@@ -1,3 +1,9 @@
 [submodule "third_party/fuzzy-fst"]
 	path = third_party/fuzzy-fst
 	url = https://github.com/L-Defraiteur/fuzzy-fst.git
+[submodule "third_party/tantivy-search"]
+	path = third_party/tantivy-search
+	url = https://github.com/L-Defraiteur/tantivy-search.git
+[submodule "extension/tantivy/ld-tantivy"]
+	path = extension/tantivy/ld-tantivy
+	url = git@github.com:L-Defraiteur/tantivy.git
