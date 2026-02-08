@@ -21,12 +21,12 @@
 #include "storage/table/struct_column.h"
 #include <concepts>
 
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::storage;
-using namespace kuzu::main;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::storage;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct StorageInfoLocalState final : TableFuncLocalState {
@@ -345,4 +345,4 @@ function_set StorageInfoFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 enum class AccumulateType : uint8_t {
@@ -16,4 +16,4 @@ struct AccumulateTypeUtil {
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

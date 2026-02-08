@@ -4,10 +4,10 @@
 #include "binder/query/reading_clause/bound_table_function_call.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::planReadingClause(const BoundReadingClause& readingClause, LogicalPlan& plan) {
@@ -140,4 +140,4 @@ void Planner::planReadOp(std::shared_ptr<LogicalOperator> op, const expression_v
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

@@ -2,7 +2,7 @@
 
 #include "common/types/types.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 // Note that this class is NOT thread-safe.
@@ -35,7 +35,7 @@ private:
 };
 
 struct SemiMaskUtil {
-    KUZU_API static std::unique_ptr<SemiMask> createMask(offset_t maxOffset);
+    RAG3DB_API static std::unique_ptr<SemiMask> createMask(offset_t maxOffset);
 };
 
 class NodeOffsetMaskMap {
@@ -88,4 +88,4 @@ private:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

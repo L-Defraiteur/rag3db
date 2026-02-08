@@ -2,9 +2,9 @@
 #include "function/list/vector_list_functions.h"
 #include "function/scalar_function.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 static std::unique_ptr<FunctionBindData> sizeBindFunc(const ScalarBindFuncInput& input) {
@@ -51,4 +51,4 @@ function_set SizeFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

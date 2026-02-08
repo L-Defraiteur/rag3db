@@ -7,12 +7,12 @@
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::storage;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 PlanMapper::PlanMapper(ExecutionContext* executionContext)
@@ -231,4 +231,4 @@ std::unique_ptr<SemiMask> PlanMapper::createSemiMask(table_id_t tableID) const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

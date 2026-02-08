@@ -2,10 +2,10 @@
 
 #include "binder/expression/expression_util.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 std::unique_ptr<FunctionBindData> FunctionBindData::getSimpleBindData(
@@ -15,4 +15,4 @@ std::unique_ptr<FunctionBindData> FunctionBindData::getSimpleBindData(
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

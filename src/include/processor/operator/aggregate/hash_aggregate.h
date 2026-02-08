@@ -20,7 +20,7 @@
 #include "processor/result/factorized_table.h"
 #include "processor/result/factorized_table_schema.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 struct HashAggregateInfo {
@@ -202,4 +202,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

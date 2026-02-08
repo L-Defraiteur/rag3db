@@ -4,10 +4,10 @@
 #include "function/table/simple_table_function.h"
 #include "main/client_context.h"
 
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct CurrentSettingBindData final : TableFuncBindData {
@@ -55,4 +55,4 @@ function_set CurrentSettingFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

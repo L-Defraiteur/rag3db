@@ -4,7 +4,7 @@
 
 #include "processor/operator/physical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 class PhysicalPlan {
@@ -17,4 +17,4 @@ public:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

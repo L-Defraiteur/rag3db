@@ -2,7 +2,7 @@
 
 #include "common/assert.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 template<>
@@ -13,7 +13,7 @@ void Serializer::serializeValue(const std::string& value) {
 }
 
 void Serializer::writeDebuggingInfo(const std::string& value) {
-#if defined(KUZU_DESER_DEBUG) && (defined(KUZU_RUNTIME_CHECKS) || !defined(NDEBUG))
+#if defined(RAG3DB_DESER_DEBUG) && (defined(RAG3DB_RUNTIME_CHECKS) || !defined(NDEBUG))
     serializeValue<std::string>(value);
 #endif
     // DO NOTHING
@@ -21,4 +21,4 @@ void Serializer::writeDebuggingInfo(const std::string& value) {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

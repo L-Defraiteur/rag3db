@@ -3,11 +3,11 @@
 #include "file_system/azure_filesystem.h"
 #include "function/azure_scan.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace azure_extension {
 
-using namespace kuzu::function;
-using namespace kuzu::common;
+using namespace rag3db::function;
+using namespace rag3db::common;
 
 std::unique_ptr<common::FileInfo> AzureFileSystem::openFile(const std::string& path,
     common::FileOpenFlags /*flags*/, main::ClientContext* /*context*/) {
@@ -50,4 +50,4 @@ TableFunction AzureFileSystem::getHandleFunction(const std::string& /*path*/) co
 }
 
 } // namespace azure_extension
-} // namespace kuzu
+} // namespace rag3db

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import kuzu
+import rag3db
 import timeit
 import psutil
 
-db = kuzu.Database("mydb")
-con = kuzu.Connection(db)
+db = rag3db.Database("mydb")
+con = rag3db.Connection(db)
 
 start = timeit.default_timer()
 con.execute(open("create.cypher").read())

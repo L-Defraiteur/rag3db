@@ -9,7 +9,7 @@
 #include "processor/result/factorized_table.h"
 #include "processor/result/result_set.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 struct HashJoinBuildPrintInfo final : OPPrintInfo {
@@ -115,4 +115,4 @@ protected:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

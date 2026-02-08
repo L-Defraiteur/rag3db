@@ -2,7 +2,7 @@
 
 #include "statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
@@ -63,4 +63,4 @@ private:
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

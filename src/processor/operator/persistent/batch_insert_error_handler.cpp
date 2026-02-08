@@ -6,9 +6,9 @@
 #include "processor/execution_context.h"
 #include "processor/warning_context.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 BatchInsertCachedError::BatchInsertCachedError(std::string message,
@@ -89,4 +89,4 @@ row_idx_t BatchInsertErrorHandler::getNumErrors() const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

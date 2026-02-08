@@ -1,4 +1,4 @@
-#ifdef KUZU_BACKTRACE
+#ifdef RAG3DB_BACKTRACE
 #include <csignal>
 #include <cstdlib>
 #include <cstring>

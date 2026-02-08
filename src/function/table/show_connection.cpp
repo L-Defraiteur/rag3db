@@ -8,11 +8,11 @@
 #include "function/table/simple_table_function.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct ShowConnectionBindData final : TableFuncBindData {
@@ -98,4 +98,4 @@ function_set ShowConnectionFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

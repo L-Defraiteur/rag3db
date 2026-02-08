@@ -4,10 +4,10 @@
 #include "common/cast.h"
 #include "planner/operator/factorization/flatten_resolver.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void LogicalInsert::computeFactorizedSchema() {
@@ -57,4 +57,4 @@ f_group_pos_set LogicalInsert::getGroupsPosToFlatten() {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

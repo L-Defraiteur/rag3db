@@ -2,7 +2,7 @@
 
 #include "types.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 struct ku_list_t {
@@ -20,4 +20,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

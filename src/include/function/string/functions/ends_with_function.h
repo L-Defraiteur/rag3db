@@ -2,7 +2,7 @@
 
 #include "common/types/ku_string.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct EndsWith {
@@ -26,4 +26,4 @@ struct EndsWith {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

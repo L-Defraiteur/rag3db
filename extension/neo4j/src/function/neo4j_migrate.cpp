@@ -12,12 +12,12 @@
 #include "httplib.h"
 #include "json.hpp"
 
-namespace kuzu {
+namespace rag3db {
 namespace neo4j_extension {
 
-using namespace kuzu::common;
-using namespace kuzu::main;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::main;
+using namespace rag3db::function;
 
 struct Neo4jMigrateBindData final : TableFuncBindData {
     std::shared_ptr<httplib::Client> client;
@@ -207,7 +207,7 @@ LogicalType convertFromNeo4jTypeStr(const std::string& neo4jTypeStr) {
     }
 }
 
-static LogicalType inferKuzuType(nlohmann::json types) {
+static LogicalType inferRag3dbType(nlohmann::json types) {
     auto kuType = convertFromNeo4jTypeStr(types[0].get<std::string>());
     for (auto i = 1u; i < types.size(); i++) {
         kuType = LogicalTypeUtils::combineTypes(
@@ -230,7 +230,7 @@ std::pair<std::string, std::string> getCreateNodeTableQuery(httplib::Client& cli
             continue;
         }
         auto property = item["row"][0].get<std::string>();
-        auto kuType = inferKuzuType(item["row"][1]);
+        auto kuType = inferRag3dbType(item["row"][1]);
 
         auto newNode = stringFormat("['{}','{}','{}','{}']", nodeName, property, kuType.toString(),
             nlohmann::to_string(item["row"][1]));
@@ -293,7 +293,7 @@ std::string getCreateRelTableQuery(httplib::Client& cli, const std::string& relN
     std::vector<binder::ColumnDefinition> propertyDefinitions;
     for (const auto& item : data) {
         auto property = item["row"][0].get<std::string>();
-        auto kuType = inferKuzuType(item["row"][1]);
+        auto kuType = inferRag3dbType(item["row"][1]);
         propertyTypes.emplace(property, kuType.toString());
         originalTypes.emplace(property, nlohmann::to_string(item["row"][1]));
         propertyDefinitions.emplace_back(property, kuType.copy());
@@ -395,8 +395,8 @@ std::string migrateQuery(ClientContext& /*context*/, const TableFuncBindData& bi
             outputQuery.append(",");
         }
     }
-    outputQuery.append("] as row RETURN row[1] as kuzu_table, row[2] as kuzu_property, row[3] as "
-                       "kuzu_type, row[4] as neo4j_types;");
+    outputQuery.append("] as row RETURN row[1] as rag3db_table, row[2] as rag3db_property, row[3] as "
+                       "rag3db_type, row[4] as neo4j_types;");
     result += outputQuery;
     return result;
 }
@@ -434,4 +434,4 @@ function_set Neo4jMigrateFunction::getFunctionSet() {
 }
 
 } // namespace neo4j_extension
-} // namespace kuzu
+} // namespace rag3db

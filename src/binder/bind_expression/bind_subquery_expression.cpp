@@ -9,11 +9,11 @@
 #include "parser/expression/parsed_subquery_expression.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::parser;
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::parser;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 std::shared_ptr<Expression> ExpressionBinder::bindSubqueryExpression(
@@ -71,4 +71,4 @@ std::shared_ptr<Expression> ExpressionBinder::bindSubqueryExpression(
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

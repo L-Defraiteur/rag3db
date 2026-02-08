@@ -20,15 +20,15 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
-using namespace kuzu::graph;
-using namespace kuzu::function;
-using namespace kuzu::planner;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
+using namespace rag3db::graph;
+using namespace rag3db::function;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace algo_extension {
 
 // Computes a spanning forest using Kruskal's algorithm:
@@ -467,4 +467,4 @@ function_set SpanningForest::getFunctionSet() {
 }
 
 } // namespace algo_extension
-} // namespace kuzu
+} // namespace rag3db

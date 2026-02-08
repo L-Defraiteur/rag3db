@@ -2,10 +2,10 @@
 #include "planner/operator/logical_union.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 LogicalPlan Planner::planQuery(const BoundStatement& boundStatement) {
@@ -70,4 +70,4 @@ void Planner::exitPropertyExprCollection(PropertyExprCollection collection) {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

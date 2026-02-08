@@ -1,6 +1,6 @@
 def test_version() -> None:
-    import kuzu
+    import rag3db
 
-    assert kuzu.version != ""
-    assert kuzu.storage_version > 0
-    assert kuzu.version == kuzu.__version__
+    assert rag3db.version != ""
+    assert rag3db.storage_version > 0
+    assert rag3db.version == rag3db.__version__

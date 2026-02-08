@@ -2,11 +2,11 @@
 
 #include "common/system_config.h"
 
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static constexpr uint64_t DATA_BLOCK_SIZE = common::TEMP_PAGE_SIZE;
@@ -323,4 +323,4 @@ void KeyBlockMergeTaskDispatcher::init(MemoryManager* memoryManager,
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

@@ -2,9 +2,9 @@
 #include "binder/query/return_with_clause/bound_projection_body.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::planProjectionBody(const BoundProjectionBody* projectionBody, LogicalPlan& plan) {
@@ -82,4 +82,4 @@ void Planner::planOrderBy(const binder::expression_vector& expressionsToProject,
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

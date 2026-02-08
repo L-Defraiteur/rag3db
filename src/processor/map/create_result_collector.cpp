@@ -3,11 +3,11 @@
 #include "processor/result/factorized_table_util.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<ResultCollector> PlanMapper::createResultCollector(AccumulateType accumulateType,
@@ -35,4 +35,4 @@ std::unique_ptr<ResultCollector> PlanMapper::createResultCollector(AccumulateTyp
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

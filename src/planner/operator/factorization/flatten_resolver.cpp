@@ -9,10 +9,10 @@
 #include "common/exception/not_implemented.h"
 #include "planner/operator/schema.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 std::pair<f_group_pos, f_group_pos_set> FlattenAllButOne::getGroupsPosToFlatten(
@@ -218,4 +218,4 @@ void GroupDependencyAnalyzer::visitSubquery(std::shared_ptr<binder::Expression> 
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

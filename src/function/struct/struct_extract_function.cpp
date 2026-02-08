@@ -4,10 +4,10 @@
 #include "function/scalar_function.h"
 #include "function/struct/vector_struct_functions.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 std::unique_ptr<FunctionBindData> StructExtractFunctions::bindFunc(
@@ -58,4 +58,4 @@ function_set StructExtractFunctions::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

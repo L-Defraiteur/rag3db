@@ -1,12 +1,12 @@
 #include "function/aggregate_function.h"
 #include "storage/storage_utils.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::processor;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::processor;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 /**
@@ -182,4 +182,4 @@ function_set CollectFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

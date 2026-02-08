@@ -4,9 +4,9 @@
 #include "main/client_context.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 void ExpressionEvaluator::init(const processor::ResultSet& resultSet,
@@ -56,4 +56,4 @@ bool ExpressionEvaluator::select(common::SelectionVector& selVector,
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

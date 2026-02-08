@@ -9,7 +9,7 @@
 #include "common/uniq_lock.h"
 #include "common/utils.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 class MemoryManager;
 
@@ -136,4 +136,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

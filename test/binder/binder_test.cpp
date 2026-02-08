@@ -3,7 +3,7 @@
 #include "graph_test/private_graph_test.h"
 #include "parser/parser.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 TEST_F(EmptyDBTest, ConfidentialStatementVisitor) {
@@ -34,4 +34,4 @@ TEST_F(EmptyDBTest, ConfidentialStatementVisitor) {
 }
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

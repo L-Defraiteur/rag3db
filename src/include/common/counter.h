@@ -4,7 +4,7 @@
 
 #include "types/types.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class LimitCounter {
@@ -23,4 +23,4 @@ private:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

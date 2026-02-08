@@ -8,14 +8,14 @@
 #include "common/serializer/serializer.h"
 #include "common/types/types.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 } // namespace main
 
 namespace catalog {
 
-struct KUZU_API ToCypherInfo {
+struct RAG3DB_API ToCypherInfo {
     virtual ~ToCypherInfo() = default;
 
     template<class TARGET>
@@ -24,7 +24,7 @@ struct KUZU_API ToCypherInfo {
     }
 };
 
-class KUZU_API CatalogEntry {
+class RAG3DB_API CatalogEntry {
 public:
     //===--------------------------------------------------------------------===//
     // constructor & destructor
@@ -111,4 +111,4 @@ protected:
 };
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

@@ -8,10 +8,10 @@
 #include "function/arithmetic/add.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 
 SequenceData SequenceCatalogEntry::getSequenceData() {
@@ -170,4 +170,4 @@ BoundCreateSequenceInfo SequenceCatalogEntry::getBoundCreateSequenceInfo(bool is
 }
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

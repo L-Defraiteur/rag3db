@@ -17,13 +17,13 @@
  * under the License.
  */
 
-#ifndef _KUZU_THRIFT_TBASE_H_
-#define _KUZU_THRIFT_TBASE_H_ 1
+#ifndef _RAG3DB_THRIFT_TBASE_H_
+#define _RAG3DB_THRIFT_TBASE_H_ 1
 
 #include "Thrift.h"
 #include "protocol/TProtocol.h"
 
-namespace kuzu_apache {
+namespace rag3db_apache {
 namespace thrift {
 
 class TBase {
@@ -33,6 +33,6 @@ public:
   virtual uint32_t write(protocol::TProtocol* oprot) const = 0;
 };
 }
-} // kuzu_apache::thrift
+} // rag3db_apache::thrift
 
-#endif // #ifndef _KUZU_THRIFT_TBASE_H_
+#endif // #ifndef _RAG3DB_THRIFT_TBASE_H_

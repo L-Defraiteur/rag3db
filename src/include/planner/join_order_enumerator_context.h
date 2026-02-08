@@ -3,7 +3,7 @@
 #include "planner/operator/logical_plan.h"
 #include "planner/subplans_table.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 class JoinOrderEnumeratorContext {
@@ -49,4 +49,4 @@ private:
 };
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

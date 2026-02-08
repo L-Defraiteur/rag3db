@@ -11,12 +11,12 @@
 #include "planner/operator/logical_table_function_call.h"
 #include "planner/operator/scan/logical_scan_node_table.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::storage;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
 void FilterPushDownOptimizer::rewrite(LogicalPlan* plan) {
@@ -329,4 +329,4 @@ expression_vector PredicateSet::getAllPredicates() {
 }
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

@@ -5,10 +5,10 @@
 #include "function/rewrite_function.h"
 #include "function/struct/vector_struct_functions.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 static std::shared_ptr<Expression> rewriteFunc(const RewriteFunctionBindInput& input) {
@@ -50,4 +50,4 @@ function_set KeysFunctions::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

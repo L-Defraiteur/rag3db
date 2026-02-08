@@ -2,7 +2,7 @@
 
 #include "processor/execution_context.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string CopyToPrintInfo::toString() const {
@@ -24,7 +24,7 @@ void CopyTo::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* cont
     }
 }
 
-void CopyTo::initGlobalStateInternal(kuzu::processor::ExecutionContext* context) {
+void CopyTo::initGlobalStateInternal(rag3db::processor::ExecutionContext* context) {
     sharedState->init(*context->clientContext, *info.bindData);
 }
 
@@ -41,4 +41,4 @@ void CopyTo::executeInternal(processor::ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

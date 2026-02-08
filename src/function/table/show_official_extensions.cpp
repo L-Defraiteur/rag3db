@@ -4,11 +4,11 @@
 #include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 static constexpr std::pair<std::string_view, std::string_view> extensions[] = {
@@ -20,7 +20,7 @@ static constexpr std::pair<std::string_view, std::string_view> extensions[] = {
     {"HTTPFS", "Adds support for reading and writing files over a HTTP(S)/S3 filesystem"},
     {"ICEBERG", "Adds support for reading from iceberg tables"},
     {"JSON", "Adds support for JSON operations"}, {"LLM", "Adds support for LLM operations"},
-    {"NEO4J", "Adds support for migrating nodes and rels from neo4j to kuzu"},
+    {"NEO4J", "Adds support for migrating nodes and rels from neo4j to rag3db"},
     {"POSTGRES", "Adds support for reading from POSTGRES tables"},
     {"SQLITE", "Adds support for reading from SQLITE tables"},
     {"UNITY_CATALOG", "Adds support for scanning delta tables registered in unity catalog"}};
@@ -62,4 +62,4 @@ function_set ShowOfficialExtensionsFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

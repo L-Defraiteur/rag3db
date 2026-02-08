@@ -21,12 +21,12 @@
 #include "storage/storage_manager.h"
 #include "utils/fts_utils.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
-using namespace kuzu::common;
-using namespace kuzu::main;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::main;
+using namespace rag3db::function;
 
 struct CreateFTSBindData final : FTSBindData {
     std::vector<property_id_t> propertyIDs;
@@ -376,4 +376,4 @@ function_set CreateFTSFunction::getFunctionSet() {
 }
 
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

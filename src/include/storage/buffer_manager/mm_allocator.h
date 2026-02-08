@@ -2,7 +2,7 @@
 
 #include "memory_manager.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 template<class T>
@@ -51,4 +51,4 @@ bool operator==(const MmAllocator<T>& a, const MmAllocator<U>& b) {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

@@ -7,12 +7,12 @@
 #include "storage/wal/wal.h"
 #include "transaction/transaction_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::testing;
-using namespace kuzu::transaction;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::testing;
+using namespace rag3db::transaction;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 class FlakyCheckpointer {
@@ -308,4 +308,4 @@ TEST_F(FlakyCheckpointerTest, ShadowFileDatabaseIDMismatchCorruptedDB) {
 }
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

@@ -2,7 +2,7 @@
 
 #include "planner/operator/logical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
 class LogicalOperatorVisitor {
@@ -179,4 +179,4 @@ protected:
 };
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

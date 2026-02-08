@@ -1,2 +1,2 @@
-include kuzu/*.so
-include kuzu/*.pyd
+include rag3db/*.so
+include rag3db/*.pyd

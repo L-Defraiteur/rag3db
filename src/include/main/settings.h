@@ -2,7 +2,7 @@
 
 #include "common/types/value/value.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 struct ThreadsSetting {
@@ -146,4 +146,4 @@ struct EnableInternalCatalogSetting {
 };
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

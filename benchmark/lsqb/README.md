@@ -1,4 +1,4 @@
-# Kuzu implementation
+# Rag3db implementation
 
 To run the benchmark, execute the following commands:
 

@@ -18,7 +18,7 @@
 /* *** Dependency *** */
 #include "zstd/common/bitstream.h"
 
-namespace kuzu_zstd {
+namespace rag3db_zstd {
 
 /* *****************************************
 *  Static allocation

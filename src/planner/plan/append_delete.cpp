@@ -2,9 +2,9 @@
 #include "planner/operator/persistent/logical_delete.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendDelete(const std::vector<BoundDeleteInfo>& infos, LogicalPlan& plan) {
@@ -16,4 +16,4 @@ void Planner::appendDelete(const std::vector<BoundDeleteInfo>& infos, LogicalPla
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

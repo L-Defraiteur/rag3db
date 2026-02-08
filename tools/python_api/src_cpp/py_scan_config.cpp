@@ -4,7 +4,7 @@
 #include "common/exception/binder.h"
 #include "function/cast/functions/numeric_limits.h"
 
-namespace kuzu {
+namespace rag3db {
 
 PyScanConfig::PyScanConfig(const common::case_insensitive_map_t<common::Value>& options,
     uint64_t numRows) {
@@ -36,4 +36,4 @@ PyScanConfig::PyScanConfig(const common::case_insensitive_map_t<common::Value>& 
     }
 }
 
-} // namespace kuzu
+} // namespace rag3db

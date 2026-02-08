@@ -2,9 +2,9 @@
 #include "binder/visitor/property_collector.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 // Note: we cannot append ResultCollector for plans enumerated for single query before there could
@@ -45,4 +45,4 @@ void Planner::planQueryPart(const NormalizedQueryPart& queryPart, LogicalPlan& p
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

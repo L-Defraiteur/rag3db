@@ -8,10 +8,10 @@
 #include "storage/table/column_chunk_data.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::transaction;
-using namespace kuzu::common;
+using namespace rag3db::transaction;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 VectorUpdateInfo& UpdateInfo::update(MemoryManager& memoryManager, const Transaction* transaction,
@@ -140,7 +140,7 @@ void UpdateInfo::iterateVectorInfo(const Transaction* transaction, idx_t idx,
     }
 }
 
-#if defined(KUZU_RUNTIME_CHECKS) || !defined(NDEBUG)
+#if defined(RAG3DB_RUNTIME_CHECKS) || !defined(NDEBUG)
 // Assert that info is in the updatedNode version chain.
 static bool validateUpdateChain(const UpdateNode& updatedNode, const VectorUpdateInfo* info) {
     auto current = updatedNode.info.get();
@@ -296,4 +296,4 @@ void UpdateInfo::iterateScan(const Transaction* transaction, uint64_t startOffse
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

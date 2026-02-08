@@ -21,14 +21,14 @@
 #include "storage/wal/wal_record.h"
 #include "transaction/transaction_context.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
-using namespace kuzu::transaction;
+using namespace rag3db::binder;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 static constexpr std::string_view checksumMismatchMessage =
@@ -589,4 +589,4 @@ void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

@@ -16,15 +16,15 @@
 #include "processor/operator/table_function_call.h"
 #include "processor/plan_mapper.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::main;
-using namespace kuzu::graph;
-using namespace kuzu::processor;
-using namespace kuzu::planner;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::main;
+using namespace rag3db::graph;
+using namespace rag3db::processor;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 void GDSFuncSharedState::setGraphNodeMask(std::unique_ptr<NodeOffsetMaskMap> maskMap) {
@@ -278,4 +278,4 @@ std::unique_ptr<PhysicalOperator> GDSFunction::getPhysicalPlan(PlanMapper* planM
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

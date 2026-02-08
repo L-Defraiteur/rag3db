@@ -1,8 +1,8 @@
 #include "api_test/api_test.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 static int32_t add5(int32_t x) {
@@ -492,4 +492,4 @@ TEST_F(ApiTest, CreateUDFExceptionTest) {
 }
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

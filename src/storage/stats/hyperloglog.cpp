@@ -5,7 +5,7 @@
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 common::cardinality_t HyperLogLog::count() const {
@@ -87,4 +87,4 @@ HyperLogLog HyperLogLog::deserialize(common::Deserializer& deserializer) {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

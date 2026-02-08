@@ -6,7 +6,7 @@
 #include "common/enums/scan_source_type.h"
 #include "function/table/scan_file_function.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 struct BoundBaseScanSource {
@@ -82,4 +82,4 @@ struct BoundQueryScanSource final : BoundBaseScanSource {
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

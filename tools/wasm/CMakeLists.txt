@@ -1,4 +1,4 @@
-add_executable(kuzu_wasm
+add_executable(rag3db_wasm
     src_cpp/main.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/connection.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/database.cpp
@@ -14,13 +14,13 @@ add_executable(kuzu_wasm
 
 file(GLOB JS_SOURCE_FILES ./src_js/*)
 
-target_link_libraries(kuzu_wasm PRIVATE kuzu)
+target_link_libraries(rag3db_wasm PRIVATE rag3db)
 
-set_target_properties(kuzu_wasm
+set_target_properties(rag3db_wasm
     PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/kuzu"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/kuzu"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/kuzu"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/rag3db"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/rag3db"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/rag3db"
 )
 
 file(COPY ${JS_SOURCE_FILES} DESTINATION  "${CMAKE_CURRENT_SOURCE_DIR}/build")

@@ -9,7 +9,7 @@
 
 #include "parquet_types.h"
 
-namespace kuzu_parquet { namespace format {
+namespace rag3db_parquet { namespace format {
 
 class parquetConstants {
  public:

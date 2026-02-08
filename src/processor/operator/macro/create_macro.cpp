@@ -5,9 +5,9 @@
 #include "storage/buffer_manager/memory_manager.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string CreateMacroPrintInfo::toString() const {
@@ -24,4 +24,4 @@ void CreateMacro::executeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

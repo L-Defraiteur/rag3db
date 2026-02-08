@@ -218,14 +218,14 @@
 
 #include "stringpiece.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 class Prog;
 class Regexp;
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 // Interface for regular expression matching.  Also corresponds to a
@@ -739,8 +739,8 @@ private:
     // First cache line is relatively cold fields.
     const std::string* pattern_;         // string regular expression
     Options options_;                    // option flags
-    kuzu::regex::Regexp* entire_regexp_; // parsed regular expression
-    kuzu::regex::Regexp* suffix_regexp_; // parsed regular expression, prefix_ removed
+    rag3db::regex::Regexp* entire_regexp_; // parsed regular expression
+    rag3db::regex::Regexp* suffix_regexp_; // parsed regular expression, prefix_ removed
     const std::string* error_;           // error indicator (or points to empty string)
     const std::string* error_arg_;       // fragment of regexp showing error (or ditto)
 
@@ -1002,9 +1002,9 @@ DECLARE_HOOK(DFASearchFailure)
 
 } // namespace hooks
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 
-using kuzu::regex::LazyRE2;
-using kuzu::regex::RE2;
+using rag3db::regex::LazyRE2;
+using rag3db::regex::RE2;
 
 #endif // RE2_RE2_H_

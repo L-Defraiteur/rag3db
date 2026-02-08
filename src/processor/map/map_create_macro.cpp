@@ -4,9 +4,9 @@
 #include "processor/result/factorized_table_util.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::planner;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapCreateMacro(
@@ -22,4 +22,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapCreateMacro(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

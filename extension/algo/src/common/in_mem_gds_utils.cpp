@@ -6,11 +6,11 @@
 #include "function/gds/gds_task.h"
 #include "main/client_context.h"
 
-using namespace kuzu::processor;
-using namespace kuzu::graph;
-using namespace kuzu::function;
+using namespace rag3db::processor;
+using namespace rag3db::graph;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace algo_extension {
 
 void InMemParallelComputeTask::run() {
@@ -36,4 +36,4 @@ void InMemGDSUtils::runParallelCompute(InMemParallelCompute& vc, common::offset_
         ->scheduleTaskAndWaitOrError(task, context, true /* launchNewWorkerThread */);
 }
 } // namespace algo_extension
-} // namespace kuzu
+} // namespace rag3db

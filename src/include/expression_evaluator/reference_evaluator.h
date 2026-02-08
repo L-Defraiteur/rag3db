@@ -2,7 +2,7 @@
 
 #include "expression_evaluator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
@@ -36,4 +36,4 @@ private:
 };
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

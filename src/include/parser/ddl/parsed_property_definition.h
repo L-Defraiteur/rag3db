@@ -2,7 +2,7 @@
 
 #include "parser/expression/parsed_expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 struct ParsedColumnDefinition {
@@ -40,4 +40,4 @@ private:
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

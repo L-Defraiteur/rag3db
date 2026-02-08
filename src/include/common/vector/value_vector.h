@@ -11,14 +11,14 @@
 #include "common/types/ku_string.h"
 #include "common/vector/auxiliary_buffer.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class Value;
 
 //! A Vector represents values of the same data type.
 //! The capacity of a ValueVector is either 1 (sequence) or DEFAULT_VECTOR_CAPACITY.
-class KUZU_API ValueVector {
+class RAG3DB_API ValueVector {
     friend class ListVector;
     friend class ListAuxiliaryBuffer;
     friend class StructVector;
@@ -152,7 +152,7 @@ private:
     std::unique_ptr<AuxiliaryBuffer> auxiliaryBuffer;
 };
 
-class KUZU_API StringVector {
+class RAG3DB_API StringVector {
 public:
     static inline InMemOverflowBuffer* getInMemOverflowBuffer(ValueVector* vector) {
         KU_ASSERT(vector->dataType.getPhysicalType() == PhysicalTypeID::STRING);
@@ -171,23 +171,23 @@ public:
     static void addString(ValueVector* vector, ku_string_t& dstStr, ku_string_t& srcStr);
     static void addString(ValueVector* vector, ku_string_t& dstStr, const char* srcStr,
         uint64_t length);
-    static void addString(kuzu::common::ValueVector* vector, ku_string_t& dstStr,
+    static void addString(rag3db::common::ValueVector* vector, ku_string_t& dstStr,
         const std::string& srcStr);
     static void copyToRowData(const ValueVector* vector, uint32_t pos, uint8_t* rowData,
         InMemOverflowBuffer* rowOverflowBuffer);
 };
 
-struct KUZU_API BlobVector {
+struct RAG3DB_API BlobVector {
     static void addBlob(ValueVector* vector, uint32_t pos, const char* data, uint32_t length) {
         StringVector::addString(vector, pos, data, length);
     } // namespace common
     static void addBlob(ValueVector* vector, uint32_t pos, const uint8_t* data, uint64_t length) {
         StringVector::addString(vector, pos, reinterpret_cast<const char*>(data), length);
     }
-}; // namespace kuzu
+}; // namespace rag3db
 
 // ListVector is used for both LIST and ARRAY physical type
-class KUZU_API ListVector {
+class RAG3DB_API ListVector {
 public:
     static const ListAuxiliaryBuffer& getAuxBuffer(const ValueVector& vector) {
         return vector.auxiliaryBuffer->constCast<ListAuxiliaryBuffer>();
@@ -349,4 +349,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

@@ -3,7 +3,7 @@
 #include "processor/operator/physical_operator.h"
 #include "processor/result/factorized_table.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 struct CrossProductLocalState {
@@ -61,4 +61,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

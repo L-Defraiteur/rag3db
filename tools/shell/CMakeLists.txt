@@ -7,26 +7,26 @@ include_directories(
 
 add_subdirectory(printer)
 
-add_executable(kuzu_shell
-        ${KUZU_SHELL_OBJECT_FILES}
+add_executable(rag3db_shell
+        ${RAG3DB_SHELL_OBJECT_FILES}
         embedded_shell.cpp
         linenoise.cpp
         shell_runner.cpp)
 
 if (NOT MSVC)
-    # On Windows, rename the executable to kuzu.exe will cause an error
-    # "multiple rules generate src/kuzu.lib", so we do not set the output
+    # On Windows, rename the executable to rag3db.exe will cause an error
+    # "multiple rules generate src/rag3db.lib", so we do not set the output
     # name for MSVC.
-    set_target_properties(kuzu_shell PROPERTIES OUTPUT_NAME kuzu)
+    set_target_properties(rag3db_shell PROPERTIES OUTPUT_NAME rag3db)
 endif ()
 
 
-target_link_libraries(kuzu_shell kuzu)
+target_link_libraries(rag3db_shell rag3db)
 if (ENABLE_BACKTRACES)
-    target_link_libraries(kuzu_shell register_backtrace_signal_handler)
+    target_link_libraries(rag3db_shell register_backtrace_signal_handler)
 endif ()
 if (MSVC)
-    target_link_libraries(kuzu_shell ws2_32)
+    target_link_libraries(rag3db_shell ws2_32)
 endif ()
 
-install(TARGETS kuzu_shell)
+install(TARGETS rag3db_shell)

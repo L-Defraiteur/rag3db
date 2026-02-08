@@ -8,10 +8,10 @@
 #include "common/vector/value_vector.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 DataBlock::DataBlock(storage::MemoryManager* mm, uint64_t size) : numTuples{0}, freeSize{size} {
@@ -767,4 +767,4 @@ void FactorizedTableIterator::updateFlatTuplePositionsInDataChunk() {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

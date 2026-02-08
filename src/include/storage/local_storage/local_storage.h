@@ -6,7 +6,7 @@
 #include "storage/local_storage/local_table.h"
 #include "storage/optimistic_allocator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 } // namespace main
@@ -40,4 +40,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

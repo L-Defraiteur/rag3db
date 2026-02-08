@@ -5,9 +5,9 @@
 #include "common/types/value/value.h"
 #include "planner/operator/logical_plan.h" // IWYU pragma: keep
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 CachedPreparedStatement::CachedPreparedStatement() = default;
@@ -86,4 +86,4 @@ std::unique_ptr<PreparedStatement> PreparedStatement::getPreparedStatementWithEr
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

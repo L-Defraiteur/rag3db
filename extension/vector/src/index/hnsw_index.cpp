@@ -8,10 +8,10 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
-using namespace kuzu::storage;
-using namespace kuzu::transaction;
+using namespace rag3db::storage;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace vector_extension {
 
 InMemHNSWLayer::InMemHNSWLayer(MemoryManager* mm, InMemHNSWLayerInfo info)
@@ -1113,4 +1113,4 @@ bool OnDiskHNSWIndex::searchOverSecondHopNbrs(const EmbeddingHandle& queryVector
 }
 
 } // namespace vector_extension
-} // namespace kuzu
+} // namespace rag3db

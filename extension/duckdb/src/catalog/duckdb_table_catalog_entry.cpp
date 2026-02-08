@@ -2,7 +2,7 @@
 
 #include "binder/ddl/bound_create_table_info.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 
 DuckDBTableCatalogEntry::DuckDBTableCatalogEntry(std::string name,
@@ -26,4 +26,4 @@ DuckDBTableCatalogEntry::getBoundExtraCreateInfo(transaction::Transaction*) cons
 }
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

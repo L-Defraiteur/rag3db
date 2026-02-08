@@ -5,10 +5,10 @@
 #include "common/string_format.h"
 #include "common/string_utils.h"
 
-using namespace kuzu::common;
-using namespace kuzu::parser;
+using namespace rag3db::common;
+using namespace rag3db::parser;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 macro_parameter_value_map ScalarMacroFunction::getDefaultParameterVals() const {
@@ -69,4 +69,4 @@ std::string ScalarMacroFunction::toCypher(const std::string& name) const {
         expression->toString());
 }
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

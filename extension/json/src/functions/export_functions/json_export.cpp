@@ -6,10 +6,10 @@
 #include "json_utils.h"
 #include "main/client_context.h"
 
-using namespace kuzu::function;
-using namespace kuzu::common;
+using namespace rag3db::function;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace json_extension {
 
 struct ExportJSONBindData : public ExportFuncBindData {
@@ -109,4 +109,4 @@ function_set JsonExportFunction::getFunctionSet() {
 }
 
 } // namespace json_extension
-} // namespace kuzu
+} // namespace rag3db

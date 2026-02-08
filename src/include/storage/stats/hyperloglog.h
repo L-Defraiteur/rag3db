@@ -8,7 +8,7 @@
 
 #include "common/utils.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 class HyperLogLog {
@@ -52,4 +52,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

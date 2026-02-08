@@ -3,7 +3,7 @@
 #include "binder/expression/expression.h"
 #include "expression_evaluator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 class PatternExpressionEvaluator : public ExpressionEvaluator {
@@ -58,4 +58,4 @@ private:
 };
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

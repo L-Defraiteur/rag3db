@@ -2,7 +2,7 @@
 
 #include "common/vector/value_vector.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct PointerFunctionExecutor {
@@ -22,4 +22,4 @@ struct PointerFunctionExecutor {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

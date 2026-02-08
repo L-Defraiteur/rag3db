@@ -4,10 +4,10 @@
 #include "binder/expression/rel_expression.h"
 #include "planner/operator/factorization/flatten_resolver.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void LogicalSetProperty::computeFactorizedSchema() {
@@ -58,4 +58,4 @@ common::TableType LogicalSetProperty::getTableType() const {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

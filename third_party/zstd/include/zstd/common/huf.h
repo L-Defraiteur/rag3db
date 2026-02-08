@@ -33,7 +33,7 @@
 #  define HUF_PUBLIC_API
 #endif
 
-namespace kuzu_zstd {
+namespace rag3db_zstd {
 
 /* ========================== */
 /* ***  simple functions  *** */

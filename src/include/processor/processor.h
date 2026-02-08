@@ -2,7 +2,7 @@
 
 #include "common/task_system/task_scheduler.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class QueryResult;
 }
@@ -34,4 +34,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

@@ -2,7 +2,7 @@
 
 #include "expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 class VariableExpression final : public Expression {
@@ -25,4 +25,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

@@ -61,7 +61,7 @@
     } else                                                                                         \
         LOG_INFO.stream()
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 class LogMessage {
@@ -113,7 +113,7 @@ private:
     LogMessageFatal& operator=(const LogMessageFatal&) = delete;
 };
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 #ifdef _MSC_VER
 //#pragma warning(pop)
 #endif

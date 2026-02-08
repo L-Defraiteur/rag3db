@@ -2,11 +2,11 @@
 
 #include "common/types/value/value.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::main;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 void LiteralExpressionEvaluator::evaluate() {}
@@ -40,4 +40,4 @@ void LiteralExpressionEvaluator::resolveResultVector(const processor::ResultSet&
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

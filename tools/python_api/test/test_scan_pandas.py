@@ -13,11 +13,11 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo  # type: ignore[no-redef]
 
-import kuzu
-from kuzu.constants import ID, LABEL
+import rag3db
+from rag3db.constants import ID, LABEL
 
 
-def validate_scan_pandas_results(results: kuzu.QueryResult) -> None:
+def validate_scan_pandas_results(results: rag3db.QueryResult) -> None:
     assert results.get_next() == [
         True,
         1,
@@ -629,7 +629,7 @@ def test_scan_py_dict_map_format(conn_db_empty: ConnDB) -> None:
     assert tp[0] == 4
     assert tp[1] == {"zoo": 44, "ela": 52, "dan": 88}
 
-    # If key and value size don't match, kuzu sniffs it as struct.
+    # If key and value size don't match, rag3db sniffs it as struct.
     df = pd.DataFrame({"id": [4], "dt": [{"key": ["Alice", "Bob"], "value": []}]})
     res = conn.execute("LOAD FROM df RETURN *")
     tup = res.get_next()

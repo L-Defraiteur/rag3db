@@ -5,10 +5,10 @@
 #include "planner/operator/sip/logical_semi_masker.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendNodeSemiMask(SemiMaskTargetType targetType, const NodeExpression& node,
@@ -45,4 +45,4 @@ LogicalPlan Planner::getNodeSemiMaskPlan(SemiMaskTargetType targetType, const No
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

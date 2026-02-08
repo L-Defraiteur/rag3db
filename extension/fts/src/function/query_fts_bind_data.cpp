@@ -11,12 +11,12 @@
 #include "storage/table/node_table.h"
 #include "utils/fts_utils.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::storage;
 
 QueryFTSOptionalParams::QueryFTSOptionalParams(const binder::expression_vector& optionalParams) {
     for (auto& optionalParam : optionalParams) {
@@ -29,6 +29,8 @@ QueryFTSOptionalParams::QueryFTSOptionalParams(const binder::expression_vector& 
             conjunctive = function::OptionalParam<Conjunctive>(optionalParam);
         } else if (paramName == TopK::NAME) {
             topK = function::OptionalParam<TopK>(optionalParam);
+        } else if (paramName == Fuzzy::NAME) {
+            fuzzy = function::OptionalParam<Fuzzy>(optionalParam);
         } else {
             throw common::BinderException{"Unknown optional parameter: " + paramName};
         }
@@ -40,6 +42,7 @@ void QueryFTSOptionalParams::evaluateParams(main::ClientContext* context) {
     b.evaluateParam(context);
     conjunctive.evaluateParam(context);
     topK.evaluateParam(context);
+    fuzzy.evaluateParam(context);
 }
 
 std::vector<std::string> QueryFTSBindData::getQueryTerms(main::ClientContext& context) const {
@@ -62,4 +65,4 @@ std::vector<std::string> QueryFTSBindData::getQueryTerms(main::ClientContext& co
 }
 
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

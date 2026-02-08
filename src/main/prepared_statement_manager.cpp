@@ -3,7 +3,7 @@
 #include "common/assert.h"
 #include "main/prepared_statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 CachedPreparedStatementManager::CachedPreparedStatementManager() = default;
@@ -26,4 +26,4 @@ CachedPreparedStatement* CachedPreparedStatementManager::getCachedStatement(
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

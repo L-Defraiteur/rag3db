@@ -6,9 +6,9 @@
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 
-using namespace kuzu::planner;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapIndexLookup(
@@ -38,4 +38,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapIndexLookup(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

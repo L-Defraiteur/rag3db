@@ -1,4 +1,4 @@
-add_library(kuzu_storage_store
+add_library(rag3db_storage_store
         OBJECT
         chunked_node_group.cpp
         column.cpp
@@ -35,5 +35,5 @@ add_library(kuzu_storage_store
 )
 
 set(ALL_OBJECT_FILES
-        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:kuzu_storage_store>
+        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_storage_store>
         PARENT_SCOPE)

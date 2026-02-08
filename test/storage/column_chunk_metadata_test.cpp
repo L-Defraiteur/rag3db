@@ -5,8 +5,8 @@
 #include "gtest/gtest.h"
 #include "storage/table/column_chunk_metadata.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
 /*
  * CompressionMetadata Tests

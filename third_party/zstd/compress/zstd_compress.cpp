@@ -33,7 +33,7 @@
 #include <sanitizer/msan_interface.h>
 #endif
 
-namespace kuzu_zstd {
+namespace rag3db_zstd {
 /*-*************************************
 *  Helper functions
 ***************************************/

@@ -4,11 +4,11 @@
 #include "binder/expression/rel_expression.h"
 #include "common/string_utils.h"
 
-using namespace kuzu::main;
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::main;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 // For each result field vector, find its corresponding input field vector if exist.
@@ -224,4 +224,4 @@ void PathExpressionEvaluator::resolveResultVector(const processor::ResultSet& /*
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

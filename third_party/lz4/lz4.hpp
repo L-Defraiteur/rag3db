@@ -42,7 +42,7 @@
 /* --- Dependency --- */
 #include <stddef.h>   /* size_t */
 
-namespace kuzu_lz4 {
+namespace rag3db_lz4 {
 
 /**
   Introduction

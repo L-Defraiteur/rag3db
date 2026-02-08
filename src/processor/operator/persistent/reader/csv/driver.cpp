@@ -7,9 +7,9 @@
 #include "processor/operator/persistent/reader/csv/serial_csv_reader.h"
 #include "utf8proc_wrapper.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 ParsingDriver::ParsingDriver(common::DataChunk& chunk, DriverType type /* = DriverType::PARSING */)
@@ -306,4 +306,4 @@ bool SniffCSVHeaderDriver::addValue(uint64_t /*rowNum*/, common::column_id_t col
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

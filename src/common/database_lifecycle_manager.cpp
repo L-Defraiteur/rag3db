@@ -2,7 +2,7 @@
 
 #include "common/exception/runtime.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 void DatabaseLifeCycleManager::checkDatabaseClosedOrThrow() const {
     if (isDatabaseClosed) {
@@ -11,4 +11,4 @@ void DatabaseLifeCycleManager::checkDatabaseClosedOrThrow() const {
     }
 }
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

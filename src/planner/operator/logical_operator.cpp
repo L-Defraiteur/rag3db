@@ -2,9 +2,9 @@
 
 #include "common/exception/runtime.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 // LCOV_EXCL_START
@@ -192,4 +192,4 @@ logical_op_vector_t LogicalOperator::copy(const logical_op_vector_t& ops) {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

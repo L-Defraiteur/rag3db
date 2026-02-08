@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 enum class GDSDensityState : uint8_t {
@@ -11,4 +11,4 @@ enum class GDSDensityState : uint8_t {
 };
 
 }
-} // namespace kuzu
+} // namespace rag3db

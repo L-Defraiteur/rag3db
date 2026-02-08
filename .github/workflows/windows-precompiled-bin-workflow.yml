@@ -32,22 +32,22 @@ jobs:
       - name: Collect artifacts
         shell: cmd
         run: |
-          move install\include\kuzu.h
-          move install\include\kuzu.hpp
-          move install\bin\kuzu_shared.dll
-          move install\lib\kuzu_shared.lib
-          move install\bin\kuzu_shell.exe kuzu.exe
+          move install\include\rag3db.h
+          move install\include\rag3db.hpp
+          move install\bin\rag3db_shared.dll
+          move install\lib\rag3db_shared.lib
+          move install\bin\rag3db_shell.exe rag3db.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: libkuzu-windows-x86_64
+          name: librag3db-windows-x86_64
           path: |
-            kuzu.h
-            kuzu.hpp
-            kuzu_shared.dll
-            kuzu_shared.lib
+            rag3db.h
+            rag3db.hpp
+            rag3db_shared.dll
+            rag3db_shared.lib
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kuzu_cli-windows-x86_64
-          path: kuzu.exe
+          name: rag3db_cli-windows-x86_64
+          path: rag3db.exe

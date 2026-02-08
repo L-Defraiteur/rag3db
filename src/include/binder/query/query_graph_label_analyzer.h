@@ -2,7 +2,7 @@
 
 #include "query_graph.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 class QueryGraphLabelAnalyzer {
@@ -22,4 +22,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

@@ -21,13 +21,13 @@
 #include "processor/result/factorized_table_util.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
-using namespace kuzu::planner;
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::extension;
+using namespace rag3db::planner;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::extension;
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapUseDatabase(
     const LogicalOperator* logicalOperator) {
@@ -148,4 +148,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExtensionClause(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

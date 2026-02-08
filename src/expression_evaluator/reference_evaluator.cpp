@@ -1,9 +1,9 @@
 #include "expression_evaluator/reference_evaluator.h"
 
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 inline static bool isTrue(ValueVector& vector, uint64_t pos) {
@@ -31,4 +31,4 @@ bool ReferenceExpressionEvaluator::selectInternal(SelectionVector& selVector) {
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

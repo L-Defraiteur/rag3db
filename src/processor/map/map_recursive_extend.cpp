@@ -5,12 +5,12 @@
 #include "processor/operator/recursive_extend.h"
 #include "processor/plan_mapper.h"
 
-using namespace kuzu::planner;
-using namespace kuzu::graph;
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::planner;
+using namespace rag3db::graph;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<NodeOffsetMaskMap> createNodeOffsetMaskMap(const Expression& expr,
@@ -70,4 +70,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapRecursiveExtend(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

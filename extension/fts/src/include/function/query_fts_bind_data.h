@@ -5,7 +5,7 @@
 #include "function/fts_config.h"
 #include "function/gds/gds.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
 struct QueryFTSOptionalParams : public function::OptionalParams {
@@ -13,19 +13,21 @@ struct QueryFTSOptionalParams : public function::OptionalParams {
     function::OptionalParam<B> b;
     function::OptionalParam<Conjunctive> conjunctive;
     function::OptionalParam<TopK> topK;
+    function::OptionalParam<Fuzzy> fuzzy;
 
     explicit QueryFTSOptionalParams(const binder::expression_vector& optionalParams);
 
     // For copy only.
     QueryFTSOptionalParams(function::OptionalParam<K> k, function::OptionalParam<B> b,
-        function::OptionalParam<Conjunctive> conjunctive, function::OptionalParam<TopK> topK)
+        function::OptionalParam<Conjunctive> conjunctive, function::OptionalParam<TopK> topK,
+        function::OptionalParam<Fuzzy> fuzzy)
         : k{std::move(k)}, b{std::move(b)}, conjunctive{std::move(conjunctive)},
-          topK{std::move(topK)} {}
+          topK{std::move(topK)}, fuzzy{std::move(fuzzy)} {}
 
     void evaluateParams(main::ClientContext* context) override;
 
     std::unique_ptr<function::OptionalParams> copy() override {
-        return std::make_unique<QueryFTSOptionalParams>(k, b, conjunctive, topK);
+        return std::make_unique<QueryFTSOptionalParams>(k, b, conjunctive, topK, fuzzy);
     }
 };
 
@@ -62,4 +64,4 @@ struct QueryFTSBindData final : public function::GDSBindData {
 };
 
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

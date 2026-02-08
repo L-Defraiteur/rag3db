@@ -10,11 +10,11 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 static cardinality_t atLeastOne(uint64_t x) {
@@ -244,4 +244,4 @@ double CardinalityEstimator::getExtensionRate(const RelExpression& rel,
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

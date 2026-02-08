@@ -8,7 +8,7 @@
 #include "common/exception/internal.h"
 #endif
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 #if USE_STD_FORMAT
@@ -117,4 +117,4 @@ inline std::string stringFormat(std::string_view format, Args&&... args) {
 #endif
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

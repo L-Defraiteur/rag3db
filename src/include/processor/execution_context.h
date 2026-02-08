@@ -2,13 +2,13 @@
 
 #include "common/profiler.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
 namespace processor {
 
-struct KUZU_API ExecutionContext {
+struct RAG3DB_API ExecutionContext {
     uint64_t queryID;
     common::Profiler* profiler;
     main::ClientContext* clientContext;
@@ -19,4 +19,4 @@ struct KUZU_API ExecutionContext {
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

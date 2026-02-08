@@ -3,10 +3,10 @@
 #include "function/scalar_function.h"
 #include "main/client_context.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 struct Rand {
     static void operation(double& result, void* dataPtr) {
@@ -24,4 +24,4 @@ function_set RandFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

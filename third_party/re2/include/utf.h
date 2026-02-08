@@ -20,7 +20,7 @@
 
 #include <stdint.h>
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 typedef signed int Rune; /* Code-point values in Unicode 4.0 are 21 bits wide.*/
@@ -40,5 +40,5 @@ int utflen(const char* s);
 char* utfrune(const char*, Rune);
 
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 #endif // UTIL_UTF_H_

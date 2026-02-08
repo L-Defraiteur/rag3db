@@ -6,13 +6,13 @@
 #include "parser/query/reading_clause/in_query_call_clause.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::parser;
-using namespace kuzu::function;
-using namespace kuzu::catalog;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::parser;
+using namespace rag3db::function;
+using namespace rag3db::catalog;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 std::unique_ptr<BoundReadingClause> Binder::bindInQueryCall(const ReadingClause& readingClause) {
@@ -42,4 +42,4 @@ std::unique_ptr<BoundReadingClause> Binder::bindInQueryCall(const ReadingClause&
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

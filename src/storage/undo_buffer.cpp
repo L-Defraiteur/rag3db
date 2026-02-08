@@ -9,11 +9,11 @@
 #include "storage/table/version_record_handler.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 struct UndoRecordHeader {
@@ -306,4 +306,4 @@ void UndoBuffer::rollbackVectorUpdateInfo(const uint8_t* record) {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

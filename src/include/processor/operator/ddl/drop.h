@@ -3,7 +3,7 @@
 #include "parser/ddl/drop_info.h"
 #include "processor/operator/sink.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 struct DropPrintInfo final : OPPrintInfo {
@@ -48,4 +48,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

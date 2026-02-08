@@ -5,7 +5,7 @@
 #include "common/vector/value_vector.h"
 #include "re2.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct RegexpExtractAll : BaseRegexpOperation {
@@ -19,7 +19,7 @@ struct RegexpExtractAll : BaseRegexpOperation {
         auto numBytesPerValue = resultDataVector->getNumBytesPerValue();
         for (const auto& match : matches) {
             common::ku_string_t kuString;
-            copyToKuzuString(match, kuString, *resultDataVector);
+            copyToRag3dbString(match, kuString, *resultDataVector);
             resultDataVector->copyFromVectorData(resultValues, resultDataVector,
                 reinterpret_cast<uint8_t*>(&kuString));
             resultValues += numBytesPerValue;
@@ -73,4 +73,4 @@ struct RegexpExtractAll : BaseRegexpOperation {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

@@ -3,13 +3,13 @@
  */
 "use strict";
 
-const KuzuWasm = require("./kuzu.js");
+const Rag3dbWasm = require("./rag3db.js");
 
 class QueryResult {
   /**
    * Internal constructor. Use `Connection.query` or `Connection.execute`
    * to get a `QueryResult` object.
-   * @param {kuzu.sync.QueryResult} _queryResult the native query result object.
+   * @param {rag3db.sync.QueryResult} _queryResult the native query result object.
    */
   constructor(_queryResult, _isClosable = true) {
     this._result = _queryResult;
@@ -23,7 +23,7 @@ class QueryResult {
    * @private
    */
   _checkQueryResult() {
-    KuzuWasm.checkInit();
+    Rag3dbWasm.checkInit();
     if (this._isClosed) {
       throw new Error("QueryResult is already closed.");
     }

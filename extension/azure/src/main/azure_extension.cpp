@@ -7,7 +7,7 @@
 #include "main/database.h"
 #include "main/duckdb_extension.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace azure_extension {
 
 void AzureExtension::load(main::ClientContext* context) {
@@ -20,23 +20,23 @@ void AzureExtension::load(main::ClientContext* context) {
 }
 
 } // namespace azure_extension
-} // namespace kuzu
+} // namespace rag3db
 
 #if defined(BUILD_DYNAMIC_LOAD)
 extern "C" {
-// Because we link against the static library on windows, we implicitly inherit KUZU_STATIC_DEFINE,
-// which cancels out any exporting, so we can't use KUZU_API.
+// Because we link against the static library on windows, we implicitly inherit RAG3DB_STATIC_DEFINE,
+// which cancels out any exporting, so we can't use RAG3DB_API.
 #if defined(_WIN32)
 #define INIT_EXPORT __declspec(dllexport)
 #else
 #define INIT_EXPORT __attribute__((visibility("default")))
 #endif
-INIT_EXPORT void init(kuzu::main::ClientContext* context) {
-    kuzu::azure_extension::AzureExtension::load(context);
+INIT_EXPORT void init(rag3db::main::ClientContext* context) {
+    rag3db::azure_extension::AzureExtension::load(context);
 }
 
 INIT_EXPORT const char* name() {
-    return kuzu::azure_extension::AzureExtension::EXTENSION_NAME;
+    return rag3db::azure_extension::AzureExtension::EXTENSION_NAME;
 }
 }
 #endif

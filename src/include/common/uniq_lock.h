@@ -2,7 +2,7 @@
 
 #include <mutex>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 struct UniqLock {
@@ -24,4 +24,4 @@ private:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

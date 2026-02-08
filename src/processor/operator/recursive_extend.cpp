@@ -9,11 +9,11 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 // All recursive join computation have the same vertex compute. This vertex compute writes
@@ -157,4 +157,4 @@ void RecursiveExtend::executeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

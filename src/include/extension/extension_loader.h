@@ -4,13 +4,13 @@
 
 #include "common/api.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
 namespace extension {
 
-class KUZU_API ExtensionLoader {
+class RAG3DB_API ExtensionLoader {
 public:
     explicit ExtensionLoader(std::string extensionName) : extensionName{std::move(extensionName)} {}
 
@@ -23,4 +23,4 @@ protected:
 };
 
 } // namespace extension
-} // namespace kuzu
+} // namespace rag3db

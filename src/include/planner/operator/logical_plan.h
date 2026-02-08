@@ -2,12 +2,12 @@
 
 #include "logical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 using cardinality_t = uint64_t;
 
-class KUZU_API LogicalPlan {
+class RAG3DB_API LogicalPlan {
     friend class CardinalityEstimator;
     friend class CostModel;
 
@@ -46,4 +46,4 @@ private:
 };
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

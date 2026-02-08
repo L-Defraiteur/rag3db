@@ -6,7 +6,7 @@
 #include "common/assert.h"
 #include "parsed_graph_entry.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
@@ -32,11 +32,11 @@ public:
         return nameToEntry;
     }
 
-    KUZU_API static GraphEntrySet* Get(const main::ClientContext& context);
+    RAG3DB_API static GraphEntrySet* Get(const main::ClientContext& context);
 
 private:
     std::unordered_map<std::string, std::unique_ptr<ParsedGraphEntry>> nameToEntry;
 };
 
 } // namespace graph
-} // namespace kuzu
+} // namespace rag3db

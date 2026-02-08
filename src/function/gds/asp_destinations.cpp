@@ -4,13 +4,13 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::processor;
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::storage;
-using namespace kuzu::graph;
+using namespace rag3db::processor;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::storage;
+using namespace rag3db::graph;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 using multiplicity_t = uint64_t;
@@ -330,4 +330,4 @@ std::unique_ptr<RJAlgorithm> AllSPDestinationsFunction::getAlgorithm() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

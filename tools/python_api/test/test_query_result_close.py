@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
-from test_helper import KUZU_ROOT
+from test_helper import RAG3DB_ROOT
 from conftest import get_db_file_path
 
 
@@ -13,9 +13,9 @@ def test_query_result_close(tmp_path: Path, build_dir: Path) -> None:
         import sys
         sys.path.append(r"{build_dir!s}")
 
-        import kuzu
-        db = kuzu.Database(r"{db_path!s}")
-        conn = kuzu.Connection(db)
+        import rag3db
+        db = rag3db.Database(r"{db_path!s}")
+        conn = rag3db.Connection(db)
         conn.execute('''
           CREATE NODE TABLE person (
             ID INT64,
@@ -36,7 +36,7 @@ def test_query_result_close(tmp_path: Path, build_dir: Path) -> None:
             u UUID,
             PRIMARY KEY (ID))
         ''')
-        conn.execute('COPY person FROM "{KUZU_ROOT}/dataset/tinysnb/vPerson.csv" (HEADER=true)')
+        conn.execute('COPY person FROM "{RAG3DB_ROOT}/dataset/tinysnb/vPerson.csv" (HEADER=true)')
         result = conn.execute("MATCH (a:person) WHERE a.ID = 0 RETURN a.isStudent;")
         # result.close()
     """)

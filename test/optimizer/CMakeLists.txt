@@ -1,1 +1,1 @@
-add_kuzu_test(optimizer_test optimizer_test.cpp)
+add_rag3db_test(optimizer_test optimizer_test.cpp)

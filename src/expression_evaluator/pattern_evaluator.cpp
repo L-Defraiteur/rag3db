@@ -3,13 +3,13 @@
 #include "common/constants.h"
 #include "function/struct/vector_struct_functions.h"
 
-using namespace kuzu::storage;
-using namespace kuzu::main;
-using namespace kuzu::common;
-using namespace kuzu::function;
-using namespace kuzu::processor;
+using namespace rag3db::storage;
+using namespace rag3db::main;
+using namespace rag3db::common;
+using namespace rag3db::function;
+using namespace rag3db::processor;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 static void updateNullPattern(ValueVector& patternVector, const ValueVector& idVector) {
@@ -85,4 +85,4 @@ void UndirectedRelExpressionEvaluator::initFurther(const ResultSet& resultSet) {
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

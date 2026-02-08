@@ -1,22 +1,22 @@
 {
-  "name": "kuzu",
+  "name": "rag3db",
   "version": "0.0.1",
   "description": "An in-process property graph database management system built for query speed and scalability.",
   "main": "index.js",
   "module": "./index.mjs",
-  "types": "./kuzu.d.ts",
+  "types": "./rag3db.d.ts",
   "exports":{
     ".":{
       "require": "./index.js",
       "import": "./index.mjs",
-      "types": "./kuzu.d.ts"
+      "types": "./rag3db.d.ts"
     }
   },
   "type": "commonjs",
-  "homepage": "https://kuzudb.com/",
+  "homepage": "https://rag3db.com/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kuzudb/kuzu.git"
+    "url": "https://github.com/rag3db/rag3db.git"
   },
   "scripts": {
     "test": "mocha test --timeout 20000",

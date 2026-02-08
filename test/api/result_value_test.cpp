@@ -1,8 +1,8 @@
 #include "api_test/api_test.h"
 #include "common/exception/runtime.h"
 
-using namespace kuzu::common;
-using namespace kuzu::testing;
+using namespace rag3db::common;
+using namespace rag3db::testing;
 
 class ResultValueTest : public ApiTest {};
 
@@ -43,8 +43,8 @@ TEST_F(ResultValueTest, getResultValueException) {
     }
 }
 
-static decltype(auto) copyFlatTuple(kuzu::processor::FlatTuple* tuple) {
-    std::vector<std::unique_ptr<kuzu::common::Value>> ret;
+static decltype(auto) copyFlatTuple(rag3db::processor::FlatTuple* tuple) {
+    std::vector<std::unique_ptr<rag3db::common::Value>> ret;
     for (uint32_t i = 0; i < tuple->len(); i++) {
         ret.emplace_back(tuple->getValue(i)->copy());
     }
@@ -52,8 +52,8 @@ static decltype(auto) copyFlatTuple(kuzu::processor::FlatTuple* tuple) {
 }
 
 TEST_F(ResultValueTest, getNextExample) {
-    std::unique_ptr<kuzu::main::QueryResult> result = conn->query("MATCH (p:person) RETURN p.*");
-    std::vector<std::vector<std::unique_ptr<kuzu::common::Value>>> tuples;
+    std::unique_ptr<rag3db::main::QueryResult> result = conn->query("MATCH (p:person) RETURN p.*");
+    std::vector<std::vector<std::unique_ptr<rag3db::common::Value>>> tuples;
     while (result->hasNext()) {
         auto tuple = result->getNext();
         tuples.emplace_back(copyFlatTuple(tuple.get()));

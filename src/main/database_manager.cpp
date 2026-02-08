@@ -5,9 +5,9 @@
 #include "main/client_context.h"
 #include "main/database.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 DatabaseManager::DatabaseManager() : defaultDatabase{""} {}
@@ -85,4 +85,4 @@ DatabaseManager* DatabaseManager::Get(const ClientContext& context) {
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

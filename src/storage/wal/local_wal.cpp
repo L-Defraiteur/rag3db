@@ -6,11 +6,11 @@
 #include "common/vector/value_vector.h"
 #include "storage/wal/checksum_writer.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 LocalWAL::LocalWAL(MemoryManager& mm, bool enableChecksums)
@@ -110,4 +110,4 @@ void LocalWAL::addNewWALRecord(const WALRecord& walRecord) {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

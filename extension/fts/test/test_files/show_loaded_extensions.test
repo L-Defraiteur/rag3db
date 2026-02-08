@@ -7,17 +7,17 @@
 -LOAD_DYNAMIC_EXTENSION fts
 -STATEMENT CALL SHOW_LOADED_EXTENSIONS() RETURN *
 ---- 1
-FTS|USER|${KUZU_ROOT_DIRECTORY}/extension/fts/build/libfts.kuzu_extension
--STATEMENT load extension "${KUZU_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.kuzu_extension"
+FTS|USER|${RAG3DB_ROOT_DIRECTORY}/extension/fts/build/libfts.rag3db_extension
+-STATEMENT load extension "${RAG3DB_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.rag3db_extension"
 ---- ok
 -STATEMENT CALL SHOW_LOADED_EXTENSIONS() RETURN *
 ---- 2
-FTS|USER|${KUZU_ROOT_DIRECTORY}/extension/fts/build/libfts.kuzu_extension
-DUCKDB|USER|${KUZU_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.kuzu_extension
--STATEMENT load extension "${KUZU_ROOT_DIRECTORY}/extension/httpfs/build/libhttpfs.kuzu_extension"
+FTS|USER|${RAG3DB_ROOT_DIRECTORY}/extension/fts/build/libfts.rag3db_extension
+DUCKDB|USER|${RAG3DB_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.rag3db_extension
+-STATEMENT load extension "${RAG3DB_ROOT_DIRECTORY}/extension/httpfs/build/libhttpfs.rag3db_extension"
 ---- ok
 -STATEMENT CALL SHOW_LOADED_EXTENSIONS() RETURN *
 ---- 3
-FTS|USER|${KUZU_ROOT_DIRECTORY}/extension/fts/build/libfts.kuzu_extension
-DUCKDB|USER|${KUZU_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.kuzu_extension
-HTTPFS|USER|${KUZU_ROOT_DIRECTORY}/extension/httpfs/build/libhttpfs.kuzu_extension
+FTS|USER|${RAG3DB_ROOT_DIRECTORY}/extension/fts/build/libfts.rag3db_extension
+DUCKDB|USER|${RAG3DB_ROOT_DIRECTORY}/extension/duckdb/build/libduckdb.rag3db_extension
+HTTPFS|USER|${RAG3DB_ROOT_DIRECTORY}/extension/httpfs/build/libhttpfs.rag3db_extension

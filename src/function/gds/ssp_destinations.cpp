@@ -3,13 +3,13 @@
 #include "function/gds/rec_joins.h"
 #include "processor/execution_context.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::graph;
-using namespace kuzu::main;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::graph;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 class SSPDestinationsOutputWriter : public RJOutputWriter {
@@ -124,4 +124,4 @@ std::unique_ptr<RJAlgorithm> SingleSPDestinationsFunction::getAlgorithm() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

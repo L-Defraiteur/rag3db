@@ -3,14 +3,14 @@
 #include "binder/expression/scalar_function_expression.h"
 #include "function/sequence/sequence_functions.h"
 
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
-using namespace kuzu::main;
-using namespace kuzu::binder;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
+using namespace rag3db::main;
+using namespace rag3db::binder;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 FunctionExpressionEvaluator::FunctionExpressionEvaluator(std::shared_ptr<Expression> expression,
@@ -78,4 +78,4 @@ void FunctionExpressionEvaluator::resolveResultVector(const ResultSet& /*resultS
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

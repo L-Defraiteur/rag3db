@@ -3,10 +3,10 @@
 #include "planner/operator/logical_intersect.h"
 #include "planner/planner.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendHashJoin(const expression_vector& joinNodeIDs, JoinType joinType,
@@ -120,4 +120,4 @@ void Planner::appendIntersect(const std::shared_ptr<Expression>& intersectNodeID
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

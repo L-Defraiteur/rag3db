@@ -1,4 +1,4 @@
-use kuzu::{Connection, Database, Error, SystemConfig};
+use rag3db::{Connection, Database, Error, SystemConfig};
 
 fn main() -> Result<(), Error> {
     let db = Database::new(

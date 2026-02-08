@@ -1,10 +1,10 @@
-import kuzu from "./index.js";
+import rag3db from "./index.js";
 
 // Re-export everything from the CommonJS module
-export const Database = kuzu.Database;
-export const Connection = kuzu.Connection;
-export const PreparedStatement = kuzu.PreparedStatement;
-export const QueryResult = kuzu.QueryResult;
-export const VERSION = kuzu.VERSION;
-export const STORAGE_VERSION = kuzu.STORAGE_VERSION;
-export default kuzu;
+export const Database = rag3db.Database;
+export const Connection = rag3db.Connection;
+export const PreparedStatement = rag3db.PreparedStatement;
+export const QueryResult = rag3db.QueryResult;
+export const VERSION = rag3db.VERSION;
+export const STORAGE_VERSION = rag3db.STORAGE_VERSION;
+export default rag3db;

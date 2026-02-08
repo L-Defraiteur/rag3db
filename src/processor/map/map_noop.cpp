@@ -1,9 +1,9 @@
 #include "planner/operator/logical_noop.h"
 #include "processor/plan_mapper.h"
 
-using namespace kuzu::planner;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapNoop(const LogicalOperator* logicalOperator) {
@@ -31,4 +31,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapNoop(const LogicalOperator* log
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

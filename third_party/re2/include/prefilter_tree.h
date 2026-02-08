@@ -24,7 +24,7 @@
 #include "sparse_array.h"
 #include "util.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 class PrefilterTree {
@@ -135,6 +135,6 @@ private:
 };
 
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 
 #endif // RE2_PREFILTER_TREE_H_

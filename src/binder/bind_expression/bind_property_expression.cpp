@@ -8,11 +8,11 @@
 #include "function/struct/vector_struct_functions.h"
 #include "parser/expression/parsed_property_expression.h"
 
-using namespace kuzu::common;
-using namespace kuzu::parser;
-using namespace kuzu::catalog;
+using namespace rag3db::common;
+using namespace rag3db::parser;
+using namespace rag3db::catalog;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 static bool isNodeOrRelPattern(const Expression& expression) {
@@ -121,4 +121,4 @@ std::shared_ptr<Expression> ExpressionBinder::bindStructPropertyExpression(
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

@@ -1,8 +1,8 @@
 #include "optimizer/logical_operator_visitor.h"
 
-using namespace kuzu::planner;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
 void LogicalOperatorVisitor::visitOperatorSwitch(LogicalOperator* op) {
@@ -183,4 +183,4 @@ std::shared_ptr<LogicalOperator> LogicalOperatorVisitor::visitOperatorReplaceSwi
 }
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

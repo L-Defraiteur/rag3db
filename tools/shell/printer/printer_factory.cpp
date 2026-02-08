@@ -2,7 +2,7 @@
 
 #include "printer/json_printer.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 std::unique_ptr<Printer> PrinterFactory::getPrinter(PrinterType type) {
@@ -39,4 +39,4 @@ std::unique_ptr<Printer> PrinterFactory::getPrinter(PrinterType type) {
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

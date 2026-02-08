@@ -2,7 +2,7 @@
 
 #include "binder/expression/expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 class PathExpression final : public Expression {
@@ -27,4 +27,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

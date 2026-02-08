@@ -12,13 +12,13 @@
 #include "planner/planner.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::catalog;
-using namespace kuzu::transaction;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::catalog;
+using namespace rag3db::transaction;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 static std::unordered_set<table_id_t> getBoundNodeTableIDSet(const RelExpression& rel,
@@ -188,4 +188,4 @@ void Planner::appendNodeLabelFilter(std::shared_ptr<Expression> nodeID,
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

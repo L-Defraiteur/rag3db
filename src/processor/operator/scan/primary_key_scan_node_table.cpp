@@ -3,10 +3,10 @@
 #include "binder/expression/expression_util.h"
 #include "processor/execution_context.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string PrimaryKeyScanPrintInfo::toString() const {
@@ -72,4 +72,4 @@ bool PrimaryKeyScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

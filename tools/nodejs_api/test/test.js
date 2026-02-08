@@ -6,7 +6,7 @@ const importTest = (name, path) => {
   });
 };
 
-describe("kuzu", () => {
+describe("rag3db", () => {
   before(() => {
     return initTests();
   });

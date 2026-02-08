@@ -13,14 +13,14 @@
 #include "parser/query/regular_query.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::parser;
-using namespace kuzu::catalog;
-using namespace kuzu::transaction;
-using namespace kuzu::storage;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::parser;
+using namespace rag3db::catalog;
+using namespace rag3db::transaction;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 FileTypeInfo getFileType(case_insensitive_map_t<Value>& options) {
@@ -166,4 +166,4 @@ std::unique_ptr<BoundStatement> Binder::bindExportDatabaseClause(const Statement
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

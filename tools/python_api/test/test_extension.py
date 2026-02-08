@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from type_aliases import ConnDB
 
-EXTENSION_CMAKE_PREFIX = 'add_definitions(-DKUZU_EXTENSION_VERSION="'
+EXTENSION_CMAKE_PREFIX = 'add_definitions(-DRAG3DB_EXTENSION_VERSION="'
 
 
 @pytest.fixture
@@ -40,20 +40,20 @@ def test_extension_install_httpfs(conn_db_readwrite: ConnDB, tmpdir: str, extens
     extension_path = (
         Path(userdir)
         .joinpath(
-            ".kuzu",
+            ".rag3db",
             "extension",
             extension_version,
             extension_extension_dir_prefix,
             "httpfs",
-            "libhttpfs.kuzu_extension",
+            "libhttpfs.rag3db_extension",
         )
         .resolve()
     )
     opener = urllib.request.build_opener()
-    opener.addheaders = [("User-agent", "Kuzu Test Suite")]
+    opener.addheaders = [("User-agent", "Rag3db Test Suite")]
     urllib.request.install_opener(opener)
-    download_url = f"http://extension.kuzudb.com/v{extension_version}/{extension_extension_dir_prefix}/httpfs/libhttpfs.kuzu_extension"
-    temp_path = Path(tmpdir) / "libhttpfs.kuzu_extension"
+    download_url = f"http://extension.rag3db.com/v{extension_version}/{extension_extension_dir_prefix}/httpfs/libhttpfs.rag3db_extension"
+    temp_path = Path(tmpdir) / "libhttpfs.rag3db_extension"
     urllib.request.urlretrieve(download_url, temp_path)
 
     conn, _ = conn_db_readwrite

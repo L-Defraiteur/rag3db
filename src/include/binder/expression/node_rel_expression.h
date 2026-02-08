@@ -4,13 +4,13 @@
 #include "expression.h"
 #include "property_expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 class TableCatalogEntry;
 }
 namespace binder {
 
-class KUZU_API NodeOrRelExpression : public Expression {
+class RAG3DB_API NodeOrRelExpression : public Expression {
     static constexpr common::ExpressionType expressionType_ = common::ExpressionType::PATTERN;
 
 public:
@@ -92,4 +92,4 @@ protected:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

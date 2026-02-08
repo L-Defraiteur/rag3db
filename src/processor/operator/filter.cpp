@@ -3,9 +3,9 @@
 #include "binder/expression/expression.h" // IWYU pragma: keep
 #include "processor/execution_context.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string FilterPrintInfo::toString() const {
@@ -67,4 +67,4 @@ bool NodeLabelFiler::getNextTuplesInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

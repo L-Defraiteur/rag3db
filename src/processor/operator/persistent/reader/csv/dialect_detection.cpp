@@ -1,6 +1,6 @@
 #include "processor/operator/persistent/reader/csv/dialect_detection.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::vector<DialectOption> generateDialectOptions(const common::CSVOption& option) {
@@ -43,4 +43,4 @@ std::vector<DialectOption> generateDialectOptions(const common::CSVOption& optio
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

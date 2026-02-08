@@ -4,9 +4,9 @@
 
 -CASE ScanUnityCatalog
 -SKIP
--STATEMENT load extension "${KUZU_ROOT_DIRECTORY}/extension/unity_catalog/build/libunity_catalog.kuzu_extension"
+-STATEMENT load extension "${RAG3DB_ROOT_DIRECTORY}/extension/unity_catalog/build/libunity_catalog.rag3db_extension"
 ---- ok
--STATEMENT load extension "${KUZU_ROOT_DIRECTORY}/extension/unity_catalog/build/libunity_catalog.kuzu_extension"
+-STATEMENT load extension "${RAG3DB_ROOT_DIRECTORY}/extension/unity_catalog/build/libunity_catalog.rag3db_extension"
 ---- ok
 
 -LOG UniversityCatalogScan

@@ -7,10 +7,10 @@
 #include "main/client_context.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 void WALRecord::serialize(Serializer& serializer) const {
@@ -483,4 +483,4 @@ std::unique_ptr<LoadExtensionRecord> LoadExtensionRecord::deserialize(Deserializ
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

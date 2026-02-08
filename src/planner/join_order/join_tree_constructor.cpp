@@ -6,10 +6,10 @@
 #include "common/exception/not_implemented.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 JoinTree JoinTreeConstructor::construct(std::shared_ptr<BoundJoinHintNode> root) {
@@ -204,4 +204,4 @@ std::shared_ptr<JoinTreeNode> JoinTreeConstructor::tryConstructNestedLoopJoin(
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

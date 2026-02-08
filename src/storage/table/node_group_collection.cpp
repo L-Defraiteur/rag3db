@@ -6,10 +6,10 @@
 #include "storage/table/table.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 NodeGroupCollection::NodeGroupCollection(MemoryManager& mm, const std::vector<LogicalType>& types,
@@ -273,4 +273,4 @@ void NodeGroupCollection::deserialize(Deserializer& deSer, MemoryManager& memory
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

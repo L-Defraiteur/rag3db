@@ -2,12 +2,12 @@
 
 #include "main/client_context.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
-using namespace kuzu::storage;
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::storage;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
 FTSUpdateVectors::FTSUpdateVectors(MemoryManager* mm)
     : mm{mm}, dataChunkState{DataChunkState::getSingleValueDataChunkState()},
@@ -91,4 +91,4 @@ FTSUpdateState::FTSUpdateState(main::ClientContext* context, FTSInternalTableInf
 }
 
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

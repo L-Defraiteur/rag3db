@@ -3,31 +3,31 @@ import sys
 from enum import Enum
 from pathlib import Path
 
-KUZU_ROOT = Path(__file__).parent.parent.parent.parent
+RAG3DB_ROOT = Path(__file__).parent.parent.parent.parent
 if sys.platform == "win32":
-    # \ in paths is not supported by kuzu's parser
-    KUZU_ROOT = str(KUZU_ROOT).replace("\\", "/")
+    # \ in paths is not supported by rag3db's parser
+    RAG3DB_ROOT = str(RAG3DB_ROOT).replace("\\", "/")
 
-KUZU_EXEC_PATH = os.path.join(
-    KUZU_ROOT,
+RAG3DB_EXEC_PATH = os.path.join(
+    RAG3DB_ROOT,
     "build",
     "release",
     "tools",
     "shell",
-    "kuzu",
+    "rag3db",
 )
 
 
-def _get_kuzu_version():
-    cmake_file = os.path.join(KUZU_ROOT, "CMakeLists.txt")
+def _get_rag3db_version():
+    cmake_file = os.path.join(RAG3DB_ROOT, "CMakeLists.txt")
     with open(cmake_file) as f:
         for line in f:
-            if line.startswith("project(Kuzu VERSION"):
+            if line.startswith("project(Rag3db VERSION"):
                 return line.split(" ")[2].strip()
         return None
 
 
-KUZU_VERSION = _get_kuzu_version()
+RAG3DB_VERSION = _get_rag3db_version()
 
 
 class KEY_ACTION(Enum):

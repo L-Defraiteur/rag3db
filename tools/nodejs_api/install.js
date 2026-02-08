@@ -11,7 +11,7 @@ const arch = process.arch;
 const prebuiltPath = path.join(
   __dirname,
   "prebuilt",
-  `kuzujs-${platform}-${arch}.node`
+  `rag3dbjs-${platform}-${arch}.node`
 );
 
 // Check if building from source is forced
@@ -24,14 +24,14 @@ if (isNpmBuildFromSourceSet) {
 else if (fsCallback.existsSync(prebuiltPath)) {
   console.log("Prebuilt binary is available.");
   console.log("Copying prebuilt binary to package directory...");
-  fs.copyFileSync(prebuiltPath, path.join(__dirname, "kuzujs.node"));
+  fs.copyFileSync(prebuiltPath, path.join(__dirname, "rag3dbjs.node"));
   console.log(
-    `Copied ${prebuiltPath} -> ${path.join(__dirname, "kuzujs.node")}.`
+    `Copied ${prebuiltPath} -> ${path.join(__dirname, "rag3dbjs.node")}.`
   );
   console.log("Copying JS files to package directory...");
   const jsSourceDir = path.join(
     __dirname,
-    "kuzu-source",
+    "rag3db-source",
     "tools",
     "nodejs_api",
     "src_js"
@@ -55,17 +55,17 @@ else if (fsCallback.existsSync(prebuiltPath)) {
 
 // Get number of threads
 const THREADS = os.cpus().length;
-console.log(`Using ${THREADS} threads to build Kuzu.`);
+console.log(`Using ${THREADS} threads to build Rag3db.`);
 
 // Install dependencies
 console.log("Installing dependencies...");
 childProcess.execSync("npm install", {
-  cwd: path.join(__dirname, "kuzu-source", "tools", "nodejs_api"),
+  cwd: path.join(__dirname, "rag3db-source", "tools", "nodejs_api"),
   stdio: "inherit",
 });
 
-// Build the Kuzu source code
-console.log("Building Kuzu source code...");
+// Build the Rag3db source code
+console.log("Building Rag3db source code...");
 const env = { ...process.env };
 
 if (process.platform === "darwin") {
@@ -122,14 +122,14 @@ if (process.platform === "win32") {
 
 childProcess.execSync("make nodejs NUM_THREADS=" + THREADS, {
   env,
-  cwd: path.join(__dirname, "kuzu-source"),
+  cwd: path.join(__dirname, "rag3db-source"),
   stdio: "inherit",
 });
 
 // Copy the built files to the package directory
 const BUILT_DIR = path.join(
   __dirname,
-  "kuzu-source",
+  "rag3db-source",
   "tools",
   "nodejs_api",
   "build"
@@ -150,9 +150,9 @@ for (const file of files) {
 // Clean up
 console.log("Cleaning up...");
 childProcess.execSync("npm run clean-all", {
-  cwd: path.join(__dirname, "kuzu-source", "tools", "nodejs_api"),
+  cwd: path.join(__dirname, "rag3db-source", "tools", "nodejs_api"),
 });
 childProcess.execSync("make clean", {
-  cwd: path.join(__dirname, "kuzu-source"),
+  cwd: path.join(__dirname, "rag3db-source"),
 });
 console.log("Done!");

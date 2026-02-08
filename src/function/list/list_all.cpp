@@ -1,9 +1,9 @@
 #include "function/list/vector_list_functions.h"
 #include "function/scalar_function.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 bool allHandler(uint64_t numSelectedValues, uint64_t originalSize) {
@@ -23,4 +23,4 @@ function_set ListAllFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class Writer {
@@ -29,4 +29,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

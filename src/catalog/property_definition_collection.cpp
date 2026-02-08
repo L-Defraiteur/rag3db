@@ -7,10 +7,10 @@
 #include "common/serializer/serializer.h"
 #include "common/string_utils.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 
 std::vector<binder::PropertyDefinition> PropertyDefinitionCollection::getDefinitions() const {
@@ -144,4 +144,4 @@ PropertyDefinitionCollection PropertyDefinitionCollection::deserialize(Deseriali
 }
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

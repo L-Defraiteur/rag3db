@@ -1,8 +1,8 @@
 #include "planner/operator/logical_flatten.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void LogicalFlatten::computeFactorizedSchema() {
@@ -15,4 +15,4 @@ void LogicalFlatten::computeFlatSchema() {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

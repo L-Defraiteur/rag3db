@@ -6,7 +6,7 @@
 #include "common/enums/table_type.h"
 #include "index_look_up_info.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 struct ExtraBoundCopyFromInfo {
@@ -19,7 +19,7 @@ struct ExtraBoundCopyFromInfo {
     }
 };
 
-struct KUZU_API BoundCopyFromInfo {
+struct RAG3DB_API BoundCopyFromInfo {
     // Name of table to copy into.
     std::string tableName;
     // Type of table.
@@ -98,4 +98,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

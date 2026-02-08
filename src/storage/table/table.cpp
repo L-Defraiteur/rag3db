@@ -4,9 +4,9 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 TableScanState::~TableScanState() = default;
@@ -62,4 +62,4 @@ DataChunk Table::constructDataChunk(MemoryManager* mm, std::vector<LogicalType> 
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

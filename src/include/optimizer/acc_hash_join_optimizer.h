@@ -3,10 +3,10 @@
 #include "logical_operator_visitor.h"
 #include "planner/operator/logical_plan.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
-// This optimizer enables the Accumulated hash join algorithm as introduced in paper "Kuzu Graph
+// This optimizer enables the Accumulated hash join algorithm as introduced in paper "Rag3db Graph
 // Database Management System".
 class HashJoinSIPOptimizer final : public LogicalOperatorVisitor {
 public:
@@ -23,4 +23,4 @@ private:
 };
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

@@ -8,10 +8,10 @@
 #include "parser/parser.h"
 #include "parser/port_db.h"
 
-using namespace kuzu::common;
-using namespace kuzu::parser;
+using namespace rag3db::common;
+using namespace rag3db::parser;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 static std::string getQueryFromFile(VirtualFileSystem* vfs, const std::string& boundFilePath,
@@ -141,4 +141,4 @@ std::unique_ptr<BoundStatement> Binder::bindImportDatabaseClause(const Statement
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

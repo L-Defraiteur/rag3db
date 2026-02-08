@@ -4,11 +4,11 @@
 #include "processor/operator/result_collector.h"
 #include "processor/plan_mapper.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::planner;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapExpressionsScan(
@@ -38,4 +38,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExpressionsScan(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

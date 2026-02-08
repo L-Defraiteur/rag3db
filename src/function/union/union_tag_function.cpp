@@ -2,9 +2,9 @@
 #include "function/union/functions/union_tag.h"
 #include "function/union/vector_union_functions.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 static std::unique_ptr<FunctionBindData> bindFunc(const ScalarBindFuncInput& input) {
@@ -22,4 +22,4 @@ function_set UnionTagFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

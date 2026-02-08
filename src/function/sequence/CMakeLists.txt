@@ -1,7 +1,7 @@
-add_library(kuzu_function_sequence
+add_library(rag3db_function_sequence
         OBJECT
         sequence_functions.cpp)
 
 set(ALL_OBJECT_FILES
-        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:kuzu_function_sequence>
+        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_function_sequence>
         PARENT_SCOPE)

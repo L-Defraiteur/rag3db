@@ -1,11 +1,11 @@
 #include "expression_evaluator/case_evaluator.h"
 
-using namespace kuzu::main;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
+using namespace rag3db::main;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 void CaseAlternativeEvaluator::init(const ResultSet& resultSet,
@@ -105,4 +105,4 @@ void CaseExpressionEvaluator::fillEntry(sel_t resultPos, ValueVector* srcVector)
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

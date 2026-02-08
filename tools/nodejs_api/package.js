@@ -3,22 +3,22 @@ const fs = require("fs/promises");
 const fsCallback = require("fs");
 const path = require("path");
 
-const KUZU_ROOT = path.resolve(path.join(__dirname, "..", ".."));
+const RAG3DB_ROOT = path.resolve(path.join(__dirname, "..", ".."));
 const CURRENT_DIR = path.resolve(__dirname);
-const ARCHIVE_PATH = path.resolve(path.join(__dirname, "kuzu-source.tar"));
+const ARCHIVE_PATH = path.resolve(path.join(__dirname, "rag3db-source.tar"));
 const PREBUILT_DIR = path.join(CURRENT_DIR, "prebuilt");
 const ARCHIVE_DIR_PATH = path.join(CURRENT_DIR, "package");
-const KUZU_VERSION_TEXT = "Kuzu VERSION";
+const RAG3DB_VERSION_TEXT = "Rag3db VERSION";
 
 (async () => {
-  console.log("Gathering Kuzu source code...");
+  console.log("Gathering Rag3db source code...");
   // Create the git archive
   await new Promise((resolve, reject) => {
     childProcess.execFile(
       "git",
       ["archive", "--format=tar", "--output=" + ARCHIVE_PATH, "HEAD"],
       {
-        cwd: KUZU_ROOT,
+        cwd: RAG3DB_ROOT,
       },
       (err) => {
         if (err) {
@@ -30,21 +30,21 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
     );
   });
 
-  // Remove the old kuzu-source directory
+  // Remove the old rag3db-source directory
   try {
-    await fs.rm(path.join(CURRENT_DIR, "kuzu-source"), { recursive: true });
+    await fs.rm(path.join(CURRENT_DIR, "rag3db-source"), { recursive: true });
   } catch (e) {
     // Ignore
   }
 
-  // Create the kuzu-source directory
-  await fs.mkdir(path.join(CURRENT_DIR, "kuzu-source"));
+  // Create the rag3db-source directory
+  await fs.mkdir(path.join(CURRENT_DIR, "rag3db-source"));
 
-  // Extract the archive to kuzu-source
+  // Extract the archive to rag3db-source
   await new Promise((resolve, reject) => {
     childProcess.execFile(
       "tar",
-      ["-xf", ARCHIVE_PATH, "-C", "kuzu-source"],
+      ["-xf", ARCHIVE_PATH, "-C", "rag3db-source"],
       { cwd: CURRENT_DIR },
       (err) => {
         if (err) {
@@ -69,10 +69,10 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
   // Create the archive directory
   await fs.mkdir(ARCHIVE_DIR_PATH);
 
-  // Move kuzu-source to archive
+  // Move rag3db-source to archive
   await fs.rename(
-    path.join(CURRENT_DIR, "kuzu-source"),
-    path.join(ARCHIVE_DIR_PATH, "kuzu-source")
+    path.join(CURRENT_DIR, "rag3db-source"),
+    path.join(ARCHIVE_DIR_PATH, "rag3db-source")
   );
 
   // Copy package.json to archive
@@ -89,13 +89,13 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
 
   // Copy LICENSE to archive
   await fs.copyFile(
-    path.join(KUZU_ROOT, "LICENSE"),
+    path.join(RAG3DB_ROOT, "LICENSE"),
     path.join(ARCHIVE_DIR_PATH, "LICENSE")
   );
 
   // Copy README.md to archive
   await fs.copyFile(
-    path.join(KUZU_ROOT, "README.md"),
+    path.join(RAG3DB_ROOT, "README.md"),
     path.join(ARCHIVE_DIR_PATH, "README.md")
   );
 
@@ -151,14 +151,14 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
   );
 
   const CMakeListsTxt = await fs.readFile(
-    path.join(KUZU_ROOT, "CMakeLists.txt"),
+    path.join(RAG3DB_ROOT, "CMakeLists.txt"),
     { encoding: "utf-8" }
   );
 
   // Get the version from CMakeLists.txt
   const lines = CMakeListsTxt.split("\n");
   for (const line of lines) {
-    if (line.includes(KUZU_VERSION_TEXT)) {
+    if (line.includes(RAG3DB_VERSION_TEXT)) {
       const versionSplit = line.split(" ")[2].trim().split(".");
       let version = versionSplit.slice(0, 3).join(".");
       if (versionSplit.length >= 4) {
@@ -181,7 +181,7 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
   // There is a symlink in the rust_api directory, so we need to remove it.
   // Otherwise, the tarball will be rejected by npm.
   await fs.unlink(
-    path.join(ARCHIVE_DIR_PATH, "kuzu-source", "tools", "rust_api", "kuzu-src")
+    path.join(ARCHIVE_DIR_PATH, "rag3db-source", "tools", "rust_api", "rag3db-src")
   );
 
   console.log("Creating tarball...");
@@ -189,7 +189,7 @@ const KUZU_VERSION_TEXT = "Kuzu VERSION";
   await new Promise((resolve, reject) => {
     childProcess.execFile(
       "tar",
-      ["-czf", "kuzu-source.tar.gz", "package"],
+      ["-czf", "rag3db-source.tar.gz", "package"],
       { cwd: CURRENT_DIR },
       (err) => {
         if (err) {

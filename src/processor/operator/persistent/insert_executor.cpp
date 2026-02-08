@@ -2,10 +2,10 @@
 
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 void NodeInsertInfo::init(const ResultSet& resultSet) {
@@ -190,4 +190,4 @@ void RelInsertExecutor::skipInsert() const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

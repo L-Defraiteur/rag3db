@@ -3,9 +3,9 @@
 #include "function/scalar_function.h"
 #include "function/timestamp/timestamp_function.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 function_set CenturyFunction::getFunctionSet() {
@@ -33,4 +33,4 @@ function_set ToTimestampFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

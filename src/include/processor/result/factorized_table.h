@@ -9,7 +9,7 @@
 #include "factorized_table_schema.h"
 #include "flat_tuple.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 class MemoryManager;
 }
@@ -86,7 +86,7 @@ private:
 
 class FlatTupleIterator;
 
-class KUZU_API FactorizedTable {
+class RAG3DB_API FactorizedTable {
     friend FlatTupleIterator;
     friend class JoinHashTable;
     friend class PathPropertyProbe;
@@ -319,4 +319,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

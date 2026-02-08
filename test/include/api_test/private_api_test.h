@@ -2,7 +2,7 @@
 
 #include "graph_test/private_graph_test.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 class PrivateApiTest : public DBTest {
@@ -14,9 +14,9 @@ public:
     }
 
     std::string getInputDir() override {
-        return TestHelper::appendKuzuRootPath("dataset/tinysnb/");
+        return TestHelper::appendRag3dbRootPath("dataset/tinysnb/");
     }
 };
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

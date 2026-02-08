@@ -1,4 +1,4 @@
-add_library(kuzu_c_api
+add_library(rag3db_c_api
         OBJECT
         connection.cpp
         database.cpp
@@ -12,5 +12,5 @@ add_library(kuzu_c_api
         version.cpp)
 
 set(ALL_OBJECT_FILES
-        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:kuzu_c_api>
+        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_c_api>
         PARENT_SCOPE)

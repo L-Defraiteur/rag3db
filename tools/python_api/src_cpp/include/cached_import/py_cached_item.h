@@ -5,7 +5,7 @@
 
 #include "pybind_include.h"
 
-namespace kuzu {
+namespace rag3db {
 
 class PythonCachedItem {
 public:
@@ -23,4 +23,4 @@ protected:
     py::handle object;
 };
 
-} // namespace kuzu
+} // namespace rag3db

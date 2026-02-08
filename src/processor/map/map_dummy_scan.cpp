@@ -3,10 +3,10 @@
 #include "processor/plan_mapper.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::planner;
+using namespace rag3db::common;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapDummyScan(const LogicalOperator*) {
@@ -33,4 +33,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapDummyScan(const LogicalOperator
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

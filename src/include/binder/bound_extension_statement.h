@@ -3,10 +3,10 @@
 #include "bound_statement.h"
 #include "extension/extension_action.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
-using namespace kuzu::extension;
+using namespace rag3db::extension;
 
 class BoundExtensionStatement final : public BoundStatement {
     static constexpr common::StatementType type_ = common::StatementType::EXTENSION;
@@ -23,4 +23,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

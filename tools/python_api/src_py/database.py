@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _kuzu
+from . import _rag3db
 from .types import Type
 
 if TYPE_CHECKING:
@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from torch_geometric.data.feature_store import IndexType
 
-    from .torch_geometric_feature_store import KuzuFeatureStore
-    from .torch_geometric_graph_store import KuzuGraphStore
+    from .torch_geometric_feature_store import Rag3dbFeatureStore
+    from .torch_geometric_graph_store import Rag3dbGraphStore
 
     if sys.version_info >= (3, 11):
         from typing import Self
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class Database:
-    """Kuzu database instance."""
+    """Rag3db database instance."""
 
     def __init__(
         self,
@@ -87,7 +87,7 @@ class Database:
 
         throw_on_wal_replay_failure: bool
             If true, any WAL replaying failure when loading the database will throw an error.
-            Otherwise, Kuzu will silently ignore the failure and replay up to where the error
+            Otherwise, Rag3db will silently ignore the failure and replay up to where the error
             occured.
 
         enable_checksums: bool
@@ -112,7 +112,7 @@ class Database:
         self.enable_checksums = enable_checksums
         self.is_closed = False
 
-        self._database: Any = None  # (type: _kuzu.Database from pybind11)
+        self._database: Any = None  # (type: _rag3db.Database from pybind11)
         if not lazy_init:
             self.init_database()
 
@@ -137,7 +137,7 @@ class Database:
         str
             The version of the database.
         """
-        return _kuzu.Database.get_version()  # type: ignore[union-attr]
+        return _rag3db.Database.get_version()  # type: ignore[union-attr]
 
     @staticmethod
     def get_storage_version() -> int:
@@ -149,7 +149,7 @@ class Database:
         int
             The storage version of the database.
         """
-        return _kuzu.Database.get_storage_version()  # type: ignore[union-attr]
+        return _rag3db.Database.get_storage_version()  # type: ignore[union-attr]
 
     def __getstate__(self) -> dict[str, Any]:
         state = {
@@ -165,7 +165,7 @@ class Database:
         """Initialize the database."""
         self.check_for_database_close()
         if self._database is None:
-            self._database = _kuzu.Database(  # type: ignore[union-attr]
+            self._database = _rag3db.Database(  # type: ignore[union-attr]
                 self.database_path,
                 self.buffer_pool_size,
                 self.max_num_threads,
@@ -180,7 +180,7 @@ class Database:
 
     def get_torch_geometric_remote_backend(
         self, num_threads: int | None = None
-    ) -> tuple[KuzuFeatureStore, KuzuGraphStore]:
+    ) -> tuple[Rag3dbFeatureStore, Rag3dbGraphStore]:
         """
         Use the database as the remote backend for torch_geometric.
 
@@ -196,7 +196,7 @@ class Database:
         torch_geometric, which is useful for mini-batch training. For example:
 
         ```python
-            loader_kuzu = NeighborLoader(
+            loader_rag3db = NeighborLoader(
                 data=(feature_store, graph_store),
                 num_neighbors={('paper', 'cites', 'paper'): [12, 12, 12]},
                 batch_size=LOADER_BATCH_SIZE,
@@ -217,18 +217,18 @@ class Database:
 
         Returns
         -------
-        feature_store : KuzuFeatureStore
+        feature_store : Rag3dbFeatureStore
             Feature store compatible with torch_geometric.
-        graph_store : KuzuGraphStore
+        graph_store : Rag3dbGraphStore
             Graph store compatible with torch_geometric.
         """
         self.check_for_database_close()
-        from .torch_geometric_feature_store import KuzuFeatureStore
-        from .torch_geometric_graph_store import KuzuGraphStore
+        from .torch_geometric_feature_store import Rag3dbFeatureStore
+        from .torch_geometric_graph_store import Rag3dbGraphStore
 
         return (
-            KuzuFeatureStore(self, num_threads),
-            KuzuGraphStore(self, num_threads),
+            Rag3dbFeatureStore(self, num_threads),
+            Rag3dbGraphStore(self, num_threads),
         )
 
     def _scan_node_table(
@@ -289,7 +289,7 @@ class Database:
         self.is_closed = True
         if self._database is not None:
             self._database.close()
-            self._database: Any = None  # (type: _kuzu.Database from pybind11)
+            self._database: Any = None  # (type: _rag3db.Database from pybind11)
 
     def check_for_database_close(self) -> None:
         """

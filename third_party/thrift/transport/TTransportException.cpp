@@ -24,7 +24,7 @@
 
 using std::string;
 
-namespace kuzu_apache {
+namespace rag3db_apache {
 namespace thrift {
 namespace transport {
 
@@ -56,4 +56,4 @@ const char* TTransportException::what() const noexcept {
 }
 }
 }
-} // kuzu_apache::thrift::transport
+} // rag3db_apache::thrift::transport

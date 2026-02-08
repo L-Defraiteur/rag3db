@@ -5,7 +5,7 @@ chai.should();
 chai.config.includeStack = true;
 
 
-global.kuzu = require("../package/nodejs");
+global.rag3db = require("../package/nodejs");
 
 const tmp = require("tmp");
 const fs = require("fs/promises");
@@ -21,9 +21,9 @@ const initTests = async () => {
   });
 
   const dbPath = path.join(tmpPath, "db.kz");
-  await kuzu.init();
-  const db = new kuzu.Database(dbPath, 1 << 30 /* 1GB */);
-  const conn = new kuzu.Connection(db, 4);
+  await rag3db.init();
+  const db = new rag3db.Database(dbPath, 1 << 30 /* 1GB */);
+  const conn = new rag3db.Connection(db, 4);
 
   const schema = (await fs.readFile("../../dataset/tinysnb/schema.cypher"))
     .toString()
@@ -62,7 +62,7 @@ const initTests = async () => {
 const cleanup = async () => {
   await conn.close();
   await db.close();
-  await kuzu.close();
+  await rag3db.close();
 };
 
 global.initTests = initTests;

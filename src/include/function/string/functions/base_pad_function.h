@@ -4,7 +4,7 @@
 #include "common/vector/value_vector.h"
 #include "utf8proc.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 // Padding logic has been taken from DuckDB:
@@ -56,4 +56,4 @@ public:
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "kuzu.hpp"
-using namespace kuzu::main;
+#include "rag3db.hpp"
+using namespace rag3db::main;
 
 int main() {
     auto database = std::make_unique<Database>("" /* fill db path */);

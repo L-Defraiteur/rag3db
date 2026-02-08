@@ -6,7 +6,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 std::string dlErrMessage() {
@@ -34,4 +34,4 @@ std::string dlErrMessage() {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

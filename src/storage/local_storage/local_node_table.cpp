@@ -9,10 +9,10 @@
 #include "storage/storage_utils.h"
 #include "storage/table/node_table.h"
 
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 std::vector<LogicalType> LocalNodeTable::getNodeTableColumnTypes(
@@ -126,4 +126,4 @@ bool LocalNodeTable::lookupPK(const Transaction* transaction, const ValueVector*
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

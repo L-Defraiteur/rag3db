@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class Connection;
 } // namespace main
@@ -15,4 +15,4 @@ struct FSMLeakChecker {
 };
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

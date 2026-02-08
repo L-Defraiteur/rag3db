@@ -1,9 +1,9 @@
 #include "planner/operator/logical_aggregate.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendAggregate(const expression_vector& expressionsToGroupBy,
@@ -18,4 +18,4 @@ void Planner::appendAggregate(const expression_vector& expressionsToGroupBy,
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

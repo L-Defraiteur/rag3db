@@ -30,10 +30,10 @@
 #include "planner/operator/simple/logical_use_database.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 static LogicalPlan getSimplePlan(std::shared_ptr<LogicalOperator> op) {
@@ -167,4 +167,4 @@ LogicalPlan Planner::planExtensionClause(const BoundStatement& statement) {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

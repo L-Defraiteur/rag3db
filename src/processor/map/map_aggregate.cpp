@@ -9,12 +9,12 @@
 #include "processor/plan_mapper.h"
 #include "processor/result/result_set_descriptor.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::function;
-using namespace kuzu::planner;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::function;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static std::vector<AggregateInfo> getAggregateInputInfos(const expression_vector& keys,
@@ -224,4 +224,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::createHashAggregate(const expressi
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

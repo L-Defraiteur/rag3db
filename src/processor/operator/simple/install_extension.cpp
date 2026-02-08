@@ -4,11 +4,11 @@
 #include "processor/execution_context.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
-using namespace kuzu::common;
-using namespace kuzu::extension;
+using namespace rag3db::common;
+using namespace rag3db::extension;
 
 void InstallExtension::setOutputMessage(bool installed, storage::MemoryManager* memoryManager) {
     if (info.forceInstall) {
@@ -41,4 +41,4 @@ void InstallExtension::executeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

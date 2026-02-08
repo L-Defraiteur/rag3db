@@ -19,11 +19,11 @@
 #include "parser/query/updating_clause/set_clause.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::parser;
-using namespace kuzu::catalog;
+using namespace rag3db::common;
+using namespace rag3db::parser;
+using namespace rag3db::catalog;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 std::unique_ptr<BoundUpdatingClause> Binder::bindUpdatingClause(
@@ -384,4 +384,4 @@ std::unique_ptr<BoundUpdatingClause> Binder::bindDeleteClause(
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

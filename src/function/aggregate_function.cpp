@@ -4,10 +4,10 @@
 #include "function/aggregate/avg.h"
 #include "function/aggregate/sum.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 AggregateFunction::AggregateFunction(const AggregateFunction& other)
@@ -59,4 +59,4 @@ void AggregateFunctionUtils::appendSumOrAvgFuncs(std::string name, common::Logic
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

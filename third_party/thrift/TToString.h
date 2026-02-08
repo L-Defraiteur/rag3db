@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _KUZU_THRIFT_TOSTRING_H_
-#define _KUZU_THRIFT_TOSTRING_H_ 1
+#ifndef _RAG3DB_THRIFT_TOSTRING_H_
+#define _RAG3DB_THRIFT_TOSTRING_H_ 1
 
 #include <cmath>
 #include <limits>
@@ -27,7 +27,7 @@
 #include <sstream>
 #include <string>
 
-namespace kuzu_apache {
+namespace rag3db_apache {
 namespace thrift {
 
 template <typename T>
@@ -108,6 +108,6 @@ std::string to_string(const std::set<T>& s) {
   return o.str();
 }
 }
-} // kuzu_apache::thrift
+} // rag3db_apache::thrift
 
-#endif // _KUZU_THRIFT_TOSTRING_H_
+#endif // _RAG3DB_THRIFT_TOSTRING_H_

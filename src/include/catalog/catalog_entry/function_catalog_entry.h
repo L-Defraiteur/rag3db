@@ -3,10 +3,10 @@
 #include "catalog_entry.h"
 #include "function/function.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 
-class KUZU_API FunctionCatalogEntry : public CatalogEntry {
+class RAG3DB_API FunctionCatalogEntry : public CatalogEntry {
 public:
     //===--------------------------------------------------------------------===//
     // constructors
@@ -32,4 +32,4 @@ protected:
 };
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

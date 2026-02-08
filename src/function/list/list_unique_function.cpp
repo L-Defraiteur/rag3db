@@ -3,9 +3,9 @@
 #include "function/list/vector_list_functions.h"
 #include "function/scalar_function.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 uint64_t ListUnique::appendListElementsToValueSet(common::list_entry_t& input,
@@ -55,4 +55,4 @@ function_set ListUniqueFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

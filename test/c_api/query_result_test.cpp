@@ -2,22 +2,22 @@
 
 #include "c_api_test/c_api_test.h"
 
-using namespace kuzu::main;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::testing;
+using namespace rag3db::main;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::testing;
 
 class CApiQueryResultTest : public CApiTest {
 public:
     std::string getInputDir() override {
-        return TestHelper::appendKuzuRootPath("dataset/tinysnb/");
+        return TestHelper::appendRag3dbRootPath("dataset/tinysnb/");
     }
 };
 
-static kuzu_value* copy_flat_tuple(kuzu_flat_tuple* tuple, uint32_t tupleLen) {
-    kuzu_value* ret = (kuzu_value*)malloc(sizeof(kuzu_value) * tupleLen);
+static rag3db_value* copy_flat_tuple(rag3db_flat_tuple* tuple, uint32_t tupleLen) {
+    rag3db_value* ret = (rag3db_value*)malloc(sizeof(rag3db_value) * tupleLen);
     for (uint32_t i = 0; i < tupleLen; i++) {
-        kuzu_flat_tuple_get_value(tuple, i, &ret[i]);
+        rag3db_flat_tuple_get_value(tuple, i, &ret[i]);
     }
     return ret;
 }
@@ -25,252 +25,252 @@ static kuzu_value* copy_flat_tuple(kuzu_flat_tuple* tuple, uint32_t tupleLen) {
 TEST_F(CApiQueryResultTest, GetNextExample) {
     auto conn = getConnection();
 
-    kuzu_query_result result;
-    kuzu_connection_query(conn, "MATCH (p:person) RETURN p.*", &result);
+    rag3db_query_result result;
+    rag3db_connection_query(conn, "MATCH (p:person) RETURN p.*", &result);
 
-    uint64_t num_tuples = kuzu_query_result_get_num_tuples(&result);
-    kuzu_value** tuples = (kuzu_value**)malloc(sizeof(kuzu_value*) * num_tuples);
+    uint64_t num_tuples = rag3db_query_result_get_num_tuples(&result);
+    rag3db_value** tuples = (rag3db_value**)malloc(sizeof(rag3db_value*) * num_tuples);
     for (uint64_t i = 0; i < num_tuples; ++i) {
-        kuzu_flat_tuple tuple;
-        kuzu_query_result_get_next(&result, &tuple);
-        tuples[i] = copy_flat_tuple(&tuple, kuzu_query_result_get_num_columns(&result));
-        kuzu_flat_tuple_destroy(&tuple);
+        rag3db_flat_tuple tuple;
+        rag3db_query_result_get_next(&result, &tuple);
+        tuples[i] = copy_flat_tuple(&tuple, rag3db_query_result_get_num_columns(&result));
+        rag3db_flat_tuple_destroy(&tuple);
     }
 
     for (uint64_t i = 0; i < num_tuples; ++i) {
-        for (uint64_t j = 0; j < kuzu_query_result_get_num_columns(&result); ++j) {
-            ASSERT_FALSE(kuzu_value_is_null(&tuples[i][j]));
-            kuzu_value_destroy(&tuples[i][j]);
+        for (uint64_t j = 0; j < rag3db_query_result_get_num_columns(&result); ++j) {
+            ASSERT_FALSE(rag3db_value_is_null(&tuples[i][j]));
+            rag3db_value_destroy(&tuples[i][j]);
         }
         free(tuples[i]);
     }
 
     free((void*)tuples);
 
-    kuzu_query_result_destroy(&result);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, GetErrorMessage) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN COUNT(*)", &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
-    char* errorMessage = kuzu_query_result_get_error_message(&result);
-    kuzu_query_result_destroy(&result);
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN COUNT(*)", &result);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
+    char* errorMessage = rag3db_query_result_get_error_message(&result);
+    rag3db_query_result_destroy(&result);
 
-    state = kuzu_connection_query(connection, "MATCH (a:personnnn) RETURN COUNT(*)", &result);
-    ASSERT_EQ(state, KuzuError);
-    ASSERT_FALSE(kuzu_query_result_is_success(&result));
-    errorMessage = kuzu_query_result_get_error_message(&result);
+    state = rag3db_connection_query(connection, "MATCH (a:personnnn) RETURN COUNT(*)", &result);
+    ASSERT_EQ(state, Rag3dbError);
+    ASSERT_FALSE(rag3db_query_result_is_success(&result));
+    errorMessage = rag3db_query_result_get_error_message(&result);
     ASSERT_EQ(std::string(errorMessage), "Binder exception: Table personnnn does not exist.");
-    kuzu_query_result_destroy(&result);
-    kuzu_destroy_string(errorMessage);
+    rag3db_query_result_destroy(&result);
+    rag3db_destroy_string(errorMessage);
 }
 
 TEST_F(CApiQueryResultTest, ToString) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN COUNT(*)", &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
-    char* str_repr = kuzu_query_result_to_string(&result);
-    ASSERT_EQ(state, KuzuSuccess);
-    kuzu_destroy_string(str_repr);
-    kuzu_query_result_destroy(&result);
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN COUNT(*)", &result);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
+    char* str_repr = rag3db_query_result_to_string(&result);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    rag3db_destroy_string(str_repr);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, GetNumColumns) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
         &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
-    ASSERT_EQ(kuzu_query_result_get_num_columns(&result), 3);
-    kuzu_query_result_destroy(&result);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
+    ASSERT_EQ(rag3db_query_result_get_num_columns(&result), 3);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, GetColumnName) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
         &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
     char* columnName;
-    ASSERT_EQ(kuzu_query_result_get_column_name(&result, 0, &columnName), KuzuSuccess);
+    ASSERT_EQ(rag3db_query_result_get_column_name(&result, 0, &columnName), Rag3dbSuccess);
     ASSERT_EQ(std::string(columnName), "a.fName");
-    kuzu_destroy_string(columnName);
-    ASSERT_EQ(kuzu_query_result_get_column_name(&result, 1, &columnName), KuzuSuccess);
+    rag3db_destroy_string(columnName);
+    ASSERT_EQ(rag3db_query_result_get_column_name(&result, 1, &columnName), Rag3dbSuccess);
     ASSERT_EQ(std::string(columnName), "a.age");
-    kuzu_destroy_string(columnName);
-    ASSERT_EQ(kuzu_query_result_get_column_name(&result, 2, &columnName), KuzuSuccess);
+    rag3db_destroy_string(columnName);
+    ASSERT_EQ(rag3db_query_result_get_column_name(&result, 2, &columnName), Rag3dbSuccess);
     ASSERT_EQ(std::string(columnName), "a.height");
-    kuzu_destroy_string(columnName);
-    ASSERT_EQ(kuzu_query_result_get_column_name(&result, 222, &columnName), KuzuError);
-    kuzu_query_result_destroy(&result);
+    rag3db_destroy_string(columnName);
+    ASSERT_EQ(rag3db_query_result_get_column_name(&result, 222, &columnName), Rag3dbError);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, GetColumnDataType) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
         &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
-    kuzu_logical_type type;
-    ASSERT_EQ(kuzu_query_result_get_column_data_type(&result, 0, &type), KuzuSuccess);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
+    rag3db_logical_type type;
+    ASSERT_EQ(rag3db_query_result_get_column_data_type(&result, 0, &type), Rag3dbSuccess);
     auto typeCpp = (LogicalType*)(type._data_type);
     ASSERT_EQ(typeCpp->getLogicalTypeID(), LogicalTypeID::STRING);
-    kuzu_data_type_destroy(&type);
-    ASSERT_EQ(kuzu_query_result_get_column_data_type(&result, 1, &type), KuzuSuccess);
+    rag3db_data_type_destroy(&type);
+    ASSERT_EQ(rag3db_query_result_get_column_data_type(&result, 1, &type), Rag3dbSuccess);
     typeCpp = (LogicalType*)(type._data_type);
     ASSERT_EQ(typeCpp->getLogicalTypeID(), LogicalTypeID::INT64);
-    kuzu_data_type_destroy(&type);
-    ASSERT_EQ(kuzu_query_result_get_column_data_type(&result, 2, &type), KuzuSuccess);
+    rag3db_data_type_destroy(&type);
+    ASSERT_EQ(rag3db_query_result_get_column_data_type(&result, 2, &type), Rag3dbSuccess);
     typeCpp = (LogicalType*)(type._data_type);
     ASSERT_EQ(typeCpp->getLogicalTypeID(), LogicalTypeID::FLOAT);
-    kuzu_data_type_destroy(&type);
-    ASSERT_EQ(kuzu_query_result_get_column_data_type(&result, 222, &type), KuzuError);
-    kuzu_query_result_destroy(&result);
+    rag3db_data_type_destroy(&type);
+    ASSERT_EQ(rag3db_query_result_get_column_data_type(&result, 222, &type), Rag3dbError);
+    rag3db_query_result_destroy(&result);
 }
 
 // TODO(Guodong): Fix this test by adding support of STRUCT in arrow table export.
 // TEST_F(CApiQueryResultTest, GetArrowSchema) {
 //    auto connection = getConnection();
-//    auto result = kuzu_connection_query(
+//    auto result = rag3db_connection_query(
 //        connection, "MATCH (p:person)-[k:knows]-(q:person) RETURN p.fName, k, q.fName");
-//    ASSERT_TRUE(kuzu_query_result_is_success(result));
-//    auto schema = kuzu_query_result_get_arrow_schema(result);
-//    ASSERT_STREQ(schema.name, "kuzu_query_result");
+//    ASSERT_TRUE(rag3db_query_result_is_success(result));
+//    auto schema = rag3db_query_result_get_arrow_schema(result);
+//    ASSERT_STREQ(schema.name, "rag3db_query_result");
 //    ASSERT_EQ(schema.n_children, 3);
 //    ASSERT_STREQ(schema.children[0]->name, "p.fName");
 //    ASSERT_STREQ(schema.children[1]->name, "k");
 //    ASSERT_STREQ(schema.children[2]->name, "q.fName");
 //
 //    schema.release(&schema);
-//    kuzu_query_result_destroy(result);
+//    rag3db_query_result_destroy(result);
 //}
 
 TEST_F(CApiQueryResultTest, GetQuerySummary) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
+    state = rag3db_connection_query(connection, "MATCH (a:person) RETURN a.fName, a.age, a.height",
         &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
-    kuzu_query_summary summary;
-    state = kuzu_query_result_get_query_summary(&result, &summary);
-    ASSERT_EQ(state, KuzuSuccess);
-    auto compilingTime = kuzu_query_summary_get_compiling_time(&summary);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
+    rag3db_query_summary summary;
+    state = rag3db_query_result_get_query_summary(&result, &summary);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    auto compilingTime = rag3db_query_summary_get_compiling_time(&summary);
     ASSERT_GT(compilingTime, 0);
-    auto executionTime = kuzu_query_summary_get_execution_time(&summary);
+    auto executionTime = rag3db_query_summary_get_execution_time(&summary);
     ASSERT_GT(executionTime, 0);
-    kuzu_query_summary_destroy(&summary);
-    kuzu_query_result_destroy(&result);
+    rag3db_query_summary_destroy(&summary);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, GetNext) {
-    kuzu_query_result result;
-    kuzu_flat_tuple row;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_flat_tuple row;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection,
+    state = rag3db_connection_query(connection,
         "MATCH (a:person) RETURN a.fName, a.age ORDER BY a.fName", &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
 
-    ASSERT_TRUE(kuzu_query_result_has_next(&result));
-    state = kuzu_query_result_get_next(&result, &row);
-    ASSERT_EQ(state, KuzuSuccess);
+    ASSERT_TRUE(rag3db_query_result_has_next(&result));
+    state = rag3db_query_result_get_next(&result, &row);
+    ASSERT_EQ(state, Rag3dbSuccess);
     auto flatTupleCpp = (FlatTuple*)(row._flat_tuple);
     ASSERT_EQ(flatTupleCpp->getValue(0)->getValue<std::string>(), "Alice");
     ASSERT_EQ(flatTupleCpp->getValue(1)->getValue<int64_t>(), 35);
 
-    ASSERT_TRUE(kuzu_query_result_has_next(&result));
-    state = kuzu_query_result_get_next(&result, &row);
-    ASSERT_EQ(state, KuzuSuccess);
+    ASSERT_TRUE(rag3db_query_result_has_next(&result));
+    state = rag3db_query_result_get_next(&result, &row);
+    ASSERT_EQ(state, Rag3dbSuccess);
     flatTupleCpp = (FlatTuple*)(row._flat_tuple);
     ASSERT_EQ(flatTupleCpp->getValue(0)->getValue<std::string>(), "Bob");
     ASSERT_EQ(flatTupleCpp->getValue(1)->getValue<int64_t>(), 30);
-    kuzu_flat_tuple_destroy(&row);
+    rag3db_flat_tuple_destroy(&row);
 
-    while (kuzu_query_result_has_next(&result)) {
-        kuzu_query_result_get_next(&result, &row);
+    while (rag3db_query_result_has_next(&result)) {
+        rag3db_query_result_get_next(&result, &row);
     }
-    ASSERT_FALSE(kuzu_query_result_has_next(&result));
-    state = kuzu_query_result_get_next(&result, &row);
-    ASSERT_EQ(state, KuzuError);
-    kuzu_query_result_destroy(&result);
+    ASSERT_FALSE(rag3db_query_result_has_next(&result));
+    state = rag3db_query_result_get_next(&result, &row);
+    ASSERT_EQ(state, Rag3dbError);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, ResetIterator) {
-    kuzu_query_result result;
-    kuzu_flat_tuple row;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_flat_tuple row;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection,
+    state = rag3db_connection_query(connection,
         "MATCH (a:person) RETURN a.fName, a.age ORDER BY a.fName", &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
 
-    ASSERT_TRUE(kuzu_query_result_has_next(&result));
-    state = kuzu_query_result_get_next(&result, &row);
-    ASSERT_EQ(state, KuzuSuccess);
+    ASSERT_TRUE(rag3db_query_result_has_next(&result));
+    state = rag3db_query_result_get_next(&result, &row);
+    ASSERT_EQ(state, Rag3dbSuccess);
     auto flatTupleCpp = (FlatTuple*)(row._flat_tuple);
     ASSERT_EQ(flatTupleCpp->getValue(0)->getValue<std::string>(), "Alice");
     ASSERT_EQ(flatTupleCpp->getValue(1)->getValue<int64_t>(), 35);
 
-    kuzu_query_result_reset_iterator(&result);
+    rag3db_query_result_reset_iterator(&result);
 
-    ASSERT_TRUE(kuzu_query_result_has_next(&result));
-    state = kuzu_query_result_get_next(&result, &row);
-    ASSERT_EQ(state, KuzuSuccess);
+    ASSERT_TRUE(rag3db_query_result_has_next(&result));
+    state = rag3db_query_result_get_next(&result, &row);
+    ASSERT_EQ(state, Rag3dbSuccess);
     flatTupleCpp = (FlatTuple*)(row._flat_tuple);
     ASSERT_EQ(flatTupleCpp->getValue(0)->getValue<std::string>(), "Alice");
     ASSERT_EQ(flatTupleCpp->getValue(1)->getValue<int64_t>(), 35);
-    kuzu_flat_tuple_destroy(&row);
+    rag3db_flat_tuple_destroy(&row);
 
-    kuzu_query_result_destroy(&result);
+    rag3db_query_result_destroy(&result);
 }
 
 TEST_F(CApiQueryResultTest, MultipleQuery) {
-    kuzu_query_result result;
-    kuzu_state state;
+    rag3db_query_result result;
+    rag3db_state state;
     auto connection = getConnection();
-    state = kuzu_connection_query(connection, "return 1; return 2; return 3;", &result);
-    ASSERT_EQ(state, KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&result));
+    state = rag3db_connection_query(connection, "return 1; return 2; return 3;", &result);
+    ASSERT_EQ(state, Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&result));
 
-    char* str = kuzu_query_result_to_string(&result);
+    char* str = rag3db_query_result_to_string(&result);
     ASSERT_EQ(std::string(str), "1\n1\n");
-    kuzu_destroy_string(str);
+    rag3db_destroy_string(str);
 
-    ASSERT_TRUE(kuzu_query_result_has_next_query_result(&result));
-    kuzu_query_result next_query_result;
-    ASSERT_EQ(kuzu_query_result_get_next_query_result(&result, &next_query_result), KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&next_query_result));
-    str = kuzu_query_result_to_string(&next_query_result);
+    ASSERT_TRUE(rag3db_query_result_has_next_query_result(&result));
+    rag3db_query_result next_query_result;
+    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result), Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&next_query_result));
+    str = rag3db_query_result_to_string(&next_query_result);
     ASSERT_EQ(std::string(str), "2\n2\n");
-    kuzu_destroy_string(str);
-    kuzu_query_result_destroy(&next_query_result);
+    rag3db_destroy_string(str);
+    rag3db_query_result_destroy(&next_query_result);
 
-    ASSERT_EQ(kuzu_query_result_get_next_query_result(&result, &next_query_result), KuzuSuccess);
-    ASSERT_TRUE(kuzu_query_result_is_success(&next_query_result));
-    str = kuzu_query_result_to_string(&next_query_result);
+    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result), Rag3dbSuccess);
+    ASSERT_TRUE(rag3db_query_result_is_success(&next_query_result));
+    str = rag3db_query_result_to_string(&next_query_result);
     ASSERT_EQ(std::string(str), "3\n3\n");
-    kuzu_destroy_string(str);
+    rag3db_destroy_string(str);
 
-    ASSERT_FALSE(kuzu_query_result_has_next_query_result(&result));
-    ASSERT_EQ(kuzu_query_result_get_next_query_result(&result, &next_query_result), KuzuError);
-    kuzu_query_result_destroy(&next_query_result);
+    ASSERT_FALSE(rag3db_query_result_has_next_query_result(&result));
+    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result), Rag3dbError);
+    rag3db_query_result_destroy(&next_query_result);
 
-    kuzu_query_result_destroy(&result);
+    rag3db_query_result_destroy(&result);
 }

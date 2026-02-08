@@ -1,6 +1,6 @@
 #include "parser/antlr_parser/parser_error_strategy.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 void ParserErrorStrategy::reportNoViableAlternative(antlr4::Parser* recognizer,
@@ -18,4 +18,4 @@ void ParserErrorStrategy::reportNoViableAlternative(antlr4::Parser* recognizer,
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

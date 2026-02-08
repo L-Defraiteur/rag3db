@@ -2,10 +2,10 @@
 
 #include "binder/expression/scalar_function_expression.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 void ColumnCaster::init(ValueVector* vectorAfterCasting, storage::MemoryManager* memoryManager) {
@@ -66,4 +66,4 @@ void ScanTable::initLocalStateInternal(ResultSet*, ExecutionContext*) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

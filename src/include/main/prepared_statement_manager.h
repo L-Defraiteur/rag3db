@@ -4,7 +4,7 @@
 #include <mutex>
 #include <unordered_map>
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 struct CachedPreparedStatement;
@@ -27,4 +27,4 @@ private:
 };
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

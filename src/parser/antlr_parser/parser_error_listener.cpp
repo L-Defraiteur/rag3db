@@ -4,9 +4,9 @@
 #include "common/string_utils.h"
 
 using namespace antlr4;
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 void ParserErrorListener::syntaxError(Recognizer* recognizer, Token* offendingSymbol, size_t line,
@@ -33,4 +33,4 @@ std::string ParserErrorListener::formatUnderLineError(Recognizer& recognizer,
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

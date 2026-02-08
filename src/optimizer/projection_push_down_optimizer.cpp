@@ -21,12 +21,12 @@
 #include "planner/operator/persistent/logical_merge.h"
 #include "planner/operator/persistent/logical_set.h"
 
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::binder;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::binder;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
 void ProjectionPushDownOptimizer::rewrite(LogicalPlan* plan) {
@@ -365,4 +365,4 @@ void ProjectionPushDownOptimizer::preAppendProjection(LogicalOperator* op, idx_t
 }
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

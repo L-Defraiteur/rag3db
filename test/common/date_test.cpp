@@ -1,7 +1,7 @@
 #include "common/types/date_t.h"
 #include "gtest/gtest.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 TEST(DateTests, IsLeapYearTest) {
     EXPECT_TRUE(Date::isLeapYear(2000));

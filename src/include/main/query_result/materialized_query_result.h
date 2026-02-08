@@ -2,7 +2,7 @@
 
 #include "main/query_result.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 class FactorizedTable;
 class FactorizedTableIterator;
@@ -15,7 +15,7 @@ class MaterializedQueryResult : public QueryResult {
 
 public:
     MaterializedQueryResult();
-    KUZU_API explicit MaterializedQueryResult(std::shared_ptr<processor::FactorizedTable> table);
+    RAG3DB_API explicit MaterializedQueryResult(std::shared_ptr<processor::FactorizedTable> table);
     MaterializedQueryResult(std::vector<std::string> columnNames,
         std::vector<common::LogicalType> columnTypes,
         std::shared_ptr<processor::FactorizedTable> table);
@@ -43,4 +43,4 @@ private:
 };
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

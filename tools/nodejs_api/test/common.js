@@ -6,13 +6,13 @@ chai.config.includeStack = true;
 
 const TEST_INSTALLED = process.env.TEST_INSTALLED || false;
 if (TEST_INSTALLED) {
-  global.kuzu = require("kuzu");
-  global.kuzuPath = require.resolve("kuzu");
-  console.log("Testing installed version @", kuzuPath);
+  global.rag3db = require("rag3db");
+  global.rag3dbPath = require.resolve("rag3db");
+  console.log("Testing installed version @", rag3dbPath);
 } else {
-  global.kuzu = require("../build/");
-  global.kuzuPath = require.resolve("../build/");
-  console.log("Testing locally built version @", kuzuPath);
+  global.rag3db = require("../build/");
+  global.rag3dbPath = require.resolve("../build/");
+  console.log("Testing locally built version @", rag3dbPath);
 }
 
 const tmp = require("tmp");
@@ -29,8 +29,8 @@ const initTests = async () => {
   });
 
   const dbPath = path.join(tmpPath, "db.kz");
-  const db = new kuzu.Database(dbPath, 1 << 28 /* 256MB */);
-  const conn = new kuzu.Connection(db, 4);
+  const db = new rag3db.Database(dbPath, 1 << 28 /* 256MB */);
+  const conn = new rag3db.Connection(db, 4);
 
   const schema = (await fs.readFile("../../dataset/tinysnb/schema.cypher"))
     .toString()

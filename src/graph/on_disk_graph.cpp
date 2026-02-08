@@ -21,15 +21,15 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::storage;
-using namespace kuzu::main;
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::processor;
-using namespace kuzu::binder;
+using namespace rag3db::catalog;
+using namespace rag3db::storage;
+using namespace rag3db::main;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::processor;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace graph {
 
 static std::vector<column_id_t> getColumnIDs(const expression_vector& propertyExprs,
@@ -347,4 +347,4 @@ bool OnDiskGraphVertexScanState::next() {
 }
 
 } // namespace graph
-} // namespace kuzu
+} // namespace rag3db

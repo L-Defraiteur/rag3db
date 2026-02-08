@@ -5,10 +5,10 @@
 #include "processor/execution_context.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string ResultCollectorPrintInfo::toString() const {
@@ -91,4 +91,4 @@ std::unique_ptr<main::QueryResult> ResultCollector::getQueryResult() const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

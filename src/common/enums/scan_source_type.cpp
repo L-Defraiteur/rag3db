@@ -2,7 +2,7 @@
 
 #include "common/assert.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 std::string ScanSourceTypeUtils::toString(ScanSourceType type) {
@@ -25,4 +25,4 @@ std::string ScanSourceTypeUtils::toString(ScanSourceType type) {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

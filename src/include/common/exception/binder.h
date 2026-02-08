@@ -3,13 +3,13 @@
 #include "common/api.h"
 #include "exception.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
-class KUZU_API BinderException : public Exception {
+class RAG3DB_API BinderException : public Exception {
 public:
     explicit BinderException(const std::string& msg) : Exception("Binder exception: " + msg){};
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

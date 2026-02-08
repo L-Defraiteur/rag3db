@@ -2,7 +2,7 @@
 
 #include "storage/page_allocator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 class PageManager;
@@ -28,4 +28,4 @@ private:
     std::vector<PageRange> optimisticallyAllocatedPages;
 };
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

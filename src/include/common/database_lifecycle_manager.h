@@ -1,10 +1,10 @@
 #pragma once
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 struct DatabaseLifeCycleManager {
     bool isDatabaseClosed = false;
     void checkDatabaseClosedOrThrow() const;
 };
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

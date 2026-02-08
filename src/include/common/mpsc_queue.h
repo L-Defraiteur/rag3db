@@ -8,7 +8,7 @@
 #include "common/assert.h"
 #include "common/copy_constructors.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 // Producers are completely wait-free.
@@ -104,4 +104,4 @@ private:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

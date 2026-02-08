@@ -6,9 +6,9 @@
 #include "storage/enums/residency_state.h"
 #include <bit>
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 // The offset chunk is able to grow beyond the node group size.
@@ -124,4 +124,4 @@ std::unique_ptr<DictionaryChunk> DictionaryChunk::deserialize(MemoryManager& mem
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

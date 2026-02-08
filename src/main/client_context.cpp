@@ -32,15 +32,15 @@
 #include "common/windows_utils.h"
 #endif
 
-using namespace kuzu::parser;
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::planner;
-using namespace kuzu::processor;
-using namespace kuzu::transaction;
+using namespace rag3db::parser;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::planner;
+using namespace rag3db::processor;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 ActiveQuery::ActiveQuery() : interrupted{false} {}
@@ -182,8 +182,8 @@ const main::ExtensionOption* ClientContext::getExtensionOption(std::string optio
 }
 
 std::string ClientContext::getExtensionDir() const {
-    return stringFormat("{}/.kuzu/extension/{}/{}/", clientConfig.homeDirectory,
-        KUZU_EXTENSION_VERSION, extension::getPlatform());
+    return stringFormat("{}/.rag3db/extension/{}/{}/", clientConfig.homeDirectory,
+        RAG3DB_EXTENSION_VERSION, extension::getPlatform());
 }
 
 std::string ClientContext::getDatabasePath() const {
@@ -194,7 +194,7 @@ Database* ClientContext::getDatabase() const {
     return localDatabase;
 }
 
-AttachedKuzuDatabase* ClientContext::getAttachedDatabase() const {
+AttachedRag3dbDatabase* ClientContext::getAttachedDatabase() const {
     return remoteDatabase;
 }
 
@@ -231,7 +231,7 @@ std::string ClientContext::getUserHomeDir() {
 #endif
 }
 
-void ClientContext::setDefaultDatabase(AttachedKuzuDatabase* defaultDatabase_) {
+void ClientContext::setDefaultDatabase(AttachedRag3dbDatabase* defaultDatabase_) {
     remoteDatabase = defaultDatabase_;
 }
 
@@ -598,11 +598,11 @@ bool ClientContext::canExecuteWriteQuery() const {
     if (getDBConfig()->readOnly) {
         return false;
     }
-    // Note: we can only attach a remote kuzu database in read-only mode and only one
-    // remote kuzu database can be attached.
+    // Note: we can only attach a remote rag3db database in read-only mode and only one
+    // remote rag3db database can be attached.
     const auto dbManager = DatabaseManager::Get(*this);
     for (const auto& attachedDB : dbManager->getAttachedDatabases()) {
-        if (attachedDB->getDBType() == ATTACHED_KUZU_DB_TYPE) {
+        if (attachedDB->getDBType() == ATTACHED_RAG3DB_DB_TYPE) {
             return false;
         }
     }
@@ -610,4 +610,4 @@ bool ClientContext::canExecuteWriteQuery() const {
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

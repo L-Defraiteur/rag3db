@@ -5,10 +5,10 @@
 #include "common/exception/runtime.h"
 #include "processor/result/factorized_table.h"
 
-using namespace kuzu::common;
-using namespace kuzu::processor;
+using namespace rag3db::common;
+using namespace rag3db::processor;
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 ArrowQueryResult::ArrowQueryResult(std::vector<ArrowArray> arrays, int64_t chunkSize)
@@ -78,4 +78,4 @@ std::unique_ptr<ArrowArray> ArrowQueryResult::getNextArrowChunk(int64_t chunkSiz
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

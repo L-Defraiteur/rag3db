@@ -1,8 +1,8 @@
 #include "planner/join_order_enumerator_context.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void JoinOrderEnumeratorContext::init(const QueryGraph* queryGraph_,
@@ -34,4 +34,4 @@ void JoinOrderEnumeratorContext::resetState() {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

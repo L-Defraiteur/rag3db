@@ -9,11 +9,11 @@
 #include "storage/storage_utils.h"
 #include "transaction/transaction_manager.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 void AttachedDatabase::invalidateCache() {
-    if (dbType != common::ATTACHED_KUZU_DB_TYPE) {
+    if (dbType != common::ATTACHED_RAG3DB_DB_TYPE) {
         auto catalogExtension = catalog->ptrCast<extension::CatalogExtension>();
         catalogExtension->invalidateCache();
     }
@@ -27,19 +27,19 @@ static void validateEmptyWAL(const std::string& path, ClientContext* context) {
             common::FileOpenFlags(common::FileFlags::READ_ONLY), context);
         if (walFile->getFileSize() > 0) {
             throw common::RuntimeException(common::stringFormat(
-                "Cannot attach an external Kuzu database with non-empty wal file. Try manually "
+                "Cannot attach an external Rag3db database with non-empty wal file. Try manually "
                 "checkpointing the external database (i.e., run \"CHECKPOINT;\")."));
         }
     }
 }
 
-AttachedKuzuDatabase::AttachedKuzuDatabase(std::string dbPath, std::string dbName,
+AttachedRag3dbDatabase::AttachedRag3dbDatabase(std::string dbPath, std::string dbName,
     std::string dbType, ClientContext* clientContext)
     : AttachedDatabase{std::move(dbName), std::move(dbType), nullptr /* catalog */} {
     auto vfs = common::VirtualFileSystem::GetUnsafe(*clientContext);
     if (DBConfig::isDBPathInMemory(dbPath)) {
-        throw common::RuntimeException("Cannot attach an in-memory Kuzu database. Please give a "
-                                       "path to an on-disk Kuzu database directory.");
+        throw common::RuntimeException("Cannot attach an in-memory Rag3db database. Please give a "
+                                       "path to an on-disk Rag3db database directory.");
     }
     auto path = vfs->expandPath(clientContext, dbPath);
     // Note: S3 directory path may end with a '/'.
@@ -48,7 +48,7 @@ AttachedKuzuDatabase::AttachedKuzuDatabase(std::string dbPath, std::string dbNam
     }
     if (!vfs->fileOrPathExists(path, clientContext)) {
         throw common::RuntimeException(common::stringFormat(
-            "Cannot attach a remote Kuzu database due to invalid path: {}.", path));
+            "Cannot attach a remote Rag3db database due to invalid path: {}.", path));
     }
     catalog = std::make_unique<catalog::Catalog>();
     validateEmptyWAL(path, clientContext);
@@ -65,4 +65,4 @@ AttachedKuzuDatabase::AttachedKuzuDatabase(std::string dbPath, std::string dbNam
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

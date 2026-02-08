@@ -4,10 +4,10 @@
 #include "planner/operator/factorization/flatten_resolver.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 static expression_vector getDependentExprs(std::shared_ptr<Expression> expr, const Schema& schema) {
@@ -305,4 +305,4 @@ void Planner::planSubqueryIfNecessary(std::shared_ptr<Expression> expression, Lo
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

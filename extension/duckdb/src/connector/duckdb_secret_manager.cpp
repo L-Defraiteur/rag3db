@@ -2,16 +2,16 @@
 
 #include "s3fs_config.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace duckdb_extension {
 
-static std::string getDuckDBExtensionOptions(httpfs_extension::S3AuthParams kuzuOptions) {
+static std::string getDuckDBExtensionOptions(httpfs_extension::S3AuthParams rag3dbOptions) {
     std::string options = "";
-    options.append(common::stringFormat("KEY_ID '{}',", kuzuOptions.accessKeyID));
-    options.append(common::stringFormat("SECRET '{}',", kuzuOptions.secretAccessKey));
-    options.append(common::stringFormat("ENDPOINT '{}',", kuzuOptions.endpoint));
-    options.append(common::stringFormat("URL_STYLE '{}',", kuzuOptions.urlStyle));
-    options.append(common::stringFormat("REGION '{}',", kuzuOptions.region));
+    options.append(common::stringFormat("KEY_ID '{}',", rag3dbOptions.accessKeyID));
+    options.append(common::stringFormat("SECRET '{}',", rag3dbOptions.secretAccessKey));
+    options.append(common::stringFormat("ENDPOINT '{}',", rag3dbOptions.endpoint));
+    options.append(common::stringFormat("URL_STYLE '{}',", rag3dbOptions.urlStyle));
+    options.append(common::stringFormat("REGION '{}',", rag3dbOptions.region));
     return options;
 }
 
@@ -27,4 +27,4 @@ std::string DuckDBSecretManager::getRemoteS3FSSecret(main::ClientContext* contex
 }
 
 } // namespace duckdb_extension
-} // namespace kuzu
+} // namespace rag3db

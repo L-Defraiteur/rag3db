@@ -11,24 +11,24 @@ Comment added to table person.
 Comment added to table knows.
 -STATEMENT CALL show_tables() RETURN *
 ---- 8
-0|person|NODE|local(kuzu)|A test comment
-1|organisation|NODE|local(kuzu)|
-2|movies|NODE|local(kuzu)|
-4|knows|REL|local(kuzu)|Another test comment
-6|studyAt|REL|local(kuzu)|
-8|workAt|REL|local(kuzu)|
-10|meets|REL|local(kuzu)|
-12|marries|REL|local(kuzu)|
+0|person|NODE|local(rag3db)|A test comment
+1|organisation|NODE|local(rag3db)|
+2|movies|NODE|local(rag3db)|
+4|knows|REL|local(rag3db)|Another test comment
+6|studyAt|REL|local(rag3db)|
+8|workAt|REL|local(rag3db)|
+10|meets|REL|local(rag3db)|
+12|marries|REL|local(rag3db)|
 -STATEMENT CALL show_tables() RETURN *
 ---- 8
-0|person|NODE|local(kuzu)|A test comment
-1|organisation|NODE|local(kuzu)|
-2|movies|NODE|local(kuzu)|
-4|knows|REL|local(kuzu)|Another test comment
-6|studyAt|REL|local(kuzu)|
-8|workAt|REL|local(kuzu)|
-10|meets|REL|local(kuzu)|
-12|marries|REL|local(kuzu)|
+0|person|NODE|local(rag3db)|A test comment
+1|organisation|NODE|local(rag3db)|
+2|movies|NODE|local(rag3db)|
+4|knows|REL|local(rag3db)|Another test comment
+6|studyAt|REL|local(rag3db)|
+8|workAt|REL|local(rag3db)|
+10|meets|REL|local(rag3db)|
+12|marries|REL|local(rag3db)|
 
 -CASE CommentOnRelGroup
 -STATEMENT CREATE NODE TABLE PersonA (id INT64 PRIMARY KEY);
@@ -41,14 +41,14 @@ Comment added to table knows.
 ---- ok
 -STATEMENT CALL SHOW_TABLES() RETURN *;
 ---- 11
-0|person|NODE|local(kuzu)|
-1|organisation|NODE|local(kuzu)|
-2|movies|NODE|local(kuzu)|
-4|knows|REL|local(kuzu)|
-6|studyAt|REL|local(kuzu)|
-8|workAt|REL|local(kuzu)|
-10|meets|REL|local(kuzu)|
-12|marries|REL|local(kuzu)|
-13|PersonA|NODE|local(kuzu)|
-14|PersonB|NODE|local(kuzu)|
-17|Rel|REL|local(kuzu)|This should appear
+0|person|NODE|local(rag3db)|
+1|organisation|NODE|local(rag3db)|
+2|movies|NODE|local(rag3db)|
+4|knows|REL|local(rag3db)|
+6|studyAt|REL|local(rag3db)|
+8|workAt|REL|local(rag3db)|
+10|meets|REL|local(rag3db)|
+12|marries|REL|local(rag3db)|
+13|PersonA|NODE|local(rag3db)|
+14|PersonB|NODE|local(rag3db)|
+17|Rel|REL|local(rag3db)|This should appear

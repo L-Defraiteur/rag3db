@@ -14,7 +14,7 @@
 #include "main/query_result.h"
 #include "prepared_statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 class RandomEngine;
 class TaskScheduler;
@@ -52,7 +52,7 @@ namespace main {
 struct DBConfig;
 class Database;
 class DatabaseManager;
-class AttachedKuzuDatabase;
+class AttachedRag3dbDatabase;
 struct SpillToDiskSetting;
 struct ExtensionOption;
 class EmbeddedShell;
@@ -69,7 +69,7 @@ struct ActiveQuery {
  * @brief Contain client side configuration. We make profiler associated per query, so the profiler
  * is not maintained in the client context.
  */
-class KUZU_API ClientContext {
+class RAG3DB_API ClientContext {
     friend class Connection;
     friend class EmbeddedShell;
     friend struct SpillToDiskSetting;
@@ -122,7 +122,7 @@ public:
     // Getters.
     std::string getDatabasePath() const;
     Database* getDatabase() const;
-    AttachedKuzuDatabase* getAttachedDatabase() const;
+    AttachedRag3dbDatabase* getAttachedDatabase() const;
 
     const CachedPreparedStatementManager& getCachedPreparedStatementManager() const {
         return cachedPreparedStatementManager;
@@ -133,7 +133,7 @@ public:
     static std::string getEnvVariable(const std::string& name);
     static std::string getUserHomeDir();
 
-    void setDefaultDatabase(AttachedKuzuDatabase* defaultDatabase_);
+    void setDefaultDatabase(AttachedRag3dbDatabase* defaultDatabase_);
     bool hasDefaultDatabase() const;
     void setUseInternalCatalogEntry(bool useInternalCatalogEntry) {
         this->useInternalCatalogEntry_ = useInternalCatalogEntry;
@@ -238,7 +238,7 @@ private:
     // Local database.
     Database* localDatabase;
     // Remote database.
-    AttachedKuzuDatabase* remoteDatabase;
+    AttachedRag3dbDatabase* remoteDatabase;
     // Progress bar.
     std::unique_ptr<common::ProgressBar> progressBar;
     // Warning information
@@ -253,4 +253,4 @@ private:
 };
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

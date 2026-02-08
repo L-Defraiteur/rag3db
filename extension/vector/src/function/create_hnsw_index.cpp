@@ -18,12 +18,12 @@
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
-using namespace kuzu::processor;
-using namespace kuzu::processor;
+using namespace rag3db::common;
+using namespace rag3db::function;
+using namespace rag3db::processor;
+using namespace rag3db::processor;
 
-namespace kuzu {
+namespace rag3db {
 namespace vector_extension {
 
 CreateInMemHNSWSharedState::CreateInMemHNSWSharedState(const CreateHNSWIndexBindData& bindData)
@@ -380,4 +380,4 @@ function_set CreateVectorIndexFunction::getFunctionSet() {
 }
 
 } // namespace vector_extension
-} // namespace kuzu
+} // namespace rag3db

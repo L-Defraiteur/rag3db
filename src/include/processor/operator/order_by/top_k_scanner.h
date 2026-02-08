@@ -2,7 +2,7 @@
 
 #include "top_k.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 struct TopKLocalScanState {
@@ -44,4 +44,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

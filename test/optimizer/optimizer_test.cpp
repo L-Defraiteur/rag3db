@@ -2,13 +2,13 @@
 #include "planner/operator/logical_plan_util.h"
 #include "test_runner/test_runner.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 class OptimizerTest : public DBTest {
 public:
     std::string getInputDir() override {
-        return TestHelper::appendKuzuRootPath("dataset/tinysnb/");
+        return TestHelper::appendRag3dbRootPath("dataset/tinysnb/");
     }
 
     std::string getEncodedPlan(const std::string& query) {
@@ -212,4 +212,4 @@ TEST_F(OptimizerTest, SubqueryHint) {
 }
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

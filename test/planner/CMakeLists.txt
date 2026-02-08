@@ -1,1 +1,1 @@
-add_kuzu_test(planner_tests cardinality_test.cpp)
+add_rag3db_test(planner_tests cardinality_test.cpp)

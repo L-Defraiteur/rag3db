@@ -37,7 +37,7 @@
 #include <string>
 #include <string_view>
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 class StringPiece {
@@ -190,5 +190,5 @@ inline bool operator>=(const StringPiece& x, const StringPiece& y) {
 std::ostream& operator<<(std::ostream& o, const StringPiece& p);
 
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 #endif // RE2_STRINGPIECE_H_

@@ -7,12 +7,12 @@
 #include "common/cast.h"
 #include "function/table/table_function.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class FileSystem;
 
-struct KUZU_API FileInfo {
+struct RAG3DB_API FileInfo {
     FileInfo(std::string path, FileSystem* fileSystem)
         : path{std::move(path)}, fileSystem{fileSystem} {}
 
@@ -64,4 +64,4 @@ struct KUZU_API FileInfo {
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

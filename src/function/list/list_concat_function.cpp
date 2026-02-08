@@ -6,9 +6,9 @@
 #include "function/list/vector_list_functions.h"
 #include "function/scalar_function.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 void ListConcat::operation(common::list_entry_t& left, common::list_entry_t& right,
@@ -59,4 +59,4 @@ function_set ListConcatFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

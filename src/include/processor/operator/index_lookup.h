@@ -5,7 +5,7 @@
 #include "processor/operator/persistent/batch_insert_error_handler.h"
 #include "processor/operator/physical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace transaction {
 class Transaction;
 }
@@ -86,4 +86,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

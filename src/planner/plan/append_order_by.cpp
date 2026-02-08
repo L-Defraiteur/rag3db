@@ -1,9 +1,9 @@
 #include "planner/operator/logical_order_by.h"
 #include "planner/planner.h"
 
-using namespace kuzu::binder;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendOrderBy(const expression_vector& expressions,
@@ -16,4 +16,4 @@ void Planner::appendOrderBy(const expression_vector& expressions,
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

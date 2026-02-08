@@ -1,9 +1,9 @@
 #include "function/string/vector_string_functions.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 struct Levenshtein {
 public:
@@ -60,4 +60,4 @@ function_set LevenshteinFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

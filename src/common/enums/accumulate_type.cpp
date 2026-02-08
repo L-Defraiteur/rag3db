@@ -2,7 +2,7 @@
 
 #include "common/assert.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 std::string AccumulateTypeUtil::toString(AccumulateType type) {
@@ -19,4 +19,4 @@ std::string AccumulateTypeUtil::toString(AccumulateType type) {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

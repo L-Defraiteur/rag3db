@@ -2,10 +2,10 @@
 
 #include "catalog/catalog_entry/table_catalog_entry.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 table_id_vector_t NodeOrRelExpression::getTableIDs() const {
@@ -41,4 +41,4 @@ void NodeOrRelExpression::addPropertyExpression(std::shared_ptr<PropertyExpressi
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

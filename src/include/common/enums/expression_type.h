@@ -5,7 +5,7 @@
 
 #include "common/api.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 enum class ExpressionType : uint8_t {
@@ -66,9 +66,9 @@ struct ExpressionTypeUtil {
 
     static ExpressionType reverseComparisonDirection(ExpressionType type);
 
-    static KUZU_API std::string toString(ExpressionType type);
+    static RAG3DB_API std::string toString(ExpressionType type);
     static std::string toParsableString(ExpressionType type);
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

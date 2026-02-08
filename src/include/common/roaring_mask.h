@@ -3,7 +3,7 @@
 #include "common/mask.h"
 #include "roaring.hh"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class Roaring32BitmapSemiMask final : public SemiMask {
@@ -51,4 +51,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

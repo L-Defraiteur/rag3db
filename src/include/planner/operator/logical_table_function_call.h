@@ -4,10 +4,10 @@
 #include "function/table/table_function.h"
 #include "planner/operator/logical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
-class KUZU_API LogicalTableFunctionCall final : public LogicalOperator {
+class RAG3DB_API LogicalTableFunctionCall final : public LogicalOperator {
     static constexpr LogicalOperatorType operatorType_ = LogicalOperatorType::TABLE_FUNCTION_CALL;
 
 public:
@@ -43,4 +43,4 @@ private:
 };
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

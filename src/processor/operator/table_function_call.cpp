@@ -3,10 +3,10 @@
 #include "binder/expression/expression_util.h"
 #include "processor/execution_context.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string TableFunctionCallPrintInfo::toString() const {
@@ -54,4 +54,4 @@ double TableFunctionCall::getProgress(ExecutionContext* /*context*/) const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

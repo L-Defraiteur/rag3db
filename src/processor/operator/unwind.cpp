@@ -4,9 +4,9 @@
 #include "common/system_config.h"
 #include "processor/execution_context.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string UnwindPrintInfo::toString() const {
@@ -76,4 +76,4 @@ bool Unwind::getNextTuplesInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

@@ -2,7 +2,7 @@
 
 #include "function/function.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace json_extension {
 
 struct CastToJsonFunction {
@@ -12,4 +12,4 @@ struct CastToJsonFunction {
 };
 
 } // namespace json_extension
-} // namespace kuzu
+} // namespace rag3db

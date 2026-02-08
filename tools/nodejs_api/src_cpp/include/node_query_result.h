@@ -1,14 +1,14 @@
 #pragma once
 
 #include "binder/bound_statement_result.h"
-#include "main/kuzu.h"
+#include "main/rag3db.h"
 #include "node_util.h"
 #include "planner/operator/logical_plan.h"
 #include "processor/result/factorized_table.h"
 #include <napi.h>
 
-using namespace kuzu::processor;
-using namespace kuzu::main;
+using namespace rag3db::processor;
+using namespace rag3db::main;
 
 class NodeQueryResult : public Napi::ObjectWrap<NodeQueryResult> {
     friend class NodeQueryResultGetNextAsyncWorker;

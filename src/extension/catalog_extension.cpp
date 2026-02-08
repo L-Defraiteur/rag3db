@@ -1,6 +1,6 @@
 #include "extension/catalog_extension.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace extension {
 
 void CatalogExtension::invalidateCache() {
@@ -9,4 +9,4 @@ void CatalogExtension::invalidateCache() {
 }
 
 } // namespace extension
-} // namespace kuzu
+} // namespace rag3db

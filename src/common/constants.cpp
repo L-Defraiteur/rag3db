@@ -1,6 +1,6 @@
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
-const char* KUZU_VERSION = KUZU_CMAKE_VERSION;
+const char* RAG3DB_VERSION = RAG3DB_CMAKE_VERSION;
 }
-} // namespace kuzu
+} // namespace rag3db

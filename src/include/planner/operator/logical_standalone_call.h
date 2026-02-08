@@ -2,7 +2,7 @@
 
 #include "planner/operator/logical_operator.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 struct Option;
 }
@@ -35,4 +35,4 @@ protected:
 };
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

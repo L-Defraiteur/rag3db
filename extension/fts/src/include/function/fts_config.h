@@ -5,7 +5,7 @@
 #include "common/types/types.h"
 #include "function/table/bind_input.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
 struct Stemmer {
@@ -65,7 +65,7 @@ struct Tokenizer {
 struct TokenizerInfo {
     std::string tokenizer = Tokenizer::DEFAULT_VALUE;
     std::string jiebaDictDir =
-        common::stringFormat("{}/extension/fts/build/dict", KUZU_ROOT_DIRECTORY);
+        common::stringFormat("{}/extension/fts/build/dict", RAG3DB_ROOT_DIRECTORY);
 
     TokenizerInfo() = default;
 };
@@ -138,5 +138,12 @@ struct TopK {
     static void validate(uint64_t value);
 };
 
+struct Fuzzy {
+    static constexpr const char* NAME = "fuzzy";
+    static constexpr common::LogicalTypeID TYPE = common::LogicalTypeID::UINT64;
+    static constexpr uint64_t DEFAULT_VALUE = 0; // 0 = disabled, 1-2 = max edit distance
+    static void validate(uint64_t value);
+};
+
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

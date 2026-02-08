@@ -6,7 +6,7 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 // Operator level info
@@ -145,4 +145,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

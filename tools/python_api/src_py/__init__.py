@@ -1,19 +1,19 @@
 """
-# Kuzu Python API bindings.
+# Rag3db Python API bindings.
 
-This package provides a Python API for Kuzu graph database management system.
+This package provides a Python API for Rag3db graph database management system.
 
 To install the package, run:
 ```
-python3 -m pip install kuzu
+python3 -m pip install rag3db
 ```
 
 Example usage:
 ```python
-import kuzu
+import rag3db
 
-db = kuzu.Database("./test")
-conn = kuzu.Connection(db)
+db = rag3db.Database("./test")
+conn = rag3db.Connection(db)
 
 # Define the schema
 conn.execute("CREATE NODE TABLE User(name STRING, age INT64, PRIMARY KEY (name))")
@@ -33,7 +33,7 @@ while results.has_next():
     print(results.get_next())
 ```
 
-The dataset used in this example can be found [here](https://github.com/kuzudb/kuzu/tree/master/dataset/demo-db/csv).
+The dataset used in this example can be found [here](https://github.com/rag3db/rag3db/tree/master/dataset/demo-db/csv).
 
 """
 

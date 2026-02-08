@@ -3,7 +3,7 @@
 #include "common/data_chunk/sel_vector.h"
 #include "common/types/types.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace transaction {
 class Transaction;
 } // namespace transaction
@@ -13,7 +13,7 @@ namespace storage {
 class ChunkedNodeGroup;
 struct VectorVersionInfo;
 
-class KUZU_API VersionInfo {
+class RAG3DB_API VersionInfo {
 public:
     VersionInfo();
     ~VersionInfo();
@@ -62,4 +62,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

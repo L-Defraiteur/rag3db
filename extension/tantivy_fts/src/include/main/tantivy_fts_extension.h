@@ -1,7 +1,7 @@
 #pragma once
 #include "extension/extension.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace tantivy_fts_extension {
 
 class TantivyFtsExtension final : public extension::Extension {
@@ -11,4 +11,4 @@ public:
 };
 
 } // namespace tantivy_fts_extension
-} // namespace kuzu
+} // namespace rag3db

@@ -9,12 +9,12 @@
 #include "parser/expression/parsed_lambda_expression.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::main;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::main;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace evaluator {
 
 void ListLambdaEvaluator::init(const ResultSet& resultSet, ClientContext* clientContext) {
@@ -117,4 +117,4 @@ ListLambdaType ListLambdaEvaluator::checkListLambdaTypeWithFunctionName(std::str
 }
 
 } // namespace evaluator
-} // namespace kuzu
+} // namespace rag3db

@@ -8,10 +8,10 @@
 #include "common/utils.h"
 #include "storage/storage_utils.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 static constexpr uint64_t DATA_BLOCK_SIZE = common::TEMP_PAGE_SIZE;
 
@@ -410,4 +410,4 @@ void OrderByKeyEncoder::encodeData(float data, uint8_t* resultPtr, bool swapByte
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

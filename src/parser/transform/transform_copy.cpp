@@ -4,9 +4,9 @@
 #include "parser/scan_source.h"
 #include "parser/transformer.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 std::unique_ptr<Statement> Transformer::transformCopyTo(CypherParser::KU_CopyTOContext& ctx) {
@@ -106,4 +106,4 @@ options_t Transformer::transformOptions(CypherParser::KU_OptionsContext& ctx) {
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

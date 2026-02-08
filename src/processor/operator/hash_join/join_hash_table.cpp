@@ -4,11 +4,11 @@
 #include "function/hash/vector_hash_functions.h"
 #include "processor/result/factorized_table.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 JoinHashTable::JoinHashTable(MemoryManager& memoryManager, logical_type_vec_t keyTypes,
@@ -209,4 +209,4 @@ offset_t JoinHashTable::getHashValueColOffset() const {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

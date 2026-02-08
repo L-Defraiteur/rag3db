@@ -12,7 +12,7 @@
 #include "transaction/transaction.h"
 #include "utils/fts_utils.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace fts_extension {
 
 void Stemmer::validate(const std::string& stemmer) {
@@ -221,5 +221,12 @@ void Tokenizer::validate(const std::string& tokenizer) {
         ".\nSupported tokenizers: 'simple' (default), 'jieba' (advanced Chinese)"};
 }
 
+void Fuzzy::validate(uint64_t value) {
+    if (value > 2) {
+        throw common::BinderException{
+            "Fuzzy search distance must be 0 (disabled), 1, or 2. Higher values are not supported."};
+    }
+}
+
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

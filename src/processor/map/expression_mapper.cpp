@@ -19,12 +19,12 @@
 #include "expression_evaluator/reference_evaluator.h"
 #include "planner/operator/schema.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::evaluator;
-using namespace kuzu::planner;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::evaluator;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static bool canEvaluateAsFunction(ExpressionType expressionType) {
@@ -212,4 +212,4 @@ std::vector<std::unique_ptr<ExpressionEvaluator>> ExpressionMapper::getEvaluator
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

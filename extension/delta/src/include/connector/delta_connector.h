@@ -2,7 +2,7 @@
 
 #include "connector/duckdb_connector.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace delta_extension {
 
 class DeltaConnector : public duckdb_extension::DuckDBConnector {
@@ -12,4 +12,4 @@ public:
 };
 
 } // namespace delta_extension
-} // namespace kuzu
+} // namespace rag3db

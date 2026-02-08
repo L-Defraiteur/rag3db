@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class NullBuffer {
@@ -36,4 +36,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

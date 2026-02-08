@@ -44,11 +44,11 @@ add_subdirectory(src/main)
 build_extension_lib(${BUILD_STATIC_EXTENSION} "tantivy_fts")
 
 # --- Link Rust lib + system deps ---
-target_link_libraries(kuzu_${EXTENSION_LIB_NAME}_extension
+target_link_libraries(rag3db_${EXTENSION_LIB_NAME}_extension
     PRIVATE
     tantivy_fts_lib)
 
 if(NOT EMSCRIPTEN)
-    target_link_libraries(kuzu_${EXTENSION_LIB_NAME}_extension
+    target_link_libraries(rag3db_${EXTENSION_LIB_NAME}_extension
         PRIVATE pthread m dl)
 endif()

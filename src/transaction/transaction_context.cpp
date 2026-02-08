@@ -5,9 +5,9 @@
 #include "main/database.h"
 #include "transaction/transaction_manager.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace transaction {
 
 TransactionContext::TransactionContext(main::ClientContext& clientContext)
@@ -85,4 +85,4 @@ void TransactionContext::beginTransactionInternal(TransactionType transactionTyp
 }
 
 } // namespace transaction
-} // namespace kuzu
+} // namespace rag3db

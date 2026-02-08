@@ -6,7 +6,7 @@
  */
 #include "parquet_constants.h"
 
-namespace kuzu_parquet { namespace format {
+namespace rag3db_parquet { namespace format {
 
 const parquetConstants g_parquet_constants;
 

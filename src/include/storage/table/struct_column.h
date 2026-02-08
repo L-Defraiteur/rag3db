@@ -3,7 +3,7 @@
 #include "common/types/types.h"
 #include "storage/table/column.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 class MemoryManager;
 
@@ -45,4 +45,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

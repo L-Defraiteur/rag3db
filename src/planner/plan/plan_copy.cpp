@@ -9,13 +9,13 @@
 #include "planner/planner.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::storage;
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::binder;
+using namespace rag3db::storage;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 static void appendIndexScan(const ExtraBoundCopyRelInfo& extraInfo, LogicalPlan& plan) {
@@ -138,4 +138,4 @@ LogicalPlan Planner::planCopyTo(const BoundStatement& statement) {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

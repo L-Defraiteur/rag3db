@@ -2,7 +2,7 @@
 
 #include "common/assert.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 std::string ConflictActionUtil::toString(ConflictAction action) {
@@ -19,4 +19,4 @@ std::string ConflictActionUtil::toString(ConflictAction action) {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

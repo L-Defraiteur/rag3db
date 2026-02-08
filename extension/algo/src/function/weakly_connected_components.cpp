@@ -8,14 +8,14 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::processor;
-using namespace kuzu::storage;
-using namespace kuzu::graph;
-using namespace kuzu::function;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::processor;
+using namespace rag3db::storage;
+using namespace rag3db::graph;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace algo_extension {
 
 class WCCAuxiliaryState : public GDSAuxiliaryState {
@@ -119,4 +119,4 @@ function_set WeaklyConnectedComponentsFunction::getFunctionSet() {
 }
 
 } // namespace algo_extension
-} // namespace kuzu
+} // namespace rag3db

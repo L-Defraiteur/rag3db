@@ -8,15 +8,15 @@
 #include "storage/storage_manager.h"
 #include "storage/table/table.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::planner;
-using namespace kuzu::evaluator;
-using namespace kuzu::transaction;
-using namespace kuzu::storage;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::planner;
+using namespace rag3db::evaluator;
+using namespace rag3db::transaction;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static column_id_t getColumnID(const TableCatalogEntry& entry,
@@ -167,4 +167,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapSetRelProperty(
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

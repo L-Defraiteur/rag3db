@@ -6,11 +6,11 @@
 #include "processor/operator/skip.h"
 #include "processor/plan_mapper.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::planner;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::planner;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapLimit(const LogicalOperator* logicalOperator) {
@@ -47,4 +47,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapLimit(const LogicalOperator* lo
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

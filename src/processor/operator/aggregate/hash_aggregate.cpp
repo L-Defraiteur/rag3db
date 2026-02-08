@@ -13,11 +13,11 @@
 #include "processor/result/factorized_table_schema.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::function;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string HashAggregatePrintInfo::toString() const {
@@ -262,4 +262,4 @@ void HashAggregate::executeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

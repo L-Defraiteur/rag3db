@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _KUZU_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_
-#define _KUZU_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_ 1
+#ifndef _RAG3DB_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_
+#define _RAG3DB_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_ 1
 
 #include <cstdlib>
 #include <cstddef>
@@ -36,7 +36,7 @@
 #define TDB_UNLIKELY(val) (val)
 #endif
 
-namespace kuzu_apache {
+namespace rag3db_apache {
 namespace thrift {
 namespace transport {
 
@@ -81,7 +81,7 @@ public:
       rBase_ = new_rBase;
       return len;
     }
-    return kuzu_apache::thrift::transport::readAll(*this, buf, len);
+    return rag3db_apache::thrift::transport::readAll(*this, buf, len);
   }
 
   /**
@@ -483,6 +483,6 @@ protected:
 };
 }
 }
-} // kuzu_apache::thrift::transport
+} // rag3db_apache::thrift::transport
 
-#endif // #ifndef _KUZU_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_
+#endif // #ifndef _RAG3DB_THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_

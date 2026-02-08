@@ -7,10 +7,10 @@
 #include "common/serializer/deserializer.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace catalog {
 
 void RelGroupCatalogEntry::addFromToConnection(table_id_t srcTableID, table_id_t dstTableID,
@@ -184,4 +184,4 @@ RelGroupCatalogEntry::getBoundExtraCreateInfo(transaction::Transaction*) const {
 }
 
 } // namespace catalog
-} // namespace kuzu
+} // namespace rag3db

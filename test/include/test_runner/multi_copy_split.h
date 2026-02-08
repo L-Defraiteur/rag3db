@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "main/kuzu.h"
+#include "main/rag3db.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 // Insert a dataset row by row instead of batch insert (copy)
@@ -33,4 +33,4 @@ private:
 };
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

@@ -11,10 +11,10 @@
 #include "function/comparison/comparison_functions.h"
 #include "function/hash/vector_hash_functions.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 BaseHashTable::BaseHashTable(storage::MemoryManager& memoryManager, logical_type_vec_t keyTypes)
@@ -302,4 +302,4 @@ void BaseHashTable::initTmpHashVector() {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

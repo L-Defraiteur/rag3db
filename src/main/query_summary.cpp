@@ -2,9 +2,9 @@
 
 #include "common/enums/statement_type.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 
 double QuerySummary::getCompilingTime() const {
@@ -36,4 +36,4 @@ StatementType QuerySummary::getStatementType() const {
 }
 
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

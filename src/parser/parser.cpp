@@ -8,14 +8,14 @@
 
 #include "common/exception/parser.h"
 #include "common/string_utils.h"
-#include "parser/antlr_parser/kuzu_cypher_parser.h"
+#include "parser/antlr_parser/rag3db_cypher_parser.h"
 #include "parser/antlr_parser/parser_error_listener.h"
 #include "parser/antlr_parser/parser_error_strategy.h"
 #include "parser/transformer.h"
 
 using namespace antlr4;
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 std::vector<std::shared_ptr<Statement>> Parser::parseQuery(std::string_view query,
@@ -41,14 +41,14 @@ std::vector<std::shared_ptr<Statement>> Parser::parseQuery(std::string_view quer
     auto tokens = CommonTokenStream(&cypherLexer);
     tokens.fill();
 
-    auto kuzuCypherParser = KuzuCypherParser(&tokens);
-    kuzuCypherParser.removeErrorListeners();
-    kuzuCypherParser.addErrorListener(&parserErrorListener);
-    kuzuCypherParser.setErrorHandler(std::make_shared<ParserErrorStrategy>());
+    auto rag3dbCypherParser = Rag3dbCypherParser(&tokens);
+    rag3dbCypherParser.removeErrorListeners();
+    rag3dbCypherParser.addErrorListener(&parserErrorListener);
+    rag3dbCypherParser.setErrorHandler(std::make_shared<ParserErrorStrategy>());
 
-    Transformer transformer(*kuzuCypherParser.ku_Statements(), std::move(transformerExtensions));
+    Transformer transformer(*rag3dbCypherParser.ku_Statements(), std::move(transformerExtensions));
     return transformer.transform();
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

@@ -3,13 +3,13 @@
 #include "common/api.h"
 #include "exception.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
-class KUZU_API StorageException : public Exception {
+class RAG3DB_API StorageException : public Exception {
 public:
     explicit StorageException(const std::string& msg) : Exception("Storage exception: " + msg){};
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

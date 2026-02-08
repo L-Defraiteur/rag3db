@@ -3,7 +3,7 @@
 #include "common/types/interval_t.h"
 #include "gtest/gtest.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 TEST(IntervalTests, FromCString) {
     interval_t result;

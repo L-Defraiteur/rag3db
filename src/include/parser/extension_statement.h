@@ -3,10 +3,10 @@
 #include "extension/extension_action.h"
 #include "statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
-using namespace kuzu::extension;
+using namespace rag3db::extension;
 
 class ExtensionStatement final : public Statement {
 public:
@@ -20,4 +20,4 @@ private:
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

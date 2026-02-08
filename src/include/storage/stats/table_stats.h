@@ -3,10 +3,10 @@
 #include "common/types/types.h"
 #include "storage/stats/column_stats.h"
 
-namespace kuzu::common {
+namespace rag3db::common {
 class LogicalType;
 }
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 class TableStats {
@@ -66,4 +66,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

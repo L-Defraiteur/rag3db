@@ -11,13 +11,13 @@
 #include "common/api.h"
 #include "common/exception/overflow.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 struct uint128_t;
 
 // System representation for int128_t.
-struct KUZU_API int128_t {
+struct RAG3DB_API int128_t {
     uint64_t low;
     int64_t high;
 
@@ -64,25 +64,25 @@ struct KUZU_API int128_t {
 };
 
 // arithmetic operators
-KUZU_API int128_t operator+(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator-(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator*(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator/(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator%(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator^(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator&(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator~(const int128_t& val);
-KUZU_API int128_t operator|(const int128_t& lhs, const int128_t& rhs);
-KUZU_API int128_t operator<<(const int128_t& lhs, int amount);
-KUZU_API int128_t operator>>(const int128_t& lhs, int amount);
+RAG3DB_API int128_t operator+(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator-(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator*(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator/(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator%(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator^(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator&(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator~(const int128_t& val);
+RAG3DB_API int128_t operator|(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API int128_t operator<<(const int128_t& lhs, int amount);
+RAG3DB_API int128_t operator>>(const int128_t& lhs, int amount);
 
 // comparison operators
-KUZU_API bool operator==(const int128_t& lhs, const int128_t& rhs);
-KUZU_API bool operator!=(const int128_t& lhs, const int128_t& rhs);
-KUZU_API bool operator>(const int128_t& lhs, const int128_t& rhs);
-KUZU_API bool operator>=(const int128_t& lhs, const int128_t& rhs);
-KUZU_API bool operator<(const int128_t& lhs, const int128_t& rhs);
-KUZU_API bool operator<=(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator==(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator!=(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator>(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator>=(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator<(const int128_t& lhs, const int128_t& rhs);
+RAG3DB_API bool operator<=(const int128_t& lhs, const int128_t& rhs);
 
 class Int128_t {
 public:
@@ -221,9 +221,9 @@ template<>
 bool Int128_t::tryCastTo(long double value, int128_t& result);
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db
 
 template<>
-struct std::hash<kuzu::common::int128_t> {
-    std::size_t operator()(const kuzu::common::int128_t& v) const noexcept;
+struct std::hash<rag3db::common::int128_t> {
+    std::size_t operator()(const rag3db::common::int128_t& v) const noexcept;
 };

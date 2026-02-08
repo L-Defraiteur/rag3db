@@ -7,7 +7,7 @@
 #include "common/vector/value_vector.h"
 #include "storage/stats/hyperloglog.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 class ColumnStats {
@@ -59,4 +59,4 @@ private:
 };
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

@@ -21,13 +21,13 @@ null
 ---- 1
 null
 
--STATEMENT RETURN json_extract('{"my_field": {"my_nested_field": ["goose", "kuzu"]}}', 'my_field/my_nested_field/1')
+-STATEMENT RETURN json_extract('{"my_field": {"my_nested_field": ["goose", "rag3db"]}}', 'my_field/my_nested_field/1')
 ---- 1
-"kuzu"
+"rag3db"
 
--STATEMENT RETURN json_extract('{"my_field": {"my_nested_field": ["goose", "kuzukuzukuzukuzu"]}}', 'my_field/my_nested_field/1')
+-STATEMENT RETURN json_extract('{"my_field": {"my_nested_field": ["goose", "rag3dbrag3dbrag3dbrag3db"]}}', 'my_field/my_nested_field/1')
 ---- 1
-"kuzukuzukuzukuzu"
+"rag3dbrag3dbrag3dbrag3db"
 
 -STATEMENT RETURN json_extract('[1, 2, 42]', 2)
 ---- 1

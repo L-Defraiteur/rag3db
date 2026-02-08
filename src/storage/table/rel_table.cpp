@@ -19,12 +19,12 @@
 #include "transaction/transaction.h"
 #include <ranges>
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::transaction;
-using namespace kuzu::evaluator;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
+using namespace rag3db::evaluator;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 void RelTableScanState::setToTable(const Transaction* transaction, Table* table_,
@@ -545,4 +545,4 @@ void RelTable::deserialize(main::ClientContext*, StorageManager*, Deserializer& 
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

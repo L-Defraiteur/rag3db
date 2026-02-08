@@ -3,7 +3,7 @@
 #include "bound_insert_info.h"
 #include "bound_updating_clause.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 class BoundInsertClause final : public BoundUpdatingClause {
@@ -40,4 +40,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

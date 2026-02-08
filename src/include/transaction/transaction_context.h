@@ -4,7 +4,7 @@
 
 #include "transaction.h"
 
-namespace kuzu {
+namespace rag3db {
 
 namespace main {
 class ClientContext;
@@ -30,7 +30,7 @@ namespace transaction {
  */
 enum class TransactionMode : uint8_t { AUTO = 0, MANUAL = 1 };
 
-class KUZU_API TransactionContext {
+class RAG3DB_API TransactionContext {
 public:
     explicit TransactionContext(main::ClientContext& clientContext);
     ~TransactionContext();
@@ -65,4 +65,4 @@ private:
 };
 
 } // namespace transaction
-} // namespace kuzu
+} // namespace rag3db

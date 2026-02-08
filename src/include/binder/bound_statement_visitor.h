@@ -3,10 +3,10 @@
 #include "binder/query/normalized_single_query.h"
 #include "bound_statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
-class KUZU_API BoundStatementVisitor {
+class RAG3DB_API BoundStatementVisitor {
 public:
     BoundStatementVisitor() = default;
     virtual ~BoundStatementVisitor() = default;
@@ -62,4 +62,4 @@ protected:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

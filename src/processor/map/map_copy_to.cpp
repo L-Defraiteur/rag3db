@@ -3,11 +3,11 @@
 #include "processor/plan_mapper.h"
 #include "storage/buffer_manager/memory_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::planner;
-using namespace kuzu::storage;
+using namespace rag3db::common;
+using namespace rag3db::planner;
+using namespace rag3db::storage;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyTo(const LogicalOperator* logicalOperator) {
@@ -40,4 +40,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyTo(const LogicalOperator* l
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

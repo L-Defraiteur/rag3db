@@ -2,7 +2,7 @@
 
 #include "benchmark.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace benchmark {
 
 // Class stores information of a benchmark
@@ -31,4 +31,4 @@ public:
 };
 
 } // namespace benchmark
-} // namespace kuzu
+} // namespace rag3db

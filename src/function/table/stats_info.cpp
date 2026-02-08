@@ -8,11 +8,11 @@
 #include "storage/table/node_table.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::main;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct StatsInfoBindData final : TableFuncBindData {
@@ -90,4 +90,4 @@ function_set StatsInfoFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

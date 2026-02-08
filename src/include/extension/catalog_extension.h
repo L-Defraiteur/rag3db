@@ -2,10 +2,10 @@
 
 #include "catalog/catalog.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace extension {
 
-class KUZU_API CatalogExtension : public catalog::Catalog {
+class RAG3DB_API CatalogExtension : public catalog::Catalog {
 public:
     CatalogExtension() : Catalog() {}
 
@@ -15,4 +15,4 @@ public:
 };
 
 } // namespace extension
-} // namespace kuzu
+} // namespace rag3db

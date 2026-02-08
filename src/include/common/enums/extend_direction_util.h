@@ -4,7 +4,7 @@
 #include "common/enums/extend_direction.h"
 #include "common/enums/rel_direction.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class ExtendDirectionUtil {
@@ -19,4 +19,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

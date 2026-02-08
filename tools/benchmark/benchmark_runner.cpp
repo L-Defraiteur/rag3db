@@ -5,9 +5,9 @@
 
 #include "spdlog/spdlog.h"
 
-using namespace kuzu::main;
+using namespace rag3db::main;
 
-namespace kuzu {
+namespace rag3db {
 namespace benchmark {
 
 const char* BENCHMARK_SUFFIX = ".benchmark";
@@ -101,4 +101,4 @@ void BenchmarkRunner::profileQueryIfEnabled(Benchmark* benchmark) const {
 }
 
 } // namespace benchmark
-} // namespace kuzu
+} // namespace rag3db

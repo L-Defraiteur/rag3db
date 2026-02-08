@@ -2,9 +2,9 @@
 #include "function/scalar_function.h"
 #include "function/utility/vector_utility_functions.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct Error {
@@ -25,4 +25,4 @@ function_set ErrorFunction::getFunctionSet() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

@@ -6,9 +6,9 @@
 #include "binder/query/bound_regular_query.h"
 #include "common/cast.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 void BoundStatementVisitor::visit(const BoundStatement& statement) {
@@ -219,4 +219,4 @@ void BoundStatementVisitor::visitUpdatingClause(const BoundUpdatingClause& updat
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

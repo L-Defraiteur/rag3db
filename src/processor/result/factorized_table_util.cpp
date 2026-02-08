@@ -1,11 +1,11 @@
 #include "processor/result/factorized_table_util.h"
 
-using namespace kuzu::storage;
-using namespace kuzu::common;
-using namespace kuzu::binder;
-using namespace kuzu::planner;
+using namespace rag3db::storage;
+using namespace rag3db::common;
+using namespace rag3db::binder;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 FactorizedTableSchema FactorizedTableUtils::createFTableSchema(const expression_vector& exprs,
@@ -67,4 +67,4 @@ std::shared_ptr<FactorizedTable> FactorizedTableUtils::getSingleStringColumnFTab
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

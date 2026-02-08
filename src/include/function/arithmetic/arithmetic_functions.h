@@ -5,7 +5,7 @@
 #include "common/types/int128_t.h"
 #include "common/types/uint128_t.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct Power {
@@ -242,4 +242,4 @@ struct Pi {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

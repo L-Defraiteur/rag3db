@@ -7,7 +7,7 @@
 #include "processor/operator/sink.h"
 #include "processor/result/factorized_table.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 class ResultCollectorSharedState {
@@ -104,4 +104,4 @@ private:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

@@ -2,10 +2,10 @@
 #include "planner/operator/persistent/logical_insert.h"
 #include "planner/planner.h"
 
-using namespace kuzu::common;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 std::unique_ptr<LogicalInsertInfo> Planner::createLogicalInsertInfo(
@@ -52,4 +52,4 @@ void Planner::appendInsertRel(const std::vector<const binder::BoundInsertInfo*>&
     plan.setLastOperator(insertRel);
 }
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

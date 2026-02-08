@@ -15,10 +15,10 @@
 #include "function/table/table_function.h"
 #include "processor/operator/persistent/reader/csv/driver.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 ParallelCSVReader::ParallelCSVReader(const std::string& filePath, idx_t fileIdx, CSVOption option,
@@ -331,4 +331,4 @@ function_set ParallelCSVScan::getFunctionSet() {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

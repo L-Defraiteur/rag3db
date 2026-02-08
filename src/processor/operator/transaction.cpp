@@ -5,10 +5,10 @@
 #include "transaction/transaction_context.h"
 #include "transaction/transaction_manager.h"
 
-using namespace kuzu::common;
-using namespace kuzu::transaction;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string TransactionPrintInfo::toString() const {
@@ -79,4 +79,4 @@ void Transaction::validateActiveTransaction(const TransactionContext& context) c
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

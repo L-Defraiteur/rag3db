@@ -5,9 +5,9 @@
 #include <utility>
 #include <vector>
 
-#include "main/kuzu.h"
+#include "main/rag3db.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace testing {
 
 // Convert an entire CSV dataset directory to some specified output.
@@ -65,4 +65,4 @@ private:
 };
 
 } // namespace testing
-} // namespace kuzu
+} // namespace rag3db

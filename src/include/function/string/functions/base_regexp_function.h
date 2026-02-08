@@ -4,7 +4,7 @@
 
 #include "common/vector/value_vector.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct BaseRegexpOperation {
@@ -15,11 +15,11 @@ struct BaseRegexpOperation {
         return std::regex_replace(pattern, std::regex(R"(\\\\)"), "\\");
     }
 
-    static inline void copyToKuzuString(const std::string& value, common::ku_string_t& kuString,
+    static inline void copyToRag3dbString(const std::string& value, common::ku_string_t& kuString,
         common::ValueVector& valueVector) {
         common::StringVector::addString(&valueVector, kuString, value.data(), value.length());
     }
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

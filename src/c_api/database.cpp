@@ -1,11 +1,11 @@
-#include "c_api/kuzu.h"
+#include "c_api/rag3db.h"
 #include "common/exception/exception.h"
-#include "main/kuzu.h"
-using namespace kuzu::main;
-using namespace kuzu::common;
+#include "main/rag3db.h"
+using namespace rag3db::main;
+using namespace rag3db::common;
 
-kuzu_state kuzu_database_init(const char* database_path, kuzu_system_config config,
-    kuzu_database* out_database) {
+rag3db_state rag3db_database_init(const char* database_path, rag3db_system_config config,
+    rag3db_database* out_database) {
     try {
         std::string database_path_str = database_path;
         auto systemConfig = SystemConfig(config.buffer_pool_size, config.max_num_threads,
@@ -18,12 +18,12 @@ kuzu_state kuzu_database_init(const char* database_path, kuzu_system_config conf
         out_database->_database = new Database(database_path_str, systemConfig);
     } catch (Exception& e) {
         out_database->_database = nullptr;
-        return KuzuError;
+        return Rag3dbError;
     }
-    return KuzuSuccess;
+    return Rag3dbSuccess;
 }
 
-void kuzu_database_destroy(kuzu_database* database) {
+void rag3db_database_destroy(rag3db_database* database) {
     if (database == nullptr) {
         return;
     }
@@ -32,9 +32,9 @@ void kuzu_database_destroy(kuzu_database* database) {
     }
 }
 
-kuzu_system_config kuzu_default_system_config() {
+rag3db_system_config rag3db_default_system_config() {
     SystemConfig config = SystemConfig();
-    auto cSystemConfig = kuzu_system_config();
+    auto cSystemConfig = rag3db_system_config();
     cSystemConfig.buffer_pool_size = config.bufferPoolSize;
     cSystemConfig.max_num_threads = config.maxNumThreads;
     cSystemConfig.enable_compression = config.enableCompression;

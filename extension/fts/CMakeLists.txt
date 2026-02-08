@@ -19,7 +19,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fuzzy-fst ${CMAKE_CURRENT_BIN
 
 build_extension_lib(${BUILD_STATIC_EXTENSION} "fts")
 
-target_link_libraries(kuzu_${EXTENSION_LIB_NAME}_extension
+target_link_libraries(rag3db_${EXTENSION_LIB_NAME}_extension
         PRIVATE
         snowball
         re2
@@ -27,7 +27,7 @@ target_link_libraries(kuzu_${EXTENSION_LIB_NAME}_extension
         fuzzy_fst)
 
 # Copy Jieba dictionaries next to the built extension so runtime can find a default path
-add_custom_command(TARGET kuzu_${EXTENSION_LIB_NAME}_extension POST_BUILD
+add_custom_command(TARGET rag3db_${EXTENSION_LIB_NAME}_extension POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${PROJECT_SOURCE_DIR}/third_party/cppjieba/dict
         ${PROJECT_SOURCE_DIR}/extension/fts/build/dict)

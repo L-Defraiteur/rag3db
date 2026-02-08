@@ -3,7 +3,7 @@
 #include "binder/bound_statement_visitor.h"
 #include "binder/query/query_graph_label_analyzer.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 class MatchClausePatternLabelRewriter final : public BoundStatementVisitor {
@@ -18,4 +18,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

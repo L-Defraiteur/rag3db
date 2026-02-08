@@ -7,10 +7,10 @@
 #include "common/file_system/file_info.h"
 #include "common/system_config.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
-static constexpr uint64_t BUFFER_SIZE = KUZU_PAGE_SIZE;
+static constexpr uint64_t BUFFER_SIZE = RAG3DB_PAGE_SIZE;
 
 BufferedFileWriter::BufferedFileWriter(FileInfo& fileInfo)
     : buffer(std::make_unique<uint8_t[]>(BUFFER_SIZE)), fileOffset(0), bufferOffset(0),
@@ -111,4 +111,4 @@ void BufferedFileReader::readNextPage() {
 }
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

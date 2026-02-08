@@ -7,10 +7,10 @@
 #include "main/client_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
 BoundTableScanInfo Binder::bindTableFunc(const std::string& tableFuncName,
@@ -74,4 +74,4 @@ BoundTableScanInfo Binder::bindTableFunc(const std::string& tableFuncName,
 }
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

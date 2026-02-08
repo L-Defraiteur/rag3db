@@ -3,9 +3,9 @@
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 void ParsedCaseAlternative::serialize(Serializer& serializer) const {
@@ -49,4 +49,4 @@ void ParsedCaseExpression::serializeInternal(Serializer& serializer) const {
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

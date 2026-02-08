@@ -5,7 +5,7 @@
 
 #include "pybind_include.h"
 
-namespace kuzu {
+namespace rag3db {
 
 // We currently only support NUMPY as backend.
 enum class PandasColumnBackend : uint8_t { NUMPY = 0 };
@@ -38,4 +38,4 @@ public:
     py::array array;
 };
 
-} // namespace kuzu
+} // namespace rag3db

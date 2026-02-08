@@ -18,7 +18,7 @@
 #include "logging.h"
 #include "regexp.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 template<typename T>
@@ -244,6 +244,6 @@ T Regexp::Walker<T>::WalkExponential(Regexp* re, T top_arg, int max_visits) {
 }
 
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 
 #endif // RE2_WALKER_INL_H_

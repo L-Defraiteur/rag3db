@@ -2,9 +2,9 @@
 
 #include "common/string_utils.h"
 
-namespace kuzu {
+namespace rag3db {
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 static bool isDateTime(NumpyNullableType type) {
     switch (type) {
@@ -146,4 +146,4 @@ LogicalType NumpyTypeUtils::numpyToLogicalType(const NumpyType& col_type) {
     }
 }
 
-} // namespace kuzu
+} // namespace rag3db

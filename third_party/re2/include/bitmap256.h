@@ -14,7 +14,7 @@
 #include "logging.h"
 #include "util.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace regex {
 
 class Bitmap256 {
@@ -111,5 +111,5 @@ int Bitmap256::FindNextSetBit(int c) const {
 }
 
 } // namespace regex
-} // namespace kuzu
+} // namespace rag3db
 #endif // RE2_BITMAP256_H_

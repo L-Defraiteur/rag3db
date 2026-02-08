@@ -2,7 +2,7 @@
 
 #include "common/types/ku_string.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 struct StartsWith {
@@ -15,4 +15,4 @@ struct StartsWith {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

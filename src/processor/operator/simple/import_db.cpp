@@ -6,11 +6,11 @@
 #include "storage/buffer_manager/memory_manager.h"
 #include "transaction/transaction_context.h"
 
-using namespace kuzu::common;
-using namespace kuzu::transaction;
-using namespace kuzu::catalog;
+using namespace rag3db::common;
+using namespace rag3db::transaction;
+using namespace rag3db::catalog;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static void validateQueryResult(main::QueryResult* queryResult) {
@@ -48,4 +48,4 @@ void ImportDB::executeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

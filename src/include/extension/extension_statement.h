@@ -2,7 +2,7 @@
 
 #include "parser/statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace extension {
 
 class ExtensionStatement : public parser::Statement {
@@ -19,4 +19,4 @@ private:
 };
 
 } // namespace extension
-} // namespace kuzu
+} // namespace rag3db

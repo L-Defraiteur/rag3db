@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 struct YieldVariable {
@@ -14,4 +14,4 @@ struct YieldVariable {
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

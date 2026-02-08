@@ -1,14 +1,14 @@
 
-# Kuzu Node.js API
+# Rag3db Node.js API
 
-A high-performance graph database for knowledge-intensive applications. This Node.js wrapper enables interaction with the Kuzu database via JavaScript or TypeScript using either **CommonJS** or **ES Modules**.
+A high-performance graph database for knowledge-intensive applications. This Node.js wrapper enables interaction with the Rag3db database via JavaScript or TypeScript using either **CommonJS** or **ES Modules**.
 
 ---
 
 ## 📦 Installation
 
 ```bash
-npm install kuzu
+npm install rag3db
 ```
 
 ---
@@ -19,7 +19,7 @@ npm install kuzu
 
 ```js
 // Import the Kùzu module (ESM)
-import { Database, Connection } from "kuzu";
+import { Database, Connection } from "rag3db";
 
 const main = async () => {
   // Initialize database and connection
@@ -60,13 +60,13 @@ const main = async () => {
 
 main().catch(console.error);
 ```
- ✅ The dataset used in this example can be found in the [official Kuzu repository](https://github.com/kuzudb/kuzu/tree/master/dataset/demo-db/csv).
+ ✅ The dataset used in this example can be found in the [official Rag3db repository](https://github.com/rag3db/rag3db/tree/master/dataset/demo-db/csv).
 
 ---
 
 ## 📚 API Overview
 
-The `kuzu` package exposes the following primary classes:
+The `rag3db` package exposes the following primary classes:
 
 * `Database` – Initializes a database from a file path.
 * `Connection` – Executes queries on a connected database.
@@ -118,7 +118,7 @@ If a prebuilt binary is unavailable for your platform, the module will be built 
 2. Name them using the format:
 
    ```
-   kuzujs-${platform}-${arch}.node
+   rag3dbjs-${platform}-${arch}.node
    ```
 3. Run the packaging script:
 
@@ -144,6 +144,6 @@ Refer to the [npm documentation](https://docs.npmjs.com/cli/v9/commands/npm-publ
 
 ## 🔗 Resources
 
-* [Kuzu GitHub](https://github.com/kuzudb/kuzu)
-* [Kuzu Documentation](https://docs.kuzudb.com)
-* [Issue Tracker](https://github.com/kuzudb/kuzu/issues)
+* [Rag3db GitHub](https://github.com/rag3db/rag3db)
+* [Rag3db Documentation](https://docs.rag3db.com)
+* [Issue Tracker](https://github.com/rag3db/rag3db/issues)

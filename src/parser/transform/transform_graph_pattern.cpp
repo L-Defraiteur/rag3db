@@ -2,9 +2,9 @@
 #include "parser/query/graph_pattern/pattern_element.h"
 #include "parser/transformer.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 std::vector<PatternElement> Transformer::transformPattern(CypherParser::OC_PatternContext& ctx) {
@@ -210,4 +210,4 @@ std::string Transformer::transformRelTypeName(CypherParser::OC_RelTypeNameContex
 }
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

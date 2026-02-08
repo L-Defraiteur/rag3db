@@ -5,9 +5,9 @@
 #include "binder/expression/expression_util.h"
 #include "common/metric.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string UnionAllScanPrintInfo::toString() const {
@@ -60,4 +60,4 @@ bool UnionAllScan::getNextTuplesInternal(ExecutionContext* /*context*/) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

@@ -15,12 +15,12 @@
 #include "storage/table/node_table.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::catalog;
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::transaction;
+using namespace rag3db::catalog;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 std::string NodeBatchInsertPrintInfo::toString() const {
@@ -310,4 +310,4 @@ void NodeBatchInsert::finalizeInternal(ExecutionContext* context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

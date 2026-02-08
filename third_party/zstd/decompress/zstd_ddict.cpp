@@ -27,7 +27,7 @@
 // #  include "../legacy/zstd_legacy.h"
 // #endif
 
-namespace kuzu_zstd {
+namespace rag3db_zstd {
 
 /*-*******************************************************
 *  Types

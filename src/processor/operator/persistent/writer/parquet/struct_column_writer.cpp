@@ -3,14 +3,14 @@
 #include "common/constants.h"
 #include "common/vector/value_vector.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
-using namespace kuzu_parquet::format;
-using namespace kuzu::common;
+using namespace rag3db_parquet::format;
+using namespace rag3db::common;
 
 std::unique_ptr<ColumnWriterState> StructColumnWriter::initializeWriteState(
-    kuzu_parquet::format::RowGroup& rowGroup) {
+    rag3db_parquet::format::RowGroup& rowGroup) {
     auto result = std::make_unique<StructColumnWriterState>(rowGroup, rowGroup.columns.size());
 
     result->childStates.reserve(childWriters.size());
@@ -97,4 +97,4 @@ void StructColumnWriter::finalizeWrite(ColumnWriterState& state_p) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

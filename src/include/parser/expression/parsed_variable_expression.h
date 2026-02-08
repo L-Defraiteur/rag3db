@@ -4,7 +4,7 @@
 #include "common/serializer/serializer.h"
 #include "parsed_expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 class ParsedVariableExpression : public ParsedExpression {
@@ -43,4 +43,4 @@ private:
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

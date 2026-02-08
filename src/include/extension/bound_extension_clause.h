@@ -2,7 +2,7 @@
 
 #include "binder/bound_statement.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace extension {
 
 class BoundExtensionClause : public binder::BoundStatement {
@@ -21,4 +21,4 @@ private:
 };
 
 } // namespace extension
-} // namespace kuzu
+} // namespace rag3db

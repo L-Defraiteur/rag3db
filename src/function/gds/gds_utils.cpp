@@ -10,13 +10,13 @@
 #include "main/client_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::function;
-using namespace kuzu::processor;
-using namespace kuzu::graph;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::function;
+using namespace rag3db::processor;
+using namespace rag3db::graph;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 static std::shared_ptr<FrontierTask> getFrontierTask(const main::ClientContext* context,
@@ -170,4 +170,4 @@ void GDSUtils::runVertexCompute(ExecutionContext* context, GDSDensityState densi
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

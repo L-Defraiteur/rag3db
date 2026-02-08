@@ -3,10 +3,10 @@
 #include "common/types/value/value.h"
 #include "expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
-class KUZU_API ParameterExpression final : public Expression {
+class RAG3DB_API ParameterExpression final : public Expression {
     static constexpr common::ExpressionType expressionType = common::ExpressionType::PARAMETER;
 
 public:
@@ -28,4 +28,4 @@ private:
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

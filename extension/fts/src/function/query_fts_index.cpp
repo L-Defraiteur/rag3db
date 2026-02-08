@@ -23,7 +23,10 @@
 #include "storage/table/node_table.h"
 #include "utils/fts_utils.h"
 
-namespace kuzu {
+// Fuzzy search support
+#include "fuzzy_fst.h"
+
+namespace rag3db {
 namespace fts_extension {
 
 using namespace storage;
@@ -280,6 +283,89 @@ private:
     std::vector<VCQueryTerm>& queryTerms;
 };
 
+// Collects all terms from the terms table for fuzzy index building
+struct TermData {
+    std::string term;
+    offset_t offset;
+    uint64_t df;
+};
+
+class CollectTermsVertexCompute final : public VertexCompute {
+public:
+    explicit CollectTermsVertexCompute(std::vector<TermData>& allTerms)
+        : allTerms{allTerms} {}
+
+    void vertexCompute(const graph::VertexScanState::Chunk& chunk) override {
+        auto terms = chunk.getProperties<ku_string_t>(0);
+        auto dfs = chunk.getProperties<uint64_t>(1);
+        auto nodeIds = chunk.getNodeIDs();
+        for (auto i = 0u; i < chunk.size(); ++i) {
+            allTerms.push_back({terms[i].getAsString(), nodeIds[i].offset, dfs[i]});
+        }
+    }
+
+    std::unique_ptr<VertexCompute> copy() override {
+        return std::make_unique<CollectTermsVertexCompute>(allTerms);
+    }
+
+private:
+    std::vector<TermData>& allTerms;
+};
+
+// Performs fuzzy search using fuzzy-fst library
+static std::unordered_map<offset_t, uint64_t> getDFsFuzzy(main::ClientContext& context,
+    processor::ExecutionContext* executionContext, graph::Graph* graph,
+    catalog::TableCatalogEntry* termsEntry, const std::vector<std::string>& queryTerms,
+    uint64_t fuzzyDistance) {
+
+    // Step 1: Collect all terms from the terms table
+    std::vector<TermData> allTerms;
+    auto collectVc = CollectTermsVertexCompute{allTerms};
+    GDSUtils::runVertexCompute(executionContext, GDSDensityState::DENSE, graph, collectVc,
+        termsEntry, std::vector<std::string>{"term", DOC_FREQUENCY_PROP_NAME});
+
+    if (allTerms.empty()) {
+        return {};
+    }
+
+    // Step 2: Build term -> (offset, df) lookup map
+    std::unordered_map<std::string, std::pair<offset_t, uint64_t>> termLookup;
+    std::vector<const char*> termPtrs;
+    termPtrs.reserve(allTerms.size());
+    for (const auto& td : allTerms) {
+        termLookup[td.term] = {td.offset, td.df};
+        termPtrs.push_back(td.term.c_str());
+    }
+
+    // Step 3: Build fuzzy index
+    FuzzyIndex* fuzzyIndex = fuzzy_fst_build(termPtrs.data(), termPtrs.size());
+    if (!fuzzyIndex) {
+        // Fuzzy index build failed, fall back to empty results
+        return {};
+    }
+
+    // Step 4: Search for each query term with fuzzy matching
+    std::unordered_map<offset_t, uint64_t> dfs;
+    FuzzySearchOptions opts = fuzzy_fst_default_options();
+    opts.max_distance = static_cast<uint32_t>(fuzzyDistance);
+    opts.limit = 100; // Limit fuzzy matches per term
+
+    for (const auto& queryTerm : queryTerms) {
+        FuzzyMatches matches = fuzzy_fst_search(fuzzyIndex, queryTerm.c_str(), opts);
+        for (size_t i = 0; i < matches.len; ++i) {
+            const char* matchedTerm = matches.data[i].term;
+            auto it = termLookup.find(matchedTerm);
+            if (it != termLookup.end()) {
+                dfs[it->second.first] = it->second.second;
+            }
+        }
+        fuzzy_fst_matches_free(matches);
+    }
+
+    fuzzy_fst_free(fuzzyIndex);
+    return dfs;
+}
+
 static constexpr char SCORE_PROP_NAME[] = "score";
 static constexpr char DOC_FREQUENCY_PROP_NAME[] = "df";
 static constexpr char TERM_FREQUENCY_PROP_NAME[] = "tf";
@@ -288,7 +374,12 @@ static constexpr char DOC_ID_PROP_NAME[] = "docID";
 
 static std::unordered_map<offset_t, uint64_t> getDFs(main::ClientContext& context,
     processor::ExecutionContext* executionContext, graph::Graph* graph,
-    catalog::TableCatalogEntry* termsEntry, std::vector<std::string>& queryTerms) {
+    catalog::TableCatalogEntry* termsEntry, std::vector<std::string>& queryTerms,
+    uint64_t fuzzyDistance = 0) {
+    // If fuzzy search is enabled, use the fuzzy-fst based search
+    if (fuzzyDistance > 0) {
+        return getDFsFuzzy(context, executionContext, graph, termsEntry, queryTerms, fuzzyDistance);
+    }
     auto storageManager = StorageManager::Get(context);
     auto tableID = termsEntry->getTableID();
     auto& termsNodeTable = storageManager->getTable(tableID)->cast<NodeTable>();
@@ -381,7 +472,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     }
     auto termsEntry = graphEntry->nodeInfos[0].entry;
     auto queryTerms = qFTSBindData.getQueryTerms(clientContext);
-    auto dfs = getDFs(clientContext, input.context, graph, termsEntry, queryTerms);
+    auto fuzzyDistance = qFTSOptionalParams.fuzzy.getParamVal();
+    auto dfs = getDFs(clientContext, input.context, graph, termsEntry, queryTerms, fuzzyDistance);
     // Do edge compute to extend terms -> docs and save the term frequency and document frequency
     // for each term-doc pair. The reason why we store the term frequency and document frequency
     // is that: we need the `len` property from the docs table which is only available during the
@@ -538,4 +630,4 @@ function_set QueryFTSFunction::getFunctionSet() {
 }
 
 } // namespace fts_extension
-} // namespace kuzu
+} // namespace rag3db

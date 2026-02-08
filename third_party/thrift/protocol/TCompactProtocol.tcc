@@ -43,7 +43,7 @@
 #endif
 #endif
 
-namespace kuzu_apache { namespace thrift { namespace protocol {
+namespace rag3db_apache { namespace thrift { namespace protocol {
 
 namespace detail { namespace compact {
 
@@ -821,6 +821,6 @@ TType TCompactProtocolT<Transport_>::getTType(int8_t type) {
   }
 }
 
-}}} // kuzu_apache::thrift::protocol
+}}} // rag3db_apache::thrift::protocol
 
 #endif // _KUZU_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_

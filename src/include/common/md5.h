@@ -25,7 +25,7 @@
 
 #include <cstdint>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 class MD5 {
@@ -94,4 +94,4 @@ public:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

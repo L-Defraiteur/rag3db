@@ -7,7 +7,7 @@
 #include "function/table/bind_input.h"
 #include "processor/operator/persistent/reader/copy_from_error.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 class ClientContext;
 }
@@ -154,4 +154,4 @@ public:
 };
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

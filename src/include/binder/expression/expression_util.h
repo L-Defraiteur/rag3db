@@ -4,10 +4,10 @@
 #include "common/types/value/value.h"
 #include "expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace binder {
 
-struct KUZU_API ExpressionUtil {
+struct RAG3DB_API ExpressionUtil {
     static expression_vector getExpressionsWithDataType(const expression_vector& expressions,
         common::LogicalTypeID dataTypeID);
 
@@ -81,4 +81,4 @@ struct KUZU_API ExpressionUtil {
 };
 
 } // namespace binder
-} // namespace kuzu
+} // namespace rag3db

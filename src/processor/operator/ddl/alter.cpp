@@ -11,12 +11,12 @@
 #include "storage/table/table.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::catalog;
-using namespace kuzu::transaction;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::catalog;
+using namespace rag3db::transaction;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 void Alter::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
@@ -353,4 +353,4 @@ void Alter::alterTable(main::ClientContext* clientContext, const TableCatalogEnt
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

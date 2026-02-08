@@ -1,7 +1,7 @@
 #include "planner/operator/scan/logical_dummy_scan.h"
 #include "planner/planner.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace planner {
 
 void Planner::appendDummyScan(LogicalPlan& plan) {
@@ -12,4 +12,4 @@ void Planner::appendDummyScan(LogicalPlan& plan) {
 }
 
 } // namespace planner
-} // namespace kuzu
+} // namespace rag3db

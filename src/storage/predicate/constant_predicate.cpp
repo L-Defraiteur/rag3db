@@ -5,10 +5,10 @@
 #include "storage/compression/compression.h"
 #include "storage/table/column_chunk_stats.h"
 
-using namespace kuzu::common;
-using namespace kuzu::function;
+using namespace rag3db::common;
+using namespace rag3db::function;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 template<typename T>
@@ -92,4 +92,4 @@ std::string ColumnConstantPredicate::toString() {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

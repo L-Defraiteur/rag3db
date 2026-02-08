@@ -6,7 +6,7 @@
 #include "main/database.h"
 #include "storage/storage_manager.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace vector_extension {
 
 static void initHNSWEntries(main::ClientContext* context) {
@@ -42,23 +42,23 @@ void VectorExtension::load(main::ClientContext* context) {
 }
 
 } // namespace vector_extension
-} // namespace kuzu
+} // namespace rag3db
 
 #if defined(BUILD_DYNAMIC_LOAD)
 extern "C" {
-// Because we link against the static library on windows, we implicitly inherit KUZU_STATIC_DEFINE,
-// which cancels out any exporting, so we can't use KUZU_API.
+// Because we link against the static library on windows, we implicitly inherit RAG3DB_STATIC_DEFINE,
+// which cancels out any exporting, so we can't use RAG3DB_API.
 #if defined(_WIN32)
 #define INIT_EXPORT __declspec(dllexport)
 #else
 #define INIT_EXPORT __attribute__((visibility("default")))
 #endif
-INIT_EXPORT void init(kuzu::main::ClientContext* context) {
-    kuzu::vector_extension::VectorExtension::load(context);
+INIT_EXPORT void init(rag3db::main::ClientContext* context) {
+    rag3db::vector_extension::VectorExtension::load(context);
 }
 
 INIT_EXPORT const char* name() {
-    return kuzu::vector_extension::VectorExtension::EXTENSION_NAME;
+    return rag3db::vector_extension::VectorExtension::EXTENSION_NAME;
 }
 }
 #endif

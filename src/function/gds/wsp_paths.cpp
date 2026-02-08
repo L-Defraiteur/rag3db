@@ -6,12 +6,12 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::processor;
-using namespace kuzu::binder;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::processor;
+using namespace rag3db::binder;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 template<typename T>
@@ -152,4 +152,4 @@ std::unique_ptr<RJAlgorithm> WeightedSPPathsFunction::getAlgorithm() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

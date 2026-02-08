@@ -19,7 +19,7 @@
 #include "zstd/compress/zstd_compress_sequences.h"
 #include "zstd/compress/zstd_compress_literals.h"
 
-namespace kuzu_zstd {
+namespace rag3db_zstd {
 /*-*************************************
 *  Superblock entropy buffer structs
 ***************************************/

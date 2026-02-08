@@ -4,7 +4,7 @@
 
 #include <atomic>
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 /**
@@ -35,4 +35,4 @@ protected:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

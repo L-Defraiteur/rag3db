@@ -4,7 +4,7 @@
 
 #include "file_system.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 
 struct LocalFileInfo final : FileInfo {
@@ -25,7 +25,7 @@ struct LocalFileInfo final : FileInfo {
 #endif
 };
 
-class KUZU_API LocalFileSystem final : public FileSystem {
+class RAG3DB_API LocalFileSystem final : public FileSystem {
 public:
     explicit LocalFileSystem(std::string homeDir) : FileSystem(std::move(homeDir)) {}
 
@@ -71,4 +71,4 @@ protected:
 };
 
 } // namespace common
-} // namespace kuzu
+} // namespace rag3db

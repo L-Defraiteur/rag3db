@@ -3,7 +3,7 @@
 #include "binder/expression/expression.h"
 #include "common/api.h"
 
-namespace kuzu {
+namespace rag3db {
 
 namespace main {
 class ClientContext;
@@ -11,7 +11,7 @@ class ClientContext;
 
 namespace function {
 
-struct KUZU_API FunctionBindData {
+struct RAG3DB_API FunctionBindData {
     std::vector<common::LogicalType> paramTypes;
     common::LogicalType resultType;
     // TODO: the following two fields should be moved to FunctionLocalState.
@@ -58,7 +58,7 @@ struct ScalarBindFuncInput {
 using scalar_bind_func =
     std::function<std::unique_ptr<FunctionBindData>(const ScalarBindFuncInput& bindInput)>;
 
-struct KUZU_API Function {
+struct RAG3DB_API Function {
     std::string name;
     std::vector<common::LogicalTypeID> parameterTypeIDs;
     bool isReadOnly = true;
@@ -105,4 +105,4 @@ struct ScalarOrAggregateFunction : Function {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

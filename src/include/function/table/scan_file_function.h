@@ -8,7 +8,7 @@
 #include "function/table/bind_data.h"
 #include "function/table/table_function.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace common {
 class FileSystem;
 }
@@ -41,7 +41,7 @@ struct ScanFileWithProgressSharedState : ScanFileSharedState {
         : ScanFileSharedState{std::move(fileScanInfo), numRows}, context{context}, totalSize{0} {}
 };
 
-struct KUZU_API ScanFileBindData : public TableFuncBindData {
+struct RAG3DB_API ScanFileBindData : public TableFuncBindData {
     common::FileScanInfo fileScanInfo;
     main::ClientContext* context;
     common::column_id_t numWarningDataColumns = 0;
@@ -70,4 +70,4 @@ struct KUZU_API ScanFileBindData : public TableFuncBindData {
 };
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

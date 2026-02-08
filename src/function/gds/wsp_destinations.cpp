@@ -5,12 +5,12 @@
 #include "processor/execution_context.h"
 #include "transaction/transaction.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
-using namespace kuzu::storage;
-using namespace kuzu::processor;
+using namespace rag3db::binder;
+using namespace rag3db::common;
+using namespace rag3db::storage;
+using namespace rag3db::processor;
 
-namespace kuzu {
+namespace rag3db {
 namespace function {
 
 class Costs {
@@ -337,4 +337,4 @@ std::unique_ptr<RJAlgorithm> WeightedSPDestinationsFunction::getAlgorithm() {
 }
 
 } // namespace function
-} // namespace kuzu
+} // namespace rag3db

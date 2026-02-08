@@ -18,7 +18,7 @@ env:
 
 jobs:
   build-precompiled-bin-x86_64:
-    runs-on: kuzu-self-hosted-linux-building-x86_64
+    runs-on: rag3db-self-hosted-linux-building-x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -36,29 +36,29 @@ jobs:
 
       - name: Collect artifacts
         run: |
-          mv install/include/kuzu.h .
-          mv install/include/kuzu.hpp .
-          mv install/lib64/libkuzu.so .
-          mv install/bin/kuzu .
+          mv install/include/rag3db.h .
+          mv install/include/rag3db.hpp .
+          mv install/lib64/librag3db.so .
+          mv install/bin/rag3db .
 
       - name: Create tarball
         run: |
-          tar -czvf libkuzu-linux-x86_64.tar.gz kuzu.h kuzu.hpp libkuzu.so
-          tar -czvf kuzu_cli-linux-x86_64.tar.gz kuzu
+          tar -czvf librag3db-linux-x86_64.tar.gz rag3db.h rag3db.hpp librag3db.so
+          tar -czvf rag3db_cli-linux-x86_64.tar.gz rag3db
 
       - uses: actions/upload-artifact@v4
         with:
-          name: libkuzu-linux-x86_64
-          path: libkuzu-linux-x86_64.tar.gz
+          name: librag3db-linux-x86_64
+          path: librag3db-linux-x86_64.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kuzu_cli-linux-x86_64
-          path: kuzu_cli-linux-x86_64.tar.gz
+          name: rag3db_cli-linux-x86_64
+          path: rag3db_cli-linux-x86_64.tar.gz
 
   build-precompiled-bin-aarch64:
     if: ${{ inputs.x86_64Only != true }}
-    runs-on: kuzu-self-hosted-linux-building-aarch64
+    runs-on: rag3db-self-hosted-linux-building-aarch64
     steps:
       - uses: actions/checkout@v4
 
@@ -76,29 +76,29 @@ jobs:
 
       - name: Collect artifacts
         run: |
-          mv install/include/kuzu.h .
-          mv install/include/kuzu.hpp .
-          mv install/lib64/libkuzu.so .
-          mv install/bin/kuzu .
+          mv install/include/rag3db.h .
+          mv install/include/rag3db.hpp .
+          mv install/lib64/librag3db.so .
+          mv install/bin/rag3db .
 
       - name: Create tarball
         run: |
-          tar -czvf libkuzu-linux-aarch64.tar.gz kuzu.h kuzu.hpp libkuzu.so
-          tar -czvf kuzu_cli-linux-aarch64.tar.gz kuzu
+          tar -czvf librag3db-linux-aarch64.tar.gz rag3db.h rag3db.hpp librag3db.so
+          tar -czvf rag3db_cli-linux-aarch64.tar.gz rag3db
 
       - uses: actions/upload-artifact@v4
         with:
-          name: libkuzu-linux-aarch64
-          path: libkuzu-linux-aarch64.tar.gz
+          name: librag3db-linux-aarch64
+          path: librag3db-linux-aarch64.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kuzu_cli-linux-aarch64
-          path: kuzu_cli-linux-aarch64.tar.gz
+          name: rag3db_cli-linux-aarch64
+          path: rag3db_cli-linux-aarch64.tar.gz
 
   build-precompiled-bin-android-armv8a:
     if: ${{ inputs.x86_64Only != true }}
-    runs-on: kuzu-self-hosted-testing
+    runs-on: rag3db-self-hosted-testing
     steps:
       - uses: actions/checkout@v4
 
@@ -120,22 +120,22 @@ jobs:
     
       - name: Collect artifacts
         run: |
-          mv install/include/kuzu.h .
-          mv install/include/kuzu.hpp .
-          mv install/lib/libkuzu.so .
-          mv install/bin/kuzu .
+          mv install/include/rag3db.h .
+          mv install/include/rag3db.hpp .
+          mv install/lib/librag3db.so .
+          mv install/bin/rag3db .
         
       - name: Create tarball
         run: |
-          tar -czvf libkuzu-android-armv8a.tar.gz kuzu.h kuzu.hpp libkuzu.so
-          tar -czvf kuzu_cli-android-armv8a.tar.gz kuzu
+          tar -czvf librag3db-android-armv8a.tar.gz rag3db.h rag3db.hpp librag3db.so
+          tar -czvf rag3db_cli-android-armv8a.tar.gz rag3db
         
       - uses: actions/upload-artifact@v4
         with:
-          name: libkuzu-android-armv8a
-          path: libkuzu-android-armv8a.tar.gz
+          name: librag3db-android-armv8a
+          path: librag3db-android-armv8a.tar.gz
         
       - uses: actions/upload-artifact@v4
         with:
-          name: kuzu_cli-android-armv8a
-          path: kuzu_cli-android-armv8a.tar.gz
+          name: rag3db_cli-android-armv8a
+          path: rag3db_cli-android-armv8a.tar.gz

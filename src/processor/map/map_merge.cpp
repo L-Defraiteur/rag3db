@@ -3,9 +3,9 @@
 #include "processor/plan_mapper.h"
 #include <processor/expression_mapper.h>
 
-using namespace kuzu::planner;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static FactorizedTableSchema getFactorizedTableSchema(const binder::expression_vector& keys,
@@ -114,4 +114,4 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapMerge(const LogicalOperator* lo
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db

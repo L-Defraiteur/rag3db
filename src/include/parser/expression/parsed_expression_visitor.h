@@ -2,7 +2,7 @@
 
 #include "parsed_expression.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace parser {
 
 class ParsedExpressionVisitor {
@@ -77,4 +77,4 @@ private:
 };
 
 } // namespace parser
-} // namespace kuzu
+} // namespace rag3db

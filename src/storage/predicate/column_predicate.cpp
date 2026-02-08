@@ -5,10 +5,10 @@
 #include "storage/predicate/constant_predicate.h"
 #include "storage/predicate/null_predicate.h"
 
-using namespace kuzu::binder;
-using namespace kuzu::common;
+using namespace rag3db::binder;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace storage {
 
 ZoneMapCheckResult ColumnPredicateSet::checkZoneMap(const MergedColumnChunkStats& stats) const {
@@ -120,4 +120,4 @@ std::string ColumnPredicate::toString() {
 }
 
 } // namespace storage
-} // namespace kuzu
+} // namespace rag3db

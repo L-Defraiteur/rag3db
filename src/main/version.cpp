@@ -2,14 +2,14 @@
 
 #include "storage/storage_version_info.h"
 
-namespace kuzu {
+namespace rag3db {
 namespace main {
 const char* Version::getVersion() {
-    return KUZU_CMAKE_VERSION;
+    return RAG3DB_CMAKE_VERSION;
 }
 
 uint64_t Version::getStorageVersion() {
     return storage::StorageVersionInfo::getStorageVersion();
 }
 } // namespace main
-} // namespace kuzu
+} // namespace rag3db

@@ -3,7 +3,7 @@
 #include "common/types/value/value.h"
 #include <napi.h>
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
 class Util {
 public:

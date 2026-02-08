@@ -3,10 +3,10 @@
 #include "common/exception/internal.h"
 #include "optimizer/logical_operator_collector.h"
 
-using namespace kuzu::common;
-using namespace kuzu::planner;
+using namespace rag3db::common;
+using namespace rag3db::planner;
 
-namespace kuzu {
+namespace rag3db {
 namespace optimizer {
 
 void RemoveFactorizationRewriter::rewrite(planner::LogicalPlan* plan) {
@@ -36,4 +36,4 @@ std::shared_ptr<planner::LogicalOperator> RemoveFactorizationRewriter::visitFlat
 }
 
 } // namespace optimizer
-} // namespace kuzu
+} // namespace rag3db

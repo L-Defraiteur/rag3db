@@ -7,7 +7,7 @@ class QueryResult {
    * Internal constructor. Use `Connection.query` or `Connection.execute`
    * to get a `QueryResult` object.
    * @param {Connection} connection the connection object.
-   * @param {KuzuNative.NodeQueryResult} queryResult the native query result object.
+   * @param {Rag3dbNative.NodeQueryResult} queryResult the native query result object.
    */
   constructor(connection, queryResult) {
     assert(

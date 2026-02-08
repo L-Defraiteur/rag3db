@@ -4,9 +4,9 @@
 #include "common/uniq_lock.h"
 #include "main/client_context.h"
 
-using namespace kuzu::common;
+using namespace rag3db::common;
 
-namespace kuzu {
+namespace rag3db {
 namespace processor {
 
 static PopulatedCopyFromError defaultPopulateFunc(CopyFromFileError error, common::idx_t) {
@@ -92,4 +92,4 @@ WarningContext* WarningContext::Get(const main::ClientContext& context) {
 }
 
 } // namespace processor
-} // namespace kuzu
+} // namespace rag3db
