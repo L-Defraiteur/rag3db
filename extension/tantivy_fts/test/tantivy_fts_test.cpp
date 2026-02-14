@@ -677,5 +677,118 @@ TEST_F(ApiTest, TantivyNgramContainsNoStemmerTest) {
     ASSERT_EQ(countResults(*result), 1u);
 }
 
+// ── Regex contains (trigram-accelerated + hybrid fuzzy) ──────────────────────
+
+TEST_F(ApiTest, TantivyRegexContainsTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 3, title: 'Programmer Guide', "
+                    "body: 'Every programmer should learn about version v2.0 systems'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // 1. Regex accelerated by trigrams: "program[a-z]+" matches "programming", "programmer".
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"program[a-z]+\",\"regex\":true}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u); // docs 0, 2 (programming), 3 (programmer)
+
+    // 2. BM25 scoring (not constant): different docs should have different scores.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"program[a-z]+\",\"regex\":true}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    double firstScore = -1.0;
+    bool hasVariation = false;
+    while (result->hasNext()) {
+        auto tuple = result->getNext();
+        auto score = tuple->getValue(1)->getValue<double>();
+        ASSERT_GT(score, 0.0) << "BM25 score should be positive";
+        if (firstScore < 0.0) {
+            firstScore = score;
+        } else if (std::abs(score - firstScore) > 0.001) {
+            hasVariation = true;
+        }
+    }
+    ASSERT_TRUE(hasVariation) << "BM25 scores should vary between docs with different tf/fieldnorm";
+
+    // 3. Regex + fuzzy hybrid: pattern has typo "programing[a-z]+" (1 m), distance=1.
+    //    Regex won't match "programming" but fuzzy on literal "programing" should.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\","
+        "\"value\":\"programing[a-z]+\",\"regex\":true,\"distance\":1}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_GE(countResults(*result), 1u) << "Hybrid should match via fuzzy on literal";
+
+    // 4. Regex with no match.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"python[a-z]+\",\"regex\":true}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // 5. Regex with highlights: verify highlights are returned.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"program[a-z]+\",\"regex\":true}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    bool hasHighlights = false;
+    while (result->hasNext()) {
+        auto tuple = result->getNext();
+        auto highlights = tuple->getValue(2)->toString();
+        if (highlights != "[]" && !highlights.empty()) {
+            hasHighlights = true;
+        }
+    }
+    ASSERT_TRUE(hasHighlights) << "Regex contains should produce highlights";
+
+    // 6. Non-regex contains still works (regression check).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 7. Regex with short literals (< 3 chars): full segment scan fallback with BM25.
+    //    Pattern "v[0-9]" has literal "v" (1 char) — no trigram acceleration, but BM25.
+    //    Doc 3 body contains "version v2.0 systems", should match "v2".
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"v[0-9]\",\"regex\":true}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_GE(countResults(*result), 1u) << "Short-literal regex should match via full scan";
+}
+
 } // namespace testing
 } // namespace rag3db
