@@ -109,7 +109,7 @@ npm install
 npx playwright test
 ```
 
-Voir [docs/14-fevrier-2026-00h58/09-guide-builds-et-tests.md](../ragforge-core-exp-kuzu/docs/14-fevrier-2026-00h58/09-guide-builds-et-tests.md) pour le guide complet.
+Voir [docs/builds-et-tests.md](docs/builds-et-tests.md) pour le guide complet (tous les builds, tests, usage IDBFS, headers COOP/COEP).
 
 ## Architecture
 
