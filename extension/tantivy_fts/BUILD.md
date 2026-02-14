@@ -18,71 +18,25 @@ Les 3 couches :
 | Extension C++ | C++ | `libtantivy_fts.rag3db_extension` | cmake |
 | Tests GTest | C++ | `tantivy_fts_test` | cmake |
 
-## Piege principal : cmake ne detecte pas les changements Rust
+## Detection automatique des changements Rust
 
-Le `CMakeLists.txt` utilise `add_custom_command(OUTPUT libtantivy_fts.a ...)` **sans `DEPENDS`** sur les fichiers sources Rust. Consequence :
+Le `CMakeLists.txt` utilise `file(GLOB_RECURSE)` + `DEPENDS` pour detecter les modifications des fichiers `.rs` et `Cargo.toml`. Quand un fichier Rust est modifie, cmake relance automatiquement cargo au prochain build.
 
-- **Si la `.a` existe deja, cmake ne relance JAMAIS cargo**, meme si les `.rs` ont change
-- **Si la `.a` est plus recente que la `.rag3db_extension`, cmake ne re-linke pas** l'extension dynamique
-- Le test binary charge l'extension via `LOAD EXTENSION '...libtantivy_fts.rag3db_extension'`, donc re-linker le test seul ne suffit pas
+**Limitation** : les NOUVEAUX fichiers `.rs` ne sont detectes qu'apres re-configuration cmake (`cmake ../..`). Les modifications de fichiers existants sont detectees immediatement.
 
-## Sequence de rebuild apres modification Rust
+## Rebuild apres modification Rust
 
-### 1. Modifier les fichiers `.rs`
-
-Deux emplacements possibles :
-- `extension/tantivy/ld-tantivy/src/` — la lib Tantivy (queries, scoring, postings, schema)
-- `extension/tantivy/ld-tantivy/tantivy_fts/rust/src/` — le bridge cxx (handle, query routing, bridge)
-
-### 2. Recompiler le Rust (cargo)
-
-```bash
-cd extension/tantivy/ld-tantivy
-
-# Touch pour forcer la redetection par cargo
-touch src/lib.rs  # si modif dans ld-tantivy/src/
-# ou
-touch tantivy_fts/rust/src/lib.rs  # si modif dans tantivy_fts/
-
-# Rebuild les deux crates
-cargo build --release -p ld-tantivy -p tantivy-fts
-```
-
-Verifier que la sortie affiche `Compiling ld-tantivy` et/ou `Compiling tantivy-fts`. Si on voit seulement `Finished` sans `Compiling`, les changements ne sont pas detectes — touch un fichier racine du crate (`lib.rs` ou `Cargo.toml`).
-
-### 3. Re-linker l'extension shared lib (cmake)
+Un seul `cmake --build` suffit — cmake detecte les changements et relance cargo automatiquement :
 
 ```bash
 cd build/release
 cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
-```
-
-Verifier que la sortie affiche `Linking CXX shared library ...libtantivy_fts.rag3db_extension`. Si cmake dit tout est "Built" sans linking, forcer :
-
-```bash
-# Forcer le re-link en touchant un source C++
-touch ../../extension/tantivy_fts/src/tantivy_fts_extension.cpp
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
-```
-
-### 4. Rebuild le test (si modifie)
-
-```bash
 cmake --build . --target tantivy_fts_test -j$(nproc)
 ```
 
-Note : le test charge l'extension dynamiquement, donc c'est l'etape 3 (re-link extension) qui compte pour les changements Rust.
-
-### Commande tout-en-un
-
-```bash
-# Depuis la racine rag3db/
-cd extension/tantivy/ld-tantivy && \
-  cargo build --release -p ld-tantivy -p tantivy-fts && \
-  cd ../../../build/release && \
-  cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc) && \
-  cmake --build . --target tantivy_fts_test -j$(nproc)
-```
+Les deux emplacements sources Rust sont surveilles :
+- `extension/tantivy/ld-tantivy/src/` — la lib Tantivy (queries, scoring, postings, schema)
+- `extension/tantivy/ld-tantivy/tantivy_fts/rust/src/` — le bridge cxx (handle, query routing, bridge)
 
 ## Builds de reference
 
@@ -93,7 +47,7 @@ cd extension/tantivy/ld-tantivy
 cargo test --lib
 ```
 
-### Tests E2E GTest (10 tests)
+### Tests E2E GTest (11 tests)
 
 ```bash
 cd build/release
@@ -123,6 +77,9 @@ cmake --build . --target rag3dbjs -j$(nproc)
 cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
 ```
 
+Le `.node` est genere directement dans `tools/nodejs_api/src_js/` (ou le loader l'attend).
+L'extension `.rag3db_extension` est chargee dynamiquement via `LOAD EXTENSION`.
+
 ### WASM (Emscripten)
 
 ```bash
@@ -133,6 +90,15 @@ emcmake cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_WASM=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE -DBUILD_BENCHMARK=FALSE
 
 emmake cmake --build . -j$(nproc)
+```
+
+Le `.js` WASM est genere directement dans `tools/wasm/package/nodejs/rag3db/` (ou le loader l'attend).
+Les extensions (tantivy_fts, json, vector, algo) sont statiquement linkees.
+
+Tests browser Playwright :
+```bash
+cd tools/wasm
+npx playwright test
 ```
 
 Prerequis WASM :
@@ -155,8 +121,8 @@ Cargo detecte les changements par timestamp. Si le fichier a le meme timestamp (
 
 **Fix** : `touch` le fichier modifie ou `cargo clean -p ld-tantivy`.
 
-### cmake ne re-linke pas l'extension
+### cmake ne detecte pas les nouveaux fichiers Rust
 
-Le `add_custom_command` pour la lib Rust n'a pas de `DEPENDS` sur les sources `.rs`. Si la `.a` existe, cmake ne relance pas cargo et ne re-linke pas l'extension.
+Le `file(GLOB_RECURSE)` qui surveille les `.rs` est evalue au moment de la configuration cmake. Les nouveaux fichiers `.rs` ne sont detectes qu'apres `cmake ../..` (re-configuration).
 
-**Fix** : rebuild manuellement avec cargo (etape 2 ci-dessus), puis forcer le re-link (etape 3).
+**Fix** : relancer `cmake ../..` apres avoir ajoute un nouveau fichier `.rs`.

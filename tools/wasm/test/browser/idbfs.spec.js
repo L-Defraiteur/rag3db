@@ -26,6 +26,8 @@ test.describe("rag3db WASM IDBFS browser tests", () => {
     expect(results.contains).toBeGreaterThanOrEqual(1);
     expect(results.fuzzy).toBeGreaterThanOrEqual(1);
     expect(results.phrase).toBe(1);
+    expect(results.regex).toBeGreaterThanOrEqual(1);
+    expect(results.hybrid).toBeGreaterThanOrEqual(1);
     expect(results.vector).toBe(3);
     expect(results.phase1).toBe("done");
   });

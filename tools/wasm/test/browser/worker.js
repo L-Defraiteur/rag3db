@@ -84,6 +84,18 @@ async function phase1(Module) {
   );
   log("Test 3 (phrase 'systems programming'): " + phraseRows.length + " results");
 
+  // Test regex contains
+  const regexRows = queryRows(conn,
+    `CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"program[a-z]+","regex":true}', 10) RETURN node_id, score`
+  );
+  log("Test 3b (regex contains 'program[a-z]+'): " + regexRows.length + " results");
+
+  // Test hybrid regex+fuzzy
+  const hybridRows = queryRows(conn,
+    `CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"program[a-z]+","regex":true,"distance":1}', 10) RETURN node_id, score`
+  );
+  log("Test 3c (hybrid regex+fuzzy): " + hybridRows.length + " results");
+
   // Test vector
   const vectorRows = queryRows(conn,
     `CALL QUERY_VECTOR_INDEX('docs', 'emb_idx', [0.12, 0.22, 0.32, 0.42], 3) RETURN node.id, node.title, distance`
@@ -97,6 +109,8 @@ async function phase1(Module) {
     contains: containsRows.length,
     fuzzy: fuzzyRows.length,
     phrase: phraseRows.length,
+    regex: regexRows.length,
+    hybrid: hybridRows.length,
     vector: vectorRows.length,
     vectorIds: vectorRows.map(r => r["node.id"]),
   };

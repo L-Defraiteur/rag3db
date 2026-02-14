@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 3333;
-const WASM_DIR = path.join(__dirname, "..", "..", "build", "rag3db");
+const WASM_DIR = path.join(__dirname, "..", "..", "package", "nodejs", "rag3db");
 const STATIC_DIR = __dirname;
 
 const MIME_TYPES = {

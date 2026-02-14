@@ -30,11 +30,21 @@ endif()
 
 set(TANTIVY_STATIC_LIB ${CARGO_TARGET_DIR}/libtantivy_fts.a)
 
+# Collect Rust sources so cmake detects changes and re-runs cargo.
+# Note: new files require cmake re-configuration, but edits are detected immediately.
+file(GLOB_RECURSE RUST_SOURCES
+    "${RUST_WORKSPACE_DIR}/src/*.rs"
+    "${RUST_WORKSPACE_DIR}/tantivy_fts/rust/src/*.rs"
+    "${RUST_WORKSPACE_DIR}/Cargo.toml"
+    "${RUST_WORKSPACE_DIR}/tantivy_fts/rust/Cargo.toml"
+)
+
 add_custom_command(
     OUTPUT ${TANTIVY_STATIC_LIB}
     COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
             cargo ${CARGO_TOOLCHAIN} build --release ${CARGO_TARGET} ${CARGO_EXTRA_FLAGS}
     WORKING_DIRECTORY ${RUST_SRC_DIR}
+    DEPENDS ${RUST_SOURCES}
     COMMENT "Building tantivy-fts Rust static library"
 )
 
