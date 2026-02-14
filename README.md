@@ -79,9 +79,11 @@ RETURN node.id, distance
 
 Extensions liees statiquement en WASM : tantivy_fts, vector, json, algo.
 
-## Builds rapides
+## Builds
 
-### Natif
+Voir **[BUILD.md](BUILD.md)** pour le guide complet (natif, Node.js, WASM, tests, problemes courants).
+
+Quick start natif :
 
 ```bash
 mkdir -p build/release && cd build/release
@@ -89,27 +91,6 @@ cmake ../.. -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_EXTENSIONS="tantivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 cmake --build . -j$(nproc)
 ```
-
-### WASM (browser)
-
-```bash
-source ~/emsdk/emsdk_env.sh
-mkdir -p build/wasm && cd build/wasm
-emcmake cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_WASM=TRUE \
-  -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE -DBUILD_BENCHMARK=FALSE
-emmake cmake --build . -j$(nproc)
-# Sortie : tools/wasm/build/rag3db/rag3db_wasm.js (17MB, single file)
-```
-
-### Tests Playwright (browser IDBFS)
-
-```bash
-cd tools/wasm
-npm install
-npx playwright test
-```
-
-Voir [docs/builds-et-tests.md](docs/builds-et-tests.md) pour le guide complet (tous les builds, tests, usage IDBFS, headers COOP/COEP).
 
 ## Architecture
 

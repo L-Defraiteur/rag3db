@@ -1,0 +1,681 @@
+#include "api_test/api_test.h"
+
+using namespace rag3db::common;
+
+namespace rag3db {
+namespace testing {
+
+static uint64_t countResults(main::QueryResult& result) {
+    uint64_t count = 0;
+    while (result.hasNext()) {
+        result.getNext();
+        count++;
+    }
+    return count;
+}
+
+// ── CREATE + all query types ────────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyCreateAndQueryTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    // Create doc table + insert 3 documents.
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language'})")
+            ->isSuccess());
+
+    // CREATE_TANTIVY_INDEX
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // contains query — "programming" in body → docs 0, 2
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // term query — "programming" in body → docs 0, 2
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"term\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // fuzzy query — "programing" (typo) distance 1 → docs 0, 2
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"fuzzy\",\"field\":\"body\",\"value\":\"programing\",\"distance\":1}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // phrase query — "systems programming" → doc 0 only
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"phrase\",\"field\":\"body\",\"terms\":[\"systems\",\"programming\"]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // parse query — "rust AND programming" → doc 0 only
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"parse\",\"field\":\"body\",\"value\":\"rust AND programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // contains c++ — special chars via regex fallback → doc 2 only
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"title\",\"value\":\"c++\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── DROP ────────────────────────────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyDropTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Query works before drop.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"term\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_GE(countResults(*result), 1u);
+
+    // DROP_TANTIVY_INDEX
+    result = conn->query("CALL DROP_TANTIVY_INDEX('doc')");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Query after drop should fail.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"term\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_FALSE(result->isSuccess());
+}
+
+// ── Error cases ─────────────────────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyErrorTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+
+    // Query on table with no index → error.
+    auto result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"term\",\"field\":\"body\",\"value\":\"test\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_FALSE(result->isSuccess());
+
+    // CREATE with non-existent property → error.
+    result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['nonexistent'])");
+    ASSERT_FALSE(result->isSuccess());
+
+    // CREATE with non-STRING property → error.
+    result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['ID'])");
+    ASSERT_FALSE(result->isSuccess());
+}
+
+// ── Stemmer option ──────────────────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyStemmerTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language'})")
+            ->isSuccess());
+
+    // Create index with French stemmer.
+    auto result =
+        conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], stemmer := 'french')");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Contains query still works (English words not affected by French stemmer).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_GE(countResults(*result), 1u);
+}
+
+// ── Filtered search by node IDs ─────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyFilteredSearchTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Without filter: "programming" in body → docs 0, 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // With filter: allowed_ids := [0] → only doc 0.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10, "
+        "allowed_ids := [CAST(0, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // With filter: allowed_ids := [2] → only doc 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10, "
+        "allowed_ids := [CAST(2, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // With filter: allowed_ids := [1] → doc 1 doesn't contain "programming" → 0 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10, "
+        "allowed_ids := [CAST(1, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // With filter: allowed_ids := [0, 2] → both docs with "programming" allowed → 2 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10, "
+        "allowed_ids := [CAST(0, 'UINT64'), CAST(2, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+}
+
+// ── Filter fields (native typed filtering during scoring) ───────────────────
+
+TEST_F(ApiTest, TantivyFilterFieldsTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    // Table with text + typed filter columns.
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE article (ID UINT64, title STRING, body STRING, "
+                            "category INT64, score DOUBLE, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language', category: 1, score: 9.5})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 1, title: 'Python Guide', "
+                    "body: 'Python is a programming language for beginners', category: 1, score: 7.0})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 2, title: 'Cooking Recipes', "
+                    "body: 'A guide to cooking Italian food', category: 2, score: 8.0})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 3, title: 'C++ Programming', "
+                    "body: 'C++ is a general-purpose programming language', category: 1, score: 8.5})")
+            ->isSuccess());
+
+    // Create index with filter fields.
+    auto result = conn->query(
+        "CALL CREATE_TANTIVY_INDEX('article', ['title', 'body'], "
+        "filter_fields := ['category', 'score'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Without filters: "programming" → 3 articles (0, 1, 3).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // With filter: category == 1 → still 3 articles (0, 1, 3 are all category 1).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":1}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // With filter: category == 2 AND "programming" → 0 results (cooking is category 2).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":2}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // With filter: score > 8.0 AND "programming" → articles 0 (9.5) and 3 (8.5).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"score\",\"op\":\"gt\",\"value\":8.0}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // With filter: score >= 8.5 AND "programming" → articles 0 (9.5) and 3 (8.5).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"score\",\"op\":\"gte\",\"value\":8.5}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // With multiple filters: category == 1 AND score > 9.0 AND "programming" → article 0 only.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":1},"
+        "{\"field\":\"score\",\"op\":\"gt\",\"value\":9.0}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── DELETE removes docs from search results ─────────────────────────────────
+
+TEST_F(ApiTest, TantivyDeleteTest2) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Before delete: "programming" in body → docs 0, 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // Delete doc 0 (Rust Programming).
+    result = conn->query("MATCH (n:doc) WHERE n.ID = 0 DELETE n");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // After delete: "programming" in body → only doc 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // "intelligence" → only doc 1, unaffected by the delete.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"intelligence\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── UPDATE modifies indexed content ─────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyUpdateTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Before update: "programming" → doc 0 only.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // "cooking" → 0 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"cooking\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // Update doc 0's body from programming → cooking.
+    result = conn->query(
+        "MATCH (n:doc) WHERE n.ID = 0 SET n.body = 'Cooking is a wonderful creative hobby'");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // After update: "programming" → 0 results (old content removed).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // "cooking" → doc 0 (new content indexed).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"cooking\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // "intelligence" → doc 1, unaffected.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"intelligence\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── Persistence (always file mode) ──────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyPersistenceTest) {
+    // This test always uses file mode to verify persistence across DB close/reopen.
+    auto tempDir = TestHelper::getTempDBPathStr("TantivyPersistenceTest");
+
+    auto loadExtension = [&](main::Connection& c) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+        ASSERT_TRUE(c.query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                        ->isSuccess());
+#endif
+    };
+
+    // ── Phase 1: Create DB, table, docs, index, verify queries ──
+    {
+        auto db = std::make_unique<main::Database>(tempDir, *systemConfig);
+        auto c = std::make_unique<main::Connection>(db.get());
+        loadExtension(*c);
+
+        ASSERT_TRUE(c->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                             "PRIMARY KEY (ID))")
+                        ->isSuccess());
+        ASSERT_TRUE(
+            c->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                     "body: 'Rust is a systems programming language focused on safety'})")
+                ->isSuccess());
+        ASSERT_TRUE(
+            c->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                     "body: 'ML is a subset of artificial intelligence'})")
+                ->isSuccess());
+        ASSERT_TRUE(
+            c->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                     "body: 'C++ is a general-purpose programming language'})")
+                ->isSuccess());
+
+        auto result = c->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+        // Verify queries before close.
+        result = c->query(
+            "CALL QUERY_TANTIVY_INDEX('doc', "
+            "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+            "RETURN node_id, score, highlights");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        ASSERT_EQ(countResults(*result), 2u);
+
+        result = c->query(
+            "CALL QUERY_TANTIVY_INDEX('doc', "
+            "'{\"type\":\"contains\",\"field\":\"title\",\"value\":\"c++\"}', 10) "
+            "RETURN node_id, score, highlights");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        ASSERT_EQ(countResults(*result), 1u);
+
+        // Close DB (conn first, then database).
+        c.reset();
+        db.reset();
+    }
+
+    // ── Phase 2: Reopen DB and verify index persisted ──
+    {
+        auto db = std::make_unique<main::Database>(tempDir, *systemConfig);
+        auto c = std::make_unique<main::Connection>(db.get());
+        loadExtension(*c);
+
+        // Same queries should return same results after reopen.
+        auto result = c->query(
+            "CALL QUERY_TANTIVY_INDEX('doc', "
+            "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+            "RETURN node_id, score, highlights");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        ASSERT_EQ(countResults(*result), 2u);
+
+        result = c->query(
+            "CALL QUERY_TANTIVY_INDEX('doc', "
+            "'{\"type\":\"contains\",\"field\":\"title\",\"value\":\"c++\"}', 10) "
+            "RETURN node_id, score, highlights");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        ASSERT_EQ(countResults(*result), 1u);
+
+        // Also verify term query works.
+        result = c->query(
+            "CALL QUERY_TANTIVY_INDEX('doc', "
+            "'{\"type\":\"term\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+            "RETURN node_id, score, highlights");
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        ASSERT_EQ(countResults(*result), 2u);
+
+        c.reset();
+        db.reset();
+    }
+
+    // Cleanup.
+    removeParentDirectoryOfDBPath(tempDir);
+}
+
+// ── Ngram contains without stemmer + BM25 scoring ───────────────────────────
+
+TEST_F(ApiTest, TantivyNgramContainsNoStemmerTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    // Doc 0 mentions "programming" 3 times (high tf).
+    // Doc 1 has no "programming".
+    // Doc 2 mentions "programming" 1 time (low tf) in a longer body.
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Programming Guide', "
+                    "body: 'Programming is fun. I love programming. Programming rocks.'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Cooking Guide', "
+                    "body: 'Cooking is a wonderful creative hobby for everyone'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'Intro to Code', "
+                    "body: 'This is an introduction to programming languages and computer science fundamentals for beginners'})")
+            ->isSuccess());
+
+    // Create index WITHOUT stemmer — ngram fast path should still work.
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // 1. Contains query without stemmer → should find docs 0 and 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 2. Fuzzy query without stemmer — "programing" (typo, distance 1) → should find docs 0 and 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"fuzzy\",\"field\":\"body\",\"value\":\"programing\",\"distance\":1}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 3. Contains with fuzzy distance — "programing" via contains (typo) → should still find docs.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programing\",\"distance\":1}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 4. BM25 score ordering: doc 0 (tf=3, short body) should score HIGHER than doc 2 (tf=1, long body).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    double score0 = -1.0, score2 = -1.0;
+    while (result->hasNext()) {
+        auto tuple = result->getNext();
+        auto nodeId = tuple->getValue(0)->getValue<uint64_t>();
+        auto score = tuple->getValue(1)->getValue<double>();
+        ASSERT_GT(score, 0.0) << "BM25 score should be positive, got " << score;
+        if (nodeId == 0) score0 = score;
+        if (nodeId == 2) score2 = score;
+    }
+    ASSERT_GT(score0, 0.0) << "Doc 0 should be in results";
+    ASSERT_GT(score2, 0.0) << "Doc 2 should be in results";
+    ASSERT_GT(score0, score2) << "Doc 0 (tf=3, short) should score higher than doc 2 (tf=1, long)";
+
+    // 5. Substring contains — "program" should match "programming" via ngram.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"program\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 6. No match — "cooking" in body → only doc 1, not 0 or 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('doc', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"cooking\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+} // namespace testing
+} // namespace rag3db
