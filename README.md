@@ -1,13 +1,13 @@
 # rag3db
 
-Fork de [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 avec recherche full-text fuzzy (Tantivy) et support WASM pour le navigateur.
+Fork de [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — graph database embarque avec full-text search avance (Tantivy) et support WASM navigateur.
 
 ## Pourquoi
 
-Kuzu est un graph database embarqué performant, mais il manque :
-- Un vrai full-text search avec fuzzy, phrase, highlights
+Kuzu est un graph database embarque performant, mais il manque :
+- Un vrai full-text search avec fuzzy, regex, phrase, highlights et scoring BM25
 - Un build WASM fonctionnel avec persistence navigateur (IDBFS)
-- L'intégration des deux (FTS + vector HNSW) pour du RAG hybride
+- L'integration des deux (FTS + vector HNSW) pour du RAG hybride
 
 rag3db ajoute l'extension **tantivy_fts** qui comble ces manques.
 
@@ -18,16 +18,24 @@ rag3db ajoute l'extension **tantivy_fts** qui comble ces manques.
 Recherche full-text via [Tantivy](https://github.com/quickwit-oss/tantivy) (moteur Rust, bridge cxx) :
 
 ```cypher
--- Créer un index
+-- Creer un index
 CALL CREATE_TANTIVY_INDEX('docs', ['title', 'body'])
 
--- Recherche exacte
+-- Recherche substring (trigram-acceleree, BM25)
 CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"programming"}', 10)
+RETURN node_id, score, highlights
+
+-- Recherche fuzzy (tolere les fautes de frappe)
+CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"programing","distance":1}', 10)
 RETURN node_id, score
 
--- Recherche fuzzy (tolère 1 faute)
-CALL QUERY_TANTIVY_INDEX('docs', '{"type":"fuzzy","field":"body","value":"programing","distance":1}', 10)
-RETURN node_id, score
+-- Recherche regex (trigram-acceleree + verification regex + BM25)
+CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"program[a-z]+","regex":true}', 10)
+RETURN node_id, score, highlights
+
+-- Regex + fuzzy hybride (le regex matche precis, le fuzzy rattrape les fautes)
+CALL QUERY_TANTIVY_INDEX('docs', '{"type":"contains","field":"body","value":"programing[a-z]+","regex":true,"distance":1}', 10)
+RETURN node_id, score, highlights
 
 -- Recherche par phrase
 CALL QUERY_TANTIVY_INDEX('docs', '{"type":"phrase","field":"body","terms":["systems","programming"]}', 10)
@@ -37,13 +45,60 @@ RETURN node_id, score, highlights
 CALL DROP_TANTIVY_INDEX('docs')
 ```
 
-Fonctionnalites :
-- Types de requetes : contains, fuzzy, phrase, term, regex, boolean, parse
-- Highlights (positions des matchs dans le texte)
-- Filter fields natifs (INT64, DOUBLE, etc. indexees dans Tantivy)
-- Filtrage par `allowed_ids` (liste de node IDs)
-- Hooks DELETE/UPDATE (mise a jour automatique de l'index)
-- Lazy commit (dirty flag, commit+reload avant chaque QUERY)
+### Pipeline contains unifie
+
+Le coeur de tantivy_fts est un **pipeline `"contains"` unifie** qui gere fuzzy, regex et les deux combines via un seul `NgramContainsQuery`. Le mode est selectionne par `"regex": true/false` (defaut: false).
+
+```
+                     Query JSON
+                         |
+             ┌───────────┴───────────┐
+             │ regex: false          │ regex: true
+             ▼                       ▼
+     Tokenize texte           regex_syntax::parse()
+     → tokens                 → Hir → Extractor
+             │                → litteraux obligatoires
+             └───────────┬───────────┘
+                         │
+                 trigram_sources
+                         │
+         ┌───────────────┼───────────────┐
+     Fuzzy            Regex           Regex (short)
+     exact+ngram      ngram union     full-scan
+     intersection     (lits >= 3)     (lits < 3)
+         │               │               │
+         └───────────────┼───────────────┘
+                         │
+             Pour chaque candidat :
+             load stored text
+                         │
+         ┌───────────────┴───────────────┐
+     Fuzzy                            Regex
+     Levenshtein → tf          1. regex::find_iter → tf_regex
+                               2. si distance > 0 :
+                                  fuzzy sur lits → tf_fuzzy
+                               → tf = max(tf_regex, tf_fuzzy)
+         │                               │
+         └───────────────┬───────────────┘
+                         │
+                 BM25 score + Highlights
+```
+
+Ce qui rend ce pipeline unique :
+
+- **Regex accelere par trigrams** : le pattern regex est parse (`regex_syntax`), les litteraux obligatoires sont extraits, convertis en trigrams, et utilises pour reduire les candidats AVANT d'executer le regex. Sur un index de 100K docs, seule une fraction est verifiee.
+- **Scoring BM25 uniforme** : fuzzy et regex partagent le meme scorer BM25. Pas de `ConstScorer` artificiel — le score reflete la frequence reelle dans le document.
+- **Hybride regex+fuzzy** : quand `regex: true` et `distance > 0`, la verification fait les deux : regex exact + fuzzy Levenshtein sur les litteraux. `tf = max(tf_regex, tf_fuzzy)`. Le regex matche precis, le fuzzy rattrape les fautes de frappe dans la partie litterale.
+- **Full-scan fallback intelligent** : quand les litteraux du regex sont trop courts pour des trigrams (< 3 chars, ex: `v[0-9]`), le scorer scanne tous les docs du segment mais garde le BM25. Pas de degradation en ConstScorer.
+
+### Autres fonctionnalites
+
+- **8 types de requetes** : contains, fuzzy, regex, phrase, term, boolean, parse + mode hybride
+- **Highlights** : positions exactes (byte offsets) des matchs dans le texte source
+- **Filter fields natifs** : colonnes non-texte (INT64, DOUBLE, etc.) indexees dans Tantivy
+- **Filtrage par `allowed_ids`** : restreindre la recherche a une liste de node IDs
+- **Hooks DELETE/UPDATE** : mise a jour automatique de l'index sur mutations Cypher
+- **Lazy commit** : dirty flag, commit+reload une seule fois avant chaque QUERY
 
 ### Extension vector (HNSW)
 
@@ -72,10 +127,10 @@ RETURN node.id, distance
 
 | Target | Statut | Tests |
 |--------|--------|-------|
-| Natif (Linux x86_64) | OK | 9 E2E GTest |
-| Node.js natif (NAPI) | OK | 139 mocha |
-| WASM NODEFS (Node.js) | OK | 94 mocha |
-| WASM browser (IDBFS) | OK | 2 Playwright (8 sub-tests) |
+| Natif (Linux x86_64) | OK | 11 E2E GTest + 1025 tests Rust |
+| Node.js natif (NAPI) | OK | contains/fuzzy/regex/phrase valides |
+| WASM Node.js (sync) | OK | contains/fuzzy/regex/hybrid valides |
+| WASM browser (IDBFS) | OK | 2 Playwright (contains/fuzzy/regex/hybrid/vector/persistence) |
 
 Extensions liees statiquement en WASM : tantivy_fts, vector, json, algo.
 
@@ -103,13 +158,16 @@ rag3db (fork Kuzu v0.11.2.2)
 ├── extension/vector/            Extension HNSW (inchangee)
 ├── tools/wasm/                  Build + tests WASM
 │   ├── test/browser/            Tests Playwright IDBFS
-│   └── build/rag3db/            Sortie WASM
+│   └── package/nodejs/rag3db/   Sortie WASM (genere par cmake)
 └── tools/nodejs_api/            Build + tests Node.js natif
+    └── src_js/rag3dbjs.node     Sortie .node (genere par cmake)
 ```
 
 Le bridge **cxx** (pas extern C) donne des structs typees Rust <-> C++, zero JSON sur le hot path.
 
 En WASM, les extensions sont liees statiquement et chargees automatiquement au demarrage de la DB.
+
+Les builds cmake detectent automatiquement les changements dans les sources Rust (`file(GLOB_RECURSE)` + `DEPENDS`) — pas besoin de rebuild cargo manuellement.
 
 ## Ce qui reste a faire
 

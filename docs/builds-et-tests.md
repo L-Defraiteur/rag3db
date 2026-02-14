@@ -24,20 +24,20 @@ node --version
 
 ## 1. Tests unitaires Rust (ld-tantivy)
 
-1015 tests de la lib Tantivy + crate tantivy_fts.
+1025 tests de la lib Tantivy + crate tantivy_fts.
 
 ```bash
 cd extension/tantivy/ld-tantivy
 cargo test --lib
 ```
 
-Resultat attendu : `test result: ok. 1015 passed`
+Resultat attendu : `test result: ok. 1025 passed`
 
 ---
 
 ## 2. Build natif + tests GTest E2E
 
-9 tests E2E de l'extension tantivy_fts (CREATE/QUERY/DROP, fuzzy, phrase, contains, filter fields, delete/update, lazy commit).
+11 tests E2E de l'extension tantivy_fts (CREATE/QUERY/DROP, fuzzy, phrase, contains, regex contains, filter fields, delete/update, lazy commit).
 
 ```bash
 mkdir -p build/release && cd build/release
