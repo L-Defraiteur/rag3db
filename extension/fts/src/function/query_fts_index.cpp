@@ -312,6 +312,12 @@ private:
     std::vector<TermData>& allTerms;
 };
 
+static constexpr char SCORE_PROP_NAME[] = "score";
+static constexpr char DOC_FREQUENCY_PROP_NAME[] = "df";
+static constexpr char TERM_FREQUENCY_PROP_NAME[] = "tf";
+static constexpr char DOC_LEN_PROP_NAME[] = "len";
+static constexpr char DOC_ID_PROP_NAME[] = "docID";
+
 // Performs fuzzy search using fuzzy-fst library
 static std::unordered_map<offset_t, uint64_t> getDFsFuzzy(main::ClientContext& context,
     processor::ExecutionContext* executionContext, graph::Graph* graph,
@@ -365,12 +371,6 @@ static std::unordered_map<offset_t, uint64_t> getDFsFuzzy(main::ClientContext& c
     fuzzy_fst_free(fuzzyIndex);
     return dfs;
 }
-
-static constexpr char SCORE_PROP_NAME[] = "score";
-static constexpr char DOC_FREQUENCY_PROP_NAME[] = "df";
-static constexpr char TERM_FREQUENCY_PROP_NAME[] = "tf";
-static constexpr char DOC_LEN_PROP_NAME[] = "len";
-static constexpr char DOC_ID_PROP_NAME[] = "docID";
 
 static std::unordered_map<offset_t, uint64_t> getDFs(main::ClientContext& context,
     processor::ExecutionContext* executionContext, graph::Graph* graph,

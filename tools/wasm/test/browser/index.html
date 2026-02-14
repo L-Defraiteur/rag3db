@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>rag3db WASM IDBFS Tests</title>
+</head>
+<body>
+<pre id="log"></pre>
+<script>
+const logEl = document.getElementById("log");
+const log = (msg) => {
+  logEl.textContent += msg + "\n";
+  console.log(msg);
+};
+
+window.testResults = {};
+
+const phase = new URLSearchParams(window.location.search).get("phase") || "1";
+log("Starting phase " + phase + " (worker-based)...");
+
+const worker = new Worker("/worker.js");
+
+worker.onmessage = (e) => {
+  if (e.data.type === "log") {
+    log(e.data.msg);
+  } else if (e.data.type === "ready") {
+    log("Worker ready, sending phase " + phase);
+    worker.postMessage({ phase });
+  } else if (e.data.type === "results") {
+    window.testResults = e.data.results;
+    log("Results received: " + JSON.stringify(e.data.results));
+  }
+};
+
+worker.onerror = (err) => {
+  log("Worker error: " + err.message);
+  window.testResults = { error: err.message };
+};
+</script>
+</body>
+</html>

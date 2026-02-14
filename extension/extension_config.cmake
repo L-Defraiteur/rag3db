@@ -9,7 +9,7 @@ endforeach()
 
 if(${BUILD_WASM})
     message(STATUS "Building for WASM, extension static linking is enabled by default")
-    add_static_link_extension(fts)
+    # fts removed: tantivy_fts replaces it with fuzzy support
     add_static_link_extension(json)
     add_static_link_extension(vector)
     add_static_link_extension(algo)

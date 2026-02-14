@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "common/assert.h"
 #include "common/exception/runtime.h"
 #include "common/file_system/file_info.h"
 #include "common/serializer/buffered_file.h"
@@ -32,7 +33,8 @@ static void validateMagicBytes(common::Deserializer& deSer) {
     std::string key;
     deSer.validateDebuggingInfo(key, "magic");
     const auto numMagicBytes = strlen(StorageVersionInfo::MAGIC_BYTES);
-    uint8_t magicBytes[4];
+    uint8_t magicBytes[8];
+    KU_ASSERT(numMagicBytes <= sizeof(magicBytes));
     for (auto i = 0u; i < numMagicBytes; i++) {
         deSer.deserializeValue<uint8_t>(magicBytes[i]);
     }

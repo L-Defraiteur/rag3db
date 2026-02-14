@@ -40,6 +40,7 @@
   "author": "Kùzu Team",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "chai": "^4.4.1",
     "esbuild": "0.24.2",
     "mocha": "^10.4.0",
