@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WASM Threading Validation Tests</title>
+</head>
+<body>
+<pre id="log"></pre>
+<script>
+const logEl = document.getElementById("log");
+const log = (msg) => {
+  logEl.textContent += msg + "\n";
+  console.log(msg);
+};
+
+window.testResults = {};
+
+log("Starting WASM threading validation tests (worker-based)...");
+
+const worker = new Worker("/threading_worker.js");
+
+worker.onmessage = (e) => {
+  if (e.data.type === "log") {
+    log(e.data.msg);
+  } else if (e.data.type === "ready") {
+    log("Worker ready, starting tests");
+    worker.postMessage({ action: "run" });
+  } else if (e.data.type === "results") {
+    window.testResults = e.data.results;
+    log("Results received: " + JSON.stringify(e.data.results));
+  }
+};
+
+worker.onerror = (err) => {
+  log("Worker error: " + err.message);
+  window.testResults = { error: err.message };
+};
+</script>
+</body>
+</html>

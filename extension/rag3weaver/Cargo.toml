@@ -5,6 +5,9 @@ edition = "2021"
 license = "MIT"
 description = "RAG pipeline orchestrator: events, config, embedder and DB traits for rag3db"
 
+[lib]
+crate-type = ["lib", "staticlib"]
+
 [dependencies]
 async-broadcast = "0.7"
 blake3 = "1"
@@ -15,5 +18,46 @@ async-trait = "0.1"
 thiserror = "2"
 tokio = { version = "1", features = ["sync"] }
 
+# Candle embedder (feature flag, active par defaut)
+candle-core = { version = "0.8", optional = true }
+candle-nn = { version = "0.8", optional = true }
+candle-transformers = { version = "0.8", optional = true }
+tokenizers = { version = "0.21", optional = true, default-features = false, features = ["fancy-regex"] }
+hf-hub = { version = "0.4", optional = true }
+
+# rag3db native (feature flag, pour natif + Node.js)
+rag3db = { path = "../../tools/rust_api", optional = true }
+
+# WASM: getrandom needs wasm_js backend for wasm32 targets
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[features]
+default = ["candle-embedder"]
+candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
+rag3db-native = ["dep:rag3db"]
+wasm-emscripten = ["dep:futures", "dep:rayon", "tokio/rt"]
+
+[dependencies.futures]
+version = "0.3"
+optional = true
+features = ["thread-pool"]
+
+[dependencies.rayon]
+version = "1.10"
+optional = true
+
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+reqwest = { version = "0.12", features = ["json"] }
+async-openai = { version = "0.32", features = ["embedding"] }
+
+[[example]]
+name = "tei_reqwest"
+
+[[example]]
+name = "tei_openai"
+
+[[example]]
+name = "candle_local"
+required-features = ["candle-embedder"]

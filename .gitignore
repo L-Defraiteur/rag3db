@@ -87,3 +87,5 @@ dataset/ldbc-1/csv
 
 # rag3weaver
 extension/rag3weaver/target/
+build_wasm/
+test-results/

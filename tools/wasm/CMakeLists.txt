@@ -1,5 +1,8 @@
+add_subdirectory(${PROJECT_SOURCE_DIR}/extension/rag3weaver ${CMAKE_BINARY_DIR}/rag3weaver)
+
 add_executable(rag3db_wasm
     src_cpp/main.cpp
+    src_cpp/weaver_bindings.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/connection.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/database.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/data_type.cpp
@@ -14,7 +17,7 @@ add_executable(rag3db_wasm
 
 file(GLOB JS_SOURCE_FILES ./src_js/*)
 
-target_link_libraries(rag3db_wasm PRIVATE rag3db)
+target_link_libraries(rag3db_wasm PRIVATE rag3db rag3weaver_lib)
 
 set_target_properties(rag3db_wasm
     PROPERTIES

@@ -5,6 +5,8 @@
 //! the concrete database implementation.
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -157,6 +159,67 @@ pub trait DbConnection: Send + Sync {
     ) -> Result<QueryResult, DbError>;
 }
 
+// ─── CallbackConnection ──────────────────────────────────────────────────────
+
+/// Type alias for the async database execute callback.
+///
+/// `Fn(&str, &[QueryParam])` → `Future<Output = Result<QueryResult, DbError>>`.
+/// Called for both `execute` (with empty params) and `execute_with_params`.
+pub type DbExecuteFn = Box<
+    dyn Fn(&str, &[QueryParam]) -> Pin<Box<dyn Future<Output = Result<QueryResult, DbError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Database connection backed by a user-provided closure.
+///
+/// The dual of [`crate::embedder::CallbackEmbedder`]. Useful for WASM
+/// (bridging to JS via rag3db_wasm.js) or any environment where the
+/// database access is provided externally.
+///
+/// ```ignore
+/// use rag3weaver::connection::{CallbackConnection, QueryResult, DbError};
+///
+/// let conn = CallbackConnection::new(|cypher, params| {
+///     Box::pin(async move {
+///         // forward to rag3db_wasm.js, HTTP API, etc.
+///         Ok(QueryResult::default())
+///     })
+/// });
+/// ```
+pub struct CallbackConnection {
+    execute_fn: DbExecuteFn,
+}
+
+impl CallbackConnection {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: Fn(&str, &[QueryParam]) -> Pin<Box<dyn Future<Output = Result<QueryResult, DbError>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            execute_fn: Box::new(f),
+        }
+    }
+}
+
+#[async_trait]
+impl DbConnection for CallbackConnection {
+    async fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
+        (self.execute_fn)(cypher, &[]).await
+    }
+
+    async fn execute_with_params(
+        &self,
+        cypher: &str,
+        params: &[QueryParam],
+    ) -> Result<QueryResult, DbError> {
+        (self.execute_fn)(cypher, params).await
+    }
+}
+
 /// Mock database connection for testing. Returns empty result sets.
 #[derive(Debug, Default)]
 pub struct MockConnection;
@@ -298,6 +361,73 @@ mod tests {
     #[tokio::test]
     async fn connection_as_trait_object() {
         let conn: Box<dyn DbConnection> = Box::new(MockConnection::new());
+        let result = conn.execute("RETURN 1").await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    // ── CallbackConnection ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn callback_connection_execute() {
+        let conn = CallbackConnection::new(|cypher, _params| {
+            let cypher = cypher.to_string();
+            Box::pin(async move {
+                Ok(QueryResult {
+                    columns: vec!["query".to_string()],
+                    rows: vec![vec![CypherValue::String(cypher)]],
+                })
+            })
+        });
+
+        let result = conn.execute("RETURN 1").await.unwrap();
+        assert_eq!(result.num_rows(), 1);
+        assert_eq!(result.rows[0][0].as_str(), Some("RETURN 1"));
+    }
+
+    #[tokio::test]
+    async fn callback_connection_with_params() {
+        let conn = CallbackConnection::new(|cypher, params| {
+            let cypher = cypher.to_string();
+            let param_count = params.len() as i64;
+            Box::pin(async move {
+                Ok(QueryResult {
+                    columns: vec!["cypher".to_string(), "param_count".to_string()],
+                    rows: vec![vec![
+                        CypherValue::String(cypher),
+                        CypherValue::Int(param_count),
+                    ]],
+                })
+            })
+        });
+
+        let params = vec![
+            QueryParam::new("name", "Alice"),
+            QueryParam::new("age", 30_i64),
+        ];
+        let result = conn
+            .execute_with_params("MATCH (n) WHERE n.name = $name", &params)
+            .await
+            .unwrap();
+        assert_eq!(result.rows[0][1].as_i64(), Some(2));
+    }
+
+    #[tokio::test]
+    async fn callback_connection_error() {
+        let conn = CallbackConnection::new(|_cypher, _params| {
+            Box::pin(async move {
+                Err(DbError::QueryError("simulated error".into()))
+            })
+        });
+
+        let err = conn.execute("BAD QUERY").await.unwrap_err();
+        assert!(matches!(err, DbError::QueryError(_)));
+    }
+
+    #[tokio::test]
+    async fn callback_connection_as_trait_object() {
+        let conn: Box<dyn DbConnection> = Box::new(CallbackConnection::new(
+            |_cypher, _params| Box::pin(async move { Ok(QueryResult::default()) }),
+        ));
         let result = conn.execute("RETURN 1").await.unwrap();
         assert!(result.is_empty());
     }
