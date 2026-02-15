@@ -84,3 +84,6 @@ scripts/generate-cpp-docs/c/docs
 dataset/binary-demo
 dataset/databases/tinysnb
 dataset/ldbc-1/csv
+
+# rag3weaver
+extension/rag3weaver/target/

@@ -1,0 +1,19 @@
+[package]
+name = "rag3weaver"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "RAG pipeline orchestrator: events, config, embedder and DB traits for rag3db"
+
+[dependencies]
+async-broadcast = "0.7"
+blake3 = "1"
+text-splitter = { version = "0.28", features = ["markdown"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+thiserror = "2"
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
