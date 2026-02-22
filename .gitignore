@@ -89,3 +89,6 @@ dataset/ldbc-1/csv
 extension/rag3weaver/target/
 build_wasm/
 test-results/
+
+# References (cloned repos for study)
+references/

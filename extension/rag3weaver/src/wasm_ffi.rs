@@ -207,6 +207,15 @@ extern "C" {
     fn rag3db_value_get_internal_id(value: *mut CValue, out: *mut CInternalId) -> CState;
     fn rag3db_value_to_string(value: *mut CValue) -> *mut c_char;
     fn rag3db_value_create_null() -> *mut CValue;
+    fn rag3db_value_create_bool(val: bool) -> *mut CValue;
+    fn rag3db_value_create_int64(val: i64) -> *mut CValue;
+    fn rag3db_value_create_double(val: f64) -> *mut CValue;
+    fn rag3db_value_create_string(val: *const c_char) -> *mut CValue;
+    fn rag3db_value_create_list(
+        num_elements: u64,
+        elements: *mut *mut CValue,
+        out_value: *mut *mut CValue,
+    ) -> CState;
     fn rag3db_value_destroy(value: *mut CValue);
 
     // Value: list
@@ -526,7 +535,11 @@ impl WasmDbConnection {
             CString::new(path).map_err(|e| DbError::ConnectionError(e.to_string()))?;
 
         unsafe {
-            let config = rag3db_default_system_config();
+            let mut config = rag3db_default_system_config();
+            // Cap DB threads for WASM: PTHREAD_POOL_SIZE=16, we need room for
+            // the rayon weaver pool (4 threads) + temporary threads.
+            // DB access is serialized by Mutex, so 2 threads is sufficient.
+            config.max_num_threads = 2;
 
             let mut db = CDatabase {
                 _database: std::ptr::null_mut(),
@@ -663,6 +676,45 @@ impl WasmDbConnection {
         }
     }
 
+    /// Convert a CypherValue to a heap-allocated C API value.
+    /// Caller must call rag3db_value_destroy on the result.
+    unsafe fn cypher_to_c_value(&self, value: &CypherValue) -> *mut CValue {
+        match value {
+            CypherValue::Null => rag3db_value_create_null(),
+            CypherValue::Bool(b) => rag3db_value_create_bool(*b),
+            CypherValue::Int(i) => rag3db_value_create_int64(*i),
+            CypherValue::Float(f) => rag3db_value_create_double(*f),
+            CypherValue::String(s) => {
+                let c_str = CString::new(s.as_str()).unwrap_or_else(|_| CString::new("").unwrap());
+                rag3db_value_create_string(c_str.as_ptr())
+            }
+            CypherValue::List(items) => {
+                let mut elements: Vec<*mut CValue> =
+                    items.iter().map(|item| self.cypher_to_c_value(item)).collect();
+                let mut list_val: *mut CValue = std::ptr::null_mut();
+                let state = rag3db_value_create_list(
+                    elements.len() as u64,
+                    elements.as_mut_ptr(),
+                    &mut list_val,
+                );
+                for elem in &mut elements {
+                    rag3db_value_destroy(*elem);
+                }
+                if state == C_SUCCESS && !list_val.is_null() {
+                    list_val
+                } else {
+                    rag3db_value_create_null()
+                }
+            }
+            CypherValue::Map(_) => {
+                // Fallback: serialize as string
+                let json = serde_json::to_string(value).unwrap_or_default();
+                let c_str = CString::new(json).unwrap_or_else(|_| CString::new("").unwrap());
+                rag3db_value_create_string(c_str.as_ptr())
+            }
+        }
+    }
+
     /// Bind a CypherValue to a prepared statement parameter.
     unsafe fn bind_param(
         &self,
@@ -691,8 +743,28 @@ impl WasmDbConnection {
                     .map_err(|e| DbError::QueryError(e.to_string()))?;
                 rag3db_prepared_statement_bind_string(stmt, name_ptr, c_val.as_ptr());
             }
-            CypherValue::List(_) | CypherValue::Map(_) => {
-                // Serialize as JSON string for complex types
+            CypherValue::List(items) => {
+                // Create native list value via C API
+                let mut elements: Vec<*mut CValue> = items
+                    .iter()
+                    .map(|item| self.cypher_to_c_value(item))
+                    .collect();
+                let mut list_val: *mut CValue = std::ptr::null_mut();
+                let state = rag3db_value_create_list(
+                    elements.len() as u64,
+                    elements.as_mut_ptr(),
+                    &mut list_val,
+                );
+                if state == C_SUCCESS && !list_val.is_null() {
+                    rag3db_prepared_statement_bind_value(stmt, name_ptr, list_val);
+                    rag3db_value_destroy(list_val);
+                }
+                for elem in &mut elements {
+                    rag3db_value_destroy(*elem);
+                }
+            }
+            CypherValue::Map(_) => {
+                // Maps still use JSON serialization (no native C API for maps with dynamic keys)
                 let json = serde_json::to_string(value)
                     .map_err(|e| DbError::TypeError(e.to_string()))?;
                 let c_val = CString::new(json)
@@ -774,7 +846,8 @@ use crate::embedder::MockEmbedder;
 pub struct WeaverContext {
     catalog: std::sync::Arc<std::sync::Mutex<Catalog>>,
     drain_lock: std::sync::Arc<std::sync::Mutex<()>>,
-    pool: rayon::ThreadPool,
+    pool: std::sync::Arc<rayon::ThreadPool>,
+    refs: std::sync::Arc<std::sync::Mutex<Vec<crate::refs::EntityRef>>>,
 }
 
 /// Thread-local buffer for returning strings to C.
@@ -858,7 +931,8 @@ pub extern "C" fn rag3weaver_catalog_new(
     Box::into_raw(Box::new(WeaverContext {
         catalog: std::sync::Arc::new(std::sync::Mutex::new(catalog)),
         drain_lock: std::sync::Arc::new(std::sync::Mutex::new(())),
-        pool,
+        pool: std::sync::Arc::new(pool),
+        refs: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
     }))
 }
 
@@ -872,16 +946,17 @@ pub extern "C" fn rag3weaver_catalog_destroy(ctx: *mut WeaverContext) {
     }
 }
 
-/// Create an entity. Returns a JSON string with the UUID, or error.
+/// Create an entity. Returns an opaque handle (>= 0) or -1 on error.
 /// `fields_json` is a JSON object `{"field": value, ...}`.
+/// The handle can be used with `rag3weaver_get_uuid()` and `rag3weaver_link()`.
 #[no_mangle]
 pub extern "C" fn rag3weaver_create(
     ctx: *mut WeaverContext,
     entity_type: *const c_char,
     fields_json: *const c_char,
-) -> *const c_char {
+) -> i64 {
     if ctx.is_null() || entity_type.is_null() || fields_json.is_null() {
-        return return_string_to_c(r#"{"error":"null pointer"}"#.into());
+        return -1;
     }
 
     let ctx = unsafe { &*ctx };
@@ -890,27 +965,127 @@ pub extern "C" fn rag3weaver_create(
 
     let fields: HashMap<String, CypherValue> = match serde_json::from_str(&fields_str) {
         Ok(f) => f,
-        Err(e) => return return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
+        Err(_) => return -1,
     };
 
     let mut catalog = match ctx.catalog.lock() {
         Ok(g) => g,
-        Err(e) => {
-            return return_string_to_c(format!(r#"{{"error":"catalog lock poisoned: {e}"}}"#))
-        }
+        Err(_) => return -1,
     };
 
     match catalog.create(&entity, fields) {
         Ok(entity_ref) => {
-            let uuid = entity_ref.uuid().unwrap_or_default();
-            return_string_to_c(format!(r#"{{"uuid":"{uuid}"}}"#))
+            let mut refs = ctx.refs.lock().unwrap();
+            let handle = refs.len() as i64;
+            refs.push(entity_ref);
+            handle
+        }
+        Err(_) => -1,
+    }
+}
+
+/// Get the resolved UUID for a handle. Returns JSON.
+/// Before drain: `{"error":"pending"}`. After drain: `{"uuid":"abc-def-..."}`.
+#[no_mangle]
+pub extern "C" fn rag3weaver_get_uuid(
+    ctx: *const WeaverContext,
+    handle: i64,
+) -> *const c_char {
+    if ctx.is_null() || handle < 0 {
+        return return_string_to_c(r#"{"error":"invalid handle"}"#.into());
+    }
+
+    let ctx = unsafe { &*ctx };
+    let refs = ctx.refs.lock().unwrap();
+    let idx = handle as usize;
+
+    if idx >= refs.len() {
+        return return_string_to_c(r#"{"error":"invalid handle"}"#.into());
+    }
+
+    match refs[idx].uuid() {
+        Ok(uuid) => return_string_to_c(format!(r#"{{"uuid":"{uuid}"}}"#)),
+        Err(crate::refs::RefError::Pending) => {
+            return_string_to_c(r#"{"error":"pending"}"#.into())
         }
         Err(e) => return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
     }
 }
 
+/// Create a link between two entities by handle.
+/// Returns 0 on success, -1 on error.
+#[no_mangle]
+pub extern "C" fn rag3weaver_link(
+    ctx: *mut WeaverContext,
+    from_handle: i64,
+    to_handle: i64,
+    rel_type: *const c_char,
+    properties_json: *const c_char,
+) -> i64 {
+    if ctx.is_null() || rel_type.is_null() || from_handle < 0 || to_handle < 0 {
+        return -1;
+    }
+
+    let ctx = unsafe { &*ctx };
+    let rel = unsafe { CStr::from_ptr(rel_type).to_string_lossy() };
+
+    let props: HashMap<String, CypherValue> = if properties_json.is_null() {
+        HashMap::new()
+    } else {
+        let s = unsafe { CStr::from_ptr(properties_json).to_string_lossy() };
+        match serde_json::from_str(&s) {
+            Ok(p) => p,
+            Err(_) => return -1,
+        }
+    };
+
+    let (from_ref, to_ref) = {
+        let refs = ctx.refs.lock().unwrap();
+        let from_idx = from_handle as usize;
+        let to_idx = to_handle as usize;
+        if from_idx >= refs.len() || to_idx >= refs.len() {
+            return -1;
+        }
+        (refs[from_idx].clone(), refs[to_idx].clone())
+    };
+
+    let mut catalog = match ctx.catalog.lock() {
+        Ok(g) => g,
+        Err(_) => return -1,
+    };
+
+    match catalog.link(&rel, from_ref, to_ref, props) {
+        Ok(_) => 0,
+        Err(_) => -1,
+    }
+}
+
+/// Build the drain result JSON including resolved handles.
+fn build_drain_json(
+    result: &crate::queue::FlushResult,
+    refs: &[crate::refs::EntityRef],
+) -> String {
+    let mut resolved = Vec::new();
+    for (i, r) in refs.iter().enumerate() {
+        if r.is_ready() {
+            if let Ok(uuid) = r.uuid() {
+                resolved.push(format!(
+                    r#"{{"handle":{},"entity":"{}","uuid":"{}"}}"#,
+                    i,
+                    r.entity(),
+                    uuid
+                ));
+            }
+        }
+    }
+    format!(
+        r#"{{"processed":{},"failed":{},"resolved":[{}]}}"#,
+        result.processed, result.failed, resolved.join(",")
+    )
+}
+
 /// Drain the operation queue (sync, blocks until complete).
-/// Returns a JSON string with flush stats.
+/// Returns a JSON string with flush stats and resolved handles.
 #[no_mangle]
 pub extern "C" fn rag3weaver_drain(ctx: *mut WeaverContext) -> *const c_char {
     if ctx.is_null() {
@@ -938,12 +1113,11 @@ pub extern "C" fn rag3weaver_drain(ctx: *mut WeaverContext) -> *const c_char {
         }
     };
 
-    let result = futures::executor::block_on(catalog.drain());
+    let result = catalog.drain_parallel(&ctx.pool);
+    drop(catalog); // Release catalog lock before building JSON
 
-    return_string_to_c(format!(
-        r#"{{"processed":{},"failed":{},"persisted":{}}}"#,
-        result.processed, result.failed, result.persisted,
-    ))
+    let refs = ctx.refs.lock().unwrap();
+    return_string_to_c(build_drain_json(&result, &refs))
 }
 
 // ── Async drain (rayon::spawn + callback) ───────────────────────────────
@@ -971,6 +1145,8 @@ pub extern "C" fn rag3weaver_drain_async(
     let ctx = unsafe { &*ctx };
     let catalog = ctx.catalog.clone();
     let drain_lock = ctx.drain_lock.clone();
+    let refs = ctx.refs.clone();
+    let pool = ctx.pool.clone();
 
     ctx.pool.spawn(move || {
         let _drain_guard = match drain_lock.lock() {
@@ -991,13 +1167,98 @@ pub extern "C" fn rag3weaver_drain_async(
             }
         };
 
-        let result = futures::executor::block_on(cat.drain());
-        drop(cat); // Release catalog lock before callback
+        let result = cat.drain_parallel(&pool);
+        drop(cat); // Release catalog lock before building JSON
 
-        let json = format!(
-            r#"{{"processed":{},"failed":{},"persisted":{}}}"#,
-            result.processed, result.failed, result.persisted,
-        );
+        let refs = refs.lock().unwrap();
+        let json = build_drain_json(&result, &refs);
+        drop(refs);
+        callback(return_string_to_c(json), user_data);
+    });
+}
+
+// ── Async search (rayon::spawn + callback) ──────────────────────────────
+
+fn parse_search_options(json: &str) -> crate::search::SearchOptions {
+    let mut opts = crate::search::SearchOptions::default();
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+        if let Some(n) = v.get("limit").and_then(|v| v.as_u64()) {
+            opts.limit = n as usize;
+        }
+        if let Some(n) = v.get("offset").and_then(|v| v.as_u64()) {
+            opts.offset = n as usize;
+        }
+        if let Some(s) = v.get("consistency").and_then(|v| v.as_str()) {
+            opts.consistency = match s {
+                "strict" => crate::search::Consistency::Strict,
+                "immediate" => crate::search::Consistency::Immediate,
+                _ => crate::search::Consistency::Eventual,
+            };
+        }
+        if let Some(n) = v.get("fuzzyDistance").and_then(|v| v.as_u64()) {
+            opts.fuzzy_distance = n as u8;
+        }
+        if let Some(s) = v.get("bm25Mode").and_then(|v| v.as_str()) {
+            if s == "regex" {
+                opts.bm25_mode = crate::search::BM25Mode::Regex;
+            }
+        }
+        if let Some(f) = v.get("keywordWeight").and_then(|v| v.as_f64()) {
+            opts.keyword_weight = Some(f);
+        }
+    }
+    opts
+}
+
+/// Async search: spawns search() on the dedicated rayon pool, calls callback when done.
+/// Returns immediately (non-blocking). The callback is invoked from a worker thread.
+#[no_mangle]
+pub extern "C" fn rag3weaver_search_async(
+    ctx: *const WeaverContext,
+    kb_name: *const c_char,
+    query: *const c_char,
+    options_json: *const c_char,
+    callback: AsyncCallback,
+    user_data: usize,
+) {
+    if ctx.is_null() || kb_name.is_null() || query.is_null() {
+        let msg = CString::new(r#"{"error":"null pointer"}"#).unwrap();
+        callback(msg.as_ptr(), user_data);
+        return;
+    }
+
+    let ctx = unsafe { &*ctx };
+    let kb = unsafe { CStr::from_ptr(kb_name).to_string_lossy().into_owned() };
+    let q = unsafe { CStr::from_ptr(query).to_string_lossy().into_owned() };
+    let opts_str = if options_json.is_null() {
+        String::new()
+    } else {
+        unsafe { CStr::from_ptr(options_json).to_string_lossy().into_owned() }
+    };
+
+    let opts = parse_search_options(&opts_str);
+    let catalog = ctx.catalog.clone();
+
+    ctx.pool.spawn(move || {
+        let mut cat = match catalog.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                let json = format!(r#"{{"error":"catalog lock poisoned: {e}"}}"#);
+                callback(return_string_to_c(json), user_data);
+                return;
+            }
+        };
+
+        let result = futures::executor::block_on(cat.search(&kb, &q, opts));
+        drop(cat);
+
+        let json = match result {
+            Ok(response) => match serde_json::to_string(&response) {
+                Ok(j) => j,
+                Err(e) => format!(r#"{{"error":"serialize failed: {e}"}}"#),
+            },
+            Err(e) => format!(r#"{{"error":"{}"}}"#, e),
+        };
         callback(return_string_to_c(json), user_data);
     });
 }

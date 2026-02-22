@@ -598,6 +598,57 @@ impl Catalog {
         self.queue.drain().await
     }
 
+    /// Parallel drain: inserts + embeds via rayon::join, then links sequentially.
+    /// Uses block_on internally (no async runtime needed). WASM-only.
+    #[cfg(feature = "wasm-emscripten")]
+    pub fn drain_parallel(&mut self, pool: &rayon::ThreadPool) -> FlushResult {
+        use crate::queue::run_processor;
+
+        let mut groups = self.queue.take_pending_grouped();
+        if groups.is_empty() {
+            return FlushResult::default();
+        }
+
+        let mut inserts = Vec::new();
+        let mut embeds = Vec::new();
+        let mut links = Vec::new();
+        for (op_type, items) in groups.drain(..) {
+            match op_type {
+                "insert" => inserts = items,
+                "embed" => embeds = items,
+                "link" => links = items,
+                _ => {}
+            }
+        }
+
+        let insert_proc = self.queue.get_processor("insert");
+        let embed_proc = self.queue.get_processor("embed");
+        let link_proc = self.queue.get_processor("link");
+
+        // Phase 1: inserts + embeds in parallel
+        let (r_insert, r_embed) = pool.install(|| {
+            rayon::join(
+                || run_processor(insert_proc.as_deref(), &mut inserts),
+                || run_processor(embed_proc.as_deref(), &mut embeds),
+            )
+        });
+
+        // Phase 2: links sequential (need resolved UUIDs from inserts)
+        let r_link = run_processor(link_proc.as_deref(), &mut links);
+
+        // Return non-completed items to the queue
+        let mut all = inserts;
+        all.extend(embeds);
+        all.extend(links);
+        self.queue.return_items(all);
+
+        FlushResult {
+            processed: r_insert.processed + r_embed.processed + r_link.processed,
+            failed: r_insert.failed + r_embed.failed + r_link.failed,
+            persisted: 0,
+        }
+    }
+
     pub async fn flush_insertions(&mut self) -> FlushResult {
         self.queue.flush_insertions().await
     }

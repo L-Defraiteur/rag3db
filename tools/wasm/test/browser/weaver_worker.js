@@ -11,6 +11,25 @@ function parse(jsonStr) {
   return JSON.parse(jsonStr);
 }
 
+// Generic async polling helper (shared by drain, search, etc.)
+function pollAsync(Module, handle) {
+  return new Promise((resolve, reject) => {
+    let polls = 0;
+    const poll = () => {
+      polls++;
+      if (Module.Weaver.asyncPoll(handle)) {
+        const json = Module.Weaver.asyncResult(handle);
+        resolve({ result: parse(json), polls });
+      } else if (polls > 30000) {
+        reject(new Error("async timeout after 30000 polls"));
+      } else {
+        setTimeout(poll, 1);
+      }
+    };
+    poll();
+  });
+}
+
 // Helper: run a raw Cypher query via the existing Connection embind class
 function queryRows(conn, sql) {
   const r = conn.query(sql);
@@ -40,11 +59,18 @@ async function runTests(Module) {
     entities: {
       Document: {
         fields: {
-          title: { fieldType: "String" },
+          title: { fieldType: "Text", titleFor: "main" },
           body: { fieldType: "Text" }
         }
       }
     },
+    relations: {
+      REFERENCES: {
+        from: "Document",
+        to: "Document"
+      }
+    },
+    knowledgeBases: { main: {} },
     embeddingDim: 4
   });
 
@@ -53,76 +79,99 @@ async function runTests(Module) {
   log("Test 2 (constructor): OK");
   results.constructorOk = true;
 
-  // Test 3: Create entities
+  // Test 3: Create entities — create() now returns int handle (>= 0)
   const docs = [
     { title: "Rust Guide", body: "Rust is a systems programming language" },
     { title: "Python Intro", body: "Python is great for data science" },
     { title: "JS Handbook", body: "JavaScript powers the modern web" },
   ];
 
+  const handles = [];
   let createsOk = true;
   for (const doc of docs) {
-    const res = parse(weaver.create("Document", JSON.stringify(doc)));
-    log("Test 3 (create): " + JSON.stringify(res));
-    if (res.error) {
+    const handle = weaver.create("Document", JSON.stringify(doc));
+    log("Test 3 (create): handle=" + handle);
+    if (handle < 0) {
       createsOk = false;
-      throw new Error("create failed: " + res.error);
+      throw new Error("create failed: returned " + handle);
     }
+    handles.push(handle);
   }
   results.createCount = docs.length;
   results.createsOk = createsOk;
-  log("Test 3: " + docs.length + " entities created (UUIDs resolved after drain)");
+  results.handles = handles;
+  log("Test 3: " + docs.length + " entities created with handles " + JSON.stringify(handles));
 
-  // Test 4: Drain
+  // Test 3b: getUuid before drain — should be pending
+  const uuidBefore = parse(weaver.getUuid(handles[0]));
+  log("Test 3b (getUuid before drain): " + JSON.stringify(uuidBefore));
+  results.uuidBeforeDrain = uuidBefore;
+
+  // Test 4: Drain — should include resolved array
   const drainRes = parse(weaver.drain());
-  log("Test 4 (drain): " + JSON.stringify(drainRes));
+  log("Test 4 (drain): processed=" + drainRes.processed + " failed=" + drainRes.failed +
+      " resolved=" + (drainRes.resolved ? drainRes.resolved.length : 0));
   results.drain = drainRes;
+
+  // Test 4b: getUuid after drain — should have UUID
+  const uuidAfter = parse(weaver.getUuid(handles[0]));
+  log("Test 4b (getUuid after drain): " + JSON.stringify(uuidAfter));
+  results.uuidAfterDrain = uuidAfter;
 
   // Test 5: Count
   const countRes = parse(weaver.count("Document"));
   log("Test 5 (count): " + JSON.stringify(countRes));
   results.count = countRes.count;
 
-  // Test 6: Async drain (drainAsyncStart / Poll / Result)
-  log("Test 6: Creating 2 more entities for async drain...");
-  const asyncDocs = [
-    { title: "Go Tutorial", body: "Go is great for concurrency" },
-    { title: "C++ Reference", body: "C++ is a powerful systems language" },
-  ];
-  for (const doc of asyncDocs) {
-    const res = parse(weaver.create("Document", JSON.stringify(doc)));
-    if (res.error) throw new Error("create failed: " + res.error);
-  }
+  // Test 6: Async drain (drainAsyncStart / Poll / Result) with link
+  log("Test 6: Creating 2 more entities + link for async drain...");
+  const h4 = weaver.create("Document", JSON.stringify(
+    { title: "Go Tutorial", body: "Go is great for concurrency" }
+  ));
+  const h5 = weaver.create("Document", JSON.stringify(
+    { title: "C++ Reference", body: "C++ is a powerful systems language" }
+  ));
+
+  // Test link between two handles
+  const linkResult = weaver.link(h4, h5, "REFERENCES", "{}");
+  log("Test 6 (link): result=" + linkResult);
+  results.linkResult = linkResult;
 
   log("Test 6: Starting async drain...");
-  const handle = weaver.drainAsyncStart();
+  const drainHandle = weaver.drainAsyncStart();
   log("Test 6: Got handle, polling...");
 
-  // Poll until done (non-blocking loop via Promise + setTimeout)
-  const asyncDrainRes = await new Promise((resolve, reject) => {
-    let polls = 0;
-    const poll = () => {
-      polls++;
-      if (Module.Weaver.drainAsyncPoll(handle)) {
-        const json = Module.Weaver.drainAsyncResult(handle);
-        log("Test 6: Async drain done after " + polls + " polls");
-        resolve(parse(json));
-      } else if (polls > 30000) {
-        reject(new Error("Async drain timeout after 30000 polls"));
-      } else {
-        setTimeout(poll, 1);
-      }
-    };
-    poll();
-  });
+  // Poll until done (non-blocking loop via generic helper)
+  const { result: asyncDrainRes, polls: drainPolls } = await pollAsync(Module, drainHandle);
+  log("Test 6: Async drain done after " + drainPolls + " polls");
 
-  log("Test 6 (async drain): " + JSON.stringify(asyncDrainRes));
+  log("Test 6 (async drain): processed=" + asyncDrainRes.processed +
+      " resolved=" + (asyncDrainRes.resolved ? asyncDrainRes.resolved.length : 0));
   results.asyncDrain = asyncDrainRes;
 
   // Test 7: Count after async drain — should be 5 total
   const countRes2 = parse(weaver.count("Document"));
   log("Test 7 (count after async): " + JSON.stringify(countRes2));
   results.countAfterAsync = countRes2.count;
+
+  // Test 8: getUuid for async-drained handles
+  const uuid4 = parse(weaver.getUuid(h4));
+  const uuid5 = parse(weaver.getUuid(h5));
+  log("Test 8 (getUuid async handles): h4=" + JSON.stringify(uuid4) + " h5=" + JSON.stringify(uuid5));
+  results.asyncUuids = { h4: uuid4, h5: uuid5 };
+
+  // Test 9: Search async (MockEmbedder → zero vectors, 0 results expected)
+  log("Test 9: Starting async search...");
+  const searchHandle = weaver.searchAsyncStart("main", "test query",
+    JSON.stringify({ limit: 5, consistency: "immediate" }));
+  const { result: searchRes, polls: searchPolls } = await pollAsync(Module, searchHandle);
+  if (searchRes.error) {
+    log("Test 9 (search async): ERROR: " + searchRes.error);
+  } else {
+    log("Test 9 (search async): done after " + searchPolls + " polls, " +
+        "results=" + searchRes.results.length + " meta.query=" + searchRes.meta.query);
+  }
+  results.search = searchRes;
 
   // Cleanup
   weaver.delete();

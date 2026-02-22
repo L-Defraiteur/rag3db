@@ -1,0 +1,9 @@
+/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/streaming_iterator-cfdf82bc8ced4c5a.d: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/slice.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/sources.rs
+
+/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/libstreaming_iterator-cfdf82bc8ced4c5a.rlib: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/slice.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/sources.rs
+
+/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/libstreaming_iterator-cfdf82bc8ced4c5a.rmeta: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/slice.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/sources.rs
+
+/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/lib.rs:
+/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/slice.rs:
+/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/streaming-iterator-0.1.9/src/sources.rs:

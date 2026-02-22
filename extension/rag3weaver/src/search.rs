@@ -6,6 +6,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use serde::Serialize;
+
 use crate::catalog::CatalogError;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::Embedder;
@@ -15,7 +17,8 @@ use crate::fusion;
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 /// Consistency level for search operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Consistency {
     /// No waiting — search immediately, even if embeddings are pending.
     Immediate,
@@ -49,7 +52,8 @@ impl Default for HybridStrategy {
 }
 
 /// Type of search that was actually performed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum SearchType {
     Hybrid,
     Semantic,
@@ -115,7 +119,8 @@ impl Default for SearchOptions {
 // ─── SearchResult / SearchResponse / SearchMeta ──────────────────────────────
 
 /// A single search result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub uuid: String,
     pub score: f64,
@@ -125,7 +130,8 @@ pub struct SearchResult {
 }
 
 /// Chunk information attached to a search result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChunkInfo {
     pub uuid: String,
     pub text: String,
@@ -134,7 +140,8 @@ pub struct ChunkInfo {
 }
 
 /// Metadata about a search operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchMeta {
     pub query: String,
     pub kb: String,
@@ -149,7 +156,8 @@ pub struct SearchMeta {
 }
 
 /// Complete search response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub meta: SearchMeta,

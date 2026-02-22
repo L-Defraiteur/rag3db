@@ -17,6 +17,9 @@ add_executable(rag3db_wasm
 
 file(GLOB JS_SOURCE_FILES ./src_js/*)
 
+# Allow duplicate symbols from rayon_core (linked independently by both
+# rag3weaver and tantivy_fts static Rust libraries).
+target_link_options(rag3db_wasm PRIVATE "LINKER:--allow-multiple-definition")
 target_link_libraries(rag3db_wasm PRIVATE rag3db rag3weaver_lib)
 
 set_target_properties(rag3db_wasm

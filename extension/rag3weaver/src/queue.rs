@@ -48,21 +48,21 @@ impl OperationItem {
         self.persisted_op_uuid = Some(op_uuid);
     }
 
-    fn mark_processing(&mut self) {
+    pub fn mark_processing(&mut self) {
         self.state = ItemState::Processing;
     }
 
-    fn mark_completed(&mut self) {
+    pub fn mark_completed(&mut self) {
         self.state = ItemState::Completed;
         self.error = None;
     }
 
-    fn mark_failed(&mut self, error: String) {
+    pub fn mark_failed(&mut self, error: String) {
         self.state = ItemState::Failed;
         self.error = Some(error);
     }
 
-    fn can_retry(&self) -> bool {
+    pub fn can_retry(&self) -> bool {
         self.retries < self.op.config().max_retries
     }
 }
@@ -138,7 +138,7 @@ pub trait Processor: Send + Sync {
 
 pub struct OperationQueue {
     items: Vec<OperationItem>,
-    processors: HashMap<&'static str, Box<dyn Processor>>,
+    processors: HashMap<&'static str, std::sync::Arc<dyn Processor>>,
     persistence: Option<Box<dyn OperationPersistence>>,
     config: FlushConfig,
     cumulative: CumulativeStats,
@@ -175,7 +175,7 @@ impl OperationQueue {
     }
 
     pub fn register_processor(&mut self, op_type: &'static str, processor: Box<dyn Processor>) {
-        self.processors.insert(op_type, processor);
+        self.processors.insert(op_type, std::sync::Arc::from(processor));
     }
 
     // ── enqueue ─────────────────────────────────────────────────────
@@ -448,6 +448,100 @@ impl OperationQueue {
     pub fn clear(&mut self) {
         self.items.clear();
     }
+
+    // ── parallel drain helpers ──────────────────────────────────────
+
+    /// Extract all pending/persisted items, grouped by operation type (sorted by priority).
+    /// Items are removed from `self.items` via `std::mem::take`.
+    /// Non-processable items (completed, failed, processing) stay in the queue.
+    pub fn take_pending_grouped(&mut self) -> Vec<(&'static str, Vec<OperationItem>)> {
+        let all = std::mem::take(&mut self.items);
+        let (to_process, keep): (Vec<_>, Vec<_>) = all.into_iter().partition(|item| {
+            matches!(item.state, ItemState::Pending | ItemState::Persisted)
+        });
+        self.items = keep;
+
+        let mut by_type: Vec<(&'static str, Vec<OperationItem>)> = Vec::new();
+        let mut type_index: HashMap<&'static str, usize> = HashMap::new();
+        for item in to_process {
+            let t = item.op.operation_type();
+            if let Some(&idx) = type_index.get(t) {
+                by_type[idx].1.push(item);
+            } else {
+                type_index.insert(t, by_type.len());
+                by_type.push((t, vec![item]));
+            }
+        }
+        by_type.sort_by_key(|(_, items)| items[0].op.priority());
+        by_type
+    }
+
+    /// Return non-completed items to the queue (e.g. retries, failed).
+    /// Completed items are filtered out.
+    pub fn return_items(&mut self, items: Vec<OperationItem>) {
+        self.items.extend(
+            items
+                .into_iter()
+                .filter(|item| !matches!(item.state, ItemState::Completed)),
+        );
+    }
+
+    /// Get an Arc clone of a registered processor by name.
+    pub fn get_processor(&self, name: &str) -> Option<std::sync::Arc<dyn Processor>> {
+        self.processors.get(name).cloned()
+    }
+}
+
+// ─── run_processor (standalone, WASM only) ──────────────────────────────────
+
+/// Process items with a processor synchronously (block_on).
+/// Same batch + retry logic as `flush()`, but standalone (no persistence, no reentrancy guard).
+#[cfg(feature = "wasm-emscripten")]
+pub fn run_processor(
+    processor: Option<&dyn Processor>,
+    items: &mut Vec<OperationItem>,
+) -> FlushResult {
+    let mut result = FlushResult::default();
+    if items.is_empty() {
+        return result;
+    }
+
+    let batch_size = items[0].op.config().batch_size;
+
+    for batch in items.chunks_mut(batch_size) {
+        for item in batch.iter_mut() {
+            item.mark_processing();
+        }
+
+        if let Some(proc) = processor {
+            match futures::executor::block_on(proc.process(batch)) {
+                Ok(()) => {
+                    for item in batch.iter_mut() {
+                        item.mark_completed();
+                        result.processed += 1;
+                    }
+                }
+                Err(e) => {
+                    for item in batch.iter_mut() {
+                        if item.can_retry() {
+                            item.retries += 1;
+                            item.state = ItemState::Pending;
+                            item.error = Some(e.clone());
+                        } else {
+                            item.mark_failed(e.clone());
+                            result.failed += 1;
+                        }
+                    }
+                }
+            }
+        } else {
+            for item in batch.iter_mut() {
+                item.mark_failed("no processor registered".to_string());
+                result.failed += 1;
+            }
+        }
+    }
+    result
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
