@@ -1,9 +1,0 @@
-/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/find_msvc_tools-faae2c2985d11b06.d: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/find_tools.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/tool.rs
-
-/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/libfind_msvc_tools-faae2c2985d11b06.rlib: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/find_tools.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/tool.rs
-
-/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/release/deps/libfind_msvc_tools-faae2c2985d11b06.rmeta: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/find_tools.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/tool.rs
-
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/lib.rs:
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/find_tools.rs:
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/find-msvc-tools-0.1.9/src/tool.rs:

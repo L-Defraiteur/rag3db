@@ -1,7 +1,0 @@
-/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/debug/deps/tree_sitter_scss-327e7a7f678d131e.d: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../src/node-types.json /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../queries/highlights.scm
-
-/home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/rag3weaver/codeparsers/target/debug/deps/libtree_sitter_scss-327e7a7f678d131e.rmeta: /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/lib.rs /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../src/node-types.json /home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../queries/highlights.scm
-
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/lib.rs:
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../src/node-types.json:
-/home/luciedefraiteur/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tree-sitter-scss-1.0.0/bindings/rust/../../queries/highlights.scm:
