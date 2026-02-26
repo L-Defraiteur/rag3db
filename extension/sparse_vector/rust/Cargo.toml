@@ -1,0 +1,21 @@
+[package]
+name = "sparse-vector"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "C FFI bindings for sparse vector indexing, used as a rag3db extension"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
+cxx = "1.0"
+
+[build-dependencies]
+cxx-build = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"

@@ -7,12 +7,19 @@
 //!
 //! [`CallbackEmbedder`] wraps a closure for quick one-off usage without
 //! defining a struct. [`MockEmbedder`] is provided for testing.
+//!
+//! The [`SparseEmbedder`] trait is separate for sparse vector generation
+//! (BM42-style attention weights). [`MockSparseEmbedder`] and
+//! [`CallbackSparseEmbedder`] follow the same patterns.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
 use async_trait::async_trait;
 use thiserror::Error;
+
+use crate::sparse_index::SparseVector;
 
 /// Errors that can occur during embedding.
 #[derive(Debug, Error)]
@@ -120,6 +127,101 @@ impl Embedder for CallbackEmbedder {
 
     fn dim(&self) -> usize {
         self.dim
+    }
+}
+
+// ─── SparseEmbedder ─────────────────────────────────────────────────────────
+
+/// Trait for embedding text into sparse vectors.
+///
+/// Separate from [`Embedder`] to allow independent implementations.
+/// V2 will provide a candle-based BM42 implementation.
+#[async_trait]
+pub trait SparseEmbedder: Send + Sync {
+    /// Embed a batch of texts into sparse vectors.
+    async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError>;
+}
+
+/// Mock sparse embedder for testing.
+///
+/// Generates deterministic sparse vectors: each whitespace-separated word is
+/// hashed (djb2) to a token ID in `[0, 30000)`, with weight `1/num_words`.
+#[derive(Debug, Clone)]
+pub struct MockSparseEmbedder;
+
+impl MockSparseEmbedder {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn word_to_token(word: &str) -> u32 {
+        let mut hash: u32 = 5381;
+        for byte in word.as_bytes() {
+            hash = hash.wrapping_mul(33).wrapping_add(*byte as u32);
+        }
+        hash % 30000
+    }
+}
+
+#[async_trait]
+impl SparseEmbedder for MockSparseEmbedder {
+    async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+        Ok(texts
+            .iter()
+            .map(|text| {
+                let words: Vec<&str> = text.split_whitespace().collect();
+                if words.is_empty() {
+                    return SparseVector::new(vec![], vec![]);
+                }
+                let mut token_weights: HashMap<u32, f32> = HashMap::new();
+                for word in &words {
+                    let token = Self::word_to_token(word);
+                    *token_weights.entry(token).or_default() += 1.0 / words.len() as f32;
+                }
+                let mut pairs: Vec<(u32, f32)> = token_weights.into_iter().collect();
+                pairs.sort_by_key(|(idx, _)| *idx);
+                let (indices, values): (Vec<u32>, Vec<f32>) = pairs.into_iter().unzip();
+                SparseVector::new(indices, values)
+            })
+            .collect())
+    }
+}
+
+// ─── CallbackSparseEmbedder ─────────────────────────────────────────────────
+
+/// Type alias for the async sparse embed callback.
+pub type SparseEmbedFn = Box<
+    dyn Fn(&[String]) -> Pin<Box<dyn Future<Output = Result<Vec<SparseVector>, EmbedError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Sparse embedder backed by a user-provided closure.
+pub struct CallbackSparseEmbedder {
+    embed_fn: SparseEmbedFn,
+}
+
+impl CallbackSparseEmbedder {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: Fn(
+                &[String],
+            )
+                -> Pin<Box<dyn Future<Output = Result<Vec<SparseVector>, EmbedError>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            embed_fn: Box::new(f),
+        }
+    }
+}
+
+#[async_trait]
+impl SparseEmbedder for CallbackSparseEmbedder {
+    async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+        (self.embed_fn)(texts).await
     }
 }
 
@@ -233,5 +335,75 @@ mod tests {
 
         let result = embedder.embed(&[]).await.unwrap();
         assert!(result.is_empty());
+    }
+
+    // ── SparseEmbedder ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_sparse_embedder_basic() {
+        let embedder = MockSparseEmbedder::new();
+        let results = embedder
+            .embed_sparse(&["hello world".into()])
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].is_empty());
+        // 2 words → at most 2 tokens (could be 1 if hash collision)
+        assert!(results[0].nnz() <= 2);
+        // weights should sum to ~1.0
+        let sum: f32 = results[0].values.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-6);
+    }
+
+    #[tokio::test]
+    async fn mock_sparse_embedder_deterministic() {
+        let embedder = MockSparseEmbedder::new();
+        let r1 = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        let r2 = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        assert_eq!(r1[0], r2[0]);
+    }
+
+    #[tokio::test]
+    async fn mock_sparse_embedder_empty() {
+        let embedder = MockSparseEmbedder::new();
+        let results = embedder.embed_sparse(&["".into()]).await.unwrap();
+        assert!(results[0].is_empty());
+    }
+
+    #[tokio::test]
+    async fn mock_sparse_embedder_indices_sorted() {
+        let embedder = MockSparseEmbedder::new();
+        let results = embedder
+            .embed_sparse(&["the quick brown fox jumps".into()])
+            .await
+            .unwrap();
+        let indices = &results[0].indices;
+        for w in indices.windows(2) {
+            assert!(w[0] < w[1], "indices should be sorted");
+        }
+    }
+
+    #[tokio::test]
+    async fn callback_sparse_embedder_basic() {
+        let embedder = CallbackSparseEmbedder::new(|texts| {
+            let len = texts.len();
+            Box::pin(async move {
+                Ok(vec![SparseVector::new(vec![1, 2], vec![0.5, 0.5]); len])
+            })
+        });
+
+        let results = embedder
+            .embed_sparse(&["hello".into()])
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].indices, vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn sparse_embedder_as_trait_object() {
+        let embedder: Box<dyn SparseEmbedder> = Box::new(MockSparseEmbedder::new());
+        let results = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        assert_eq!(results.len(), 1);
     }
 }

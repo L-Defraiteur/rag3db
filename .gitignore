@@ -90,5 +90,8 @@ extension/rag3weaver/target/
 build_wasm/
 test-results/
 
+# sparse_vector Rust build
+extension/sparse_vector/rust/target/
+
 # References (cloned repos for study)
 references/
