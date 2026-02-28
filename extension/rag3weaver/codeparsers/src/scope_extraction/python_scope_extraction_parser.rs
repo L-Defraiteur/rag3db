@@ -140,7 +140,16 @@ impl PythonScopeExtractionParser {
                     self.extract_function(node, content, depth, parent, file_imports)
                 };
                 scope.file_path = file_path.to_string();
+                let func_name = scope.name.clone();
                 scopes.push(scope);
+
+                // Recurse into body for nested scopes (comprehensions, nested functions, etc.)
+                if let Some(body_node) = node.child_by_field_name("body") {
+                    let mut body_cursor = body_node.walk();
+                    for child in body_node.children(&mut body_cursor) {
+                        self.extract_scopes(child, scopes, content, depth + 1, Some(func_name.clone()), file_imports, file_path);
+                    }
+                }
             }
             "decorated_definition" => {
                 let decorators = self.extract_decorators(node, content);
@@ -174,6 +183,11 @@ impl PythonScopeExtractionParser {
                         }
                     }
                 }
+            }
+            "list_comprehension" | "set_comprehension" | "dictionary_comprehension" | "generator_expression" => {
+                let mut scope = self.extract_comprehension(node, content, depth, parent.clone(), file_imports);
+                scope.file_path = file_path.to_string();
+                scopes.push(scope);
             }
             "expression_statement" => {
                 let mut cursor = node.walk();
@@ -225,12 +239,15 @@ impl PythonScopeExtractionParser {
             .unwrap_or_else(|| "AnonymousClass".to_string());
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-
-        // Only capture class definition line, not the entire body
-        let lines: Vec<&str> = content.split('\n').collect();
-        let node_content = lines.get(start_line - 1)
-            .map(|l| l.trim().to_string())
-            .filter(|s| !s.is_empty())
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
             .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         // Build signature with base classes if present
@@ -258,7 +275,7 @@ impl PythonScopeExtractionParser {
         }
 
         let parameters: Vec<ParameterInfo> = Vec::new();
-        let content_dedented = node_content.clone(); // Already a single line
+        let content_dedented = self.dedent_content(&node_content);
         let docstring = self.extract_docstring(node, content);
 
         // Build reference exclusions
@@ -285,7 +302,7 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Class, start_line, end_line,
+            name, r#type: ScopeInfoType::Class, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters,
             return_type: None, return_type_info: None,
             modifiers: Vec::new(), generic_parameters: None,
@@ -311,7 +328,16 @@ impl PythonScopeExtractionParser {
             .unwrap_or_else(|| "anonymous".to_string());
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let parameters = self.extract_parameters(node, content);
         let return_type = self.extract_return_type(node, content);
@@ -346,7 +372,7 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Function, start_line, end_line,
+            name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type,
             return_type_info: None, modifiers: Vec::new(),
             generic_parameters: None, heritage_clauses: None,
@@ -383,7 +409,16 @@ impl PythonScopeExtractionParser {
         let name = self.get_node_text(Some(left_node), content);
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let parameters = self.extract_lambda_parameters(right_node, content);
         let param_names: Vec<&str> = parameters.iter().map(|p| p.name.as_str()).collect();
@@ -409,7 +444,7 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         Some(ScopeInfo {
-            name, r#type: ScopeInfoType::Lambda, start_line, end_line,
+            name, r#type: ScopeInfoType::Lambda, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters,
             return_type: None, return_type_info: None,
             modifiers: Vec::new(), generic_parameters: None,
@@ -440,7 +475,16 @@ impl PythonScopeExtractionParser {
         let name = self.get_node_text(Some(left_node), content);
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
         let value = self.get_node_text(Some(right_node), content);
 
         // Determine if constant (ALL_CAPS with underscore) or variable
@@ -471,7 +515,7 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         Some(ScopeInfo {
-            name, r#type: scope_type, start_line, end_line,
+            name, r#type: scope_type, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters: Vec::new(),
             return_type: None, return_type_info: None,
             modifiers: Vec::new(), generic_parameters: None,
@@ -488,6 +532,108 @@ impl PythonScopeExtractionParser {
             decorators: Some(Vec::new()), docstring: None,
             value: Some(value),
         })
+    }
+
+    /// Extract comprehension as scope (list/set/dict comprehension, generator expression)
+
+    fn extract_comprehension(&self, node: SyntaxNode, content: &str, depth: usize, parent: Option<String>, file_imports: &[ImportReference]) -> ScopeInfo {
+        let kind_name = match node.kind() {
+            "list_comprehension" => "list_comprehension",
+            "set_comprehension" => "set_comprehension",
+            "dictionary_comprehension" => "dict_comprehension",
+            "generator_expression" => "generator_expression",
+            _ => "comprehension",
+        };
+
+        // Try to get name from parent assignment context
+        let name = self.extract_comprehension_name(node, content)
+            .unwrap_or_else(|| kind_name.to_string());
+
+        let start_line = node.start_position().row + 1;
+        let end_line = node.end_position().row + 1;
+        let node_content = self.get_node_text(Some(node), content);
+        let content_dedented = self.dedent_content(&node_content);
+
+        // Truncate for signature if too long
+        let signature = if node_content.len() > 80 {
+            format!("{}...", &node_content[..77])
+        } else {
+            node_content.clone()
+        };
+
+        // Build reference exclusions: iteration variables are local to comprehension
+        let mut reference_exclusions = HashSet::new();
+        reference_exclusions.insert("self".to_string());
+        reference_exclusions.insert("cls".to_string());
+        reference_exclusions.insert(name.clone());
+        self.collect_for_variables(node, content, &mut reference_exclusions);
+
+        let identifier_references = self.extract_identifier_references(node, content, reference_exclusions);
+        let import_references = self.resolve_imports_for_scope(&identifier_references, file_imports);
+
+        let imports = if !import_references.is_empty() {
+            let mut sources: HashSet<String> = HashSet::new();
+            for imp in &import_references { sources.insert(imp.source.clone()); }
+            sources.into_iter().collect()
+        } else {
+            vec![]
+        };
+
+        ScopeInfo {
+            name, r#type: ScopeInfoType::Lambda,
+            scope_start_line: start_line, signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: Some(start_line), body_end_line: Some(end_line),
+            scope_end_line: end_line,
+            file_path: String::new(), signature, parameters: vec![],
+            return_type: None, return_type_info: None,
+            modifiers: Vec::new(), generic_parameters: None,
+            heritage_clauses: None, decorator_details: None,
+            content: node_content, content_dedented,
+            children: Vec::new(), members: None, enum_members: None,
+            variables: None, dependencies: vec![], exports: vec![], imports,
+            import_references, identifier_references,
+            ast_valid: self.validate_node(node),
+            ast_issues: vec![], ast_notes: vec![],
+            complexity: 1, lines_of_code: end_line - start_line + 1,
+            parent, depth,
+            decorators: None, docstring: None, value: None,
+        }
+    }
+
+    /// Try to extract comprehension name from parent assignment (e.g., result = [x for x in items])
+    fn extract_comprehension_name(&self, node: SyntaxNode, content: &str) -> Option<String> {
+        let parent = node.parent()?;
+        if parent.kind() == "assignment" {
+            let left = parent.child_by_field_name("left")?;
+            if left.kind() == "identifier" {
+                return Some(self.get_node_text(Some(left), content));
+            }
+        }
+        None
+    }
+
+    /// Collect iteration variables from for_in_clause children (these are local to the comprehension scope)
+    fn collect_for_variables(&self, node: SyntaxNode, content: &str, exclusions: &mut HashSet<String>) {
+        if node.kind() == "for_in_clause" {
+            if let Some(left) = node.child_by_field_name("left") {
+                if left.kind() == "identifier" {
+                    exclusions.insert(self.get_node_text(Some(left), content));
+                } else {
+                    // Handle tuple unpacking: for x, y in items
+                    let mut cursor = left.walk();
+                    for child in left.children(&mut cursor) {
+                        if child.kind() == "identifier" {
+                            exclusions.insert(self.get_node_text(Some(child), content));
+                        }
+                    }
+                }
+            }
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self.collect_for_variables(child, content, exclusions);
+        }
     }
 
     /// Extract function parameters with type information
@@ -1283,7 +1429,7 @@ impl PythonScopeExtractionParser {
                         r.kind = Some(IdentifierReferenceKind::LocalScope);
                         let target = &local_targets[0];
                         r.target_scope = Some(format!("{}::{}:{}-{}",
-                            target.file_path, target.name, target.start_line, target.end_line));
+                            target.file_path, target.name, target.scope_start_line, target.scope_end_line));
                         continue;
                     }
                 }
@@ -1332,10 +1478,10 @@ impl PythonScopeExtractionParser {
                 if let Some(targets) = scope_index.get(type_id) {
                     if !targets.is_empty() {
                         let target = &targets[0];
-                        let target_id = format!("{}::{}:{}-{}", target.file_path, target.name, target.start_line, target.end_line);
+                        let target_id = format!("{}::{}:{}-{}", target.file_path, target.name, target.scope_start_line, target.scope_end_line);
                         scope.identifier_references.push(IdentifierReference {
                             identifier: type_id.clone(),
-                            line: scope.start_line,
+                            line: scope.scope_start_line,
                             context: Some(scope.signature.clone()),
                             kind: Some(IdentifierReferenceKind::LocalScope),
                             target_scope: Some(target_id),
@@ -1349,7 +1495,7 @@ impl PythonScopeExtractionParser {
                 if let Some(import_match) = import_map.get(type_id) {
                     scope.identifier_references.push(IdentifierReference {
                         identifier: type_id.clone(),
-                        line: scope.start_line,
+                        line: scope.scope_start_line,
                         context: Some(scope.signature.clone()),
                         kind: Some(IdentifierReferenceKind::Import),
                         source: Some(import_match.source.clone()),
@@ -1379,7 +1525,7 @@ impl PythonScopeExtractionParser {
             // Collect param types upfront to avoid borrow conflicts
             let param_types: Vec<(String, usize, String)> = scope.parameters.iter()
                 .filter_map(|p| p.r#type.as_ref().map(|t| {
-                    (t.clone(), scope.start_line, scope.signature.clone())
+                    (t.clone(), scope.scope_start_line, scope.signature.clone())
                 }))
                 .collect();
 
@@ -1397,7 +1543,7 @@ impl PythonScopeExtractionParser {
                     if let Some(targets) = scope_index.get(type_id) {
                         if !targets.is_empty() {
                             let target = &targets[0];
-                            let target_id = format!("{}::{}:{}-{}", target.file_path, target.name, target.start_line, target.end_line);
+                            let target_id = format!("{}::{}:{}-{}", target.file_path, target.name, target.scope_start_line, target.scope_end_line);
                             scope.identifier_references.push(IdentifierReference {
                                 identifier: type_id.clone(),
                                 line: *start_line,
@@ -1453,7 +1599,7 @@ impl PythonScopeExtractionParser {
                                 if !type_references.contains_key(&r.identifier) {
                                     type_references.insert(r.identifier.clone(), (
                                         target_scope.clone(),
-                                        scope.start_line,
+                                        scope.scope_start_line,
                                         scope.signature.clone(),
                                     ));
                                 }

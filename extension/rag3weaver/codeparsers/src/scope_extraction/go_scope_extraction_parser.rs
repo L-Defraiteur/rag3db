@@ -134,7 +134,7 @@ impl GoScopeExtractionParser {
         self.extract_scopes(root_node, &mut scopes, content, 0, None, &structured_imports, file_path);
         let file_scopes = self.base.extract_file_scopes(content, &scopes, file_path, &structured_imports);
         scopes.extend(file_scopes);
-        scopes.sort_by_key(|s| s.start_line);
+        scopes.sort_by_key(|s| s.scope_start_line);
         let scope_index = self.base.classify_scope_references(&mut scopes, &structured_imports);
         self.base.attach_signature_references(&mut scopes, &scope_index, &structured_imports);
 
@@ -221,7 +221,16 @@ impl GoScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Determine type kind
@@ -253,10 +262,11 @@ impl GoScopeExtractionParser {
         let is_exported = Self::is_exported(&name);
         let generic_params = self.extract_go_generics(node, content);
 
-        // Extract heritage clauses from embedded fields in structs
+        // Extract heritage clauses from embedded fields in structs and interfaces
         let heritage_clauses: Option<Vec<HeritageClause>> = {
             let embedded: Vec<String> = members.iter()
-                .filter(|m| m.member_type == ClassMemberInfoMemberType::Property && m.r#type.as_deref() == Some(&m.name))
+                .filter(|m| m.member_type == ClassMemberInfoMemberType::Property
+                    && (m.r#type.as_deref() == Some(&m.name) || m.r#type.is_none()))
                 .map(|m| m.name.trim_start_matches('*').to_string())
                 .collect();
             if embedded.is_empty() {
@@ -294,8 +304,12 @@ impl GoScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: scope_type,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],
@@ -442,7 +456,7 @@ impl GoScopeExtractionParser {
                     });
                 }
             } else if child.kind() == "type_identifier" || child.kind() == "qualified_type" {
-                // Embedded interface
+                // Embedded interface (direct child)
                 members.push(ClassMemberInfo {
                     name: self.base.get_node_text(Some(child), content),
                     r#type: None,
@@ -454,6 +468,32 @@ impl GoScopeExtractionParser {
                     signature: None,
                     value: None,
                 });
+            } else if child.kind() == "type_elem" {
+                // Embedded interface wrapped in type_elem (tree-sitter-go 0.23+)
+                // Look for type_identifier or qualified_type among type_elem's children
+                let mut found_name = None;
+                let mut found_line = child.start_position().row + 1;
+                let mut inner_cursor = child.walk();
+                for inner_child in child.children(&mut inner_cursor) {
+                    if inner_child.kind() == "type_identifier" || inner_child.kind() == "qualified_type" {
+                        found_name = Some(self.base.get_node_text(Some(inner_child), content));
+                        found_line = inner_child.start_position().row + 1;
+                        break;
+                    }
+                }
+                if let Some(name) = found_name {
+                    members.push(ClassMemberInfo {
+                        name,
+                        r#type: None,
+                        member_type: ClassMemberInfoMemberType::Property,
+                        accessibility: None,
+                        is_static: false,
+                        is_readonly: false,
+                        line: found_line,
+                        signature: None,
+                        value: None,
+                    });
+                }
             }
         }
 
@@ -472,7 +512,16 @@ impl GoScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         let is_exported = Self::is_exported(&name);
@@ -514,8 +563,12 @@ impl GoScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Function,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
@@ -561,7 +614,16 @@ impl GoScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Extract receiver
@@ -636,8 +698,12 @@ impl GoScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Method,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,

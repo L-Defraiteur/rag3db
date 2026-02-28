@@ -1,25 +1,16 @@
-use std::collections::HashMap;
-
 use serde_json::json;
 
 use crate::base::universal_types::FileAnalysis;
 use crate::base::universal_types::Language;
 use crate::base::universal_types::ParserCapabilities;
-use crate::base::universal_types::ScopeType;
 use crate::base::universal_types::UniversalExport;
 use crate::base::universal_types::UniversalExportKind;
 use crate::base::universal_types::UniversalImport;
 use crate::base::universal_types::UniversalImportKind;
-use crate::base::universal_types::UniversalReference;
-use crate::base::universal_types::UniversalReferenceKind;
-use crate::base::universal_types::UniversalScope;
 use crate::scope_extraction::go_scope_extraction_parser::GoScopeExtractionParser;
-use crate::scope_extraction::types::IdentifierReferenceKind;
 use crate::scope_extraction::types::ImportReference;
 use crate::scope_extraction::types::ImportReferenceKind;
 use crate::scope_extraction::types::ScopeFileAnalysis;
-use crate::scope_extraction::types::ScopeInfo;
-use crate::scope_extraction::types::ScopeInfoType;
 
 pub struct GoLanguageParser {
     pub language: Language,
@@ -55,9 +46,6 @@ impl GoLanguageParser {
             ..
         } = scope_analysis;
 
-        let scopes = scopes.into_iter()
-            .map(|scope| self.convert_to_universal_scope(scope))
-            .collect();
         let imports = import_references.into_iter()
             .map(|imp| self.convert_to_universal_import(imp))
             .collect();
@@ -87,86 +75,6 @@ impl GoLanguageParser {
             lines_of_code: total_lines,
             parse_time: None,
             errors,
-        }
-    }
-
-    fn convert_to_universal_scope(&self, scope: ScopeInfo) -> UniversalScope {
-        let scope_type = match scope.r#type {
-            ScopeInfoType::Class => ScopeType::Class,
-            ScopeInfoType::Interface => ScopeType::Interface,
-            ScopeInfoType::Function => ScopeType::Function,
-            ScopeInfoType::Method => ScopeType::Method,
-            ScopeInfoType::Enum => ScopeType::Enum,
-            ScopeInfoType::TypeAlias => ScopeType::TypeAlias,
-            ScopeInfoType::Namespace => ScopeType::Namespace,
-            ScopeInfoType::Module => ScopeType::Module,
-            ScopeInfoType::Variable => ScopeType::Variable,
-            ScopeInfoType::Lambda => ScopeType::Lambda,
-            ScopeInfoType::Constant => ScopeType::Constant,
-            ScopeInfoType::Block => ScopeType::Block,
-        };
-
-        let references = scope.identifier_references.into_iter()
-            .map(|r| UniversalReference {
-                identifier: r.identifier,
-                line: r.line,
-                column: r.column,
-                context: r.context,
-                qualifier: r.qualifier,
-                kind: r.kind.map(|k| match k {
-                    IdentifierReferenceKind::Import => UniversalReferenceKind::Import,
-                    IdentifierReferenceKind::LocalScope => UniversalReferenceKind::LocalScope,
-                    IdentifierReferenceKind::Builtin => UniversalReferenceKind::Builtin,
-                    IdentifierReferenceKind::Unknown => UniversalReferenceKind::Unknown,
-                }),
-                source: r.source,
-                target_scope: r.target_scope,
-                is_local_import: r.is_local_import,
-            })
-            .collect();
-
-        let imports = scope.import_references.into_iter()
-            .map(|imp| self.convert_to_universal_import(imp))
-            .collect();
-
-        let parameters = scope.parameters;
-
-        let mut lang_specific = HashMap::new();
-        lang_specific.insert("go".to_string(), json!({
-            "modifiers": scope.modifiers,
-            "complexity": scope.complexity,
-            "contentDedented": scope.content_dedented,
-            "astValid": scope.ast_valid,
-            "astIssues": scope.ast_issues,
-            "astNotes": scope.ast_notes,
-            "exports": scope.exports,
-            "dependencies": scope.dependencies,
-            "genericParameters": scope.generic_parameters,
-        }));
-
-        UniversalScope {
-            uuid: String::new(),
-            name: scope.name,
-            r#type: scope_type,
-            file_path: scope.file_path,
-            start_line: scope.start_line,
-            end_line: scope.end_line,
-            start_column: None,
-            end_column: None,
-            source: scope.content,
-            language: self.language.clone(),
-            signature: Some(scope.signature),
-            return_type: scope.return_type,
-            parameters: Some(parameters),
-            value: None,
-            decorators: None,
-            docstring: scope.docstring,
-            parent_name: scope.parent,
-            parent_uuid: None,
-            depth: scope.depth,
-            references,
-            imports,
-            language_specific: Some(lang_specific),
         }
     }
 

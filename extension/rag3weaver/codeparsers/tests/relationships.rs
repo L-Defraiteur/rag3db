@@ -7,6 +7,7 @@
 use codeparsers::parallel::project_parser::{ProjectParser, ProjectParserOptions, ParseProjectOptions};
 use codeparsers::relationship_resolution::types::RelationshipType;
 use codeparsers::scope_extraction::types::ScopeInfo;
+use codeparsers::scope_extraction::types::ScopeInfoType;
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
@@ -1154,5 +1155,368 @@ void render(Vtable* vt, void* obj) {
 
     let vtable = find_scope(&scopes, "Vtable");
     assert!(vtable.is_some(), "Vtable typedef should be extracted");
+}
+
+// ===========================================================================
+// Body extraction: content = body-only, line numbers correct
+// ===========================================================================
+
+#[test]
+fn ts_function_body_extraction() {
+    // Line 1 is blank (leading newline), function starts line 2
+    let scopes = parse_scopes(&[("body.ts", r#"
+function greet(name: string): string {
+    const msg = "Hello " + name;
+    return msg;
+}
+"#)]);
+
+    let greet = find_scope(&scopes, "greet").expect("greet scope not found");
+
+    // content should be the body block only (not contain the signature)
+    assert!(!greet.content.contains("function greet"), "content should NOT contain signature, got: {}", greet.content);
+    assert!(greet.content.contains("return msg"), "content should contain body code");
+
+    // body lines should be populated
+    assert!(greet.body_start_line.is_some(), "body_start_line should be Some");
+    assert!(greet.body_end_line.is_some(), "body_end_line should be Some");
+
+    // signature_end_line <= body_start_line (equal when { is on same line as signature)
+    assert!(greet.signature_end_line <= greet.body_start_line.unwrap(),
+        "signature_end_line ({}) should be <= body_start_line ({})",
+        greet.signature_end_line, greet.body_start_line.unwrap());
+}
+
+#[test]
+fn ts_class_body_extraction() {
+    let scopes = parse_scopes(&[("cls.ts", r#"
+class Foo {
+    bar() {
+        return 42;
+    }
+}
+"#)]);
+
+    let foo = find_scope(&scopes, "Foo").expect("Foo scope not found");
+
+    // content should be the class body, not the "class Foo {" line
+    assert!(!foo.content.contains("class Foo"), "content should NOT contain 'class Foo' signature, got: {}", foo.content);
+    assert!(foo.body_start_line.is_some(), "body_start_line should be Some for class");
+}
+
+#[test]
+fn ts_method_body_extraction() {
+    let scopes = parse_scopes(&[("meth.ts", r#"
+class Calc {
+    add(a: number, b: number): number {
+        return a + b;
+    }
+}
+"#)]);
+
+    let add = find_scope(&scopes, "add").expect("add scope not found");
+
+    assert!(!add.content.contains("add(a:"), "content should NOT contain method signature");
+    assert!(add.content.contains("return a + b"), "content should contain method body");
+    assert!(add.body_start_line.is_some(), "body_start_line should be Some for method");
+}
+
+#[test]
+fn python_function_body_extraction() {
+    let scopes = parse_scopes(&[("body.py", r#"
+def greet(name):
+    msg = "Hello " + name
+    return msg
+"#)]);
+
+    let greet = find_scope(&scopes, "greet").expect("greet scope not found");
+
+    assert!(!greet.content.contains("def greet"), "content should NOT contain Python function signature, got: {}", greet.content);
+    assert!(greet.content.contains("return msg"), "content should contain body");
+    assert!(greet.body_start_line.is_some(), "body_start_line should be Some for Python function");
+}
+
+#[test]
+fn rust_function_body_extraction() {
+    let scopes = parse_scopes(&[("body.rs", r#"
+fn compute(x: i32) -> i32 {
+    let y = x * 2;
+    y + 1
+}
+"#)]);
+
+    let compute = find_scope(&scopes, "compute").expect("compute scope not found");
+
+    assert!(!compute.content.contains("fn compute"), "content should NOT contain Rust function signature, got: {}", compute.content);
+    assert!(compute.content.contains("let y = x * 2"), "content should contain body");
+    assert!(compute.body_start_line.is_some(), "body_start_line should be Some for Rust function");
+}
+
+#[test]
+fn go_function_body_extraction() {
+    let scopes = parse_scopes(&[("body.go", "package main\n\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n")]);
+
+    let add = find_scope(&scopes, "Add").expect("Add scope not found");
+
+    assert!(!add.content.contains("func Add"), "content should NOT contain Go function signature, got: {}", add.content);
+    assert!(add.content.contains("return a + b"), "content should contain body");
+    assert!(add.body_start_line.is_some(), "body_start_line should be Some for Go function");
+}
+
+#[test]
+fn cpp_function_body_extraction() {
+    let scopes = parse_scopes(&[("body.cpp", r#"
+int add(int a, int b) {
+    return a + b;
+}
+"#)]);
+
+    let add = find_scope(&scopes, "add").expect("add scope not found");
+
+    assert!(!add.content.contains("int add"), "content should NOT contain C++ function signature, got: {}", add.content);
+    assert!(add.content.contains("return a + b"), "content should contain body");
+    assert!(add.body_start_line.is_some(), "body_start_line should be Some for C++ function");
+}
+
+#[test]
+fn csharp_method_body_extraction() {
+    let scopes = parse_scopes(&[("body.cs", r#"
+class Calc {
+    public int Add(int a, int b) {
+        return a + b;
+    }
+}
+"#)]);
+
+    let add = find_scope(&scopes, "Add").expect("Add scope not found");
+
+    assert!(!add.content.contains("public int Add"), "content should NOT contain C# method signature, got: {}", add.content);
+    assert!(add.content.contains("return a + b"), "content should contain body");
+    assert!(add.body_start_line.is_some(), "body_start_line should be Some for C# method");
+}
+
+#[test]
+fn c_function_body_extraction() {
+    let scopes = parse_scopes(&[("body.c", r#"
+int add(int a, int b) {
+    return a + b;
+}
+"#)]);
+
+    let add = find_scope(&scopes, "add").expect("add scope not found");
+
+    assert!(!add.content.contains("int add"), "content should NOT contain C function signature, got: {}", add.content);
+    assert!(add.content.contains("return a + b"), "content should contain body");
+    assert!(add.body_start_line.is_some(), "body_start_line should be Some for C function");
+}
+
+// ===========================================================================
+// Coverage gaps: C++ virtual inheritance
+// ===========================================================================
+
+#[test]
+fn cpp_virtual_inheritance_detected() {
+    let scopes = parse_scopes(&[("diamond.cpp", r#"
+class Base {
+public:
+    int value;
+};
+
+class Left : virtual public Base {
+public:
+    void left_method() {}
+};
+
+class Right : virtual public Base {
+public:
+    void right_method() {}
+};
+
+class Diamond : public Left, public Right {
+public:
+    void diamond_method() {}
+};
+"#)]);
+
+    for s in &scopes {
+        if s.r#type == ScopeInfoType::Class {
+            eprintln!("  [cpp virtual] name={:?} heritage={:?} modifiers={:?}", s.name, s.heritage_clauses, s.modifiers);
+        }
+    }
+
+    // Left and Right should inherit from Base
+    let left = find_scope(&scopes, "Left").expect("Left scope not found");
+    assert!(left.heritage_clauses.as_ref().map_or(false, |h| h.iter().any(|c| c.types.contains(&"Base".to_string()))),
+        "Left should inherit from Base");
+
+    // Diamond should inherit from Left and Right
+    let diamond = find_scope(&scopes, "Diamond").expect("Diamond scope not found");
+    let heritage = diamond.heritage_clauses.as_ref().expect("Diamond should have heritage");
+    let all_types: Vec<&String> = heritage.iter().flat_map(|c| c.types.iter()).collect();
+    assert!(all_types.contains(&&"Left".to_string()), "Diamond should inherit from Left");
+    assert!(all_types.contains(&&"Right".to_string()), "Diamond should inherit from Right");
+}
+
+// ===========================================================================
+// Coverage gaps: Rust closures as scopes
+// ===========================================================================
+
+#[test]
+fn rust_closure_extracted_as_scope() {
+    let scopes = parse_scopes(&[("closures.rs", r#"
+fn process(items: Vec<i32>) -> Vec<i32> {
+    let doubled = items.iter().map(|x| x * 2).collect();
+    let adder = |a: i32, b: i32| a + b;
+    doubled
+}
+"#)]);
+
+    for s in &scopes {
+        eprintln!("  [rust closure] name={:?} type={:?} parent={:?} sig={:?}", s.name, s.r#type, s.parent, s.signature);
+    }
+
+    // Named closure (assigned to variable via let)
+    let adder = scopes.iter().find(|s| s.name == "adder" && s.r#type == ScopeInfoType::Lambda);
+    assert!(adder.is_some(), "Rust closure assigned to 'adder' should be extracted as Lambda scope");
+    let adder = adder.unwrap();
+    assert_eq!(adder.parent.as_deref(), Some("process"), "adder's parent should be process");
+    assert!(adder.parameters.len() == 2, "adder should have 2 parameters, got {}", adder.parameters.len());
+}
+
+// ===========================================================================
+// Coverage gaps: Python comprehensions as scopes
+// ===========================================================================
+
+#[test]
+fn python_comprehension_extracted_as_scope() {
+    let scopes = parse_scopes(&[("comp.py", r#"
+def process(items):
+    result = [x.name for x in items if x.active]
+    unique = {x for x in result}
+    return unique
+"#)]);
+
+    for s in &scopes {
+        eprintln!("  [py comp] name={:?} type={:?} parent={:?}", s.name, s.r#type, s.parent);
+    }
+
+    // Named list comprehension (assigned to variable)
+    let result = scopes.iter().find(|s| s.name == "result" && s.r#type == ScopeInfoType::Lambda);
+    assert!(result.is_some(), "Python list comprehension assigned to 'result' should be extracted as Lambda scope");
+
+    // Named set comprehension
+    let unique = scopes.iter().find(|s| s.name == "unique" && s.r#type == ScopeInfoType::Lambda);
+    assert!(unique.is_some(), "Python set comprehension assigned to 'unique' should be extracted as Lambda scope");
+}
+
+// ===========================================================================
+// Coverage gaps: C++ lambdas as scopes
+// ===========================================================================
+
+#[test]
+fn cpp_lambda_extracted_as_scope() {
+    let scopes = parse_scopes(&[("lambdas.cpp", r#"
+auto doubler = [](int x) { return x * 2; };
+
+void process() {
+    auto adder = [](int a, int b) { return a + b; };
+}
+"#)]);
+
+    for s in &scopes {
+        eprintln!("  [cpp lambda] name={:?} type={:?} parent={:?} sig={:?}", s.name, s.r#type, s.parent, s.signature);
+    }
+
+    // Top-level named lambda
+    let doubler = scopes.iter().find(|s| s.name == "doubler");
+    assert!(doubler.is_some(), "C++ named lambda 'doubler' should be extracted as scope");
+    let doubler = doubler.unwrap();
+    assert_eq!(doubler.r#type, ScopeInfoType::Lambda, "doubler should be Lambda type");
+
+    // Lambda inside function body
+    let adder = scopes.iter().find(|s| s.name == "adder");
+    assert!(adder.is_some(), "C++ lambda 'adder' inside function body should be extracted");
+    let adder = adder.unwrap();
+    assert_eq!(adder.r#type, ScopeInfoType::Lambda, "adder should be Lambda type");
+    assert_eq!(adder.parent.as_deref(), Some("process"), "adder's parent should be process");
+}
+
+// ===========================================================================
+// Coverage gaps: Go interface embedding
+// ===========================================================================
+
+#[test]
+fn go_interface_embedding_is_inherits() {
+    let rels = parse_rels(&[("io.go", r#"package io
+
+type Reader interface {
+    Read(p []byte) (int, error)
+}
+
+type Writer interface {
+    Write(p []byte) (int, error)
+}
+
+type ReadWriter interface {
+    Reader
+    Writer
+}
+"#)]);
+
+    for r in &rels {
+        eprintln!("  [go iface embed] {} -> {} ({:?})", r.from, r.to, r.rel_type);
+    }
+
+    assert!(has_rel(&rels, "ReadWriter", "Reader", RelationshipType::INHERITSFROM),
+        "Go interface embedding: ReadWriter should INHERITS_FROM Reader");
+    assert!(has_rel(&rels, "ReadWriter", "Writer", RelationshipType::INHERITSFROM),
+        "Go interface embedding: ReadWriter should INHERITS_FROM Writer");
+}
+
+// ===========================================================================
+// Coverage gaps: TypeScript decorator relationships
+// ===========================================================================
+
+#[test]
+fn ts_decorator_relationship() {
+    let rels = parse_rels(&[("service.ts", r#"
+function Injectable() { return (target: any) => target; }
+
+@Injectable()
+class UserService {
+    getUser(id: string) {
+        return { id };
+    }
+}
+"#)]);
+
+    for r in &rels {
+        eprintln!("  [ts deco] {} -> {} ({:?})", r.from, r.to, r.rel_type);
+    }
+
+    // Class-level decorator creates DECORATEDBY (inverse of DECORATES)
+    assert!(has_rel(&rels, "UserService", "Injectable", RelationshipType::DECORATEDBY),
+        "TS class decorator: UserService should be DECORATEDBY Injectable");
+}
+
+#[test]
+fn ts_method_decorator_relationship() {
+    let rels = parse_rels(&[("api.ts", r#"
+function Log() { return (target: any, key: string) => {}; }
+
+class ApiController {
+    @Log()
+    getUser(id: string) {
+        return { id };
+    }
+}
+"#)]);
+
+    for r in &rels {
+        eprintln!("  [ts method deco] {} -> {} ({:?})", r.from, r.to, r.rel_type);
+    }
+
+    assert!(has_rel(&rels, "getUser", "Log", RelationshipType::DECORATEDBY),
+        "TS method decorator: getUser should be DECORATEDBY Log");
 }
 

@@ -258,8 +258,8 @@ impl RelationshipResolver {
                     name: scope.name.clone(),
                     signature: Some(scope.signature.clone()),
                     parent: scope.parent.clone(),
-                    start_line: scope.start_line,
-                    end_line: scope.end_line,
+                    start_line: scope.scope_start_line,
+                    end_line: scope.scope_end_line,
                 };
 
                 // Add to name mapping
@@ -917,7 +917,7 @@ impl RelationshipResolver {
 
         // For variables/constants: include line number to differentiate same-name vars
         if scope.r#type == ScopeInfoType::Variable || scope.r#type == ScopeInfoType::Constant {
-            hash_input.push_str(&format!(":line{}", scope.start_line));
+            hash_input.push_str(&format!(":line{}", scope.scope_start_line));
         }
 
         let hash = blake3::hash(hash_input.as_bytes()).to_hex().to_string();

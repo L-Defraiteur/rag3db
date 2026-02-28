@@ -123,7 +123,7 @@ impl CScopeExtractionParser {
         self.extract_scopes(root_node, &mut scopes, content, 0, None, &structured_imports, file_path);
         let file_scopes = self.base.extract_file_scopes(content, &scopes, file_path, &structured_imports);
         scopes.extend(file_scopes);
-        scopes.sort_by_key(|s| s.start_line);
+        scopes.sort_by_key(|s| s.scope_start_line);
         let scope_index = self.base.classify_scope_references(&mut scopes, &structured_imports);
         self.base.attach_signature_references(&mut scopes, &scope_index, &structured_imports);
 
@@ -289,7 +289,16 @@ impl CScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
 
         // Extract return type from primitive_type or type_identifier
         let mut cursor = node.walk();
@@ -326,8 +335,12 @@ impl CScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Function,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
@@ -446,7 +459,16 @@ impl CScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
 
         // Extract struct fields (members)
         let members = self.extract_struct_members(node, content);
@@ -473,8 +495,12 @@ impl CScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Class,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],
@@ -566,7 +592,16 @@ impl CScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
 
         // Extract enum members
         let enum_members = self.extract_c_enum_members(node, content);
@@ -593,8 +628,12 @@ impl CScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Enum,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],
@@ -729,7 +768,16 @@ impl CScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
 
         // Determine what this typedef refers to
         let mut cursor = node.walk();
@@ -771,8 +819,12 @@ impl CScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::TypeAlias,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],

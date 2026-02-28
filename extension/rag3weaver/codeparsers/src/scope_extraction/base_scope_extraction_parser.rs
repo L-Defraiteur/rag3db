@@ -291,7 +291,7 @@ impl BaseScopeExtractionParser {
         scopes.extend(file_scopes);
 
         // Sort scopes by start line to maintain order
-        scopes.sort_by_key(|s| s.start_line);
+        scopes.sort_by_key(|s| s.scope_start_line);
 
         // Classify scope references (link identifiers to imports/local scopes)
         let scope_index = self.classify_scope_references(&mut scopes, &structured_imports);
@@ -340,8 +340,8 @@ impl BaseScopeExtractionParser {
             let mut scope = self.extract_class(node, content, depth, parent, file_imports);
             scope.file_path = file_path.to_string();
             let scope_name = scope.name.clone();
-            let scope_start = scope.start_line;
-            let scope_end = scope.end_line;
+            let scope_start = scope.scope_start_line;
+            let scope_end = scope.scope_end_line;
             scopes.push(scope);
 
             // Track children count before recursion
@@ -401,8 +401,8 @@ impl BaseScopeExtractionParser {
             let mut scope = self.extract_namespace(node, content, depth, parent, file_imports);
             scope.file_path = file_path.to_string();
             let scope_name = scope.name.clone();
-            let scope_start = scope.start_line;
-            let scope_end = scope.end_line;
+            let scope_start = scope.scope_start_line;
+            let scope_end = scope.scope_end_line;
             scopes.push(scope);
 
             // Track children count before recursion
@@ -526,11 +526,15 @@ impl BaseScopeExtractionParser {
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
 
-        // Only capture class definition line, not the entire body
-        let node_content = content.split('\n')
-            .nth(start_line - 1)
-            .map(|l| l.trim().to_string())
-            .filter(|s| !s.is_empty())
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
             .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
@@ -538,7 +542,7 @@ impl BaseScopeExtractionParser {
         let return_type = self.extract_return_type(node, content);
         let return_type_info = self.extract_return_type_info(node, content);
         let signature = self.build_signature("class", &name, &parameters, return_type.as_deref(), &modifiers);
-        let content_dedented = node_content.clone(); // Already a single line
+        let content_dedented = self.dedent_content(&node_content);
 
         let generic_parameters = Some(self.extract_generic_parameters(node, content));
         let heritage_clauses = Some(self.extract_heritage_clauses(node, content));
@@ -566,7 +570,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Class, start_line, end_line,
+            name, r#type: ScopeInfoType::Class, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses, decorator_details,
             content: node_content, content_dedented, children: Vec::new(),
@@ -588,7 +592,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = Vec::new();
@@ -619,7 +633,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Interface, start_line, end_line,
+            name, r#type: ScopeInfoType::Interface, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters, heritage_clauses, decorator_details,
             content: node_content, content_dedented, children: Vec::new(),
@@ -641,7 +655,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = self.extract_parameters(node, content);
@@ -673,7 +697,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Function, start_line, end_line,
+            name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses: None, decorator_details,
             content: node_content, content_dedented, children: Vec::new(),
@@ -695,7 +719,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = self.extract_parameters(node, content);
@@ -727,7 +761,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Method, start_line, end_line,
+            name, r#type: ScopeInfoType::Method, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses: None, decorator_details,
             content: node_content, content_dedented, children: Vec::new(),
@@ -749,7 +783,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = Vec::new();
@@ -776,7 +820,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Enum, start_line, end_line,
+            name, r#type: ScopeInfoType::Enum, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
             content: node_content, content_dedented, children: Vec::new(),
@@ -798,7 +842,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = Vec::new();
@@ -823,7 +877,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::TypeAlias, start_line, end_line,
+            name, r#type: ScopeInfoType::TypeAlias, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
             content: node_content, content_dedented, children: Vec::new(),
@@ -845,7 +899,17 @@ impl BaseScopeExtractionParser {
         };
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.get_node_text(Some(node), content);
+
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.get_node_text(Some(node), content));
 
         let modifiers = self.extract_modifiers(node, content);
         let parameters = Vec::new();
@@ -870,7 +934,7 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
-            name, r#type: ScopeInfoType::Namespace, start_line, end_line,
+            name, r#type: ScopeInfoType::Namespace, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
             content: node_content, content_dedented, children: Vec::new(),
@@ -905,7 +969,17 @@ impl BaseScopeExtractionParser {
             };
             let start_line = declarator.start_position().row + 1;
             let end_line = declarator.end_position().row + 1;
-            let node_content = self.get_node_text(Some(*declarator), content);
+
+            let body_node = value_node.child_by_field_name("body");
+            let (body_start_line, body_end_line) = body_node
+                .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+                .unwrap_or((None, None));
+            let signature_end_line = body_start_line
+                .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+                .unwrap_or(end_line);
+            let node_content = body_node
+                .map(|body| self.get_node_text(Some(body), content))
+                .unwrap_or_else(|| self.get_node_text(Some(*declarator), content));
 
             let parameters = self.extract_parameters(value_node, content);
             let return_type = value_node.child_by_field_name("return_type")
@@ -937,7 +1011,7 @@ impl BaseScopeExtractionParser {
             let docstring = self.extract_js_doc(node, content);
 
             scopes.push(ScopeInfo {
-                name, r#type: ScopeInfoType::Function, start_line, end_line,
+                name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
                 file_path: String::new(), signature, parameters, return_type, return_type_info: None,
                 modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
                 content: node_content, content_dedented, children: Vec::new(),
@@ -1025,7 +1099,7 @@ impl BaseScopeExtractionParser {
             let value = value_node.map(|vn| self.get_node_text(Some(vn), content));
 
             scopes.push(ScopeInfo {
-                name, r#type: ScopeInfoType::Variable, start_line, end_line,
+                name, r#type: ScopeInfoType::Variable, scope_start_line: start_line, signature_start_line: start_line, signature_end_line: end_line, body_start_line: None, body_end_line: None, scope_end_line: end_line,
                 file_path: String::new(), signature, parameters: Vec::new(),
                 return_type: variable_type, return_type_info: None,
                 modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
@@ -1463,32 +1537,56 @@ impl BaseScopeExtractionParser {
             let mut cursor = node_to_check.walk();
             for child in node_to_check.children(&mut cursor) {
                 if child.kind() == "decorator" {
-                    let mut name_node = None;
-                    let mut c2 = child.walk();
-                    for n in child.children(&mut c2) {
-                        if n.kind() == "identifier" || n.kind() == "call_expression" {
-                            name_node = Some(n);
-                            break;
-                        }
+                    if let Some(info) = self.parse_decorator_node(child, content) {
+                        decorators.push(info);
                     }
-                    let Some(nn) = name_node else { continue };
-                    let (name, args) = if nn.kind() == "call_expression" {
-                        let func_node = nn.child_by_field_name("function");
-                        let n = func_node.map(|f| self.get_node_text(Some(f), content)).unwrap_or_default();
-                        let a = nn.child_by_field_name("arguments").map(|a| self.get_node_text(Some(a), content));
-                        (n, a)
-                    } else {
-                        (self.get_node_text(Some(nn), content), None)
-                    };
-                    decorators.push(DecoratorInfo {
-                        name: name.trim_start_matches('@').to_string(),
-                        arguments: args,
-                        line: child.start_position().row + 1,
-                    });
                 }
             }
         }
+
+        // For method_definition nodes, decorators are siblings (not children) in the class_body
+        if node.kind() == "method_definition" || node.kind() == "public_field_definition" {
+            let mut prev = node.prev_sibling();
+            while let Some(sib) = prev {
+                if sib.kind() == "decorator" {
+                    if let Some(info) = self.parse_decorator_node(sib, content) {
+                        decorators.push(info);
+                    }
+                } else if sib.kind() != "comment" {
+                    break;
+                }
+                prev = sib.prev_sibling();
+            }
+        }
+
         decorators
+    }
+
+    /// Parse a single decorator AST node into a DecoratorInfo
+
+    fn parse_decorator_node(&self, decorator_node: SyntaxNode, content: &str) -> Option<DecoratorInfo> {
+        let mut name_node = None;
+        let mut cursor = decorator_node.walk();
+        for n in decorator_node.children(&mut cursor) {
+            if n.kind() == "identifier" || n.kind() == "call_expression" {
+                name_node = Some(n);
+                break;
+            }
+        }
+        let nn = name_node?;
+        let (name, args) = if nn.kind() == "call_expression" {
+            let func_node = nn.child_by_field_name("function");
+            let n = func_node.map(|f| self.get_node_text(Some(f), content)).unwrap_or_default();
+            let a = nn.child_by_field_name("arguments").map(|a| self.get_node_text(Some(a), content));
+            (n, a)
+        } else {
+            (self.get_node_text(Some(nn), content), None)
+        };
+        Some(DecoratorInfo {
+            name: name.trim_start_matches('@').to_string(),
+            arguments: args,
+            line: decorator_node.start_position().row + 1,
+        })
     }
 
     /// Extract enum members with values
@@ -2429,7 +2527,7 @@ impl BaseScopeExtractionParser {
                                         .unwrap_or(&local_targets[0]);
                                     r.kind = Some(IdentifierReferenceKind::LocalScope);
                                     r.target_scope = Some(format!("{}::{}:{}-{}",
-                                        target.file_path, target.name, target.start_line, target.end_line));
+                                        target.file_path, target.name, target.scope_start_line, target.scope_end_line));
                                     return Some(r);
                                 }
                             }
@@ -2437,7 +2535,7 @@ impl BaseScopeExtractionParser {
                             let target = &local_targets[0];
                             r.kind = Some(IdentifierReferenceKind::LocalScope);
                             r.target_scope = Some(format!("{}::{}:{}-{}",
-                                target.file_path, target.name, target.start_line, target.end_line));
+                                target.file_path, target.name, target.scope_start_line, target.scope_end_line));
                             return Some(r);
                         }
                     }
@@ -2485,7 +2583,7 @@ impl BaseScopeExtractionParser {
 
                     scope.identifier_references.push(IdentifierReference {
                         identifier: symbol_name.to_string(),
-                        line: scope.start_line + line_offset,
+                        line: scope.scope_start_line + line_offset,
                         column: Some(col),
                         context: self.get_line_from_content(&scope.content, line_offset + 1),
                         qualifier: None,
@@ -2533,10 +2631,10 @@ impl BaseScopeExtractionParser {
                     if !targets.is_empty() {
                         let target = &targets[0];
                         let target_id = format!("{}::{}:{}-{}",
-                            target.file_path, target.name, target.start_line, target.end_line);
+                            target.file_path, target.name, target.scope_start_line, target.scope_end_line);
                         scope.identifier_references.push(IdentifierReference {
                             identifier: type_id,
-                            line: scope.start_line,
+                            line: scope.scope_start_line,
                             column: None,
                             context: Some(scope.signature.clone()),
                             qualifier: None,
@@ -2553,7 +2651,7 @@ impl BaseScopeExtractionParser {
                 if let Some(import_match) = import_map.get(&type_id) {
                     scope.identifier_references.push(IdentifierReference {
                         identifier: type_id,
-                        line: scope.start_line,
+                        line: scope.scope_start_line,
                         column: None,
                         context: Some(scope.signature.clone()),
                         qualifier: None,
@@ -2594,10 +2692,10 @@ impl BaseScopeExtractionParser {
                         if !targets.is_empty() {
                             let target = &targets[0];
                             let target_id = format!("{}::{}:{}-{}",
-                                target.file_path, target.name, target.start_line, target.end_line);
+                                target.file_path, target.name, target.scope_start_line, target.scope_end_line);
                             scope.identifier_references.push(IdentifierReference {
                                 identifier: type_id.clone(),
-                                line: scope.start_line,
+                                line: scope.scope_start_line,
                                 column: None,
                                 context: Some(scope.signature.clone()),
                                 qualifier: None,
@@ -2613,7 +2711,7 @@ impl BaseScopeExtractionParser {
                     if let Some(import_match) = import_map.get(type_id) {
                         scope.identifier_references.push(IdentifierReference {
                             identifier: type_id.clone(),
-                            line: scope.start_line,
+                            line: scope.scope_start_line,
                             column: None,
                             context: Some(scope.signature.clone()),
                             qualifier: None,
@@ -2657,7 +2755,7 @@ impl BaseScopeExtractionParser {
                             if let Some(ref ts) = r.target_scope {
                                 type_references.entry(r.identifier.clone()).or_insert(TypeRefInfo {
                                     target_scope: ts.clone(),
-                                    line: scope.start_line,
+                                    line: scope.scope_start_line,
                                     context: scope.signature.clone(),
                                 });
                             }
@@ -2795,16 +2893,16 @@ impl BaseScopeExtractionParser {
 
         // Sort existing scopes by start line
         let mut sorted_scopes: Vec<&ScopeInfo> = existing_scopes.iter().collect();
-        sorted_scopes.sort_by_key(|s| s.start_line);
+        sorted_scopes.sort_by_key(|s| s.scope_start_line);
 
         // Find gaps between scopes
         let mut current_line: usize = 1;
         let mut file_scope_index: usize = 1;
 
         for scope in &sorted_scopes {
-            if scope.start_line > current_line {
+            if scope.scope_start_line > current_line {
                 let gap_start = current_line;
-                let gap_end = scope.start_line - 1;
+                let gap_end = scope.scope_start_line - 1;
 
                 let gap_content = lines[gap_start - 1..gap_end].join("\n");
                 let gap_content = gap_content.trim();
@@ -2815,7 +2913,7 @@ impl BaseScopeExtractionParser {
                     file_scopes.push(file_scope);
                 }
             }
-            current_line = current_line.max(scope.end_line + 1);
+            current_line = current_line.max(scope.scope_end_line + 1);
         }
 
         // Check for code after the last scope
@@ -2887,8 +2985,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Module,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -2930,7 +3032,7 @@ impl BaseScopeExtractionParser {
         let lines: Vec<&str> = content.split('\n').collect();
 
         let mut sorted_children: Vec<&ScopeInfo> = child_scopes.iter().collect();
-        sorted_children.sort_by_key(|s| s.start_line);
+        sorted_children.sort_by_key(|s| s.scope_start_line);
 
         let container_start = container_start_line as usize;
         let container_end = container_end_line as usize;
@@ -2939,9 +3041,9 @@ impl BaseScopeExtractionParser {
         let mut scope_index: usize = 1;
 
         for child in &sorted_children {
-            if child.start_line > current_line {
+            if child.scope_start_line > current_line {
                 let gap_start = current_line;
-                let gap_end = child.start_line - 1;
+                let gap_end = child.scope_start_line - 1;
 
                 if gap_start >= 1 && gap_end <= lines.len() && gap_start <= gap_end {
                     let gap_content = lines[gap_start - 1..gap_end].join("\n");
@@ -2954,7 +3056,7 @@ impl BaseScopeExtractionParser {
                     }
                 }
             }
-            current_line = current_line.max(child.end_line + 1);
+            current_line = current_line.max(child.scope_end_line + 1);
         }
 
         // Check for code after the last child (before closing brace)
@@ -3005,8 +3107,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Block,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -3192,7 +3298,7 @@ impl BaseScopeExtractionParser {
         let lines: Vec<&str> = content.split('\n').collect();
 
         let mut sorted_methods: Vec<&ScopeInfo> = method_scopes.iter().collect();
-        sorted_methods.sort_by_key(|s| s.start_line);
+        sorted_methods.sort_by_key(|s| s.scope_start_line);
 
         let obj_start = object_start_line as usize;
         let obj_end = object_end_line as usize;
@@ -3201,9 +3307,9 @@ impl BaseScopeExtractionParser {
         let mut scope_index: usize = 1;
 
         for method in &sorted_methods {
-            if method.start_line > current_line {
+            if method.scope_start_line > current_line {
                 let gap_start = current_line;
-                let gap_end = method.start_line - 1;
+                let gap_end = method.scope_start_line - 1;
                 if gap_start >= 1 && gap_end <= lines.len() && gap_start <= gap_end {
                     let gap_content = lines[gap_start - 1..gap_end].join("\n");
                     let gap_content = gap_content.trim();
@@ -3214,7 +3320,7 @@ impl BaseScopeExtractionParser {
                     }
                 }
             }
-            current_line = current_line.max(method.end_line + 1);
+            current_line = current_line.max(method.scope_end_line + 1);
         }
 
         // Check for code after the last method
@@ -3263,8 +3369,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Block,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -3346,8 +3456,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Method,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
@@ -3420,8 +3534,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Lambda,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
@@ -3701,8 +3819,12 @@ impl BaseScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Variable,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line: start_line,
+            body_start_line: None,
+            body_end_line: None,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: Vec::new(),

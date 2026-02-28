@@ -143,7 +143,7 @@ impl CppScopeExtractionParser {
         self.extract_scopes(root_node, &mut scopes, content, 0, None, &structured_imports, file_path);
         let file_scopes = self.base.extract_file_scopes(content, &scopes, file_path, &structured_imports);
         scopes.extend(file_scopes);
-        scopes.sort_by_key(|s| s.start_line);
+        scopes.sort_by_key(|s| s.scope_start_line);
         let scope_index = self.base.classify_scope_references(&mut scopes, &structured_imports);
         self.base.attach_signature_references(&mut scopes, &scope_index, &structured_imports);
 
@@ -381,7 +381,16 @@ impl CppScopeExtractionParser {
                     if child.kind() == "function_definition" {
                         let mut method_scope = self.extract_cpp_method(child, content, depth + 1, Some(scope_name.clone()), file_imports);
                         method_scope.file_path = file_path.to_string();
+                        let method_name = method_scope.name.clone();
                         scopes.push(method_scope);
+
+                        // Recurse into method body for nested lambdas
+                        if let Some(body) = child.child_by_field_name("body") {
+                            let mut body_cursor = body.walk();
+                            for body_child in body.children(&mut body_cursor) {
+                                self.extract_scopes(body_child, scopes, content, depth + 2, Some(method_name.clone()), file_imports, file_path);
+                            }
+                        }
                     }
                 }
             }
@@ -423,6 +432,23 @@ impl CppScopeExtractionParser {
             scope.r#type = ScopeInfoType::Function;
             scope.name = name;
             scope.file_path = file_path.to_string();
+            let func_name = scope.name.clone();
+            scopes.push(scope);
+
+            // Recurse into body for nested scopes (lambdas, etc.)
+            if let Some(body) = node.child_by_field_name("body") {
+                let mut body_cursor = body.walk();
+                for body_child in body.children(&mut body_cursor) {
+                    self.extract_scopes(body_child, scopes, content, depth + 1, Some(func_name.clone()), file_imports, file_path);
+                }
+            }
+            return;
+        }
+
+        // Handle lambda expressions
+        if node.kind() == "lambda_expression" {
+            let mut scope = self.extract_cpp_lambda(node, content, depth, parent, file_imports);
+            scope.file_path = file_path.to_string();
             scopes.push(scope);
             return;
         }
@@ -455,7 +481,16 @@ impl CppScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Build reference exclusions and extract identifier references
@@ -478,8 +513,12 @@ impl CppScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Namespace,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: format!("namespace {}", name),
             parameters: vec![],
@@ -526,7 +565,16 @@ impl CppScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Extract base classes
@@ -553,8 +601,12 @@ impl CppScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Class,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: {
                 let base_sig = format!("{} {}", if is_struct { "struct" } else { "class" }, name);
@@ -708,7 +760,16 @@ impl CppScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         let mut cursor = node.walk();
@@ -739,8 +800,12 @@ impl CppScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Method,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
@@ -810,6 +875,138 @@ impl CppScopeExtractionParser {
         params
     }
 
+    /// Extract C++ lambda expression
+
+    pub fn extract_cpp_lambda(&self, node: SyntaxNode, content: &str, depth: usize, parent: Option<String>, file_imports: &[ImportReference]) -> ScopeInfo {
+        let start_line = node.start_position().row + 1;
+        let end_line = node.end_position().row + 1;
+
+        // Try to get name from parent context (e.g., auto fn = [](...) { ... })
+        let name = self.extract_lambda_name(node, content)
+            .unwrap_or_else(|| "Lambda".to_string());
+
+        // Body: compound_statement via field name or direct child search
+        let body_node = match node.child_by_field_name("body") {
+            Some(b) => Some(b),
+            None => {
+                let mut cursor = node.walk();
+                let found = node.children(&mut cursor).find(|c| c.kind() == "compound_statement");
+                found
+            }
+        };
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
+        let content_dedented = self.base.dedent_content(&node_content);
+
+        // Capture list
+        let capture_text = {
+            let mut cursor = node.walk();
+            node.child_by_field_name("captures")
+                .or_else(|| node.children(&mut cursor).find(|c| c.kind() == "lambda_capture_specifier"))
+                .map(|n| self.base.get_node_text(Some(n), content))
+                .unwrap_or_else(|| "[]".to_string())
+        };
+
+        // Parameters from declarator (abstract_function_declarator)
+        let declarator = match node.child_by_field_name("declarator") {
+            Some(d) => Some(d),
+            None => {
+                let mut cursor = node.walk();
+                let found = node.children(&mut cursor).find(|c| c.kind() == "abstract_function_declarator");
+                found
+            }
+        };
+        let parameters = self.extract_c_parameters(declarator, content);
+
+        let signature = format!("{} ({})",
+            capture_text,
+            parameters.iter().map(|p| {
+                if let Some(ref t) = p.r#type { format!("{} {}", t, p.name) }
+                else { p.name.clone() }
+            }).collect::<Vec<_>>().join(", ")
+        );
+
+        // Build reference exclusions and extract identifier references
+        let mut reference_exclusions = self.base.build_reference_exclusions(&name, &parameters);
+        let local_symbols = self.base.collect_local_symbols(node, content);
+        reference_exclusions.extend(local_symbols);
+
+        let identifier_references = self.base.extract_identifier_references(node, content, reference_exclusions);
+        let import_references = self.base.resolve_imports_for_scope(&identifier_references, file_imports);
+
+        let imports = if !import_references.is_empty() {
+            let mut seen = HashSet::new();
+            import_references.iter()
+                .filter_map(|r| if seen.insert(r.source.clone()) { Some(r.source.clone()) } else { None })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        ScopeInfo {
+            name,
+            r#type: ScopeInfoType::Lambda,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
+            file_path: String::new(),
+            signature,
+            parameters,
+            return_type: None,
+            return_type_info: None,
+            modifiers: vec![],
+            generic_parameters: None,
+            heritage_clauses: None,
+            decorator_details: None,
+            content: node_content.clone(),
+            content_dedented,
+            children: vec![],
+            members: None,
+            enum_members: None,
+            variables: None,
+            dependencies: self.base.extract_dependencies(&node_content),
+            exports: vec![],
+            imports,
+            import_references,
+            identifier_references,
+            ast_valid: true,
+            ast_issues: vec![],
+            ast_notes: vec![],
+            complexity: self.base.calculate_complexity(node),
+            lines_of_code: end_line - start_line + 1,
+            parent,
+            depth,
+            docstring: None,
+            decorators: None,
+            value: None,
+        }
+    }
+
+    /// Try to extract lambda name from parent context (e.g., auto fn = [](int x) { ... })
+
+    fn extract_lambda_name(&self, node: SyntaxNode, content: &str) -> Option<String> {
+        let parent = node.parent()?;
+        if parent.kind() == "init_declarator" {
+            let mut cursor = parent.walk();
+            for child in parent.children(&mut cursor) {
+                if child.kind() == "identifier" {
+                    return Some(self.base.get_node_text(Some(child), content));
+                }
+            }
+        }
+        None
+    }
+
     /// Extract C++ enum (plain enum or enum class)
 
     pub fn extract_cpp_enum(&self, node: SyntaxNode, content: &str, depth: usize, parent: Option<String>, file_imports: &[ImportReference]) -> ScopeInfo {
@@ -828,7 +1025,16 @@ impl CppScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Extract enum members from enumerator_list
@@ -880,8 +1086,12 @@ impl CppScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Enum,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],

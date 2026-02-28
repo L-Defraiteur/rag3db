@@ -133,7 +133,7 @@ impl RustScopeExtractionParser {
         self.extract_scopes(root_node, &mut scopes, content, 0, None, &structured_imports, file_path);
         let file_scopes = self.base.extract_file_scopes(content, &scopes, file_path, &structured_imports);
         scopes.extend(file_scopes);
-        scopes.sort_by_key(|s| s.start_line);
+        scopes.sort_by_key(|s| s.scope_start_line);
         let scope_index = self.base.classify_scope_references(&mut scopes, &structured_imports);
         self.base.attach_signature_references(&mut scopes, &scope_index, &structured_imports);
 
@@ -192,7 +192,16 @@ impl RustScopeExtractionParser {
                     if child.kind() == "function_item" {
                         let mut method_scope = self.extract_rust_method(child, content, depth + 1, Some(scope_name.clone()), file_imports);
                         method_scope.file_path = file_path.to_string();
+                        let method_name = method_scope.name.clone();
                         scopes.push(method_scope);
+
+                        // Recurse into method body for nested closures
+                        if let Some(body) = child.child_by_field_name("body") {
+                            let mut body_cursor = body.walk();
+                            for body_child in body.children(&mut body_cursor) {
+                                self.extract_scopes(body_child, scopes, content, depth + 2, Some(method_name.clone()), file_imports, file_path);
+                            }
+                        }
                     }
                 }
             }
@@ -241,6 +250,23 @@ impl RustScopeExtractionParser {
         if node.kind() == "function_item" && parent.is_none() {
             let mut scope = self.extract_rust_function(node, content, depth, parent, file_imports);
             scope.file_path = file_path.to_string();
+            let func_name = scope.name.clone();
+            scopes.push(scope);
+
+            // Recurse into body for nested scopes (closures, etc.)
+            if let Some(body) = node.child_by_field_name("body") {
+                let mut body_cursor = body.walk();
+                for body_child in body.children(&mut body_cursor) {
+                    self.extract_scopes(body_child, scopes, content, depth + 1, Some(func_name.clone()), file_imports, file_path);
+                }
+            }
+            return;
+        }
+
+        // Handle closure expressions
+        if node.kind() == "closure_expression" {
+            let mut scope = self.extract_rust_closure(node, content, depth, parent, file_imports);
+            scope.file_path = file_path.to_string();
             scopes.push(scope);
             return;
         }
@@ -259,7 +285,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Check if it's a pub module
@@ -291,8 +326,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Namespace,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: format!("{}mod {}", if modifiers.contains(&"pub".to_string()) { "pub " } else { "" }, name),
             parameters: vec![],
@@ -359,7 +398,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Extract generic parameters
@@ -401,8 +449,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name,
             r#type: ScopeInfoType::Class,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters: vec![],
@@ -443,7 +495,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Check visibility
@@ -482,8 +543,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Class,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: format!("{}struct {}", if is_pub { "pub " } else { "" }, name),
             parameters: vec![],
@@ -564,7 +629,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Check visibility
@@ -600,8 +674,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Interface,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: format!("{}trait {}", if is_pub { "pub " } else { "" }, name),
             parameters: vec![],
@@ -642,7 +720,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Check visibility
@@ -673,8 +760,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Enum,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature: format!("{}enum {}", if is_pub { "pub " } else { "" }, name),
             parameters: vec![],
@@ -750,6 +841,161 @@ impl RustScopeExtractionParser {
         variants
     }
 
+    /// Extract Rust closure expression (|args| body)
+
+    pub fn extract_rust_closure(&self, node: SyntaxNode, content: &str, depth: usize, parent: Option<String>, file_imports: &[ImportReference]) -> ScopeInfo {
+        let start_line = node.start_position().row + 1;
+        let end_line = node.end_position().row + 1;
+
+        // Try to get name from parent let binding (e.g., let adder = |a, b| a + b;)
+        let name = self.extract_closure_name(node, content)
+            .unwrap_or_else(|| "Closure".to_string());
+
+        // Body can be a block or a direct expression
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
+        let content_dedented = self.base.dedent_content(&node_content);
+
+        // Extract parameters from closure_parameters (|a, b|)
+        let parameters = self.extract_closure_parameters(node, content);
+
+        // Check for move keyword
+        let mut modifiers = Vec::new();
+        let mut cursor = node.walk();
+        if node.children(&mut cursor).any(|c| c.kind() == "move") {
+            modifiers.push("move".to_string());
+        }
+
+        let param_str = parameters.iter()
+            .map(|p| {
+                if let Some(ref t) = p.r#type { format!("{}: {}", p.name, t) }
+                else { p.name.clone() }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let move_prefix = if modifiers.contains(&"move".to_string()) { "move " } else { "" };
+        let signature = format!("{}|{}|", move_prefix, param_str);
+
+        // Build reference exclusions and extract identifier references
+        let mut reference_exclusions = self.base.build_reference_exclusions(&name, &parameters);
+        let local_symbols = self.base.collect_local_symbols(node, content);
+        reference_exclusions.extend(local_symbols);
+
+        let identifier_references = self.base.extract_identifier_references(node, content, reference_exclusions);
+        let import_references = self.base.resolve_imports_for_scope(&identifier_references, file_imports);
+
+        let imports = if !import_references.is_empty() {
+            let mut seen = HashSet::new();
+            import_references.iter()
+                .filter_map(|r| if seen.insert(r.source.clone()) { Some(r.source.clone()) } else { None })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        ScopeInfo {
+            name,
+            r#type: ScopeInfoType::Lambda,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
+            file_path: String::new(),
+            signature,
+            parameters,
+            return_type: None,
+            return_type_info: None,
+            modifiers,
+            generic_parameters: None,
+            heritage_clauses: None,
+            decorator_details: None,
+            content: node_content.clone(),
+            content_dedented,
+            children: vec![],
+            members: None,
+            enum_members: None,
+            variables: None,
+            dependencies: self.base.extract_dependencies(&node_content),
+            exports: vec![],
+            imports,
+            import_references,
+            identifier_references,
+            ast_valid: true,
+            ast_issues: vec![],
+            ast_notes: vec![],
+            complexity: self.base.calculate_complexity(node),
+            lines_of_code: end_line - start_line + 1,
+            parent,
+            depth,
+            docstring: None,
+            decorators: None,
+            value: None,
+        }
+    }
+
+    /// Try to extract closure name from parent let binding (e.g., let adder = |a, b| a + b;)
+    fn extract_closure_name(&self, node: SyntaxNode, content: &str) -> Option<String> {
+        let parent = node.parent()?;
+        if parent.kind() == "let_declaration" {
+            let pattern = parent.child_by_field_name("pattern")?;
+            if pattern.kind() == "identifier" {
+                return Some(self.base.get_node_text(Some(pattern), content));
+            }
+        }
+        None
+    }
+
+    /// Extract closure parameters from |a: i32, b| syntax
+    fn extract_closure_parameters(&self, node: SyntaxNode, content: &str) -> Vec<ParameterInfo> {
+        let mut parameters = Vec::new();
+        let mut cursor = node.walk();
+        let params_node = node.children(&mut cursor)
+            .find(|c| c.kind() == "closure_parameters");
+
+        if let Some(params) = params_node {
+            let mut cursor = params.walk();
+            for child in params.children(&mut cursor) {
+                match child.kind() {
+                    "identifier" => {
+                        let name = self.base.get_node_text(Some(child), content);
+                        if !name.is_empty() {
+                            parameters.push(ParameterInfo {
+                                name, r#type: None, optional: false, default_value: None,
+                                line: child.start_position().row + 1,
+                                column: child.start_position().column,
+                            });
+                        }
+                    }
+                    "parameter" => {
+                        let pat = child.child_by_field_name("pattern");
+                        let ty = child.child_by_field_name("type");
+                        let name = pat.map(|n| self.base.get_node_text(Some(n), content)).unwrap_or_default();
+                        let param_type = ty.map(|n| self.base.get_node_text(Some(n), content));
+                        if !name.is_empty() {
+                            parameters.push(ParameterInfo {
+                                name, r#type: param_type, optional: false, default_value: None,
+                                line: child.start_position().row + 1,
+                                column: child.start_position().column,
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        parameters
+    }
+
     pub fn extract_rust_function(&self, node: SyntaxNode, content: &str, depth: usize, parent: Option<String>, file_imports: &[ImportReference]) -> ScopeInfo {
         let mut cursor = node.walk();
         let name_node = node.children(&mut cursor).find(|c| c.kind() == "identifier");
@@ -757,7 +1003,16 @@ impl RustScopeExtractionParser {
 
         let start_line = node.start_position().row + 1;
         let end_line = node.end_position().row + 1;
-        let node_content = self.base.get_node_text(Some(node), content);
+        let body_node = node.child_by_field_name("body");
+        let (body_start_line, body_end_line) = body_node
+            .map(|b| (Some(b.start_position().row + 1), Some(b.end_position().row + 1)))
+            .unwrap_or((None, None));
+        let signature_end_line = body_start_line
+            .map(|bl| if bl > start_line { bl - 1 } else { start_line })
+            .unwrap_or(end_line);
+        let node_content = body_node
+            .map(|body| self.base.get_node_text(Some(body), content))
+            .unwrap_or_else(|| self.base.get_node_text(Some(node), content));
         let content_dedented = self.base.dedent_content(&node_content);
 
         // Check visibility and other modifiers
@@ -820,8 +1075,12 @@ impl RustScopeExtractionParser {
         ScopeInfo {
             name: name.clone(),
             r#type: ScopeInfoType::Function,
-            start_line,
-            end_line,
+            scope_start_line: start_line,
+            signature_start_line: start_line,
+            signature_end_line,
+            body_start_line,
+            body_end_line,
+            scope_end_line: end_line,
             file_path: String::new(),
             signature,
             parameters,
