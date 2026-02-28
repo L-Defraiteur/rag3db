@@ -35,8 +35,11 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 [features]
 default = ["candle-embedder"]
 candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
+candle-wasm = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers"]
+bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
+cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]
 rag3db-native = ["dep:rag3db"]
-wasm-emscripten = ["dep:futures", "dep:rayon", "tokio/rt"]
+wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]
 version = "0.3"
@@ -45,7 +48,6 @@ features = ["thread-pool"]
 
 [dependencies.rayon]
 version = "1.10"
-optional = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

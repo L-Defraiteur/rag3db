@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config, DTYPE};
+#[cfg(feature = "candle-embedder")]
 use hf_hub::api::sync::Api;
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
@@ -28,6 +29,9 @@ pub enum DefaultModel {
     /// `BAAI/bge-base-en-v1.5` — 768 dims, ~110MB.
     /// Higher quality embeddings. Compatible with TEI server vectors.
     BgeBase,
+    /// `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` — 384 dims, ~471MB.
+    /// Multilingual (50+ languages). Recommended WASM default for non-English.
+    MultilingualMiniLM,
 }
 
 impl DefaultModel {
@@ -36,6 +40,7 @@ impl DefaultModel {
         match self {
             Self::MiniLM => "sentence-transformers/all-MiniLM-L6-v2",
             Self::BgeBase => "BAAI/bge-base-en-v1.5",
+            Self::MultilingualMiniLM => "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         }
     }
 
@@ -44,6 +49,7 @@ impl DefaultModel {
         match self {
             Self::MiniLM => 384,
             Self::BgeBase => 768,
+            Self::MultilingualMiniLM => 384,
         }
     }
 }
@@ -74,9 +80,32 @@ pub struct CandleEmbedder {
 }
 
 impl CandleEmbedder {
+    /// Internal constructor from pre-loaded components.
+    fn new_inner(
+        config: Config,
+        mut tokenizer: Tokenizer,
+        vb: VarBuilder,
+        device: Device,
+    ) -> Result<Self, EmbedError> {
+        let dim = config.hidden_size;
+        tokenizer.with_padding(Some(PaddingParams {
+            strategy: PaddingStrategy::BatchLongest,
+            ..Default::default()
+        }));
+        let model = BertModel::load(vb, &config)
+            .map_err(|e| EmbedError::ProviderError(format!("load model: {e}")))?;
+        Ok(Self {
+            model,
+            tokenizer: Mutex::new(tokenizer),
+            dim,
+            device,
+        })
+    }
+
     /// Load a pre-configured model.
     ///
     /// Downloads from HuggingFace Hub on first call, cached afterwards.
+    #[cfg(feature = "candle-embedder")]
     pub fn new(default_model: DefaultModel) -> Result<Self, EmbedError> {
         Self::from_repo(default_model.model_id(), None)
     }
@@ -85,6 +114,7 @@ impl CandleEmbedder {
     ///
     /// The model must have `config.json`, `tokenizer.json`, and
     /// `model.safetensors` in the repository.
+    #[cfg(feature = "candle-embedder")]
     pub fn from_repo(model_id: &str, revision: Option<&str>) -> Result<Self, EmbedError> {
         let device = Device::Cpu;
 
@@ -117,34 +147,39 @@ impl CandleEmbedder {
         )
         .map_err(|e| EmbedError::ProviderError(format!("parse config: {e}")))?;
 
-        let dim = config.hidden_size;
-
-        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
-
-        tokenizer.with_padding(Some(PaddingParams {
-            strategy: PaddingStrategy::BatchLongest,
-            ..Default::default()
-        }));
 
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(&[weights_path], DTYPE, &device)
                 .map_err(|e| EmbedError::ProviderError(format!("load weights: {e}")))?
         };
 
-        let model = BertModel::load(vb, &config)
-            .map_err(|e| EmbedError::ProviderError(format!("load model: {e}")))?;
-
-        Ok(Self {
-            model,
-            tokenizer: Mutex::new(tokenizer),
-            dim,
-            device,
-        })
+        Self::new_inner(config, tokenizer, vb, device)
     }
 
-    /// Synchronous embed — called from the async trait impl.
-    fn embed_sync(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+    /// Load a BERT-compatible model from in-memory bytes (WASM-compatible).
+    ///
+    /// Accepts raw bytes for config.json, tokenizer.json, and model.safetensors.
+    /// No filesystem or network access required — ideal for WASM where JS fetches
+    /// the model files and passes them as byte arrays.
+    pub fn from_bytes(
+        config_json: &[u8],
+        tokenizer_json: &[u8],
+        weights: Vec<u8>,
+    ) -> Result<Self, EmbedError> {
+        let config: Config = serde_json::from_slice(config_json)
+            .map_err(|e| EmbedError::ProviderError(format!("config parse: {e}")))?;
+        let tokenizer = Tokenizer::from_bytes(tokenizer_json)
+            .map_err(|e| EmbedError::ProviderError(format!("tokenizer parse: {e}")))?;
+        let device = Device::Cpu;
+        let vb = VarBuilder::from_buffered_safetensors(weights, DTYPE, &device)
+            .map_err(|e| EmbedError::ProviderError(format!("weights load: {e}")))?;
+        Self::new_inner(config, tokenizer, vb, device)
+    }
+
+    /// Synchronous embed — called from the async trait impl and WASM FFI.
+    pub fn embed_sync(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -259,12 +294,28 @@ mod tests {
         assert_eq!(DefaultModel::default(), DefaultModel::BgeBase);
     }
 
-    // ── Integration tests (require network + model download) ──────────
+    // ── Integration tests (require network + model download + candle-embedder feature) ──
+    // Models are shared via OnceLock to avoid concurrent HF Hub download lock conflicts.
 
+    #[cfg(feature = "candle-embedder")]
+    fn shared_minilm() -> &'static CandleEmbedder {
+        use std::sync::OnceLock;
+        static E: OnceLock<CandleEmbedder> = OnceLock::new();
+        E.get_or_init(|| CandleEmbedder::new(DefaultModel::MiniLM).unwrap())
+    }
+
+    #[cfg(feature = "candle-embedder")]
+    fn shared_multilingual() -> &'static CandleEmbedder {
+        use std::sync::OnceLock;
+        static E: OnceLock<CandleEmbedder> = OnceLock::new();
+        E.get_or_init(|| CandleEmbedder::new(DefaultModel::MultilingualMiniLM).unwrap())
+    }
+
+    #[cfg(feature = "candle-embedder")]
     #[tokio::test]
     #[ignore] // run with: cargo test -- --ignored
     async fn candle_embedder_minilm_embed() {
-        let embedder = CandleEmbedder::new(DefaultModel::MiniLM).unwrap();
+        let embedder = shared_minilm();
         assert_eq!(embedder.dim(), 384);
 
         let texts = vec!["hello world".into(), "foo bar".into()];
@@ -274,11 +325,11 @@ mod tests {
         assert_eq!(vectors[0].len(), 384);
         assert_eq!(vectors[1].len(), 384);
 
-        // Vectors should be L2-normalized (norm ≈ 1.0)
         let norm: f32 = vectors[0].iter().map(|x| x * x).sum::<f32>().sqrt();
         assert!((norm - 1.0).abs() < 0.01, "norm={norm}, expected ~1.0");
     }
 
+    #[cfg(feature = "candle-embedder")]
     #[tokio::test]
     #[ignore]
     async fn candle_embedder_bge_base_embed() {
@@ -295,18 +346,20 @@ mod tests {
         assert!((norm - 1.0).abs() < 0.01, "norm={norm}, expected ~1.0");
     }
 
+    #[cfg(feature = "candle-embedder")]
     #[tokio::test]
     #[ignore]
     async fn candle_embedder_empty_batch() {
-        let embedder = CandleEmbedder::new(DefaultModel::MiniLM).unwrap();
+        let embedder = shared_minilm();
         let vectors = embedder.embed(&[]).await.unwrap();
         assert!(vectors.is_empty());
     }
 
+    #[cfg(feature = "candle-embedder")]
     #[tokio::test]
     #[ignore]
     async fn candle_embedder_cosine_similarity() {
-        let embedder = CandleEmbedder::new(DefaultModel::MiniLM).unwrap();
+        let embedder = shared_minilm();
         let texts = vec![
             "Rust programming language".into(),
             "Rust systems programming".into(),
@@ -323,15 +376,57 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "candle-embedder")]
     #[tokio::test]
     #[ignore]
     async fn candle_embedder_as_trait_object() {
-        let embedder: Box<dyn Embedder> =
-            Box::new(CandleEmbedder::new(DefaultModel::MiniLM).unwrap());
+        let embedder: &dyn Embedder = shared_minilm();
         assert_eq!(embedder.dim(), 384);
         let result = embedder.embed(&["test".into()]).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 384);
+    }
+
+    #[cfg(feature = "candle-embedder")]
+    #[tokio::test]
+    #[ignore]
+    async fn candle_embedder_multilingual_minilm_embed() {
+        let embedder = shared_multilingual();
+        assert_eq!(embedder.dim(), 384);
+
+        let texts = vec!["hello world".into(), "bonjour le monde".into()];
+        let vectors = embedder.embed(&texts).await.unwrap();
+
+        assert_eq!(vectors.len(), 2);
+        assert_eq!(vectors[0].len(), 384);
+        assert_eq!(vectors[1].len(), 384);
+
+        let norm: f32 = vectors[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 0.01, "norm={norm}, expected ~1.0");
+    }
+
+    #[cfg(feature = "candle-embedder")]
+    #[tokio::test]
+    #[ignore]
+    async fn candle_embedder_multilingual_cosine() {
+        let embedder = shared_multilingual();
+        let vecs = embedder
+            .embed(&[
+                "Rust programming language".into(),
+                "Langage de programmation Rust".into(),
+                "recetas de cocina".into(),
+            ])
+            .await
+            .unwrap();
+
+        let sim_translation = cosine(&vecs[0], &vecs[1]);
+        let sim_unrelated = cosine(&vecs[0], &vecs[2]);
+
+        eprintln!("[multilingual] en↔fr={sim_translation:.4}, en↔es_unrelated={sim_unrelated:.4}");
+        assert!(
+            sim_translation > sim_unrelated,
+            "translation={sim_translation:.4} should be > unrelated={sim_unrelated:.4}"
+        );
     }
 
     fn cosine(a: &[f32], b: &[f32]) -> f32 {

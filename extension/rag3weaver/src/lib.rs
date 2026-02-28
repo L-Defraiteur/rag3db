@@ -3,6 +3,8 @@
 //! Provides typed events, config parsing, and async traits for embedding
 //! and database access. Designed to be runtime-agnostic (WASM-compatible).
 
+#[cfg(feature = "bge-m3")]
+pub mod bge_m3_embedder;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod bm42_model;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
