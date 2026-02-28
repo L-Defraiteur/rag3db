@@ -51,7 +51,7 @@ pub use query::{PreparedQuery, QueryBuilder};
 pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
-pub use sparse_index::{SparseIndex, SparseVector};
+pub use sparse_index::SparseVector;
 pub use uuid::{chunk_uuid, hashsafe_uuid};
 pub use catalog::{Catalog, CatalogError, DeleteResult, KBMetadata, UpdateResult, UpdateStatus};
 pub use search::{

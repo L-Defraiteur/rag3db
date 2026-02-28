@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::ops::{CatalogOp, ChunkOp, InsertOp, LinkOp};
+use crate::ops::{CatalogOp, InsertOp, LinkOp};
 use crate::persistence::OperationPersistence;
 
 // ─── QueueSender / QueueReceiver ─────────────────────────────────────────────

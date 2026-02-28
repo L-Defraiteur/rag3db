@@ -14,7 +14,7 @@ use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::Embedder;
 use crate::filter::{FilterCondition, FilterValue};
 use crate::fusion;
-use crate::sparse_index::{SparseIndex, SparseVector};
+use crate::sparse_index::SparseVector;
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -642,48 +642,163 @@ pub async fn search_bm25(
         .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-    Ok(result
+    if result.rows.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // QUERY_TANTIVY_INDEX returns node_id as UINT64 offsets, not UUIDs.
+    // Resolve offsets → UUIDs via OFFSET(id(n)).
+    let offsets: Vec<(u64, f64)> = result
         .rows
         .iter()
-        .map(|row| {
-            let uuid = match row.get(0) {
-                Some(CypherValue::String(s)) => s.clone(),
-                Some(CypherValue::Int(i)) => i.to_string(),
-                Some(CypherValue::Float(f)) => (*f as i64).to_string(),
-                _ => String::new(),
-            };
-            let score = row.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
-            SearchResult {
+        .filter_map(|row| {
+            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
+            let score = row.get(1).and_then(|v| v.as_f64())?;
+            Some((offset, score))
+        })
+        .collect();
+
+    if offsets.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let offset_list = offsets
+        .iter()
+        .map(|(o, _)| o.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let resolve_cypher = format!(
+        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
+         RETURN OFFSET(id(n)), n._uuid"
+    );
+    let resolve_result = conn
+        .execute(&resolve_cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
+    for row in &resolve_result.rows {
+        if let (Some(oid), Some(uuid)) = (
+            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
+            row.get(1).and_then(|v| v.as_str()),
+        ) {
+            offset_to_uuid.insert(oid, uuid.to_string());
+        }
+    }
+
+    Ok(offsets
+        .into_iter()
+        .filter_map(|(offset, score)| {
+            let uuid = offset_to_uuid.get(&offset)?.clone();
+            Some(SearchResult {
                 uuid,
                 score,
                 entity: Some(entity.to_string()),
                 data: None,
                 chunk: None,
-            }
+            })
         })
         .collect())
 }
 
-/// Sparse vector search via in-memory inverted index.
+/// Sparse vector search via the sparse_vector Cypher extension.
 ///
-/// Queries the `SparseIndex` for the given entity and returns results
-/// sorted by descending dot-product score.
-pub fn search_sparse(
-    sparse_index: &SparseIndex,
-    query_vector: &SparseVector,
+/// 1. Calls `QUERY_SPARSE_VECTOR_INDEX` → (node_id offset, score) pairs
+/// 2. Resolves offsets → UUIDs via `MATCH ... WHERE OFFSET(id(n)) IN [...]`
+/// 3. Returns `SearchResult` with real UUIDs, sorted by descending score.
+pub async fn search_sparse_cypher(
+    conn: &dyn DbConnection,
     entity: &str,
+    query_vector: &SparseVector,
     limit: usize,
-) -> Vec<SearchResult> {
-    let raw = sparse_index.search(query_vector, limit);
-    raw.into_iter()
-        .map(|(uuid, score)| SearchResult {
-            uuid,
-            score: score as f64,
-            entity: Some(entity.to_string()),
-            data: None,
-            chunk: None,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if query_vector.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 1. Build Cypher for sparse search
+    let indices_str = query_vector
+        .indices
+        .iter()
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let weights_str = query_vector
+        .values
+        .iter()
+        .map(|w| format!("{:.6}", *w as f64))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let cypher = format!(
+        "CALL QUERY_SPARSE_VECTOR_INDEX('{entity}', [{indices_str}], [{weights_str}], {limit}) \
+         RETURN node_id, score"
+    );
+
+    let sparse_result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    if sparse_result.rows.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 2. Extract (offset, score) pairs
+    let offsets: Vec<(u64, f64)> = sparse_result
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
+            let score = row.get(1).and_then(|v| v.as_f64())?;
+            Some((offset, score))
         })
-        .collect()
+        .collect();
+
+    if offsets.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 3. Resolve offsets → UUIDs
+    let offset_list = offsets
+        .iter()
+        .map(|(o, _)| o.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let resolve_cypher = format!(
+        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
+         RETURN OFFSET(id(n)), n._uuid"
+    );
+
+    let resolve_result = conn
+        .execute(&resolve_cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
+    for row in &resolve_result.rows {
+        if let (Some(oid), Some(uuid)) = (
+            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
+            row.get(1).and_then(|v| v.as_str()),
+        ) {
+            offset_to_uuid.insert(oid, uuid.to_string());
+        }
+    }
+
+    // 4. Build results with real UUIDs, preserving score order
+    Ok(offsets
+        .into_iter()
+        .filter_map(|(offset, score)| {
+            let uuid = offset_to_uuid.get(&offset)?.clone();
+            Some(SearchResult {
+                uuid,
+                score,
+                entity: Some(entity.to_string()),
+                data: None,
+                chunk: None,
+            })
+        })
+        .collect())
 }
 
 /// Fuse vector, BM25, and optional sparse results using the specified strategy.
@@ -1632,37 +1747,6 @@ mod tests {
             .unwrap();
         assert!(graph.nodes.is_empty());
         assert!(graph.edges.is_empty());
-    }
-
-    // ── search_sparse ───────────────────────────────────────────────────
-
-    #[test]
-    fn search_sparse_empty_index() {
-        let index = SparseIndex::new();
-        let query = SparseVector::new(vec![1, 2], vec![0.5, 0.3]);
-        let results = search_sparse(&index, &query, "Document", 10);
-        assert!(results.is_empty());
-    }
-
-    #[test]
-    fn search_sparse_returns_sorted() {
-        let mut index = SparseIndex::new();
-        index.insert("a", &SparseVector::new(vec![1, 2], vec![0.8, 0.2]));
-        index.insert("b", &SparseVector::new(vec![1, 3], vec![0.3, 0.9]));
-        index.insert("c", &SparseVector::new(vec![2, 3], vec![0.5, 0.5]));
-
-        let query = SparseVector::new(vec![1, 2], vec![1.0, 1.0]);
-        let results = search_sparse(&index, &query, "Doc", 10);
-
-        assert_eq!(results.len(), 3);
-        // "a" has dot(q, a) = 1.0*0.8 + 1.0*0.2 = 1.0
-        // "b" has dot(q, b) = 1.0*0.3 = 0.3
-        // "c" has dot(q, c) = 1.0*0.5 = 0.5
-        assert_eq!(results[0].uuid, "a");
-        assert_eq!(results[1].uuid, "c");
-        assert_eq!(results[2].uuid, "b");
-        assert!(results[0].score > results[1].score);
-        assert_eq!(results[0].entity.as_deref(), Some("Doc"));
     }
 
     // ── 3-way fusion ────────────────────────────────────────────────────

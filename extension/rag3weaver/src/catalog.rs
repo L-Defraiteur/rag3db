@@ -22,7 +22,7 @@ use crate::ops::{CatalogOp, ChunkOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, R
 use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueSender, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher};
-use crate::sparse_index::{SparseIndex, SparseVector};
+use crate::sparse_index::SparseVector;
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::{chunk_uuid, hashsafe_uuid};
 use crate::validator::{validate_schema, KBFieldRef};
@@ -107,8 +107,6 @@ pub struct Catalog {
     kb_metadata: HashMap<String, KBMetadata>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
-    /// Per-KB sparse inverted indexes (in-memory, rebuilt from DB at initialize).
-    sparse_indexes: HashMap<String, SparseIndex>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
     /// Shared with InsertProcessor (populated on INSERT via RETURN ID(n)).
     node_id_cache: Arc<RwLock<NodeIdCache>>,
@@ -139,15 +137,21 @@ impl Catalog {
             kb_metadata: HashMap::new(),
             initialized: false,
             embedding_cache: HashMap::new(),
-            sparse_indexes: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
             chunker_cache: HashMap::new(),
         }
     }
 
+    /// Replace the dense embedder with a shared Arc.
+    /// Use this to share a single model instance between dense and sparse roles.
+    pub fn set_embedder(&mut self, embedder: Arc<dyn Embedder>) {
+        self.embedder = embedder;
+    }
+
     /// Set the sparse embedder (optional). Must be called before `initialize()`.
-    pub fn set_sparse_embedder(&mut self, embedder: Box<dyn SparseEmbedder>) {
-        self.sparse_embedder = Some(Arc::from(embedder));
+    /// Accepts `Arc<dyn SparseEmbedder>` to allow sharing with the dense embedder.
+    pub fn set_sparse_embedder(&mut self, embedder: Arc<dyn SparseEmbedder>) {
+        self.sparse_embedder = Some(embedder);
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
@@ -268,11 +272,23 @@ impl Catalog {
             );
         }
 
-        // Rebuild in-memory sparse indexes for KBs that have sparse=true
-        for (kb_name, kb_config) in &self.config.knowledge_bases {
-            if kb_config.sparse {
-                let index = self.rebuild_sparse_index(kb_name).await?;
-                self.sparse_indexes.insert(kb_name.clone(), index);
+        // Create sparse vector indexes via extension for KBs that have sparse=true
+        if self.sparse_embedder.is_some() {
+            for (kb_name, kb_config) in &self.config.knowledge_bases {
+                if kb_config.sparse {
+                    let indices_col = format!("{kb_name}_sparse_indices");
+                    let weights_col = format!("{kb_name}_sparse_weights");
+                    if let Some(kb_meta) = self.kb_metadata.get(kb_name) {
+                        for entity in &kb_meta.entities {
+                            // Idempotent: extension handles existing indexes gracefully
+                            let cypher = format!(
+                                "CALL CREATE_SPARSE_VECTOR_INDEX('{entity}', '{indices_col}', '{weights_col}')"
+                            );
+                            // Ignore errors (index may already exist)
+                            let _ = self.conn.execute(&cypher).await;
+                        }
+                    }
+                }
             }
         }
 
@@ -643,18 +659,7 @@ impl Catalog {
             cache.remove(uuid);
         }
 
-        // Remove from in-memory sparse indexes
-        for (kb_name, sparse_idx) in &mut self.sparse_indexes {
-            let kb_sparse = self
-                .config
-                .knowledge_bases
-                .get(kb_name)
-                .map(|c| c.sparse)
-                .unwrap_or(false);
-            if kb_sparse {
-                sparse_idx.remove(uuid);
-            }
-        }
+        // Sparse vector extension handles delete via hooks — no manual removal needed.
 
         self.event_bus.emit(CatalogEvent::EntityDeleted {
             entity: entity_name.to_string(),
@@ -673,18 +678,9 @@ impl Catalog {
     // ── Queue control ──────────────────────────────────────────────────
 
     pub async fn drain(&mut self) -> FlushResult {
-        let result = self.queue.drain().await;
-
-        // Refresh sparse indexes after drain (new sparse vectors may have been stored)
-        for (kb_name, kb_config) in &self.config.knowledge_bases {
-            if kb_config.sparse {
-                if let Ok(index) = self.rebuild_sparse_index(kb_name).await {
-                    self.sparse_indexes.insert(kb_name.clone(), index);
-                }
-            }
-        }
-
-        result
+        self.queue.drain().await
+        // No sparse rebuild needed: the sparse_vector extension maintains
+        // its index via INSERT/DELETE/UPDATE hooks automatically.
     }
 
     /// Parallel drain: inserts + embeds via rayon::join, then links sequentially.
@@ -898,7 +894,7 @@ impl Catalog {
                         )
                     };
                     let cypher = format!(
-                        "{match_prefix} WHERE {} RETURN id(n)",
+                        "{match_prefix} WHERE {} RETURN OFFSET(id(n))",
                         parsed.combine_where()
                     );
                     let result = if parsed.params.is_empty() {
@@ -1005,15 +1001,20 @@ impl Catalog {
             .cloned()
             .unwrap_or_default();
         let sparse_results = if kb_config.sparse {
-            if let (Some(sparse_emb), Some(sparse_idx)) =
-                (&self.sparse_embedder, self.sparse_indexes.get(kb_name))
-            {
+            if let Some(ref sparse_emb) = self.sparse_embedder {
                 let query_vecs = sparse_emb
                     .embed_sparse(&[query.to_string()])
                     .await
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
                 if let Some(qv) = query_vecs.into_iter().next() {
-                    search::search_sparse(sparse_idx, &qv, &entity, search_limit)
+                    search::search_sparse_cypher(
+                        self.conn.as_ref(),
+                        &entity,
+                        &qv,
+                        search_limit,
+                    )
+                    .await
+                    .unwrap_or_default()
                 } else {
                     vec![]
                 }
@@ -1123,77 +1124,6 @@ impl Catalog {
         }
     }
 
-    /// Rebuild the in-memory sparse index for a KB by reading stored
-    /// sparse vectors from the database.
-    async fn rebuild_sparse_index(&self, kb_name: &str) -> Result<SparseIndex, CatalogError> {
-        let mut index = SparseIndex::new();
-
-        let kb_meta = match self.kb_metadata.get(kb_name) {
-            Some(m) => m,
-            None => return Ok(index), // no metadata yet → empty index
-        };
-
-        let indices_col = format!("{kb_name}_sparse_indices");
-        let weights_col = format!("{kb_name}_sparse_weights");
-
-        // Single UNION ALL query for all entity types
-        let union_parts: Vec<String> = kb_meta
-            .entities
-            .iter()
-            .map(|entity| {
-                format!(
-                    "MATCH (n:{entity}) \
-                     WHERE n.{indices_col} IS NOT NULL \
-                     RETURN n._uuid, n.{indices_col}, n.{weights_col}"
-                )
-            })
-            .collect();
-
-        if union_parts.is_empty() {
-            return Ok(index);
-        }
-
-        let cypher = union_parts.join(" UNION ALL ");
-        let result = self
-            .conn
-            .execute(&cypher)
-            .await
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        {
-            for row in &result.rows {
-                let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("");
-                if uuid.is_empty() {
-                    continue;
-                }
-
-                let indices: Vec<u32> = match row.get(1) {
-                    Some(CypherValue::List(list)) => list
-                        .iter()
-                        .filter_map(|v| v.as_i64().map(|i| i as u32))
-                        .collect(),
-                    _ => continue,
-                };
-
-                let weights: Vec<f32> = match row.get(2) {
-                    Some(CypherValue::List(list)) => list
-                        .iter()
-                        .filter_map(|v| v.as_f64().map(|f| f as f32))
-                        .collect(),
-                    _ => continue,
-                };
-
-                if indices.len() == weights.len() && !indices.is_empty() {
-                    let sv = SparseVector::new(indices, weights);
-                    index.insert(uuid, &sv);
-                }
-            }
-        }
-
-        Ok(index)
-
-    }
-
     fn check_entity(&self, name: &str) -> Result<&EntityDef, CatalogError> {
         self.config
             .entities
@@ -1262,46 +1192,6 @@ impl Catalog {
             entity_ref: entity_ref.clone(),
             data: data.clone(),
         }))
-    }
-
-    fn build_embed_texts(
-        &self,
-        entity_name: &str,
-        kb_name: &str,
-        data: &HashMap<String, CypherValue>,
-    ) -> Vec<String> {
-        let kb = match self.kb_metadata.get(kb_name) {
-            Some(kb) => kb,
-            None => return vec![],
-        };
-
-        let mut texts = Vec::new();
-
-        // Title field (if from this entity)
-        if kb.title.entity == entity_name {
-            if let Some(val) = data.get(&kb.title.field) {
-                if let Some(s) = val.as_str() {
-                    if !s.is_empty() {
-                        texts.push(s.to_string());
-                    }
-                }
-            }
-        }
-
-        // Content fields (if from this entity)
-        for content_ref in &kb.content {
-            if content_ref.entity == entity_name {
-                if let Some(val) = data.get(&content_ref.field) {
-                    if let Some(s) = val.as_str() {
-                        if !s.is_empty() {
-                            texts.push(s.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        texts
     }
 
     fn row_to_map(
