@@ -72,6 +72,9 @@ struct RAG3DB_API NodeTableUpdateState : TableUpdateState {
 struct RAG3DB_API NodeTableDeleteState : TableDeleteState {
     common::ValueVector& nodeIDVector;
     common::ValueVector& pkVector;
+    // Pre-created index delete states, reused across multiple delete_() calls.
+    std::vector<std::unique_ptr<Index::DeleteState>> indexDeleteStates;
+    bool indexDeleteStatesInitialized = false;
 
     explicit NodeTableDeleteState(common::ValueVector& nodeIDVector, common::ValueVector& pkVector)
         : nodeIDVector{nodeIDVector}, pkVector{pkVector} {}
@@ -134,7 +137,9 @@ public:
     void insert(transaction::Transaction* transaction, TableInsertState& insertState) override;
     void initUpdateState(main::ClientContext* context, TableUpdateState& updateState) const;
     void update(transaction::Transaction* transaction, TableUpdateState& updateState) override;
+    void initDeleteStates(const transaction::Transaction* transaction, TableDeleteState& deleteState);
     bool delete_(transaction::Transaction* transaction, TableDeleteState& deleteState) override;
+    void finalizeDelete(transaction::Transaction* transaction, TableDeleteState& deleteState);
 
     void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState,
         PageAllocator& pageAllocator) override;

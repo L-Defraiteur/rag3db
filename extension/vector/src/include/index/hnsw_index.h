@@ -106,21 +106,6 @@ public:
     static std::vector<NodeWithDistance> popTopK(max_node_priority_queue_t& result,
         common::length_t k);
 
-    std::unique_ptr<UpdateState> initUpdateState(main::ClientContext* /*context*/,
-        common::column_id_t /*columnID*/, storage::visible_func /*isVisible*/) override {
-        throw common::RuntimeException{"Cannot set property vec in table embeddings because it is "
-                                       "used in one or more indexes. Try delete and then insert."};
-    }
-
-    std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction* /*transaction*/,
-        storage::MemoryManager* /*mm*/, storage::visible_func /*isVisible*/) override {
-        return std::make_unique<DeleteState>();
-    }
-    void delete_(transaction::Transaction* /*transaction*/,
-        const common::ValueVector& /*nodeIDVector*/, DeleteState& /*deleteState*/) override {
-        // DO NOTHING.
-    }
-
     static int64_t getDegreeThresholdToShrink(int64_t degree);
     static int64_t getMaximumSupportedMl();
 
@@ -224,6 +209,13 @@ public:
         const std::vector<common::ValueVector*>&, InsertState&) override {
         KU_UNREACHABLE;
     }
+    std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction*,
+        storage::MemoryManager*, storage::visible_func) override {
+        KU_UNREACHABLE;
+    }
+    void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {
+        KU_UNREACHABLE;
+    }
     // Note that the input is only `offset`, as we assume embeddings are already cached in memory.
     bool insert(common::offset_t offset, CreateInMemHNSWLocalState* localState);
     void finalizeNodeGroup(common::node_group_idx_t nodeGroupIdx);
@@ -301,6 +293,31 @@ public:
             common::column_id_t columnID, uint64_t degree);
     };
 
+    struct HNSWDeleteState final : DeleteState {
+        HNSWInsertState insertState;
+        // Neighbors to shrink, collected across multiple delete_() calls and deduplicated.
+        std::unordered_set<common::offset_t> lowerNeighborsToShrink;
+        std::unordered_set<common::offset_t> upperNeighborsToShrink;
+        // Track deleted nodes so we skip them during finalize.
+        std::unordered_set<common::offset_t> deletedNodes;
+        HNSWDeleteState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
+            catalog::TableCatalogEntry* upperRelTableEntry,
+            catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
+            common::column_id_t columnID, uint64_t degree)
+            : insertState{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
+                  nodeTable, columnID, degree} {}
+    };
+
+    struct HNSWUpdateState final : UpdateState {
+        HNSWInsertState insertState;
+        HNSWUpdateState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
+            catalog::TableCatalogEntry* upperRelTableEntry,
+            catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
+            common::column_id_t columnID, uint64_t degree)
+            : insertState{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
+                  nodeTable, columnID, degree} {}
+    };
+
     OnDiskHNSWIndex(const main::ClientContext* context, storage::IndexInfo indexInfo,
         std::unique_ptr<storage::IndexStorageInfo> storageInfo, HNSWIndexConfig config);
 
@@ -315,6 +332,18 @@ public:
     bool needCommitInsert() const override { return true; }
     void commitInsert(transaction::Transaction*, const common::ValueVector&,
         const std::vector<common::ValueVector*>&, InsertState&) override;
+
+    std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction* transaction,
+        storage::MemoryManager* mm, storage::visible_func isVisible) override;
+    void delete_(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
+        DeleteState& deleteState) override;
+    void finalizeDelete(transaction::Transaction* transaction,
+        DeleteState& deleteState) override;
+
+    std::unique_ptr<UpdateState> initUpdateState(main::ClientContext* context,
+        common::column_id_t columnID, storage::visible_func isVisible) override;
+    void update(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
+        common::ValueVector& propertyVector, UpdateState& updateState) override;
 
     static storage::IndexType getIndexType() {
         static const storage::IndexType HNSW_INDEX_TYPE{"HNSW",
@@ -358,6 +387,18 @@ private:
         const std::vector<NodeWithDistance>& nbrs, bool isUpperLayer, HNSWInsertState& insertState);
     void shrinkForNode(transaction::Transaction* transaction, common::offset_t offset,
         bool isUpperLayer, common::length_t maxDegree, HNSWInsertState& insertState);
+
+    struct DeletedNeighbors {
+        std::vector<common::offset_t> lower;
+        std::vector<common::offset_t> upper;
+    };
+    DeletedNeighbors deleteFromGraph(transaction::Transaction* transaction, common::offset_t offset,
+        HNSWInsertState& insertState);
+    std::vector<common::offset_t> scanNeighbors(transaction::Transaction* transaction,
+        common::offset_t offset, bool isUpperLayer, HNSWInsertState& insertState);
+    void cleanEdgesForNode(transaction::Transaction* transaction, common::offset_t offset,
+        bool isUpperLayer, HNSWInsertState& insertState,
+        const std::unordered_set<common::offset_t>& deletedNodes);
 
     void processSecondHopCandidates(const EmbeddingHandle& queryVector,
         HNSWSearchState& searchState, int64_t& numVisitedNbrs,

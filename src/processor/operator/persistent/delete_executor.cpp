@@ -69,14 +69,14 @@ void NodeDeleteExecutor::init(ResultSet* resultSet, ExecutionContext*) {
 void SingleLabelNodeDeleteExecutor::init(ResultSet* resultSet, ExecutionContext* context) {
     NodeDeleteExecutor::init(resultSet, context);
     tableInfo.init(*resultSet);
+    deleteState_ =
+        std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
 }
 
 void SingleLabelNodeDeleteExecutor::delete_(ExecutionContext* context) {
     KU_ASSERT(tableInfo.pkVector->state == info.nodeIDVector->state);
-    auto deleteState =
-        std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
     auto transaction = Transaction::Get(*context->clientContext);
-    if (!tableInfo.table->delete_(transaction, *deleteState)) {
+    if (!tableInfo.table->delete_(transaction, *deleteState_)) {
         return;
     }
     switch (info.deleteType) {
@@ -91,10 +91,20 @@ void SingleLabelNodeDeleteExecutor::delete_(ExecutionContext* context) {
     }
 }
 
+void SingleLabelNodeDeleteExecutor::finalize(ExecutionContext* context) {
+    if (!deleteState_) {
+        return;
+    }
+    auto transaction = Transaction::Get(*context->clientContext);
+    tableInfo.table->finalizeDelete(transaction, *deleteState_);
+}
+
 void MultiLabelNodeDeleteExecutor::init(ResultSet* resultSet, ExecutionContext* context) {
     NodeDeleteExecutor::init(resultSet, context);
-    for (auto& [_, tableInfo] : tableInfos) {
+    for (auto& [tableID, tableInfo] : tableInfos) {
         tableInfo.init(*resultSet);
+        deleteStates_[tableID] =
+            std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
     }
 }
 
@@ -107,8 +117,7 @@ void MultiLabelNodeDeleteExecutor::delete_(ExecutionContext* context) {
     }
     const auto nodeID = info.nodeIDVector->getValue<internalID_t>(pos);
     const auto& tableInfo = tableInfos.at(nodeID.tableID);
-    auto deleteState =
-        std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
+    auto& deleteState = deleteStates_.at(nodeID.tableID);
     auto transaction = Transaction::Get(*context->clientContext);
     if (!tableInfo.table->delete_(transaction, *deleteState)) {
         return;
@@ -122,6 +131,18 @@ void MultiLabelNodeDeleteExecutor::delete_(ExecutionContext* context) {
     } break;
     default:
         KU_UNREACHABLE;
+    }
+}
+
+void MultiLabelNodeDeleteExecutor::finalize(ExecutionContext* context) {
+    if (deleteStates_.empty()) {
+        return;
+    }
+    auto transaction = Transaction::Get(*context->clientContext);
+    for (auto& [tableID, tableInfo] : tableInfos) {
+        if (auto it = deleteStates_.find(tableID); it != deleteStates_.end() && it->second) {
+            tableInfo.table->finalizeDelete(transaction, *it->second);
+        }
     }
 }
 

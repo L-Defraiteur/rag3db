@@ -642,6 +642,177 @@ void OnDiskHNSWIndex::checkpoint(main::ClientContext* context,
     lowerRelTable->checkpoint(context, lowerRelTableEntry, pageAllocator);
 }
 
+// ── DELETE / UPDATE ─────────────────────────────────────────────────────────
+
+std::unique_ptr<Index::DeleteState> OnDiskHNSWIndex::initDeleteState(
+    const transaction::Transaction* transaction, storage::MemoryManager* /*mm*/,
+    storage::visible_func /*isVisible*/) {
+    auto* context = transaction->getClientContext();
+    auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
+        getIndexTableCatalogEntries(catalog::Catalog::Get(*context),
+            Transaction::Get(*context), indexInfo);
+    return std::make_unique<HNSWDeleteState>(context, nodeTableEntry, upperRelTableEntry,
+        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+}
+
+void OnDiskHNSWIndex::delete_(Transaction* transaction, const common::ValueVector& nodeIDVector,
+    DeleteState& deleteState) {
+    auto& state = deleteState.cast<HNSWDeleteState>();
+    for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
+        const auto pos = nodeIDVector.state->getSelVector()[i];
+        const auto offset = nodeIDVector.readNodeOffset(pos);
+        auto [lowerNbrs, upperNbrs] = deleteFromGraph(transaction, offset, state.insertState);
+        state.deletedNodes.insert(offset);
+        for (const auto nbr : lowerNbrs) {
+            if (nbr != offset) {
+                state.lowerNeighborsToShrink.insert(nbr);
+            }
+        }
+        for (const auto nbr : upperNbrs) {
+            if (nbr != offset) {
+                state.upperNeighborsToShrink.insert(nbr);
+            }
+        }
+    }
+}
+
+void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& deleteState) {
+    auto& state = deleteState.cast<HNSWDeleteState>();
+    if (state.deletedNodes.empty()) {
+        return;
+    }
+    for (const auto nbrOffset : state.lowerNeighborsToShrink) {
+        if (!state.deletedNodes.contains(nbrOffset)) {
+            cleanEdgesForNode(transaction, nbrOffset, false /*isUpperLayer*/, state.insertState,
+                state.deletedNodes);
+        }
+    }
+    for (const auto nbrOffset : state.upperNeighborsToShrink) {
+        if (!state.deletedNodes.contains(nbrOffset)) {
+            cleanEdgesForNode(transaction, nbrOffset, true /*isUpperLayer*/, state.insertState,
+                state.deletedNodes);
+        }
+    }
+    state.lowerNeighborsToShrink.clear();
+    state.upperNeighborsToShrink.clear();
+    state.deletedNodes.clear();
+}
+
+void OnDiskHNSWIndex::cleanEdgesForNode(Transaction* transaction, common::offset_t offset,
+    bool isUpperLayer, HNSWInsertState& insertState,
+    const std::unordered_set<common::offset_t>& deletedNodes) {
+    // 1. Scan current forward edges.
+    auto neighbors = scanNeighbors(transaction, offset, isUpperLayer, insertState);
+    // 2. Check if any neighbor was deleted.
+    bool needsCleanup = false;
+    for (const auto nbr : neighbors) {
+        if (deletedNodes.contains(nbr)) {
+            needsCleanup = true;
+            break;
+        }
+    }
+    if (!needsCleanup) {
+        return;
+    }
+    // 3. Delete all forward edges.
+    insertState.relDeleteState->srcNodeIDVector.setValue(0,
+        common::nodeID_t{offset, indexInfo.tableID});
+    auto& relTable = isUpperLayer ? *upperRelTable : *lowerRelTable;
+    insertState.relDeleteState->detachDeleteDirection = common::RelDataDirection::FWD;
+    relTable.detachDelete(transaction, insertState.relDeleteState.get());
+    // 4. Re-insert only edges to non-deleted nodes.
+    for (const auto nbr : neighbors) {
+        if (!deletedNodes.contains(nbr)) {
+            insertState.relInsertState->srcNodeIDVector.setValue(0,
+                common::nodeID_t{offset, indexInfo.tableID});
+            insertState.relInsertState->dstNodeIDVector.setValue(0,
+                common::nodeID_t{nbr, indexInfo.tableID});
+            relTable.insert(transaction, *insertState.relInsertState);
+        }
+    }
+}
+
+std::unique_ptr<Index::UpdateState> OnDiskHNSWIndex::initUpdateState(
+    main::ClientContext* context, common::column_id_t /*columnID*/,
+    storage::visible_func /*isVisible*/) {
+    auto transaction = Transaction::Get(*context);
+    auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
+        getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);
+    return std::make_unique<HNSWUpdateState>(context, nodeTableEntry, upperRelTableEntry,
+        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+}
+
+void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector& nodeIDVector,
+    common::ValueVector& propertyVector, UpdateState& updateState) {
+    auto& state = updateState.cast<HNSWUpdateState>();
+    const auto pos = nodeIDVector.state->getSelVector()[0];
+    const auto offset = nodeIDVector.readNodeOffset(pos);
+    // 1. Remove old node from graph (forward edges + lazy cleanup of neighbors' back-edges).
+    (void)deleteFromGraph(transaction, offset, state.insertState);
+    // 2. Re-insert with new embedding if not NULL.
+    const auto valuePos = propertyVector.state->getSelVector()[0];
+    if (!propertyVector.isNull(valuePos)) {
+        auto scanState = std::make_unique<CommitInsertEmbeddingScanState>(&propertyVector);
+        EmbeddingHandle handle{propertyVector.getValue<common::list_entry_t>(valuePos).offset,
+            scanState.get()};
+        insertInternal(transaction, offset, handle, state.insertState);
+    }
+}
+
+std::vector<common::offset_t> OnDiskHNSWIndex::scanNeighbors(Transaction* /*transaction*/,
+    common::offset_t offset, bool isUpperLayer, HNSWInsertState& insertState) {
+    const auto& searchState = insertState.searchState;
+    const auto& graph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
+    const auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
+    const auto relTableID =
+        isUpperLayer ? hnswStorageInfo.upperRelTableID : hnswStorageInfo.lowerRelTableID;
+    const auto relTableEntry =
+        isUpperLayer ? searchState.upperRelTableEntry : searchState.lowerRelTableEntry;
+    const auto scanState = graph->prepareRelScan(*relTableEntry, relTableID, indexInfo.tableID, {});
+    auto itr = graph->scanFwd(common::nodeID_t{offset, indexInfo.tableID}, *scanState);
+    std::vector<common::offset_t> neighbors;
+    for (const auto& neighborChunk : itr) {
+        neighborChunk.forEachBreakWhenFalse([&](auto nbrs, auto i) -> bool {
+            auto nbr = nbrs[i];
+            if (nbr.offset == common::INVALID_OFFSET) {
+                return false;
+            }
+            neighbors.push_back(nbr.offset);
+            return true;
+        });
+    }
+    return neighbors;
+}
+
+// NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const function.
+OnDiskHNSWIndex::DeletedNeighbors OnDiskHNSWIndex::deleteFromGraph(Transaction* transaction,
+    common::offset_t offset,
+    HNSWInsertState& insertState) {
+    auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
+    // 1. Scan neighbors in both layers BEFORE deleting edges.
+    auto lowerNeighbors = scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState);
+    auto upperNeighbors = scanNeighbors(transaction, offset, true /*isUpperLayer*/, insertState);
+    // 2. Entry point replacement if the deleted node is an entry point.
+    if (hnswStorageInfo.lowerEntryPoint == offset) {
+        hnswStorageInfo.lowerEntryPoint = lowerNeighbors.empty() ?
+                                              common::INVALID_OFFSET :
+                                              lowerNeighbors[0];
+    }
+    if (hnswStorageInfo.upperEntryPoint == offset) {
+        hnswStorageInfo.upperEntryPoint = upperNeighbors.empty() ?
+                                              common::INVALID_OFFSET :
+                                              upperNeighbors[0];
+    }
+    // 3. Delete all forward edges from the node in both layers.
+    insertState.relDeleteState->srcNodeIDVector.setValue(0,
+        common::nodeID_t{offset, indexInfo.tableID});
+    insertState.relDeleteState->detachDeleteDirection = common::RelDataDirection::FWD;
+    lowerRelTable->detachDelete(transaction, insertState.relDeleteState.get());
+    upperRelTable->detachDelete(transaction, insertState.relDeleteState.get());
+    // 4. Return neighbors for deferred shrink in finalizeDelete().
+    return {std::move(lowerNeighbors), std::move(upperNeighbors)};
+}
+
 void OnDiskHNSWIndex::insertInternal(Transaction* transaction, common::offset_t offset,
     const EmbeddingHandle& vector, HNSWInsertState& insertState) {
     // Search fow lower layer entry point.

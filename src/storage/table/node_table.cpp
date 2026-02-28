@@ -507,8 +507,32 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
     hasChanges = true;
 }
 
+void NodeTable::initDeleteStates(const Transaction* transaction, TableDeleteState& deleteState) {
+    auto& nodeDeleteState = ku_dynamic_cast<NodeTableDeleteState&>(deleteState);
+    if (nodeDeleteState.indexDeleteStatesInitialized) {
+        return;
+    }
+    nodeDeleteState.indexDeleteStates.resize(indexes.size());
+    for (auto i = 0u; i < indexes.size(); i++) {
+        nodeDeleteState.indexDeleteStates[i] =
+            indexes[i].getIndex()->initDeleteState(transaction, memoryManager,
+                getVisibleFunc(transaction));
+    }
+    nodeDeleteState.indexDeleteStatesInitialized = true;
+}
+
+void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& deleteState) {
+    auto& nodeDeleteState = ku_dynamic_cast<NodeTableDeleteState&>(deleteState);
+    if (!nodeDeleteState.indexDeleteStatesInitialized) {
+        return;
+    }
+    for (auto i = 0u; i < indexes.size(); i++) {
+        indexes[i].getIndex()->finalizeDelete(transaction, *nodeDeleteState.indexDeleteStates[i]);
+    }
+}
+
 bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState) {
-    const auto& nodeDeleteState = ku_dynamic_cast<NodeTableDeleteState&>(deleteState);
+    auto& nodeDeleteState = ku_dynamic_cast<NodeTableDeleteState&>(deleteState);
     KU_ASSERT(nodeDeleteState.nodeIDVector.state->getSelVector().getSelSize() == 1);
     const auto pos = nodeDeleteState.nodeIDVector.state->getSelVector()[0];
     if (nodeDeleteState.nodeIDVector.isNull(pos)) {
@@ -516,10 +540,11 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     bool isDeleted = false;
     const auto nodeOffset = nodeDeleteState.nodeIDVector.readNodeOffset(pos);
-    for (auto& index : indexes) {
-        auto indexDeleteState = index.getIndex()->initDeleteState(transaction, memoryManager,
-            getVisibleFunc(transaction));
-        index.getIndex()->delete_(transaction, nodeDeleteState.nodeIDVector, *indexDeleteState);
+    // Use pre-created index delete states (initialized once, reused across calls).
+    initDeleteStates(transaction, deleteState);
+    for (auto i = 0u; i < indexes.size(); i++) {
+        indexes[i].getIndex()->delete_(transaction, nodeDeleteState.nodeIDVector,
+            *nodeDeleteState.indexDeleteStates[i]);
     }
 
     if (transaction->isUnCommitted(tableID, nodeOffset)) {

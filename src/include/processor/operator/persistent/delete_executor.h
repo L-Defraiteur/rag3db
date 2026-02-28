@@ -66,6 +66,7 @@ public:
     virtual void init(ResultSet* resultSet, ExecutionContext* context);
 
     virtual void delete_(ExecutionContext* context) = 0;
+    virtual void finalize(ExecutionContext* /*context*/) {}
 
     virtual std::unique_ptr<NodeDeleteExecutor> copy() const = 0;
 
@@ -98,6 +99,7 @@ public:
 
     void init(ResultSet* resultSet, ExecutionContext*) override;
     void delete_(ExecutionContext* context) override;
+    void finalize(ExecutionContext* context) override;
 
     std::unique_ptr<NodeDeleteExecutor> copy() const override {
         return std::make_unique<SingleLabelNodeDeleteExecutor>(*this);
@@ -105,6 +107,7 @@ public:
 
 private:
     NodeTableDeleteInfo tableInfo;
+    std::unique_ptr<storage::NodeTableDeleteState> deleteState_;
 };
 
 class MultiLabelNodeDeleteExecutor final : public NodeDeleteExecutor {
@@ -117,6 +120,7 @@ public:
 
     void init(ResultSet* resultSet, ExecutionContext*) override;
     void delete_(ExecutionContext* context) override;
+    void finalize(ExecutionContext* context) override;
 
     std::unique_ptr<NodeDeleteExecutor> copy() const override {
         return std::make_unique<MultiLabelNodeDeleteExecutor>(*this);
@@ -124,6 +128,7 @@ public:
 
 private:
     common::table_id_map_t<NodeTableDeleteInfo> tableInfos;
+    common::table_id_map_t<std::unique_ptr<storage::NodeTableDeleteState>> deleteStates_;
 };
 
 struct RelDeleteInfo {

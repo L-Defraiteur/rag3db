@@ -145,6 +145,8 @@ public:
 
     static Transaction* Get(const main::ClientContext& context);
 
+    main::ClientContext* getClientContext() const { return clientContext; }
+
 private:
     common::offset_t getMinUncommittedNodeOffset(common::table_id_t tableID) const;
 

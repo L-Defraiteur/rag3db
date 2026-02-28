@@ -44,6 +44,12 @@ bool DeleteNode::getNextTuplesInternal(ExecutionContext* context) {
     return true;
 }
 
+void DeleteNode::finalizeInternal(ExecutionContext* context) {
+    for (auto& executor : executors) {
+        executor->finalize(context);
+    }
+}
+
 void DeleteRel::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
     for (auto& executor : executors) {
         executor->init(resultSet, context);

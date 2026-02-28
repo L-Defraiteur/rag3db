@@ -145,6 +145,10 @@ public:
         const transaction::Transaction* transaction, MemoryManager* mm, visible_func isVisible) = 0;
     virtual void delete_(transaction::Transaction* transaction,
         const common::ValueVector& nodeIDVector, DeleteState& deleteState) = 0;
+    virtual void finalizeDelete(transaction::Transaction* /*transaction*/,
+        DeleteState& /*deleteState*/) {
+        // DO NOTHING. Override in extensions that need batched cleanup (e.g., HNSW).
+    }
     virtual bool needCommitInsert() const { return false; }
     virtual void commitInsert(transaction::Transaction*, const common::ValueVector&,
         const std::vector<common::ValueVector*>&, InsertState&) {
