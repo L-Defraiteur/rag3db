@@ -71,7 +71,11 @@ std::unique_ptr<Index> TantivyIndex::load(main::ClientContext* context, StorageM
     return std::make_unique<TantivyIndex>(std::move(indexInfo), std::move(si), std::move(handle));
 }
 
-static LogicalType fieldTypeToLogicalType(const std::string& ft) {
+/// Map tantivy field type + physical type → LogicalType for scan vectors.
+/// PhysicalTypeID is needed because BOOL maps to "i64" in Tantivy
+/// but requires LogicalType::BOOL() for correct ValueVector reads.
+static LogicalType fieldTypeToLogicalType(const std::string& ft, PhysicalTypeID physType) {
+    if (physType == PhysicalTypeID::BOOL) return LogicalType::BOOL();
     if (ft == "u64") return LogicalType::UINT64();
     if (ft == "i64") return LogicalType::INT64();
     if (ft == "f64") return LogicalType::DOUBLE();
@@ -141,7 +145,7 @@ void TantivyIndex::update(transaction::Transaction* transaction,
     std::vector<std::unique_ptr<ValueVector>> scanVecs;
     std::vector<ValueVector*> scanPtrs;
     for (size_t c = 0; c < indexInfo.columnIDs.size(); c++) {
-        auto lt = fieldTypeToLogicalType(fieldTypes_[c]);
+        auto lt = fieldTypeToLogicalType(fieldTypes_[c], indexInfo.keyDataTypes[c]);
         auto vec = std::make_unique<ValueVector>(std::move(lt),
             state.memoryManager, dataChunk);
         scanPtrs.push_back(vec.get());
@@ -219,7 +223,11 @@ void TantivyIndex::insert(transaction::Transaction*, const ValueVector& nodeIDVe
                 } else if (ft == "i64") {
                     DocFieldI64 field;
                     field.field_id = fieldIds_[f];
-                    field.value = propertyVectors[f]->getValue<int64_t>(pos);
+                    if (indexInfo.keyDataTypes[f] == PhysicalTypeID::BOOL) {
+                        field.value = propertyVectors[f]->getValue<bool>(pos) ? 1 : 0;
+                    } else {
+                        field.value = propertyVectors[f]->getValue<int64_t>(pos);
+                    }
                     i64Fields.push_back(field);
                 } else if (ft == "f64") {
                     DocFieldF64 field;
@@ -295,7 +303,7 @@ void TantivyIndex::finalize(main::ClientContext* context) {
     std::vector<std::unique_ptr<ValueVector>> outputVecs;
     std::vector<ValueVector*> outputPtrs;
     for (size_t c = 0; c < colIDs.size(); c++) {
-        auto logicalType = fieldTypeToLogicalType(fieldTypes_[c]);
+        auto logicalType = fieldTypeToLogicalType(fieldTypes_[c], indexInfo.keyDataTypes[c]);
         auto vec = std::make_unique<ValueVector>(std::move(logicalType),
             MemoryManager::Get(*context), dataChunk);
         outputPtrs.push_back(vec.get());
@@ -350,7 +358,11 @@ void TantivyIndex::finalize(main::ClientContext* context) {
                 } else if (ft == "i64") {
                     DocFieldI64 field;
                     field.field_id = fieldIds_[f];
-                    field.value = outputPtrs[f]->getValue<int64_t>(0);
+                    if (indexInfo.keyDataTypes[f] == PhysicalTypeID::BOOL) {
+                        field.value = outputPtrs[f]->getValue<bool>(0) ? 1 : 0;
+                    } else {
+                        field.value = outputPtrs[f]->getValue<int64_t>(0);
+                    }
                     i64Fields.push_back(field);
                 } else if (ft == "f64") {
                     DocFieldF64 field;

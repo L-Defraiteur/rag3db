@@ -150,7 +150,7 @@ impl Default for SearchMode {
 }
 
 /// Chunking strategy.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChunkStrategy {
     Semantic,
@@ -214,6 +214,18 @@ pub struct KBConfig {
 
     #[serde(default, alias = "special_ops")]
     pub special_ops: Option<HashMap<String, serde_json::Value>>,
+
+    /// Enable sparse vector indexing for this KB.
+    #[serde(default)]
+    pub sparse: bool,
+
+    /// Weight of sparse signal in 3-way weighted fusion (0.0–1.0).
+    #[serde(default = "default_sparse_weight", alias = "sparse_weight")]
+    pub sparse_weight: f64,
+}
+
+fn default_sparse_weight() -> f64 {
+    0.2
 }
 
 impl Default for KBConfig {
@@ -225,6 +237,8 @@ impl Default for KBConfig {
             content_boost: 1.0,
             chunking: ChunkingConfig::default(),
             special_ops: None,
+            sparse: false,
+            sparse_weight: default_sparse_weight(),
         }
     }
 }

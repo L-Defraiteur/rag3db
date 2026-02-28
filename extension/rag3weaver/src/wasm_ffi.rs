@@ -1454,6 +1454,67 @@ pub extern "C" fn rag3weaver_test_tokio_mt() -> *const c_char {
     }
 }
 
+// ── Candle embedding test (feature: candle-wasm) ────────────────────────
+
+/// Test candle embedding in WASM. Receives model files as raw bytes from JS,
+/// creates a CandleEmbedder, embeds a text, and returns the result as JSON.
+/// Returns: {"ok":true,"dim":N,"nonZero":N,"sample":[f,f,f]} or {"ok":false,"error":"..."}
+#[cfg(feature = "candle-wasm")]
+#[no_mangle]
+pub extern "C" fn rag3weaver_candle_embed(
+    config_ptr: *const u8,
+    config_len: usize,
+    tokenizer_ptr: *const u8,
+    tokenizer_len: usize,
+    weights_ptr: *const u8,
+    weights_len: usize,
+    text_ptr: *const c_char,
+) -> *const c_char {
+    use crate::candle_embedder::CandleEmbedder;
+
+    let result = std::panic::catch_unwind(|| {
+        if config_ptr.is_null() || tokenizer_ptr.is_null() || weights_ptr.is_null() || text_ptr.is_null() {
+            return r#"{"ok":false,"error":"null pointer"}"#.to_string();
+        }
+
+        let config = unsafe { std::slice::from_raw_parts(config_ptr, config_len) };
+        let tokenizer = unsafe { std::slice::from_raw_parts(tokenizer_ptr, tokenizer_len) };
+        let weights = unsafe { std::slice::from_raw_parts(weights_ptr, weights_len) }.to_vec();
+        let text = unsafe { CStr::from_ptr(text_ptr) }.to_string_lossy();
+
+        let embedder = match CandleEmbedder::from_bytes(config, tokenizer, weights) {
+            Ok(e) => e,
+            Err(e) => return format!(r#"{{"ok":false,"error":"embedder init: {e}"}}"#),
+        };
+
+        let texts = vec![text.into_owned()];
+        match embedder.embed_sync(&texts) {
+            Ok(vecs) if !vecs.is_empty() => {
+                let v = &vecs[0];
+                let dim = v.len();
+                let non_zero = v.iter().filter(|x| **x != 0.0).count();
+                let s0 = v.get(0).copied().unwrap_or(0.0);
+                let s1 = v.get(1).copied().unwrap_or(0.0);
+                let s2 = v.get(2).copied().unwrap_or(0.0);
+                let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                format!(
+                    r#"{{"ok":true,"dim":{},"nonZero":{},"norm":{:.6},"sample":[{:.6},{:.6},{:.6}]}}"#,
+                    dim, non_zero, norm, s0, s1, s2
+                )
+            }
+            Ok(_) => r#"{"ok":false,"error":"empty result"}"#.to_string(),
+            Err(e) => format!(r#"{{"ok":false,"error":"embed: {e}"}}"#),
+        }
+    });
+
+    match result {
+        Ok(json) => return_string_to_c(json),
+        Err(_) => return_string_to_c(
+            r#"{"ok":false,"error":"panic during candle embed"}"#.to_string(),
+        ),
+    }
+}
+
 /// Get the entity count for a given entity type. Returns JSON.
 #[no_mangle]
 pub extern "C" fn rag3weaver_count(

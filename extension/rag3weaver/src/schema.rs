@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::config::{CatalogConfig, EntityDef, FieldType, RelationDef};
+use crate::config::{CatalogConfig, EntityDef, FieldType, KBConfig, RelationDef};
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,7 @@ pub fn generate_node_table_ddl(
     entity_name: &str,
     entity_def: &EntityDef,
     embedding_dim: usize,
+    kb_configs: &HashMap<String, KBConfig>,
 ) -> Result<String, SchemaError> {
     validate_identifier(entity_name, "entity")?;
 
@@ -139,8 +140,18 @@ pub fn generate_node_table_ddl(
     let kb_mappings = resolve_entity_kbs(entity_def);
     let mut kb_names: Vec<&String> = kb_mappings.keys().collect();
     kb_names.sort();
-    for kb_name in kb_names {
+    for kb_name in &kb_names {
         columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
+
+        // Sparse vector columns (if KB has sparse enabled)
+        if kb_configs
+            .get(kb_name.as_str())
+            .map(|c| c.sparse)
+            .unwrap_or(false)
+        {
+            columns.push(format!("{kb_name}_sparse_indices INT64[]"));
+            columns.push(format!("{kb_name}_sparse_weights DOUBLE[]"));
+        }
     }
 
     let col_defs = columns.join(",\n    ");
@@ -154,32 +165,56 @@ pub fn generate_node_table_ddl(
 /// Generate CREATE NODE TABLE for chunk storage.
 ///
 /// Created for entities that have at least one `chunked: true` field.
-/// Tracks parent, text, offsets (char + line), and an embedding vector.
+/// Tracks parent, text, offsets (char + line), and per-KB embedding columns
+/// (same naming convention as entity tables: `{kb}_embedding`, `{kb}_sparse_*`).
 pub fn generate_chunk_table_ddl(
     entity_name: &str,
+    entity_def: &EntityDef,
     embedding_dim: usize,
+    kb_configs: &HashMap<String, KBConfig>,
 ) -> Result<String, SchemaError> {
     validate_identifier(entity_name, "entity")?;
     let table_name = format!("{entity_name}_Chunk");
 
+    let mut columns = vec![
+        "_uuid STRING".to_string(),
+        "_parent_uuid STRING".to_string(),
+        "_parent_field STRING".to_string(),
+        "_kb_name STRING".to_string(),
+        "_text STRING".to_string(),
+        "_text_hash STRING".to_string(),
+        "_index INT64".to_string(),
+        "_start_char INT64".to_string(),
+        "_end_char INT64".to_string(),
+        "_start_line INT64".to_string(),
+        "_end_line INT64".to_string(),
+        "_core_start_char INT64".to_string(),
+        "_core_end_char INT64".to_string(),
+        "_core_start_line INT64".to_string(),
+        "_core_end_line INT64".to_string(),
+    ];
+
+    // Per-KB embedding + sparse columns (same naming as entity table)
+    let kb_mappings = resolve_entity_kbs(entity_def);
+    let mut kb_names: Vec<&String> = kb_mappings.keys().collect();
+    kb_names.sort();
+    for kb_name in &kb_names {
+        columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
+
+        if kb_configs
+            .get(kb_name.as_str())
+            .map(|c| c.sparse)
+            .unwrap_or(false)
+        {
+            columns.push(format!("{kb_name}_sparse_indices INT64[]"));
+            columns.push(format!("{kb_name}_sparse_weights DOUBLE[]"));
+        }
+    }
+
+    let col_defs = columns.join(",\n    ");
     Ok(format!(
         "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
-         _uuid STRING,\n    \
-         _parent_uuid STRING,\n    \
-         _parent_field STRING,\n    \
-         _kb_name STRING,\n    \
-         _text STRING,\n    \
-         _text_hash STRING,\n    \
-         _index INT64,\n    \
-         _start_char INT64,\n    \
-         _end_char INT64,\n    \
-         _start_line INT64,\n    \
-         _end_line INT64,\n    \
-         _core_start_char INT64,\n    \
-         _core_end_char INT64,\n    \
-         _core_start_line INT64,\n    \
-         _core_end_line INT64,\n    \
-         embedding FLOAT[{embedding_dim}],\n    \
+         {col_defs},\n    \
          PRIMARY KEY(_uuid)\n)"
     ))
 }
@@ -252,18 +287,28 @@ pub fn generate_vector_index_ddl(
     index_name: &str,
 ) -> String {
     format!(
-        "CALL CREATE_VECTOR_INDEX('{table}', '{index_name}', '{column}', metric := 'cosine')"
+        "CALL CREATE_VECTOR_INDEX('{table}', '{index_name}', '{column}', metric := 'cosine', skip_if_exists := true)"
     )
 }
 
-/// Generate CALL CREATE_TANTIVY_INDEX for FTS on text fields.
-pub fn generate_fts_index_ddl(table: &str, fields: &[&str]) -> String {
+/// Generate CALL CREATE_TANTIVY_INDEX for FTS on text fields,
+/// with optional filter fields for native Tantivy pre-filtering.
+pub fn generate_fts_index_ddl(table: &str, fields: &[&str], filter_fields: &[&str]) -> String {
     let cols = fields
         .iter()
         .map(|f| format!("'{f}'"))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("CALL CREATE_TANTIVY_INDEX('{table}', [{cols}])")
+    if filter_fields.is_empty() {
+        format!("CALL CREATE_TANTIVY_INDEX('{table}', [{cols}])")
+    } else {
+        let ff = filter_fields
+            .iter()
+            .map(|f| format!("'{f}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("CALL CREATE_TANTIVY_INDEX('{table}', [{cols}], filter_fields := [{ff}])")
+    }
 }
 
 /// Generate CREATE NODE TABLE for the `_catalog_meta` system table.
@@ -314,12 +359,44 @@ pub fn generate_full_schema(
 
     for entity_name in &entity_names {
         let entity_def = &config.entities[*entity_name];
-        ddl.push(generate_node_table_ddl(entity_name, entity_def, config.embedding_dim)?);
+        ddl.push(generate_node_table_ddl(
+            entity_name,
+            entity_def,
+            config.embedding_dim,
+            &config.knowledge_bases,
+        )?);
 
         // Chunk table if needed
         if entity_has_chunks(entity_def) {
-            ddl.push(generate_chunk_table_ddl(entity_name, config.embedding_dim)?);
+            ddl.push(generate_chunk_table_ddl(
+                entity_name,
+                entity_def,
+                config.embedding_dim,
+                &config.knowledge_bases,
+            )?);
             ddl.push(generate_chunk_rel_ddl(entity_name)?);
+        }
+
+        // Collect filter fields: non-text entity fields for Tantivy pre-filtering.
+        // These are indexed alongside text fields so native FilterClause queries
+        // can filter at the segment level (no post-filter needed).
+        let mut filter_fields: Vec<&str> = Vec::new();
+        {
+            let mut sorted_fnames: Vec<&String> = entity_def.fields.keys().collect();
+            sorted_fnames.sort();
+            for fname in &sorted_fnames {
+                let fdef = &entity_def.fields[*fname];
+                match fdef.field_type {
+                    // Text fields are already indexed as FTS text fields.
+                    FieldType::Text => {}
+                    // Boolean → Kuzu BOOLEAN → Tantivy "i64" (0/1 in C++)
+                    // Timestamp → Kuzu TIMESTAMP → Tantivy "i64" (microseconds epoch in C++)
+                    // String, Choice, Tags, Json → Kuzu STRING → Tantivy "string"
+                    // Int64, Integer → Kuzu INT64 → Tantivy "i64"
+                    // Double, Number → Kuzu DOUBLE → Tantivy "f64"
+                    _ => filter_fields.push(fname.as_str()),
+                }
+            }
         }
 
         // Indexes for this entity's KBs
@@ -340,12 +417,12 @@ pub fn generate_full_schema(
                 let chunk_idx = format!("{entity_name}_Chunk_{kb_name}_vec");
                 indexes.push(generate_vector_index_ddl(
                     &chunk_table,
-                    "embedding",
+                    &emb_col,
                     &chunk_idx,
                 ));
             }
 
-            // FTS index on title + content fields
+            // FTS index on title + content fields + filter fields
             let mut fts_fields = Vec::new();
             if let Some(ref title) = mapping.title_field {
                 fts_fields.push(title.as_str());
@@ -356,7 +433,7 @@ pub fn generate_full_schema(
                 }
             }
             if !fts_fields.is_empty() {
-                indexes.push(generate_fts_index_ddl(entity_name, &fts_fields));
+                indexes.push(generate_fts_index_ddl(entity_name, &fts_fields, &filter_fields));
             }
         }
     }
@@ -531,7 +608,7 @@ mod tests {
             hashsafe: None,
         };
 
-        let ddl = generate_node_table_ddl("Person", &entity, 384).unwrap();
+        let ddl = generate_node_table_ddl("Person", &entity, 384, &HashMap::new()).unwrap();
         assert!(ddl.starts_with("CREATE NODE TABLE IF NOT EXISTS Person("));
         assert!(ddl.contains("_uuid STRING"));
         assert!(ddl.contains("_content_hash STRING"));
@@ -558,8 +635,33 @@ mod tests {
             hashsafe: None,
         };
 
-        let ddl = generate_node_table_ddl("Document", &entity, 384).unwrap();
+        let ddl = generate_node_table_ddl("Document", &entity, 384, &HashMap::new()).unwrap();
         assert!(ddl.contains("main_embedding FLOAT[384]"));
+        assert!(!ddl.contains("sparse_indices"));
+    }
+
+    #[test]
+    fn node_table_with_sparse() {
+        use crate::config::KBConfig;
+        let mut fields = HashMap::new();
+        fields.insert(
+            "title".to_string(),
+            make_text_field(Some("main"), None),
+        );
+        let entity = EntityDef {
+            fields,
+            hashsafe: None,
+        };
+
+        let mut kb_configs = HashMap::new();
+        let mut kb = KBConfig::default();
+        kb.sparse = true;
+        kb_configs.insert("main".to_string(), kb);
+
+        let ddl = generate_node_table_ddl("Document", &entity, 384, &kb_configs).unwrap();
+        assert!(ddl.contains("main_embedding FLOAT[384]"));
+        assert!(ddl.contains("main_sparse_indices INT64[]"));
+        assert!(ddl.contains("main_sparse_weights DOUBLE[]"));
     }
 
     #[test]
@@ -582,7 +684,7 @@ mod tests {
             hashsafe: None,
         };
 
-        let ddl = generate_node_table_ddl("File", &entity, 768).unwrap();
+        let ddl = generate_node_table_ddl("File", &entity, 768, &HashMap::new()).unwrap();
         assert!(ddl.contains("code_embedding FLOAT[768]"));
         assert!(ddl.contains("docs_embedding FLOAT[768]"));
     }
@@ -593,14 +695,19 @@ mod tests {
             fields: HashMap::new(),
             hashsafe: None,
         };
-        assert!(generate_node_table_ddl("my-table", &entity, 384).is_err());
+        assert!(generate_node_table_ddl("my-table", &entity, 384, &HashMap::new()).is_err());
     }
 
     // ── generate_chunk_table_ddl ─────────────────────────────────────────
 
     #[test]
     fn chunk_table_basic() {
-        let ddl = generate_chunk_table_ddl("Document", 384).unwrap();
+        let mut fields = HashMap::new();
+        fields.insert("title".to_string(), make_text_field(Some("main"), None));
+        fields.insert("body".to_string(), make_chunked_field("main"));
+        let entity = EntityDef { fields, hashsafe: None };
+
+        let ddl = generate_chunk_table_ddl("Document", &entity, 384, &HashMap::new()).unwrap();
         assert!(ddl.contains("CREATE NODE TABLE IF NOT EXISTS Document_Chunk("));
         assert!(ddl.contains("_uuid STRING"));
         assert!(ddl.contains("_parent_uuid STRING"));
@@ -617,7 +724,7 @@ mod tests {
         assert!(ddl.contains("_core_end_char INT64"));
         assert!(ddl.contains("_core_start_line INT64"));
         assert!(ddl.contains("_core_end_line INT64"));
-        assert!(ddl.contains("embedding FLOAT[384]"));
+        assert!(ddl.contains("main_embedding FLOAT[384]"));
         assert!(ddl.contains("PRIMARY KEY(_uuid)"));
     }
 
@@ -685,16 +792,29 @@ mod tests {
         let ddl = generate_vector_index_ddl("Document", "main_embedding", "Document_main_vec");
         assert_eq!(
             ddl,
-            "CALL CREATE_VECTOR_INDEX('Document', 'Document_main_vec', 'main_embedding', metric := 'cosine')"
+            "CALL CREATE_VECTOR_INDEX('Document', 'Document_main_vec', 'main_embedding', metric := 'cosine', skip_if_exists := true)"
         );
     }
 
     #[test]
-    fn fts_index_ddl() {
-        let ddl = generate_fts_index_ddl("Document", &["title", "body"]);
+    fn fts_index_ddl_no_filter() {
+        let ddl = generate_fts_index_ddl("Document", &["title", "body"], &[]);
         assert_eq!(
             ddl,
             "CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'])"
+        );
+    }
+
+    #[test]
+    fn fts_index_ddl_with_filter_fields() {
+        let ddl = generate_fts_index_ddl(
+            "Document",
+            &["title", "body"],
+            &["page_count", "status"],
+        );
+        assert_eq!(
+            ddl,
+            "CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'], filter_fields := ['page_count', 'status'])"
         );
     }
 
@@ -742,6 +862,35 @@ mod tests {
         assert!(
             schema.indexes.iter().any(|s| s.contains("CREATE_TANTIVY_INDEX")),
             "should have FTS index"
+        );
+    }
+
+    #[test]
+    fn full_schema_fts_includes_filter_fields() {
+        let config = make_full_config();
+        let schema = generate_full_schema(&config).unwrap();
+
+        // make_full_config has page_count:Int64 and status:String → filter_fields
+        let fts = schema
+            .indexes
+            .iter()
+            .find(|s| s.contains("CREATE_TANTIVY_INDEX"))
+            .expect("should have FTS index");
+        assert!(
+            fts.contains("filter_fields"),
+            "FTS DDL should include filter_fields: {fts}"
+        );
+        assert!(
+            fts.contains("'page_count'"),
+            "filter_fields should include page_count: {fts}"
+        );
+        assert!(
+            fts.contains("'status'"),
+            "filter_fields should include status: {fts}"
+        );
+        assert!(
+            fts.contains("'published'"),
+            "filter_fields should include published (Boolean): {fts}"
         );
     }
 
@@ -836,6 +985,8 @@ mod tests {
         );
         fields.insert("body".to_string(), make_chunked_field("main"));
         fields.insert("page_count".to_string(), make_field(FieldType::Int64));
+        fields.insert("published".to_string(), make_field(FieldType::Boolean));
+        fields.insert("status".to_string(), make_field(FieldType::String));
 
         let mut entities = HashMap::new();
         entities.insert(

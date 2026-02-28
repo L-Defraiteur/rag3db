@@ -790,5 +790,373 @@ TEST_F(ApiTest, TantivyRegexContainsTest) {
     ASSERT_GE(countResults(*result), 1u) << "Short-literal regex should match via full scan";
 }
 
+// ── Boolean + Timestamp filter fields ─────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyBoolTimestampFilterTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    // Table with text + boolean + timestamp filter columns.
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE article (ID UINT64, title STRING, body STRING, "
+                            "published BOOLEAN, created_at TIMESTAMP, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language', "
+                    "published: true, created_at: timestamp('2024-01-15 10:00:00')})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 1, title: 'Python Guide', "
+                    "body: 'Python is a programming language for beginners', "
+                    "published: false, created_at: timestamp('2024-06-01 12:00:00')})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 2, title: 'Cooking Recipes', "
+                    "body: 'A guide to cooking Italian food', "
+                    "published: true, created_at: timestamp('2025-01-01 00:00:00')})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 3, title: 'C++ Programming', "
+                    "body: 'C++ is a general-purpose programming language', "
+                    "published: true, created_at: timestamp('2023-06-15 08:30:00')})")
+            ->isSuccess());
+
+    // Create index with boolean and timestamp filter fields.
+    auto result = conn->query(
+        "CALL CREATE_TANTIVY_INDEX('article', ['title', 'body'], "
+        "filter_fields := ['published', 'created_at'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Without filters: "programming" → 3 articles (0, 1, 3).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // Filter: published == 1 (true) AND "programming" → articles 0, 3 (article 1 is unpublished).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"published\",\"op\":\"eq\",\"value\":1}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // Filter: published == 0 (false) AND "programming" → article 1 only.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"published\",\"op\":\"eq\",\"value\":0}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // Filter: created_at > 2024-03-01 (epoch us = 1709251200000000) → articles 1, 2 (June 2024, Jan 2025).
+    // Among those, "programming" matches only article 1.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"created_at\",\"op\":\"gt\",\"value\":1709251200000000}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // Filter: created_at < 2024-03-01 → articles 0 (Jan 2024), 3 (Jun 2023).
+    // Both have "programming" → 2 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"created_at\",\"op\":\"lt\",\"value\":1709251200000000}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // Combined: published == 1 AND created_at > 2024-03-01 AND "guide" → article 2 only (cooking, published, Jan 2025).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"guide\","
+        "\"filters\":[{\"field\":\"published\",\"op\":\"eq\",\"value\":1},"
+        "{\"field\":\"created_at\",\"op\":\"gt\",\"value\":1709251200000000}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── String filter field (ngram contains/starts_with on filter field) ──────────
+
+TEST_F(ApiTest, TantivyStringFilterFieldTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    // Table with text body + string filter column (category name, not full-text).
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE article (ID UINT64, title STRING, body STRING, "
+                            "tag STRING, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language', tag: 'programming'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 1, title: 'Python Guide', "
+                    "body: 'Python is a programming language for beginners', tag: 'programming'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 2, title: 'Cooking Recipes', "
+                    "body: 'A guide to cooking Italian food', tag: 'cooking'})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 3, title: 'C++ Programming', "
+                    "body: 'C++ is a general-purpose programming language', tag: 'systems'})")
+            ->isSuccess());
+
+    // Create index with string filter field.
+    auto result = conn->query(
+        "CALL CREATE_TANTIVY_INDEX('article', ['title', 'body'], "
+        "filter_fields := ['tag'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // 1. eq filter: tag == "programming" AND "programming" in body → articles 0, 1.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"eq\",\"value\":\"programming\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 2. eq filter: tag == "systems" AND "programming" → article 3 only.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"eq\",\"value\":\"systems\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // 3. eq filter: tag == "cooking" AND "programming" → 0 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"eq\",\"value\":\"cooking\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // 4. starts_with filter: tag starts with "prog" → articles 0, 1 (tag=programming).
+    //    Among those, all have "programming" in body → 2 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"starts_with\",\"value\":\"prog\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 5. contains filter on string field: tag contains "ystem" → article 3 (tag=systems).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"contains\",\"value\":\"ystem\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // 6. ne filter: tag != "programming" AND "guide" in body → article 2 (cooking).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"guide\","
+        "\"filters\":[{\"field\":\"tag\",\"op\":\"ne\",\"value\":\"programming\"}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── Between filter + in filter ───────────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyBetweenAndInFilterTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE article (ID UINT64, title STRING, body STRING, "
+                            "category INT64, score DOUBLE, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language', category: 1, score: 9.5})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 1, title: 'Python Guide', "
+                    "body: 'Python is a programming language for beginners', category: 2, score: 7.0})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 2, title: 'Cooking Recipes', "
+                    "body: 'A guide to cooking Italian food', category: 3, score: 8.0})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 3, title: 'C++ Programming', "
+                    "body: 'C++ is a general-purpose programming language', category: 1, score: 8.5})")
+            ->isSuccess());
+
+    auto result = conn->query(
+        "CALL CREATE_TANTIVY_INDEX('article', ['title', 'body'], "
+        "filter_fields := ['category', 'score'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // 1. between filter: score between [8.0, 9.0] AND "programming" → article 3 (score 8.5).
+    //    Article 0 (score 9.5) is outside range; article 1 (score 7.0) is outside range.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"score\",\"op\":\"between\",\"value\":[8.0,9.0]}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // 2. between filter: score between [7.0, 9.5] → all 3 programming articles.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"score\",\"op\":\"between\",\"value\":[7.0,9.5]}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // 3. in filter: category in [1, 3] AND "programming" → articles 0, 3 (category 1).
+    //    Article 2 is category 3 but no "programming".
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"in\",\"value\":[1,3]}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 4. in filter: category in [2] AND "programming" → article 1 only.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"in\",\"value\":[2]}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+
+    // 5. Combined between + in: score between [7.0, 9.0] AND category in [1] AND "programming"
+    //    → article 3 only (score 8.5, category 1).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"score\",\"op\":\"between\",\"value\":[7.0,9.0]},"
+        "{\"field\":\"category\",\"op\":\"in\",\"value\":[1]}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+// ── Filters + allowed_ids combined ───────────────────────────────────────────
+
+TEST_F(ApiTest, TantivyFiltersWithAllowedIdsTest) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE article (ID UINT64, title STRING, body STRING, "
+                            "category INT64, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language', category: 1})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 1, title: 'Python Guide', "
+                    "body: 'Python is a programming language for beginners', category: 1})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 2, title: 'Cooking Recipes', "
+                    "body: 'A guide to cooking Italian food', category: 2})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:article {ID: 3, title: 'C++ Programming', "
+                    "body: 'C++ is a general-purpose programming language', category: 1})")
+            ->isSuccess());
+
+    auto result = conn->query(
+        "CALL CREATE_TANTIVY_INDEX('article', ['title', 'body'], "
+        "filter_fields := ['category'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Without any restriction: "programming" → 3 articles (0, 1, 3).
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // 1. Only filters: category == 1 → articles 0, 1, 3 (all have "programming") → 3.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":1}]}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 3u);
+
+    // 2. Only allowed_ids: [0, 1] → articles 0, 1 have "programming" → 2.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\"}', 10, "
+        "allowed_ids := [CAST(0, 'UINT64'), CAST(1, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 3. Filters + allowed_ids combined:
+    //    category == 1 (articles 0, 1, 3) AND allowed_ids [0, 3] → intersection = {0, 3}.
+    //    Both have "programming" → 2 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":1}]}', 10, "
+        "allowed_ids := [CAST(0, 'UINT64'), CAST(3, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+
+    // 4. Filters + allowed_ids with empty intersection:
+    //    category == 2 (article 2=cooking) AND allowed_ids [0, 1, 3] → intersection = {} → 0 results.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":2}]}', 10, "
+        "allowed_ids := [CAST(0, 'UINT64'), CAST(1, 'UINT64'), CAST(3, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 0u);
+
+    // 5. Filters restrict, allowed_ids restrict further:
+    //    category == 1 (articles 0, 1, 3) AND allowed_ids [1] → only article 1.
+    result = conn->query(
+        "CALL QUERY_TANTIVY_INDEX('article', "
+        "'{\"type\":\"contains\",\"field\":\"body\",\"value\":\"programming\","
+        "\"filters\":[{\"field\":\"category\",\"op\":\"eq\",\"value\":1}]}', 10, "
+        "allowed_ids := [CAST(1, 'UINT64')]) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
 } // namespace testing
 } // namespace rag3db

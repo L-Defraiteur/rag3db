@@ -28,7 +28,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
             cargo ${CARGO_TOOLCHAIN} build --release ${CARGO_TARGET}
                   ${CARGO_EXTRA_FLAGS}
-                  --no-default-features --features wasm-emscripten
+                  --no-default-features --features wasm-emscripten,candle-wasm
     WORKING_DIRECTORY ${RUST_SRC_DIR}
     DEPENDS ${RUST_SOURCES}
     COMMENT "Building rag3weaver Rust static library for WASM"

@@ -40,9 +40,11 @@ pub fn hashsafe_uuid(entity_name: &str, field_values: &[&str]) -> String {
 
 /// Generate a deterministic UUID for a chunk.
 ///
-/// Format: `parent_uuid|chunk|index` → blake3 → UUID.
-pub fn chunk_uuid(parent_uuid: &str, index: usize) -> String {
-    let input = format!("{parent_uuid}|chunk|{index}");
+/// Format: `parent_uuid|chunk|field_name|index` → blake3 → UUID.
+/// Including `field_name` prevents collisions when an entity has multiple
+/// chunked fields (e.g. `body` and `code`).
+pub fn chunk_uuid(parent_uuid: &str, field_name: &str, index: usize) -> String {
+    let input = format!("{parent_uuid}|chunk|{field_name}|{index}");
     let hash = content_hash(&input);
     hash_to_uuid(&hash)
 }
@@ -96,16 +98,16 @@ mod tests {
     #[test]
     fn chunk_uuid_deterministic() {
         let parent = hashsafe_uuid("Doc", &["test"]);
-        let c1 = chunk_uuid(&parent, 0);
-        let c2 = chunk_uuid(&parent, 0);
+        let c1 = chunk_uuid(&parent, "body", 0);
+        let c2 = chunk_uuid(&parent, "body", 0);
         assert_eq!(c1, c2);
     }
 
     #[test]
     fn chunk_uuid_different_index() {
         let parent = hashsafe_uuid("Doc", &["test"]);
-        let c0 = chunk_uuid(&parent, 0);
-        let c1 = chunk_uuid(&parent, 1);
+        let c0 = chunk_uuid(&parent, "body", 0);
+        let c1 = chunk_uuid(&parent, "body", 1);
         assert_ne!(c0, c1);
     }
 
@@ -113,8 +115,16 @@ mod tests {
     fn chunk_uuid_different_parent() {
         let p1 = hashsafe_uuid("Doc", &["a"]);
         let p2 = hashsafe_uuid("Doc", &["b"]);
-        let c1 = chunk_uuid(&p1, 0);
-        let c2 = chunk_uuid(&p2, 0);
+        let c1 = chunk_uuid(&p1, "body", 0);
+        let c2 = chunk_uuid(&p2, "body", 0);
+        assert_ne!(c1, c2);
+    }
+
+    #[test]
+    fn chunk_uuid_different_field() {
+        let parent = hashsafe_uuid("Doc", &["test"]);
+        let c1 = chunk_uuid(&parent, "body", 0);
+        let c2 = chunk_uuid(&parent, "code", 0);
         assert_ne!(c1, c2);
     }
 

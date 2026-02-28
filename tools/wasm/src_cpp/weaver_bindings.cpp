@@ -2,9 +2,11 @@
 // Exposes a `Weaver` class to JavaScript via emscripten embind.
 
 #include <string>
+#include <vector>
 #include <atomic>
 #include <cstdint>
 #include <emscripten/bind.h>
+#include <emscripten/val.h>
 using namespace emscripten;
 
 // Async callback type matching Rust's AsyncCallback
@@ -31,6 +33,12 @@ extern "C" {
     const char* rag3weaver_test_async_pool();
     const char* rag3weaver_test_rayon();
     const char* rag3weaver_test_tokio_mt();
+    // Candle embedding test (receives model bytes, returns embedding JSON)
+    const char* rag3weaver_candle_embed(
+        const uint8_t* config, size_t config_len,
+        const uint8_t* tokenizer, size_t tokenizer_len,
+        const uint8_t* weights, size_t weights_len,
+        const char* text);
 }
 
 // ── Async support (generic for drain, search, etc.) ─────────────────────
@@ -148,6 +156,23 @@ public:
         const char* r = rag3weaver_test_tokio_mt();
         return r ? std::string(r) : R"({"error":"null result"})";
     }
+
+    /// Test candle embedding: receives model files as JS Uint8Arrays + text,
+    /// creates CandleEmbedder in WASM, embeds text, returns JSON result.
+    static std::string testCandleEmbed(val configArr, val tokenizerArr,
+                                        val weightsArr, std::string text) {
+        auto configVec = convertJSArrayToNumberVector<uint8_t>(configArr);
+        auto tokenizerVec = convertJSArrayToNumberVector<uint8_t>(tokenizerArr);
+        auto weightsVec = convertJSArrayToNumberVector<uint8_t>(weightsArr);
+
+        const char* r = rag3weaver_candle_embed(
+            configVec.data(), configVec.size(),
+            tokenizerVec.data(), tokenizerVec.size(),
+            weightsVec.data(), weightsVec.size(),
+            text.c_str()
+        );
+        return r ? std::string(r) : R"({"error":"null result"})";
+    }
 };
 
 EMSCRIPTEN_BINDINGS(rag3weaver_wasm) {
@@ -166,5 +191,6 @@ EMSCRIPTEN_BINDINGS(rag3weaver_wasm) {
         .class_function("testThreads", &Weaver::testThreads)
         .class_function("testAsyncPool", &Weaver::testAsyncPool)
         .class_function("testRayon", &Weaver::testRayon)
-        .class_function("testTokioMt", &Weaver::testTokioMt);
+        .class_function("testTokioMt", &Weaver::testTokioMt)
+        .class_function("testCandleEmbed", &Weaver::testCandleEmbed);
 }

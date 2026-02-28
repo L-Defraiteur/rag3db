@@ -1,7 +1,12 @@
-//! Text chunking with overlap and offset tracking.
+//! Text chunking with overlap and offset tracking (core-first approach).
 //!
 //! Uses [`text-splitter`](https://crates.io/crates/text-splitter) for intelligent
 //! boundary detection (semantic text + markdown-aware) and adds line number tracking.
+//!
+//! Algorithm (inspired by L3 SemanticChunker):
+//! 1. Split text into non-overlapping **cores** at semantic boundaries
+//! 2. Extend each core by `overlap` chars on both sides
+//! 3. Core offsets track the "owned" zone, full offsets include overlap context
 //!
 //! - `Semantic` / `Sentence` → `TextSplitter` (text semantic boundaries)
 //! - `Markdown` → `MarkdownSplitter` (respects headers, code blocks, lists)
@@ -13,23 +18,38 @@ use text_splitter::{ChunkConfig, MarkdownSplitter, TextSplitter};
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 /// A chunk of text with its position in the original document.
+///
+/// Each chunk has two sets of offsets:
+/// - **Full** (`start_byte`..`end_byte`): the chunk text including overlap context
+/// - **Core** (`core_start_byte`..`core_end_byte`): the "owned" zone without overlap
+///
+/// Cores are contiguous and non-overlapping. The frontend can use core offsets
+/// to highlight the unique portion of each chunk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chunk {
     pub text: String,
     /// Sequential index (0, 1, 2, ...).
     pub index: usize,
-    /// Byte offset where this chunk starts in the original text.
+    /// Byte offset where this chunk starts in the original text (with overlap).
     pub start_byte: usize,
-    /// Byte offset where this chunk ends in the original text.
+    /// Byte offset where this chunk ends in the original text (with overlap).
     pub end_byte: usize,
     /// Line number (0-based) where this chunk starts.
     pub start_line: usize,
     /// Line number (0-based) where this chunk ends.
     pub end_line: usize,
+    /// Byte offset where the core zone starts (without overlap).
+    pub core_start_byte: usize,
+    /// Byte offset where the core zone ends (without overlap).
+    pub core_end_byte: usize,
+    /// Line number (0-based) where the core zone starts.
+    pub core_start_line: usize,
+    /// Line number (0-based) where the core zone ends.
+    pub core_end_line: usize,
 }
 
 /// Configuration for the chunker.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChunkerConfig {
     /// Maximum characters per chunk.
     pub max_size: usize,
@@ -75,13 +95,18 @@ impl Chunker {
             if trimmed.is_empty() {
                 return vec![];
             }
+            let end_line = count_newlines(text);
             return vec![Chunk {
                 text: trimmed.to_string(),
                 index: 0,
                 start_byte: 0,
                 end_byte: text.len(),
                 start_line: 0,
-                end_line: count_newlines(text),
+                end_line,
+                core_start_byte: 0,
+                core_end_byte: text.len(),
+                core_start_line: 0,
+                core_end_line: end_line,
             }];
         }
 
@@ -91,54 +116,37 @@ impl Chunker {
         }
     }
 
-    /// Fixed-size chunking: split at max_size boundaries, no delimiter search.
+    /// Fixed-size chunking: core-first, then extend with overlap.
     fn chunk_fixed(&self, text: &str) -> Vec<Chunk> {
         let line_at = build_line_index(text);
-        let mut chunks = Vec::new();
+        let core_size = self.config.max_size.saturating_sub(self.config.overlap).max(1);
+        let overlap = self.config.overlap;
+
+        // Phase 1: Build non-overlapping cores
+        let mut cores: Vec<(usize, usize)> = Vec::new();
         let mut pos = 0;
-        let mut chunk_index = 0;
-
         while pos < text.len() {
-            let raw_end = (pos + self.config.max_size).min(text.len());
+            let raw_end = (pos + core_size).min(text.len());
             let end = snap_to_char_boundary(text, raw_end);
-            let end = end.max(pos + 1); // always advance
-
-            let chunk_text = text[pos..end].trim();
-            if !chunk_text.is_empty() {
-                chunks.push(Chunk {
-                    text: chunk_text.to_string(),
-                    index: chunk_index,
-                    start_byte: pos,
-                    end_byte: end,
-                    start_line: line_at[pos],
-                    end_line: line_at[end],
-                });
-                chunk_index += 1;
-            }
-
-            // Advance with overlap
-            let next_pos = end.saturating_sub(self.config.overlap);
-            let next_pos = snap_to_char_boundary(text, next_pos);
-            pos = next_pos.max(pos + 1);
+            let end = end.max(pos + 1);
+            cores.push((pos, end));
+            pos = end;
         }
 
-        chunks
+        // Phase 2: Extend cores with overlap
+        extend_cores_to_chunks(text, &cores, overlap, &line_at)
     }
 
-    /// Use text-splitter for intelligent boundary detection.
+    /// Use text-splitter for intelligent boundary detection (core-first).
     ///
     /// `Semantic` / `Sentence` → `TextSplitter` (semantic text boundaries).
     /// `Markdown` → `MarkdownSplitter` (CommonMark-aware).
     fn chunk_with_text_splitter(&self, text: &str) -> Vec<Chunk> {
         let line_at = build_line_index(text);
 
-        // Clamp overlap to be strictly less than max_size
-        let overlap = self.config.overlap.min(self.config.max_size.saturating_sub(1));
-
-        let chunk_config = ChunkConfig::new(self.config.max_size)
-            .with_overlap(overlap)
-            .expect("overlap is clamped < max_size")
-            .with_trim(false);
+        // Phase 1: Build cores via text-splitter (no overlap, smaller max)
+        let core_size = self.config.max_size.saturating_sub(self.config.overlap).max(1);
+        let chunk_config = ChunkConfig::new(core_size).with_trim(false);
 
         let indices: Vec<(usize, &str)> = match self.config.strategy {
             ChunkStrategy::Markdown => MarkdownSplitter::new(chunk_config)
@@ -149,31 +157,64 @@ impl Chunker {
                 .collect(),
         };
 
-        let mut chunks = Vec::new();
-        let mut chunk_index = 0;
+        let cores: Vec<(usize, usize)> = indices
+            .iter()
+            .filter(|(_, s)| !s.trim().is_empty())
+            .map(|(offset, s)| (*offset, offset + s.len()))
+            .collect();
 
-        for (byte_offset, chunk_text) in indices {
-            let trimmed = chunk_text.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let end_byte = byte_offset + chunk_text.len();
-            chunks.push(Chunk {
-                text: trimmed.to_string(),
-                index: chunk_index,
-                start_byte: byte_offset,
-                end_byte,
-                start_line: line_at[byte_offset],
-                end_line: line_at[end_byte],
-            });
-            chunk_index += 1;
-        }
-
-        chunks
+        // Phase 2: Extend cores with overlap
+        extend_cores_to_chunks(text, &cores, self.config.overlap, &line_at)
     }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/// Extend non-overlapping cores into overlapping chunks.
+///
+/// Each core is extended by `overlap` chars on both sides (clamped to text bounds).
+/// Core offsets are preserved as-is.
+fn extend_cores_to_chunks(
+    text: &str,
+    cores: &[(usize, usize)],
+    overlap: usize,
+    line_at: &[usize],
+) -> Vec<Chunk> {
+    let mut chunks = Vec::new();
+    let mut chunk_index = 0;
+
+    for &(core_start, core_end) in cores {
+        // Extend with overlap on both sides
+        let start_byte = if core_start >= overlap {
+            snap_to_char_boundary(text, core_start - overlap)
+        } else {
+            0
+        };
+        let end_byte = snap_to_char_boundary(text, (core_end + overlap).min(text.len()));
+        let end_byte = end_byte.max(start_byte + 1);
+
+        let chunk_text = text[start_byte..end_byte].trim();
+        if chunk_text.is_empty() {
+            continue;
+        }
+
+        chunks.push(Chunk {
+            text: chunk_text.to_string(),
+            index: chunk_index,
+            start_byte,
+            end_byte,
+            start_line: line_at[start_byte],
+            end_line: line_at[end_byte],
+            core_start_byte: core_start,
+            core_end_byte: core_end,
+            core_start_line: line_at[core_start],
+            core_end_line: line_at[core_end],
+        });
+        chunk_index += 1;
+    }
+
+    chunks
+}
 
 /// Precompute cumulative newline counts: `line_at[i]` = number of `\n` in `text[..i]`.
 ///
@@ -260,6 +301,9 @@ mod tests {
         assert_eq!(chunks[0].end_byte, text.len());
         assert_eq!(chunks[0].start_line, 0);
         assert_eq!(chunks[0].end_line, 0);
+        // Single chunk: core = full range
+        assert_eq!(chunks[0].core_start_byte, 0);
+        assert_eq!(chunks[0].core_end_byte, text.len());
     }
 
     // ── semantic chunking (text-splitter) ─────────────────────────────────
@@ -318,6 +362,80 @@ mod tests {
         }
     }
 
+    // ── core offsets ─────────────────────────────────────────────────────
+
+    #[test]
+    fn cores_are_contiguous() {
+        let text = "A. ".repeat(200);
+        let chunks = semantic_chunker(30, 10).chunk(&text);
+        assert!(chunks.len() >= 3, "need at least 3 chunks");
+
+        // Cores should be contiguous: core_end[i] == core_start[i+1]
+        for i in 0..chunks.len() - 1 {
+            assert_eq!(
+                chunks[i].core_end_byte, chunks[i + 1].core_start_byte,
+                "cores should be contiguous at chunk {i}: end={} vs next start={}",
+                chunks[i].core_end_byte, chunks[i + 1].core_start_byte,
+            );
+        }
+    }
+
+    #[test]
+    fn cores_cover_full_text() {
+        let text = "Hello world. This is a longer text. It should be chunked properly.";
+        let chunks = semantic_chunker(30, 5).chunk(text);
+
+        // First core starts at 0
+        assert_eq!(chunks[0].core_start_byte, 0);
+        // Last core ends at text length
+        assert_eq!(chunks.last().unwrap().core_end_byte, text.len());
+    }
+
+    #[test]
+    fn core_within_chunk_bounds() {
+        let text = "A. ".repeat(200);
+        let chunks = semantic_chunker(30, 10).chunk(&text);
+
+        for chunk in &chunks {
+            assert!(
+                chunk.core_start_byte >= chunk.start_byte,
+                "core_start should be >= start: core_start={}, start={}",
+                chunk.core_start_byte, chunk.start_byte
+            );
+            assert!(
+                chunk.core_end_byte <= chunk.end_byte,
+                "core_end should be <= end: core_end={}, end={}",
+                chunk.core_end_byte, chunk.end_byte
+            );
+        }
+    }
+
+    #[test]
+    fn single_chunk_core_equals_full() {
+        let text = "Short text";
+        let chunks = semantic_chunker(100, 20).chunk(text);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].core_start_byte, chunks[0].start_byte);
+        assert_eq!(chunks[0].core_end_byte, chunks[0].end_byte);
+    }
+
+    #[test]
+    fn core_lines_within_chunk_lines() {
+        let text = "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7";
+        let chunks = semantic_chunker(20, 8).chunk(text);
+
+        for chunk in &chunks {
+            assert!(
+                chunk.core_start_line >= chunk.start_line,
+                "core_start_line >= start_line"
+            );
+            assert!(
+                chunk.core_end_line <= chunk.end_line,
+                "core_end_line <= end_line"
+            );
+        }
+    }
+
     // ── fixed chunking ───────────────────────────────────────────────────
 
     #[test]
@@ -325,6 +443,7 @@ mod tests {
         let text = "abcdefghijklmnopqrstuvwxyz";
         let chunks = fixed_chunker(10, 0).chunk(text);
         assert!(chunks.len() >= 2);
+        // With overlap=0, core = full chunk, size <= max_size
         for chunk in &chunks {
             assert!(
                 chunk.end_byte - chunk.start_byte <= 10,
@@ -344,6 +463,19 @@ mod tests {
             assert!(
                 chunks[1].start_byte < chunks[0].end_byte,
                 "overlap expected"
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_cores_contiguous() {
+        let text = "abcdefghijklmnopqrstuvwxyz0123456789";
+        let chunks = fixed_chunker(15, 5).chunk(text);
+        assert!(chunks.len() >= 2);
+        for i in 0..chunks.len() - 1 {
+            assert_eq!(
+                chunks[i].core_end_byte, chunks[i + 1].core_start_byte,
+                "fixed cores should be contiguous"
             );
         }
     }

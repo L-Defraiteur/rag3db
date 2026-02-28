@@ -6,21 +6,25 @@
 //! `drain()` to process them.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 
 use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef, SearchMode};
 use crate::connection::{CypherValue, DbConnection, QueryParam};
-use crate::embedder::Embedder;
+use crate::embedder::{Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
+use crate::filter::{FilterCompiler, FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
-use crate::ops::{CatalogOp, EmbedOp, InsertOp, LinkOp, RefOrUuid};
-use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueStats};
+use crate::node_id_cache::{InternalNodeId, NodeIdCache};
+use crate::ops::{CatalogOp, ChunkOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueSender, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher};
-use crate::uuid::hashsafe_uuid;
+use crate::sparse_index::{SparseIndex, SparseVector};
+use crate::chunker::{Chunker, ChunkerConfig};
+use crate::uuid::{chunk_uuid, hashsafe_uuid};
 use crate::validator::{validate_schema, KBFieldRef};
 
 // ─── KBMetadata ────────────────────────────────────────────────────────────
@@ -61,6 +65,8 @@ pub enum CatalogError {
     DbError(String),
     #[error("embed error: {0}")]
     EmbedError(String),
+    #[error("filter error: {0}")]
+    FilterError(String),
 }
 
 // ─── UpdateResult / DeleteResult ───────────────────────────────────────────
@@ -94,12 +100,20 @@ pub struct DeleteResult {
 pub struct Catalog {
     conn: Arc<dyn DbConnection>,
     embedder: Arc<dyn Embedder>,
+    sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     config: CatalogConfig,
     queue: OperationQueue,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
+    /// Per-KB sparse inverted indexes (in-memory, rebuilt from DB at initialize).
+    sparse_indexes: HashMap<String, SparseIndex>,
+    /// Cache mapping entity UUIDs to rag3db internal node IDs.
+    /// Shared with InsertProcessor (populated on INSERT via RETURN ID(n)).
+    node_id_cache: Arc<RwLock<NodeIdCache>>,
+    /// Cached chunkers keyed by config to avoid re-instantiation.
+    chunker_cache: HashMap<ChunkerConfig, Chunker>,
 }
 
 impl Catalog {
@@ -118,13 +132,22 @@ impl Catalog {
         Self {
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
+            sparse_embedder: None,
             config,
             queue: OperationQueue::new(queue_config),
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
             initialized: false,
             embedding_cache: HashMap::new(),
+            sparse_indexes: HashMap::new(),
+            node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
+            chunker_cache: HashMap::new(),
         }
+    }
+
+    /// Set the sparse embedder (optional). Must be called before `initialize()`.
+    pub fn set_sparse_embedder(&mut self, embedder: Box<dyn SparseEmbedder>) {
+        self.sparse_embedder = Some(Arc::from(embedder));
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
@@ -199,10 +222,24 @@ impl Catalog {
         }
 
         // 6. Register processors
+
+        // Pre-warm chunker cache and register chunk processor
+        self.warm_chunker_cache();
+        self.queue.register_processor(
+            "chunk",
+            Box::new(ChunkProcessor {
+                config: self.config.clone(),
+                kb_metadata: self.kb_metadata.clone(),
+                chunker_cache: std::mem::take(&mut self.chunker_cache),
+                has_sparse: self.sparse_embedder.is_some(),
+            }),
+        );
+
         self.queue.register_processor(
             "insert",
             Box::new(InsertProcessor {
                 conn: self.conn.clone(),
+                node_id_cache: self.node_id_cache.clone(),
             }),
         );
         self.queue.register_processor(
@@ -219,6 +256,25 @@ impl Catalog {
                 embedding_dim: self.config.embedding_dim,
             }),
         );
+
+        // Register sparse embed processor if sparse embedder is set
+        if let Some(ref sparse_emb) = self.sparse_embedder {
+            self.queue.register_processor(
+                "sparse_embed",
+                Box::new(SparseEmbedProcessor {
+                    conn: self.conn.clone(),
+                    sparse_embedder: sparse_emb.clone(),
+                }),
+            );
+        }
+
+        // Rebuild in-memory sparse indexes for KBs that have sparse=true
+        for (kb_name, kb_config) in &self.config.knowledge_bases {
+            if kb_config.sparse {
+                let index = self.rebuild_sparse_index(kb_name).await?;
+                self.sparse_indexes.insert(kb_name.clone(), index);
+            }
+        }
 
         self.initialized = true;
         Ok(())
@@ -251,7 +307,7 @@ impl Catalog {
 
         // Build full data with system columns
         let mut full_data = data.clone();
-        full_data.insert("_uuid".to_string(), CypherValue::String(uuid));
+        full_data.insert("_uuid".to_string(), CypherValue::String(uuid.clone()));
         full_data.insert(
             "_content_hash".to_string(),
             CypherValue::String(hash),
@@ -268,22 +324,10 @@ impl Catalog {
             entity_ref.clone(),
         ));
 
-        // Create EmbedOps for each KB this entity belongs to
+        // Enqueue InsertOp + ChunkOp (deferred chunking, processed at drain time).
         let mut ops: Vec<CatalogOp> = vec![insert_op];
-        let kb_names: Vec<String> = self
-            .get_kbs_for_entity(entity_name)
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
-        for kb_name in &kb_names {
-            let texts = self.build_embed_texts(entity_name, kb_name, &data);
-            if !texts.is_empty() {
-                ops.push(CatalogOp::Embed(EmbedOp {
-                    entity_ref: entity_ref.clone(),
-                    kb_name: kb_name.clone(),
-                    texts,
-                }));
-            }
+        if let Some(chunk_op) = self.maybe_enqueue_chunk_op(entity_name, &uuid, &entity_ref, &data) {
+            ops.push(chunk_op);
         }
 
         self.queue.enqueue_all(ops);
@@ -440,32 +484,11 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        // Check entity exists and get current hash
-        let cypher = format!(
-            "MATCH (n:{entity_name} {{_uuid: $uuid}}) RETURN n._content_hash AS hash"
-        );
-        let result = self
-            .conn
-            .execute_with_params(&cypher, &[QueryParam::new("uuid", uuid)])
-            .await
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        if result.is_empty() {
-            return Err(CatalogError::NotFound {
-                entity: entity_name.to_string(),
-                uuid: uuid.to_string(),
-            });
-        }
-
+        // Compute new hash before the query
         let new_content = self.build_content_text(entity_name, &data);
         let new_hash = content_hash(&new_content);
-        let old_hash = result.rows[0]
-            .get(0)
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let content_changed = old_hash != new_hash;
 
-        // Build SET clause
+        // Build SET clause — always include _content_hash
         let mut set_parts = Vec::new();
         let mut params: Vec<QueryParam> = vec![QueryParam::new("uuid", uuid)];
 
@@ -478,51 +501,86 @@ impl Catalog {
                 value: data[key].clone(),
             });
         }
-        if content_changed {
-            set_parts.push("n._content_hash = $new_hash".to_string());
-            params.push(QueryParam::new("new_hash", new_hash));
+        set_parts.push("n._content_hash = $new_hash".to_string());
+        params.push(QueryParam::new("new_hash", new_hash.clone()));
+
+        // Single query: capture old hash via WITH, then SET + RETURN
+        let cypher = format!(
+            "MATCH (n:{entity_name} {{_uuid: $uuid}}) \
+             WITH n, n._content_hash AS old_hash \
+             SET {} \
+             RETURN old_hash",
+            set_parts.join(", ")
+        );
+        let result = self
+            .conn
+            .execute_with_params(&cypher, &params)
+            .await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        if result.is_empty() {
+            return Err(CatalogError::NotFound {
+                entity: entity_name.to_string(),
+                uuid: uuid.to_string(),
+            });
         }
 
-        if !set_parts.is_empty() {
-            let cypher = format!(
-                "MATCH (n:{entity_name} {{_uuid: $uuid}}) SET {}",
-                set_parts.join(", ")
-            );
-            self.conn
-                .execute_with_params(&cypher, &params)
-                .await
-                .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        }
+        let old_hash = result.rows[0]
+            .get(0)
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let content_changed = old_hash != new_hash;
 
-        // Re-embed if content changed
+        // Re-chunk if content changed
         let mut reembedded = false;
+        let mut chunks_deleted = 0usize;
+        let mut chunks_created = 0usize;
         if content_changed {
-            let kb_names: Vec<String> = self
-                .get_kbs_for_entity(entity_name)
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect();
-            for kb_name in &kb_names {
-                let texts = self.build_embed_texts(entity_name, kb_name, &data);
-                if !texts.is_empty() {
-                    let (entity_ref, resolver) = EntityRef::new(entity_name);
-                    resolver.resolve(uuid.to_string());
-                    self.queue.enqueue(CatalogOp::Embed(EmbedOp {
-                        entity_ref,
-                        kb_name: kb_name.clone(),
-                        texts,
-                    }));
-                }
+            let entity_def = &self.config.entities[entity_name];
+
+            // Delete old chunks
+            if entity_has_chunks(entity_def) {
+                let chunk_table = format!("{entity_name}_Chunk");
+                let del_cypher = format!(
+                    "MATCH (c:{chunk_table} {{_parent_uuid: $uuid}}) \
+                     DETACH DELETE c RETURN count(c) AS cnt"
+                );
+                let del_result = self
+                    .conn
+                    .execute_with_params(&del_cypher, &[QueryParam::new("uuid", uuid)])
+                    .await
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+                chunks_deleted = del_result
+                    .rows
+                    .get(0)
+                    .and_then(|r| r.get(0))
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as usize;
             }
-            reembedded = true;
+
+            // Re-chunk and re-embed via ChunkOp (deferred, parallel at drain time)
+            let (entity_ref, resolver) = EntityRef::new(entity_name);
+            resolver.resolve(uuid.to_string());
+            if let Some(chunk_op) = self.maybe_enqueue_chunk_op(entity_name, uuid, &entity_ref, &data) {
+                reembedded = true;
+                // chunks_created will be determined at drain time; estimate from chunker
+                let chunker = Chunker::new(ChunkerConfig::default());
+                let body = data.values()
+                    .filter_map(|v| v.as_str())
+                    .max_by_key(|s| s.len())
+                    .unwrap_or("");
+                chunks_created = chunker.chunk(body).len().max(1);
+                self.queue.enqueue_all(vec![chunk_op]);
+            }
         }
 
         self.event_bus.emit(CatalogEvent::EntityUpdated {
             entity: entity_name.to_string(),
             uuid: uuid.to_string(),
             reembedded,
-            chunks_created: 0,
-            chunks_deleted: 0,
+            chunks_created,
+            chunks_deleted,
         });
 
         Ok(UpdateResult {
@@ -534,8 +592,8 @@ impl Catalog {
                 UpdateStatus::Unchanged
             },
             reembedded,
-            chunks_created: 0,
-            chunks_deleted: 0,
+            chunks_created,
+            chunks_deleted,
         })
     }
 
@@ -547,7 +605,9 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        // Delete chunks if entity has chunked fields
+        // Delete chunks then entity — kept as 2 queries because Kuzu does not
+        // support DETACH DELETE inside a WITH chain (no FOREACH either).
+        // Delete is a rare one-off operation so 2 round-trips is acceptable.
         let mut chunks_deleted = 0;
         if entity_has_chunks(&self.config.entities[entity_name]) {
             let chunk_table = format!("{entity_name}_Chunk");
@@ -578,6 +638,24 @@ impl Catalog {
             .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
+        // Remove from node ID cache
+        if let Ok(mut cache) = self.node_id_cache.write() {
+            cache.remove(uuid);
+        }
+
+        // Remove from in-memory sparse indexes
+        for (kb_name, sparse_idx) in &mut self.sparse_indexes {
+            let kb_sparse = self
+                .config
+                .knowledge_bases
+                .get(kb_name)
+                .map(|c| c.sparse)
+                .unwrap_or(false);
+            if kb_sparse {
+                sparse_idx.remove(uuid);
+            }
+        }
+
         self.event_bus.emit(CatalogEvent::EntityDeleted {
             entity: entity_name.to_string(),
             uuid: uuid.to_string(),
@@ -595,14 +673,25 @@ impl Catalog {
     // ── Queue control ──────────────────────────────────────────────────
 
     pub async fn drain(&mut self) -> FlushResult {
-        self.queue.drain().await
+        let result = self.queue.drain().await;
+
+        // Refresh sparse indexes after drain (new sparse vectors may have been stored)
+        for (kb_name, kb_config) in &self.config.knowledge_bases {
+            if kb_config.sparse {
+                if let Ok(index) = self.rebuild_sparse_index(kb_name).await {
+                    self.sparse_indexes.insert(kb_name.clone(), index);
+                }
+            }
+        }
+
+        result
     }
 
     /// Parallel drain: inserts + embeds via rayon::join, then links sequentially.
     /// Uses block_on internally (no async runtime needed). WASM-only.
     #[cfg(feature = "wasm-emscripten")]
     pub fn drain_parallel(&mut self, pool: &rayon::ThreadPool) -> FlushResult {
-        use crate::queue::run_processor;
+        use crate::queue::{run_processor, queue_channel};
 
         let mut groups = self.queue.take_pending_grouped();
         if groups.is_empty() {
@@ -624,17 +713,18 @@ impl Catalog {
         let insert_proc = self.queue.get_processor("insert");
         let embed_proc = self.queue.get_processor("embed");
         let link_proc = self.queue.get_processor("link");
+        let (sender, _receiver) = queue_channel();
 
         // Phase 1: inserts + embeds in parallel
         let (r_insert, r_embed) = pool.install(|| {
             rayon::join(
-                || run_processor(insert_proc.as_deref(), &mut inserts),
-                || run_processor(embed_proc.as_deref(), &mut embeds),
+                || run_processor(insert_proc.as_deref(), &mut inserts, &sender),
+                || run_processor(embed_proc.as_deref(), &mut embeds, &sender),
             )
         });
 
         // Phase 2: links sequential (need resolved UUIDs from inserts)
-        let r_link = run_processor(link_proc.as_deref(), &mut links);
+        let r_link = run_processor(link_proc.as_deref(), &mut links, &sender);
 
         // Return non-completed items to the queue
         let mut all = inserts;
@@ -665,6 +755,14 @@ impl Catalog {
 
     pub fn subscribe(&self) -> async_broadcast::Receiver<CatalogEvent> {
         self.event_bus.subscribe()
+    }
+
+    // ── Node ID cache ─────────────────────────────────────────────────
+
+    /// Access the shared node ID cache (uuid → internal rag3db node ID).
+    /// Populated automatically by InsertProcessor on each INSERT.
+    pub fn node_id_cache(&self) -> &Arc<RwLock<NodeIdCache>> {
+        &self.node_id_cache
     }
 
     // ── Schema queries ─────────────────────────────────────────────────
@@ -744,6 +842,94 @@ impl Catalog {
             fields
         };
 
+        // Parse filters: filter_condition takes priority over legacy filters HashMap
+        let condition: Option<FilterCondition> = if options.filter_condition.is_some() {
+            options.filter_condition.clone()
+        } else if !options.filters.is_empty() {
+            Some(options.filters.clone().into())
+        } else {
+            None
+        };
+
+        // For vector search: compile ALL filters to Cypher WHERE (already pre-filter)
+        let (filter_where, filter_params, filter_match) = if let Some(ref cond) = condition {
+            let mut parser = FilterParser::new(&self.config.relations);
+            let parsed = parser
+                .parse_condition(cond, &entity, "n")
+                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+            let where_str = if parsed.where_clauses.is_empty() {
+                None
+            } else {
+                Some(parsed.combine_where())
+            };
+            let match_str = if parsed.match_clauses.is_empty() {
+                None
+            } else {
+                Some(parsed.match_clauses.join(" "))
+            };
+            (where_str, parsed.params, match_str)
+        } else {
+            (None, vec![], None)
+        };
+
+        // For BM25 search: split filters into Tantivy-native and Kuzu-only
+        let (tantivy_filters, allowed_ids) = if let Some(ref cond) = condition {
+            let split = FilterCompiler::split(cond);
+
+            // Tantivy-native part → FilterClause JSON
+            let tf = split
+                .tantivy
+                .as_ref()
+                .map(|t| FilterCompiler::to_tantivy_json(t));
+
+            // Kuzu-only part → pre-resolve IDs via Cypher MATCH
+            let aids = if let Some(ref kuzu_cond) = split.kuzu {
+                let mut parser = FilterParser::new(&self.config.relations);
+                let parsed = parser
+                    .parse_condition(kuzu_cond, &entity, "n")
+                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+                if !parsed.where_clauses.is_empty() {
+                    let match_prefix = if parsed.match_clauses.is_empty() {
+                        format!("MATCH (n:{entity})")
+                    } else {
+                        format!(
+                            "MATCH (n:{entity}) {}",
+                            parsed.match_clauses.join(" ")
+                        )
+                    };
+                    let cypher = format!(
+                        "{match_prefix} WHERE {} RETURN id(n)",
+                        parsed.combine_where()
+                    );
+                    let result = if parsed.params.is_empty() {
+                        self.conn
+                            .execute(&cypher)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    } else {
+                        self.conn
+                            .execute_with_params(&cypher, &parsed.params)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    };
+                    let ids: Vec<u64> = result
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                        .collect();
+                    Some(ids)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            (tf, aids)
+        } else {
+            (None, None)
+        };
+
         // Embed query
         let embedding =
             search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)
@@ -758,6 +944,9 @@ impl Catalog {
                     kb_name,
                     &embedding,
                     search_limit,
+                    filter_where.as_deref(),
+                    &filter_params,
+                    filter_match.as_deref(),
                 )
                 .await?;
                 let br = search::search_bm25(
@@ -768,6 +957,8 @@ impl Catalog {
                     options.bm25_mode,
                     options.fuzzy_distance,
                     search_limit,
+                    tantivy_filters.as_deref(),
+                    allowed_ids.as_deref(),
                 )
                 .await?;
                 (vr, br)
@@ -779,6 +970,9 @@ impl Catalog {
                     kb_name,
                     &embedding,
                     search_limit,
+                    filter_where.as_deref(),
+                    &filter_params,
+                    filter_match.as_deref(),
                 )
                 .await?;
                 (vr, vec![])
@@ -792,6 +986,8 @@ impl Catalog {
                     options.bm25_mode,
                     options.fuzzy_distance,
                     search_limit,
+                    tantivy_filters.as_deref(),
+                    allowed_ids.as_deref(),
                 )
                 .await?;
                 (vec![], br)
@@ -801,11 +997,44 @@ impl Catalog {
         let vector_count = vector_results.len();
         let bm25_count = bm25_results.len();
 
+        // Sparse search (if KB has sparse enabled and we have a sparse embedder)
+        let kb_config = self
+            .config
+            .knowledge_bases
+            .get(kb_name)
+            .cloned()
+            .unwrap_or_default();
+        let sparse_results = if kb_config.sparse {
+            if let (Some(sparse_emb), Some(sparse_idx)) =
+                (&self.sparse_embedder, self.sparse_indexes.get(kb_name))
+            {
+                let query_vecs = sparse_emb
+                    .embed_sparse(&[query.to_string()])
+                    .await
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                if let Some(qv) = query_vecs.into_iter().next() {
+                    search::search_sparse(sparse_idx, &qv, &entity, search_limit)
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+        let sparse_count = sparse_results.len();
+        let sparse_weight = options
+            .sparse_weight
+            .unwrap_or(kb_config.sparse_weight);
+
         let mut fused = search::fuse_results(
             &vector_results,
             &bm25_results,
+            &sparse_results,
             options.hybrid_strategy,
             keyword_weight,
+            sparse_weight,
             options.boost_factor,
             options.rrf_k,
         );
@@ -839,6 +1068,7 @@ impl Catalog {
                 pending_count,
                 vector_count,
                 bm25_count,
+                sparse_count,
                 fused_count,
                 search_time_ms: 0,
             },
@@ -893,6 +1123,77 @@ impl Catalog {
         }
     }
 
+    /// Rebuild the in-memory sparse index for a KB by reading stored
+    /// sparse vectors from the database.
+    async fn rebuild_sparse_index(&self, kb_name: &str) -> Result<SparseIndex, CatalogError> {
+        let mut index = SparseIndex::new();
+
+        let kb_meta = match self.kb_metadata.get(kb_name) {
+            Some(m) => m,
+            None => return Ok(index), // no metadata yet → empty index
+        };
+
+        let indices_col = format!("{kb_name}_sparse_indices");
+        let weights_col = format!("{kb_name}_sparse_weights");
+
+        // Single UNION ALL query for all entity types
+        let union_parts: Vec<String> = kb_meta
+            .entities
+            .iter()
+            .map(|entity| {
+                format!(
+                    "MATCH (n:{entity}) \
+                     WHERE n.{indices_col} IS NOT NULL \
+                     RETURN n._uuid, n.{indices_col}, n.{weights_col}"
+                )
+            })
+            .collect();
+
+        if union_parts.is_empty() {
+            return Ok(index);
+        }
+
+        let cypher = union_parts.join(" UNION ALL ");
+        let result = self
+            .conn
+            .execute(&cypher)
+            .await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        {
+            for row in &result.rows {
+                let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("");
+                if uuid.is_empty() {
+                    continue;
+                }
+
+                let indices: Vec<u32> = match row.get(1) {
+                    Some(CypherValue::List(list)) => list
+                        .iter()
+                        .filter_map(|v| v.as_i64().map(|i| i as u32))
+                        .collect(),
+                    _ => continue,
+                };
+
+                let weights: Vec<f32> = match row.get(2) {
+                    Some(CypherValue::List(list)) => list
+                        .iter()
+                        .filter_map(|v| v.as_f64().map(|f| f as f32))
+                        .collect(),
+                    _ => continue,
+                };
+
+                if indices.len() == weights.len() && !indices.is_empty() {
+                    let sv = SparseVector::new(indices, weights);
+                    index.insert(uuid, &sv);
+                }
+            }
+        }
+
+        Ok(index)
+
+    }
+
     fn check_entity(&self, name: &str) -> Result<&EntityDef, CatalogError> {
         self.config
             .entities
@@ -923,6 +1224,44 @@ impl Catalog {
             }
         }
         parts.join("|")
+    }
+
+    /// Pre-warm the chunker cache for all KB chunking configs.
+    fn warm_chunker_cache(&mut self) {
+        for kb in self.kb_metadata.values() {
+            let key = ChunkerConfig {
+                max_size: kb.chunking.max_size,
+                overlap: kb.chunking.overlap,
+                strategy: kb.chunking.strategy.clone(),
+            };
+            self.chunker_cache
+                .entry(key.clone())
+                .or_insert_with(|| Chunker::new(key));
+        }
+    }
+
+    /// Check if entity has chunks and enqueue a ChunkOp if so.
+    fn maybe_enqueue_chunk_op(
+        &self,
+        entity_name: &str,
+        parent_uuid: &str,
+        entity_ref: &EntityRef,
+        data: &HashMap<String, CypherValue>,
+    ) -> Option<CatalogOp> {
+        let entity_def = self.config.entities.get(entity_name)?;
+        if !entity_has_chunks(entity_def) {
+            return None;
+        }
+        let kbs = self.get_kbs_for_entity(entity_name);
+        if kbs.is_empty() {
+            return None;
+        }
+        Some(CatalogOp::Chunk(ChunkOp {
+            entity_name: entity_name.to_string(),
+            parent_uuid: parent_uuid.to_string(),
+            entity_ref: entity_ref.clone(),
+            data: data.clone(),
+        }))
     }
 
     fn build_embed_texts(
@@ -980,22 +1319,231 @@ impl Catalog {
     }
 }
 
+// ─── compute_chunk_ops (standalone) ────────────────────────────────────────
+
+/// Build InsertOps, LinkOps, EmbedOps, SparseEmbedOps for all chunks of an entity.
+/// Standalone function (no &self) for use by ChunkProcessor in parallel via rayon.
+fn compute_chunk_ops(
+    entity_name: &str,
+    parent_uuid: &str,
+    entity_ref: &EntityRef,
+    data: &HashMap<String, CypherValue>,
+    config: &CatalogConfig,
+    kb_metadata: &HashMap<String, KBMetadata>,
+    chunker_cache: &HashMap<ChunkerConfig, Chunker>,
+    has_sparse: bool,
+) -> Vec<CatalogOp> {
+    let entity_def = match config.entities.get(entity_name) {
+        Some(def) => def,
+        None => return vec![],
+    };
+    if !entity_has_chunks(entity_def) {
+        return vec![];
+    }
+
+    let kb_names: Vec<&String> = kb_metadata
+        .iter()
+        .filter(|(_, kb)| kb.entities.contains(entity_name))
+        .map(|(name, _)| name)
+        .collect();
+    if kb_names.is_empty() {
+        return vec![];
+    }
+
+    let mut ops = Vec::new();
+
+    for kb_name in &kb_names {
+        let kb_meta = match kb_metadata.get(*kb_name) {
+            Some(kb) => kb,
+            None => continue,
+        };
+        let kb_config = config.knowledge_bases.get(*kb_name);
+
+        let title_text: Option<String> = if kb_meta.title.entity == entity_name {
+            data.get(&kb_meta.title.field)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        let kb_sparse = kb_config.map(|c| c.sparse).unwrap_or(false) && has_sparse;
+        let chunking = &kb_meta.chunking;
+
+        let chunker_key = ChunkerConfig {
+            max_size: chunking.max_size,
+            overlap: chunking.overlap,
+            strategy: chunking.strategy.clone(),
+        };
+        let chunker = chunker_cache
+            .get(&chunker_key)
+            .expect("chunker must be pre-warmed in cache");
+
+        for content_ref in &kb_meta.content {
+            if content_ref.entity != entity_name {
+                continue;
+            }
+            let field_name = &content_ref.field;
+            let field_def = match entity_def.fields.get(field_name) {
+                Some(fd) => fd,
+                None => continue,
+            };
+            if !field_def.chunked {
+                continue;
+            }
+
+            let field_text = match data.get(field_name).and_then(|v| v.as_str()) {
+                Some(s) if !s.is_empty() => s,
+                _ => continue,
+            };
+
+            let chunks = chunker.chunk(field_text);
+            if chunks.is_empty() {
+                continue;
+            }
+
+            let chunk_table = format!("{entity_name}_Chunk");
+            let rel_name = format!("{entity_name}_HAS_CHUNK");
+
+            for chunk in &chunks {
+                let c_uuid = chunk_uuid(parent_uuid, field_name, chunk.index);
+
+                let embed_text = match &title_text {
+                    Some(title) => format!("{title}\n---\n{}", chunk.text),
+                    None => chunk.text.clone(),
+                };
+
+                let mut chunk_data = HashMap::new();
+                chunk_data.insert("_uuid".to_string(), CypherValue::String(c_uuid.clone()));
+                chunk_data.insert("_parent_uuid".to_string(), CypherValue::String(parent_uuid.to_string()));
+                chunk_data.insert("_parent_field".to_string(), CypherValue::String(field_name.clone()));
+                chunk_data.insert("_kb_name".to_string(), CypherValue::String(kb_name.to_string()));
+                chunk_data.insert("_text".to_string(), CypherValue::String(chunk.text.clone()));
+                chunk_data.insert("_text_hash".to_string(), CypherValue::String(content_hash(&chunk.text)));
+                chunk_data.insert("_index".to_string(), CypherValue::Int(chunk.index as i64));
+                chunk_data.insert("_start_char".to_string(), CypherValue::Int(chunk.start_byte as i64));
+                chunk_data.insert("_end_char".to_string(), CypherValue::Int(chunk.end_byte as i64));
+                chunk_data.insert("_start_line".to_string(), CypherValue::Int(chunk.start_line as i64));
+                chunk_data.insert("_end_line".to_string(), CypherValue::Int(chunk.end_line as i64));
+                chunk_data.insert("_core_start_char".to_string(), CypherValue::Int(chunk.core_start_byte as i64));
+                chunk_data.insert("_core_end_char".to_string(), CypherValue::Int(chunk.core_end_byte as i64));
+                chunk_data.insert("_core_start_line".to_string(), CypherValue::Int(chunk.core_start_line as i64));
+                chunk_data.insert("_core_end_line".to_string(), CypherValue::Int(chunk.core_end_line as i64));
+
+                let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
+
+                ops.push(CatalogOp::Insert(InsertOp::new(
+                    chunk_table.clone(),
+                    chunk_data,
+                    chunk_resolver,
+                    chunk_ref.clone(),
+                )));
+
+                let (link_ref, link_resolver) = RelationRef::new(&rel_name);
+                ops.push(CatalogOp::Link(LinkOp::new(
+                    rel_name.clone(),
+                    RefOrUuid::Ref(entity_ref.clone()),
+                    RefOrUuid::Uuid(c_uuid.clone()),
+                    HashMap::new(),
+                    link_resolver,
+                    link_ref,
+                )));
+
+                ops.push(CatalogOp::Embed(EmbedOp {
+                    entity_ref: chunk_ref.clone(),
+                    kb_name: kb_name.to_string(),
+                    texts: vec![embed_text.clone()],
+                }));
+
+                if kb_sparse {
+                    ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
+                        entity_ref: chunk_ref,
+                        kb_name: kb_name.to_string(),
+                        texts: vec![embed_text],
+                    }));
+                }
+            }
+        }
+    }
+
+    ops
+}
+
+// ─── ChunkProcessor ───────────────────────────────────────────────────────
+
+/// Processes ChunkOps by running the chunker (in parallel via rayon) and
+/// emitting downstream InsertOp/LinkOp/EmbedOp/SparseEmbedOp via the sender.
+struct ChunkProcessor {
+    config: CatalogConfig,
+    kb_metadata: HashMap<String, KBMetadata>,
+    chunker_cache: HashMap<ChunkerConfig, Chunker>,
+    has_sparse: bool,
+}
+
+#[async_trait]
+impl Processor for ChunkProcessor {
+    async fn process(&self, items: &mut [OperationItem], sender: &QueueSender) -> Result<(), String> {
+        use rayon::prelude::*;
+
+        // Collect ChunkOps from items
+        let chunk_ops: Vec<&ChunkOp> = items
+            .iter()
+            .filter_map(|item| match &item.op {
+                CatalogOp::Chunk(c) => Some(c),
+                _ => None,
+            })
+            .collect();
+
+        // Parallel chunking via rayon
+        let all_downstream: Vec<Vec<CatalogOp>> = chunk_ops
+            .par_iter()
+            .map(|chunk_op| {
+                compute_chunk_ops(
+                    &chunk_op.entity_name,
+                    &chunk_op.parent_uuid,
+                    &chunk_op.entity_ref,
+                    &chunk_op.data,
+                    &self.config,
+                    &self.kb_metadata,
+                    &self.chunker_cache,
+                    self.has_sparse,
+                )
+            })
+            .collect();
+
+        // Emit all downstream ops
+        for ops in all_downstream {
+            sender.emit_all(ops);
+        }
+
+        Ok(())
+    }
+}
+
 // ─── InsertProcessor ───────────────────────────────────────────────────────
 
 struct InsertProcessor {
     conn: Arc<dyn DbConnection>,
+    node_id_cache: Arc<RwLock<NodeIdCache>>,
 }
 
 #[async_trait]
 impl Processor for InsertProcessor {
-    async fn process(&self, items: &mut [OperationItem]) -> Result<(), String> {
+    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
         for item in items.iter_mut() {
             if let CatalogOp::Insert(ref mut insert) = item.op {
                 let mut columns: Vec<&str> =
                     insert.data.keys().map(|k| k.as_str()).collect();
                 columns.sort();
 
-                let cypher = generate_insert_cypher(&insert.entity_name, &columns);
+                // Append RETURN ID(n) to capture the internal node ID
+                let base_cypher = generate_insert_cypher(&insert.entity_name, &columns);
+                let cypher = base_cypher.replace(
+                    &format!("(:{}", insert.entity_name),
+                    &format!("(n:{}", insert.entity_name),
+                ) + " RETURN ID(n)";
+
                 let params: Vec<QueryParam> = columns
                     .iter()
                     .map(|&col| QueryParam {
@@ -1008,7 +1556,8 @@ impl Processor for InsertProcessor {
                     })
                     .collect();
 
-                self.conn
+                let result = self
+                    .conn
                     .execute_with_params(&cypher, &params)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -1020,6 +1569,18 @@ impl Processor for InsertProcessor {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
+
+                // Cache the internal node ID if returned (format: "table_id:offset")
+                if let Some(id_val) = result.rows.first().and_then(|row| row.first()) {
+                    if let Some(id_str) = id_val.as_str() {
+                        if let Some(node_id) = InternalNodeId::parse(id_str) {
+                            if let Ok(mut cache) = self.node_id_cache.write() {
+                                cache.insert(&uuid, node_id);
+                            }
+                        }
+                    }
+                }
+
                 if let Some(resolver) = insert.take_resolver() {
                     resolver.resolve(uuid);
                 }
@@ -1037,7 +1598,7 @@ struct LinkProcessor {
 
 #[async_trait]
 impl Processor for LinkProcessor {
-    async fn process(&self, items: &mut [OperationItem]) -> Result<(), String> {
+    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
         for item in items.iter_mut() {
             if let CatalogOp::Link(ref mut link) = item.op {
                 let from_uuid = link
@@ -1100,7 +1661,7 @@ struct EmbedProcessor {
 
 #[async_trait]
 impl Processor for EmbedProcessor {
-    async fn process(&self, items: &mut [OperationItem]) -> Result<(), String> {
+    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
         // Phase 1: Wait for all entity refs to resolve, collect embed work
         struct EmbedWork {
             uuid: String,
@@ -1152,7 +1713,8 @@ impl Processor for EmbedProcessor {
             ));
         }
 
-        // Phase 3: Store each embedding on its entity node
+        // Phase 3: Batch store embeddings via UNWIND (one query per entity+col group)
+        let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &Vec<f32>)>> = HashMap::new();
         for (work, vector) in works.iter().zip(vectors.iter()) {
             if vector.len() != self.embedding_dim {
                 return Err(format!(
@@ -1161,28 +1723,174 @@ impl Processor for EmbedProcessor {
                     vector.len()
                 ));
             }
+            groups
+                .entry((&work.entity_name, &work.embedding_col))
+                .or_default()
+                .push((work, vector));
+        }
 
-            let cypher = format!(
-                "MATCH (n:{} {{_uuid: $uuid}}) SET n.{} = $embedding",
-                work.entity_name, work.embedding_col
-            );
-
-            let embedding_value = CypherValue::List(
-                vector
+        for ((entity_name, col), group) in &groups {
+            let items_param = CypherValue::List(
+                group
                     .iter()
-                    .map(|&f| CypherValue::Float(f as f64))
+                    .map(|(work, vec)| {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "uuid".to_string(),
+                            CypherValue::String(work.uuid.clone()),
+                        );
+                        map.insert(
+                            "emb".to_string(),
+                            CypherValue::List(
+                                vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                            ),
+                        );
+                        CypherValue::Map(map)
+                    })
                     .collect(),
             );
-            let params = vec![
-                QueryParam::new("uuid", work.uuid.clone()),
-                QueryParam {
-                    name: "embedding".to_string(),
-                    value: embedding_value,
-                },
-            ];
+
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                 SET n.{col} = item.emb"
+            );
 
             self.conn
-                .execute_with_params(&cypher, &params)
+                .execute_with_params(
+                    &cypher,
+                    &[QueryParam {
+                        name: "items".to_string(),
+                        value: items_param,
+                    }],
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+}
+
+// ─── SparseEmbedProcessor ──────────────────────────────────────────────────
+
+struct SparseEmbedProcessor {
+    conn: Arc<dyn DbConnection>,
+    sparse_embedder: Arc<dyn SparseEmbedder>,
+}
+
+#[async_trait]
+impl Processor for SparseEmbedProcessor {
+    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
+        struct SparseWork {
+            uuid: String,
+            text: String,
+            entity_name: String,
+            kb_name: String,
+        }
+
+        let mut works = Vec::new();
+
+        for item in items.iter_mut() {
+            if let CatalogOp::SparseEmbed(ref mut op) = item.op {
+                let uuid = op
+                    .entity_ref
+                    .ready()
+                    .await
+                    .map_err(|e| format!("sparse embed ref resolution failed: {e}"))?;
+
+                if op.texts.is_empty() {
+                    continue;
+                }
+
+                works.push(SparseWork {
+                    uuid,
+                    text: op.texts.join("\n"),
+                    entity_name: op.entity_ref.entity().to_string(),
+                    kb_name: op.kb_name.clone(),
+                });
+            }
+        }
+
+        if works.is_empty() {
+            return Ok(());
+        }
+
+        // Batch embed
+        let texts: Vec<String> = works.iter().map(|w| w.text.clone()).collect();
+        let sparse_vecs = self
+            .sparse_embedder
+            .embed_sparse(&texts)
+            .await
+            .map_err(|e| format!("sparse embedding failed: {e}"))?;
+
+        if sparse_vecs.len() != works.len() {
+            return Err(format!(
+                "sparse embedder returned {} vectors for {} texts",
+                sparse_vecs.len(),
+                works.len()
+            ));
+        }
+
+        // Batch store sparse vectors via UNWIND (one query per entity+kb group)
+        let mut groups: HashMap<(&str, &str), Vec<(&SparseWork, &SparseVector)>> = HashMap::new();
+        for (work, sv) in works.iter().zip(sparse_vecs.iter()) {
+            groups
+                .entry((&work.entity_name, &work.kb_name))
+                .or_default()
+                .push((work, sv));
+        }
+
+        for ((entity_name, kb_name), group) in &groups {
+            let indices_col = format!("{kb_name}_sparse_indices");
+            let weights_col = format!("{kb_name}_sparse_weights");
+
+            let items_param = CypherValue::List(
+                group
+                    .iter()
+                    .map(|(work, sv)| {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "uuid".to_string(),
+                            CypherValue::String(work.uuid.clone()),
+                        );
+                        map.insert(
+                            "indices".to_string(),
+                            CypherValue::List(
+                                sv.indices
+                                    .iter()
+                                    .map(|&i| CypherValue::Int(i as i64))
+                                    .collect(),
+                            ),
+                        );
+                        map.insert(
+                            "weights".to_string(),
+                            CypherValue::List(
+                                sv.values
+                                    .iter()
+                                    .map(|&f| CypherValue::Float(f as f64))
+                                    .collect(),
+                            ),
+                        );
+                        CypherValue::Map(map)
+                    })
+                    .collect(),
+            );
+
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                 SET n.{indices_col} = item.indices, n.{weights_col} = item.weights"
+            );
+
+            self.conn
+                .execute_with_params(
+                    &cypher,
+                    &[QueryParam {
+                        name: "items".to_string(),
+                        value: items_param,
+                    }],
+                )
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -1284,6 +1992,23 @@ mod tests {
         data.insert("body".to_string(), CypherValue::String(body.to_string()));
         data.insert("page_count".to_string(), CypherValue::Int(42));
         data
+    }
+
+    /// Number of chunks produced by the Chunker for a given body text.
+    fn count_chunks(body: &str) -> usize {
+        let chunker = Chunker::new(ChunkerConfig::default());
+        chunker.chunk(body).len()
+    }
+
+    /// Ops enqueued at create() time: 1 entity insert + 1 ChunkOp.
+    fn ops_enqueued_per_create(_body: &str) -> usize {
+        2 // 1 InsertOp + 1 ChunkOp
+    }
+
+    /// Total ops processed after drain(): ChunkOp + entity insert + N*(chunk insert + link + embed).
+    fn ops_per_create(body: &str) -> usize {
+        let n = count_chunks(body);
+        1 + 1 + n * 3 // 1 ChunkOp + 1 entity insert + N * (chunk insert + link + embed)
     }
 
     // ── lifecycle ──────────────────────────────────────────────────────
@@ -1396,13 +2121,14 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().await.unwrap();
 
-        let data = make_doc_data("Title", "Body text");
+        let body = "Body text";
+        let data = make_doc_data("Title", body);
         catalog.create("Document", data).unwrap();
 
         let stats = catalog.queue_stats();
-        // 1 insert + 1 embed (Document has 1 KB "main")
-        assert_eq!(stats.total_queued, 2);
-        assert_eq!(stats.pending, 2);
+        let expected = ops_enqueued_per_create(body);
+        assert_eq!(stats.total_queued, expected);
+        assert_eq!(stats.pending, expected);
     }
 
     #[tokio::test]
@@ -1459,13 +2185,14 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().await.unwrap();
 
-        let data = make_doc_data("Test Doc", "Content here");
+        let body = "Content here";
+        let data = make_doc_data("Test Doc", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
         assert!(!entity_ref.is_ready());
 
         let result = catalog.drain().await;
-        assert_eq!(result.processed, 2); // 1 insert + 1 embed
+        assert_eq!(result.processed, ops_per_create(body));
         assert_eq!(result.failed, 0);
 
         assert!(entity_ref.is_ready());
@@ -1479,8 +2206,10 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().await.unwrap();
 
-        let data1 = make_doc_data("Doc A", "Body A");
-        let data2 = make_doc_data("Doc B", "Body B");
+        let body_a = "Body A";
+        let body_b = "Body B";
+        let data1 = make_doc_data("Doc A", body_a);
+        let data2 = make_doc_data("Doc B", body_b);
         let ref1 = catalog.create("Document", data1).unwrap();
         let ref2 = catalog.create("Document", data2).unwrap();
 
@@ -1494,8 +2223,8 @@ mod tests {
             .unwrap();
 
         let result = catalog.drain().await;
-        // 2 inserts + 2 embeds + 1 link = 5
-        assert_eq!(result.processed, 5);
+        let expected = ops_per_create(body_a) + ops_per_create(body_b) + 1; // +1 user link
+        assert_eq!(result.processed, expected);
         assert_eq!(result.failed, 0);
 
         assert!(ref1.is_ready());
@@ -1632,20 +2361,22 @@ mod tests {
         assert!(!catalog.has_pending());
         assert_eq!(catalog.queue_stats().total_queued, 0);
 
+        let body = "B";
         catalog
-            .create("Document", make_doc_data("A", "B"))
+            .create("Document", make_doc_data("A", body))
             .unwrap();
 
+        let enqueued = ops_enqueued_per_create(body);
         assert!(catalog.has_pending());
         let stats = catalog.queue_stats();
-        assert_eq!(stats.total_queued, 2); // insert + embed
-        assert_eq!(stats.pending, 2);
+        assert_eq!(stats.total_queued, enqueued);
+        assert_eq!(stats.pending, enqueued);
 
         catalog.drain().await;
 
         assert!(!catalog.has_pending());
         let stats = catalog.queue_stats();
-        assert_eq!(stats.total_processed, 2);
+        assert_eq!(stats.total_processed, ops_per_create(body));
     }
 
     // ── flush_insertions ───────────────────────────────────────────────
@@ -1655,20 +2386,50 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().await.unwrap();
 
-        let data = make_doc_data("Partial", "Flush test");
+        let body = "Flush test";
+        let data = make_doc_data("Partial", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
-        // Flush only inserts (priority 1)
+        let n_chunks = count_chunks(body);
+
+        // Flush prio <= 1: ChunkOp (prio 0) → expands → then inserts (prio 1)
+        // Processed: 1 ChunkOp + 1 entity insert + N chunk inserts
         let result = catalog.flush_insertions().await;
-        assert_eq!(result.processed, 1); // only the insert
+        assert_eq!(result.processed, 1 + 1 + n_chunks);
         assert!(entity_ref.is_ready());
 
-        // Embed still pending
+        // Links (prio 2) + embeds (prio 3) still pending
         assert!(catalog.has_pending());
 
-        // Drain the rest
+        // Drain the rest: N links (prio 2) + N embeds (prio 3)
         let result = catalog.drain().await;
-        assert_eq!(result.processed, 1); // the embed
+        assert_eq!(result.processed, n_chunks * 2);
         assert!(!catalog.has_pending());
+    }
+
+    // ── filter_condition priority ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn search_filter_condition_takes_priority() {
+        use crate::filter::{FilterCondition, FilterOp, FilterValue};
+        use crate::search::SearchOptions;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        // Both filters and filter_condition set — filter_condition should win
+        let mut opts = SearchOptions::default();
+        opts.filters.insert(
+            "page_count".to_string(),
+            FilterValue::Direct(CypherValue::Int(10)),
+        );
+        opts.filter_condition = Some(FilterCondition::Field {
+            key: "page_count".to_string(),
+            value: FilterValue::Direct(CypherValue::Int(99)),
+        });
+
+        // With MockConnection, search returns empty but should not error
+        let response = catalog.search("main", "test", opts).await.unwrap();
+        assert!(response.results.is_empty());
     }
 }

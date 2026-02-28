@@ -41,6 +41,18 @@ pub enum FilterOp {
     HasAny(Vec<CypherValue>),
     HasAll(Vec<CypherValue>),
     HasNone(Vec<CypherValue>),
+    IsNull,
+    IsNotNull,
+    IsEmpty,
+    IsNotEmpty,
+    Between(CypherValue, CypherValue),
+    NotIn(Vec<CypherValue>),
+    StartsWith(String),
+    Contains(String),
+    ValuesCount {
+        min: Option<usize>,
+        max: Option<usize>,
+    },
 }
 
 /// A filter value: direct value, list (IN shorthand), or operator list.
@@ -52,6 +64,29 @@ pub enum FilterValue {
     List(Vec<CypherValue>),
     /// One or more operators (combined with AND).
     Ops(Vec<FilterOp>),
+}
+
+/// Composable filter condition (Qdrant-like Must/Should/MustNot).
+#[derive(Debug, Clone)]
+pub enum FilterCondition {
+    /// Single field filter.
+    Field { key: String, value: FilterValue },
+    /// AND: all conditions must match.
+    Must(Vec<FilterCondition>),
+    /// OR: at least one condition must match.
+    Should(Vec<FilterCondition>),
+    /// NOT: none of the conditions must match.
+    MustNot(Vec<FilterCondition>),
+}
+
+impl From<HashMap<String, FilterValue>> for FilterCondition {
+    fn from(filters: HashMap<String, FilterValue>) -> Self {
+        let fields: Vec<FilterCondition> = filters
+            .into_iter()
+            .map(|(key, value)| FilterCondition::Field { key, value })
+            .collect();
+        FilterCondition::Must(fields)
+    }
 }
 
 /// Parsed filter result with parameterized clauses.
@@ -168,6 +203,187 @@ impl<'a> FilterParser<'a> {
         })
     }
 
+    /// Parse a `FilterCondition` tree into parameterized Cypher clauses.
+    ///
+    /// Supports recursive Must (AND), Should (OR), MustNot (NOT) composition.
+    /// Cross-entity MATCH clauses are accumulated at the top level (not nested).
+    pub fn parse_condition(
+        &mut self,
+        condition: &FilterCondition,
+        result_entity: &str,
+        result_alias: &str,
+    ) -> Result<ParsedFilter, FilterError> {
+        self.param_counter = 0;
+
+        let mut match_clauses = Vec::new();
+        let mut params = Vec::new();
+        let mut aliases = HashMap::new();
+        let mut alias_counter = 0_usize;
+
+        validate_identifier(result_entity, "entity")?;
+        aliases.insert(result_entity.to_string(), result_alias.to_string());
+
+        let where_str = self.build_condition_clause(
+            condition,
+            result_entity,
+            result_alias,
+            &mut match_clauses,
+            &mut params,
+            &mut aliases,
+            &mut alias_counter,
+        )?;
+
+        let where_clauses = if where_str.is_empty() {
+            vec![]
+        } else {
+            vec![where_str]
+        };
+
+        Ok(ParsedFilter {
+            where_clauses,
+            match_clauses,
+            params,
+            aliases,
+        })
+    }
+
+    fn build_condition_clause(
+        &mut self,
+        condition: &FilterCondition,
+        result_entity: &str,
+        result_alias: &str,
+        match_clauses: &mut Vec<String>,
+        params: &mut Vec<QueryParam>,
+        aliases: &mut HashMap<String, String>,
+        alias_counter: &mut usize,
+    ) -> Result<String, FilterError> {
+        match condition {
+            FilterCondition::Field { key, value } => {
+                let (entity, field) = if let Some((e, f)) = key.split_once('.') {
+                    (e.to_string(), f.to_string())
+                } else {
+                    (result_entity.to_string(), key.clone())
+                };
+
+                validate_identifier(&entity, "entity")?;
+                validate_identifier(&field, "field")?;
+
+                let alias = if let Some(a) = aliases.get(&entity) {
+                    a.clone()
+                } else {
+                    *alias_counter += 1;
+                    let a = format!("e{alias_counter}");
+                    aliases.insert(entity.clone(), a.clone());
+
+                    let rel = find_relation(self.relations, result_entity, &entity)
+                        .ok_or_else(|| FilterError::NoRelation {
+                            from: result_entity.to_string(),
+                            to: entity.clone(),
+                        })?;
+                    validate_identifier(&rel.name, "relation")?;
+
+                    if rel.from == result_entity {
+                        match_clauses.push(format!(
+                            "MATCH ({result_alias})-[:{}]->({a}:{entity})",
+                            rel.name
+                        ));
+                    } else {
+                        match_clauses.push(format!(
+                            "MATCH ({result_alias})<-[:{}]-({a}:{entity})",
+                            rel.name
+                        ));
+                    }
+                    a
+                };
+
+                Ok(self
+                    .build_clause(&alias, &field, value, params)
+                    .unwrap_or_default())
+            }
+            FilterCondition::Must(conditions) => {
+                let clauses: Vec<String> = conditions
+                    .iter()
+                    .map(|c| {
+                        self.build_condition_clause(
+                            c,
+                            result_entity,
+                            result_alias,
+                            match_clauses,
+                            params,
+                            aliases,
+                            alias_counter,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if clauses.is_empty() {
+                    Ok(String::new())
+                } else if clauses.len() == 1 {
+                    Ok(clauses.into_iter().next().unwrap())
+                } else {
+                    Ok(format!("({})", clauses.join(" AND ")))
+                }
+            }
+            FilterCondition::Should(conditions) => {
+                let clauses: Vec<String> = conditions
+                    .iter()
+                    .map(|c| {
+                        self.build_condition_clause(
+                            c,
+                            result_entity,
+                            result_alias,
+                            match_clauses,
+                            params,
+                            aliases,
+                            alias_counter,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if clauses.is_empty() {
+                    Ok(String::new())
+                } else if clauses.len() == 1 {
+                    Ok(clauses.into_iter().next().unwrap())
+                } else {
+                    Ok(format!("({})", clauses.join(" OR ")))
+                }
+            }
+            FilterCondition::MustNot(conditions) => {
+                let clauses: Vec<String> = conditions
+                    .iter()
+                    .map(|c| {
+                        self.build_condition_clause(
+                            c,
+                            result_entity,
+                            result_alias,
+                            match_clauses,
+                            params,
+                            aliases,
+                            alias_counter,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if clauses.is_empty() {
+                    Ok(String::new())
+                } else if clauses.len() == 1 {
+                    Ok(format!(
+                        "NOT ({})",
+                        clauses.into_iter().next().unwrap()
+                    ))
+                } else {
+                    Ok(format!("NOT ({})", clauses.join(" AND ")))
+                }
+            }
+        }
+    }
+
     fn next_param(&mut self) -> String {
         let name = format!("filter_p{}", self.param_counter);
         self.param_counter += 1;
@@ -225,12 +441,24 @@ impl<'a> FilterParser<'a> {
             FilterOp::Lte(v) => ("<=", v),
             FilterOp::Gt(v) => (">", v),
             FilterOp::Gte(v) => (">=", v),
-            // Handled separately below
+            // List ops handled separately
             FilterOp::In(_)
             | FilterOp::HasAny(_)
             | FilterOp::HasAll(_)
-            | FilterOp::HasNone(_) => {
+            | FilterOp::HasNone(_)
+            | FilterOp::NotIn(_) => {
                 return self.build_list_op_clause(prop, op, params);
+            }
+            // Special ops (no value or multi-value)
+            FilterOp::IsNull
+            | FilterOp::IsNotNull
+            | FilterOp::IsEmpty
+            | FilterOp::IsNotEmpty
+            | FilterOp::Between(_, _)
+            | FilterOp::StartsWith(_)
+            | FilterOp::Contains(_)
+            | FilterOp::ValuesCount { .. } => {
+                return self.build_special_op_clause(prop, op, params);
             }
         };
 
@@ -268,6 +496,59 @@ impl<'a> FilterParser<'a> {
                 Some(format!(
                     "NOT list_any_match({prop}, v -> list_contains(${p}, v))"
                 ))
+            }
+            FilterOp::NotIn(items) => {
+                params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
+                Some(format!("NOT ({prop} IN ${p})"))
+            }
+            _ => None,
+        }
+    }
+    fn build_special_op_clause(
+        &mut self,
+        prop: &str,
+        op: &FilterOp,
+        params: &mut Vec<QueryParam>,
+    ) -> Option<String> {
+        match op {
+            FilterOp::IsNull => Some(format!("{prop} IS NULL")),
+            FilterOp::IsNotNull => Some(format!("{prop} IS NOT NULL")),
+            FilterOp::IsEmpty => Some(format!("size({prop}) = 0")),
+            FilterOp::IsNotEmpty => Some(format!("size({prop}) > 0")),
+            FilterOp::Between(lo, hi) => {
+                let p_lo = self.next_param();
+                let p_hi = self.next_param();
+                params.push(QueryParam::new(&p_lo, lo.clone()));
+                params.push(QueryParam::new(&p_hi, hi.clone()));
+                Some(format!("{prop} >= ${p_lo} AND {prop} <= ${p_hi}"))
+            }
+            FilterOp::StartsWith(s) => {
+                let p = self.next_param();
+                params.push(QueryParam::new(&p, CypherValue::String(s.clone())));
+                Some(format!("starts_with({prop}, ${p})"))
+            }
+            FilterOp::Contains(s) => {
+                let p = self.next_param();
+                params.push(QueryParam::new(&p, CypherValue::String(s.clone())));
+                Some(format!("contains({prop}, ${p})"))
+            }
+            FilterOp::ValuesCount { min, max } => {
+                let mut clauses = Vec::new();
+                if let Some(min_val) = min {
+                    let p = self.next_param();
+                    params.push(QueryParam::new(&p, CypherValue::Int(*min_val as i64)));
+                    clauses.push(format!("size({prop}) >= ${p}"));
+                }
+                if let Some(max_val) = max {
+                    let p = self.next_param();
+                    params.push(QueryParam::new(&p, CypherValue::Int(*max_val as i64)));
+                    clauses.push(format!("size({prop}) <= ${p}"));
+                }
+                if clauses.is_empty() {
+                    None
+                } else {
+                    Some(clauses.join(" AND "))
+                }
             }
             _ => None,
         }
@@ -355,6 +636,429 @@ impl From<bool> for FilterValue {
 impl From<Vec<CypherValue>> for FilterValue {
     fn from(v: Vec<CypherValue>) -> Self {
         Self::List(v)
+    }
+}
+
+// ─── FilterBuilder ──────────────────────────────────────────────────────────
+
+/// Ergonomic builder for constructing filter conditions.
+///
+/// ```ignore
+/// let filter = FilterBuilder::new()
+///     .eq("status", "active")
+///     .range("price", Some(CypherValue::from(10)), Some(CypherValue::from(100)))
+///     .is_not_null("email")
+///     .build();
+/// ```
+pub struct FilterBuilder {
+    conditions: Vec<FilterCondition>,
+}
+
+impl FilterBuilder {
+    pub fn new() -> Self {
+        Self {
+            conditions: Vec::new(),
+        }
+    }
+
+    /// Add a raw field filter.
+    pub fn field(mut self, key: &str, value: impl Into<FilterValue>) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: value.into(),
+        });
+        self
+    }
+
+    /// Equality filter: `field = value`.
+    pub fn eq(mut self, key: &str, value: impl Into<CypherValue>) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Eq(value.into())]),
+        });
+        self
+    }
+
+    /// Not-equal filter: `field <> value`.
+    pub fn neq(mut self, key: &str, value: impl Into<CypherValue>) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Neq(value.into())]),
+        });
+        self
+    }
+
+    /// Range filter: optional min (>=) and/or max (<=).
+    pub fn range(
+        mut self,
+        key: &str,
+        min: Option<CypherValue>,
+        max: Option<CypherValue>,
+    ) -> Self {
+        let mut ops = Vec::new();
+        if let Some(lo) = min {
+            ops.push(FilterOp::Gte(lo));
+        }
+        if let Some(hi) = max {
+            ops.push(FilterOp::Lte(hi));
+        }
+        if !ops.is_empty() {
+            self.conditions.push(FilterCondition::Field {
+                key: key.to_string(),
+                value: FilterValue::Ops(ops),
+            });
+        }
+        self
+    }
+
+    /// IN filter: `field IN [values]`.
+    pub fn is_in(mut self, key: &str, values: Vec<CypherValue>) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::In(values)]),
+        });
+        self
+    }
+
+    /// IS NULL filter.
+    pub fn is_null(mut self, key: &str) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::IsNull]),
+        });
+        self
+    }
+
+    /// IS NOT NULL filter.
+    pub fn is_not_null(mut self, key: &str) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::IsNotNull]),
+        });
+        self
+    }
+
+    /// HasAny: list contains at least one of the values.
+    pub fn has_any(mut self, key: &str, values: Vec<CypherValue>) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::HasAny(values)]),
+        });
+        self
+    }
+
+    /// StartsWith: string prefix match.
+    pub fn starts_with(mut self, key: &str, prefix: &str) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::StartsWith(prefix.to_string())]),
+        });
+        self
+    }
+
+    /// Contains: substring match.
+    pub fn contains_str(mut self, key: &str, substring: &str) -> Self {
+        self.conditions.push(FilterCondition::Field {
+            key: key.to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Contains(substring.to_string())]),
+        });
+        self
+    }
+
+    /// Create an OR condition (static).
+    pub fn or(conditions: Vec<FilterCondition>) -> FilterCondition {
+        FilterCondition::Should(conditions)
+    }
+
+    /// Create a NOT condition (static).
+    pub fn not(conditions: Vec<FilterCondition>) -> FilterCondition {
+        FilterCondition::MustNot(conditions)
+    }
+
+    /// Build into a `FilterCondition::Must`.
+    pub fn build(self) -> FilterCondition {
+        FilterCondition::Must(self.conditions)
+    }
+
+    /// Build into a legacy `HashMap<String, FilterValue>` for retrocompatibility.
+    ///
+    /// Only works if all conditions are `Field` variants. Panics otherwise.
+    pub fn build_map(self) -> HashMap<String, FilterValue> {
+        let mut map = HashMap::new();
+        for cond in self.conditions {
+            match cond {
+                FilterCondition::Field { key, value } => {
+                    map.insert(key, value);
+                }
+                _ => panic!("build_map only supports Field conditions"),
+            }
+        }
+        map
+    }
+}
+
+impl Default for FilterBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ─── FilterCompiler ──────────────────────────────────────────────────────────
+
+/// Result of splitting a FilterCondition into Tantivy-native and Kuzu-only parts.
+#[derive(Debug, Clone)]
+pub struct SplitResult {
+    /// Conditions compilable to Tantivy FilterClause (native pre-filter).
+    pub tantivy: Option<FilterCondition>,
+    /// Conditions requiring Kuzu Cypher (lists, null, cross-entity).
+    pub kuzu: Option<FilterCondition>,
+}
+
+/// Compiles FilterConditions for dual-backend execution:
+/// Tantivy-native FilterClause JSON for segment-level pre-filtering,
+/// and Kuzu Cypher for ops that Tantivy cannot handle.
+pub struct FilterCompiler;
+
+impl FilterCompiler {
+    /// Returns true if a single FilterOp can be handled by Tantivy natively.
+    fn is_tantivy_op(op: &FilterOp) -> bool {
+        matches!(
+            op,
+            FilterOp::Eq(_)
+                | FilterOp::Neq(_)
+                | FilterOp::Lt(_)
+                | FilterOp::Lte(_)
+                | FilterOp::Gt(_)
+                | FilterOp::Gte(_)
+                | FilterOp::In(_)
+                | FilterOp::Between(_, _)
+                | FilterOp::NotIn(_)
+                | FilterOp::StartsWith(_)
+                | FilterOp::Contains(_)
+        )
+    }
+
+    /// Returns true if a field key is cross-entity (contains ".").
+    fn is_cross_entity(key: &str) -> bool {
+        key.contains('.')
+    }
+
+    /// Check if all ops in a FilterValue are Tantivy-compatible.
+    fn is_field_tantivy(key: &str, value: &FilterValue) -> bool {
+        if Self::is_cross_entity(key) {
+            return false;
+        }
+        match value {
+            FilterValue::Direct(cv) => !cv.is_null(), // IS NULL → Kuzu
+            FilterValue::List(_) => true,              // IN shorthand → Tantivy
+            FilterValue::Ops(ops) => ops.iter().all(Self::is_tantivy_op),
+        }
+    }
+
+    /// Split a FilterCondition into Tantivy-native and Kuzu-only parts.
+    ///
+    /// Rules:
+    /// - **Must**: split recursively, each child goes to its category
+    /// - **Should/MustNot**: all-or-nothing (if any child is Kuzu-only, whole group → Kuzu)
+    /// - **Cross-entity** (key contains "."): always Kuzu
+    /// - **Field**: classified by op type
+    pub fn split(condition: &FilterCondition) -> SplitResult {
+        match condition {
+            FilterCondition::Field { key, value } => {
+                if Self::is_field_tantivy(key, value) {
+                    SplitResult {
+                        tantivy: Some(condition.clone()),
+                        kuzu: None,
+                    }
+                } else {
+                    SplitResult {
+                        tantivy: None,
+                        kuzu: Some(condition.clone()),
+                    }
+                }
+            }
+            FilterCondition::Must(children) => {
+                let mut tantivy_children = Vec::new();
+                let mut kuzu_children = Vec::new();
+                for child in children {
+                    let sub = Self::split(child);
+                    if let Some(t) = sub.tantivy {
+                        tantivy_children.push(t);
+                    }
+                    if let Some(k) = sub.kuzu {
+                        kuzu_children.push(k);
+                    }
+                }
+                SplitResult {
+                    tantivy: Self::wrap_must(tantivy_children),
+                    kuzu: Self::wrap_must(kuzu_children),
+                }
+            }
+            FilterCondition::Should(children) | FilterCondition::MustNot(children) => {
+                // All-or-nothing: if any child is Kuzu-only, whole group → Kuzu
+                let all_tantivy = children.iter().all(|c| Self::is_all_tantivy(c));
+                if all_tantivy {
+                    SplitResult {
+                        tantivy: Some(condition.clone()),
+                        kuzu: None,
+                    }
+                } else {
+                    SplitResult {
+                        tantivy: None,
+                        kuzu: Some(condition.clone()),
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check recursively if a condition is entirely Tantivy-compatible.
+    fn is_all_tantivy(condition: &FilterCondition) -> bool {
+        match condition {
+            FilterCondition::Field { key, value } => Self::is_field_tantivy(key, value),
+            FilterCondition::Must(children)
+            | FilterCondition::Should(children)
+            | FilterCondition::MustNot(children) => {
+                children.iter().all(|c| Self::is_all_tantivy(c))
+            }
+        }
+    }
+
+    fn wrap_must(children: Vec<FilterCondition>) -> Option<FilterCondition> {
+        match children.len() {
+            0 => None,
+            1 => Some(children.into_iter().next().unwrap()),
+            _ => Some(FilterCondition::Must(children)),
+        }
+    }
+
+    /// Compile a Tantivy-compatible FilterCondition into JSON FilterClause array.
+    ///
+    /// The returned values match the `FilterClause` struct in tantivy_fts/query.rs.
+    /// Only call this on the `tantivy` part of a `SplitResult`.
+    pub fn to_tantivy_json(condition: &FilterCondition) -> Vec<serde_json::Value> {
+        match condition {
+            FilterCondition::Field { key, value } => {
+                Self::field_to_json(key, value)
+            }
+            FilterCondition::Must(children) => {
+                if children.len() == 1 {
+                    return Self::to_tantivy_json(&children[0]);
+                }
+                let clauses: Vec<serde_json::Value> = children
+                    .iter()
+                    .flat_map(|c| Self::to_tantivy_json(c))
+                    .collect();
+                vec![serde_json::json!({
+                    "op": "must",
+                    "clauses": clauses
+                })]
+            }
+            FilterCondition::Should(children) => {
+                let clauses: Vec<serde_json::Value> = children
+                    .iter()
+                    .flat_map(|c| Self::to_tantivy_json(c))
+                    .collect();
+                vec![serde_json::json!({
+                    "op": "should",
+                    "clauses": clauses
+                })]
+            }
+            FilterCondition::MustNot(children) => {
+                let clauses: Vec<serde_json::Value> = children
+                    .iter()
+                    .flat_map(|c| Self::to_tantivy_json(c))
+                    .collect();
+                vec![serde_json::json!({
+                    "op": "must_not",
+                    "clauses": clauses
+                })]
+            }
+        }
+    }
+
+    /// Convert a single field filter to JSON FilterClause(s).
+    fn field_to_json(key: &str, value: &FilterValue) -> Vec<serde_json::Value> {
+        match value {
+            FilterValue::Direct(cv) => {
+                vec![serde_json::json!({
+                    "field": key,
+                    "op": "eq",
+                    "value": cypher_to_json(cv)
+                })]
+            }
+            FilterValue::List(items) => {
+                let json_items: Vec<serde_json::Value> =
+                    items.iter().map(cypher_to_json).collect();
+                vec![serde_json::json!({
+                    "field": key,
+                    "op": "in",
+                    "value": json_items
+                })]
+            }
+            FilterValue::Ops(ops) => {
+                let clauses: Vec<serde_json::Value> = ops
+                    .iter()
+                    .map(|op| Self::op_to_json(key, op))
+                    .collect();
+                if clauses.len() == 1 {
+                    clauses
+                } else {
+                    // Multiple ops on same field = AND
+                    vec![serde_json::json!({
+                        "op": "must",
+                        "clauses": clauses
+                    })]
+                }
+            }
+        }
+    }
+
+    fn op_to_json(field: &str, op: &FilterOp) -> serde_json::Value {
+        match op {
+            FilterOp::Eq(v) => serde_json::json!({"field": field, "op": "eq", "value": cypher_to_json(v)}),
+            FilterOp::Neq(v) => serde_json::json!({"field": field, "op": "ne", "value": cypher_to_json(v)}),
+            FilterOp::Lt(v) => serde_json::json!({"field": field, "op": "lt", "value": cypher_to_json(v)}),
+            FilterOp::Lte(v) => serde_json::json!({"field": field, "op": "lte", "value": cypher_to_json(v)}),
+            FilterOp::Gt(v) => serde_json::json!({"field": field, "op": "gt", "value": cypher_to_json(v)}),
+            FilterOp::Gte(v) => serde_json::json!({"field": field, "op": "gte", "value": cypher_to_json(v)}),
+            FilterOp::In(items) => {
+                let json_items: Vec<serde_json::Value> = items.iter().map(cypher_to_json).collect();
+                serde_json::json!({"field": field, "op": "in", "value": json_items})
+            }
+            FilterOp::NotIn(items) => {
+                let json_items: Vec<serde_json::Value> = items.iter().map(cypher_to_json).collect();
+                serde_json::json!({"field": field, "op": "not_in", "value": json_items})
+            }
+            FilterOp::Between(lo, hi) => {
+                serde_json::json!({"field": field, "op": "between", "value": [cypher_to_json(lo), cypher_to_json(hi)]})
+            }
+            FilterOp::StartsWith(s) => serde_json::json!({"field": field, "op": "starts_with", "value": s}),
+            FilterOp::Contains(s) => serde_json::json!({"field": field, "op": "contains", "value": s}),
+            // Kuzu-only ops should never reach here (split filters them out)
+            _ => serde_json::json!({}),
+        }
+    }
+}
+
+/// Convert a CypherValue to a serde_json::Value for Tantivy FilterClause.
+fn cypher_to_json(cv: &CypherValue) -> serde_json::Value {
+    match cv {
+        CypherValue::Null => serde_json::Value::Null,
+        CypherValue::Bool(b) => serde_json::Value::Bool(*b),
+        CypherValue::Int(n) => serde_json::json!(*n),
+        CypherValue::Float(f) => serde_json::json!(*f),
+        CypherValue::String(s) => serde_json::Value::String(s.clone()),
+        CypherValue::List(items) => {
+            serde_json::Value::Array(items.iter().map(cypher_to_json).collect())
+        }
+        CypherValue::Map(map) => {
+            let obj: serde_json::Map<std::string::String, serde_json::Value> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), cypher_to_json(v)))
+                .collect();
+            serde_json::Value::Object(obj)
+        }
     }
 }
 
@@ -610,6 +1314,145 @@ mod tests {
         );
     }
 
+    // ── new ops ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_op_is_null() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "deleted_at",
+            FilterValue::Ops(vec![FilterOp::IsNull]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["n.deleted_at IS NULL"]);
+        assert!(r.params.is_empty());
+    }
+
+    #[test]
+    fn parse_op_is_not_null() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "email",
+            FilterValue::Ops(vec![FilterOp::IsNotNull]),
+        );
+        let r = parser.parse(&filters, "Person", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["n.email IS NOT NULL"]);
+        assert!(r.params.is_empty());
+    }
+
+    #[test]
+    fn parse_op_is_empty() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "tags",
+            FilterValue::Ops(vec![FilterOp::IsEmpty]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["size(n.tags) = 0"]);
+    }
+
+    #[test]
+    fn parse_op_is_not_empty() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "tags",
+            FilterValue::Ops(vec![FilterOp::IsNotEmpty]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["size(n.tags) > 0"]);
+    }
+
+    #[test]
+    fn parse_op_between() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "price",
+            FilterValue::Ops(vec![FilterOp::Between(
+                CypherValue::from(10.0_f64),
+                CypherValue::from(100.0_f64),
+            )]),
+        );
+        let r = parser.parse(&filters, "Product", "n").unwrap();
+        assert_eq!(
+            r.where_clauses,
+            vec!["n.price >= $filter_p0 AND n.price <= $filter_p1"]
+        );
+        assert_eq!(r.params.len(), 2);
+        assert_eq!(r.params[0].value.as_f64(), Some(10.0));
+        assert_eq!(r.params[1].value.as_f64(), Some(100.0));
+    }
+
+    #[test]
+    fn parse_op_not_in() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "status",
+            FilterValue::Ops(vec![FilterOp::NotIn(vec![
+                CypherValue::from("deleted"),
+                CypherValue::from("archived"),
+            ])]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["NOT (n.status IN $filter_p0)"]);
+        assert_eq!(r.params.len(), 1);
+    }
+
+    #[test]
+    fn parse_op_starts_with() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "name",
+            FilterValue::Ops(vec![FilterOp::StartsWith("Dr.".to_string())]),
+        );
+        let r = parser.parse(&filters, "Person", "n").unwrap();
+        assert_eq!(r.where_clauses, vec!["starts_with(n.name, $filter_p0)"]);
+        assert_eq!(r.params[0].value.as_str(), Some("Dr."));
+    }
+
+    #[test]
+    fn parse_op_contains() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "description",
+            FilterValue::Ops(vec![FilterOp::Contains("important".to_string())]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(
+            r.where_clauses,
+            vec!["contains(n.description, $filter_p0)"]
+        );
+        assert_eq!(r.params[0].value.as_str(), Some("important"));
+    }
+
+    #[test]
+    fn parse_op_values_count() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let filters = filters_one(
+            "tags",
+            FilterValue::Ops(vec![FilterOp::ValuesCount {
+                min: Some(2),
+                max: Some(10),
+            }]),
+        );
+        let r = parser.parse(&filters, "Document", "n").unwrap();
+        assert_eq!(
+            r.where_clauses,
+            vec!["size(n.tags) >= $filter_p0 AND size(n.tags) <= $filter_p1"]
+        );
+        assert_eq!(r.params.len(), 2);
+        assert_eq!(r.params[0].value.as_i64(), Some(2));
+        assert_eq!(r.params[1].value.as_i64(), Some(10));
+    }
+
     // ── cross-entity ────────────────────────────────────────────────────
 
     #[test]
@@ -795,5 +1638,396 @@ mod tests {
         let f2 = filters_one("b", "y".into());
         let r2 = parser.parse(&f2, "Doc", "n").unwrap();
         assert_eq!(r2.params[0].name, "filter_p0");
+    }
+
+    // ── FilterCondition ─────────────────────────────────────────────────
+
+    #[test]
+    fn condition_must_and() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let cond = FilterCondition::Must(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: "active".into(),
+            },
+            FilterCondition::Field {
+                key: "count".to_string(),
+                value: FilterValue::Ops(vec![FilterOp::Gt(CypherValue::from(5_i64))]),
+            },
+        ]);
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        let where_str = r.combine_where();
+        assert!(where_str.contains("n.status = $filter_p0"));
+        assert!(where_str.contains("AND"));
+        assert!(where_str.contains("n.count > $filter_p1"));
+        assert_eq!(r.params.len(), 2);
+    }
+
+    #[test]
+    fn condition_should_or() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let cond = FilterCondition::Should(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: "active".into(),
+            },
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: "pending".into(),
+            },
+        ]);
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        let where_str = r.combine_where();
+        assert!(where_str.contains("OR"));
+        assert!(where_str.contains("n.status = $filter_p0"));
+        assert!(where_str.contains("n.status = $filter_p1"));
+    }
+
+    #[test]
+    fn condition_must_not() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let cond = FilterCondition::MustNot(vec![FilterCondition::Field {
+            key: "deleted".to_string(),
+            value: true.into(),
+        }]);
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        let where_str = r.combine_where();
+        assert!(where_str.starts_with("NOT ("));
+        assert!(where_str.contains("n.deleted = $filter_p0"));
+    }
+
+    #[test]
+    fn condition_nested_must_should() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        // Must(Should(a, b), Field(c))
+        let cond = FilterCondition::Must(vec![
+            FilterCondition::Should(vec![
+                FilterCondition::Field {
+                    key: "status".to_string(),
+                    value: "active".into(),
+                },
+                FilterCondition::Field {
+                    key: "status".to_string(),
+                    value: "pending".into(),
+                },
+            ]),
+            FilterCondition::Field {
+                key: "type".to_string(),
+                value: "article".into(),
+            },
+        ]);
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        let where_str = r.combine_where();
+        // Should produce: ((... OR ...) AND n.type = ...)
+        assert!(where_str.contains("OR"));
+        assert!(where_str.contains("AND"));
+        assert_eq!(r.params.len(), 3);
+    }
+
+    #[test]
+    fn condition_from_hashmap_retrocompat() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let mut filters = HashMap::new();
+        filters.insert("status".to_string(), FilterValue::from("active"));
+        let cond: FilterCondition = filters.into();
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        assert!(r.combine_where().contains("n.status = $filter_p0"));
+        assert_eq!(r.params.len(), 1);
+    }
+
+    // ── FilterBuilder ───────────────────────────────────────────────────
+
+    #[test]
+    fn builder_basic_chain() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let cond = FilterBuilder::new()
+            .eq("status", CypherValue::from("active"))
+            .is_not_null("email")
+            .starts_with("name", "Dr.")
+            .build();
+        let r = parser
+            .parse_condition(&cond, "Person", "n")
+            .unwrap();
+        let w = r.combine_where();
+        assert!(w.contains("n.status = $filter_p0"));
+        assert!(w.contains("n.email IS NOT NULL"));
+        assert!(w.contains("starts_with(n.name, $filter_p"));
+        assert_eq!(r.params.len(), 2); // eq + starts_with (is_not_null has no params)
+    }
+
+    #[test]
+    fn builder_with_or() {
+        let rels = no_relations();
+        let mut parser = FilterParser::new(&rels);
+        let cond = FilterCondition::Must(vec![
+            FilterBuilder::or(vec![
+                FilterCondition::Field {
+                    key: "status".to_string(),
+                    value: "active".into(),
+                },
+                FilterCondition::Field {
+                    key: "status".to_string(),
+                    value: "pending".into(),
+                },
+            ]),
+            FilterCondition::Field {
+                key: "type".to_string(),
+                value: "article".into(),
+            },
+        ]);
+        let r = parser
+            .parse_condition(&cond, "Document", "n")
+            .unwrap();
+        let w = r.combine_where();
+        assert!(w.contains("OR"));
+        assert!(w.contains("AND"));
+    }
+
+    #[test]
+    fn builder_build_map_retrocompat() {
+        let map = FilterBuilder::new()
+            .eq("status", CypherValue::from("active"))
+            .is_null("deleted_at")
+            .build_map();
+        assert!(map.contains_key("status"));
+        assert!(map.contains_key("deleted_at"));
+        assert_eq!(map.len(), 2);
+    }
+
+    // ── FilterCompiler::split ──────────────────────────────────────────
+
+    #[test]
+    fn split_scalar_field_to_tantivy() {
+        let cond = FilterCondition::Field {
+            key: "status".to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Eq(CypherValue::from("active"))]),
+        };
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_some());
+        assert!(r.kuzu.is_none());
+    }
+
+    #[test]
+    fn split_is_null_to_kuzu() {
+        let cond = FilterCondition::Field {
+            key: "deleted_at".to_string(),
+            value: FilterValue::Ops(vec![FilterOp::IsNull]),
+        };
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_none());
+        assert!(r.kuzu.is_some());
+    }
+
+    #[test]
+    fn split_cross_entity_to_kuzu() {
+        let cond = FilterCondition::Field {
+            key: "Author.name".to_string(),
+            value: FilterValue::from("John"),
+        };
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_none());
+        assert!(r.kuzu.is_some());
+    }
+
+    #[test]
+    fn split_null_direct_to_kuzu() {
+        let cond = FilterCondition::Field {
+            key: "field".to_string(),
+            value: FilterValue::Direct(CypherValue::Null),
+        };
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_none());
+        assert!(r.kuzu.is_some());
+    }
+
+    #[test]
+    fn split_must_mixed() {
+        // Must(Eq(scalar), IsNull) → Eq goes to Tantivy, IsNull goes to Kuzu
+        let cond = FilterCondition::Must(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::Ops(vec![FilterOp::Eq(CypherValue::from("active"))]),
+            },
+            FilterCondition::Field {
+                key: "deleted_at".to_string(),
+                value: FilterValue::Ops(vec![FilterOp::IsNull]),
+            },
+        ]);
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_some(), "should have tantivy part");
+        assert!(r.kuzu.is_some(), "should have kuzu part");
+    }
+
+    #[test]
+    fn split_should_all_tantivy() {
+        // Should(Eq, Eq) → all Tantivy-compat → stays as Should in tantivy
+        let cond = FilterCondition::Should(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("active"),
+            },
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("pending"),
+            },
+        ]);
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_some());
+        assert!(r.kuzu.is_none());
+    }
+
+    #[test]
+    fn split_should_mixed_all_to_kuzu() {
+        // Should(Eq, IsNull) → one kuzu-only → whole Should goes to Kuzu
+        let cond = FilterCondition::Should(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("active"),
+            },
+            FilterCondition::Field {
+                key: "field".to_string(),
+                value: FilterValue::Ops(vec![FilterOp::IsNull]),
+            },
+        ]);
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_none());
+        assert!(r.kuzu.is_some());
+    }
+
+    #[test]
+    fn split_must_not_all_tantivy() {
+        let cond = FilterCondition::MustNot(vec![FilterCondition::Field {
+            key: "status".to_string(),
+            value: FilterValue::from("deleted"),
+        }]);
+        let r = FilterCompiler::split(&cond);
+        assert!(r.tantivy.is_some());
+        assert!(r.kuzu.is_none());
+    }
+
+    // ── FilterCompiler::to_tantivy_json ────────────────────────────────
+
+    #[test]
+    fn to_tantivy_json_eq() {
+        let cond = FilterCondition::Field {
+            key: "status".to_string(),
+            value: FilterValue::from("active"),
+        };
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["field"], "status");
+        assert_eq!(json[0]["op"], "eq");
+        assert_eq!(json[0]["value"], "active");
+    }
+
+    #[test]
+    fn to_tantivy_json_between() {
+        let cond = FilterCondition::Field {
+            key: "price".to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Between(
+                CypherValue::from(10.0_f64),
+                CypherValue::from(100.0_f64),
+            )]),
+        };
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "between");
+        assert_eq!(json[0]["value"][0], 10.0);
+        assert_eq!(json[0]["value"][1], 100.0);
+    }
+
+    #[test]
+    fn to_tantivy_json_in_list() {
+        let cond = FilterCondition::Field {
+            key: "status".to_string(),
+            value: FilterValue::List(vec![
+                CypherValue::from("active"),
+                CypherValue::from("pending"),
+            ]),
+        };
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "in");
+        assert_eq!(json[0]["value"][0], "active");
+        assert_eq!(json[0]["value"][1], "pending");
+    }
+
+    #[test]
+    fn to_tantivy_json_must_composite() {
+        let cond = FilterCondition::Must(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("active"),
+            },
+            FilterCondition::Field {
+                key: "count".to_string(),
+                value: FilterValue::Ops(vec![FilterOp::Gt(CypherValue::from(5_i64))]),
+            },
+        ]);
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "must");
+        let clauses = json[0]["clauses"].as_array().unwrap();
+        assert_eq!(clauses.len(), 2);
+        assert_eq!(clauses[0]["field"], "status");
+        assert_eq!(clauses[1]["field"], "count");
+        assert_eq!(clauses[1]["op"], "gt");
+    }
+
+    #[test]
+    fn to_tantivy_json_should_composite() {
+        let cond = FilterCondition::Should(vec![
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("a"),
+            },
+            FilterCondition::Field {
+                key: "status".to_string(),
+                value: FilterValue::from("b"),
+            },
+        ]);
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "should");
+    }
+
+    #[test]
+    fn to_tantivy_json_contains() {
+        let cond = FilterCondition::Field {
+            key: "name".to_string(),
+            value: FilterValue::Ops(vec![FilterOp::Contains("test".to_string())]),
+        };
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "contains");
+        assert_eq!(json[0]["value"], "test");
+    }
+
+    #[test]
+    fn to_tantivy_json_starts_with() {
+        let cond = FilterCondition::Field {
+            key: "name".to_string(),
+            value: FilterValue::Ops(vec![FilterOp::StartsWith("Dr.".to_string())]),
+        };
+        let json = FilterCompiler::to_tantivy_json(&cond);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["op"], "starts_with");
+        assert_eq!(json[0]["value"], "Dr.");
     }
 }

@@ -4,12 +4,60 @@
 //! Provides `OperationQueue` — enqueue `CatalogOp`s, flush by priority,
 //! dispatch to registered `Processor`s in batches.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
+use tokio::sync::mpsc;
 
-use crate::ops::{CatalogOp, InsertOp, LinkOp};
+use crate::ops::{CatalogOp, ChunkOp, InsertOp, LinkOp};
 use crate::persistence::OperationPersistence;
+
+// ─── QueueSender / QueueReceiver ─────────────────────────────────────────────
+
+/// Producer handle passed to processors to inject downstream ops into the queue.
+///
+/// Uses `tokio::sync::mpsc::unbounded_channel` — `send()` is sync and never blocks.
+/// Clone-able and `Send`, safe to share across rayon threads.
+#[derive(Clone)]
+pub struct QueueSender {
+    tx: mpsc::UnboundedSender<CatalogOp>,
+}
+
+impl QueueSender {
+    /// Inject a new op to be processed in a subsequent priority round.
+    pub fn emit(&self, op: CatalogOp) {
+        let _ = self.tx.send(op);
+    }
+
+    /// Inject multiple ops at once.
+    pub fn emit_all(&self, ops: Vec<CatalogOp>) {
+        for op in ops {
+            let _ = self.tx.send(op);
+        }
+    }
+}
+
+/// Consumer handle — drained synchronously via `try_recv()` after each priority group.
+pub struct QueueReceiver {
+    rx: mpsc::UnboundedReceiver<CatalogOp>,
+}
+
+impl QueueReceiver {
+    /// Drain all pending ops (non-blocking).
+    fn drain(&mut self) -> Vec<CatalogOp> {
+        let mut ops = Vec::new();
+        while let Ok(op) = self.rx.try_recv() {
+            ops.push(op);
+        }
+        ops
+    }
+}
+
+/// Create a sender/receiver pair for processor expansion.
+pub fn queue_channel() -> (QueueSender, QueueReceiver) {
+    let (tx, rx) = mpsc::unbounded_channel();
+    (QueueSender { tx }, QueueReceiver { rx })
+}
 
 // ─── ItemState ──────────────────────────────────────────────────────────────
 
@@ -129,9 +177,17 @@ pub struct QueueStats {
 /// Registered per operation type (`"insert"`, `"link"`, `"embed"`).
 /// On success all items in the batch are marked completed; on failure
 /// they are marked failed (with retry if under max_retries).
+///
+/// Processors may inject downstream ops via `sender.emit()`. Injected ops
+/// must have a **strictly higher** priority number than the current group
+/// (e.g. a prio-0 processor can emit prio-1/2/3 ops, not prio-0).
 #[async_trait]
 pub trait Processor: Send + Sync {
-    async fn process(&self, items: &mut [OperationItem]) -> Result<(), String>;
+    async fn process(
+        &self,
+        items: &mut [OperationItem],
+        sender: &QueueSender,
+    ) -> Result<(), String>;
 }
 
 // ─── OperationQueue ─────────────────────────────────────────────────────────
@@ -193,7 +249,7 @@ impl OperationQueue {
             CatalogOp::Link(LinkOp { relation_ref, .. }) => {
                 relation_ref.set_queue_item_id(id.clone());
             }
-            CatalogOp::Embed(_) => {}
+            CatalogOp::Chunk(_) | CatalogOp::Embed(_) | CatalogOp::SparseEmbed(_) => {}
         }
 
         let item = OperationItem {
@@ -222,12 +278,10 @@ impl OperationQueue {
 
     /// Flush operations up to the given priority.
     ///
-    /// 1. Partition items into processable (pending/persisted, priority <= max) and rest.
-    /// 2. Persist pending items if persistence is configured.
-    /// 3. Group by operation type (in priority order).
-    /// 4. For each group, call the registered processor in batches.
-    /// 5. Mark completed on success, failed (with retry) on error.
-    /// 6. Remove completed items from the in-memory list.
+    /// Single-pass processing by priority level (via BTreeMap). After each
+    /// priority group, ops injected by processors via `QueueSender` are merged
+    /// into the remaining groups. Injected ops must have strictly higher priority
+    /// numbers than their source group (enforced by assert).
     pub async fn flush(&mut self, options: FlushOptions) -> FlushResult {
         if self.processing {
             return FlushResult::default();
@@ -252,103 +306,138 @@ impl OperationQueue {
             return result;
         }
 
-        // Group by operation_type, preserving priority order (since all items
-        // of a given type share the same priority, grouping = sorting)
-        let mut by_type: Vec<(&'static str, Vec<OperationItem>)> = Vec::new();
-        let mut type_index: HashMap<&'static str, usize> = HashMap::new();
-
+        // Group by priority (BTreeMap guarantees ascending order)
+        let mut prio_groups: BTreeMap<u8, Vec<OperationItem>> = BTreeMap::new();
         for item in to_process {
-            let t = item.op.operation_type();
-            if let Some(&idx) = type_index.get(t) {
-                by_type[idx].1.push(item);
-            } else {
-                type_index.insert(t, by_type.len());
-                by_type.push((t, vec![item]));
-            }
+            prio_groups.entry(item.op.priority()).or_default().push(item);
         }
 
-        // Sort groups by priority (first item's priority in each group)
-        by_type.sort_by_key(|(_, items)| items[0].op.priority());
+        // Create expansion channel
+        let (sender, mut receiver) = queue_channel();
 
-        // Process each group
-        for (op_type, mut items) in by_type {
-            // Persist pending items if persistence is available
-            if let Some(ref persistence) = self.persistence {
-                for item in items.iter_mut() {
-                    if matches!(item.state, ItemState::Pending) {
-                        match persistence.persist(item).await {
-                            Ok(uuid) => {
-                                item.mark_persisted(uuid);
-                                result.persisted += 1;
-                            }
-                            Err(e) => {
-                                item.mark_failed(e);
-                                result.failed += 1;
-                                self.cumulative.total_failed += 1;
-                            }
-                        }
-                    }
+        // Process each priority level
+        while let Some(prio) = prio_groups.keys().next().copied() {
+            let items = prio_groups.remove(&prio).unwrap();
+
+            // Sub-group by operation type (e.g. embed + sparse_embed both at prio 3)
+            let mut by_type: Vec<(&'static str, Vec<OperationItem>)> = Vec::new();
+            let mut type_index: HashMap<&'static str, usize> = HashMap::new();
+            for item in items {
+                let t = item.op.operation_type();
+                if let Some(&idx) = type_index.get(t) {
+                    by_type[idx].1.push(item);
+                } else {
+                    type_index.insert(t, by_type.len());
+                    by_type.push((t, vec![item]));
                 }
             }
 
-            // Separate failed items (from persistence errors)
-            let (mut processable, failed): (Vec<_>, Vec<_>) = items
-                .into_iter()
-                .partition(|item| !matches!(item.state, ItemState::Failed));
-            keep.extend(failed);
-
-            if processable.is_empty() {
-                continue;
-            }
-
-            let batch_size = processable[0].op.config().batch_size;
-
-            // Process in batches
-            for batch in processable.chunks_mut(batch_size) {
-                // Mark all items in this batch as processing
-                for item in batch.iter_mut() {
-                    item.mark_processing();
-                }
-
-                if let Some(processor) = self.processors.get(op_type) {
-                    match processor.process(batch).await {
-                        Ok(()) => {
-                            for item in batch.iter_mut() {
-                                item.mark_completed();
-                                result.processed += 1;
-                                self.cumulative.total_processed += 1;
-                            }
-                        }
-                        Err(e) => {
-                            for item in batch.iter_mut() {
-                                if item.can_retry() {
-                                    item.retries += 1;
-                                    item.state = ItemState::Pending;
-                                    item.error = Some(e.clone());
-                                } else {
-                                    item.mark_failed(e.clone());
+            // Process each type group
+            for (op_type, mut items) in by_type {
+                // Persist pending items if persistence is available
+                if let Some(ref persistence) = self.persistence {
+                    for item in items.iter_mut() {
+                        if matches!(item.state, ItemState::Pending) {
+                            match persistence.persist(item).await {
+                                Ok(uuid) => {
+                                    item.mark_persisted(uuid);
+                                    result.persisted += 1;
+                                }
+                                Err(e) => {
+                                    item.mark_failed(e);
                                     result.failed += 1;
                                     self.cumulative.total_failed += 1;
                                 }
                             }
                         }
                     }
-                } else {
-                    // No processor registered for this type
+                }
+
+                // Separate failed items (from persistence errors)
+                let (mut processable, failed): (Vec<_>, Vec<_>) = items
+                    .into_iter()
+                    .partition(|item| !matches!(item.state, ItemState::Failed));
+                keep.extend(failed);
+
+                if processable.is_empty() {
+                    continue;
+                }
+
+                let batch_size = processable[0].op.config().batch_size;
+
+                // Process in batches
+                for batch in processable.chunks_mut(batch_size) {
                     for item in batch.iter_mut() {
-                        item.mark_failed(format!("no processor registered for '{op_type}'"));
-                        result.failed += 1;
-                        self.cumulative.total_failed += 1;
+                        item.mark_processing();
+                    }
+
+                    if let Some(processor) = self.processors.get(op_type) {
+                        match processor.process(batch, &sender).await {
+                            Ok(()) => {
+                                for item in batch.iter_mut() {
+                                    item.mark_completed();
+                                    result.processed += 1;
+                                    self.cumulative.total_processed += 1;
+                                }
+                            }
+                            Err(e) => {
+                                for item in batch.iter_mut() {
+                                    if item.can_retry() {
+                                        item.retries += 1;
+                                        item.state = ItemState::Pending;
+                                        item.error = Some(e.clone());
+                                    } else {
+                                        item.mark_failed(e.clone());
+                                        result.failed += 1;
+                                        self.cumulative.total_failed += 1;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for item in batch.iter_mut() {
+                            item.mark_failed(format!("no processor registered for '{op_type}'"));
+                            result.failed += 1;
+                            self.cumulative.total_failed += 1;
+                        }
                     }
                 }
+
+                // Keep non-completed items (retries, failed)
+                keep.extend(
+                    processable
+                        .into_iter()
+                        .filter(|item| !matches!(item.state, ItemState::Completed)),
+                );
             }
 
-            // Keep non-completed items (retries, failed)
-            keep.extend(
-                processable
-                    .into_iter()
-                    .filter(|item| !matches!(item.state, ItemState::Completed)),
-            );
+            // Drain expansion channel — merge injected ops into remaining groups
+            for op in receiver.drain() {
+                let new_prio = op.priority();
+                assert!(
+                    new_prio > prio,
+                    "processor at priority {} injected op '{}' at priority {} \
+                     (must be strictly higher)",
+                    prio,
+                    op.operation_type(),
+                    new_prio,
+                );
+                if new_prio > max_priority {
+                    // Beyond this flush's scope — keep for later
+                    keep.push(new_operation_item(
+                        &mut self.counter,
+                        &mut self.cumulative,
+                        op,
+                    ));
+                } else {
+                    let item = new_operation_item(
+                        &mut self.counter,
+                        &mut self.cumulative,
+                        op,
+                    );
+                    prio_groups.entry(new_prio).or_default().push(item);
+                }
+            }
         }
 
         self.cumulative.flush_count += 1;
@@ -500,6 +589,7 @@ impl OperationQueue {
 pub fn run_processor(
     processor: Option<&dyn Processor>,
     items: &mut Vec<OperationItem>,
+    sender: &QueueSender,
 ) -> FlushResult {
     let mut result = FlushResult::default();
     if items.is_empty() {
@@ -514,7 +604,7 @@ pub fn run_processor(
         }
 
         if let Some(proc) = processor {
-            match futures::executor::block_on(proc.process(batch)) {
+            match futures::executor::block_on(proc.process(batch, sender)) {
                 Ok(()) => {
                     for item in batch.iter_mut() {
                         item.mark_completed();
@@ -546,6 +636,31 @@ pub fn run_processor(
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/// Create a new OperationItem for an injected op (used by flush expansion).
+fn new_operation_item(counter: &mut u64, cumulative: &mut CumulativeStats, op: CatalogOp) -> OperationItem {
+    *counter += 1;
+    let id = format!("opi_{}", *counter);
+    match &op {
+        CatalogOp::Insert(InsertOp { entity_ref, .. }) => {
+            entity_ref.set_queue_item_id(id.clone());
+        }
+        CatalogOp::Link(LinkOp { relation_ref, .. }) => {
+            relation_ref.set_queue_item_id(id.clone());
+        }
+        _ => {}
+    }
+    cumulative.total_queued += 1;
+    OperationItem {
+        id,
+        op,
+        state: ItemState::Pending,
+        created_at: now_ms(),
+        error: None,
+        retries: 0,
+        persisted_op_uuid: None,
+    }
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -569,7 +684,7 @@ mod tests {
 
     #[async_trait]
     impl Processor for OkProcessor {
-        async fn process(&self, _items: &mut [OperationItem]) -> Result<(), String> {
+        async fn process(&self, _items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
             Ok(())
         }
     }
@@ -578,7 +693,7 @@ mod tests {
 
     #[async_trait]
     impl Processor for FailProcessor {
-        async fn process(&self, _items: &mut [OperationItem]) -> Result<(), String> {
+        async fn process(&self, _items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
             Err("boom".to_string())
         }
     }
@@ -602,7 +717,7 @@ mod tests {
 
     #[async_trait]
     impl Processor for ResolvingProcessor {
-        async fn process(&self, items: &mut [OperationItem]) -> Result<(), String> {
+        async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
             *self.call_count.lock().unwrap() += 1;
             for item in items.iter_mut() {
                 if let CatalogOp::Insert(ref mut insert) = item.op {
@@ -964,5 +1079,150 @@ mod tests {
         // Insert processed, embed still pending
         assert!(q.has_pending());
         assert_eq!(q.pending_count(), 1);
+    }
+
+    // ── expansion pattern tests ─────────────────────────────────────
+
+    #[test]
+    fn sender_emit_and_drain() {
+        let (sender, mut receiver) = queue_channel();
+
+        let (op1, _) = make_insert_op();
+        let op2 = make_embed_op();
+        sender.emit(op1);
+        sender.emit(op2);
+
+        let ops = receiver.drain();
+        assert_eq!(ops.len(), 2);
+        assert_eq!(ops[0].operation_type(), "insert");
+        assert_eq!(ops[1].operation_type(), "embed");
+
+        // Second drain is empty
+        let ops = receiver.drain();
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn sender_emit_all() {
+        let (sender, mut receiver) = queue_channel();
+
+        let (op1, _) = make_insert_op();
+        let (op2, _) = make_insert_op();
+        sender.emit_all(vec![op1, op2]);
+
+        let ops = receiver.drain();
+        assert_eq!(ops.len(), 2);
+    }
+
+    /// Processor that emits an embed op for each insert it processes.
+    struct ExpandingProcessor;
+
+    #[async_trait]
+    impl Processor for ExpandingProcessor {
+        async fn process(&self, items: &mut [OperationItem], sender: &QueueSender) -> Result<(), String> {
+            for _item in items.iter() {
+                // Emit a downstream embed op (prio 3) from insert processor (prio 1)
+                sender.emit(make_embed_op());
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn expand_processor_injects_downstream() {
+        let mut q = make_queue();
+
+        // Enqueue 2 inserts
+        let (op1, _) = make_insert_op();
+        let (op2, _) = make_insert_op();
+        q.enqueue(op1);
+        q.enqueue(op2);
+
+        // ExpandingProcessor for inserts: emits 1 embed per insert
+        q.register_processor("insert", Box::new(ExpandingProcessor));
+        // OkProcessor for embeds: just marks completed
+        q.register_processor("embed", Box::new(OkProcessor));
+
+        let result = q.drain().await;
+
+        // 2 inserts processed + 2 injected embeds processed = 4
+        assert_eq!(result.processed, 4);
+        assert_eq!(result.failed, 0);
+        assert!(q.is_empty());
+
+        // Cumulative: 2 originally enqueued + 2 injected = 4 total queued
+        let s = q.stats();
+        assert_eq!(s.total_queued, 4);
+        assert_eq!(s.total_processed, 4);
+    }
+
+    #[tokio::test]
+    async fn expand_respects_flush_up_to_priority() {
+        let mut q = make_queue();
+
+        // Enqueue 1 insert
+        let (op1, _) = make_insert_op();
+        q.enqueue(op1);
+
+        // ExpandingProcessor emits 1 embed (prio 3) per insert
+        q.register_processor("insert", Box::new(ExpandingProcessor));
+        q.register_processor("embed", Box::new(OkProcessor));
+
+        // Flush only inserts (prio <= 1) — injected embeds (prio 3) should NOT be processed
+        let result = q.flush_insertions().await;
+        assert_eq!(result.processed, 1); // only the insert
+
+        // The injected embed should be pending
+        assert_eq!(q.pending_count(), 1);
+
+        // Now drain the rest
+        let result = q.drain().await;
+        assert_eq!(result.processed, 1); // the embed
+        assert!(q.is_empty());
+    }
+
+    /// Processor that injects an op at the SAME priority (should panic).
+    struct SamePrioExpandProcessor;
+
+    #[async_trait]
+    impl Processor for SamePrioExpandProcessor {
+        async fn process(&self, _items: &mut [OperationItem], sender: &QueueSender) -> Result<(), String> {
+            // Insert is prio 1, emitting another insert (prio 1) → should panic
+            let (op, _) = make_insert_op();
+            sender.emit(op);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "must be strictly higher")]
+    async fn expand_same_priority_panics() {
+        let mut q = make_queue();
+        let (op, _) = make_insert_op();
+        q.enqueue(op);
+        q.register_processor("insert", Box::new(SamePrioExpandProcessor));
+        q.drain().await;
+    }
+
+    /// Processor that injects an op at a LOWER priority (should panic).
+    struct LowerPrioExpandProcessor;
+
+    #[async_trait]
+    impl Processor for LowerPrioExpandProcessor {
+        async fn process(&self, _items: &mut [OperationItem], sender: &QueueSender) -> Result<(), String> {
+            // Embed is prio 3, emitting an insert (prio 1) → should panic
+            let (op, _) = make_insert_op();
+            sender.emit(op);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "must be strictly higher")]
+    async fn expand_lower_priority_panics() {
+        let mut q = make_queue();
+        q.enqueue(make_embed_op());
+        q.register_processor("embed", Box::new(LowerPrioExpandProcessor));
+        q.drain().await;
     }
 }

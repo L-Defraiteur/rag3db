@@ -152,40 +152,68 @@ pub struct EmbedOp {
     pub texts: Vec<String>,
 }
 
+/// Calculate sparse embeddings for an entity.
+///
+/// Priority 3 — same as dense embed, processed after inserts.
+pub struct SparseEmbedOp {
+    pub entity_ref: EntityRef,
+    pub kb_name: String,
+    pub texts: Vec<String>,
+}
+
+/// Deferred chunking operation — processed at priority 0 (before inserts).
+///
+/// Contains the raw entity data. The `ChunkProcessor` splits text into chunks
+/// and emits downstream InsertOp/LinkOp/EmbedOp/SparseEmbedOp via QueueSender.
+pub struct ChunkOp {
+    pub entity_name: String,
+    pub parent_uuid: String,
+    pub entity_ref: EntityRef,
+    pub data: HashMap<String, CypherValue>,
+}
+
 // ─── CatalogOp enum ─────────────────────────────────────────────────────────
 
 /// Main operation enum — each enqueued operation is one of these variants.
 pub enum CatalogOp {
+    Chunk(ChunkOp),
     Insert(InsertOp),
     Link(LinkOp),
     Embed(EmbedOp),
+    SparseEmbed(SparseEmbedOp),
 }
 
 impl CatalogOp {
     /// Processing priority (lower = processed first).
     pub fn priority(&self) -> u8 {
         match self {
+            Self::Chunk(_) => OP_CHUNK.priority,
             Self::Insert(_) => OP_INSERT.priority,
             Self::Link(_) => OP_LINK.priority,
             Self::Embed(_) => OP_EMBED.priority,
+            Self::SparseEmbed(_) => OP_SPARSE_EMBED.priority,
         }
     }
 
     /// Operation type name (for processor dispatch and persistence).
     pub fn operation_type(&self) -> &'static str {
         match self {
+            Self::Chunk(_) => OP_CHUNK.name,
             Self::Insert(_) => OP_INSERT.name,
             Self::Link(_) => OP_LINK.name,
             Self::Embed(_) => OP_EMBED.name,
+            Self::SparseEmbed(_) => OP_SPARSE_EMBED.name,
         }
     }
 
     /// Full config for this operation type.
     pub fn config(&self) -> &'static OperationConfig {
         match self {
+            Self::Chunk(_) => &OP_CHUNK,
             Self::Insert(_) => &OP_INSERT,
             Self::Link(_) => &OP_LINK,
             Self::Embed(_) => &OP_EMBED,
+            Self::SparseEmbed(_) => &OP_SPARSE_EMBED,
         }
     }
 }
@@ -199,6 +227,13 @@ pub struct OperationConfig {
     pub batch_size: usize,
     pub max_retries: u32,
 }
+
+pub const OP_CHUNK: OperationConfig = OperationConfig {
+    name: "chunk",
+    priority: 0,
+    batch_size: 10_000,
+    max_retries: 0,
+};
 
 pub const OP_INSERT: OperationConfig = OperationConfig {
     name: "insert",
@@ -219,6 +254,13 @@ pub const OP_EMBED: OperationConfig = OperationConfig {
     priority: 3,
     batch_size: 32,
     max_retries: 3,
+};
+
+pub const OP_SPARSE_EMBED: OperationConfig = OperationConfig {
+    name: "sparse_embed",
+    priority: 3,
+    batch_size: 32,
+    max_retries: 2,
 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

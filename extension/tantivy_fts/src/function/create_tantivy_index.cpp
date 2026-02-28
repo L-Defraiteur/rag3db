@@ -29,6 +29,7 @@ struct FilterFieldInfo {
     std::string name;
     property_id_t propertyID;
     std::string tantivyType; // "u64", "i64", "f64", "string"
+    LogicalTypeID originalTypeID; // for BOOL→i64, TIMESTAMP→i64 conversion
 };
 
 struct CreateTantivyBindData final : TableFuncBindData {
@@ -83,6 +84,8 @@ static std::string mapLogicalTypeToTantivy(const LogicalType& type) {
     case LogicalTypeID::INT32:
     case LogicalTypeID::INT16:
     case LogicalTypeID::INT8:
+    case LogicalTypeID::BOOL:
+    case LogicalTypeID::TIMESTAMP:
         return "i64";
     case LogicalTypeID::UINT64:
     case LogicalTypeID::UINT32:
@@ -116,9 +119,9 @@ static std::vector<FilterFieldInfo> resolveFilterFields(
             throw BinderException{stringFormat(
                 "Filter field '{}' has type {} which is not supported by Tantivy. "
                 "Supported types: INT64, INT32, INT16, INT8, UINT64, UINT32, UINT16, UINT8, "
-                "DOUBLE, FLOAT, STRING.", propName, propType.toString())};
+                "DOUBLE, FLOAT, STRING, BOOLEAN, TIMESTAMP.", propName, propType.toString())};
         }
-        result.push_back(FilterFieldInfo{propName, propID, tantivyType});
+        result.push_back(FilterFieldInfo{propName, propID, tantivyType, propType.getLogicalTypeID()});
     }
     return result;
 }
@@ -359,7 +362,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
                     } else if (ffInfo.tantivyType == "i64") {
                         DocFieldI64 field;
                         field.field_id = fid;
-                        field.value = outputPtrs[vecIdx]->getValue<int64_t>(0);
+                        if (ffInfo.originalTypeID == LogicalTypeID::BOOL) {
+                            field.value = outputPtrs[vecIdx]->getValue<bool>(0) ? 1 : 0;
+                        } else {
+                            field.value = outputPtrs[vecIdx]->getValue<int64_t>(0);
+                        }
                         i64Fields.push_back(field);
                     } else if (ffInfo.tantivyType == "f64") {
                         DocFieldF64 field;
