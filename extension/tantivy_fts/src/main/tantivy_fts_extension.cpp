@@ -5,6 +5,7 @@
 #include "function/create_tantivy_index.h"
 #include "function/drop_tantivy_index.h"
 #include "function/query_tantivy_index.h"
+#include "function/search_function.h"
 #include "index/tantivy_index.h"
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
@@ -40,6 +41,9 @@ void TantivyFtsExtension::load(main::ClientContext* context) {
     ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateTantivyFunction>(db);
     ExtensionUtils::addStandaloneTableFunc<DropTantivyFunction>(db);
     ExtensionUtils::addInternalStandaloneTableFunc<InternalDropTantivyFunction>(db);
+    ExtensionUtils::addScalarFunc<SearchFunction>(db);
+    ExtensionUtils::addScalarFunc<SearchScoreFunction>(db);
+    ExtensionUtils::addScalarFunc<SearchHighlightsFunction>(db);
     ExtensionUtils::registerIndexType(db, TantivyIndex::getIndexType());
     initTantivyEntries(context, *db.getCatalog());
 }

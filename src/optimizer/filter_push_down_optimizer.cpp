@@ -3,11 +3,15 @@
 #include "binder/expression/literal_expression.h"
 #include "binder/expression/property_expression.h"
 #include "binder/expression/scalar_function_expression.h"
+#include "binder/expression/variable_expression.h"
+#include "common/fts_types.h"
 #include "main/client_context.h"
 #include "planner/operator/extend/logical_extend.h"
 #include "planner/operator/logical_empty_result.h"
 #include "planner/operator/logical_filter.h"
 #include "planner/operator/logical_hash_join.h"
+#include "planner/operator/logical_order_by.h"
+#include "planner/operator/logical_projection.h"
 #include "planner/operator/logical_table_function_call.h"
 #include "planner/operator/scan/logical_scan_node_table.h"
 
@@ -21,6 +25,7 @@ namespace optimizer {
 
 void FilterPushDownOptimizer::rewrite(LogicalPlan* plan) {
     visitOperator(plan->getLastOperator());
+    resolveSearchExpressions(plan->getLastOperator().get());
 }
 
 std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitOperator(
@@ -204,6 +209,34 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitScanNodeTableRepl
             predicateSet.addPredicate(primaryKeyEqualityComparison);
         }
     }
+    // Try FTS scan rewrite (only if still a regular SCAN and single table).
+    if (scan.getScanType() == LogicalScanNodeTableType::SCAN && tableIDs.size() == 1) {
+        auto searchPredicate = predicateSet.popSearchPredicate();
+        if (searchPredicate != nullptr) {
+            auto& funcExpr = searchPredicate->constCast<ScalarFunctionExpression>();
+            auto* ftsBindData = dynamic_cast<FTSSearchBindData*>(funcExpr.getBindData());
+            KU_ASSERT(ftsBindData != nullptr);
+            auto searchFunc = ftsBindData->searchFunc;
+            int64_t limit = 1000;
+
+            // Create virtual property expressions for score and highlights.
+            // Unique names MUST match SEARCH_SCORE() and SEARCH_HIGHLIGHTS() calls
+            // so the ExpressionMapper resolves them as references, not evaluations.
+            auto scoreExpr = std::make_shared<VariableExpression>(
+                LogicalType::DOUBLE(), "SEARCH_SCORE()", "_fts_score");
+            auto hlExpr = std::make_shared<VariableExpression>(
+                LogicalType::STRING(), "SEARCH_HIGHLIGHTS()", "_fts_highlights");
+
+            scan.addProperty(scoreExpr);
+            scan.addProperty(hlExpr);
+
+            auto ftsInfo = std::make_unique<FTSScanInfo>(
+                std::move(searchFunc), limit, scoreExpr, hlExpr);
+            scan.setScanType(LogicalScanNodeTableType::FTS_SCAN);
+            scan.setExtraInfo(std::move(ftsInfo));
+            scan.computeFlatSchema();
+        }
+    }
     return finishPushDown(op);
 }
 
@@ -321,11 +354,98 @@ std::shared_ptr<Expression> PredicateSet::popNodePKEqualityComparison(const Expr
     return nullptr;
 }
 
+std::shared_ptr<Expression> PredicateSet::popSearchPredicate() {
+    for (auto it = nonEqualityPredicates.begin(); it != nonEqualityPredicates.end(); ++it) {
+        if ((*it)->expressionType == ExpressionType::FUNCTION) {
+            auto& func = (*it)->constCast<ScalarFunctionExpression>();
+            if (func.getFunction().isIndexScanPredicate) {
+                auto result = *it;
+                nonEqualityPredicates.erase(it);
+                return result;
+            }
+        }
+    }
+    return nullptr;
+}
+
 expression_vector PredicateSet::getAllPredicates() {
     expression_vector result;
     result.insert(result.end(), equalityPredicates.begin(), equalityPredicates.end());
     result.insert(result.end(), nonEqualityPredicates.begin(), nonEqualityPredicates.end());
     return result;
+}
+
+// Find the FTS_SCAN node in the plan tree and return its FTSScanInfo, or nullptr.
+static FTSScanInfo* findFTSScanInfo(LogicalOperator* op) {
+    if (op->getOperatorType() == LogicalOperatorType::SCAN_NODE_TABLE) {
+        auto& scan = op->cast<LogicalScanNodeTable>();
+        if (scan.getScanType() == LogicalScanNodeTableType::FTS_SCAN) {
+            return dynamic_cast<FTSScanInfo*>(scan.getExtraInfo());
+        }
+    }
+    for (auto i = 0u; i < op->getNumChildren(); ++i) {
+        auto result = findFTSScanInfo(op->getChild(i).get());
+        if (result != nullptr) {
+            return result;
+        }
+    }
+    return nullptr;
+}
+
+// Replace SEARCH_SCORE()/SEARCH_HIGHLIGHTS() function expressions with the corresponding
+// VariableExpressions in an expression vector. Returns true if any replacement was made.
+static bool replaceInExprVector(expression_vector& exprs,
+    const std::shared_ptr<Expression>& scoreExpr,
+    const std::shared_ptr<Expression>& hlExpr) {
+    bool changed = false;
+    for (auto& expr : exprs) {
+        if (expr->expressionType == ExpressionType::FUNCTION &&
+            expr->getUniqueName() == scoreExpr->getUniqueName()) {
+            expr = scoreExpr;
+            changed = true;
+        } else if (expr->expressionType == ExpressionType::FUNCTION &&
+                   expr->getUniqueName() == hlExpr->getUniqueName()) {
+            expr = hlExpr;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+// Walk the plan tree and replace SEARCH_SCORE()/SEARCH_HIGHLIGHTS() ScalarFunctionExpressions
+// with the VariableExpressions created by the FTS_SCAN rewrite.
+void FilterPushDownOptimizer::resolveSearchExpressions(LogicalOperator* root) {
+    auto* ftsInfo = findFTSScanInfo(root);
+    if (ftsInfo == nullptr) {
+        return;
+    }
+    auto& scoreExpr = ftsInfo->scoreExpr;
+    auto& hlExpr = ftsInfo->highlightsExpr;
+
+    std::function<void(LogicalOperator*)> walk = [&](LogicalOperator* op) {
+        switch (op->getOperatorType()) {
+        case LogicalOperatorType::PROJECTION: {
+            auto& proj = op->cast<LogicalProjection>();
+            auto exprs = proj.getExpressionsToProject();
+            if (replaceInExprVector(exprs, scoreExpr, hlExpr)) {
+                proj.setExpressionsToProject(exprs);
+            }
+        } break;
+        case LogicalOperatorType::ORDER_BY: {
+            auto& orderBy = op->cast<LogicalOrderBy>();
+            auto exprs = orderBy.getExpressionsToOrderBy();
+            if (replaceInExprVector(exprs, scoreExpr, hlExpr)) {
+                orderBy.setExpressionsToOrderBy(std::move(exprs));
+            }
+        } break;
+        default:
+            break;
+        }
+        for (auto i = 0u; i < op->getNumChildren(); ++i) {
+            walk(op->getChild(i).get());
+        }
+    };
+    walk(root);
 }
 
 } // namespace optimizer

@@ -22,7 +22,8 @@ void LogicalScanNodeTable::computeFactorizedSchema() {
         schema->insertToGroupAndScope(property, groupPos);
     }
     switch (scanType) {
-    case LogicalScanNodeTableType::PRIMARY_KEY_SCAN: {
+    case LogicalScanNodeTableType::PRIMARY_KEY_SCAN:
+    case LogicalScanNodeTableType::FTS_SCAN: {
         schema->setGroupAsSingleState(groupPos);
     } break;
     default:
@@ -36,6 +37,10 @@ void LogicalScanNodeTable::computeFlatSchema() {
     schema->insertToGroupAndScope(nodeID, 0);
     for (auto& property : properties) {
         schema->insertToGroupAndScope(property, 0);
+    }
+    if (scanType == LogicalScanNodeTableType::PRIMARY_KEY_SCAN ||
+        scanType == LogicalScanNodeTableType::FTS_SCAN) {
+        schema->setGroupAsSingleState(0);
     }
 }
 

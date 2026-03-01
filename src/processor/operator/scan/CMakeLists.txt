@@ -1,5 +1,6 @@
 add_library(rag3db_processor_operator_scan
         OBJECT
+        fts_scan_node_table.cpp
         primary_key_scan_node_table.cpp
         scan_multi_rel_tables.cpp
         scan_node_table.cpp

@@ -24,6 +24,7 @@ struct PredicateSet {
     void addPredicate(std::shared_ptr<binder::Expression> predicate);
     std::shared_ptr<binder::Expression> popNodePKEqualityComparison(
         const binder::Expression& nodeID);
+    std::shared_ptr<binder::Expression> popSearchPredicate();
     binder::expression_vector getAllPredicates();
 
 private:
@@ -43,6 +44,11 @@ public:
     void rewrite(planner::LogicalPlan* plan);
 
 private:
+    // Post-pass: replace SEARCH_SCORE()/SEARCH_HIGHLIGHTS() function expressions with
+    // the VariableExpressions created by the FTS_SCAN rewrite, so downstream operators
+    // (Projection, OrderBy) reference the scan's virtual vectors.
+    static void resolveSearchExpressions(planner::LogicalOperator* root);
+
     std::shared_ptr<planner::LogicalOperator> visitOperator(
         const std::shared_ptr<planner::LogicalOperator>& op);
     // Collect predicates in FILTER

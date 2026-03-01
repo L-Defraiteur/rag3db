@@ -1,6 +1,7 @@
 #pragma once
 
 #include "binder/expression/expression_util.h"
+#include "common/fts_types.h"
 #include "planner/operator/logical_operator.h"
 #include "storage/predicate/column_predicate.h"
 
@@ -10,6 +11,7 @@ namespace planner {
 enum class LogicalScanNodeTableType : uint8_t {
     SCAN = 0,
     PRIMARY_KEY_SCAN = 1,
+    FTS_SCAN = 2,
 };
 
 struct ExtraScanNodeTableInfo {
@@ -29,6 +31,23 @@ struct PrimaryKeyScanInfo final : ExtraScanNodeTableInfo {
 
     std::unique_ptr<ExtraScanNodeTableInfo> copy() const override {
         return std::make_unique<PrimaryKeyScanInfo>(key);
+    }
+};
+
+struct FTSScanInfo final : ExtraScanNodeTableInfo {
+    FTSSearchFunc searchFunc;
+    int64_t limit;
+    std::shared_ptr<binder::Expression> scoreExpr;
+    std::shared_ptr<binder::Expression> highlightsExpr;
+
+    FTSScanInfo(FTSSearchFunc searchFunc, int64_t limit,
+        std::shared_ptr<binder::Expression> scoreExpr,
+        std::shared_ptr<binder::Expression> highlightsExpr)
+        : searchFunc{std::move(searchFunc)}, limit{limit}, scoreExpr{std::move(scoreExpr)},
+          highlightsExpr{std::move(highlightsExpr)} {}
+
+    std::unique_ptr<ExtraScanNodeTableInfo> copy() const override {
+        return std::make_unique<FTSScanInfo>(searchFunc, limit, scoreExpr, highlightsExpr);
     }
 };
 

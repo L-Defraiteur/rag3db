@@ -307,6 +307,9 @@ bool ConstantExpressionVisitor::visitFunction(const Expression& expr) {
     if (funcExpr.getFunction().name == function::RandFunction::name) {
         return false;
     }
+    if (funcExpr.getFunction().isNonFoldable) {
+        return false;
+    }
     return visitChildren(expr);
 }
 

@@ -21,6 +21,9 @@ public:
     std::string getExpressionsForPrinting() const override;
 
     binder::expression_vector getExpressionsToOrderBy() const { return expressionsToOrderBy; }
+    void setExpressionsToOrderBy(binder::expression_vector exprs) {
+        expressionsToOrderBy = std::move(exprs);
+    }
     std::vector<bool> getIsAscOrders() const { return isAscOrders; }
 
     bool isTopK() const { return hasLimitNum(); }

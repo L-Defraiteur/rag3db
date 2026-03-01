@@ -1158,5 +1158,128 @@ TEST_F(ApiTest, TantivyFiltersWithAllowedIdsTest) {
     ASSERT_EQ(countResults(*result), 1u);
 }
 
+// ── SEARCH() in WHERE ──────────────────────────────────────────────────────
+
+// Helper: create doc table, insert docs, create index, load extension
+static void setupSearchTest(main::Connection* conn) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, "
+                            "year INT64, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 0, title: 'Rust Programming', "
+                    "body: 'Rust is a systems programming language focused on safety', year: 2024})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 1, title: 'Machine Learning', "
+                    "body: 'ML is a subset of artificial intelligence', year: 2023})")
+            ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:doc {ID: 2, title: 'C++ Language', "
+                    "body: 'C++ is a general-purpose programming language', year: 2025})")
+            ->isSuccess());
+    auto result = conn->query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+}
+
+TEST_F(ApiTest, SearchInWhere_Contains) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programming') RETURN d.title");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+}
+
+TEST_F(ApiTest, SearchInWhere_ContainsSplit) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'rust safety', 'contains_split') RETURN d.title");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    // "rust" matches doc 0, "safety" matches doc 0 → at least 1
+    ASSERT_GE(countResults(*result), 1u);
+}
+
+TEST_F(ApiTest, SearchInWhere_Fuzzy) {
+    setupSearchTest(conn.get());
+    // "programing" (typo) with fuzzy distance 1
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programing', 'fuzzy', 1) RETURN d.title");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 2u);
+}
+
+TEST_F(ApiTest, SearchInWhere_Parse) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'rust AND programming', 'parse') RETURN d.title");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+TEST_F(ApiTest, SearchInWhere_Score) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programming') "
+        "RETURN d.title, SEARCH_SCORE() AS score ORDER BY score DESC");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    auto tuple = result->getNext();
+    auto score = tuple->getValue(1)->getValue<double>();
+    ASSERT_GT(score, 0.0) << "Score should be positive";
+}
+
+TEST_F(ApiTest, SearchInWhere_Highlights) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programming') "
+        "RETURN d.title, SEARCH_HIGHLIGHTS() AS hl");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    auto tuple = result->getNext();
+    auto hl = tuple->getValue(1)->getValue<std::string>();
+    // Highlights should be a JSON object
+    ASSERT_FALSE(hl.empty());
+    ASSERT_EQ(hl[0], '{');
+}
+
+TEST_F(ApiTest, SearchInWhere_NoIndex_Error) {
+    // Table without index
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE noindex (ID UINT64, body STRING, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    auto result = conn->query(
+        "MATCH (d:noindex) WHERE SEARCH(d.body, 'test') RETURN d.body");
+    ASSERT_FALSE(result->isSuccess());
+}
+
+TEST_F(ApiTest, SearchInWhere_WithCypherFilter) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programming') AND d.year >= 2025 "
+        "RETURN d.title, d.year");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    // Only doc 2 (C++ Language, year 2025) matches both
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
+TEST_F(ApiTest, SearchInWhere_OrderByLimit) {
+    setupSearchTest(conn.get());
+    auto result = conn->query(
+        "MATCH (d:doc) WHERE SEARCH(d.body, 'programming') "
+        "RETURN d.title, SEARCH_SCORE() AS score ORDER BY score DESC LIMIT 1");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_EQ(countResults(*result), 1u);
+}
+
 } // namespace testing
 } // namespace rag3db

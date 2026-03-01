@@ -29,6 +29,8 @@ struct RAG3DB_API ScalarFunction : public ScalarOrAggregateFunction {
     scalar_func_compile_exec_t compileFunc = nullptr;
     bool isListLambda = false;
     bool isVarLength = false;
+    bool isIndexScanPredicate = false;
+    bool isNonFoldable = false;
 
     ScalarFunction() = default;
     ScalarFunction(std::string name, std::vector<common::LogicalTypeID> parameterTypeIDs,
