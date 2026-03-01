@@ -161,6 +161,17 @@ pub struct SparseEmbedOp {
     pub texts: Vec<String>,
 }
 
+/// Calculate both dense and sparse embeddings in a single forward pass.
+///
+/// Priority 3 — same as embed/sparse_embed, processed after inserts.
+/// Batch size is large (500) because the processor subdivides into GPU
+/// mini-batches of 32 internally and accumulates results for a single UNWIND.
+pub struct DualEmbedOp {
+    pub entity_ref: EntityRef,
+    pub kb_name: String,
+    pub texts: Vec<String>,
+}
+
 /// Deferred chunking operation — processed at priority 0 (before inserts).
 ///
 /// Contains the raw entity data. The `ChunkProcessor` splits text into chunks
@@ -181,6 +192,7 @@ pub enum CatalogOp {
     Link(LinkOp),
     Embed(EmbedOp),
     SparseEmbed(SparseEmbedOp),
+    DualEmbed(DualEmbedOp),
 }
 
 impl CatalogOp {
@@ -192,6 +204,7 @@ impl CatalogOp {
             Self::Link(_) => OP_LINK.priority,
             Self::Embed(_) => OP_EMBED.priority,
             Self::SparseEmbed(_) => OP_SPARSE_EMBED.priority,
+            Self::DualEmbed(_) => OP_DUAL_EMBED.priority,
         }
     }
 
@@ -203,6 +216,7 @@ impl CatalogOp {
             Self::Link(_) => OP_LINK.name,
             Self::Embed(_) => OP_EMBED.name,
             Self::SparseEmbed(_) => OP_SPARSE_EMBED.name,
+            Self::DualEmbed(_) => OP_DUAL_EMBED.name,
         }
     }
 
@@ -214,6 +228,7 @@ impl CatalogOp {
             Self::Link(_) => &OP_LINK,
             Self::Embed(_) => &OP_EMBED,
             Self::SparseEmbed(_) => &OP_SPARSE_EMBED,
+            Self::DualEmbed(_) => &OP_DUAL_EMBED,
         }
     }
 }
@@ -261,6 +276,13 @@ pub const OP_SPARSE_EMBED: OperationConfig = OperationConfig {
     priority: 3,
     batch_size: 32,
     max_retries: 2,
+};
+
+pub const OP_DUAL_EMBED: OperationConfig = OperationConfig {
+    name: "dual_embed",
+    priority: 3,
+    batch_size: 500,
+    max_retries: 3,
 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

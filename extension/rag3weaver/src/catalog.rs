@@ -10,15 +10,15 @@ use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 
-use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef, SearchMode};
+use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef};
 use crate::connection::{CypherValue, DbConnection, QueryParam};
-use crate::embedder::{Embedder, SparseEmbedder};
+use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
 use crate::filter::{FilterCompiler, FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
-use crate::ops::{CatalogOp, ChunkOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::ops::{CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
 use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueEvent, QueueSender, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher};
@@ -36,7 +36,7 @@ pub struct KBMetadata {
     pub title: KBFieldRef,
     pub content: Vec<KBFieldRef>,
     pub entities: HashSet<String>,
-    pub search: SearchMode,
+    pub signals: search::SearchSignals,
     pub keyword_weight: f64,
     pub title_boost: f64,
     pub content_boost: f64,
@@ -101,6 +101,7 @@ pub struct Catalog {
     conn: Arc<dyn DbConnection>,
     embedder: Arc<dyn Embedder>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
+    dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
     queue: OperationQueue,
     event_bus: EventBus,
@@ -131,6 +132,7 @@ impl Catalog {
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
             sparse_embedder: None,
+            dual_embedder: None,
             config,
             queue: OperationQueue::new(queue_config),
             event_bus: EventBus::new(64),
@@ -152,6 +154,13 @@ impl Catalog {
     /// Accepts `Arc<dyn SparseEmbedder>` to allow sharing with the dense embedder.
     pub fn set_sparse_embedder(&mut self, embedder: Arc<dyn SparseEmbedder>) {
         self.sparse_embedder = Some(embedder);
+    }
+
+    /// Set the dual embedder (optional). When set, both dense and sparse embeddings
+    /// are computed in a single forward pass via `DualEmbedProcessor`.
+    /// Must be called before `initialize()`.
+    pub fn set_dual_embedder(&mut self, embedder: Arc<dyn DualEmbedder>) {
+        self.dual_embedder = Some(embedder);
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
@@ -216,7 +225,7 @@ impl Catalog {
                     title,
                     content,
                     entities: kb_validation.entities.clone(),
-                    search: kb_config.search,
+                    signals: kb_config.signals,
                     keyword_weight: kb_config.keyword_weight,
                     title_boost: kb_config.title_boost,
                     content_boost: kb_config.content_boost,
@@ -235,7 +244,8 @@ impl Catalog {
                 config: self.config.clone(),
                 kb_metadata: self.kb_metadata.clone(),
                 chunker_cache: std::mem::take(&mut self.chunker_cache),
-                has_sparse: self.sparse_embedder.is_some(),
+                has_sparse: self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
+                has_dual: self.dual_embedder.is_some(),
             }),
         );
 
@@ -252,6 +262,23 @@ impl Catalog {
                 conn: self.conn.clone(),
             }),
         );
+        // Register dual embed processor if dual embedder is available,
+        // otherwise fall back to separate embed + sparse_embed processors.
+        if let Some(ref dual_emb) = self.dual_embedder {
+            self.queue.register_processor(
+                "dual_embed",
+                Box::new(DualEmbedProcessor {
+                    conn: self.conn.clone(),
+                    embedder: dual_emb.clone(),
+                    embedding_dim: self.config.embedding_dim,
+                    gpu_batch_size: 32,
+                    event_tx: Some(self.queue.event_sender()),
+                }),
+            );
+        }
+
+        // Always register single-mode processors (used when dual is not available,
+        // or for KBs that need only dense or only sparse).
         self.queue.register_processor(
             "embed",
             Box::new(EmbedProcessor {
@@ -261,7 +288,6 @@ impl Catalog {
             }),
         );
 
-        // Register sparse embed processor if sparse embedder is set
         if let Some(ref sparse_emb) = self.sparse_embedder {
             self.queue.register_processor(
                 "sparse_embed",
@@ -273,16 +299,24 @@ impl Catalog {
         }
 
         // Create sparse vector indexes via extension for KBs that have sparse=true
-        if self.sparse_embedder.is_some() {
+        // Sparse embeddings live on the chunk table (when chunked), so the index
+        // must be created there — not on the parent entity.
+        if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
             for (kb_name, kb_config) in &self.config.knowledge_bases {
-                if kb_config.sparse {
+                if kb_config.signals.sparse() {
                     let indices_col = format!("{kb_name}_sparse_indices");
                     let weights_col = format!("{kb_name}_sparse_weights");
                     if let Some(kb_meta) = self.kb_metadata.get(kb_name) {
                         for entity in &kb_meta.entities {
-                            // Idempotent: extension handles existing indexes gracefully
+                            let target = if self.config.entities.get(entity.as_str())
+                                .map(|e| entity_has_chunks(e)).unwrap_or(false)
+                            {
+                                format!("{entity}_Chunk")
+                            } else {
+                                entity.clone()
+                            };
                             let cypher = format!(
-                                "CALL CREATE_SPARSE_VECTOR_INDEX('{entity}', '{indices_col}', '{weights_col}')"
+                                "CALL CREATE_SPARSE_VECTOR_INDEX('{target}', '{indices_col}', '{weights_col}')"
                             );
                             // Ignore errors (index may already exist)
                             let _ = self.conn.execute(&cypher).await;
@@ -829,11 +863,14 @@ impl Catalog {
             search::Consistency::Immediate => {}
         }
 
-        let search_type = match kb.search {
-            SearchMode::Semantic => search::SearchType::Semantic,
-            SearchMode::Fulltext => search::SearchType::BM25Only,
-            SearchMode::Hybrid => search::SearchType::Hybrid,
-        };
+        // Resolve signals: per-query override > KB default
+        let kb_config = self
+            .config
+            .knowledge_bases
+            .get(kb_name)
+            .cloned()
+            .unwrap_or_default();
+        let signals = options.signals.unwrap_or(kb_config.signals);
 
         let search_limit = (options.limit + options.offset) * 2;
         let entity = kb.title.entity.clone();
@@ -845,8 +882,6 @@ impl Catalog {
         } else {
             entity.clone()
         };
-        let keyword_weight = options.keyword_weight.unwrap_or(kb.keyword_weight);
-
         // Collect text fields for BM25 search (title + content fields for this entity)
         let bm25_fields: Vec<String> = {
             let mut fields = vec![];
@@ -949,142 +984,139 @@ impl Catalog {
             (None, None)
         };
 
-        // Embed query
-        let embedding =
-            search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)
-                .await?;
-
         // Detect chunked entity early (used for BM25 → chunk resolution)
         let is_chunked = self.config.entities.get(&entity)
             .map(|e| entity_has_chunks(e)).unwrap_or(false);
 
-        // Run searches based on mode
-        let (vector_results, bm25_results) = match search_type {
-            search::SearchType::Hybrid => {
-                let vr = search::search_vector(
-                    self.conn.as_ref(),
-                    &vector_entity,
-                    kb_name,
-                    &embedding,
-                    search_limit,
-                    filter_where.as_deref(),
-                    &filter_params,
-                    filter_match.as_deref(),
+        // Compute return fields for enrichment (used by resolve_and_enrich helpers)
+        let enrich_fields: Vec<String> = self.config.entities.get(&entity)
+            .map(|e| e.fields.keys().cloned().collect())
+            .unwrap_or_default();
+
+        // ── Embed query: use dual embedder when both dense+sparse are needed ──
+        let need_dense = signals.vector();
+        let need_sparse = signals.sparse();
+
+        let (embedding, query_sparse) = if need_dense && need_sparse {
+            if let Some(ref dual_emb) = self.dual_embedder {
+                // Single forward pass → dense + sparse
+                let (dense_vecs, sparse_vecs) = dual_emb
+                    .embed_dual(&[query.to_string()])
+                    .await
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                (
+                    dense_vecs.into_iter().next().unwrap_or_default(),
+                    sparse_vecs.into_iter().next(),
                 )
-                .await?;
-                let br = if is_chunked {
-                    let hits = search::search_bm25_raw(
-                        self.conn.as_ref(), &entity, query, &bm25_fields,
-                        options.bm25_mode, options.fuzzy_distance, search_limit,
-                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    ).await?;
-                    search::resolve_bm25_to_chunks(
-                        self.conn.as_ref(), &vector_entity, &entity, hits,
-                    ).await?
-                } else {
-                    search::search_bm25(
-                        self.conn.as_ref(), &entity, query, &bm25_fields,
-                        options.bm25_mode, options.fuzzy_distance, search_limit,
-                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    ).await?
-                };
-                (vr, br)
+            } else {
+                // Fallback: separate embedders
+                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache).await?;
+                let sparse = if let Some(ref sparse_emb) = self.sparse_embedder {
+                    sparse_emb.embed_sparse(&[query.to_string()]).await
+                        .map_err(|e| CatalogError::EmbedError(e.to_string()))?
+                        .into_iter().next()
+                } else { None };
+                (dense, sparse)
             }
-            search::SearchType::Semantic => {
-                let vr = search::search_vector(
-                    self.conn.as_ref(),
-                    &vector_entity,
-                    kb_name,
-                    &embedding,
-                    search_limit,
-                    filter_where.as_deref(),
-                    &filter_params,
-                    filter_match.as_deref(),
-                )
-                .await?;
-                (vr, vec![])
+        } else if need_dense {
+            let dense = if let Some(ref dual_emb) = self.dual_embedder {
+                let (dense_vecs, _) = dual_emb.embed_dual(&[query.to_string()]).await
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                dense_vecs.into_iter().next().unwrap_or_default()
+            } else {
+                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache).await?
+            };
+            (dense, None)
+        } else if need_sparse {
+            let sparse = if let Some(ref dual_emb) = self.dual_embedder {
+                let (_, sparse_vecs) = dual_emb.embed_dual(&[query.to_string()]).await
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                sparse_vecs.into_iter().next()
+            } else if let Some(ref sparse_emb) = self.sparse_embedder {
+                sparse_emb.embed_sparse(&[query.to_string()]).await
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?
+                    .into_iter().next()
+            } else { None };
+            (vec![], sparse)
+        } else {
+            (vec![], None)
+        };
+
+        // ── Run searches based on signals ─────────────────────────────────
+        let vector_results = if need_dense {
+            search::search_vector(
+                self.conn.as_ref(),
+                &vector_entity,
+                kb_name,
+                &embedding,
+                search_limit,
+                filter_where.as_deref(),
+                &filter_params,
+                filter_match.as_deref(),
+            )
+            .await?
+        } else {
+            vec![]
+        };
+
+        let bm25_results = if signals.bm25() {
+            if is_chunked {
+                search::search_bm25_chunked(
+                    self.conn.as_ref(), &entity, &vector_entity, query, &bm25_fields,
+                    options.bm25_mode, options.fuzzy_distance, search_limit,
+                    tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    &enrich_fields,
+                ).await?
+            } else {
+                search::search_bm25(
+                    self.conn.as_ref(), &entity, query, &bm25_fields,
+                    options.bm25_mode, options.fuzzy_distance, search_limit,
+                    tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    &enrich_fields,
+                ).await?
             }
-            search::SearchType::BM25Only => {
-                let br = if is_chunked {
-                    let hits = search::search_bm25_raw(
-                        self.conn.as_ref(), &entity, query, &bm25_fields,
-                        options.bm25_mode, options.fuzzy_distance, search_limit,
-                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    ).await?;
-                    search::resolve_bm25_to_chunks(
-                        self.conn.as_ref(), &vector_entity, &entity, hits,
-                    ).await?
-                } else {
-                    search::search_bm25(
-                        self.conn.as_ref(), &entity, query, &bm25_fields,
-                        options.bm25_mode, options.fuzzy_distance, search_limit,
-                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    ).await?
-                };
-                (vec![], br)
-            }
+        } else {
+            vec![]
         };
 
         let vector_count = vector_results.len();
         let bm25_count = bm25_results.len();
 
-        // Sparse search (if KB has sparse enabled and we have a sparse embedder)
-        let kb_config = self
-            .config
-            .knowledge_bases
-            .get(kb_name)
-            .cloned()
-            .unwrap_or_default();
-        let sparse_results = if kb_config.sparse {
-            if let Some(ref sparse_emb) = self.sparse_embedder {
-                let query_vecs = sparse_emb
-                    .embed_sparse(&[query.to_string()])
-                    .await
-                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
-                if let Some(qv) = query_vecs.into_iter().next() {
-                    search::search_sparse_cypher(
-                        self.conn.as_ref(),
-                        &vector_entity,
-                        &qv,
-                        search_limit,
-                    )
-                    .await
-                    .unwrap_or_default()
-                } else {
-                    vec![]
-                }
-            } else {
-                vec![]
-            }
+        let sparse_results = if let Some(qv) = query_sparse {
+            let sparse_fields = if is_chunked { &[][..] } else { &enrich_fields };
+            search::search_sparse_cypher(
+                self.conn.as_ref(),
+                &vector_entity,
+                &qv,
+                search_limit,
+                sparse_fields,
+            )
+            .await?
         } else {
             vec![]
         };
         let sparse_count = sparse_results.len();
-        let sparse_weight = options
-            .sparse_weight
-            .unwrap_or(kb_config.sparse_weight);
 
-        // Resolve chunk-level results to parent-level with ChunkInfo
+        // Resolve chunk-level results to parent-level with ChunkInfo + enrichment
         let vector_results = if is_chunked && !vector_results.is_empty() {
-            search::resolve_chunk_results(
-                self.conn.as_ref(), &vector_entity, &entity, vector_results,
+            search::resolve_vector_chunks(
+                self.conn.as_ref(), &vector_entity, &entity, vector_results, &enrich_fields,
             ).await?
         } else { vector_results };
         let sparse_results = if is_chunked && !sparse_results.is_empty() {
-            search::resolve_chunk_results(
-                self.conn.as_ref(), &vector_entity, &entity, sparse_results,
+            search::resolve_vector_chunks(
+                self.conn.as_ref(), &vector_entity, &entity, sparse_results, &enrich_fields,
             ).await?
         } else { sparse_results };
 
+        let fusion_config = options.fusion.as_ref()
+            .cloned()
+            .unwrap_or_else(|| kb_config.fusion_config());
         let mut fused = search::fuse_results(
             &vector_results,
             &bm25_results,
             &sparse_results,
-            options.hybrid_strategy,
-            keyword_weight,
-            sparse_weight,
-            options.boost_factor,
-            options.rrf_k,
+            &fusion_config,
         );
         let fused_count = fused.len();
 
@@ -1098,13 +1130,13 @@ impl Catalog {
         }
         fused.truncate(options.limit);
 
-        // Enrich results with parent entity data
-        let enrich_fields: Vec<String> = self.config.entities.get(&entity)
-            .map(|e| e.fields.keys().cloned().collect())
-            .unwrap_or_default();
-        search::enrich_results_with_data(
-            self.conn.as_ref(), &entity, &enrich_fields, &mut fused,
-        ).await?;
+        // Enrich results that don't already have data (e.g. vector non-chunked)
+        let needs_enrich: bool = fused.iter().any(|r| r.data.is_none());
+        if needs_enrich && !enrich_fields.is_empty() {
+            search::enrich_results_with_data(
+                self.conn.as_ref(), &entity, &enrich_fields, &mut fused,
+            ).await?;
+        }
 
         self.event_bus.emit(CatalogEvent::SearchCompleted {
             kb: kb_name.to_string(),
@@ -1117,7 +1149,7 @@ impl Catalog {
             meta: search::SearchMeta {
                 query: query.to_string(),
                 kb: kb_name.to_string(),
-                search_type,
+                signals,
                 consistency: options.consistency,
                 partial: pending_count > 0
                     && options.consistency == search::Consistency::Immediate,
@@ -1277,6 +1309,7 @@ fn compute_chunk_ops(
     kb_metadata: &HashMap<String, KBMetadata>,
     chunker_cache: &HashMap<ChunkerConfig, Chunker>,
     has_sparse: bool,
+    has_dual: bool,
 ) -> Vec<CatalogOp> {
     let entity_def = match config.entities.get(entity_name) {
         Some(def) => def,
@@ -1313,7 +1346,8 @@ fn compute_chunk_ops(
             None
         };
 
-        let kb_sparse = kb_config.map(|c| c.sparse).unwrap_or(false) && has_sparse;
+        let kb_signals = kb_config.map(|c| c.signals).unwrap_or(search::SearchSignals::HYBRID);
+        let kb_sparse = kb_signals.sparse() && has_sparse;
         let chunking = &kb_meta.chunking;
 
         let chunker_key = ChunkerConfig {
@@ -1395,18 +1429,29 @@ fn compute_chunk_ops(
                     link_ref,
                 )));
 
-                ops.push(CatalogOp::Embed(EmbedOp {
-                    entity_ref: chunk_ref.clone(),
-                    kb_name: kb_name.to_string(),
-                    texts: vec![embed_text.clone()],
-                }));
-
-                if kb_sparse {
-                    ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
+                if has_dual && kb_signals.vector() && kb_sparse {
+                    // Single forward pass for both dense + sparse
+                    ops.push(CatalogOp::DualEmbed(DualEmbedOp {
                         entity_ref: chunk_ref,
                         kb_name: kb_name.to_string(),
                         texts: vec![embed_text],
                     }));
+                } else {
+                    if kb_signals.vector() {
+                        ops.push(CatalogOp::Embed(EmbedOp {
+                            entity_ref: chunk_ref.clone(),
+                            kb_name: kb_name.to_string(),
+                            texts: vec![embed_text.clone()],
+                        }));
+                    }
+
+                    if kb_sparse {
+                        ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
+                            entity_ref: chunk_ref,
+                            kb_name: kb_name.to_string(),
+                            texts: vec![embed_text],
+                        }));
+                    }
                 }
             }
         }
@@ -1424,6 +1469,7 @@ struct ChunkProcessor {
     kb_metadata: HashMap<String, KBMetadata>,
     chunker_cache: HashMap<ChunkerConfig, Chunker>,
     has_sparse: bool,
+    has_dual: bool,
 }
 
 #[async_trait]
@@ -1453,6 +1499,7 @@ impl Processor for ChunkProcessor {
                     &self.kb_metadata,
                     &self.chunker_cache,
                     self.has_sparse,
+                    self.has_dual,
                 )
             })
             .collect();
@@ -1838,6 +1885,203 @@ impl Processor for SparseEmbedProcessor {
                 )
                 .await
                 .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+}
+
+// ─── DualEmbedProcessor ─────────────────────────────────────────────────────
+
+/// Processes DualEmbedOps: single forward pass for dense + sparse, then
+/// batch UNWIND for each. Receives mega-batches (~500) from the queue,
+/// subdivides into GPU mini-batches of `gpu_batch_size` internally.
+struct DualEmbedProcessor {
+    conn: Arc<dyn DbConnection>,
+    embedder: Arc<dyn DualEmbedder>,
+    embedding_dim: usize,
+    gpu_batch_size: usize,
+    event_tx: Option<async_broadcast::Sender<QueueEvent>>,
+}
+
+#[async_trait]
+impl Processor for DualEmbedProcessor {
+    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
+        struct DualWork {
+            uuid: String,
+            text: String,
+            entity_name: String,
+            kb_name: String,
+        }
+
+        // Phase 1: resolve refs, collect work
+        let mut works = Vec::new();
+        for item in items.iter_mut() {
+            if let CatalogOp::DualEmbed(ref mut op) = item.op {
+                let uuid = op
+                    .entity_ref
+                    .ready()
+                    .await
+                    .map_err(|e| format!("dual embed ref resolution failed: {e}"))?;
+
+                if op.texts.is_empty() {
+                    continue;
+                }
+
+                works.push(DualWork {
+                    uuid,
+                    text: op.texts.join("\n"),
+                    entity_name: op.entity_ref.entity().to_string(),
+                    kb_name: op.kb_name.clone(),
+                });
+            }
+        }
+
+        if works.is_empty() {
+            return Ok(());
+        }
+
+        // Phase 2: GPU embedding in mini-batches of gpu_batch_size
+        let mut dense_results: Vec<(&DualWork, Vec<f32>)> = Vec::with_capacity(works.len());
+        let mut sparse_results: Vec<(&DualWork, SparseVector)> = Vec::with_capacity(works.len());
+
+        for chunk in works.chunks(self.gpu_batch_size) {
+            let t0 = std::time::Instant::now();
+
+            let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+            let (dense_vecs, sparse_vecs) = self.embedder.embed_dual(&texts).await
+                .map_err(|e| format!("dual embed failed: {e}"))?;
+
+            if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
+                return Err(format!(
+                    "dual embedder returned {}/{} vectors for {} texts",
+                    dense_vecs.len(), sparse_vecs.len(), chunk.len()
+                ));
+            }
+
+            let gpu_ms = t0.elapsed().as_millis() as u64;
+            if let Some(ref tx) = self.event_tx {
+                let _ = tx.try_broadcast(QueueEvent::GpuBatchCompleted {
+                    op_type: "dual_embed",
+                    batch_size: chunk.len(),
+                    duration_ms: gpu_ms,
+                });
+            }
+
+            // Find the index into works for this chunk
+            let base_idx = dense_results.len();
+            for (i, (dense, sparse)) in dense_vecs.into_iter().zip(sparse_vecs.into_iter()).enumerate() {
+                dense_results.push((&works[base_idx + i], dense));
+                sparse_results.push((&works[base_idx + i], sparse));
+            }
+        }
+
+        // Phase 3: UNWIND dense (1 transaction for all)
+        {
+            let t1 = std::time::Instant::now();
+
+            // Group by (entity_name, embedding_col)
+            let mut groups: HashMap<(&str, String), Vec<(&DualWork, &Vec<f32>)>> = HashMap::new();
+            for (work, vec) in &dense_results {
+                if vec.len() != self.embedding_dim {
+                    return Err(format!(
+                        "embedding dimension mismatch: expected {}, got {}",
+                        self.embedding_dim, vec.len()
+                    ));
+                }
+                let col = format!("{}_embedding", work.kb_name);
+                groups.entry((&work.entity_name, col)).or_default().push((work, vec));
+            }
+
+            for ((entity_name, col), group) in &groups {
+                let items_param = CypherValue::List(
+                    group.iter().map(|(work, vec)| {
+                        let mut map = BTreeMap::new();
+                        map.insert("uuid".to_string(), CypherValue::String(work.uuid.clone()));
+                        map.insert("emb".to_string(), CypherValue::List(
+                            vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                        ));
+                        CypherValue::Map(map)
+                    }).collect(),
+                );
+
+                let cypher = format!(
+                    "UNWIND $items AS item \
+                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                     SET n.{col} = item.emb"
+                );
+
+                self.conn
+                    .execute_with_params(&cypher, &[QueryParam {
+                        name: "items".to_string(),
+                        value: items_param,
+                    }])
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+
+            let dense_ms = t1.elapsed().as_millis() as u64;
+            if let Some(ref tx) = self.event_tx {
+                let _ = tx.try_broadcast(QueueEvent::DbWriteCompleted {
+                    op_type: "dual_embed",
+                    column: "dense".into(),
+                    item_count: dense_results.len(),
+                    duration_ms: dense_ms,
+                });
+            }
+        }
+
+        // Phase 4: UNWIND sparse (1 transaction for all)
+        {
+            let t2 = std::time::Instant::now();
+
+            let mut groups: HashMap<(&str, &str), Vec<(&DualWork, &SparseVector)>> = HashMap::new();
+            for (work, sv) in &sparse_results {
+                groups.entry((&work.entity_name, &work.kb_name as &str)).or_default().push((work, sv));
+            }
+
+            for ((entity_name, kb_name), group) in &groups {
+                let indices_col = format!("{kb_name}_sparse_indices");
+                let weights_col = format!("{kb_name}_sparse_weights");
+
+                let items_param = CypherValue::List(
+                    group.iter().map(|(work, sv)| {
+                        let mut map = BTreeMap::new();
+                        map.insert("uuid".to_string(), CypherValue::String(work.uuid.clone()));
+                        map.insert("indices".to_string(), CypherValue::List(
+                            sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
+                        ));
+                        map.insert("weights".to_string(), CypherValue::List(
+                            sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                        ));
+                        CypherValue::Map(map)
+                    }).collect(),
+                );
+
+                let cypher = format!(
+                    "UNWIND $items AS item \
+                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                     SET n.{indices_col} = item.indices, n.{weights_col} = item.weights"
+                );
+
+                self.conn
+                    .execute_with_params(&cypher, &[QueryParam {
+                        name: "items".to_string(),
+                        value: items_param,
+                    }])
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+
+            let sparse_ms = t2.elapsed().as_millis() as u64;
+            if let Some(ref tx) = self.event_tx {
+                let _ = tx.try_broadcast(QueueEvent::DbWriteCompleted {
+                    op_type: "dual_embed",
+                    column: "sparse".into(),
+                    item_count: sparse_results.len(),
+                    duration_ms: sparse_ms,
+                });
+            }
         }
 
         Ok(())
@@ -2268,7 +2512,7 @@ mod tests {
         assert_eq!(kb.title.field, "title");
         assert_eq!(kb.content.len(), 1);
         assert_eq!(kb.content[0].field, "body");
-        assert_eq!(kb.search, SearchMode::Hybrid);
+        assert_eq!(kb.signals, search::SearchSignals::HYBRID);
         assert_eq!(kb.keyword_weight, 0.3);
 
         assert!(catalog.get_kb_metadata("nonexistent").is_none());

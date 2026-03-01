@@ -299,6 +299,18 @@ fn extract_op_data(
             let payload = serde_json::to_string(&map).unwrap_or_default();
             (None, Some(op.entity_ref.temp_uuid().to_string()), payload)
         }
+        CatalogOp::DualEmbed(op) => {
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "kb_name".to_string(),
+                serde_json::Value::String(op.kb_name.clone()),
+            );
+            if let Ok(texts) = serde_json::to_value(&op.texts) {
+                map.insert("texts".to_string(), texts);
+            }
+            let payload = serde_json::to_string(&map).unwrap_or_default();
+            (None, Some(op.entity_ref.temp_uuid().to_string()), payload)
+        }
         CatalogOp::Chunk(chunk) => {
             let payload = serde_json::to_string(&chunk.data).unwrap_or_default();
             (

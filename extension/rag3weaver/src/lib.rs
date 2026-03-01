@@ -40,12 +40,12 @@ pub mod validator;
 pub use chunker::{Chunk, Chunker, ChunkerConfig};
 pub use config::CatalogConfig;
 pub use connection::{CallbackConnection, DbConnection};
-pub use embedder::{CallbackEmbedder, CallbackSparseEmbedder, EmbedError, EmbedFn, Embedder, SparseEmbedder};
+pub use embedder::{CallbackDualEmbedder, CallbackEmbedder, CallbackSparseEmbedder, DualEmbedFn, DualEmbedder, EmbedError, EmbedFn, Embedder, SparseEmbedder};
 pub use events::{CatalogEvent, EventBus};
 pub use filter::{FilterBuilder, FilterCompiler, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter, SplitResult};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
-pub use ops::{CatalogOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, OperationConfig, RefOrUuid, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
+pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
 pub use persistence::{OperationPersistence, PersistedOp};
 pub use query::{PreparedQuery, QueryBuilder};
 pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueEvent, QueueStats};
@@ -55,8 +55,9 @@ pub use sparse_index::SparseVector;
 pub use uuid::{chunk_uuid, hashsafe_uuid};
 pub use catalog::{Catalog, CatalogError, DeleteResult, KBMetadata, UpdateResult, UpdateStatus};
 pub use search::{
-    BM25Mode, Consistency, ExploreGraph, ExploreOptions, ExploreResult, GraphEdge, GraphNode,
-    HybridStrategy, SearchMeta, SearchOptions, SearchResponse, SearchResult, SearchType,
+    BM25Mode, BoostType, Consistency, ExploreGraph, ExploreOptions, ExploreResult,
+    FusionConfig, FusionStrategy, GraphEdge, GraphNode, NormalizeMode, SearchMeta,
+    SearchOptions, SearchResponse, SearchResult, SearchSignals, SignalConfig, SignalRole,
 };
 pub use validator::{validate_schema, KBFieldRef};
 pub use cypher_persistence::CypherPersistence;

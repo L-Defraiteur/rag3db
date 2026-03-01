@@ -225,6 +225,105 @@ impl SparseEmbedder for CallbackSparseEmbedder {
     }
 }
 
+// ─── DualEmbedder ──────────────────────────────────────────────────────────
+
+/// Trait for models that produce both dense and sparse embeddings in a single
+/// forward pass (e.g. BGE-M3, MiniLM+BM42).
+///
+/// Implementing this trait allows the pipeline to avoid redundant forward passes
+/// when both dense and sparse signals are active.
+#[async_trait]
+pub trait DualEmbedder: Send + Sync {
+    /// Embed a batch of texts into dense + sparse vectors in one forward pass.
+    async fn embed_dual(
+        &self,
+        texts: &[String],
+    ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError>;
+
+    /// The output dimension of the dense embedding.
+    fn dim(&self) -> usize;
+}
+
+/// Mock dual embedder for testing. Returns zero dense vectors + word-hash sparse vectors.
+#[derive(Debug, Clone)]
+pub struct MockDualEmbedder {
+    dim: usize,
+}
+
+impl MockDualEmbedder {
+    pub fn new(dim: usize) -> Self {
+        Self { dim }
+    }
+}
+
+#[async_trait]
+impl DualEmbedder for MockDualEmbedder {
+    async fn embed_dual(
+        &self,
+        texts: &[String],
+    ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
+        let dense: Vec<Vec<f32>> = texts.iter().map(|_| vec![0.0_f32; self.dim]).collect();
+        let sparse_embedder = MockSparseEmbedder::new();
+        let sparse = sparse_embedder.embed_sparse(texts).await?;
+        Ok((dense, sparse))
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+}
+
+/// Type alias for the async dual embed callback.
+pub type DualEmbedFn = Box<
+    dyn Fn(
+            &[String],
+        ) -> Pin<
+            Box<dyn Future<Output = Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError>> + Send>,
+        > + Send
+        + Sync,
+>;
+
+/// Dual embedder backed by a user-provided closure (for WASM FFI or custom pipelines).
+pub struct CallbackDualEmbedder {
+    embed_fn: DualEmbedFn,
+    dim: usize,
+}
+
+impl CallbackDualEmbedder {
+    pub fn new<F>(dim: usize, f: F) -> Self
+    where
+        F: Fn(
+                &[String],
+            ) -> Pin<
+                Box<
+                    dyn Future<Output = Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError>>
+                        + Send,
+                >,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            embed_fn: Box::new(f),
+            dim,
+        }
+    }
+}
+
+#[async_trait]
+impl DualEmbedder for CallbackDualEmbedder {
+    async fn embed_dual(
+        &self,
+        texts: &[String],
+    ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
+        (self.embed_fn)(texts).await
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -405,5 +504,56 @@ mod tests {
         let embedder: Box<dyn SparseEmbedder> = Box::new(MockSparseEmbedder::new());
         let results = embedder.embed_sparse(&["test".into()]).await.unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    // ── DualEmbedder ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_dual_embedder_basic() {
+        let embedder = MockDualEmbedder::new(384);
+        assert_eq!(embedder.dim(), 384);
+
+        let texts = vec!["hello world".into(), "foo bar".into()];
+        let (dense, sparse) = embedder.embed_dual(&texts).await.unwrap();
+
+        assert_eq!(dense.len(), 2);
+        assert_eq!(dense[0].len(), 384);
+        assert_eq!(sparse.len(), 2);
+        assert!(!sparse[0].is_empty());
+    }
+
+    #[tokio::test]
+    async fn mock_dual_embedder_empty_batch() {
+        let embedder = MockDualEmbedder::new(128);
+        let (dense, sparse) = embedder.embed_dual(&[]).await.unwrap();
+        assert!(dense.is_empty());
+        assert!(sparse.is_empty());
+    }
+
+    #[tokio::test]
+    async fn callback_dual_embedder_basic() {
+        let embedder = CallbackDualEmbedder::new(3, |texts| {
+            let len = texts.len();
+            Box::pin(async move {
+                let dense = vec![vec![1.0_f32, 2.0, 3.0]; len];
+                let sparse = vec![SparseVector::new(vec![1, 2], vec![0.5, 0.5]); len];
+                Ok((dense, sparse))
+            })
+        });
+
+        assert_eq!(embedder.dim(), 3);
+        let (dense, sparse) = embedder.embed_dual(&["hello".into()]).await.unwrap();
+        assert_eq!(dense.len(), 1);
+        assert_eq!(dense[0], vec![1.0, 2.0, 3.0]);
+        assert_eq!(sparse[0].indices, vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn dual_embedder_as_trait_object() {
+        let embedder: Box<dyn DualEmbedder> = Box::new(MockDualEmbedder::new(64));
+        assert_eq!(embedder.dim(), 64);
+        let (dense, sparse) = embedder.embed_dual(&["test".into()]).await.unwrap();
+        assert_eq!(dense.len(), 1);
+        assert_eq!(sparse.len(), 1);
     }
 }

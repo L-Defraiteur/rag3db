@@ -13,11 +13,10 @@ use std::sync::Arc;
 
 use rag3weaver::config::{
     CatalogConfig, ChunkingConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
-    SearchMode,
 };
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder};
-use rag3weaver::search::{BM25Mode, Consistency, SearchOptions};
+use rag3weaver::embedder::{Embedder, MockEmbedder, SparseEmbedder};
+use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
 
 #[cfg(feature = "candle-embedder")]
@@ -159,14 +158,14 @@ fn make_kb_config() -> CatalogConfig {
     kbs.insert(
         "main".into(),
         KBConfig {
-            search: SearchMode::Hybrid,
+            signals: SearchSignals::HYBRID,
             ..Default::default()
         },
     );
     kbs.insert(
         "authors".into(),
         KBConfig {
-            search: SearchMode::Semantic,
+            signals: SearchSignals::SEMANTIC,
             ..Default::default()
         },
     );
@@ -222,7 +221,7 @@ fn rag3db_root() -> String {
     })
 }
 
-/// Load required extensions (vector, tantivy_fts) into a native connection.
+/// Load required extensions (vector, tantivy_fts, sparse_vector) into a native connection.
 /// Extensions are found in build/native-test/ (built by run_e2e.sh).
 async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
@@ -231,6 +230,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
         ("tantivy_fts", format!("{root}/extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")),
+        ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ];
     for (name, ext_path) in &extensions {
         if !std::path::Path::new(ext_path).exists() {
@@ -618,7 +618,7 @@ async fn setup_bm25_catalog() -> Catalog {
 
     let mut config = make_kb_config();
     // Override main KB to fulltext-only (no vector needed)
-    config.knowledge_bases.get_mut("main").unwrap().search = SearchMode::Fulltext;
+    config.knowledge_bases.get_mut("main").unwrap().signals = SearchSignals::FULLTEXT;
 
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
     catalog.initialize().await.unwrap();
@@ -862,7 +862,7 @@ fn make_vector_config(dim: usize) -> CatalogConfig {
     kbs.insert(
         "kb".into(),
         KBConfig {
-            search: SearchMode::Semantic,
+            signals: SearchSignals::SEMANTIC,
             ..Default::default()
         },
     );
@@ -1208,6 +1208,692 @@ async fn phase2_vector_bgem3_ml() {
         "BGE-M3",
     )
     .await;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 3 — Sparse search with real BGE-M3 model
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Config for sparse tests: Hybrid KB with sparse enabled, uses BGE-M3 dim (1024).
+#[cfg(feature = "bge-m3")]
+fn make_sparse_config() -> CatalogConfig {
+    let mut fields = HashMap::new();
+    fields.insert("title".into(), text_title_for("kb"));
+    fields.insert("body".into(), text_content_for("kb"));
+
+    let mut entities = HashMap::new();
+    entities.insert(
+        "Document".into(),
+        EntityDef {
+            fields,
+            hashsafe: None,
+        },
+    );
+
+    let mut kbs = HashMap::new();
+    kbs.insert(
+        "kb".into(),
+        KBConfig {
+            signals: SearchSignals::HYBRID | SearchSignals::SPARSE,
+            ..Default::default()
+        },
+    );
+
+    CatalogConfig {
+        name: Some("sparse-test".into()),
+        entities,
+        relations: HashMap::new(),
+        knowledge_bases: kbs,
+        embedding_dim: 1024, // BGE-M3 dense dim
+        ..Default::default()
+    }
+}
+
+/// Setup catalog with BGE-M3 as both dense embedder and sparse embedder.
+/// Inserts 3 thematically distinct docs, drains (builds vector + sparse + BM25 indexes).
+#[cfg(feature = "bge-m3")]
+async fn setup_sparse_catalog() -> Catalog {
+    use std::time::Instant;
+    let t0 = Instant::now();
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    eprintln!("  [timing] connection: {:?}", t0.elapsed());
+
+    let t1 = Instant::now();
+    load_extensions(boxed.as_ref()).await;
+    eprintln!("  [timing] load_extensions: {:?}", t1.elapsed());
+
+    let t2 = Instant::now();
+    let config = make_sparse_config();
+    let embedder: Arc<dyn Embedder> = BGE_M3.clone();
+    let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+    catalog.set_embedder(embedder);
+    catalog.set_sparse_embedder(sparse);
+    catalog.initialize().await.unwrap();
+    eprintln!("  [timing] initialize: {:?}", t2.elapsed());
+
+    let t3 = Instant::now();
+    let docs = [
+        ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
+        ("French Cuisine", "La cuisine française est mondialement reconnue. Les sauces, les pâtisseries et les techniques de cuisson sont au cœur de la gastronomie."),
+        ("Machine Learning", "Deep learning uses neural networks with many layers. Transformers and attention mechanisms have revolutionized natural language processing."),
+    ];
+    for (title, body) in &docs {
+        let mut data = BTreeMap::new();
+        data.insert("title".into(), CypherValue::String(title.to_string()));
+        data.insert("body".into(), CypherValue::String(body.to_string()));
+        catalog.create("Document", data).unwrap();
+    }
+    eprintln!("  [timing] create 3 docs: {:?}", t3.elapsed());
+
+    let t4 = Instant::now();
+    let result = catalog.drain().await;
+    eprintln!("  [timing] drain: {:?} (processed={}, failed={})", t4.elapsed(), result.processed, result.failed);
+    assert_eq!(result.failed, 0);
+
+    eprintln!("  [timing] total setup: {:?}", t0.elapsed());
+    catalog
+}
+
+/// Sparse search finds results — hybrid mode with sparse enabled.
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase3_sparse_search_finds_results() {
+    let mut catalog = setup_sparse_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "programming",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[sparse] results={}, vector={}, bm25={}, sparse={}",
+        response.results.len(),
+        response.meta.vector_count,
+        response.meta.bm25_count,
+        response.meta.sparse_count,
+    );
+    assert!(!response.results.is_empty(), "Should find results");
+    assert!(
+        response.meta.sparse_count > 0,
+        "sparse_count should be > 0 in hybrid+sparse mode"
+    );
+}
+
+/// Sparse + vector + BM25 all contribute in 3-way hybrid.
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase3_hybrid_3way() {
+    let mut catalog = setup_sparse_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "neural networks",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[3-way] results={}, vector={}, bm25={}, sparse={}",
+        response.results.len(),
+        response.meta.vector_count,
+        response.meta.bm25_count,
+        response.meta.sparse_count,
+    );
+    assert!(response.meta.vector_count > 0, "vector_count should be > 0");
+    assert!(response.meta.bm25_count > 0, "bm25_count should be > 0");
+    assert!(
+        response.meta.sparse_count > 0,
+        "sparse_count should be > 0 for 3-way hybrid"
+    );
+}
+
+/// Top result for programming query should be Rust doc.
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase3_sparse_top_result_programming() {
+    let mut catalog = setup_sparse_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "memory safety systems programming",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(!response.results.is_empty());
+    let top = &response.results[0];
+    let title = top
+        .data
+        .as_ref()
+        .and_then(|d| d.get("title"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    eprintln!("[sparse] Top result: '{}' (score={})", title, top.score);
+    assert!(
+        title.contains("Rust"),
+        "Top result for programming query should be Rust doc, got '{title}'"
+    );
+}
+
+/// Data enrichment: results should have data populated directly (Level 1 optimization).
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase3_sparse_data_enriched() {
+    let mut catalog = setup_sparse_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "cuisine française",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(!response.results.is_empty());
+    for (i, r) in response.results.iter().enumerate() {
+        assert!(
+            r.data.is_some(),
+            "Result {i} should have data populated (Level 1 enrichment), uuid={}",
+            r.uuid
+        );
+        let data = r.data.as_ref().unwrap();
+        assert!(
+            data.contains_key("title"),
+            "Result {i} data should contain 'title'"
+        );
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 4 — Signal isolation: benchmark each signal independently + combos
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Build a catalog config with explicit SearchSignals.
+#[cfg(feature = "bge-m3")]
+fn make_phase4_config(signals: SearchSignals) -> CatalogConfig {
+    let mut fields = HashMap::new();
+    fields.insert("title".into(), text_title_for("kb"));
+    fields.insert("body".into(), text_content_for("kb"));
+
+    let mut entities = HashMap::new();
+    entities.insert(
+        "Document".into(),
+        EntityDef {
+            fields,
+            hashsafe: None,
+        },
+    );
+
+    let mut kbs = HashMap::new();
+    kbs.insert(
+        "kb".into(),
+        KBConfig {
+            signals: signals,
+            ..Default::default()
+        },
+    );
+
+    CatalogConfig {
+        name: Some("phase4-test".into()),
+        entities,
+        relations: HashMap::new(),
+        knowledge_bases: kbs,
+        embedding_dim: 1024,
+        ..Default::default()
+    }
+}
+
+/// Setup a catalog with the given signals, BGE-M3 as needed, same 3 docs.
+/// Returns (catalog, drain_ms).
+#[cfg(feature = "bge-m3")]
+async fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
+    use std::time::Instant;
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref()).await;
+
+    let config = make_phase4_config(signals);
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+
+    if signals.vector() {
+        let embedder: Arc<dyn Embedder> = BGE_M3.clone();
+        catalog.set_embedder(embedder);
+    }
+    if signals.sparse() {
+        let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
+        catalog.set_sparse_embedder(sparse);
+    }
+
+    catalog.initialize().await.unwrap();
+
+    let docs = [
+        ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
+        ("French Cuisine", "La cuisine française est mondialement reconnue. Les sauces, les pâtisseries et les techniques de cuisson sont au cœur de la gastronomie."),
+        ("Machine Learning", "Deep learning uses neural networks with many layers. Transformers and attention mechanisms have revolutionized natural language processing."),
+    ];
+    for (title, body) in &docs {
+        let mut data = BTreeMap::new();
+        data.insert("title".into(), CypherValue::String(title.to_string()));
+        data.insert("body".into(), CypherValue::String(body.to_string()));
+        catalog.create("Document", data).unwrap();
+    }
+
+    let t0 = Instant::now();
+    let result = catalog.drain().await;
+    let drain_ms = t0.elapsed().as_millis();
+    assert_eq!(result.failed, 0);
+
+    eprintln!(
+        "  [phase4] signals={:?} drain={}ms processed={}",
+        signals, drain_ms, result.processed,
+    );
+
+    (catalog, drain_ms)
+}
+
+// ── Individual signals ──────────────────────────────────────────────────
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_bm25_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::BM25).await;
+    let response = catalog
+        .search(
+            "kb",
+            "systems programming safety",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[bm25-only] results={}, bm25={}, vector={}, sparse={}",
+        response.results.len(),
+        response.meta.bm25_count,
+        response.meta.vector_count,
+        response.meta.sparse_count,
+    );
+    assert!(!response.results.is_empty(), "BM25 should find results");
+    assert!(response.meta.bm25_count > 0);
+    assert_eq!(response.meta.vector_count, 0);
+    assert_eq!(response.meta.sparse_count, 0);
+}
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_dense_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::VECTOR).await;
+    let response = catalog
+        .search(
+            "kb",
+            "systems programming safety",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[dense-only] results={}, vector={}, bm25={}, sparse={}",
+        response.results.len(),
+        response.meta.vector_count,
+        response.meta.bm25_count,
+        response.meta.sparse_count,
+    );
+    assert!(!response.results.is_empty(), "Vector should find results");
+    assert!(response.meta.vector_count > 0);
+    assert_eq!(response.meta.bm25_count, 0);
+    assert_eq!(response.meta.sparse_count, 0);
+}
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_sparse_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::SPARSE).await;
+    let response = catalog
+        .search(
+            "kb",
+            "systems programming safety",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[sparse-only] results={}, sparse={}, vector={}, bm25={}",
+        response.results.len(),
+        response.meta.sparse_count,
+        response.meta.vector_count,
+        response.meta.bm25_count,
+    );
+    assert!(!response.results.is_empty(), "Sparse should find results");
+    assert!(response.meta.sparse_count > 0);
+    assert_eq!(response.meta.vector_count, 0);
+    assert_eq!(response.meta.bm25_count, 0);
+}
+
+// ── Pairwise combinations ───────────────────────────────────────────────
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_bm25_vector() {
+    let signals = SearchSignals::BM25 | SearchSignals::VECTOR;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let response = catalog
+        .search(
+            "kb",
+            "neural networks deep learning",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[bm25+vector] results={}, bm25={}, vector={}, sparse={}",
+        response.results.len(),
+        response.meta.bm25_count,
+        response.meta.vector_count,
+        response.meta.sparse_count,
+    );
+    assert!(response.meta.bm25_count > 0, "BM25 should contribute");
+    assert!(response.meta.vector_count > 0, "Vector should contribute");
+    assert_eq!(response.meta.sparse_count, 0);
+}
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_bm25_sparse() {
+    let signals = SearchSignals::BM25 | SearchSignals::SPARSE;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let response = catalog
+        .search(
+            "kb",
+            "neural networks deep learning",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[bm25+sparse] results={}, bm25={}, sparse={}, vector={}",
+        response.results.len(),
+        response.meta.bm25_count,
+        response.meta.sparse_count,
+        response.meta.vector_count,
+    );
+    assert!(response.meta.bm25_count > 0, "BM25 should contribute");
+    assert!(response.meta.sparse_count > 0, "Sparse should contribute");
+    assert_eq!(response.meta.vector_count, 0);
+}
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_vector_sparse() {
+    let signals = SearchSignals::VECTOR | SearchSignals::SPARSE;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let response = catalog
+        .search(
+            "kb",
+            "neural networks deep learning",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[vector+sparse] results={}, vector={}, sparse={}, bm25={}",
+        response.results.len(),
+        response.meta.vector_count,
+        response.meta.sparse_count,
+        response.meta.bm25_count,
+    );
+    assert!(response.meta.vector_count > 0, "Vector should contribute");
+    assert!(response.meta.sparse_count > 0, "Sparse should contribute");
+    assert_eq!(response.meta.bm25_count, 0);
+}
+
+// ── All three signals ───────────────────────────────────────────────────
+
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase4_all_three() {
+    let signals = SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let response = catalog
+        .search(
+            "kb",
+            "memory safety systems programming",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[all-three] results={}, bm25={}, vector={}, sparse={}",
+        response.results.len(),
+        response.meta.bm25_count,
+        response.meta.vector_count,
+        response.meta.sparse_count,
+    );
+    assert!(response.meta.bm25_count > 0, "BM25 should contribute");
+    assert!(response.meta.vector_count > 0, "Vector should contribute");
+    assert!(response.meta.sparse_count > 0, "Sparse should contribute");
+
+    // Top result should be Rust doc
+    let top = &response.results[0];
+    let title = top
+        .data
+        .as_ref()
+        .and_then(|d| d.get("title"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    eprintln!("[all-three] Top: '{}' (score={})", title, top.score);
+    assert!(
+        title.contains("Rust"),
+        "Top result should be Rust doc, got '{title}'"
+    );
+}
+
+// ── Phase 5: DualEmbedder (single forward pass dense+sparse) ────────────
+
+#[cfg(feature = "bge-m3")]
+use rag3weaver::embedder::DualEmbedder;
+
+/// Setup catalog with BGE-M3 as DualEmbedder (single forward pass for dense+sparse).
+/// Same 3 docs as phase3, but uses the dual path.
+#[cfg(feature = "bge-m3")]
+async fn setup_dual_catalog() -> Catalog {
+    use std::time::Instant;
+    let t0 = Instant::now();
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref()).await;
+
+    let config = make_sparse_config();
+    let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
+    // Still need a dense embedder for Catalog::new (required param),
+    // but DualEmbedProcessor will be used instead for KBs with vector+sparse.
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+    catalog.set_dual_embedder(dual);
+    catalog.initialize().await.unwrap();
+
+    let docs = [
+        ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
+        ("French Cuisine", "La cuisine française est mondialement reconnue. Les sauces, les pâtisseries et les techniques de cuisson sont au cœur de la gastronomie."),
+        ("Machine Learning", "Deep learning uses neural networks with many layers. Transformers and attention mechanisms have revolutionized natural language processing."),
+    ];
+    for (title, body) in &docs {
+        let mut data = BTreeMap::new();
+        data.insert("title".into(), CypherValue::String(title.to_string()));
+        data.insert("body".into(), CypherValue::String(body.to_string()));
+        catalog.create("Document", data).unwrap();
+    }
+
+    let t1 = Instant::now();
+    let result = catalog.drain().await;
+    eprintln!(
+        "  [dual] drain: {:?} (processed={}, failed={})",
+        t1.elapsed(), result.processed, result.failed,
+    );
+    assert_eq!(result.failed, 0);
+    eprintln!("  [dual] total setup: {:?}", t0.elapsed());
+    catalog
+}
+
+/// DualEmbedder: sparse search finds results (same assertion as phase3).
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase5_dual_sparse_search() {
+    let mut catalog = setup_dual_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "programming",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[dual-sparse] results={}, vector={}, bm25={}, sparse={}",
+        response.results.len(),
+        response.meta.vector_count,
+        response.meta.bm25_count,
+        response.meta.sparse_count,
+    );
+    assert!(!response.results.is_empty(), "Should find results");
+    assert!(response.meta.sparse_count > 0, "Sparse should contribute");
+    assert!(response.meta.vector_count > 0, "Vector should contribute");
+}
+
+/// DualEmbedder: top result is Rust doc (same assertion as phase3).
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase5_dual_top_result() {
+    let mut catalog = setup_dual_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "systems programming safety ownership",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let top = &response.results[0];
+    let title = top
+        .data
+        .as_ref()
+        .and_then(|d| d.get("title"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    eprintln!("[dual-top] Top: '{}' (score={})", title, top.score);
+    assert!(
+        title.contains("Rust"),
+        "Top result should be Rust doc, got '{title}'"
+    );
+}
+
+/// DualEmbedder: 3-way hybrid (BM25 + vector + sparse) works.
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+#[ignore]
+async fn phase5_dual_3way_hybrid() {
+    let mut catalog = setup_dual_catalog().await;
+    let response = catalog
+        .search(
+            "kb",
+            "memory safety systems programming",
+            SearchOptions {
+                bm25_mode: BM25Mode::ContainsSplit,
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    eprintln!(
+        "[dual-3way] results={}, bm25={}, vector={}, sparse={}",
+        response.results.len(),
+        response.meta.bm25_count,
+        response.meta.vector_count,
+        response.meta.sparse_count,
+    );
+    assert!(response.meta.bm25_count > 0, "BM25 should contribute");
+    assert!(response.meta.vector_count > 0, "Vector should contribute");
+    assert!(response.meta.sparse_count > 0, "Sparse should contribute");
 }
 
 // ── UNWIND + MATCH + SET isolation test ─────────────────────────────────

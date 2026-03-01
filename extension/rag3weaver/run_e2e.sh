@@ -67,7 +67,7 @@ cd "$WEAVER"
 
 # Build the cargo test filter args
 CARGO_ARGS=(
-  --features "rag3db-native,candle-embedder,bge-m3"
+  --features "rag3db-native,candle-embedder,bge-m3,cuda"
   --test "$TEST_FILE"
   --
   --ignored
@@ -82,9 +82,12 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 
 echo "▸ Running: cargo test ${CARGO_ARGS[*]}"
 
+export PATH="/usr/local/cuda/bin:$PATH"
+export LD_LIBRARY_PATH="$BUILD/src:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export CUDA_ROOT="/usr/local/cuda"
+
 RAG3DB_SHARED=1 \
 RAG3DB_LIBRARY_DIR="$BUILD/src" \
 RAG3DB_INCLUDE_DIR="$BUILD/src" \
-LD_LIBRARY_PATH="$BUILD/src" \
 RAG3DB_ROOT="$ROOT" \
 exec cargo test "${CARGO_ARGS[@]}"

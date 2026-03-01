@@ -50,6 +50,19 @@ pub enum QueueEvent {
         /// (op_type, priority) pairs for each injected op.
         ops: Vec<(&'static str, u8)>,
     },
+    /// A GPU mini-batch completed inside a mega-batch processor (e.g. DualEmbedProcessor).
+    GpuBatchCompleted {
+        op_type: &'static str,
+        batch_size: usize,
+        duration_ms: u64,
+    },
+    /// A DB UNWIND write completed inside a mega-batch processor.
+    DbWriteCompleted {
+        op_type: &'static str,
+        column: String,
+        item_count: usize,
+        duration_ms: u64,
+    },
 }
 
 // ─── QueueSender / QueueReceiver ─────────────────────────────────────────────
@@ -290,6 +303,12 @@ impl OperationQueue {
         self.processors.insert(op_type, std::sync::Arc::from(processor));
     }
 
+    /// Get a clone of the event sender for use by processors that emit
+    /// fine-grained timing events (e.g. DualEmbedProcessor).
+    pub fn event_sender(&self) -> Sender<QueueEvent> {
+        self.event_tx.clone()
+    }
+
     // ── enqueue ─────────────────────────────────────────────────────
 
     /// Enqueue a single operation. Sets `queue_item_id` on the op's ref.
@@ -305,7 +324,7 @@ impl OperationQueue {
             CatalogOp::Link(LinkOp { relation_ref, .. }) => {
                 relation_ref.set_queue_item_id(id.clone());
             }
-            CatalogOp::Chunk(_) | CatalogOp::Embed(_) | CatalogOp::SparseEmbed(_) => {}
+            CatalogOp::Chunk(_) | CatalogOp::Embed(_) | CatalogOp::SparseEmbed(_) | CatalogOp::DualEmbed(_) => {}
         }
 
         let item = OperationItem {

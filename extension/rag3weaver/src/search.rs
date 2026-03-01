@@ -7,13 +7,12 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::catalog::CatalogError;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::Embedder;
 use crate::filter::{FilterCondition, FilterValue};
-use crate::fusion;
 use crate::sparse_index::SparseVector;
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -36,30 +35,181 @@ impl Default for Consistency {
     }
 }
 
-/// Fusion strategy for combining vector and BM25 results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HybridStrategy {
-    /// BM25 boosts vector score: `vector × (1 + bm25_norm × factor)`.
-    Boost,
+/// Fusion strategy for combining search signals.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FusionStrategy {
     /// Reciprocal Rank Fusion: rank-based, score-agnostic.
-    RRF,
-    /// Weighted linear combination: `(1-w) × vector + w × bm25`.
+    #[default]
+    Rrf,
+    /// Weighted linear combination of normalized scores.
     Weighted,
 }
 
-impl Default for HybridStrategy {
+/// Role of a signal in fusion.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalRole {
+    /// Participate in the main fusion (RRF or weighted).
+    #[default]
+    Fuse,
+    /// Re-rank results after fusion — does not contribute new candidates.
+    Boost,
+}
+
+/// How a boost signal modifies existing scores.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BoostType {
+    /// `score += weight × normalized_signal_score`
+    Additive,
+    /// `score *= (1 + weight × normalized_signal_score)`
+    #[default]
+    Multiplicative,
+}
+
+/// Score normalization strategy applied before fusion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NormalizeMode {
+    /// Normalize to [0,1] per-query: `(score - min) / (max - min)`.
+    MinMax,
+    /// Raw scores, no normalization.
+    None,
+    /// Use rank position instead of score.
+    Rank,
+}
+
+/// Per-signal configuration for fusion.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SignalConfig {
+    #[serde(default = "default_signal_weight")]
+    pub weight: f64,
+    #[serde(default)]
+    pub role: SignalRole,
+    #[serde(default)]
+    pub boost_type: BoostType,
+    #[serde(default)]
+    pub normalize: Option<NormalizeMode>,
+    #[serde(default)]
+    pub top_k: Option<usize>,
+}
+
+fn default_signal_weight() -> f64 { 1.0 }
+
+impl Default for SignalConfig {
     fn default() -> Self {
-        Self::Boost
+        Self {
+            weight: 1.0,
+            role: SignalRole::Fuse,
+            boost_type: BoostType::Multiplicative,
+            normalize: None,
+            top_k: None,
+        }
     }
 }
 
-/// Type of search that was actually performed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SearchType {
-    Hybrid,
-    Semantic,
-    BM25Only,
+/// Resolved fusion configuration passed to `fuse_results`.
+#[derive(Debug, Clone)]
+pub struct FusionConfig {
+    pub strategy: FusionStrategy,
+    pub rrf_k: f64,
+    pub bm25: SignalConfig,
+    pub vector: SignalConfig,
+    pub sparse: SignalConfig,
+}
+
+impl Default for FusionConfig {
+    fn default() -> Self {
+        Self {
+            strategy: FusionStrategy::Rrf,
+            rrf_k: DEFAULT_RRF_K,
+            bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 0.7, ..SignalConfig::default() },
+            sparse: SignalConfig { weight: 0.2, ..SignalConfig::default() },
+        }
+    }
+}
+
+/// Binary flags selecting which search signals to activate.
+///
+/// Combine with `|`: `SearchSignals::BM25 | SearchSignals::SPARSE`.
+/// Named aliases mirror `SearchMode` for convenience.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SearchSignals(u8);
+
+impl SearchSignals {
+    pub const NONE:     Self = Self(0);
+    pub const BM25:     Self = Self(0b001);
+    pub const VECTOR:   Self = Self(0b010);
+    pub const SPARSE:   Self = Self(0b100);
+
+    // Convenience aliases matching SearchMode
+    pub const FULLTEXT: Self = Self(0b001);          // BM25 only
+    pub const SEMANTIC: Self = Self(0b010);          // Vector only
+    pub const HYBRID:   Self = Self(0b011);          // BM25 + Vector
+
+    pub const fn bm25(self) -> bool    { self.0 & 0b001 != 0 }
+    pub const fn vector(self) -> bool  { self.0 & 0b010 != 0 }
+    pub const fn sparse(self) -> bool  { self.0 & 0b100 != 0 }
+    pub const fn is_empty(self) -> bool { self.0 == 0 }
+}
+
+impl std::ops::BitOr for SearchSignals {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+}
+
+impl std::ops::BitOrAssign for SearchSignals {
+    fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; }
+}
+
+impl std::fmt::Debug for SearchSignals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut parts = vec![];
+        if self.bm25()   { parts.push("bm25"); }
+        if self.vector() { parts.push("vector"); }
+        if self.sparse() { parts.push("sparse"); }
+        if parts.is_empty() {
+            write!(f, "SearchSignals(none)")
+        } else {
+            write!(f, "SearchSignals({})", parts.join("|"))
+        }
+    }
+}
+
+impl Serialize for SearchSignals {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut parts = vec![];
+        if self.bm25()   { parts.push("bm25"); }
+        if self.vector() { parts.push("vector"); }
+        if self.sparse() { parts.push("sparse"); }
+        let mut seq = serializer.serialize_seq(Some(parts.len()))?;
+        for p in &parts {
+            seq.serialize_element(p)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SearchSignals {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let tags: Vec<String> = Vec::deserialize(deserializer)?;
+        let mut s = Self::NONE;
+        for tag in &tags {
+            match tag.as_str() {
+                "bm25" | "fulltext" => s |= Self::BM25,
+                "vector" | "semantic" | "dense" => s |= Self::VECTOR,
+                "sparse" => s |= Self::SPARSE,
+                other => return Err(serde::de::Error::unknown_variant(
+                    other,
+                    &["bm25", "vector", "sparse"],
+                )),
+            }
+        }
+        Ok(s)
+    }
 }
 
 /// BM25 query mode for keyword search via QUERY_TANTIVY_INDEX.
@@ -97,19 +247,14 @@ pub struct SearchOptions {
     pub filters: HashMap<String, FilterValue>,
     /// Structured filter condition (takes priority over `filters` HashMap).
     pub filter_condition: Option<FilterCondition>,
-    pub hybrid_strategy: HybridStrategy,
-    /// Overrides the KB's default keyword_weight.
-    pub keyword_weight: Option<f64>,
-    /// Boost factor for `HybridStrategy::Boost` (default 0.3).
-    pub boost_factor: Option<f64>,
-    /// RRF constant for `HybridStrategy::RRF` (default 60.0).
-    pub rrf_k: Option<f64>,
     /// BM25 query mode: Contains (fuzzy substring) or Regex.
     pub bm25_mode: BM25Mode,
     /// Levenshtein distance for fuzzy matching (default 1). Applies in both modes.
     pub fuzzy_distance: u8,
-    /// Overrides the KB's default sparse_weight for 3-way fusion.
-    pub sparse_weight: Option<f64>,
+    /// Override KB's default search signals. If None, derived from KBConfig.
+    pub signals: Option<SearchSignals>,
+    /// Override KB's default fusion config. If None, derived from KBConfig.
+    pub fusion: Option<FusionConfig>,
 }
 
 impl Default for SearchOptions {
@@ -121,13 +266,10 @@ impl Default for SearchOptions {
             timeout_ms: 5000,
             filters: HashMap::new(),
             filter_condition: None,
-            hybrid_strategy: HybridStrategy::default(),
-            keyword_weight: None,
-            boost_factor: None,
-            rrf_k: None,
             bm25_mode: BM25Mode::default(),
             fuzzy_distance: 1,
-            sparse_weight: None,
+            signals: None,
+            fusion: None,
         }
     }
 }
@@ -165,7 +307,7 @@ pub struct ChunkInfo {
 pub struct SearchMeta {
     pub query: String,
     pub kb: String,
-    pub search_type: SearchType,
+    pub signals: SearchSignals,
     pub consistency: Consistency,
     pub partial: bool,
     pub pending_count: usize,
@@ -246,7 +388,6 @@ pub struct ExploreResult {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_BOOST_FACTOR: f64 = 0.3;
 const DEFAULT_RRF_K: f64 = 60.0;
 pub(crate) const EMBEDDING_CACHE_MAX: usize = 100;
 
@@ -736,6 +877,251 @@ pub async fn resolve_and_enrich(
         .collect())
 }
 
+/// Intermediate struct for `resolve_and_enrich_chunked()`.
+/// Holds parent-level data + all child chunks for one parent node.
+pub struct ResolvedParent {
+    pub uuid: String,
+    pub data: BTreeMap<String, CypherValue>,
+    pub chunks: Vec<ChunkRecord>,
+}
+
+/// A single chunk record with metadata.
+pub struct ChunkRecord {
+    pub uuid: String,
+    pub text: String,
+    pub index: usize,
+    pub parent_field: String,
+    pub start_char: usize,
+    pub end_char: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+/// Resolve offsets, fetch entity fields AND child chunks in one query.
+///
+/// Returns one row per parent×chunk (flat join, no COLLECT), grouped in Rust.
+/// When a parent has no chunks (OPTIONAL MATCH), it appears with an empty chunks vec.
+///
+/// Prefer `resolve_and_enrich_chunked()` for BM25 chunked searches (Level 1+).
+pub async fn resolve_and_enrich_chunked(
+    conn: &dyn DbConnection,
+    entity: &str,
+    chunk_entity: &str,
+    offsets: &[u64],
+    return_fields: &[String],
+) -> Result<HashMap<u64, ResolvedParent>, CatalogError> {
+    if offsets.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let offset_list = offsets
+        .iter()
+        .map(|o| o.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // Build RETURN clause: parent fields + chunk fields
+    let mut return_cols: Vec<String> = vec![
+        "OFFSET(id(n)) AS _offset".to_string(),
+        "n._uuid AS _uuid".to_string(),
+    ];
+    for f in return_fields {
+        return_cols.push(format!("n.{f} AS {f}"));
+    }
+    // Chunk columns (after parent fields)
+    return_cols.push("c._uuid AS c_uuid".to_string());
+    return_cols.push("c._text AS c_text".to_string());
+    return_cols.push("c._index AS c_idx".to_string());
+    return_cols.push("c._parent_field AS c_field".to_string());
+    return_cols.push("c._start_char AS c_start".to_string());
+    return_cols.push("c._end_char AS c_end".to_string());
+    return_cols.push("c._start_line AS c_sline".to_string());
+    return_cols.push("c._end_line AS c_eline".to_string());
+    let return_clause = return_cols.join(", ");
+
+    let cypher = format!(
+        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
+         OPTIONAL MATCH (n)-[:{entity}_HAS_CHUNK]->(c:{chunk_entity}) \
+         RETURN {return_clause}"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // Group rows by offset → ResolvedParent
+    let chunk_col_start = 2 + return_fields.len();
+    let mut map: HashMap<u64, ResolvedParent> = HashMap::new();
+
+    for row in &result.rows {
+        let offset = match row.get(0).and_then(|v| v.as_i64()) {
+            Some(o) => o as u64,
+            None => continue,
+        };
+
+        let entry = map.entry(offset).or_insert_with(|| {
+            let uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let mut data = BTreeMap::new();
+            for (i, field) in return_fields.iter().enumerate() {
+                if let Some(val) = row.get(i + 2) {
+                    data.insert(field.clone(), val.clone());
+                }
+            }
+            ResolvedParent { uuid, data, chunks: Vec::new() }
+        });
+
+        // Parse chunk columns (may be NULL from OPTIONAL MATCH)
+        let c_uuid = row.get(chunk_col_start).and_then(|v| v.as_str());
+        if let Some(c_uuid) = c_uuid {
+            entry.chunks.push(ChunkRecord {
+                uuid: c_uuid.to_string(),
+                text: row.get(chunk_col_start + 1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                index: row.get(chunk_col_start + 2).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                parent_field: row.get(chunk_col_start + 3).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                start_char: row.get(chunk_col_start + 4).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                end_char: row.get(chunk_col_start + 5).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                start_line: row.get(chunk_col_start + 6).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                end_line: row.get(chunk_col_start + 7).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+            });
+        }
+    }
+
+    Ok(map)
+}
+
+/// Resolve chunk-level results (vector/sparse) to parent level with enrichment in one query.
+///
+/// Merges `resolve_chunk_results()` + `enrich_results_with_data()` into a single
+/// Cypher query that fetches chunk metadata, parent UUID, and parent fields.
+///
+/// Prefer `resolve_vector_chunks()` for vector/sparse chunked searches (Level 1+).
+pub async fn resolve_vector_chunks(
+    conn: &dyn DbConnection,
+    chunk_entity: &str,
+    parent_entity: &str,
+    results: Vec<SearchResult>,
+    return_fields: &[String],
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 1. Collect chunk UUIDs
+    let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+    let uuid_list = chunk_uuids
+        .iter()
+        .map(|u| format!("'{}'", u.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // 2. Build query: chunk metadata + parent fields in one shot
+    let mut return_cols: Vec<String> = vec![
+        "c._uuid AS chunk_uuid".to_string(),
+        "p._uuid AS parent_uuid".to_string(),
+        "c._text AS c_text".to_string(),
+        "c._index AS c_idx".to_string(),
+        "c._start_line AS c_sline".to_string(),
+        "c._end_line AS c_eline".to_string(),
+        "c._start_char AS c_start".to_string(),
+        "c._end_char AS c_end".to_string(),
+    ];
+    for f in return_fields {
+        return_cols.push(format!("p.{f} AS {f}"));
+    }
+    let return_clause = return_cols.join(", ");
+
+    let cypher = format!(
+        "MATCH (c:{chunk_entity}) WHERE c._uuid IN [{uuid_list}] \
+         MATCH (p:{parent_entity})-[:{parent_entity}_HAS_CHUNK]->(c) \
+         RETURN {return_clause}"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // 3. Build chunk_uuid → (parent_uuid, chunk_meta, parent_data) map
+    struct ResolvedChunk {
+        parent_uuid: String,
+        text: String,
+        index: usize,
+        start_line: usize,
+        end_line: usize,
+        start_char: usize,
+        end_char: usize,
+        parent_data: Option<BTreeMap<String, CypherValue>>,
+    }
+
+    let mut chunk_info_map: HashMap<String, ResolvedChunk> = HashMap::new();
+    for row in &result.rows {
+        let chunk_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let parent_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let start_line = row.get(4).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_line = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let start_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let parent_data = if !return_fields.is_empty() {
+            let mut data = BTreeMap::new();
+            for (i, field) in return_fields.iter().enumerate() {
+                if let Some(val) = row.get(i + 8) {
+                    data.insert(field.clone(), val.clone());
+                }
+            }
+            Some(data)
+        } else {
+            None
+        };
+        chunk_info_map.insert(chunk_uuid, ResolvedChunk {
+            parent_uuid, text, index, start_line, end_line, start_char, end_char, parent_data,
+        });
+    }
+
+    // 4. Group by parent, keep best-scoring chunk per parent
+    let mut parent_best: HashMap<String, (f64, String, ChunkInfo, Option<BTreeMap<String, CypherValue>>)> =
+        HashMap::new();
+    for r in &results {
+        if let Some(meta) = chunk_info_map.get(&r.uuid) {
+            let chunk_info = ChunkInfo {
+                uuid: r.uuid.clone(),
+                text: meta.text.clone(),
+                index: meta.index,
+                score: r.score,
+                start_line: meta.start_line,
+                end_line: meta.end_line,
+                start_char: meta.start_char,
+                end_char: meta.end_char,
+            };
+            let entry = parent_best.entry(meta.parent_uuid.clone());
+            match entry {
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    e.insert((r.score, meta.parent_uuid.clone(), chunk_info, meta.parent_data.clone()));
+                }
+                std::collections::hash_map::Entry::Occupied(mut e) => {
+                    if r.score > e.get().0 {
+                        e.insert((r.score, meta.parent_uuid.clone(), chunk_info, meta.parent_data.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Build parent-level results
+    let mut resolved: Vec<SearchResult> = parent_best
+        .into_values()
+        .map(|(score, parent_uuid, chunk_info, data)| SearchResult {
+            uuid: parent_uuid,
+            score,
+            entity: Some(parent_entity.to_string()),
+            data,
+            chunk: Some(chunk_info),
+        })
+        .collect();
+    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(resolved)
+}
+
 /// Brute-force vector scan with `array_cosine_similarity`. O(N).
 ///
 /// Legacy fallback — kept for environments where the HNSW vector extension
@@ -916,6 +1302,7 @@ pub async fn search_bm25(
     limit: usize,
     tantivy_filters: Option<&[serde_json::Value]>,
     allowed_ids: Option<&[u64]>,
+    return_fields: &[String],
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if fields.is_empty() {
         return Ok(vec![]);
@@ -951,9 +1338,8 @@ pub async fn search_bm25(
         return Ok(vec![]);
     }
 
-    // QUERY_TANTIVY_INDEX returns node_id as UINT64 offsets, not UUIDs.
-    // Resolve offsets → UUIDs via OFFSET(id(n)).
-    let offsets: Vec<(u64, f64)> = result
+    // Extract (offset, score) pairs from CALL result
+    let offsets_scores: Vec<(u64, f64)> = result
         .rows
         .iter()
         .filter_map(|row| {
@@ -963,47 +1349,12 @@ pub async fn search_bm25(
         })
         .collect();
 
-    if offsets.is_empty() {
+    if offsets_scores.is_empty() {
         return Ok(vec![]);
     }
 
-    let offset_list = offsets
-        .iter()
-        .map(|(o, _)| o.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let resolve_cypher = format!(
-        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
-         RETURN OFFSET(id(n)), n._uuid"
-    );
-    let resolve_result = conn
-        .execute(&resolve_cypher)
-        .await
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
-    for row in &resolve_result.rows {
-        if let (Some(oid), Some(uuid)) = (
-            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
-            row.get(1).and_then(|v| v.as_str()),
-        ) {
-            offset_to_uuid.insert(oid, uuid.to_string());
-        }
-    }
-
-    Ok(offsets
-        .into_iter()
-        .filter_map(|(offset, score)| {
-            let uuid = offset_to_uuid.get(&offset)?.clone();
-            Some(SearchResult {
-                uuid,
-                score,
-                entity: Some(entity.to_string()),
-                data: None,
-                chunk: None,
-            })
-        })
-        .collect())
+    // Resolve offsets → UUIDs + fetch entity data in one query
+    resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await
 }
 
 /// BM25 result with per-field highlight byte offsets.
@@ -1257,6 +1608,142 @@ pub async fn resolve_bm25_to_chunks(
     Ok(results)
 }
 
+/// BM25 chunked search: CALL + resolve/chunks/enrich in 2 queries instead of 3.
+///
+/// Replaces the pattern `search_bm25_raw()` → `resolve_bm25_to_chunks()` by merging
+/// offset resolution, chunk fetching, and data enrichment into one Cypher query.
+///
+/// Prefer `search_bm25_chunked()` for chunked BM25 searches (Level 1+).
+pub async fn search_bm25_chunked(
+    conn: &dyn DbConnection,
+    entity: &str,
+    chunk_entity: &str,
+    query: &str,
+    fields: &[String],
+    mode: BM25Mode,
+    fuzzy_distance: u8,
+    limit: usize,
+    tantivy_filters: Option<&[serde_json::Value]>,
+    allowed_ids: Option<&[u64]>,
+    return_fields: &[String],
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if fields.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Query 1: CALL QUERY_TANTIVY_INDEX → (offset, score, highlights)
+    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance, tantivy_filters);
+    let escaped_json = json_query.replace('\'', "''");
+
+    let cypher = if let Some(ids) = allowed_ids {
+        let ids_str = ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
+             allowed_ids := [{ids_str}]) \
+             RETURN node_id, score, highlights"
+        )
+    } else {
+        format!(
+            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
+             RETURN node_id, score, highlights"
+        )
+    };
+
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    if result.rows.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Extract (offset, score, highlights_json)
+    let hits: Vec<(u64, f64, String)> = result
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
+            let score = row.get(1).and_then(|v| v.as_f64())?;
+            let hl_json = row.get(2).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+            Some((offset, score, hl_json))
+        })
+        .collect();
+
+    if hits.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Query 2: resolve offsets + fetch chunks + enrich in one query
+    let offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
+    let parents = resolve_and_enrich_chunked(conn, entity, chunk_entity, &offsets, return_fields).await?;
+
+    // Match highlights to chunks for each hit
+    let mut results: Vec<SearchResult> = Vec::new();
+    for (offset, score, hl_json) in &hits {
+        let highlights = parse_highlights_json(hl_json);
+
+        let parent = match parents.get(offset) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let data = if parent.data.is_empty() { None } else { Some(parent.data.clone()) };
+
+        // Find chunks that overlap with highlights
+        let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
+        for chunk in &parent.chunks {
+            let mut overlap = 0usize;
+            if let Some(offsets) = highlights.get(&chunk.parent_field) {
+                for &(h_start, h_end) in offsets {
+                    let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
+                    overlap += ov;
+                }
+            }
+            if overlap > 0 {
+                matched_chunks.push((overlap, chunk));
+            }
+        }
+
+        if matched_chunks.is_empty() {
+            // No chunk intersection (e.g. match in title only)
+            results.push(SearchResult {
+                uuid: parent.uuid.clone(),
+                score: *score,
+                entity: Some(entity.to_string()),
+                data: data.clone(),
+                chunk: None,
+            });
+        } else {
+            matched_chunks.sort_by(|a, b| b.0.cmp(&a.0));
+            for (_, c) in matched_chunks {
+                results.push(SearchResult {
+                    uuid: parent.uuid.clone(),
+                    score: *score,
+                    entity: Some(entity.to_string()),
+                    data: data.clone(),
+                    chunk: Some(ChunkInfo {
+                        uuid: c.uuid.clone(),
+                        text: c.text.clone(),
+                        index: c.index,
+                        score: *score,
+                        start_line: c.start_line,
+                        end_line: c.end_line,
+                        start_char: c.start_char,
+                        end_char: c.end_char,
+                    }),
+                });
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 /// Sparse vector search via the sparse_vector Cypher extension.
 ///
 /// 1. Calls `QUERY_SPARSE_VECTOR_INDEX` → (node_id offset, score) pairs
@@ -1267,6 +1754,7 @@ pub async fn search_sparse_cypher(
     entity: &str,
     query_vector: &SparseVector,
     limit: usize,
+    return_fields: &[String],
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if query_vector.is_empty() {
         return Ok(vec![]);
@@ -1301,7 +1789,7 @@ pub async fn search_sparse_cypher(
     }
 
     // 2. Extract (offset, score) pairs
-    let offsets: Vec<(u64, f64)> = sparse_result
+    let offsets_scores: Vec<(u64, f64)> = sparse_result
         .rows
         .iter()
         .filter_map(|row| {
@@ -1311,68 +1799,24 @@ pub async fn search_sparse_cypher(
         })
         .collect();
 
-    if offsets.is_empty() {
+    if offsets_scores.is_empty() {
         return Ok(vec![]);
     }
 
-    // 3. Resolve offsets → UUIDs
-    let offset_list = offsets
-        .iter()
-        .map(|(o, _)| o.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let resolve_cypher = format!(
-        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
-         RETURN OFFSET(id(n)), n._uuid"
-    );
-
-    let resolve_result = conn
-        .execute(&resolve_cypher)
-        .await
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
-    for row in &resolve_result.rows {
-        if let (Some(oid), Some(uuid)) = (
-            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
-            row.get(1).and_then(|v| v.as_str()),
-        ) {
-            offset_to_uuid.insert(oid, uuid.to_string());
-        }
-    }
-
-    // 4. Build results with real UUIDs, preserving score order
-    Ok(offsets
-        .into_iter()
-        .filter_map(|(offset, score)| {
-            let uuid = offset_to_uuid.get(&offset)?.clone();
-            Some(SearchResult {
-                uuid,
-                score,
-                entity: Some(entity.to_string()),
-                data: None,
-                chunk: None,
-            })
-        })
-        .collect())
+    // 3. Resolve offsets → UUIDs + fetch entity data in one query
+    resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await
 }
 
-/// Fuse vector, BM25, and optional sparse results using the specified strategy.
+/// Fuse vector, BM25, and optional sparse results using per-signal config.
 ///
-/// If only one source has results, returns them directly.
-/// When sparse results are present:
-/// - **RRF**: all non-empty lists go through N-way RRF
-/// - **Weighted**: 3-way weighted fusion `(1-kw-sw)*vec + kw*bm25 + sw*sparse`
-/// - **Boost**: falls back to RRF (boost doesn't extend naturally to 3 signals)
+/// Each signal has a role (Fuse or Boost), a weight, and optional normalization.
+/// Fuse signals are combined first (via RRF or Weighted), then Boost signals
+/// re-rank the fused results.
 pub fn fuse_results(
     vector_results: &[SearchResult],
     bm25_results: &[SearchResult],
     sparse_results: &[SearchResult],
-    strategy: HybridStrategy,
-    keyword_weight: f64,
-    sparse_weight: f64,
-    boost_factor: Option<f64>,
-    rrf_k: Option<f64>,
+    config: &FusionConfig,
 ) -> Vec<SearchResult> {
     let lists: [&[SearchResult]; 3] = [vector_results, bm25_results, sparse_results];
     let non_empty_count = lists.iter().filter(|l| !l.is_empty()).count();
@@ -1389,8 +1833,9 @@ pub fn fuse_results(
         }
     }
 
-    // Build chunk lookup from all inputs (best chunk per UUID)
+    // Build chunk + data lookups from all inputs
     let mut chunk_map: HashMap<String, ChunkInfo> = HashMap::new();
+    let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
     for list in &lists {
         for r in list.iter() {
             if let Some(ref chunk) = r.chunk {
@@ -1406,53 +1851,182 @@ pub fn fuse_results(
                     }
                 }
             }
+            if let Some(ref data) = r.data {
+                data_map.entry(r.uuid.clone()).or_insert_with(|| data.clone());
+            }
         }
     }
 
-    let has_sparse = !sparse_results.is_empty();
-
-    let mut fused = match strategy {
-        HybridStrategy::RRF => {
-            fuse_rrf_n(&lists, rrf_k.unwrap_or(DEFAULT_RRF_K))
+    // Apply top_k per signal
+    let configs = [&config.vector, &config.bm25, &config.sparse];
+    let truncated: Vec<Vec<SearchResult>> = lists.iter().zip(configs.iter()).map(|(list, cfg)| {
+        if let Some(k) = cfg.top_k {
+            list.iter().take(k).cloned().collect()
+        } else {
+            list.to_vec()
         }
-        HybridStrategy::Weighted => {
-            if has_sparse {
-                fuse_weighted_3way(
-                    vector_results,
-                    bm25_results,
-                    sparse_results,
-                    keyword_weight,
-                    sparse_weight,
-                )
-            } else {
-                fuse_weighted(vector_results, bm25_results, keyword_weight)
+    }).collect();
+    let vector_r = &truncated[0];
+    let bm25_r = &truncated[1];
+    let sparse_r = &truncated[2];
+
+    // Collect entity map
+    let mut entity_map: HashMap<String, String> = HashMap::new();
+    for list in &[vector_r, bm25_r, sparse_r] {
+        for r in list.iter() {
+            if let Some(ref e) = r.entity {
+                entity_map.entry(r.uuid.clone()).or_insert_with(|| e.clone());
             }
         }
-        HybridStrategy::Boost => {
-            if has_sparse {
-                fuse_rrf_n(&lists, rrf_k.unwrap_or(DEFAULT_RRF_K))
-            } else {
-                fuse_boost(
-                    vector_results,
-                    bm25_results,
-                    boost_factor.unwrap_or(DEFAULT_BOOST_FACTOR),
-                )
-            }
-        }
-    };
+    }
 
-    // Re-attach chunk info from inputs
-    if !chunk_map.is_empty() {
-        for r in &mut fused {
-            if r.chunk.is_none() {
-                if let Some(chunk) = chunk_map.remove(&r.uuid) {
-                    r.chunk = Some(chunk);
+    // Separate fuse vs boost signals: (results, config)
+    let all_signals: [(&[SearchResult], &SignalConfig); 3] = [
+        (vector_r.as_slice(), &config.vector),
+        (bm25_r.as_slice(), &config.bm25),
+        (sparse_r.as_slice(), &config.sparse),
+    ];
+
+    let fuse_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
+        .filter(|(r, c)| !r.is_empty() && c.role == SignalRole::Fuse)
+        .copied()
+        .collect();
+    let boost_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
+        .filter(|(r, c)| !r.is_empty() && c.role == SignalRole::Boost)
+        .copied()
+        .collect();
+
+    // Step 1: Fuse signals
+    let mut scores: HashMap<String, f64> = HashMap::new();
+
+    if fuse_signals.is_empty() {
+        // All active signals are boost — no base to boost from.
+        // Treat them all as fuse instead.
+        let fallback: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
+            .filter(|(r, _)| !r.is_empty())
+            .copied()
+            .collect();
+        fuse_by_strategy(&fallback, config, &mut scores);
+    } else if fuse_signals.len() == 1 {
+        // Single fuse signal — use raw scores
+        let (results, _cfg) = fuse_signals[0];
+        for r in results {
+            scores.insert(r.uuid.clone(), r.score);
+        }
+    } else {
+        fuse_by_strategy(&fuse_signals, config, &mut scores);
+    }
+
+    // Step 2: Apply boost signals
+    for (results, cfg) in &boost_signals {
+        let norm_scores = normalize_scores(results, cfg.normalize);
+        for (uuid, score) in &mut scores {
+            let boost_val = norm_scores.get(uuid.as_str()).copied().unwrap_or(0.0);
+            match cfg.boost_type {
+                BoostType::Additive => {
+                    *score += cfg.weight * boost_val;
+                }
+                BoostType::Multiplicative => {
+                    *score *= 1.0 + cfg.weight * boost_val;
                 }
             }
         }
     }
 
+    // Sort by score descending
+    let mut result_vec: Vec<(String, f64)> = scores.into_iter().collect();
+    result_vec.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Build final results
+    let mut fused: Vec<SearchResult> = result_vec
+        .into_iter()
+        .map(|(uuid, score)| {
+            SearchResult {
+                entity: entity_map.get(&uuid).cloned(),
+                uuid,
+                score,
+                data: None,
+                chunk: None,
+            }
+        })
+        .collect();
+
+    // Re-attach chunk info and data from inputs
+    for r in &mut fused {
+        if r.chunk.is_none() {
+            if let Some(chunk) = chunk_map.remove(&r.uuid) {
+                r.chunk = Some(chunk);
+            }
+        }
+        if r.data.is_none() {
+            if let Some(data) = data_map.remove(&r.uuid) {
+                r.data = Some(data);
+            }
+        }
+    }
+
     fused
+}
+
+fn fuse_by_strategy(
+    signals: &[(&[SearchResult], &SignalConfig)],
+    config: &FusionConfig,
+    scores: &mut HashMap<String, f64>,
+) {
+    match config.strategy {
+        FusionStrategy::Rrf => {
+            for (results, cfg) in signals {
+                for (rank, r) in results.iter().enumerate() {
+                    *scores.entry(r.uuid.clone()).or_default() +=
+                        cfg.weight / (config.rrf_k + rank as f64 + 1.0);
+                }
+            }
+        }
+        FusionStrategy::Weighted => {
+            for (results, cfg) in signals {
+                let norm_scores = normalize_scores(results, cfg.normalize);
+                for (uuid, ns) in &norm_scores {
+                    *scores.entry(uuid.to_string()).or_default() += cfg.weight * ns;
+                }
+            }
+        }
+    }
+}
+
+/// Normalize scores from a result list according to mode.
+fn normalize_scores(results: &[SearchResult], mode: Option<NormalizeMode>) -> HashMap<String, f64> {
+    let mode = mode.unwrap_or(NormalizeMode::MinMax);
+    let mut map = HashMap::new();
+    if results.is_empty() {
+        return map;
+    }
+    match mode {
+        NormalizeMode::MinMax => {
+            let max = results.iter().map(|r| r.score).fold(f64::NEG_INFINITY, f64::max);
+            let min = results.iter().map(|r| r.score).fold(f64::INFINITY, f64::min);
+            let range = max - min;
+            for r in results {
+                if range.abs() < 1e-12 {
+                    // All scores identical → normalize to 1.0
+                    map.insert(r.uuid.clone(), 1.0);
+                } else {
+                    map.insert(r.uuid.clone(), (r.score - min) / range);
+                }
+            }
+        }
+        NormalizeMode::None => {
+            for r in results {
+                map.insert(r.uuid.clone(), r.score);
+            }
+        }
+        NormalizeMode::Rank => {
+            let total = results.len() as f64;
+            for (rank, r) in results.iter().enumerate() {
+                map.insert(r.uuid.clone(), 1.0 - (rank as f64 / total));
+            }
+        }
+    }
+    map
 }
 
 /// BFS graph exploration from seed nodes.
@@ -1653,236 +2227,6 @@ async fn explore_relation_batch(
         .collect())
 }
 
-fn fuse_rrf_n(
-    result_lists: &[&[SearchResult]],
-    rrf_k: f64,
-) -> Vec<SearchResult> {
-    let non_empty: Vec<&&[SearchResult]> =
-        result_lists.iter().filter(|l| !l.is_empty()).collect();
-    if non_empty.is_empty() {
-        return vec![];
-    }
-
-    let mut entity_map: HashMap<&str, &str> = HashMap::new();
-    for list in &non_empty {
-        for r in list.iter() {
-            if let Some(ref e) = r.entity {
-                entity_map.insert(&r.uuid, e);
-            }
-        }
-    }
-
-    let tuple_lists: Vec<Vec<(String, f32)>> = non_empty
-        .iter()
-        .map(|list| {
-            list.iter()
-                .map(|r| (r.uuid.clone(), r.score as f32))
-                .collect()
-        })
-        .collect();
-    let tuple_refs: Vec<&[(String, f32)]> =
-        tuple_lists.iter().map(|v| v.as_slice()).collect();
-
-    let fused = fusion::rrf_fuse(&tuple_refs, rrf_k as f32);
-
-    fused
-        .into_iter()
-        .map(|(uuid, score)| SearchResult {
-            entity: entity_map.get(uuid.as_str()).map(|e| e.to_string()),
-            uuid,
-            score: score as f64,
-            data: None,
-            chunk: None,
-        })
-        .collect()
-}
-
-fn fuse_weighted(
-    vector_results: &[SearchResult],
-    bm25_results: &[SearchResult],
-    keyword_weight: f64,
-) -> Vec<SearchResult> {
-    let mut vector_map: HashMap<&str, f64> = HashMap::new();
-    let mut bm25_map: HashMap<&str, f64> = HashMap::new();
-    let mut entity_map: HashMap<&str, &str> = HashMap::new();
-
-    for r in vector_results {
-        vector_map.insert(&r.uuid, r.score);
-        if let Some(ref e) = r.entity {
-            entity_map.insert(&r.uuid, e);
-        }
-    }
-    for r in bm25_results {
-        bm25_map.insert(&r.uuid, r.score);
-        entity_map.entry(&r.uuid).or_insert_with(|| {
-            r.entity.as_deref().unwrap_or("")
-        });
-    }
-
-    let max_bm25 = bm25_results
-        .iter()
-        .map(|r| r.score)
-        .fold(0.0_f64, f64::max);
-    let norm = if max_bm25 > 0.0 { max_bm25 } else { 1.0 };
-
-    let mut all_uuids: HashSet<&str> = HashSet::new();
-    for r in vector_results.iter().chain(bm25_results.iter()) {
-        all_uuids.insert(&r.uuid);
-    }
-
-    let mut results: Vec<SearchResult> = all_uuids
-        .into_iter()
-        .map(|uuid| {
-            let vs = vector_map.get(uuid).copied().unwrap_or(0.0);
-            let bs = bm25_map.get(uuid).copied().unwrap_or(0.0) / norm;
-            let score =
-                fusion::weighted_fuse(vs as f32, bs as f32, keyword_weight as f32) as f64;
-            SearchResult {
-                entity: entity_map.get(uuid).map(|e| e.to_string()),
-                uuid: uuid.to_string(),
-                score,
-                data: None,
-                chunk: None,
-            }
-        })
-        .collect();
-
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    results
-}
-
-fn fuse_weighted_3way(
-    vector_results: &[SearchResult],
-    bm25_results: &[SearchResult],
-    sparse_results: &[SearchResult],
-    keyword_weight: f64,
-    sparse_weight: f64,
-) -> Vec<SearchResult> {
-    let mut vector_map: HashMap<&str, f64> = HashMap::new();
-    let mut bm25_map: HashMap<&str, f64> = HashMap::new();
-    let mut sparse_map: HashMap<&str, f64> = HashMap::new();
-    let mut entity_map: HashMap<&str, &str> = HashMap::new();
-
-    for r in vector_results {
-        vector_map.insert(&r.uuid, r.score);
-        if let Some(ref e) = r.entity {
-            entity_map.insert(&r.uuid, e);
-        }
-    }
-    for r in bm25_results {
-        bm25_map.insert(&r.uuid, r.score);
-        entity_map
-            .entry(&r.uuid)
-            .or_insert_with(|| r.entity.as_deref().unwrap_or(""));
-    }
-    for r in sparse_results {
-        sparse_map.insert(&r.uuid, r.score);
-        entity_map
-            .entry(&r.uuid)
-            .or_insert_with(|| r.entity.as_deref().unwrap_or(""));
-    }
-
-    // Normalize BM25 and sparse scores to [0, 1]
-    let max_bm25 = bm25_results
-        .iter()
-        .map(|r| r.score)
-        .fold(0.0_f64, f64::max);
-    let bm25_norm = if max_bm25 > 0.0 { max_bm25 } else { 1.0 };
-
-    let max_sparse = sparse_results
-        .iter()
-        .map(|r| r.score)
-        .fold(0.0_f64, f64::max);
-    let sparse_norm = if max_sparse > 0.0 { max_sparse } else { 1.0 };
-
-    let vector_weight = (1.0 - keyword_weight - sparse_weight).max(0.0);
-
-    let mut all_uuids: HashSet<&str> = HashSet::new();
-    for r in vector_results
-        .iter()
-        .chain(bm25_results.iter())
-        .chain(sparse_results.iter())
-    {
-        all_uuids.insert(&r.uuid);
-    }
-
-    let mut results: Vec<SearchResult> = all_uuids
-        .into_iter()
-        .map(|uuid| {
-            let vs = vector_map.get(uuid).copied().unwrap_or(0.0);
-            let bs = bm25_map.get(uuid).copied().unwrap_or(0.0) / bm25_norm;
-            let ss = sparse_map.get(uuid).copied().unwrap_or(0.0) / sparse_norm;
-            let score = vector_weight * vs + keyword_weight * bs + sparse_weight * ss;
-            SearchResult {
-                entity: entity_map.get(uuid).map(|e| e.to_string()),
-                uuid: uuid.to_string(),
-                score,
-                data: None,
-                chunk: None,
-            }
-        })
-        .collect();
-
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    results
-}
-
-fn fuse_boost(
-    vector_results: &[SearchResult],
-    bm25_results: &[SearchResult],
-    boost_factor: f64,
-) -> Vec<SearchResult> {
-    let mut bm25_map: HashMap<&str, f64> = HashMap::new();
-    for r in bm25_results {
-        bm25_map.insert(&r.uuid, r.score);
-    }
-
-    let max_bm25 = bm25_results
-        .iter()
-        .map(|r| r.score)
-        .fold(0.0_f64, f64::max);
-    let norm = if max_bm25 > 0.0 { max_bm25 } else { 1.0 };
-
-    let vector_uuids: HashSet<&str> =
-        vector_results.iter().map(|r| r.uuid.as_str()).collect();
-
-    let mut results: Vec<SearchResult> = vector_results
-        .iter()
-        .map(|r| {
-            let bm25_norm = bm25_map.get(r.uuid.as_str()).copied().unwrap_or(0.0) / norm;
-            let score = fusion::boost_fuse(
-                r.score as f32,
-                bm25_norm as f32,
-                boost_factor as f32,
-            ) as f64;
-            SearchResult {
-                uuid: r.uuid.clone(),
-                score,
-                entity: r.entity.clone(),
-                data: None,
-                chunk: None,
-            }
-        })
-        .collect();
-
-    // BM25-only results (not in vector set) get default vector score 0.5
-    for r in bm25_results {
-        if !vector_uuids.contains(r.uuid.as_str()) {
-            let bm25_norm = r.score / norm;
-            let score = fusion::boost_fuse(0.5, bm25_norm as f32, boost_factor as f32) as f64;
-            results.push(SearchResult {
-                uuid: r.uuid.clone(),
-                score,
-                entity: r.entity.clone(),
-                data: None,
-                chunk: None,
-            });
-        }
-    }
-
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    results
-}
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -2077,6 +2421,7 @@ mod tests {
             10,
             None,
             None,
+            &[],
         )
         .await
         .unwrap();
@@ -2087,7 +2432,7 @@ mod tests {
     async fn search_bm25_empty_fields() {
         let conn = MockConnection::new();
 
-        let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, None)
+        let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, None, &[])
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -2164,31 +2509,50 @@ mod tests {
 
     // ── fuse_results ─────────────────────────────────────────────────────
 
+    fn rrf_config() -> FusionConfig {
+        FusionConfig {
+            strategy: FusionStrategy::Rrf,
+            rrf_k: 60.0,
+            bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 0.7, ..SignalConfig::default() },
+            sparse: SignalConfig { weight: 0.2, ..SignalConfig::default() },
+        }
+    }
+
+    fn weighted_config() -> FusionConfig {
+        FusionConfig {
+            strategy: FusionStrategy::Weighted,
+            rrf_k: 60.0,
+            bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 0.7, normalize: Some(NormalizeMode::None), ..SignalConfig::default() },
+            sparse: SignalConfig { weight: 0.2, ..SignalConfig::default() },
+        }
+    }
+
     #[test]
     fn fuse_empty() {
-        let results = fuse_results(&[], &[], &[], HybridStrategy::Boost, 0.3, 0.0, None, None);
+        let results = fuse_results(&[], &[], &[], &rrf_config());
         assert!(results.is_empty());
     }
 
     #[test]
     fn fuse_vector_only() {
         let vector = vec![make_result("a", 0.9), make_result("b", 0.7)];
-        let results = fuse_results(&vector, &[], &[], HybridStrategy::Boost, 0.3, 0.0, None, None);
+        let results = fuse_results(&vector, &[], &[], &rrf_config());
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].uuid, "a");
         assert_eq!(results[1].uuid, "b");
-        // Scores unchanged when no BM25
+        // Single source — scores unchanged
         assert!((results[0].score - 0.9).abs() < 1e-6);
     }
 
     #[test]
     fn fuse_bm25_only() {
         let bm25 = vec![make_result("x", 5.0), make_result("y", 3.0)];
-        let results = fuse_results(&[], &bm25, &[], HybridStrategy::Weighted, 0.3, 0.0, None, None);
+        let results = fuse_results(&[], &bm25, &[], &rrf_config());
 
         assert_eq!(results.len(), 2);
-        // BM25-only results returned directly
         assert_eq!(results[0].uuid, "x");
     }
 
@@ -2205,36 +2569,45 @@ mod tests {
             make_result("a", 1.0),
         ];
 
-        let results = fuse_results(&vector, &bm25, &[], HybridStrategy::RRF, 0.3, 0.0, None, Some(60.0));
+        let results = fuse_results(&vector, &bm25, &[], &rrf_config());
 
-        // All 4 unique UUIDs should be present
         assert_eq!(results.len(), 4);
-
-        // "a" and "b" appear in both lists → higher RRF score
         let a_score = results.iter().find(|r| r.uuid == "a").unwrap().score;
         let d_score = results.iter().find(|r| r.uuid == "d").unwrap().score;
         assert!(a_score > d_score, "a (in both lists) should rank above d (only in BM25)");
     }
 
     #[test]
-    fn fuse_boost() {
+    fn fuse_boost_multiplicative() {
         let vector = vec![make_result("a", 0.9), make_result("b", 0.7)];
         let bm25 = vec![make_result("a", 5.0), make_result("c", 3.0)];
 
-        let results =
-            fuse_results(&vector, &bm25, &[], HybridStrategy::Boost, 0.3, 0.0, Some(0.3), None);
+        // vector=fuse, bm25=boost multiplicative
+        let config = FusionConfig {
+            strategy: FusionStrategy::Rrf,
+            rrf_k: 60.0,
+            vector: SignalConfig { weight: 1.0, ..SignalConfig::default() },
+            bm25: SignalConfig {
+                weight: 0.3,
+                role: SignalRole::Boost,
+                boost_type: BoostType::Multiplicative,
+                ..SignalConfig::default()
+            },
+            sparse: SignalConfig::default(),
+        };
+        let results = fuse_results(&vector, &bm25, &[], &config);
 
-        // "a" in both → boosted score
         let a = results.iter().find(|r| r.uuid == "a").unwrap();
-        // boost: 0.9 * (1 + 1.0 * 0.3) = 0.9 * 1.3 = 1.17
-        assert!(a.score > 0.9, "a should be boosted above 0.9");
+        // "a" in vector with score 0.9, boosted by bm25 (normalized=1.0): 0.9 * (1 + 0.3*1.0) = 1.17
+        assert!(a.score > 0.9, "a should be boosted above 0.9, got {}", a.score);
 
-        // "c" only in BM25 → gets default vector score 0.5
-        let c = results.iter().find(|r| r.uuid == "c").unwrap();
-        assert!(c.score > 0.0);
+        // "b" only in vector, no bm25 boost → score stays 0.7
+        let b = results.iter().find(|r| r.uuid == "b").unwrap();
+        assert!((b.score - 0.7).abs() < 0.01);
 
-        // 3 total results: a, b, c
-        assert_eq!(results.len(), 3);
+        // "c" only in bm25 (boost role) → not in results (boost doesn't add candidates)
+        assert!(results.iter().find(|r| r.uuid == "c").is_none());
+        assert_eq!(results.len(), 2);
     }
 
     #[test]
@@ -2242,23 +2615,15 @@ mod tests {
         let vector = vec![make_result("a", 0.9), make_result("b", 0.7)];
         let bm25 = vec![make_result("a", 5.0), make_result("c", 3.0)];
 
-        let results = fuse_results(
-            &vector,
-            &bm25,
-            &[],
-            HybridStrategy::Weighted,
-            0.3,
-            0.0,
-            None,
-            None,
-        );
+        let results = fuse_results(&vector, &bm25, &[], &weighted_config());
 
         // 3 unique UUIDs
         assert_eq!(results.len(), 3);
 
-        // "a" gets weighted: (1-0.3)*0.9 + 0.3*(5/5) = 0.63 + 0.3 = 0.93
+        // "a": vector=0.9 (no norm), bm25 norm min-max: (5-3)/(5-3)=1.0
+        // score = 0.7*0.9 + 0.3*1.0 = 0.63 + 0.3 = 0.93
         let a = results.iter().find(|r| r.uuid == "a").unwrap();
-        assert!((a.score - 0.93).abs() < 0.01);
+        assert!((a.score - 0.93).abs() < 0.02, "expected ~0.93, got {}", a.score);
 
         // Results should be sorted by score descending
         for w in results.windows(2) {
@@ -2303,7 +2668,7 @@ mod tests {
         assert!(response.results.is_empty()); // MockConnection → empty
         assert_eq!(response.meta.query, "hello world");
         assert_eq!(response.meta.kb, "main");
-        assert_eq!(response.meta.search_type, SearchType::Hybrid);
+        assert_eq!(response.meta.signals, SearchSignals::HYBRID);
         assert_eq!(response.meta.vector_count, 0);
         assert_eq!(response.meta.bm25_count, 0);
         assert_eq!(response.meta.fused_count, 0);
@@ -2345,17 +2710,9 @@ mod tests {
         let bm25 = vec![make_result("b", 5.0), make_result("c", 3.0)];
         let sparse = vec![make_result("c", 0.8), make_result("a", 0.4)];
 
-        let results = fuse_results(
-            &vector, &bm25, &sparse,
-            HybridStrategy::RRF, 0.3, 0.2, None, Some(60.0),
-        );
+        let results = fuse_results(&vector, &bm25, &sparse, &rrf_config());
 
-        // All 3 uuids present
         assert_eq!(results.len(), 3);
-        // "a" in vector(rank1) + sparse(rank2) => high RRF
-        // "b" in vector(rank2) + bm25(rank1) => high RRF
-        // "c" in bm25(rank2) + sparse(rank1) => high RRF
-        // All 3 appear in 2 lists each
         assert!(results[0].score > 0.0);
     }
 
@@ -2365,43 +2722,83 @@ mod tests {
         let bm25 = vec![make_result("a", 4.0)];
         let sparse = vec![make_result("a", 2.0)];
 
-        // kw=0.3, sw=0.2 => vw=0.5
-        let results = fuse_results(
-            &vector, &bm25, &sparse,
-            HybridStrategy::Weighted, 0.3, 0.2, None, None,
-        );
+        // vector=0.5 (none norm), bm25=0.3 (minmax), sparse=0.2 (minmax)
+        let config = FusionConfig {
+            strategy: FusionStrategy::Weighted,
+            rrf_k: 60.0,
+            vector: SignalConfig { weight: 0.5, normalize: Some(NormalizeMode::None), ..SignalConfig::default() },
+            bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
+            sparse: SignalConfig { weight: 0.2, ..SignalConfig::default() },
+        };
+        let results = fuse_results(&vector, &bm25, &sparse, &config);
 
         assert_eq!(results.len(), 1);
-        // 0.5*0.9 + 0.3*(4/4) + 0.2*(2/2) = 0.45 + 0.3 + 0.2 = 0.95
-        assert!((results[0].score - 0.95).abs() < 0.01);
+        // Single doc: minmax of a single value = 0 range → normalized to 1.0
+        // 0.5*0.9 + 0.3*1.0 + 0.2*1.0 = 0.45 + 0.3 + 0.2 = 0.95
+        assert!((results[0].score - 0.95).abs() < 0.01, "expected ~0.95, got {}", results[0].score);
     }
 
     #[test]
-    fn fuse_boost_with_sparse_falls_back_to_rrf() {
+    fn fuse_sparse_as_boost() {
         let vector = vec![make_result("a", 0.9)];
         let bm25 = vec![make_result("b", 5.0)];
-        let sparse = vec![make_result("c", 0.8)];
+        let sparse = vec![make_result("a", 0.8), make_result("b", 0.3)];
 
-        let results = fuse_results(
-            &vector, &bm25, &sparse,
-            HybridStrategy::Boost, 0.3, 0.2, Some(0.3), None,
-        );
+        let config = FusionConfig {
+            strategy: FusionStrategy::Rrf,
+            rrf_k: 60.0,
+            vector: SignalConfig { weight: 0.7, ..SignalConfig::default() },
+            bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
+            sparse: SignalConfig {
+                weight: 0.2,
+                role: SignalRole::Boost,
+                boost_type: BoostType::Multiplicative,
+                ..SignalConfig::default()
+            },
+        };
+        let results = fuse_results(&vector, &bm25, &sparse, &config);
 
-        // Boost + sparse => fallback RRF, all 3 present
-        assert_eq!(results.len(), 3);
-        assert!(results[0].score > 0.0);
+        // "a" and "b" from fuse, sparse boosts them
+        assert_eq!(results.len(), 2);
+        let a = results.iter().find(|r| r.uuid == "a").unwrap();
+        let b = results.iter().find(|r| r.uuid == "b").unwrap();
+        // "a" has sparse boost (normalized 1.0), "b" has sparse boost (normalized ~0.0 via minmax with min=0.3, max=0.8)
+        assert!(a.score > 0.0);
+        assert!(b.score > 0.0);
     }
 
     #[test]
     fn fuse_sparse_only() {
         let sparse = vec![make_result("x", 0.7), make_result("y", 0.3)];
-        let results = fuse_results(
-            &[], &[], &sparse,
-            HybridStrategy::RRF, 0.3, 0.2, None, None,
-        );
+        let results = fuse_results(&[], &[], &sparse, &rrf_config());
 
         // Single source => returned directly
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].uuid, "x");
+    }
+
+    #[test]
+    fn fuse_boost_additive() {
+        let vector = vec![make_result("a", 0.8), make_result("b", 0.5)];
+        let bm25 = vec![make_result("a", 10.0), make_result("b", 2.0)];
+
+        let config = FusionConfig {
+            strategy: FusionStrategy::Rrf,
+            rrf_k: 60.0,
+            vector: SignalConfig { weight: 1.0, ..SignalConfig::default() },
+            bm25: SignalConfig {
+                weight: 0.5,
+                role: SignalRole::Boost,
+                boost_type: BoostType::Additive,
+                ..SignalConfig::default()
+            },
+            sparse: SignalConfig::default(),
+        };
+        let results = fuse_results(&vector, &bm25, &[], &config);
+
+        let a = results.iter().find(|r| r.uuid == "a").unwrap();
+        let b = results.iter().find(|r| r.uuid == "b").unwrap();
+        // "a" has higher bm25 normalized → gets more additive boost
+        assert!(a.score > b.score);
     }
 }

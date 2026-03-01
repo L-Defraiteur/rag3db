@@ -147,20 +147,6 @@ pub struct RelationDef {
 
 // ─── Search & KB Config ─────────────────────────────────────────────────────
 
-/// Search mode for a knowledge base.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SearchMode {
-    Hybrid,
-    Semantic,
-    Fulltext,
-}
-
-impl Default for SearchMode {
-    fn default() -> Self {
-        Self::Hybrid
-    }
-}
 
 /// Chunking strategy.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -206,11 +192,30 @@ impl Default for ChunkingConfig {
 }
 
 /// Knowledge base configuration.
+///
+/// JSON examples:
+/// - `{ "signals": ["bm25", "vector", "sparse"] }`
+/// - `{ "signals": ["bm25", "vector"], "signalConfigs": { "bm25": { "weight": 0.3, "role": "boost" } } }`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct KBConfig {
-    pub search: SearchMode,
+    /// Active search signals: `["bm25", "vector", "sparse"]`.
+    pub signals: crate::search::SearchSignals,
 
+    /// Per-signal config (weights, roles, boost types).
+    /// Each value is a number (= weight) or an object (full config).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal_configs: Option<HashMap<String, crate::search::SignalConfig>>,
+
+    /// Fusion strategy for "fuse" signals (default: rrf).
+    #[serde(default)]
+    pub fusion_strategy: crate::search::FusionStrategy,
+
+    /// RRF k parameter (default: 60.0).
+    #[serde(default = "default_rrf_k")]
+    pub rrf_k: f64,
+
+    /// BM25 weight in fusion (used when signal_configs is absent).
     #[serde(alias = "keyword_weight")]
     pub keyword_weight: f64,
 
@@ -225,29 +230,57 @@ pub struct KBConfig {
     #[serde(default, alias = "special_ops")]
     pub special_ops: Option<HashMap<String, serde_json::Value>>,
 
-    /// Enable sparse vector indexing for this KB.
-    #[serde(default)]
-    pub sparse: bool,
-
-    /// Weight of sparse signal in 3-way weighted fusion (0.0–1.0).
+    /// Sparse weight in fusion (used when signal_configs is absent).
     #[serde(default = "default_sparse_weight", alias = "sparse_weight")]
     pub sparse_weight: f64,
 }
 
-fn default_sparse_weight() -> f64 {
-    0.2
+fn default_sparse_weight() -> f64 { 0.2 }
+fn default_rrf_k() -> f64 { 60.0 }
+
+impl KBConfig {
+    /// Build a [`FusionConfig`](crate::search::FusionConfig) from this KB config.
+    ///
+    /// If `signal_configs` is present, use it directly.
+    /// Otherwise, derive from `keyword_weight` / `sparse_weight`.
+    pub fn fusion_config(&self) -> crate::search::FusionConfig {
+        use crate::search::{FusionConfig, SignalConfig};
+        if let Some(ref configs) = self.signal_configs {
+            let get = |name: &str| configs.get(name).copied().unwrap_or_default();
+            FusionConfig {
+                strategy: self.fusion_strategy,
+                rrf_k: self.rrf_k,
+                bm25: get("bm25"),
+                vector: get("vector"),
+                sparse: get("sparse"),
+            }
+        } else {
+            let sparse_w = if self.signals.sparse() { self.sparse_weight } else { 0.0 };
+            let vector_w = (1.0 - self.keyword_weight - sparse_w).max(0.0);
+            FusionConfig {
+                strategy: self.fusion_strategy,
+                rrf_k: self.rrf_k,
+                bm25: SignalConfig { weight: self.keyword_weight, ..SignalConfig::default() },
+                vector: SignalConfig { weight: vector_w, ..SignalConfig::default() },
+                sparse: SignalConfig { weight: self.sparse_weight, ..SignalConfig::default() },
+            }
+        }
+    }
 }
 
 impl Default for KBConfig {
     fn default() -> Self {
+        use crate::search::SearchSignals;
         Self {
-            search: SearchMode::Hybrid,
+            signals: SearchSignals::HYBRID,
+            signal_configs: None,
+            fusion_strategy: Default::default(),
+            rrf_k: default_rrf_k(),
             keyword_weight: 0.3,
             title_boost: 2.0,
             content_boost: 1.0,
             chunking: ChunkingConfig::default(),
             special_ops: None,
-            sparse: false,
             sparse_weight: default_sparse_weight(),
         }
     }
@@ -401,7 +434,7 @@ mod tests {
         );
 
         let kb = &config.knowledge_bases["main"];
-        assert_eq!(kb.search, SearchMode::Hybrid);
+        assert_eq!(kb.signals, crate::search::SearchSignals::HYBRID);
         assert_eq!(kb.keyword_weight, 0.4);
         assert_eq!(kb.chunking.max_size, 2000);
         assert_eq!(kb.chunking.overlap, 300);

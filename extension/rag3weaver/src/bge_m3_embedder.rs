@@ -30,7 +30,7 @@ use candle_nn::VarBuilder;
 use candle_transformers::models::xlm_roberta::{Config, XLMRobertaModel};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
-use crate::embedder::{EmbedError, Embedder, SparseEmbedder};
+use crate::embedder::{DualEmbedder, EmbedError, Embedder, SparseEmbedder};
 use crate::sparse_index::SparseVector;
 
 const DTYPE: DType = DType::F32;
@@ -200,21 +200,14 @@ impl BgeM3Embedder {
         Ok((hidden_states, input_ids_vecs, attention_mask_t))
     }
 
-    /// Dense embedding: CLS token + L2 normalize → Vec<f32> (1024 dims).
-    pub fn embed_dense_sync(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        if texts.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let (hidden_states, _, _) = self.forward_pass(texts)?;
-
-        // CLS token (position 0) → [batch, hidden_size]
+    /// Extract dense embeddings from pre-computed hidden states.
+    /// CLS token (position 0) + L2 normalize → Vec<f32> (1024 dims).
+    fn extract_dense(&self, hidden_states: &Tensor, batch_size: usize) -> Result<Vec<Vec<f32>>, EmbedError> {
         let cls = hidden_states
             .narrow(1, 0, 1)
             .and_then(|t| t.squeeze(1))
             .map_err(|e| EmbedError::ProviderError(format!("cls: {e}")))?;
 
-        // L2 normalize
         let norms = cls
             .sqr()
             .and_then(|s| s.sum_keepdim(1))
@@ -224,7 +217,6 @@ impl BgeM3Embedder {
             .broadcast_div(&norms)
             .map_err(|e| EmbedError::ProviderError(format!("normalize: {e}")))?;
 
-        let batch_size = texts.len();
         let mut results = Vec::with_capacity(batch_size);
         for i in 0..batch_size {
             let vec = normalized
@@ -233,31 +225,20 @@ impl BgeM3Embedder {
                 .map_err(|e| EmbedError::ProviderError(format!("extract: {e}")))?;
             results.push(vec);
         }
-
         Ok(results)
     }
 
-    /// Sparse embedding: W_lex(hidden) → ReLU → scatter by token_id (max) → SparseVector.
-    ///
-    /// Each dimension is an XLM-RoBERTa token_id (vocab ~250k). The weight is
-    /// the maximum activation of `ReLU(W_lex · h_i)` across all positions where
-    /// that token appears. Special tokens are excluded.
-    pub fn embed_sparse_sync(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
-        if texts.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let (hidden_states, input_ids_vecs, _) = self.forward_pass(texts)?;
-
-        // sparse_linear: [batch, seq, hidden_size] → [batch, seq, 1] → squeeze → [batch, seq]
+    /// Extract sparse embeddings from pre-computed hidden states.
+    /// W_lex(hidden) → ReLU → scatter by token_id (max) → SparseVector.
+    fn extract_sparse(&self, hidden_states: &Tensor, input_ids_vecs: &[Vec<u32>]) -> Result<Vec<SparseVector>, EmbedError> {
         let token_weights = self
             .sparse_linear
-            .forward(&hidden_states)
+            .forward(hidden_states)
             .and_then(|t| t.squeeze(2))
             .and_then(|t| t.relu())
             .map_err(|e| EmbedError::ProviderError(format!("sparse linear: {e}")))?;
 
-        let batch_size = texts.len();
+        let batch_size = input_ids_vecs.len();
         let mut results = Vec::with_capacity(batch_size);
 
         for i in 0..batch_size {
@@ -268,7 +249,6 @@ impl BgeM3Embedder {
 
             let ids = &input_ids_vecs[i];
 
-            // Scatter: token_id → max weight across all positions
             let mut token_max: HashMap<u32, f32> = HashMap::new();
             for (pos, &token_id) in ids.iter().enumerate() {
                 if token_id == CLS_TOKEN_ID
@@ -290,7 +270,6 @@ impl BgeM3Embedder {
                 }
             }
 
-            // Sort by token_id for consistent ordering
             let mut entries: Vec<(u32, f32)> = token_max.into_iter().collect();
             entries.sort_by_key(|(id, _)| *id);
 
@@ -301,6 +280,35 @@ impl BgeM3Embedder {
         }
 
         Ok(results)
+    }
+
+    /// Dense embedding: forward pass + CLS + L2 normalize.
+    pub fn embed_dense_sync(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+        let (hidden_states, _, _) = self.forward_pass(texts)?;
+        self.extract_dense(&hidden_states, texts.len())
+    }
+
+    /// Sparse embedding: forward pass + sparse_linear + ReLU + scatter.
+    pub fn embed_sparse_sync(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+        let (hidden_states, input_ids_vecs, _) = self.forward_pass(texts)?;
+        self.extract_sparse(&hidden_states, &input_ids_vecs)
+    }
+
+    /// Dual embedding: single forward pass → dense + sparse.
+    pub fn embed_dual_sync(&self, texts: &[String]) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
+        if texts.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+        let (hidden_states, input_ids_vecs, _) = self.forward_pass(texts)?;
+        let dense = self.extract_dense(&hidden_states, texts.len())?;
+        let sparse = self.extract_sparse(&hidden_states, &input_ids_vecs)?;
+        Ok((dense, sparse))
     }
 }
 
@@ -319,6 +327,20 @@ impl Embedder for BgeM3Embedder {
 impl SparseEmbedder for BgeM3Embedder {
     async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
         self.embed_sparse_sync(texts)
+    }
+}
+
+#[async_trait]
+impl DualEmbedder for BgeM3Embedder {
+    async fn embed_dual(
+        &self,
+        texts: &[String],
+    ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
+        self.embed_dual_sync(texts)
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
     }
 }
 
@@ -515,6 +537,33 @@ mod tests {
         let result = embedder.embed(&["test".into()]).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 1024);
+    }
+
+    #[cfg(feature = "bge-m3")]
+    #[tokio::test]
+    #[ignore]
+    async fn bge_m3_dual_matches_separate() {
+        let embedder = shared_embedder();
+        let texts = vec!["rust programming".into(), "cooking pasta".into()];
+
+        let (dual_dense, dual_sparse) = embedder.embed_dual(&texts).await.unwrap();
+        let sep_dense = embedder.embed(&texts).await.unwrap();
+        let sep_sparse = embedder.embed_sparse(&texts).await.unwrap();
+
+        // Dense results should be identical (same forward pass extraction)
+        for (i, (dd, sd)) in dual_dense.iter().zip(sep_dense.iter()).enumerate() {
+            for (a, b) in dd.iter().zip(sd.iter()) {
+                assert!((a - b).abs() < 1e-5, "dense mismatch at text {i}");
+            }
+        }
+
+        // Sparse results should be identical
+        for (i, (ds, ss)) in dual_sparse.iter().zip(sep_sparse.iter()).enumerate() {
+            assert_eq!(ds.indices, ss.indices, "sparse indices mismatch at text {i}");
+            for (a, b) in ds.values.iter().zip(ss.values.iter()) {
+                assert!((a - b).abs() < 1e-5, "sparse values mismatch at text {i}");
+            }
+        }
     }
 
     #[cfg(feature = "bge-m3")]

@@ -146,7 +146,7 @@ pub fn generate_node_table_ddl(
         // Sparse vector columns (if KB has sparse enabled)
         if kb_configs
             .get(kb_name.as_str())
-            .map(|c| c.sparse)
+            .map(|c| c.signals.sparse())
             .unwrap_or(false)
         {
             columns.push(format!("{kb_name}_sparse_indices INT64[]"));
@@ -203,7 +203,7 @@ pub fn generate_chunk_table_ddl(
 
         if kb_configs
             .get(kb_name.as_str())
-            .map(|c| c.sparse)
+            .map(|c| c.signals.sparse())
             .unwrap_or(false)
         {
             columns.push(format!("{kb_name}_sparse_indices INT64[]"));
@@ -654,8 +654,9 @@ mod tests {
         };
 
         let mut kb_configs = HashMap::new();
+        use crate::search::SearchSignals;
         let mut kb = KBConfig::default();
-        kb.sparse = true;
+        kb.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
         kb_configs.insert("main".to_string(), kb);
 
         let ddl = generate_node_table_ddl("Document", &entity, 384, &kb_configs).unwrap();
