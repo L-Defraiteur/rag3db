@@ -6,7 +6,7 @@ Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph da
 
 ### tantivy_fts — Full-Text Search
 
-Full-text search via [Tantivy](https://github.com/quickwit-oss/tantivy) (Rust fork, cxx bridge):
+Full-text search via [ld-tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of Tantivy v0.26.0, cxx bridge):
 
 ```cypher
 -- Create index (text fields + optional filter fields)
@@ -185,7 +185,7 @@ The **cxx** bridge (not extern C) provides typed Rust <-> C++ structs, zero JSON
 ## Provenance
 
 - **Kuzu**: [kuzudb/kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 (MIT License, see NOTICE)
-- **Tantivy**: [quickwit-oss/tantivy](https://github.com/quickwit-oss/tantivy) v0.26.0 (MIT License)
+- **Tantivy**: [L-Defraiteur/tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of v0.26.0, MIT License)
 
 ## License
 
