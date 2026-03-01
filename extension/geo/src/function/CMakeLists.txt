@@ -1,0 +1,31 @@
+add_library(rag3db_geo_function
+    OBJECT
+    geo_distance.cpp
+    geo_contains.cpp
+    geo_within_bbox.cpp
+    geo_distance_euclidean.cpp
+    geo_within_bbox_nd.cpp
+    geo_within_circle.cpp
+    geo_within_sphere.cpp
+    geo_quat_rotate.cpp
+    geo_quat_inverse.cpp
+    geo_quat_multiply.cpp
+    geo_quat_from_axis_angle.cpp
+    geo_quat_to_matrix.cpp
+    geo_matrix_rotate.cpp
+    geo_matrix_multiply.cpp
+    geo_matrix_transpose.cpp
+    geo_within_obb.cpp
+    geo_within_obb_matrix.cpp
+    geo_within_polygon_3d.cpp
+    geo_within_polygon_3d_matrix.cpp
+    geo_within_frustum.cpp
+    geo_within_convex.cpp
+    geo_frustum_from_camera.cpp
+    create_spatial_index.cpp
+    query_spatial_index.cpp
+    drop_spatial_index.cpp)
+
+set(GEO_EXTENSION_OBJECT_FILES
+    ${GEO_EXTENSION_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_geo_function>
+    PARENT_SCOPE)

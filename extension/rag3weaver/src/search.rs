@@ -652,6 +652,90 @@ pub async fn enrich_results_with_data(
     Ok(())
 }
 
+/// Resolve node offsets to UUIDs and fetch entity properties in one query.
+///
+/// Merges the offset→UUID resolution and data enrichment into a single
+/// `MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [...] RETURN _offset, _uuid, field1, ...`
+/// query. Returns `SearchResult` with `data` already populated.
+///
+/// When `return_fields` is empty, only `_offset` and `_uuid` are fetched.
+/// Prefer `resolve_and_enrich()` / `resolve_and_enrich_chunked()` / `resolve_vector_chunks()`
+/// for composed queries (Level 1+).
+pub async fn resolve_and_enrich(
+    conn: &dyn DbConnection,
+    entity: &str,
+    offsets_scores: &[(u64, f64)],
+    return_fields: &[String],
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if offsets_scores.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let offset_list = offsets_scores
+        .iter()
+        .map(|(o, _)| o.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut return_cols: Vec<String> = vec![
+        "OFFSET(id(n)) AS _offset".to_string(),
+        "n._uuid AS _uuid".to_string(),
+    ];
+    for f in return_fields {
+        return_cols.push(format!("n.{f} AS {f}"));
+    }
+    let return_clause = return_cols.join(", ");
+
+    let cypher = format!(
+        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] RETURN {return_clause}"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // Build offset → (uuid, data) map
+    let mut offset_map: HashMap<u64, (String, Option<BTreeMap<String, CypherValue>>)> =
+        HashMap::new();
+    for row in &result.rows {
+        let offset = match row.get(0).and_then(|v| v.as_i64()) {
+            Some(o) => o as u64,
+            None => continue,
+        };
+        let uuid = match row.get(1).and_then(|v| v.as_str()) {
+            Some(u) => u.to_string(),
+            None => continue,
+        };
+        let data = if !return_fields.is_empty() {
+            let mut map = BTreeMap::new();
+            for (i, field) in return_fields.iter().enumerate() {
+                if let Some(val) = row.get(i + 2) {
+                    map.insert(field.clone(), val.clone());
+                }
+            }
+            Some(map)
+        } else {
+            None
+        };
+        offset_map.insert(offset, (uuid, data));
+    }
+
+    // Build results preserving original score order
+    Ok(offsets_scores
+        .iter()
+        .filter_map(|(offset, score)| {
+            let (uuid, data) = offset_map.get(offset)?;
+            Some(SearchResult {
+                uuid: uuid.clone(),
+                score: *score,
+                entity: Some(entity.to_string()),
+                data: data.clone(),
+                chunk: None,
+            })
+        })
+        .collect())
+}
+
 /// Brute-force vector scan with `array_cosine_similarity`. O(N).
 ///
 /// Legacy fallback — kept for environments where the HNSW vector extension
