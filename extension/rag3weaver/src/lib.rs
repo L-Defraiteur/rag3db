@@ -48,7 +48,7 @@ pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use ops::{CatalogOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, OperationConfig, RefOrUuid, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
 pub use persistence::{OperationPersistence, PersistedOp};
 pub use query::{PreparedQuery, QueryBuilder};
-pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueStats};
+pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueEvent, QueueStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;

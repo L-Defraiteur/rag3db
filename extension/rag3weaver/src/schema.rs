@@ -164,7 +164,7 @@ pub fn generate_node_table_ddl(
 
 /// Generate CREATE NODE TABLE for chunk storage.
 ///
-/// Created for entities that have at least one `chunked: true` field.
+/// Created for entities that have at least one `content_for` field.
 /// Tracks parent, text, offsets (char + line), and per-KB embedding columns
 /// (same naming convention as entity tables: `{kb}_embedding`, `{kb}_sparse_*`).
 pub fn generate_chunk_table_ddl(
@@ -334,9 +334,9 @@ pub fn generate_insert_cypher(table: &str, columns: &[&str]) -> String {
     format!("CREATE (:{table} {{{props}}})")
 }
 
-/// Returns true if the entity has at least one field with `chunked: true`.
+/// Returns true if the entity has at least one field that is content for a KB (i.e. chunked).
 pub fn entity_has_chunks(entity_def: &EntityDef) -> bool {
-    entity_def.fields.values().any(|f| f.chunked)
+    entity_def.fields.values().any(|f| f.is_chunked())
 }
 
 /// Generate all DDL statements for a complete catalog schema.
@@ -471,7 +471,7 @@ mod tests {
             field_type: ft,
             title_for: None,
             content_for: None,
-            chunked: false,
+
             boost: None,
             default_value: None,
         }
@@ -483,7 +483,7 @@ mod tests {
             title_for: title_for.map(|s| s.to_string()),
             content_for: content_for
                 .map(|v| v.into_iter().map(|s| s.to_string()).collect()),
-            chunked: false,
+
             boost: None,
             default_value: None,
         }
@@ -494,7 +494,7 @@ mod tests {
             field_type: FieldType::Text,
             title_for: None,
             content_for: Some(vec![content_for.to_string()]),
-            chunked: true,
+
             boost: None,
             default_value: None,
         }
@@ -1017,6 +1017,107 @@ mod tests {
             knowledge_bases,
             embedding_dim: 384,
             ..Default::default()
+        }
+    }
+
+    /// Reproduce the exact WASM test config to see what DDL is generated.
+    #[test]
+    fn wasm_test_config_ddl() {
+        let mut fields = HashMap::new();
+        fields.insert(
+            "title".to_string(),
+            make_text_field(Some("main"), None),
+        );
+        fields.insert("body".to_string(), make_field(FieldType::Text));
+
+        let mut entities = HashMap::new();
+        entities.insert(
+            "Document".to_string(),
+            EntityDef {
+                fields,
+                hashsafe: None,
+            },
+        );
+
+        let mut relations = HashMap::new();
+        relations.insert(
+            "REFERENCES".to_string(),
+            RelationDef {
+                from: "Document".to_string(),
+                to: "Document".to_string(),
+                properties: None,
+            },
+        );
+
+        let mut knowledge_bases = HashMap::new();
+        knowledge_bases.insert("main".to_string(), KBConfig::default());
+
+        let config = CatalogConfig {
+            name: Some("test-weaver".to_string()),
+            entities,
+            relations,
+            knowledge_bases,
+            embedding_dim: 4,
+            ..Default::default()
+        };
+
+        let schema = generate_full_schema(&config).unwrap();
+
+        // FTS should only have 'title' (body is Text but not titleFor or contentFor)
+        let fts = schema
+            .indexes
+            .iter()
+            .find(|s| s.contains("CREATE_TANTIVY_INDEX"));
+
+        // body is Text → NOT in filter_fields
+        if let Some(fts_ddl) = fts {
+            assert!(
+                !fts_ddl.contains("filter_fields"),
+                "should NOT have filter_fields (both fields are Text): {fts_ddl}"
+            );
+        }
+    }
+
+    /// Regression test: JS-style JSON config (camelCase keys, PascalCase values)
+    /// must produce the same DDL as Rust-constructed config.
+    /// This was the root cause of the Tantivy "Field already exists" panic.
+    #[test]
+    fn wasm_test_config_ddl_from_json() {
+        let json_str = r#"{
+            "name": "test-weaver",
+            "entities": {
+                "Document": {
+                    "fields": {
+                        "title": { "fieldType": "Text", "titleFor": "main" },
+                        "body": { "fieldType": "Text" }
+                    }
+                }
+            },
+            "relations": {
+                "REFERENCES": { "from": "Document", "to": "Document" }
+            },
+            "knowledgeBases": { "main": {} },
+            "embeddingDim": 4
+        }"#;
+
+        let config: CatalogConfig = serde_json::from_str(json_str).unwrap();
+
+        // Both fields must be Text
+        let doc = &config.entities["Document"];
+        assert_eq!(doc.fields["title"].field_type, FieldType::Text);
+        assert_eq!(doc.fields["body"].field_type, FieldType::Text);
+
+        let schema = generate_full_schema(&config).unwrap();
+        let fts = schema
+            .indexes
+            .iter()
+            .find(|s| s.contains("CREATE_TANTIVY_INDEX"));
+
+        if let Some(fts_ddl) = fts {
+            assert!(
+                !fts_ddl.contains("filter_fields"),
+                "should NOT have filter_fields (both fields are Text): {fts_ddl}"
+            );
         }
     }
 }

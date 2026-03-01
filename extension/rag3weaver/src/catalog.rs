@@ -5,7 +5,7 @@
 //! synchronous `create()`/`link()` methods that enqueue operations, and async
 //! `drain()` to process them.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
@@ -19,7 +19,7 @@ use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
 use crate::ops::{CatalogOp, ChunkOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
-use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueSender, QueueStats};
+use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueEvent, QueueSender, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher};
 use crate::sparse_index::SparseVector;
@@ -301,7 +301,7 @@ impl Catalog {
     pub fn create(
         &mut self,
         entity_name: &str,
-        data: HashMap<String, CypherValue>,
+        data: BTreeMap<String, CypherValue>,
     ) -> Result<EntityRef, CatalogError> {
         self.check_initialized()?;
         let entity_def = self.check_entity(entity_name)?;
@@ -355,7 +355,7 @@ impl Catalog {
         rel_name: &str,
         from: impl Into<RefOrUuid>,
         to: impl Into<RefOrUuid>,
-        properties: HashMap<String, CypherValue>,
+        properties: BTreeMap<String, CypherValue>,
     ) -> Result<RelationRef, CatalogError> {
         self.check_initialized()?;
 
@@ -384,7 +384,7 @@ impl Catalog {
         &self,
         entity_name: &str,
         uuid: &str,
-    ) -> Result<Option<HashMap<String, CypherValue>>, CatalogError> {
+    ) -> Result<Option<BTreeMap<String, CypherValue>>, CatalogError> {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
@@ -407,7 +407,7 @@ impl Catalog {
         &self,
         entity_name: &str,
         uuids: &[String],
-    ) -> Result<Vec<HashMap<String, CypherValue>>, CatalogError> {
+    ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
@@ -495,7 +495,7 @@ impl Catalog {
         &mut self,
         entity_name: &str,
         uuid: &str,
-        data: HashMap<String, CypherValue>,
+        data: BTreeMap<String, CypherValue>,
     ) -> Result<UpdateResult, CatalogError> {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
@@ -747,10 +747,25 @@ impl Catalog {
         self.queue.stats()
     }
 
+    /// Direct access to the underlying connection (useful for debugging/tests).
+    pub fn conn(&self) -> &dyn DbConnection {
+        self.conn.as_ref()
+    }
+
+    /// Execute raw Cypher (useful for debugging/tests).
+    pub async fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.conn.execute(cypher).await.map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
     // ── Event bus ──────────────────────────────────────────────────────
 
     pub fn subscribe(&self) -> async_broadcast::Receiver<CatalogEvent> {
         self.event_bus.subscribe()
+    }
+
+    /// Subscribe to queue-level events (enqueue, processing, completed, injected).
+    pub fn subscribe_queue(&self) -> async_broadcast::Receiver<QueueEvent> {
+        self.queue.subscribe()
     }
 
     // ── Node ID cache ─────────────────────────────────────────────────
@@ -822,6 +837,14 @@ impl Catalog {
 
         let search_limit = (options.limit + options.offset) * 2;
         let entity = kb.title.entity.clone();
+        // Vector search targets the chunk table when the entity has chunked fields
+        let vector_entity = if self.config.entities.get(&entity)
+            .map(|e| entity_has_chunks(e)).unwrap_or(false)
+        {
+            format!("{entity}_Chunk")
+        } else {
+            entity.clone()
+        };
         let keyword_weight = options.keyword_weight.unwrap_or(kb.keyword_weight);
 
         // Collect text fields for BM25 search (title + content fields for this entity)
@@ -931,12 +954,16 @@ impl Catalog {
             search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)
                 .await?;
 
+        // Detect chunked entity early (used for BM25 → chunk resolution)
+        let is_chunked = self.config.entities.get(&entity)
+            .map(|e| entity_has_chunks(e)).unwrap_or(false);
+
         // Run searches based on mode
         let (vector_results, bm25_results) = match search_type {
             search::SearchType::Hybrid => {
                 let vr = search::search_vector(
                     self.conn.as_ref(),
-                    &entity,
+                    &vector_entity,
                     kb_name,
                     &embedding,
                     search_limit,
@@ -945,24 +972,28 @@ impl Catalog {
                     filter_match.as_deref(),
                 )
                 .await?;
-                let br = search::search_bm25(
-                    self.conn.as_ref(),
-                    &entity,
-                    query,
-                    &bm25_fields,
-                    options.bm25_mode,
-                    options.fuzzy_distance,
-                    search_limit,
-                    tantivy_filters.as_deref(),
-                    allowed_ids.as_deref(),
-                )
-                .await?;
+                let br = if is_chunked {
+                    let hits = search::search_bm25_raw(
+                        self.conn.as_ref(), &entity, query, &bm25_fields,
+                        options.bm25_mode, options.fuzzy_distance, search_limit,
+                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    ).await?;
+                    search::resolve_bm25_to_chunks(
+                        self.conn.as_ref(), &vector_entity, &entity, hits,
+                    ).await?
+                } else {
+                    search::search_bm25(
+                        self.conn.as_ref(), &entity, query, &bm25_fields,
+                        options.bm25_mode, options.fuzzy_distance, search_limit,
+                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    ).await?
+                };
                 (vr, br)
             }
             search::SearchType::Semantic => {
                 let vr = search::search_vector(
                     self.conn.as_ref(),
-                    &entity,
+                    &vector_entity,
                     kb_name,
                     &embedding,
                     search_limit,
@@ -974,18 +1005,22 @@ impl Catalog {
                 (vr, vec![])
             }
             search::SearchType::BM25Only => {
-                let br = search::search_bm25(
-                    self.conn.as_ref(),
-                    &entity,
-                    query,
-                    &bm25_fields,
-                    options.bm25_mode,
-                    options.fuzzy_distance,
-                    search_limit,
-                    tantivy_filters.as_deref(),
-                    allowed_ids.as_deref(),
-                )
-                .await?;
+                let br = if is_chunked {
+                    let hits = search::search_bm25_raw(
+                        self.conn.as_ref(), &entity, query, &bm25_fields,
+                        options.bm25_mode, options.fuzzy_distance, search_limit,
+                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    ).await?;
+                    search::resolve_bm25_to_chunks(
+                        self.conn.as_ref(), &vector_entity, &entity, hits,
+                    ).await?
+                } else {
+                    search::search_bm25(
+                        self.conn.as_ref(), &entity, query, &bm25_fields,
+                        options.bm25_mode, options.fuzzy_distance, search_limit,
+                        tantivy_filters.as_deref(), allowed_ids.as_deref(),
+                    ).await?
+                };
                 (vec![], br)
             }
         };
@@ -1009,7 +1044,7 @@ impl Catalog {
                 if let Some(qv) = query_vecs.into_iter().next() {
                     search::search_sparse_cypher(
                         self.conn.as_ref(),
-                        &entity,
+                        &vector_entity,
                         &qv,
                         search_limit,
                     )
@@ -1028,6 +1063,18 @@ impl Catalog {
         let sparse_weight = options
             .sparse_weight
             .unwrap_or(kb_config.sparse_weight);
+
+        // Resolve chunk-level results to parent-level with ChunkInfo
+        let vector_results = if is_chunked && !vector_results.is_empty() {
+            search::resolve_chunk_results(
+                self.conn.as_ref(), &vector_entity, &entity, vector_results,
+            ).await?
+        } else { vector_results };
+        let sparse_results = if is_chunked && !sparse_results.is_empty() {
+            search::resolve_chunk_results(
+                self.conn.as_ref(), &vector_entity, &entity, sparse_results,
+            ).await?
+        } else { sparse_results };
 
         let mut fused = search::fuse_results(
             &vector_results,
@@ -1050,6 +1097,14 @@ impl Catalog {
             }
         }
         fused.truncate(options.limit);
+
+        // Enrich results with parent entity data
+        let enrich_fields: Vec<String> = self.config.entities.get(&entity)
+            .map(|e| e.fields.keys().cloned().collect())
+            .unwrap_or_default();
+        search::enrich_results_with_data(
+            self.conn.as_ref(), &entity, &enrich_fields, &mut fused,
+        ).await?;
 
         self.event_bus.emit(CatalogEvent::SearchCompleted {
             kb: kb_name.to_string(),
@@ -1093,7 +1148,7 @@ impl Catalog {
                 label: r.uuid.clone(),
                 depth: 0,
                 is_search_result: true,
-                data: HashMap::new(),
+                data: BTreeMap::new(),
             })
             .collect();
 
@@ -1134,7 +1189,7 @@ impl Catalog {
     fn build_content_text(
         &self,
         entity_name: &str,
-        data: &HashMap<String, CypherValue>,
+        data: &BTreeMap<String, CypherValue>,
     ) -> String {
         let entity_def = match self.config.entities.get(entity_name) {
             Some(def) => def,
@@ -1176,7 +1231,7 @@ impl Catalog {
         entity_name: &str,
         parent_uuid: &str,
         entity_ref: &EntityRef,
-        data: &HashMap<String, CypherValue>,
+        data: &BTreeMap<String, CypherValue>,
     ) -> Option<CatalogOp> {
         let entity_def = self.config.entities.get(entity_name)?;
         if !entity_has_chunks(entity_def) {
@@ -1198,8 +1253,8 @@ impl Catalog {
         &self,
         columns: &[String],
         row: &[CypherValue],
-    ) -> HashMap<String, CypherValue> {
-        let mut data = HashMap::new();
+    ) -> BTreeMap<String, CypherValue> {
+        let mut data = BTreeMap::new();
         for (i, col) in columns.iter().enumerate() {
             if i < row.len() {
                 data.insert(col.clone(), row[i].clone());
@@ -1217,7 +1272,7 @@ fn compute_chunk_ops(
     entity_name: &str,
     parent_uuid: &str,
     entity_ref: &EntityRef,
-    data: &HashMap<String, CypherValue>,
+    data: &BTreeMap<String, CypherValue>,
     config: &CatalogConfig,
     kb_metadata: &HashMap<String, KBMetadata>,
     chunker_cache: &HashMap<ChunkerConfig, Chunker>,
@@ -1279,7 +1334,7 @@ fn compute_chunk_ops(
                 Some(fd) => fd,
                 None => continue,
             };
-            if !field_def.chunked {
+            if !field_def.is_chunked() {
                 continue;
             }
 
@@ -1304,7 +1359,7 @@ fn compute_chunk_ops(
                     None => chunk.text.clone(),
                 };
 
-                let mut chunk_data = HashMap::new();
+                let mut chunk_data = BTreeMap::new();
                 chunk_data.insert("_uuid".to_string(), CypherValue::String(c_uuid.clone()));
                 chunk_data.insert("_parent_uuid".to_string(), CypherValue::String(parent_uuid.to_string()));
                 chunk_data.insert("_parent_field".to_string(), CypherValue::String(field_name.clone()));
@@ -1335,7 +1390,7 @@ fn compute_chunk_ops(
                     rel_name.clone(),
                     RefOrUuid::Ref(entity_ref.clone()),
                     RefOrUuid::Uuid(c_uuid.clone()),
-                    HashMap::new(),
+                    BTreeMap::new(),
                     link_resolver,
                     link_ref,
                 )));
@@ -1624,7 +1679,7 @@ impl Processor for EmbedProcessor {
                 group
                     .iter()
                     .map(|(work, vec)| {
-                        let mut map = HashMap::new();
+                        let mut map = BTreeMap::new();
                         map.insert(
                             "uuid".to_string(),
                             CypherValue::String(work.uuid.clone()),
@@ -1739,7 +1794,7 @@ impl Processor for SparseEmbedProcessor {
                 group
                     .iter()
                     .map(|(work, sv)| {
-                        let mut map = HashMap::new();
+                        let mut map = BTreeMap::new();
                         map.insert(
                             "uuid".to_string(),
                             CypherValue::String(work.uuid.clone()),
@@ -1808,7 +1863,7 @@ mod tests {
                 field_type: FieldType::Text,
                 title_for: Some("main".to_string()),
                 content_for: None,
-                chunked: false,
+
                 boost: Some(2.0),
                 default_value: None,
             },
@@ -1819,7 +1874,7 @@ mod tests {
                 field_type: FieldType::Text,
                 title_for: None,
                 content_for: Some(vec!["main".to_string()]),
-                chunked: true,
+
                 boost: None,
                 default_value: None,
             },
@@ -1830,7 +1885,7 @@ mod tests {
                 field_type: FieldType::Int64,
                 title_for: None,
                 content_for: None,
-                chunked: false,
+
                 boost: None,
                 default_value: None,
             },
@@ -1876,8 +1931,8 @@ mod tests {
         )
     }
 
-    fn make_doc_data(title: &str, body: &str) -> HashMap<String, CypherValue> {
-        let mut data = HashMap::new();
+    fn make_doc_data(title: &str, body: &str) -> BTreeMap<String, CypherValue> {
+        let mut data = BTreeMap::new();
         data.insert("title".to_string(), CypherValue::String(title.to_string()));
         data.insert("body".to_string(), CypherValue::String(body.to_string()));
         data.insert("page_count".to_string(), CypherValue::Int(42));
@@ -1929,7 +1984,7 @@ mod tests {
                 field_type: FieldType::Text,
                 title_for: None,
                 content_for: Some(vec!["orphan_kb".to_string()]),
-                chunked: false,
+
                 boost: None,
                 default_value: None,
             },
@@ -1963,7 +2018,7 @@ mod tests {
     #[test]
     fn create_before_init_errors() {
         let mut catalog = make_catalog();
-        let err = catalog.create("Document", HashMap::new()).unwrap_err();
+        let err = catalog.create("Document", BTreeMap::new()).unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
@@ -1971,7 +2026,7 @@ mod tests {
     fn link_before_init_errors() {
         let mut catalog = make_catalog();
         let err = catalog
-            .link("REFERENCES", "a", "b", HashMap::new())
+            .link("REFERENCES", "a", "b", BTreeMap::new())
             .unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
@@ -2002,7 +2057,7 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().await.unwrap();
 
-        let err = catalog.create("Ghost", HashMap::new()).unwrap_err();
+        let err = catalog.create("Ghost", BTreeMap::new()).unwrap_err();
         assert!(matches!(err, CatalogError::UnknownEntity(ref s) if s == "Ghost"));
     }
 
@@ -2050,7 +2105,7 @@ mod tests {
         catalog.initialize().await.unwrap();
 
         let rel_ref = catalog
-            .link("REFERENCES", "uuid-a", "uuid-b", HashMap::new())
+            .link("REFERENCES", "uuid-a", "uuid-b", BTreeMap::new())
             .unwrap();
 
         assert_eq!(rel_ref.relation(), "REFERENCES");
@@ -2063,7 +2118,7 @@ mod tests {
         catalog.initialize().await.unwrap();
 
         let err = catalog
-            .link("GHOST_REL", "a", "b", HashMap::new())
+            .link("GHOST_REL", "a", "b", BTreeMap::new())
             .unwrap_err();
         assert!(matches!(err, CatalogError::UnknownRelation(ref s) if s == "GHOST_REL"));
     }
@@ -2108,7 +2163,7 @@ mod tests {
                 "REFERENCES",
                 ref1.clone(),
                 ref2.clone(),
-                HashMap::new(),
+                BTreeMap::new(),
             )
             .unwrap();
 

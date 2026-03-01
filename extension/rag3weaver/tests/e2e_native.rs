@@ -14,7 +14,7 @@
 
 #![cfg(feature = "rag3db-native")]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use rag3weaver::config::{EntityDef, FieldDef, FieldType, RelationDef};
 use rag3weaver::connection::CypherValue;
@@ -28,7 +28,7 @@ fn make_field(ft: FieldType) -> FieldDef {
         field_type: ft,
         title_for: None,
         content_for: None,
-        chunked: false,
+
         boost: None,
         default_value: None,
     }
@@ -81,16 +81,16 @@ fn make_basic_config() -> CatalogConfig {
     }
 }
 
-fn make_doc(title: &str, body: &str, page_count: i64) -> HashMap<String, CypherValue> {
-    let mut data = HashMap::new();
+fn make_doc(title: &str, body: &str, page_count: i64) -> BTreeMap<String, CypherValue> {
+    let mut data = BTreeMap::new();
     data.insert("title".to_string(), CypherValue::String(title.to_string()));
     data.insert("body".to_string(), CypherValue::String(body.to_string()));
     data.insert("page_count".to_string(), CypherValue::Int(page_count));
     data
 }
 
-fn make_author(name: &str) -> HashMap<String, CypherValue> {
-    let mut data = HashMap::new();
+fn make_author(name: &str) -> BTreeMap<String, CypherValue> {
+    let mut data = BTreeMap::new();
     data.insert("name".to_string(), CypherValue::String(name.to_string()));
     data
 }
@@ -107,7 +107,7 @@ fn make_catalog() -> Catalog {
 /// Extract a property from the node map returned by catalog.get().
 /// catalog.get() returns {"n": Map({_label, _id, ...properties})}
 fn get_node_prop<'a>(
-    data: &'a HashMap<String, CypherValue>,
+    data: &'a BTreeMap<String, CypherValue>,
     prop: &str,
 ) -> Option<&'a CypherValue> {
     match data.get("n") {
@@ -274,7 +274,7 @@ async fn e2e_create_link_drain() {
             "WRITTEN_BY",
             doc_ref.clone(),
             author_ref.clone(),
-            HashMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -313,7 +313,7 @@ async fn e2e_update_document() {
     let uuid = entity_ref.uuid().unwrap();
 
     // Update body and page_count
-    let mut new_data = HashMap::new();
+    let mut new_data = BTreeMap::new();
     new_data.insert(
         "body".to_string(),
         CypherValue::String("Updated body content".to_string()),
@@ -467,7 +467,7 @@ async fn e2e_full_pipeline() {
     );
 
     // Update a document
-    let mut update = HashMap::new();
+    let mut update = BTreeMap::new();
     update.insert("page_count".to_string(), CypherValue::Int(55));
     catalog
         .update("Document", &doc1.uuid().unwrap(), update)
@@ -502,7 +502,7 @@ async fn e2e_update_not_found() {
     let mut catalog = make_catalog();
     catalog.initialize().await.unwrap();
 
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("title".to_string(), CypherValue::String("x".to_string()));
 
     let err = catalog

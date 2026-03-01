@@ -13,18 +13,27 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
+    #[serde(alias = "String")]
     String,
+    #[serde(alias = "Text")]
     Text,
+    #[serde(alias = "Int64")]
     Int64,
-    #[serde(alias = "integer")]
+    #[serde(alias = "integer", alias = "Integer")]
     Integer,
+    #[serde(alias = "Double")]
     Double,
-    #[serde(alias = "number")]
+    #[serde(alias = "number", alias = "Number")]
     Number,
+    #[serde(alias = "Boolean")]
     Boolean,
+    #[serde(alias = "Timestamp")]
     Timestamp,
+    #[serde(alias = "Json", alias = "JSON")]
     Json,
+    #[serde(alias = "Tags")]
     Tags,
+    #[serde(alias = "Choice")]
     Choice,
 }
 
@@ -40,7 +49,7 @@ impl Default for FieldType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldDef {
-    #[serde(default, rename = "type", alias = "field_type")]
+    #[serde(default, rename = "type", alias = "field_type", alias = "fieldType")]
     pub field_type: FieldType,
 
     #[serde(default, alias = "title_for")]
@@ -53,14 +62,18 @@ pub struct FieldDef {
     )]
     pub content_for: Option<Vec<String>>,
 
-    #[serde(default, alias = "chunk")]
-    pub chunked: bool,
-
     #[serde(default)]
     pub boost: Option<f64>,
 
     #[serde(default, rename = "default", alias = "default_value")]
     pub default_value: Option<serde_json::Value>,
+}
+
+impl FieldDef {
+    /// A field is chunked if it is content for at least one knowledge base.
+    pub fn is_chunked(&self) -> bool {
+        self.content_for.is_some()
+    }
 }
 
 fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
@@ -170,8 +183,6 @@ impl Default for ChunkStrategy {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ChunkingConfig {
-    pub enabled: bool,
-
     #[serde(alias = "max_size")]
     pub max_size: usize,
 
@@ -186,7 +197,6 @@ pub struct ChunkingConfig {
 impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             max_size: 1500,
             overlap: 200,
             strategy: ChunkStrategy::Semantic,
@@ -352,7 +362,7 @@ mod tests {
                 "Document": {
                     "fields": {
                         "title": { "type": "text", "titleFor": "main", "boost": 2.0 },
-                        "body": { "type": "text", "contentFor": "main", "chunked": true },
+                        "body": { "type": "text", "contentFor": "main" },
                         "page_count": { "type": "int64" }
                     },
                     "hashsafe": ["title"]
@@ -384,7 +394,7 @@ mod tests {
         assert_eq!(title.boost, Some(2.0));
 
         let body = &doc.fields["body"];
-        assert!(body.chunked);
+        assert!(body.is_chunked());
         assert_eq!(
             body.content_for.as_deref(),
             Some(&["main".to_string()][..])
@@ -478,9 +488,59 @@ mod tests {
     }
 
     #[test]
+    fn field_type_pascal_case() {
+        for (json_val, expected) in [
+            ("\"String\"", FieldType::String),
+            ("\"Text\"", FieldType::Text),
+            ("\"Int64\"", FieldType::Int64),
+            ("\"Integer\"", FieldType::Integer),
+            ("\"Double\"", FieldType::Double),
+            ("\"Number\"", FieldType::Number),
+            ("\"Boolean\"", FieldType::Boolean),
+            ("\"Timestamp\"", FieldType::Timestamp),
+            ("\"Json\"", FieldType::Json),
+            ("\"JSON\"", FieldType::Json),
+            ("\"Tags\"", FieldType::Tags),
+            ("\"Choice\"", FieldType::Choice),
+        ] {
+            let ft: FieldType = serde_json::from_str(json_val).unwrap();
+            assert_eq!(ft, expected, "failed for {json_val}");
+        }
+    }
+
+    /// Reproduces the WASM test config exactly as JS sends it (camelCase keys,
+    /// PascalCase FieldType values). This was the root cause of the Tantivy
+    /// schema panic: "fieldType" key was not recognized, defaulting to String.
+    #[test]
+    fn js_style_config_deserialization() {
+        let json_str = r#"{
+            "name": "test-weaver",
+            "entities": {
+                "Document": {
+                    "fields": {
+                        "title": { "fieldType": "Text", "titleFor": "main" },
+                        "body": { "fieldType": "Text" }
+                    }
+                }
+            },
+            "relations": {
+                "REFERENCES": { "from": "Document", "to": "Document" }
+            },
+            "knowledgeBases": { "main": {} },
+            "embeddingDim": 4
+        }"#;
+
+        let config: CatalogConfig = serde_json::from_str(json_str).unwrap();
+        let doc = &config.entities["Document"];
+        assert_eq!(doc.fields["title"].field_type, FieldType::Text,
+            "title should be Text, not {:?}", doc.fields["title"].field_type);
+        assert_eq!(doc.fields["body"].field_type, FieldType::Text,
+            "body should be Text, not {:?}", doc.fields["body"].field_type);
+    }
+
+    #[test]
     fn chunking_defaults() {
         let c = ChunkingConfig::default();
-        assert!(c.enabled);
         assert_eq!(c.max_size, 1500);
         assert_eq!(c.overlap, 200);
         assert_eq!(c.strategy, ChunkStrategy::Semantic);

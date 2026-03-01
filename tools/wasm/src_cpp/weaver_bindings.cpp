@@ -39,6 +39,12 @@ extern "C" {
         const uint8_t* tokenizer, size_t tokenizer_len,
         const uint8_t* weights, size_t weights_len,
         const char* text);
+    // Set real embedder from model bytes (replaces MockEmbedder)
+    const char* rag3weaver_catalog_set_embedder(
+        void* ctx,
+        const uint8_t* config, size_t config_len,
+        const uint8_t* tokenizer, size_t tokenizer_len,
+        const uint8_t* weights, size_t weights_len);
 }
 
 // ── Async support (generic for drain, search, etc.) ─────────────────────
@@ -157,6 +163,22 @@ public:
         return r ? std::string(r) : R"({"error":"null result"})";
     }
 
+    /// Set a real CandleEmbedder from model files (replaces MockEmbedder).
+    /// JS fetches config.json, tokenizer.json, model.safetensors as Uint8Arrays.
+    std::string setEmbedder(val configArr, val tokenizerArr, val weightsArr) {
+        auto configVec = convertJSArrayToNumberVector<uint8_t>(configArr);
+        auto tokenizerVec = convertJSArrayToNumberVector<uint8_t>(tokenizerArr);
+        auto weightsVec = convertJSArrayToNumberVector<uint8_t>(weightsArr);
+
+        const char* r = rag3weaver_catalog_set_embedder(
+            ctx_,
+            configVec.data(), configVec.size(),
+            tokenizerVec.data(), tokenizerVec.size(),
+            weightsVec.data(), weightsVec.size()
+        );
+        return r ? std::string(r) : R"({"error":"null result"})";
+    }
+
     /// Test candle embedding: receives model files as JS Uint8Arrays + text,
     /// creates CandleEmbedder in WASM, embeds text, returns JSON result.
     static std::string testCandleEmbed(val configArr, val tokenizerArr,
@@ -187,6 +209,7 @@ EMSCRIPTEN_BINDINGS(rag3weaver_wasm) {
         .class_function("asyncPoll", &Weaver::asyncPoll)
         .class_function("asyncResult", &Weaver::asyncResult)
         .function("count", &Weaver::count)
+        .function("setEmbedder", &Weaver::setEmbedder)
         .class_function("version", &Weaver::version)
         .class_function("testThreads", &Weaver::testThreads)
         .class_function("testAsyncPool", &Weaver::testAsyncPool)

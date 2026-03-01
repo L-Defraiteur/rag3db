@@ -4,7 +4,7 @@
 //! Defines `CatalogOp` (the main enum), per-variant structs (`InsertOp`,
 //! `LinkOp`, `EmbedOp`), `RefOrUuid`, and `OperationConfig` constants.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::connection::CypherValue;
 use crate::refs::{EntityRef, EntityRefResolver, RefError, RelationRef, RelationRefResolver};
@@ -72,7 +72,7 @@ impl From<&str> for RefOrUuid {
 /// the resulting UUID.
 pub struct InsertOp {
     pub entity_name: String,
-    pub data: HashMap<String, CypherValue>,
+    pub data: BTreeMap<String, CypherValue>,
     /// Producer side — consumed by the queue processor after successful insert.
     /// `Option` because the processor takes it via `take_resolver()`.
     pub resolver: Option<EntityRefResolver>,
@@ -83,7 +83,7 @@ pub struct InsertOp {
 impl InsertOp {
     pub fn new(
         entity_name: String,
-        data: HashMap<String, CypherValue>,
+        data: BTreeMap<String, CypherValue>,
         resolver: EntityRefResolver,
         entity_ref: EntityRef,
     ) -> Self {
@@ -108,7 +108,7 @@ pub struct LinkOp {
     pub rel_name: String,
     pub from: RefOrUuid,
     pub to: RefOrUuid,
-    pub properties: HashMap<String, CypherValue>,
+    pub properties: BTreeMap<String, CypherValue>,
     /// Producer side — consumed by the queue processor after successful link.
     /// `Option` because the processor takes it via `take_resolver()`.
     pub resolver: Option<RelationRefResolver>,
@@ -121,7 +121,7 @@ impl LinkOp {
         rel_name: String,
         from: RefOrUuid,
         to: RefOrUuid,
-        properties: HashMap<String, CypherValue>,
+        properties: BTreeMap<String, CypherValue>,
         resolver: RelationRefResolver,
         relation_ref: RelationRef,
     ) -> Self {
@@ -169,7 +169,7 @@ pub struct ChunkOp {
     pub entity_name: String,
     pub parent_uuid: String,
     pub entity_ref: EntityRef,
-    pub data: HashMap<String, CypherValue>,
+    pub data: BTreeMap<String, CypherValue>,
 }
 
 // ─── CatalogOp enum ─────────────────────────────────────────────────────────
@@ -275,7 +275,7 @@ mod tests {
         let (entity_ref, resolver) = EntityRef::new("Document");
         let op = CatalogOp::Insert(InsertOp::new(
             "Document".to_string(),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             entity_ref.clone(),
         ));
@@ -288,7 +288,7 @@ mod tests {
             "HAS_SECTION".to_string(),
             RefOrUuid::from("uuid-from"),
             RefOrUuid::from("uuid-to"),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             relation_ref.clone(),
         ));
@@ -400,7 +400,7 @@ mod tests {
     #[test]
     fn insert_op_carries_data() {
         let (entity_ref, resolver) = EntityRef::new("Document");
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert("title".to_string(), CypherValue::String("Hello".to_string()));
         data.insert("page_count".to_string(), CypherValue::Int(42));
 
@@ -423,7 +423,7 @@ mod tests {
         let (entity_ref, resolver) = EntityRef::new("Document");
         let mut op = InsertOp::new(
             "Document".to_string(),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             entity_ref.clone(),
         );
@@ -448,7 +448,7 @@ mod tests {
             "HAS_SECTION".to_string(),
             RefOrUuid::from(from_ref),
             RefOrUuid::from("existing-uuid"),
-            HashMap::new(),
+            BTreeMap::new(),
             rel_resolver,
             relation_ref.clone(),
         );
@@ -474,7 +474,7 @@ mod tests {
             "HAS".to_string(),
             RefOrUuid::from("a"),
             RefOrUuid::from("b"),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             relation_ref.clone(),
         );

@@ -4,7 +4,7 @@
 //! the rag3db C API directly. Symbols resolve at link time when the static
 //! library is linked into the emscripten WASM binary alongside rag3db.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 
 use async_trait::async_trait;
@@ -403,7 +403,7 @@ unsafe fn convert_list(value: *mut CValue) -> CypherValue {
 }
 
 unsafe fn convert_node(value: *mut CValue) -> CypherValue {
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
 
     // Label
     let mut label_val = zeroed_value();
@@ -436,7 +436,7 @@ unsafe fn convert_node(value: *mut CValue) -> CypherValue {
 }
 
 unsafe fn convert_rel(value: *mut CValue) -> CypherValue {
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
 
     // Label
     let mut label_val = zeroed_value();
@@ -478,7 +478,7 @@ unsafe fn convert_rel(value: *mut CValue) -> CypherValue {
 unsafe fn convert_struct(value: *mut CValue) -> CypherValue {
     let mut num_fields: u64 = 0;
     rag3db_value_get_struct_num_fields(value, &mut num_fields);
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
     for i in 0..num_fields {
         let mut name_ptr: *mut c_char = std::ptr::null_mut();
         rag3db_value_get_struct_field_name(value, i, &mut name_ptr);
@@ -494,7 +494,7 @@ unsafe fn convert_struct(value: *mut CValue) -> CypherValue {
 unsafe fn convert_map(value: *mut CValue) -> CypherValue {
     let mut size: u64 = 0;
     rag3db_value_get_map_size(value, &mut size);
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
     for i in 0..size {
         let mut key_val = zeroed_value();
         rag3db_value_get_map_key(value, i, &mut key_val);
@@ -946,6 +946,50 @@ pub extern "C" fn rag3weaver_catalog_destroy(ctx: *mut WeaverContext) {
     }
 }
 
+/// Replace the catalog's embedder with a CandleEmbedder loaded from raw bytes.
+/// Call after `rag3weaver_catalog_new` to swap MockEmbedder for a real model.
+/// JS fetches model files (config.json, tokenizer.json, model.safetensors),
+/// then passes them as (ptr, len) pairs.
+/// Returns JSON: `{"ok":true}` or `{"ok":false,"error":"..."}`.
+#[no_mangle]
+pub extern "C" fn rag3weaver_catalog_set_embedder(
+    ctx: *mut WeaverContext,
+    config_ptr: *const u8,
+    config_len: usize,
+    tokenizer_ptr: *const u8,
+    tokenizer_len: usize,
+    weights_ptr: *const u8,
+    weights_len: usize,
+) -> *const c_char {
+    use crate::candle_embedder::CandleEmbedder;
+
+    if ctx.is_null() || config_ptr.is_null() || tokenizer_ptr.is_null() || weights_ptr.is_null() {
+        return return_string_to_c(r#"{"ok":false,"error":"null pointer"}"#.into());
+    }
+
+    let config = unsafe { std::slice::from_raw_parts(config_ptr, config_len) };
+    let tokenizer = unsafe { std::slice::from_raw_parts(tokenizer_ptr, tokenizer_len) };
+    let weights = unsafe { std::slice::from_raw_parts(weights_ptr, weights_len) }.to_vec();
+
+    let embedder = match CandleEmbedder::from_bytes(config, tokenizer, weights) {
+        Ok(e) => e,
+        Err(e) => {
+            return return_string_to_c(format!(r#"{{"ok":false,"error":"embedder init: {e}"}}"#));
+        }
+    };
+
+    let ctx = unsafe { &*ctx };
+    let mut catalog = match ctx.catalog.lock() {
+        Ok(g) => g,
+        Err(e) => {
+            return return_string_to_c(format!(r#"{{"ok":false,"error":"lock: {e}"}}"#));
+        }
+    };
+
+    catalog.set_embedder(std::sync::Arc::new(embedder));
+    return_string_to_c(r#"{"ok":true}"#.into())
+}
+
 /// Create an entity. Returns an opaque handle (>= 0) or -1 on error.
 /// `fields_json` is a JSON object `{"field": value, ...}`.
 /// The handle can be used with `rag3weaver_get_uuid()` and `rag3weaver_link()`.
@@ -963,7 +1007,7 @@ pub extern "C" fn rag3weaver_create(
     let entity = unsafe { CStr::from_ptr(entity_type).to_string_lossy() };
     let fields_str = unsafe { CStr::from_ptr(fields_json).to_string_lossy() };
 
-    let fields: HashMap<String, CypherValue> = match serde_json::from_str(&fields_str) {
+    let fields: BTreeMap<String, CypherValue> = match serde_json::from_str(&fields_str) {
         Ok(f) => f,
         Err(_) => return -1,
     };
@@ -1029,8 +1073,8 @@ pub extern "C" fn rag3weaver_link(
     let ctx = unsafe { &*ctx };
     let rel = unsafe { CStr::from_ptr(rel_type).to_string_lossy() };
 
-    let props: HashMap<String, CypherValue> = if properties_json.is_null() {
-        HashMap::new()
+    let props: BTreeMap<String, CypherValue> = if properties_json.is_null() {
+        BTreeMap::new()
     } else {
         let s = unsafe { CStr::from_ptr(properties_json).to_string_lossy() };
         match serde_json::from_str(&s) {

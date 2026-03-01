@@ -4,7 +4,7 @@
 //! allowing the pipeline to execute Cypher queries without depending on
 //! the concrete database implementation.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -38,7 +38,7 @@ pub enum CypherValue {
     Float(f64),
     String(String),
     List(Vec<CypherValue>),
-    Map(HashMap<String, CypherValue>),
+    Map(BTreeMap<String, CypherValue>),
 }
 
 impl CypherValue {
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn cypher_value_map() {
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert("name".to_string(), CypherValue::from("Alice"));
         map.insert("age".to_string(), CypherValue::from(30_i64));
         let v = CypherValue::Map(map);

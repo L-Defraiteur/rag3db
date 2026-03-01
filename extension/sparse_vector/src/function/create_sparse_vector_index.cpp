@@ -150,7 +150,12 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     // 1. Build index path.
     std::string basePath;
     if (context.clientContext->isInMemory()) {
-        basePath = std::filesystem::temp_directory_path().string() + "/rag3db_sparse_vector";
+        // Each in-memory DB instance gets a unique directory based on its pointer address,
+        // so multiple in-memory databases in the same process don't collide.
+        auto dbId = std::to_string(
+            reinterpret_cast<uintptr_t>(context.clientContext->getDatabase()));
+        basePath = std::filesystem::temp_directory_path().string() +
+            "/rag3db_sparse_vector/" + dbId;
     } else {
         basePath = std::filesystem::path(
             context.clientContext->getDatabasePath()).parent_path().string();

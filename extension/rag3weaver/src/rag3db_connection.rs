@@ -3,7 +3,7 @@
 //! Provides [`Rag3dbConnection`] that implements [`DbConnection`] by embedding
 //! the rag3db C++ engine in-process via the official Rust crate.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use async_trait::async_trait;
@@ -156,7 +156,7 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
             CypherValue::List(vs.into_iter().map(rag3db_value_to_cypher).collect())
         }
         rag3db::Value::Node(n) => {
-            let mut map = HashMap::new();
+            let mut map = BTreeMap::new();
             map.insert(
                 "_label".to_string(),
                 CypherValue::String(n.get_label_name().clone()),
@@ -172,7 +172,7 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
             CypherValue::Map(map)
         }
         rag3db::Value::Rel(r) => {
-            let mut map = HashMap::new();
+            let mut map = BTreeMap::new();
             map.insert(
                 "_label".to_string(),
                 CypherValue::String(r.get_label_name().clone()),
@@ -193,14 +193,14 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
             CypherValue::Map(map)
         }
         rag3db::Value::Struct(fields) => {
-            let mut map = HashMap::new();
+            let mut map = BTreeMap::new();
             for (key, val) in fields {
                 map.insert(key, rag3db_value_to_cypher(val));
             }
             CypherValue::Map(map)
         }
         rag3db::Value::Map(_, pairs) => {
-            let mut map = HashMap::new();
+            let mut map = BTreeMap::new();
             for (k, v) in pairs {
                 let key = match k {
                     rag3db::Value::String(s) => s,

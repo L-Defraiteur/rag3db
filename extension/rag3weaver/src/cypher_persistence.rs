@@ -351,11 +351,11 @@ mod tests {
     use crate::connection::MockConnection;
     use crate::ops::{CatalogOp, InsertOp};
     use crate::refs::EntityRef;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     fn make_test_item() -> OperationItem {
         let (entity_ref, resolver) = EntityRef::new("Document");
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert(
             "title".to_string(),
             CypherValue::String("Test Doc".to_string()),
@@ -404,7 +404,7 @@ mod tests {
             "HAS".to_string(),
             "uuid-a".into(),
             "uuid-b".into(),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             rel_ref,
         ));
@@ -482,7 +482,7 @@ mod integration_tests {
     use crate::queue::ItemState;
     use crate::rag3db_connection::Rag3dbConnection;
     use crate::refs::{EntityRef, RelationRef};
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     fn make_conn() -> Arc<dyn DbConnection> {
         Arc::new(Rag3dbConnection::in_memory().unwrap())
@@ -490,7 +490,7 @@ mod integration_tests {
 
     fn make_insert_item(id: &str, title: &str) -> OperationItem {
         let (entity_ref, resolver) = EntityRef::new("Document");
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert("title".to_string(), CypherValue::String(title.to_string()));
         let op = CatalogOp::Insert(InsertOp::new(
             "Document".to_string(),
@@ -515,7 +515,7 @@ mod integration_tests {
             "HAS".to_string(),
             RefOrUuid::from("uuid-a"),
             RefOrUuid::from("uuid-b"),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             rel_ref,
         ));

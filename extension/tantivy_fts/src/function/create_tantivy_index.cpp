@@ -135,6 +135,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
         input->getParam(1)->constPtrCast<binder::LiteralExpression>()->getValue();
     auto stemmer = std::string("english");
     std::vector<FilterFieldInfo> filterFields;
+
     for (auto& [name, val] : input->optionalParams) {
         if (name == "stemmer") {
             stemmer = val.toString();
@@ -170,6 +171,7 @@ static std::unique_ptr<TableFuncBindData> bindFuncInternal(ClientContext* contex
         input->getParam(2)->constPtrCast<binder::LiteralExpression>()->getValue();
     auto stemmer = std::string("english");
     std::vector<FilterFieldInfo> filterFields;
+
     for (auto& [name, val] : input->optionalParams) {
         if (name == "stemmer") {
             stemmer = val.toString();
@@ -236,7 +238,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     // 1. Build index path.
     std::string basePath;
     if (context.clientContext->isInMemory()) {
-        basePath = std::filesystem::temp_directory_path().string() + "/rag3db_tantivy";
+        // Each in-memory DB instance gets a unique directory based on its pointer address,
+        // so multiple in-memory databases in the same process don't collide.
+        auto dbId = std::to_string(
+            reinterpret_cast<uintptr_t>(context.clientContext->getDatabase()));
+        basePath = std::filesystem::temp_directory_path().string() + "/rag3db_tantivy/" + dbId;
     } else {
         basePath = std::filesystem::path(
             context.clientContext->getDatabasePath()).parent_path().string();

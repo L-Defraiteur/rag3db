@@ -6,11 +6,51 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use async_broadcast::{InactiveReceiver, Sender};
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
 use crate::ops::{CatalogOp, InsertOp, LinkOp};
 use crate::persistence::OperationPersistence;
+
+// ─── QueueEvent ─────────────────────────────────────────────────────────────
+
+/// Events emitted by the queue during its lifecycle.
+#[derive(Debug, Clone)]
+pub enum QueueEvent {
+    /// An operation was added to the queue.
+    Enqueued {
+        id: String,
+        op_type: &'static str,
+        priority: u8,
+    },
+    /// A batch of operations is about to be processed.
+    ProcessingBatch {
+        op_type: &'static str,
+        priority: u8,
+        items: Vec<String>,
+    },
+    /// A batch completed successfully.
+    BatchCompleted {
+        op_type: &'static str,
+        priority: u8,
+        items: Vec<String>,
+    },
+    /// A batch failed.
+    BatchFailed {
+        op_type: &'static str,
+        priority: u8,
+        items: Vec<String>,
+        error: String,
+    },
+    /// Downstream ops were injected by a processor into the queue.
+    Injected {
+        count: usize,
+        source_priority: u8,
+        /// (op_type, priority) pairs for each injected op.
+        ops: Vec<(&'static str, u8)>,
+    },
+}
 
 // ─── QueueSender / QueueReceiver ─────────────────────────────────────────────
 
@@ -200,6 +240,8 @@ pub struct OperationQueue {
     cumulative: CumulativeStats,
     processing: bool,
     counter: u64,
+    event_tx: Sender<QueueEvent>,
+    _inactive_rx: InactiveReceiver<QueueEvent>,
 }
 
 /// Cumulative counters (not reset on clear).
@@ -213,6 +255,9 @@ struct CumulativeStats {
 
 impl OperationQueue {
     pub fn new(config: FlushConfig) -> Self {
+        let (mut tx, rx) = async_broadcast::broadcast(256);
+        tx.set_overflow(true);
+        let inactive = rx.deactivate();
         Self {
             items: Vec::new(),
             processors: HashMap::new(),
@@ -221,7 +266,18 @@ impl OperationQueue {
             cumulative: CumulativeStats::default(),
             processing: false,
             counter: 0,
+            event_tx: tx,
+            _inactive_rx: inactive,
         }
+    }
+
+    /// Subscribe to queue events (enqueue, processing, completed, failed, injected).
+    pub fn subscribe(&self) -> async_broadcast::Receiver<QueueEvent> {
+        self._inactive_rx.activate_cloned()
+    }
+
+    fn emit(&self, event: QueueEvent) {
+        let _ = self.event_tx.try_broadcast(event);
     }
 
     // ── configuration ───────────────────────────────────────────────
@@ -264,7 +320,13 @@ impl OperationQueue {
 
         self.items.push(item);
         self.cumulative.total_queued += 1;
-        self.items.last().unwrap()
+        let last = self.items.last().unwrap();
+        self.emit(QueueEvent::Enqueued {
+            id: last.id.clone(),
+            op_type: last.op.operation_type(),
+            priority: last.op.priority(),
+        });
+        last
     }
 
     /// Enqueue multiple operations at once.
@@ -367,9 +429,15 @@ impl OperationQueue {
 
                 // Process in batches
                 for batch in processable.chunks_mut(batch_size) {
+                    let batch_ids: Vec<String> = batch.iter().map(|i| i.id.clone()).collect();
                     for item in batch.iter_mut() {
                         item.mark_processing();
                     }
+                    self.emit(QueueEvent::ProcessingBatch {
+                        op_type,
+                        priority: prio,
+                        items: batch_ids.clone(),
+                    });
 
                     if let Some(processor) = self.processors.get(op_type) {
                         match processor.process(batch, &sender).await {
@@ -379,6 +447,11 @@ impl OperationQueue {
                                     result.processed += 1;
                                     self.cumulative.total_processed += 1;
                                 }
+                                self.emit(QueueEvent::BatchCompleted {
+                                    op_type,
+                                    priority: prio,
+                                    items: batch_ids,
+                                });
                             }
                             Err(e) => {
                                 for item in batch.iter_mut() {
@@ -392,6 +465,12 @@ impl OperationQueue {
                                         self.cumulative.total_failed += 1;
                                     }
                                 }
+                                self.emit(QueueEvent::BatchFailed {
+                                    op_type,
+                                    priority: prio,
+                                    items: batch_ids,
+                                    error: e,
+                                });
                             }
                         }
                     } else {
@@ -400,6 +479,12 @@ impl OperationQueue {
                             result.failed += 1;
                             self.cumulative.total_failed += 1;
                         }
+                        self.emit(QueueEvent::BatchFailed {
+                            op_type,
+                            priority: prio,
+                            items: batch_ids,
+                            error: format!("no processor registered for '{op_type}'"),
+                        });
                     }
                 }
 
@@ -412,7 +497,18 @@ impl OperationQueue {
             }
 
             // Drain expansion channel — merge injected ops into remaining groups
-            for op in receiver.drain() {
+            let drained = receiver.drain();
+            if !drained.is_empty() {
+                let ops_info: Vec<(&'static str, u8)> = drained.iter()
+                    .map(|op| (op.operation_type(), op.priority()))
+                    .collect();
+                self.emit(QueueEvent::Injected {
+                    count: drained.len(),
+                    source_priority: prio,
+                    ops: ops_info,
+                });
+            }
+            for op in drained {
                 let new_prio = op.priority();
                 assert!(
                     new_prio > prio,
@@ -675,7 +771,6 @@ mod tests {
     use super::*;
     use crate::ops::{EmbedOp, InsertOp, LinkOp, RefOrUuid};
     use crate::refs::{EntityRef, RelationRef};
-    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
     // ── mock processor ──────────────────────────────────────────────
@@ -740,7 +835,7 @@ mod tests {
         let (entity_ref, resolver) = EntityRef::new("Document");
         let op = CatalogOp::Insert(InsertOp::new(
             "Document".to_string(),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             entity_ref.clone(),
         ));
@@ -753,7 +848,7 @@ mod tests {
             "HAS_SECTION".to_string(),
             RefOrUuid::from("a"),
             RefOrUuid::from("b"),
-            HashMap::new(),
+            BTreeMap::new(),
             resolver,
             relation_ref.clone(),
         ));

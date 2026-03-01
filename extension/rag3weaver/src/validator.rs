@@ -190,7 +190,7 @@ mod tests {
             field_type: ft,
             title_for: None,
             content_for: None,
-            chunked: false,
+
             boost: None,
             default_value: None,
         }
@@ -201,7 +201,7 @@ mod tests {
             field_type: FieldType::Text,
             title_for: Some(kb.to_string()),
             content_for: None,
-            chunked: false,
+
             boost: None,
             default_value: None,
         }
@@ -212,7 +212,7 @@ mod tests {
             field_type: FieldType::Text,
             title_for: None,
             content_for: Some(kbs.iter().map(|s| s.to_string()).collect()),
-            chunked: false,
+
             boost: None,
             default_value: None,
         }

@@ -5,7 +5,7 @@
 //! `Catalog::search_with_explore()`, plus types for search options,
 //! results, and graph exploration.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::Serialize;
 
@@ -65,10 +65,18 @@ pub enum SearchType {
 /// BM25 query mode for keyword search via QUERY_TANTIVY_INDEX.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BM25Mode {
-    /// NgramContainsQuery fuzzy — substring + trigram + Levenshtein + BM25.
+    /// NgramContainsQuery fuzzy — substring match + trigram + Levenshtein + BM25.
+    /// The entire query is matched as a contiguous substring.
     Contains,
+    /// Like Contains, but multi-word queries are auto-split: each word becomes
+    /// a separate contains clause combined with boolean should, so "Rust safety"
+    /// finds docs containing both words even if they're far apart.
+    ContainsSplit,
     /// NgramContainsQuery regex — trigram-accelerated regex + optional fuzzy hybrid.
     Regex,
+    /// Native Tantivy QueryParser — standard BM25 term-by-term search.
+    /// Each word is tokenized independently, docs matching more terms score higher.
+    Parse,
 }
 
 impl Default for BM25Mode {
@@ -133,7 +141,7 @@ pub struct SearchResult {
     pub uuid: String,
     pub score: f64,
     pub entity: Option<String>,
-    pub data: Option<HashMap<String, CypherValue>>,
+    pub data: Option<BTreeMap<String, CypherValue>>,
     pub chunk: Option<ChunkInfo>,
 }
 
@@ -145,6 +153,10 @@ pub struct ChunkInfo {
     pub text: String,
     pub index: usize,
     pub score: f64,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub start_char: usize,
+    pub end_char: usize,
 }
 
 /// Metadata about a search operation.
@@ -204,7 +216,7 @@ pub struct GraphNode {
     pub label: String,
     pub depth: usize,
     pub is_search_result: bool,
-    pub data: HashMap<String, CypherValue>,
+    pub data: BTreeMap<String, CypherValue>,
 }
 
 /// An edge in the explore graph.
@@ -214,7 +226,7 @@ pub struct GraphEdge {
     pub to_uuid: String,
     pub relation: String,
     pub direction: String,
-    pub properties: HashMap<String, CypherValue>,
+    pub properties: BTreeMap<String, CypherValue>,
 }
 
 /// The graph part of an explore result.
@@ -482,6 +494,164 @@ fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> 
         .collect()
 }
 
+/// Resolve chunk-level search results to parent-level results with ChunkInfo.
+///
+/// Used by both vector and sparse search when the entity has chunks.
+/// Groups results by parent, keeps the best-scoring chunk per parent.
+pub async fn resolve_chunk_results(
+    conn: &dyn DbConnection,
+    chunk_entity: &str,
+    parent_entity: &str,
+    results: Vec<SearchResult>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 1. Collect distinct chunk UUIDs
+    let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+    let uuid_list = chunk_uuids
+        .iter()
+        .map(|u| format!("'{}'", u.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // 2. Batch fetch chunk metadata
+    let cypher = format!(
+        "MATCH (c:{chunk_entity}) WHERE c._uuid IN [{uuid_list}] \
+         RETURN c._uuid, c._parent_uuid, c._text, c._index, \
+         c._start_line, c._end_line, c._start_char, c._end_char"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // 3. Build chunk metadata map
+    struct ChunkMeta {
+        parent_uuid: String,
+        text: String,
+        index: usize,
+        start_line: usize,
+        end_line: usize,
+        start_char: usize,
+        end_char: usize,
+    }
+
+    let mut chunk_map: HashMap<String, ChunkMeta> = HashMap::new();
+    for row in &result.rows {
+        let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let parent_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let start_line = row.get(4).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_line = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let start_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        chunk_map.insert(uuid, ChunkMeta {
+            parent_uuid, text, index, start_line, end_line, start_char, end_char,
+        });
+    }
+
+    // 4. Group by parent, keep best-scoring chunk per parent
+    let mut parent_best: HashMap<String, (f64, String, ChunkInfo)> = HashMap::new();
+    for r in &results {
+        if let Some(meta) = chunk_map.get(&r.uuid) {
+            let chunk_info = ChunkInfo {
+                uuid: r.uuid.clone(),
+                text: meta.text.clone(),
+                index: meta.index,
+                score: r.score,
+                start_line: meta.start_line,
+                end_line: meta.end_line,
+                start_char: meta.start_char,
+                end_char: meta.end_char,
+            };
+            let entry = parent_best.entry(meta.parent_uuid.clone());
+            match entry {
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
+                }
+                std::collections::hash_map::Entry::Occupied(mut e) => {
+                    if r.score > e.get().0 {
+                        e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Build parent-level results, preserving score order
+    let mut resolved: Vec<SearchResult> = parent_best
+        .into_values()
+        .map(|(score, parent_uuid, chunk_info)| SearchResult {
+            uuid: parent_uuid,
+            score,
+            entity: Some(parent_entity.to_string()),
+            data: None,
+            chunk: Some(chunk_info),
+        })
+        .collect();
+    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(resolved)
+}
+
+/// Enrich search results with parent entity data (title, body, etc.).
+///
+/// Batch-fetches entity data for all result UUIDs and populates `result.data`.
+pub async fn enrich_results_with_data(
+    conn: &dyn DbConnection,
+    entity: &str,
+    fields: &[String],
+    results: &mut [SearchResult],
+) -> Result<(), CatalogError> {
+    if results.is_empty() || fields.is_empty() {
+        return Ok(());
+    }
+
+    let uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+    let uuid_list = uuids
+        .iter()
+        .map(|u| format!("'{}'", u.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let return_cols: Vec<String> = std::iter::once("n._uuid AS _uuid".to_string())
+        .chain(fields.iter().map(|f| format!("n.{f} AS {f}")))
+        .collect();
+    let return_clause = return_cols.join(", ");
+
+    let cypher = format!(
+        "MATCH (n:{entity}) WHERE n._uuid IN [{uuid_list}] RETURN {return_clause}"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // Build uuid → data map
+    let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
+    for row in &result.rows {
+        let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let mut data = BTreeMap::new();
+        for (i, field) in fields.iter().enumerate() {
+            if let Some(val) = row.get(i + 1) {
+                data.insert(field.clone(), val.clone());
+            }
+        }
+        data_map.insert(uuid, data);
+    }
+
+    // Populate results
+    for r in results.iter_mut() {
+        if let Some(data) = data_map.remove(&r.uuid) {
+            r.data = Some(data);
+        }
+    }
+
+    Ok(())
+}
+
 /// Brute-force vector scan with `array_cosine_similarity`. O(N).
 ///
 /// Legacy fallback — kept for environments where the HNSW vector extension
@@ -550,9 +720,14 @@ async fn search_vector_bruteforce(
 
 /// Build the JSON query config for QUERY_TANTIVY_INDEX.
 ///
-/// Single field → `{"type":"contains","field":"f","value":"q","distance":1}`
-/// Multiple fields → `{"type":"boolean","should":[...]}`
-/// Regex mode → adds `"regex":true`
+/// - **Contains**: `{"type":"contains","field":"f","value":"full query","distance":1}`
+/// - **ContainsSplit**: splits query into words, each word becomes a contains clause
+///   combined with boolean should — "Rust safety" matches docs with both words anywhere.
+/// - **Regex**: like Contains but adds `"regex":true`
+/// - **Parse**: `{"type":"parse","fields":["f1","f2"],"value":"query"}` — native Tantivy
+///   QueryParser, standard BM25 term-by-term search.
+///
+/// Multiple fields → wraps in `{"type":"boolean","should":[...]}`
 /// Optional `tantivy_filters` injects `"filters":[...]` for native Tantivy pre-filtering.
 pub fn build_bm25_query(
     query: &str,
@@ -561,27 +736,41 @@ pub fn build_bm25_query(
     distance: u8,
     tantivy_filters: Option<&[serde_json::Value]>,
 ) -> String {
-    let make_clause = |field: &str| -> serde_json::Value {
-        let mut obj = serde_json::json!({
-            "type": "contains",
-            "field": field,
-            "value": query,
-            "distance": distance,
-        });
-        if mode == BM25Mode::Regex {
-            obj["regex"] = serde_json::json!(true);
+    let mut obj = match mode {
+        BM25Mode::Parse => {
+            if fields.len() == 1 {
+                serde_json::json!({
+                    "type": "parse",
+                    "field": &fields[0],
+                    "value": query,
+                })
+            } else {
+                serde_json::json!({
+                    "type": "parse",
+                    "fields": fields,
+                    "value": query,
+                })
+            }
         }
-        obj
-    };
-
-    let mut obj = if fields.len() == 1 {
-        make_clause(&fields[0])
-    } else {
-        let clauses: Vec<serde_json::Value> = fields.iter().map(|f| make_clause(f)).collect();
-        serde_json::json!({
-            "type": "boolean",
-            "should": clauses,
-        })
+        BM25Mode::ContainsSplit => {
+            let words: Vec<&str> = query.split_whitespace().collect();
+            if words.len() <= 1 {
+                // Single word: same as Contains
+                build_contains_clauses(query, fields, distance, false)
+            } else {
+                // Multi-word: boolean should of per-word contains across all fields
+                let word_clauses: Vec<serde_json::Value> = words
+                    .iter()
+                    .map(|word| build_contains_clauses(word, fields, distance, false))
+                    .collect();
+                serde_json::json!({
+                    "type": "boolean",
+                    "should": word_clauses,
+                })
+            }
+        }
+        BM25Mode::Contains => build_contains_clauses(query, fields, distance, false),
+        BM25Mode::Regex => build_contains_clauses(query, fields, distance, true),
     };
 
     if let Some(filters) = tantivy_filters {
@@ -591,6 +780,38 @@ pub fn build_bm25_query(
     }
 
     obj.to_string()
+}
+
+/// Build contains clause(s) for one value across fields.
+/// Single field → single contains object. Multiple fields → boolean should.
+fn build_contains_clauses(
+    value: &str,
+    fields: &[String],
+    distance: u8,
+    regex: bool,
+) -> serde_json::Value {
+    let make_clause = |field: &str| -> serde_json::Value {
+        let mut obj = serde_json::json!({
+            "type": "contains",
+            "field": field,
+            "value": value,
+            "distance": distance,
+        });
+        if regex {
+            obj["regex"] = serde_json::json!(true);
+        }
+        obj
+    };
+
+    if fields.len() == 1 {
+        make_clause(&fields[0])
+    } else {
+        let clauses: Vec<serde_json::Value> = fields.iter().map(|f| make_clause(f)).collect();
+        serde_json::json!({
+            "type": "boolean",
+            "should": clauses,
+        })
+    }
 }
 
 /// BM25 keyword search via QUERY_TANTIVY_INDEX.
@@ -699,6 +920,257 @@ pub async fn search_bm25(
             })
         })
         .collect())
+}
+
+/// BM25 result with per-field highlight byte offsets.
+pub struct BM25Hit {
+    uuid: String,
+    score: f64,
+    /// field_name → [(start_byte, end_byte)]
+    highlights: HashMap<String, Vec<(usize, usize)>>,
+}
+
+/// Like `search_bm25` but returns raw hits with per-field highlight offsets.
+///
+/// Uses `RETURN node_id, score, highlights` (3rd column = JSON).
+pub async fn search_bm25_raw(
+    conn: &dyn DbConnection,
+    entity: &str,
+    query: &str,
+    fields: &[String],
+    mode: BM25Mode,
+    fuzzy_distance: u8,
+    limit: usize,
+    tantivy_filters: Option<&[serde_json::Value]>,
+    allowed_ids: Option<&[u64]>,
+) -> Result<Vec<BM25Hit>, CatalogError> {
+    if fields.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance, tantivy_filters);
+    let escaped_json = json_query.replace('\'', "''");
+
+    let cypher = if let Some(ids) = allowed_ids {
+        let ids_str = ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
+             allowed_ids := [{ids_str}]) \
+             RETURN node_id, score, highlights"
+        )
+    } else {
+        format!(
+            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
+             RETURN node_id, score, highlights"
+        )
+    };
+
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    if result.rows.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Collect (offset, score, highlights_json)
+    let offsets: Vec<(u64, f64, String)> = result
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
+            let score = row.get(1).and_then(|v| v.as_f64())?;
+            let hl_json = row.get(2).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+            Some((offset, score, hl_json))
+        })
+        .collect();
+
+    if offsets.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Resolve offsets → UUIDs
+    let offset_list = offsets
+        .iter()
+        .map(|(o, _, _)| o.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let resolve_cypher = format!(
+        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
+         RETURN OFFSET(id(n)), n._uuid"
+    );
+    let resolve_result = conn
+        .execute(&resolve_cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
+    for row in &resolve_result.rows {
+        if let (Some(oid), Some(uuid)) = (
+            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
+            row.get(1).and_then(|v| v.as_str()),
+        ) {
+            offset_to_uuid.insert(oid, uuid.to_string());
+        }
+    }
+
+    Ok(offsets
+        .into_iter()
+        .filter_map(|(offset, score, hl_json)| {
+            let uuid = offset_to_uuid.get(&offset)?.clone();
+            let highlights = parse_highlights_json(&hl_json);
+            Some(BM25Hit { uuid, score, highlights })
+        })
+        .collect())
+}
+
+/// Parse highlights JSON: `{"body":[[100,200]],"title":[[5,15]]}` → HashMap
+fn parse_highlights_json(json: &str) -> HashMap<String, Vec<(usize, usize)>> {
+    let mut result = HashMap::new();
+    let parsed: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    if let Some(obj) = parsed.as_object() {
+        for (field, ranges) in obj {
+            if let Some(arr) = ranges.as_array() {
+                let offsets: Vec<(usize, usize)> = arr
+                    .iter()
+                    .filter_map(|pair| {
+                        let a = pair.as_array()?;
+                        let start = a.get(0)?.as_u64()? as usize;
+                        let end = a.get(1)?.as_u64()? as usize;
+                        Some((start, end))
+                    })
+                    .collect();
+                if !offsets.is_empty() {
+                    result.insert(field.clone(), offsets);
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Resolve BM25 parent-level hits to chunk-level results using highlight offsets.
+///
+/// For each hit, returns one result per chunk that intersects any highlight range.
+/// Chunks are sorted by descending overlap. When no chunk intersects (e.g. match
+/// in a non-chunked field like title), returns a single result with `chunk: None`.
+pub async fn resolve_bm25_to_chunks(
+    conn: &dyn DbConnection,
+    chunk_entity: &str,
+    parent_entity: &str,
+    hits: Vec<BM25Hit>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if hits.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 1. Collect parent UUIDs
+    let parent_uuids: Vec<&str> = hits.iter().map(|h| h.uuid.as_str()).collect();
+    let uuid_list = parent_uuids
+        .iter()
+        .map(|u| format!("'{}'", u.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // 2. Batch fetch chunks for these parents
+    let cypher = format!(
+        "MATCH (p:{parent_entity})-[:{parent_entity}_HAS_CHUNK]->(c:{chunk_entity}) \
+         WHERE p._uuid IN [{uuid_list}] \
+         RETURN p._uuid, c._uuid, c._text, c._index, c._parent_field, \
+         c._start_char, c._end_char, c._start_line, c._end_line"
+    );
+    let result = conn
+        .execute(&cypher)
+        .await
+        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+    // 3. Build parent → chunks map
+    struct ChunkRecord {
+        uuid: String,
+        text: String,
+        index: usize,
+        parent_field: String,
+        start_char: usize,
+        end_char: usize,
+        start_line: usize,
+        end_line: usize,
+    }
+
+    let mut parent_chunks: HashMap<String, Vec<ChunkRecord>> = HashMap::new();
+    for row in &result.rows {
+        let p_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let c_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let parent_field = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let start_char = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let start_line = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let end_line = row.get(8).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        parent_chunks.entry(p_uuid).or_default().push(ChunkRecord {
+            uuid: c_uuid, text, index, parent_field, start_char, end_char, start_line, end_line,
+        });
+    }
+
+    // 4. For each BM25Hit, collect all chunks that intersect any highlight
+    let mut results: Vec<SearchResult> = Vec::new();
+    for hit in hits {
+        let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
+
+        if let Some(chunks) = parent_chunks.get(&hit.uuid) {
+            for chunk in chunks {
+                let mut overlap = 0usize;
+                if let Some(offsets) = hit.highlights.get(&chunk.parent_field) {
+                    for &(h_start, h_end) in offsets {
+                        let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
+                        overlap += ov;
+                    }
+                }
+                if overlap > 0 {
+                    matched_chunks.push((overlap, chunk));
+                }
+            }
+        }
+
+        if matched_chunks.is_empty() {
+            // No chunk intersection (e.g. match in title only)
+            results.push(SearchResult {
+                uuid: hit.uuid,
+                score: hit.score,
+                entity: Some(parent_entity.to_string()),
+                data: None,
+                chunk: None,
+            });
+        } else {
+            // Sort by descending overlap
+            matched_chunks.sort_by(|a, b| b.0.cmp(&a.0));
+            for (_, c) in matched_chunks {
+                results.push(SearchResult {
+                    uuid: hit.uuid.clone(),
+                    score: hit.score,
+                    entity: Some(parent_entity.to_string()),
+                    data: None,
+                    chunk: Some(ChunkInfo {
+                        uuid: c.uuid.clone(),
+                        text: c.text.clone(),
+                        index: c.index,
+                        score: hit.score,
+                        start_line: c.start_line,
+                        end_line: c.end_line,
+                        start_char: c.start_char,
+                        end_char: c.end_char,
+                    }),
+                });
+            }
+        }
+    }
+
+    Ok(results)
 }
 
 /// Sparse vector search via the sparse_vector Cypher extension.
@@ -824,7 +1296,7 @@ pub fn fuse_results(
     if non_empty_count == 0 {
         return vec![];
     }
-    // Single source — return directly
+    // Single source — return directly (preserves chunk/data as-is)
     if non_empty_count == 1 {
         for l in &lists {
             if !l.is_empty() {
@@ -833,9 +1305,29 @@ pub fn fuse_results(
         }
     }
 
+    // Build chunk lookup from all inputs (best chunk per UUID)
+    let mut chunk_map: HashMap<String, ChunkInfo> = HashMap::new();
+    for list in &lists {
+        for r in list.iter() {
+            if let Some(ref chunk) = r.chunk {
+                let entry = chunk_map.entry(r.uuid.clone());
+                match entry {
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        e.insert(chunk.clone());
+                    }
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        if chunk.score > e.get().score {
+                            e.insert(chunk.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let has_sparse = !sparse_results.is_empty();
 
-    match strategy {
+    let mut fused = match strategy {
         HybridStrategy::RRF => {
             fuse_rrf_n(&lists, rrf_k.unwrap_or(DEFAULT_RRF_K))
         }
@@ -854,7 +1346,6 @@ pub fn fuse_results(
         }
         HybridStrategy::Boost => {
             if has_sparse {
-                // Boost doesn't extend to 3 signals — fallback to RRF
                 fuse_rrf_n(&lists, rrf_k.unwrap_or(DEFAULT_RRF_K))
             } else {
                 fuse_boost(
@@ -864,7 +1355,20 @@ pub fn fuse_results(
                 )
             }
         }
+    };
+
+    // Re-attach chunk info from inputs
+    if !chunk_map.is_empty() {
+        for r in &mut fused {
+            if r.chunk.is_none() {
+                if let Some(chunk) = chunk_map.remove(&r.uuid) {
+                    r.chunk = Some(chunk);
+                }
+            }
+        }
     }
+
+    fused
 }
 
 /// BFS graph exploration from seed nodes.
@@ -927,7 +1431,7 @@ pub async fn explore_bfs(
                     to_uuid: n_uuid,
                     relation: rel.clone(),
                     direction: "outgoing".to_string(),
-                    properties: HashMap::new(),
+                    properties: BTreeMap::new(),
                 });
             }
         }
@@ -961,7 +1465,7 @@ pub async fn explore_bfs(
                     to_uuid,
                     relation: rel.clone(),
                     direction: "incoming".to_string(),
-                    properties: HashMap::new(),
+                    properties: BTreeMap::new(),
                 });
             }
         }
@@ -1000,7 +1504,7 @@ async fn explore_relation_batch(
     uuids: &[String],
     relation: &str,
     direction: &str,
-) -> Result<Vec<(String, String, String, HashMap<String, CypherValue>)>, CatalogError> {
+) -> Result<Vec<(String, String, String, BTreeMap<String, CypherValue>)>, CatalogError> {
     if uuids.is_empty() {
         return Ok(vec![]);
     }
@@ -1058,7 +1562,7 @@ async fn explore_relation_batch(
                 .to_string();
             let data = match row.get(3) {
                 Some(CypherValue::Map(m)) => m.clone(),
-                _ => HashMap::new(),
+                _ => BTreeMap::new(),
             };
             (from_uuid, n_uuid, entity, data)
         })
@@ -1358,7 +1862,7 @@ mod tests {
                 field_type: FieldType::Text,
                 title_for: Some("main".to_string()),
                 content_for: None,
-                chunked: false,
+
                 boost: Some(2.0),
                 default_value: None,
             },
@@ -1369,7 +1873,7 @@ mod tests {
                 field_type: FieldType::Text,
                 title_for: None,
                 content_for: Some(vec!["main".to_string()]),
-                chunked: true,
+
                 boost: None,
                 default_value: None,
             },
