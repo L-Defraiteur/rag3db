@@ -185,7 +185,7 @@ The **cxx** bridge (not extern C) provides typed Rust <-> C++ structs, zero JSON
 ## Provenance
 
 - **Kuzu**: [kuzudb/kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 (MIT License, see NOTICE)
-- **Tantivy**: [L-Defraiteur/tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of v0.26.0, MIT License)
+- **Tantivy**: [L-Defraiteur/tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of v0.26.0, LRSL v1.2)
 
 ## License
 
