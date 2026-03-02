@@ -22,7 +22,7 @@ static constexpr std::array icebergExtensionFunctions = {"ICEBERG_SCAN", "ICEBER
     "ICEBERG_SNAPSHOTS"};
 static constexpr std::array azureExtensionFunctions = {"AZURE_SCAN"};
 static constexpr std::array vectorExtensionFunctions = {"QUERY_VECTOR_INDEX", "CREATE_VECTOR_INDEX",
-    "DROP_VECTOR_INDEX"};
+    "DROP_VECTOR_INDEX", "VECTOR_SEARCH", "VECTOR_DISTANCE"};
 static constexpr std::array llmExtensionFunctions = {"CREATE_EMBEDDING"};
 static constexpr std::array neo4jExtensionFunctions = {"NEO4J_MIGRATE"};
 static constexpr std::array algoExtensionFunctions = {"K_CORE_DECOMPOSITION", "PAGE_RANK",
@@ -30,6 +30,8 @@ static constexpr std::array algoExtensionFunctions = {"K_CORE_DECOMPOSITION", "P
     "WEAKLY_CONNECTED_COMPONENTS"};
 static constexpr std::array tantivyFtsExtensionFunctions = {"CREATE_TANTIVY_INDEX",
     "QUERY_TANTIVY_INDEX", "DROP_TANTIVY_INDEX", "SEARCH", "SEARCH_SCORE", "SEARCH_HIGHLIGHTS"};
+static constexpr std::array sparseVectorExtensionFunctions = {"CREATE_SPARSE_VECTOR_INDEX",
+    "QUERY_SPARSE_VECTOR_INDEX", "DROP_SPARSE_VECTOR_INDEX", "SPARSE_SEARCH", "SPARSE_SCORE"};
 
 static constexpr EntriesForExtension functionsForExtensionsRaw[] = {
     {"FTS", ftsExtensionFunctions, ftsExtensionFunctions.size()},
@@ -43,6 +45,7 @@ static constexpr EntriesForExtension functionsForExtensionsRaw[] = {
     {"NEO4J", neo4jExtensionFunctions, neo4jExtensionFunctions.size()},
     {"ALGO", algoExtensionFunctions, algoExtensionFunctions.size()},
     {"TANTIVY_FTS", tantivyFtsExtensionFunctions, tantivyFtsExtensionFunctions.size()},
+    {"SPARSE_VECTOR", sparseVectorExtensionFunctions, sparseVectorExtensionFunctions.size()},
 };
 static constexpr std::array functionsForExtensions = std::to_array(functionsForExtensionsRaw);
 

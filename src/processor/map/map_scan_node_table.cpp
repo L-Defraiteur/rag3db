@@ -4,7 +4,7 @@
 #include "common/mask.h"
 #include "planner/operator/scan/logical_scan_node_table.h"
 #include "processor/expression_mapper.h"
-#include "processor/operator/scan/fts_scan_node_table.h"
+#include "processor/operator/scan/index_scan_node_table.h"
 #include "processor/operator/scan/primary_key_scan_node_table.h"
 #include "processor/operator/scan/scan_node_table.h"
 #include "processor/plan_mapper.h"
@@ -91,24 +91,24 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapScanNodeTable(
         return std::make_unique<PrimaryKeyScanNodeTable>(std::move(scanInfo), std::move(tableInfos),
             std::move(evaluator), std::move(sharedState), getOperatorID(), std::move(printInfo));
     }
-    case LogicalScanNodeTableType::FTS_SCAN: {
-        auto& ftsInfo = scan.getExtraInfo()->constCast<FTSScanInfo>();
+    case LogicalScanNodeTableType::INDEX_SCAN: {
+        auto& indexInfo = scan.getExtraInfo()->constCast<IndexScanInfo>();
         KU_ASSERT(tableInfos.size() == 1);
-        // Find virtual property positions (score and highlights in outVectors).
-        idx_t scoreVectorIdx = INVALID_IDX;
-        idx_t highlightsVectorIdx = INVALID_IDX;
+        // Find virtual property positions in outVectors.
+        std::vector<idx_t> virtualVectorIndices;
         const auto& properties = scan.getProperties();
-        for (idx_t i = 0; i < properties.size(); i++) {
-            if (properties[i].get() == ftsInfo.scoreExpr.get()) {
-                scoreVectorIdx = i;
-            } else if (properties[i].get() == ftsInfo.highlightsExpr.get()) {
-                highlightsVectorIdx = i;
+        for (auto& vExpr : indexInfo.virtualExprs) {
+            for (idx_t i = 0; i < properties.size(); i++) {
+                if (properties[i].get() == vExpr.get()) {
+                    virtualVectorIndices.push_back(i);
+                    break;
+                }
             }
         }
-        KU_ASSERT(scoreVectorIdx != INVALID_IDX && highlightsVectorIdx != INVALID_IDX);
-        auto printInfo = std::make_unique<FTSScanPrintInfo>(tableNames[0]);
-        return std::make_unique<FTSScanNodeTable>(std::move(scanInfo), std::move(tableInfos[0]),
-            ftsInfo.searchFunc, ftsInfo.limit, scoreVectorIdx, highlightsVectorIdx,
+        KU_ASSERT(virtualVectorIndices.size() == indexInfo.virtualExprs.size());
+        auto printInfo = std::make_unique<IndexScanPrintInfo>(tableNames[0]);
+        return std::make_unique<IndexScanNodeTable>(std::move(scanInfo), std::move(tableInfos[0]),
+            indexInfo.searchFunc, indexInfo.limit, std::move(virtualVectorIndices),
             getOperatorID(), std::move(printInfo));
     }
     default:

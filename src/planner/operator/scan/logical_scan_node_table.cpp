@@ -23,7 +23,7 @@ void LogicalScanNodeTable::computeFactorizedSchema() {
     }
     switch (scanType) {
     case LogicalScanNodeTableType::PRIMARY_KEY_SCAN:
-    case LogicalScanNodeTableType::FTS_SCAN: {
+    case LogicalScanNodeTableType::INDEX_SCAN: {
         schema->setGroupAsSingleState(groupPos);
     } break;
     default:
@@ -39,7 +39,7 @@ void LogicalScanNodeTable::computeFlatSchema() {
         schema->insertToGroupAndScope(property, 0);
     }
     if (scanType == LogicalScanNodeTableType::PRIMARY_KEY_SCAN ||
-        scanType == LogicalScanNodeTableType::FTS_SCAN) {
+        scanType == LogicalScanNodeTableType::INDEX_SCAN) {
         schema->setGroupAsSingleState(0);
     }
 }

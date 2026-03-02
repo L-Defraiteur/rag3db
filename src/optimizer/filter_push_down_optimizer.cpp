@@ -4,7 +4,7 @@
 #include "binder/expression/property_expression.h"
 #include "binder/expression/scalar_function_expression.h"
 #include "binder/expression/variable_expression.h"
-#include "common/fts_types.h"
+#include "common/index_search_types.h"
 #include "main/client_context.h"
 #include "planner/operator/extend/logical_extend.h"
 #include "planner/operator/logical_empty_result.h"
@@ -209,31 +209,32 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitScanNodeTableRepl
             predicateSet.addPredicate(primaryKeyEqualityComparison);
         }
     }
-    // Try FTS scan rewrite (only if still a regular SCAN and single table).
+    // Try index scan rewrite (only if still a regular SCAN and single table).
     if (scan.getScanType() == LogicalScanNodeTableType::SCAN && tableIDs.size() == 1) {
         auto searchPredicate = predicateSet.popSearchPredicate();
         if (searchPredicate != nullptr) {
             auto& funcExpr = searchPredicate->constCast<ScalarFunctionExpression>();
-            auto* ftsBindData = dynamic_cast<FTSSearchBindData*>(funcExpr.getBindData());
-            KU_ASSERT(ftsBindData != nullptr);
-            auto searchFunc = ftsBindData->searchFunc;
+            auto* bindData = dynamic_cast<IndexSearchBindData*>(funcExpr.getBindData());
+            KU_ASSERT(bindData != nullptr);
+            auto searchFunc = bindData->searchFunc;
             int64_t limit = 1000;
 
-            // Create virtual property expressions for score and highlights.
-            // Unique names MUST match SEARCH_SCORE() and SEARCH_HIGHLIGHTS() calls
-            // so the ExpressionMapper resolves them as references, not evaluations.
-            auto scoreExpr = std::make_shared<VariableExpression>(
-                LogicalType::DOUBLE(), "SEARCH_SCORE()", "_fts_score");
-            auto hlExpr = std::make_shared<VariableExpression>(
-                LogicalType::STRING(), "SEARCH_HIGHLIGHTS()", "_fts_highlights");
+            // Create virtual property expressions from bind data specs.
+            // Unique names MUST match the virtual function calls (e.g., SEARCH_SCORE(),
+            // VECTOR_DISTANCE()) so the ExpressionMapper resolves them as references.
+            std::vector<std::shared_ptr<Expression>> virtualExprs;
+            for (auto& spec : bindData->virtualExprSpecs) {
+                auto expr = std::make_shared<VariableExpression>(
+                    spec.type.copy(), spec.functionName + "()",
+                    "_idx_" + spec.functionName);
+                scan.addProperty(expr);
+                virtualExprs.push_back(expr);
+            }
 
-            scan.addProperty(scoreExpr);
-            scan.addProperty(hlExpr);
-
-            auto ftsInfo = std::make_unique<FTSScanInfo>(
-                std::move(searchFunc), limit, scoreExpr, hlExpr);
-            scan.setScanType(LogicalScanNodeTableType::FTS_SCAN);
-            scan.setExtraInfo(std::move(ftsInfo));
+            auto indexInfo = std::make_unique<IndexScanInfo>(
+                std::move(searchFunc), limit, std::move(virtualExprs));
+            scan.setScanType(LogicalScanNodeTableType::INDEX_SCAN);
+            scan.setExtraInfo(std::move(indexInfo));
             scan.computeFlatSchema();
         }
     }
@@ -375,16 +376,16 @@ expression_vector PredicateSet::getAllPredicates() {
     return result;
 }
 
-// Find the FTS_SCAN node in the plan tree and return its FTSScanInfo, or nullptr.
-static FTSScanInfo* findFTSScanInfo(LogicalOperator* op) {
+// Find the INDEX_SCAN node in the plan tree and return its IndexScanInfo, or nullptr.
+static IndexScanInfo* findIndexScanInfo(LogicalOperator* op) {
     if (op->getOperatorType() == LogicalOperatorType::SCAN_NODE_TABLE) {
         auto& scan = op->cast<LogicalScanNodeTable>();
-        if (scan.getScanType() == LogicalScanNodeTableType::FTS_SCAN) {
-            return dynamic_cast<FTSScanInfo*>(scan.getExtraInfo());
+        if (scan.getScanType() == LogicalScanNodeTableType::INDEX_SCAN) {
+            return dynamic_cast<IndexScanInfo*>(scan.getExtraInfo());
         }
     }
     for (auto i = 0u; i < op->getNumChildren(); ++i) {
-        auto result = findFTSScanInfo(op->getChild(i).get());
+        auto result = findIndexScanInfo(op->getChild(i).get());
         if (result != nullptr) {
             return result;
         }
@@ -392,49 +393,47 @@ static FTSScanInfo* findFTSScanInfo(LogicalOperator* op) {
     return nullptr;
 }
 
-// Replace SEARCH_SCORE()/SEARCH_HIGHLIGHTS() function expressions with the corresponding
-// VariableExpressions in an expression vector. Returns true if any replacement was made.
+// Replace virtual function expressions (e.g., SEARCH_SCORE(), VECTOR_DISTANCE()) with the
+// corresponding VariableExpressions. Returns true if any replacement was made.
 static bool replaceInExprVector(expression_vector& exprs,
-    const std::shared_ptr<Expression>& scoreExpr,
-    const std::shared_ptr<Expression>& hlExpr) {
+    const std::vector<std::shared_ptr<Expression>>& virtualExprs) {
     bool changed = false;
     for (auto& expr : exprs) {
-        if (expr->expressionType == ExpressionType::FUNCTION &&
-            expr->getUniqueName() == scoreExpr->getUniqueName()) {
-            expr = scoreExpr;
-            changed = true;
-        } else if (expr->expressionType == ExpressionType::FUNCTION &&
-                   expr->getUniqueName() == hlExpr->getUniqueName()) {
-            expr = hlExpr;
-            changed = true;
+        if (expr->expressionType == ExpressionType::FUNCTION) {
+            for (auto& vExpr : virtualExprs) {
+                if (expr->getUniqueName() == vExpr->getUniqueName()) {
+                    expr = vExpr;
+                    changed = true;
+                    break;
+                }
+            }
         }
     }
     return changed;
 }
 
-// Walk the plan tree and replace SEARCH_SCORE()/SEARCH_HIGHLIGHTS() ScalarFunctionExpressions
-// with the VariableExpressions created by the FTS_SCAN rewrite.
+// Walk the plan tree and replace virtual ScalarFunctionExpressions (e.g., SEARCH_SCORE(),
+// VECTOR_DISTANCE(), SPARSE_SCORE()) with the VariableExpressions created by the INDEX_SCAN rewrite.
 void FilterPushDownOptimizer::resolveSearchExpressions(LogicalOperator* root) {
-    auto* ftsInfo = findFTSScanInfo(root);
-    if (ftsInfo == nullptr) {
+    auto* indexInfo = findIndexScanInfo(root);
+    if (indexInfo == nullptr) {
         return;
     }
-    auto& scoreExpr = ftsInfo->scoreExpr;
-    auto& hlExpr = ftsInfo->highlightsExpr;
+    auto& virtualExprs = indexInfo->virtualExprs;
 
     std::function<void(LogicalOperator*)> walk = [&](LogicalOperator* op) {
         switch (op->getOperatorType()) {
         case LogicalOperatorType::PROJECTION: {
             auto& proj = op->cast<LogicalProjection>();
             auto exprs = proj.getExpressionsToProject();
-            if (replaceInExprVector(exprs, scoreExpr, hlExpr)) {
+            if (replaceInExprVector(exprs, virtualExprs)) {
                 proj.setExpressionsToProject(exprs);
             }
         } break;
         case LogicalOperatorType::ORDER_BY: {
             auto& orderBy = op->cast<LogicalOrderBy>();
             auto exprs = orderBy.getExpressionsToOrderBy();
-            if (replaceInExprVector(exprs, scoreExpr, hlExpr)) {
+            if (replaceInExprVector(exprs, virtualExprs)) {
                 orderBy.setExpressionsToOrderBy(std::move(exprs));
             }
         } break;

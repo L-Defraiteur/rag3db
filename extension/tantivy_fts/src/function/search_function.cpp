@@ -7,7 +7,7 @@
 #include "function/scalar_function.h"
 #include "catalog/catalog.h"
 #include "common/exception/binder.h"
-#include "common/fts_types.h"
+#include "common/index_search_types.h"
 #include "common/string_format.h"
 #include "index/tantivy_index.h"
 #include "main/client_context.h"
@@ -105,19 +105,26 @@ static std::string buildQueryJson(const std::string& field, const std::string& v
 
 // ── SearchBindData ──────────────────────────────────────────────────────────
 
-struct SearchBindData final : FTSSearchBindData {
+struct SearchBindData final : IndexSearchBindData {
     table_id_t tableID;
     std::string fieldName;
     std::string queryJson;
 
     SearchBindData(LogicalType resultType, table_id_t tableID, std::string fieldName,
-        std::string queryJson, FTSSearchFunc searchFunc)
-        : FTSSearchBindData{std::move(resultType), std::move(searchFunc)}, tableID{tableID},
-          fieldName{std::move(fieldName)}, queryJson{std::move(queryJson)} {}
+        std::string queryJson, IndexSearchFunc searchFunc,
+        std::vector<VirtualExprSpec> virtualExprSpecs)
+        : IndexSearchBindData{std::move(resultType), std::move(searchFunc),
+              std::move(virtualExprSpecs)},
+          tableID{tableID}, fieldName{std::move(fieldName)}, queryJson{std::move(queryJson)} {}
 
     std::unique_ptr<FunctionBindData> copy() const override {
+        std::vector<VirtualExprSpec> specsCopy;
+        specsCopy.reserve(virtualExprSpecs.size());
+        for (auto& spec : virtualExprSpecs) {
+            specsCopy.push_back(spec.copy());
+        }
         return std::make_unique<SearchBindData>(
-            resultType.copy(), tableID, fieldName, queryJson, searchFunc);
+            resultType.copy(), tableID, fieldName, queryJson, searchFunc, std::move(specsCopy));
     }
 };
 
@@ -188,15 +195,15 @@ static std::unique_ptr<FunctionBindData> searchBindFunc(const ScalarBindFuncInpu
     auto& tantivyIndex = indexOpt.value()->cast<TantivyIndex>();
     TantivyIndex* indexPtr = &tantivyIndex;
 
-    FTSSearchFunc searchFunc = [indexPtr, queryJson](int64_t limit)
-        -> std::vector<FTSSearchResult> {
+    IndexSearchFunc searchFunc = [indexPtr, queryJson](int64_t limit)
+        -> std::vector<IndexSearchResult> {
         indexPtr->flushIfDirty();
         auto rustResults = search_with_highlights(
             indexPtr->getHandle(), queryJson, static_cast<uint32_t>(limit));
-        std::vector<FTSSearchResult> results;
+        std::vector<IndexSearchResult> results;
         results.reserve(rustResults.size());
         for (const auto& r : rustResults) {
-            results.push_back(FTSSearchResult{
+            results.push_back(IndexSearchResult{
                 static_cast<offset_t>(r.node_id),
                 static_cast<double>(r.score),
                 highlightsToJson(r.highlights)});
@@ -204,9 +211,13 @@ static std::unique_ptr<FunctionBindData> searchBindFunc(const ScalarBindFuncInpu
         return results;
     };
 
+    std::vector<VirtualExprSpec> virtualSpecs;
+    virtualSpecs.emplace_back("SEARCH_SCORE", LogicalType::DOUBLE());
+    virtualSpecs.emplace_back("SEARCH_HIGHLIGHTS", LogicalType::STRING());
+
     return std::make_unique<SearchBindData>(
         LogicalType::BOOL(), tableID, fieldName,
-        std::move(queryJson), std::move(searchFunc));
+        std::move(queryJson), std::move(searchFunc), std::move(virtualSpecs));
 }
 
 // ── SEARCH exec (fallback — optimizer should convert to FTS_SCAN) ───────────

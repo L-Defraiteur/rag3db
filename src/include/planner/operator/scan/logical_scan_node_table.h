@@ -1,7 +1,7 @@
 #pragma once
 
 #include "binder/expression/expression_util.h"
-#include "common/fts_types.h"
+#include "common/index_search_types.h"
 #include "planner/operator/logical_operator.h"
 #include "storage/predicate/column_predicate.h"
 
@@ -11,7 +11,7 @@ namespace planner {
 enum class LogicalScanNodeTableType : uint8_t {
     SCAN = 0,
     PRIMARY_KEY_SCAN = 1,
-    FTS_SCAN = 2,
+    INDEX_SCAN = 2,
 };
 
 struct ExtraScanNodeTableInfo {
@@ -34,20 +34,19 @@ struct PrimaryKeyScanInfo final : ExtraScanNodeTableInfo {
     }
 };
 
-struct FTSScanInfo final : ExtraScanNodeTableInfo {
-    FTSSearchFunc searchFunc;
+struct IndexScanInfo final : ExtraScanNodeTableInfo {
+    IndexSearchFunc searchFunc;
     int64_t limit;
-    std::shared_ptr<binder::Expression> scoreExpr;
-    std::shared_ptr<binder::Expression> highlightsExpr;
+    // Virtual expressions (e.g., score, highlights/metadata) — dynamic per index type.
+    std::vector<std::shared_ptr<binder::Expression>> virtualExprs;
 
-    FTSScanInfo(FTSSearchFunc searchFunc, int64_t limit,
-        std::shared_ptr<binder::Expression> scoreExpr,
-        std::shared_ptr<binder::Expression> highlightsExpr)
-        : searchFunc{std::move(searchFunc)}, limit{limit}, scoreExpr{std::move(scoreExpr)},
-          highlightsExpr{std::move(highlightsExpr)} {}
+    IndexScanInfo(IndexSearchFunc searchFunc, int64_t limit,
+        std::vector<std::shared_ptr<binder::Expression>> virtualExprs)
+        : searchFunc{std::move(searchFunc)}, limit{limit},
+          virtualExprs{std::move(virtualExprs)} {}
 
     std::unique_ptr<ExtraScanNodeTableInfo> copy() const override {
-        return std::make_unique<FTSScanInfo>(searchFunc, limit, scoreExpr, highlightsExpr);
+        return std::make_unique<IndexScanInfo>(searchFunc, limit, virtualExprs);
     }
 };
 
