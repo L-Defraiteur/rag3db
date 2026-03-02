@@ -2,6 +2,34 @@
 
 Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (Tantivy), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
 
+## Cypher-Native Index Search
+
+All search types integrate directly into Cypher `WHERE` clauses via the generalized `INDEX_SCAN` optimizer. No table functions needed — just `MATCH ... WHERE ... RETURN`.
+
+```cypher
+-- Full-text search (BM25, fuzzy, regex, multi-field highlights)
+MATCH (d:Document)
+WHERE SEARCH(d.body, 'rust programming', 'contains_split')
+RETURN d.title, SEARCH_SCORE() AS score, SEARCH_HIGHLIGHTS() AS hl
+ORDER BY score DESC LIMIT 10
+
+-- Sparse vector search (BM42/SPLADE-style lexical embeddings)
+MATCH (d:Document)
+WHERE SPARSE_SEARCH(d.ID, [42, 108, 256], [0.5, 0.3, 0.2])
+RETURN d.title, SPARSE_SCORE() AS score
+ORDER BY score DESC LIMIT 10
+
+-- Vector similarity search (HNSW, cosine/L2/IP)
+MATCH (d:Document)
+WHERE VECTOR_SEARCH(d.embedding, [0.1, 0.2, ..., 0.5], 10)
+RETURN d.title, VECTOR_DISTANCE() AS dist
+ORDER BY dist ASC LIMIT 10
+```
+
+Each function sets `isIndexScanPredicate` — the optimizer intercepts it, runs the index search, and provides virtual expressions (`SEARCH_SCORE()`, `SPARSE_SCORE()`, `VECTOR_DISTANCE()`) as output columns. Standard Cypher `AND` filters, `ORDER BY`, and `LIMIT` compose naturally.
+
+The table function API (`CALL QUERY_*`) remains available for advanced use cases (filtered search, projected graphs, etc.).
+
 ## Extensions
 
 ### tantivy_fts — Full-Text Search
@@ -153,10 +181,19 @@ Statically linked extensions in WASM: tantivy_fts, vector, sparse_vector, json, 
 See **[BUILD.md](BUILD.md)** for the full guide.
 
 ```bash
-# Native
+# Quick build (all extensions: tantivy_fts, sparse_vector, vector, geo)
+./build.sh
+
+# Build + run all extension tests
+./build.sh test
+
+# Build + test a single extension
+./build.sh sparse_vector
+
+# Manual cmake (extensions default to tantivy_fts;sparse_vector;vector;geo)
 mkdir -p build/release && cd build/release
-cmake ../.. -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXTENSIONS="tantivy_fts;geo" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
+cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
+  -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 cmake --build . -j$(nproc)
 
 # E2E tests (rag3weaver)

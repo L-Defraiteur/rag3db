@@ -1,3 +1,6 @@
 if (${BUILD_EXTENSION_TESTS})
     add_rag3db_test(vector_prepare_test prepare_test.cpp)
+    add_dependencies(vector_prepare_test rag3db_vector_extension)
+    add_rag3db_test(vector_search_test vector_search_test.cpp)
+    add_dependencies(vector_search_test rag3db_vector_extension)
 endif ()

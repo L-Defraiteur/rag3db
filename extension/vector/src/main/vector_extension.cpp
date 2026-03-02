@@ -2,6 +2,7 @@
 
 #include "catalog/hnsw_index_catalog_entry.h"
 #include "function/hnsw_index_functions.h"
+#include "function/vector_search_function.h"
 #include "main/client_context.h"
 #include "main/database.h"
 #include "storage/storage_manager.h"
@@ -37,6 +38,8 @@ void VectorExtension::load(main::ClientContext* context) {
     extension::ExtensionUtils::addStandaloneTableFunc<CreateVectorIndexFunction>(db);
     extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalDropHNSWIndexFunction>(db);
     extension::ExtensionUtils::addStandaloneTableFunc<DropVectorIndexFunction>(db);
+    extension::ExtensionUtils::addScalarFunc<VectorSearchFunction>(db);
+    extension::ExtensionUtils::addScalarFunc<VectorDistanceFunction>(db);
     extension::ExtensionUtils::registerIndexType(db, OnDiskHNSWIndex::getIndexType());
     initHNSWEntries(context);
 }

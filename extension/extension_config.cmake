@@ -1,4 +1,12 @@
-set(EXTENSION_LIST azure delta duckdb fts httpfs iceberg json llm postgres sqlite unity_catalog vector neo4j algo tantivy_fts sparse_vector)
+set(EXTENSION_LIST azure delta duckdb fts httpfs iceberg json llm postgres sqlite unity_catalog vector neo4j algo tantivy_fts sparse_vector geo)
+
+# Default extensions for native builds (tantivy_fts, sparse_vector, vector, geo).
+# Override with -DBUILD_EXTENSIONS="ext1;ext2" on the cmake command line.
+if("${BUILD_EXTENSIONS}" STREQUAL "")
+    set(BUILD_EXTENSIONS "tantivy_fts;sparse_vector;vector;geo" PARENT_SCOPE)
+    set(BUILD_EXTENSIONS "tantivy_fts;sparse_vector;vector;geo")
+    message(STATUS "BUILD_EXTENSIONS not set, using default: tantivy_fts;sparse_vector;vector;geo")
+endif()
 
 #set(EXTENSION_STATIC_LINK_LIST fts)
 string(JOIN ", " joined_extensions ${EXTENSION_STATIC_LINK_LIST})

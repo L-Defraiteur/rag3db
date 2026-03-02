@@ -2,7 +2,8 @@ add_library(rag3db_hnsw_function
         OBJECT
         create_hnsw_index.cpp
         drop_hnsw_index.cpp
-        query_hnsw_index.cpp)
+        query_hnsw_index.cpp
+        vector_search_function.cpp)
 
 set(VECTOR_EXTENSION_OBJECT_FILES
         ${VECTOR_EXTENSION_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_hnsw_function>

@@ -5,6 +5,7 @@
 #include "function/create_sparse_vector_index.h"
 #include "function/drop_sparse_vector_index.h"
 #include "function/query_sparse_vector_index.h"
+#include "function/sparse_search_function.h"
 #include "index/sparse_vector_index.h"
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
@@ -40,6 +41,8 @@ void SparseVectorExtension::load(main::ClientContext* context) {
     ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateSparseVectorFunction>(db);
     ExtensionUtils::addStandaloneTableFunc<DropSparseVectorFunction>(db);
     ExtensionUtils::addInternalStandaloneTableFunc<InternalDropSparseVectorFunction>(db);
+    ExtensionUtils::addScalarFunc<SparseSearchFunction>(db);
+    ExtensionUtils::addScalarFunc<SparseScoreFunction>(db);
     ExtensionUtils::registerIndexType(db, SparseVectorIndex::getIndexType());
     initSparseVectorEntries(context, *db.getCatalog());
 }
