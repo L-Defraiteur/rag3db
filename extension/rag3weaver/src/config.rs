@@ -178,7 +178,16 @@ pub struct ChunkingConfig {
 
     #[serde(alias = "fulltext_on_chunks")]
     pub fulltext_on_chunks: bool,
+
+    /// Maximum chars reserved for the title prefix in embed_text.
+    /// Title is truncated to this limit before being prepended to chunk text.
+    /// The effective chunk max_size is reduced by this amount + separator length.
+    /// Set to 0 to disable title prefix in embeddings.
+    #[serde(default = "default_title_max_chars", alias = "title_max_chars")]
+    pub title_max_chars: usize,
 }
+
+fn default_title_max_chars() -> usize { 256 }
 
 impl Default for ChunkingConfig {
     fn default() -> Self {
@@ -187,6 +196,7 @@ impl Default for ChunkingConfig {
             overlap: 200,
             strategy: ChunkStrategy::Semantic,
             fulltext_on_chunks: true,
+            title_max_chars: default_title_max_chars(),
         }
     }
 }

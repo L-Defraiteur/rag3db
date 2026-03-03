@@ -78,6 +78,9 @@ pub struct InsertOp {
     pub resolver: Option<EntityRefResolver>,
     /// Clone of the `EntityRef` given to the caller, for tracking (queue_item_id, temp_uuid).
     pub entity_ref: EntityRef,
+    /// Override the default priority (1.0). Used by AggregateProcessor to inject
+    /// chunk inserts at prio 2.6 (after aggregate at 2.5).
+    pub priority_override: Option<OrderedPriority>,
 }
 
 impl InsertOp {
@@ -92,7 +95,14 @@ impl InsertOp {
             data,
             resolver: Some(resolver),
             entity_ref,
+            priority_override: None,
         }
+    }
+
+    /// Create an InsertOp with a custom priority (used for post-aggregate chunk inserts).
+    pub fn with_priority(mut self, priority: OrderedPriority) -> Self {
+        self.priority_override = Some(priority);
+        self
     }
 
     /// Take the resolver out (consumed once on success by the processor).
@@ -114,6 +124,9 @@ pub struct LinkOp {
     pub resolver: Option<RelationRefResolver>,
     /// Clone of the `RelationRef` given to the caller.
     pub relation_ref: RelationRef,
+    /// Override the default priority (2.0). Used by AggregateProcessor to inject
+    /// chunk links at prio 2.7 (after aggregate at 2.5).
+    pub priority_override: Option<OrderedPriority>,
 }
 
 impl LinkOp {
@@ -132,7 +145,14 @@ impl LinkOp {
             properties,
             resolver: Some(resolver),
             relation_ref,
+            priority_override: None,
         }
+    }
+
+    /// Create a LinkOp with a custom priority (used for post-aggregate chunk links).
+    pub fn with_priority(mut self, priority: OrderedPriority) -> Self {
+        self.priority_override = Some(priority);
+        self
     }
 
     /// Take the resolver out (consumed once on success by the processor).
@@ -183,6 +203,28 @@ pub struct ChunkOp {
     pub data: BTreeMap<String, CypherValue>,
 }
 
+/// Rebuild a KB Index entry's content, re-chunk, and enqueue embed ops.
+///
+/// Priority 2.5 — processed after links (2.0), before embeds (3.0).
+/// Idempotent: queries the graph for current state and rebuilds from scratch.
+/// Deduplicated by `index_entry_uuid` at drain() time — 100 links to the same
+/// Directory produce a single rebuild.
+///
+/// Enqueued by:
+/// - `create()` for each KB where the entity has `titleFor`
+/// - `link()` when the content entity has `contentFor` for a KB owned by the other endpoint
+/// - `update()` / `delete()` for propagation
+pub struct AggregateOp {
+    /// UUID of the `{KB}_Index` entry to rebuild.
+    pub index_entry_uuid: String,
+    /// KB name (e.g. "TreeKB", "FileContentKB").
+    pub kb_name: String,
+    /// Title entity name (e.g. "Directory", "File").
+    pub title_entity: String,
+    /// UUID of the title entity instance.
+    pub source_uuid: String,
+}
+
 // ─── CatalogOp enum ─────────────────────────────────────────────────────────
 
 /// Main operation enum — each enqueued operation is one of these variants.
@@ -190,6 +232,7 @@ pub enum CatalogOp {
     Chunk(ChunkOp),
     Insert(InsertOp),
     Link(LinkOp),
+    Aggregate(AggregateOp),
     Embed(EmbedOp),
     SparseEmbed(SparseEmbedOp),
     DualEmbed(DualEmbedOp),
@@ -197,11 +240,13 @@ pub enum CatalogOp {
 
 impl CatalogOp {
     /// Processing priority (lower = processed first).
-    pub fn priority(&self) -> u8 {
+    /// Respects `priority_override` on InsertOp/LinkOp if set.
+    pub fn priority(&self) -> OrderedPriority {
         match self {
             Self::Chunk(_) => OP_CHUNK.priority,
-            Self::Insert(_) => OP_INSERT.priority,
-            Self::Link(_) => OP_LINK.priority,
+            Self::Insert(op) => op.priority_override.unwrap_or(OP_INSERT.priority),
+            Self::Link(op) => op.priority_override.unwrap_or(OP_LINK.priority),
+            Self::Aggregate(_) => OP_AGGREGATE.priority,
             Self::Embed(_) => OP_EMBED.priority,
             Self::SparseEmbed(_) => OP_SPARSE_EMBED.priority,
             Self::DualEmbed(_) => OP_DUAL_EMBED.priority,
@@ -214,6 +259,7 @@ impl CatalogOp {
             Self::Chunk(_) => OP_CHUNK.name,
             Self::Insert(_) => OP_INSERT.name,
             Self::Link(_) => OP_LINK.name,
+            Self::Aggregate(_) => OP_AGGREGATE.name,
             Self::Embed(_) => OP_EMBED.name,
             Self::SparseEmbed(_) => OP_SPARSE_EMBED.name,
             Self::DualEmbed(_) => OP_DUAL_EMBED.name,
@@ -226,10 +272,54 @@ impl CatalogOp {
             Self::Chunk(_) => &OP_CHUNK,
             Self::Insert(_) => &OP_INSERT,
             Self::Link(_) => &OP_LINK,
+            Self::Aggregate(_) => &OP_AGGREGATE,
             Self::Embed(_) => &OP_EMBED,
             Self::SparseEmbed(_) => &OP_SPARSE_EMBED,
             Self::DualEmbed(_) => &OP_DUAL_EMBED,
         }
+    }
+}
+
+// ─── OrderedPriority ────────────────────────────────────────────────────────
+
+/// Wrapper around `f32` that implements `Ord` (via `total_cmp`).
+///
+/// Needed because `f32` doesn't implement `Ord` in Rust (NaN issues).
+/// Used as key in `BTreeMap` for priority-based queue ordering.
+/// Values: 0.0 = chunk, 1.0 = insert, 2.0 = link, 3.0 = embed (full ingest),
+/// 3.5 = embed (touched sources), etc.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OrderedPriority(pub f32);
+
+impl OrderedPriority {
+    pub fn new(v: f32) -> Self {
+        Self(v)
+    }
+}
+
+impl Eq for OrderedPriority {}
+
+impl PartialOrd for OrderedPriority {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OrderedPriority {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+
+impl std::fmt::Display for OrderedPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<f32> for OrderedPriority {
+    fn from(v: f32) -> Self {
+        Self(v)
     }
 }
 
@@ -238,49 +328,62 @@ impl CatalogOp {
 /// Static configuration for an operation type.
 pub struct OperationConfig {
     pub name: &'static str,
-    pub priority: u8,
+    pub priority: OrderedPriority,
     pub batch_size: usize,
     pub max_retries: u32,
 }
 
 pub const OP_CHUNK: OperationConfig = OperationConfig {
     name: "chunk",
-    priority: 0,
+    priority: OrderedPriority(0.0),
     batch_size: 10_000,
     max_retries: 0,
 };
 
 pub const OP_INSERT: OperationConfig = OperationConfig {
     name: "insert",
-    priority: 1,
+    priority: OrderedPriority(1.0),
     batch_size: 50,
     max_retries: 3,
 };
 
 pub const OP_LINK: OperationConfig = OperationConfig {
     name: "link",
-    priority: 2,
+    priority: OrderedPriority(2.0),
     batch_size: 50,
     max_retries: 3,
 };
 
+pub const OP_AGGREGATE: OperationConfig = OperationConfig {
+    name: "aggregate",
+    priority: OrderedPriority(2.5),
+    batch_size: 50,
+    max_retries: 3,
+};
+
+/// Post-aggregate chunk inserts (injected by AggregateProcessor, prio > 2.5).
+pub const PRIO_POST_AGG_INSERT: OrderedPriority = OrderedPriority(2.6);
+/// Post-aggregate chunk links (injected by AggregateProcessor, prio > 2.5).
+pub const PRIO_POST_AGG_LINK: OrderedPriority = OrderedPriority(2.7);
+
+
 pub const OP_EMBED: OperationConfig = OperationConfig {
     name: "embed",
-    priority: 3,
+    priority: OrderedPriority(3.0),
     batch_size: 32,
     max_retries: 3,
 };
 
 pub const OP_SPARSE_EMBED: OperationConfig = OperationConfig {
     name: "sparse_embed",
-    priority: 3,
+    priority: OrderedPriority(3.0),
     batch_size: 32,
     max_retries: 2,
 };
 
 pub const OP_DUAL_EMBED: OperationConfig = OperationConfig {
     name: "dual_embed",
-    priority: 3,
+    priority: OrderedPriority(3.0),
     batch_size: 500,
     max_retries: 3,
 };
@@ -317,6 +420,15 @@ mod tests {
         (op, relation_ref)
     }
 
+    fn make_aggregate() -> CatalogOp {
+        CatalogOp::Aggregate(AggregateOp {
+            index_entry_uuid: "idx-uuid-1".to_string(),
+            kb_name: "TreeKB".to_string(),
+            title_entity: "Directory".to_string(),
+            source_uuid: "dir-uuid-1".to_string(),
+        })
+    }
+
     fn make_embed() -> CatalogOp {
         let (entity_ref, _resolver) = EntityRef::new("Document");
         CatalogOp::Embed(EmbedOp {
@@ -331,19 +443,72 @@ mod tests {
     #[test]
     fn insert_op_priority() {
         let (op, _) = make_insert();
-        assert_eq!(op.priority(), 1);
+        assert_eq!(op.priority(), OrderedPriority(1.0));
     }
 
     #[test]
     fn link_op_priority() {
         let (op, _) = make_link();
-        assert_eq!(op.priority(), 2);
+        assert_eq!(op.priority(), OrderedPriority(2.0));
+    }
+
+    #[test]
+    fn aggregate_op_priority() {
+        let op = make_aggregate();
+        assert_eq!(op.priority(), OrderedPriority(2.5));
+        assert_eq!(op.operation_type(), "aggregate");
+        assert_eq!(op.config().batch_size, 50);
     }
 
     #[test]
     fn embed_op_priority() {
         let op = make_embed();
-        assert_eq!(op.priority(), 3);
+        assert_eq!(op.priority(), OrderedPriority(3.0));
+    }
+
+    #[test]
+    fn ordered_priority_ordering() {
+        let p0 = OrderedPriority(0.0);
+        let p1 = OrderedPriority(1.0);
+        let p2 = OrderedPriority(2.0);
+        let p3 = OrderedPriority(3.0);
+        let p3_5 = OrderedPriority(3.5);
+        assert!(p0 < p1);
+        assert!(p1 < p2);
+        assert!(p2 < p3);
+        assert!(p3 < p3_5);
+        assert_eq!(p3, OrderedPriority(3.0));
+    }
+
+    #[test]
+    fn ordered_priority_btreemap() {
+        use std::collections::BTreeMap;
+        let mut map = BTreeMap::new();
+        map.insert(OrderedPriority(3.0), "embed");
+        map.insert(OrderedPriority(1.0), "insert");
+        map.insert(OrderedPriority(3.5), "touched");
+        map.insert(OrderedPriority(0.0), "chunk");
+        let keys: Vec<f32> = map.keys().map(|k| k.0).collect();
+        assert_eq!(keys, vec![0.0, 1.0, 3.0, 3.5]);
+    }
+
+    #[test]
+    fn priority_override_insert_and_link() {
+        let (mut insert, _) = make_insert();
+        assert_eq!(insert.priority(), OrderedPriority(1.0));
+        if let CatalogOp::Insert(ref mut op) = insert {
+            op.priority_override = Some(PRIO_POST_AGG_INSERT);
+        }
+        assert_eq!(insert.priority(), PRIO_POST_AGG_INSERT);
+        assert_eq!(insert.operation_type(), "insert"); // type unchanged
+
+        let (mut link, _) = make_link();
+        assert_eq!(link.priority(), OrderedPriority(2.0));
+        if let CatalogOp::Link(ref mut op) = link {
+            op.priority_override = Some(PRIO_POST_AGG_LINK);
+        }
+        assert_eq!(link.priority(), PRIO_POST_AGG_LINK);
+        assert_eq!(link.operation_type(), "link"); // type unchanged
     }
 
     // ── operation_type ──────────────────────────────────────────────

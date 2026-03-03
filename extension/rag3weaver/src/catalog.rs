@@ -18,10 +18,10 @@ use crate::filter::{FilterCompiler, FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
-use crate::ops::{CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::ops::{AggregateOp, CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid, PRIO_POST_AGG_INSERT, PRIO_POST_AGG_LINK};
 use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueEvent, QueueSender, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
-use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher};
+use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher, resolve_entity_kbs};
 use crate::sparse_index::SparseVector;
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::{chunk_uuid, hashsafe_uuid};
@@ -262,6 +262,20 @@ impl Catalog {
                 conn: self.conn.clone(),
             }),
         );
+
+        // Aggregate processor: rebuilds {KB}_Index content, chunks per source field.
+        self.warm_chunker_cache();
+        self.queue.register_processor(
+            "aggregate",
+            Box::new(AggregateProcessor {
+                conn: self.conn.clone(),
+                config: self.config.clone(),
+                kb_metadata: self.kb_metadata.clone(),
+                chunker_cache: std::mem::take(&mut self.chunker_cache),
+                has_sparse: self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
+                has_dual: self.dual_embedder.is_some(),
+            }),
+        );
         // Register dual embed processor if dual embedder is available,
         // otherwise fall back to separate embed + sparse_embed processors.
         if let Some(ref dual_emb) = self.dual_embedder {
@@ -298,30 +312,19 @@ impl Catalog {
             );
         }
 
-        // Create sparse vector indexes via extension for KBs that have sparse=true
-        // Sparse embeddings live on the chunk table (when chunked), so the index
-        // must be created there — not on the parent entity.
+        // Create sparse vector indexes via extension for KBs that have sparse=true.
+        // Sparse embeddings live on {KB}_Index_Chunk (one index per KB).
         if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
             for (kb_name, kb_config) in &self.config.knowledge_bases {
                 if kb_config.signals.sparse() {
+                    let target = format!("{kb_name}_Index_Chunk");
                     let indices_col = format!("{kb_name}_sparse_indices");
                     let weights_col = format!("{kb_name}_sparse_weights");
-                    if let Some(kb_meta) = self.kb_metadata.get(kb_name) {
-                        for entity in &kb_meta.entities {
-                            let target = if self.config.entities.get(entity.as_str())
-                                .map(|e| entity_has_chunks(e)).unwrap_or(false)
-                            {
-                                format!("{entity}_Chunk")
-                            } else {
-                                entity.clone()
-                            };
-                            let cypher = format!(
-                                "CALL CREATE_SPARSE_VECTOR_INDEX('{target}', '{indices_col}', '{weights_col}')"
-                            );
-                            // Ignore errors (index may already exist)
-                            let _ = self.conn.execute(&cypher).await;
-                        }
-                    }
+                    let cypher = format!(
+                        "CALL CREATE_SPARSE_VECTOR_INDEX('{target}', '{indices_col}', '{weights_col}')"
+                    );
+                    // Ignore errors (index may already exist)
+                    let _ = self.conn.execute(&cypher).await;
                 }
             }
         }
@@ -374,10 +377,84 @@ impl Catalog {
             entity_ref.clone(),
         ));
 
-        // Enqueue InsertOp + ChunkOp (deferred chunking, processed at drain time).
+        // Enqueue InsertOp for the entity + KB Index ops (if titleFor any KB).
         let mut ops: Vec<CatalogOp> = vec![insert_op];
-        if let Some(chunk_op) = self.maybe_enqueue_chunk_op(entity_name, &uuid, &entity_ref, &data) {
-            ops.push(chunk_op);
+
+        // For each KB where this entity has titleFor, create Index entry + AggregateOp.
+        let entity_kbs = resolve_entity_kbs(entity_def);
+        for (kb_name, mapping) in &entity_kbs {
+            if mapping.title_field.is_none() {
+                continue; // This entity only has contentFor for this KB, not titleFor
+            }
+            let title_field = mapping.title_field.as_ref().unwrap();
+
+            // Build {KB}_Index entry data
+            let index_uuid = hashsafe_uuid(
+                &format!("{kb_name}_Index"),
+                &[entity_name, &uuid],
+            );
+            let title_max_chars = self.kb_metadata.get(kb_name.as_str())
+                .map(|m| m.chunking.title_max_chars)
+                .unwrap_or(256);
+            let raw_title = data
+                .get(title_field)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let title_text: String = if title_max_chars > 0 && raw_title.len() > title_max_chars {
+                raw_title.chars().take(title_max_chars).collect()
+            } else {
+                raw_title.to_string()
+            };
+
+            // Collect content from this entity's own contentFor fields
+            let mut content_parts: Vec<String> = Vec::new();
+            for field_name in &mapping.content_fields {
+                if let Some(text) = data.get(field_name).and_then(|v| v.as_str()) {
+                    if !text.is_empty() {
+                        content_parts.push(text.to_string());
+                    }
+                }
+            }
+            let content_text = content_parts.join("\n");
+
+            let index_table = format!("{kb_name}_Index");
+            let mut index_data = BTreeMap::new();
+            index_data.insert("_uuid".to_string(), CypherValue::String(index_uuid.clone()));
+            index_data.insert("_source_entity".to_string(), CypherValue::String(entity_name.to_string()));
+            index_data.insert("_source_uuid".to_string(), CypherValue::String(uuid.clone()));
+            // Sentinel hash: empty string forces AggregateProcessor to always run on first drain.
+            // The real hash is computed by AggregateProcessor after aggregating all content.
+            index_data.insert("_content_hash".to_string(), CypherValue::String(String::new()));
+            index_data.insert("_title".to_string(), CypherValue::String(title_text));
+            index_data.insert("_content".to_string(), CypherValue::String(content_text));
+
+            let (index_ref, index_resolver) = EntityRef::new(&index_table);
+            ops.push(CatalogOp::Insert(InsertOp::new(
+                index_table.clone(),
+                index_data,
+                index_resolver,
+                index_ref.clone(),
+            )));
+
+            // LinkOp: {Entity}_IN_{KB}
+            let in_rel_name = format!("{entity_name}_IN_{kb_name}");
+            let (in_rel_ref, in_rel_resolver) = RelationRef::new(&in_rel_name);
+            ops.push(CatalogOp::Link(LinkOp::new(
+                in_rel_name,
+                RefOrUuid::Ref(entity_ref.clone()),
+                RefOrUuid::Ref(index_ref),
+                BTreeMap::new(),
+                in_rel_resolver,
+                in_rel_ref,
+            )));
+
+            // AggregateOp (deferred: will rebuild _content + chunks at drain time)
+            ops.push(CatalogOp::Aggregate(AggregateOp {
+                index_entry_uuid: index_uuid,
+                kb_name: kb_name.clone(),
+                title_entity: entity_name.to_string(),
+                source_uuid: uuid.clone(),
+            }));
         }
 
         self.queue.enqueue_all(ops);
@@ -393,22 +470,56 @@ impl Catalog {
     ) -> Result<RelationRef, CatalogError> {
         self.check_initialized()?;
 
-        if !self.config.relations.contains_key(rel_name) {
-            return Err(CatalogError::UnknownRelation(rel_name.to_string()));
-        }
+        let rel_def = self.config.relations.get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let from_entity = rel_def.from.clone();
+        let to_entity = rel_def.to.clone();
+
+        let from_ref = from.into();
+        let to_ref = to.into();
 
         let (relation_ref, resolver) = RelationRef::new(rel_name);
 
         let op = CatalogOp::Link(LinkOp::new(
             rel_name.to_string(),
-            from.into(),
-            to.into(),
+            from_ref.clone(),
+            to_ref.clone(),
             properties,
             resolver,
             relation_ref.clone(),
         ));
 
-        self.queue.enqueue(op);
+        let mut ops: Vec<CatalogOp> = vec![op];
+
+        // Incremental: if this relation connects a content entity to a title entity
+        // for a KB, enqueue an AggregateOp so the title entity's index is rebuilt.
+        // Only when UUIDs are already resolved (incremental case). In batch mode,
+        // UUIDs are pending EntityRefs and create() already enqueued AggregateOps.
+        for (kb_name, kb_meta) in &self.kb_metadata {
+            let title_entity = &kb_meta.title.entity;
+            // Check if one side is the title entity and the other contributes content
+            let title_uuid = if from_entity == *title_entity && kb_meta.entities.contains(&to_entity) {
+                from_ref.try_resolve().ok()
+            } else if to_entity == *title_entity && kb_meta.entities.contains(&from_entity) {
+                to_ref.try_resolve().ok()
+            } else {
+                None
+            };
+            if let Some(t_uuid) = title_uuid {
+                let index_uuid = hashsafe_uuid(
+                    &format!("{kb_name}_Index"),
+                    &[title_entity, &t_uuid],
+                );
+                ops.push(CatalogOp::Aggregate(AggregateOp {
+                    index_entry_uuid: index_uuid,
+                    kb_name: kb_name.clone(),
+                    title_entity: title_entity.clone(),
+                    source_uuid: t_uuid,
+                }));
+            }
+        }
+
+        self.queue.enqueue_all(ops);
         Ok(relation_ref)
     }
 
@@ -581,47 +692,70 @@ impl Catalog {
             .unwrap_or("");
         let content_changed = old_hash != new_hash;
 
-        // Re-chunk if content changed
+        // If content changed, enqueue AggregateOps for all KBs this entity contributes to.
+        // The AggregateProcessor will handle deleting old chunks, re-chunking, and re-embedding.
         let mut reembedded = false;
-        let mut chunks_deleted = 0usize;
-        let mut chunks_created = 0usize;
+        let chunks_deleted = 0usize;
+        let chunks_created = 0usize;
         if content_changed {
             let entity_def = &self.config.entities[entity_name];
+            let entity_kbs = resolve_entity_kbs(entity_def);
 
-            // Delete old chunks
-            if entity_has_chunks(entity_def) {
-                let chunk_table = format!("{entity_name}_Chunk");
-                let del_cypher = format!(
-                    "MATCH (c:{chunk_table} {{_parent_uuid: $uuid}}) \
-                     DETACH DELETE c RETURN count(c) AS cnt"
-                );
-                let del_result = self
-                    .conn
-                    .execute_with_params(&del_cypher, &[QueryParam::new("uuid", uuid)])
-                    .await
-                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-                chunks_deleted = del_result
-                    .rows
-                    .get(0)
-                    .and_then(|r| r.get(0))
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0) as usize;
+            let mut ops = Vec::new();
+            for (kb_name, mapping) in &entity_kbs {
+                if mapping.title_field.is_some() {
+                    // This entity is the title entity for this KB → aggregate its index entry
+                    let index_uuid = hashsafe_uuid(
+                        &format!("{kb_name}_Index"),
+                        &[entity_name, uuid],
+                    );
+                    ops.push(CatalogOp::Aggregate(AggregateOp {
+                        index_entry_uuid: index_uuid,
+                        kb_name: kb_name.clone(),
+                        title_entity: entity_name.to_string(),
+                        source_uuid: uuid.to_string(),
+                    }));
+                    reembedded = true;
+                } else {
+                    // contentFor-only: find linked title entities and re-aggregate them.
+                    let kb_meta = match self.kb_metadata.get(kb_name.as_str()) {
+                        Some(m) => m,
+                        None => continue,
+                    };
+                    let title_entity = &kb_meta.title.entity;
+                    if let Some((rel_name, title_is_from)) = self.find_relation_to_entity(title_entity, entity_name) {
+                        let (match_pattern, return_field) = if title_is_from {
+                            (format!("MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: $uuid}})"), "t")
+                        } else {
+                            (format!("MATCH (e:{entity_name} {{_uuid: $uuid}})-[:{rel_name}]->(t:{title_entity})"), "t")
+                        };
+                        let query = format!("{match_pattern} RETURN {return_field}._uuid");
+                        if let Ok(title_results) = self
+                            .conn
+                            .execute_with_params(&query, &[QueryParam::new("uuid", uuid)])
+                            .await
+                        {
+                            for row in &title_results.rows {
+                                if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
+                                    let index_uuid = hashsafe_uuid(
+                                        &format!("{kb_name}_Index"),
+                                        &[title_entity, title_uuid],
+                                    );
+                                    ops.push(CatalogOp::Aggregate(AggregateOp {
+                                        index_entry_uuid: index_uuid,
+                                        kb_name: kb_name.clone(),
+                                        title_entity: title_entity.clone(),
+                                        source_uuid: title_uuid.to_string(),
+                                    }));
+                                    reembedded = true;
+                                }
+                            }
+                        }
+                    }
+                }
             }
-
-            // Re-chunk and re-embed via ChunkOp (deferred, parallel at drain time)
-            let (entity_ref, resolver) = EntityRef::new(entity_name);
-            resolver.resolve(uuid.to_string());
-            if let Some(chunk_op) = self.maybe_enqueue_chunk_op(entity_name, uuid, &entity_ref, &data) {
-                reembedded = true;
-                // chunks_created will be determined at drain time; estimate from chunker
-                let chunker = Chunker::new(ChunkerConfig::default());
-                let body = data.values()
-                    .filter_map(|v| v.as_str())
-                    .max_by_key(|s| s.len())
-                    .unwrap_or("");
-                chunks_created = chunker.chunk(body).len().max(1);
-                self.queue.enqueue_all(vec![chunk_op]);
+            if !ops.is_empty() {
+                self.queue.enqueue_all(ops);
             }
         }
 
@@ -655,28 +789,109 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        // Delete chunks then entity — kept as 2 queries because Kuzu does not
-        // support DETACH DELETE inside a WITH chain (no FOREACH either).
-        // Delete is a rare one-off operation so 2 round-trips is acceptable.
-        let mut chunks_deleted = 0;
-        if entity_has_chunks(&self.config.entities[entity_name]) {
-            let chunk_table = format!("{entity_name}_Chunk");
-            let cypher = format!(
-                "MATCH (c:{chunk_table} {{_parent_uuid: $uuid}}) \
-                 DETACH DELETE c RETURN count(c) AS cnt"
-            );
-            let result = self
-                .conn
-                .execute_with_params(&cypher, &[QueryParam::new("uuid", uuid)])
-                .await
-                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        // Delete KB Index entries and their chunks for KBs where this entity has titleFor.
+        // For contentFor-only KBs, delete SOURCED chunks and re-aggregate the title entities.
+        let mut chunks_deleted = 0usize;
+        let mut aggregate_ops: Vec<CatalogOp> = Vec::new();
+        let entity_def = &self.config.entities[entity_name];
+        let entity_kbs = resolve_entity_kbs(entity_def);
+        for (kb_name, mapping) in &entity_kbs {
+            if mapping.title_field.is_some() {
+                // This entity is the title entity for this KB → delete its index entry + chunks
+                let index_uuid = hashsafe_uuid(
+                    &format!("{kb_name}_Index"),
+                    &[entity_name, uuid],
+                );
+                // Delete chunks linked to this index entry
+                let chunk_table = format!("{kb_name}_Index_Chunk");
+                let del_chunks = format!(
+                    "MATCH (c:{chunk_table} {{_parent_uuid: $idx_uuid}}) \
+                     DETACH DELETE c RETURN count(c) AS cnt"
+                );
+                let result = self
+                    .conn
+                    .execute_with_params(&del_chunks, &[QueryParam::new("idx_uuid", index_uuid.clone())])
+                    .await
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                chunks_deleted += result
+                    .rows
+                    .get(0)
+                    .and_then(|r| r.get(0))
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as usize;
 
-            chunks_deleted = result
-                .rows
-                .get(0)
-                .and_then(|r| r.get(0))
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0) as usize;
+                // Delete the index entry itself
+                let index_table = format!("{kb_name}_Index");
+                let del_idx = format!(
+                    "MATCH (idx:{index_table} {{_uuid: $idx_uuid}}) DETACH DELETE idx"
+                );
+                let _ = self
+                    .conn
+                    .execute_with_params(&del_idx, &[QueryParam::new("idx_uuid", index_uuid)])
+                    .await;
+            } else {
+                // contentFor-only: delete SOURCED chunks from this entity, then re-aggregate
+                // the linked title entities so their _content is rebuilt without this entity.
+                let kb_meta = match self.kb_metadata.get(kb_name.as_str()) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let title_entity = &kb_meta.title.entity;
+
+                // Delete chunks this entity SOURCED for this KB
+                let sourced_rel = format!("{entity_name}_SOURCED_{kb_name}");
+                let chunk_table = format!("{kb_name}_Index_Chunk");
+                let del_sourced = format!(
+                    "MATCH (e:{entity_name} {{_uuid: $uuid}})-[:{sourced_rel}]->(c:{chunk_table}) \
+                     DETACH DELETE c RETURN count(c) AS cnt"
+                );
+                let result = self
+                    .conn
+                    .execute_with_params(&del_sourced, &[QueryParam::new("uuid", uuid)])
+                    .await
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                chunks_deleted += result
+                    .rows
+                    .get(0)
+                    .and_then(|r| r.get(0))
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as usize;
+
+                // Find linked title entities → enqueue AggregateOps to rebuild their content
+                if let Some((rel_name, title_is_from)) = self.find_relation_to_entity(title_entity, entity_name) {
+                    let (match_pattern, return_field) = if title_is_from {
+                        // title -[rel]-> content_entity
+                        (format!("MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: $uuid}})"), "t")
+                    } else {
+                        // content_entity -[rel]-> title
+                        (format!("MATCH (e:{entity_name} {{_uuid: $uuid}})-[:{rel_name}]->(t:{title_entity})"), "t")
+                    };
+                    let query = format!("{match_pattern} RETURN {return_field}._uuid");
+                    let title_results = self
+                        .conn
+                        .execute_with_params(&query, &[QueryParam::new("uuid", uuid)])
+                        .await
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                    for row in &title_results.rows {
+                        if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
+                            let index_uuid = hashsafe_uuid(
+                                &format!("{kb_name}_Index"),
+                                &[title_entity, title_uuid],
+                            );
+                            aggregate_ops.push(CatalogOp::Aggregate(AggregateOp {
+                                index_entry_uuid: index_uuid,
+                                kb_name: kb_name.clone(),
+                                title_entity: title_entity.clone(),
+                                source_uuid: title_uuid.to_string(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        if !aggregate_ops.is_empty() {
+            self.queue.enqueue_all(aggregate_ops);
         }
 
         // DETACH DELETE the entity
@@ -873,28 +1088,11 @@ impl Catalog {
         let signals = options.signals.unwrap_or(kb_config.signals);
 
         let search_limit = (options.limit + options.offset) * 2;
-        let entity = kb.title.entity.clone();
-        // Vector search targets the chunk table when the entity has chunked fields
-        let vector_entity = if self.config.entities.get(&entity)
-            .map(|e| entity_has_chunks(e)).unwrap_or(false)
-        {
-            format!("{entity}_Chunk")
-        } else {
-            entity.clone()
-        };
-        // Collect text fields for BM25 search (title + content fields for this entity)
-        let bm25_fields: Vec<String> = {
-            let mut fields = vec![];
-            if kb.title.entity == entity {
-                fields.push(kb.title.field.clone());
-            }
-            for c in &kb.content {
-                if c.entity == entity {
-                    fields.push(c.field.clone());
-                }
-            }
-            fields
-        };
+        // All searches target {KB}_Index / {KB}_Index_Chunk (not entity tables)
+        let entity = format!("{kb_name}_Index");
+        let vector_entity = format!("{kb_name}_Index_Chunk");
+        // BM25 fields are fixed on the index table
+        let bm25_fields: Vec<String> = vec!["_title".to_string(), "_content".to_string()];
 
         // Parse filters: filter_condition takes priority over legacy filters HashMap
         let condition: Option<FilterCondition> = if options.filter_condition.is_some() {
@@ -984,14 +1182,17 @@ impl Catalog {
             (None, None)
         };
 
-        // Detect chunked entity early (used for BM25 → chunk resolution)
-        let is_chunked = self.config.entities.get(&entity)
-            .map(|e| entity_has_chunks(e)).unwrap_or(false);
+        // KB Index always has chunks ({KB}_Index_Chunk)
+        let is_chunked = true;
 
-        // Compute return fields for enrichment (used by resolve_and_enrich helpers)
-        let enrich_fields: Vec<String> = self.config.entities.get(&entity)
-            .map(|e| e.fields.keys().cloned().collect())
-            .unwrap_or_default();
+        // Enrichment fields: return index entry data (_title, _content, _source_entity, _source_uuid)
+        let enrich_fields: Vec<String> = vec![
+            "_title".to_string(),
+            "_content".to_string(),
+            "_source_entity".to_string(),
+            "_source_uuid".to_string(),
+            "_content_hash".to_string(),
+        ];
 
         // ── Embed query: use dual embedder when both dense+sparse are needed ──
         let need_dense = signals.vector();
@@ -1216,6 +1417,19 @@ impl Catalog {
             .entities
             .get(name)
             .ok_or_else(|| CatalogError::UnknownEntity(name.to_string()))
+    }
+
+    /// Find a relation connecting two entity types. Returns (rel_name, entity_a_is_from).
+    fn find_relation_to_entity(&self, entity_a: &str, entity_b: &str) -> Option<(String, bool)> {
+        for (rel_name, rel_def) in &self.config.relations {
+            if rel_def.from == entity_a && rel_def.to == entity_b {
+                return Some((rel_name.clone(), true));
+            }
+            if rel_def.from == entity_b && rel_def.to == entity_a {
+                return Some((rel_name.clone(), false));
+            }
+        }
+        None
     }
 
     fn build_content_text(
@@ -1639,6 +1853,479 @@ impl Processor for LinkProcessor {
                 }
             }
         }
+        Ok(())
+    }
+}
+
+// ─── AggregateProcessor ────────────────────────────────────────────────────
+
+/// Processes AggregateOps: rebuilds `_content` on `{KB}_Index`, deletes stale
+/// chunks, re-chunks per source field, and emits InsertOps + LinkOps (at post-
+/// aggregate priority 2.6/2.7) + EmbedOps (at 3.0) via the queue sender.
+struct AggregateProcessor {
+    conn: Arc<dyn DbConnection>,
+    config: CatalogConfig,
+    kb_metadata: HashMap<String, KBMetadata>,
+    chunker_cache: HashMap<ChunkerConfig, Chunker>,
+    has_sparse: bool,
+    has_dual: bool,
+}
+
+/// Content collected from a single source field of a contributing entity.
+struct SourceContent {
+    entity_name: String,
+    entity_uuid: String,
+    field_name: String,
+    text: String,
+}
+
+impl AggregateProcessor {
+    /// Find a relation in the config that connects `title_entity` to `content_entity`.
+    /// Returns `(rel_name, is_forward)` where is_forward=true means title→content.
+    fn find_relation_to_entity(
+        &self,
+        title_entity: &str,
+        content_entity: &str,
+    ) -> Option<(String, bool)> {
+        for (rel_name, rel_def) in &self.config.relations {
+            if rel_def.from == title_entity && rel_def.to == content_entity {
+                return Some((rel_name.clone(), true));
+            }
+            if rel_def.from == content_entity && rel_def.to == title_entity {
+                return Some((rel_name.clone(), false));
+            }
+        }
+        None
+    }
+
+    /// Process a single (deduplicated) AggregateOp.
+    async fn process_one(
+        &self,
+        agg: &AggregateOp,
+        sender: &QueueSender,
+    ) -> Result<(), String> {
+        let kb_name = &agg.kb_name;
+        let kb_meta = match self.kb_metadata.get(kb_name) {
+            Some(m) => m,
+            None => return Ok(()),
+        };
+        let kb_config = self.config.knowledge_bases.get(kb_name);
+        let kb_signals = kb_config.map(|c| c.signals).unwrap_or(search::SearchSignals::HYBRID);
+        let kb_sparse = kb_signals.sparse() && self.has_sparse;
+
+        let index_table = format!("{kb_name}_Index");
+        let chunk_table = format!("{kb_name}_Index_Chunk");
+        let title_entity = &agg.title_entity;
+        let source_uuid = &agg.source_uuid;
+
+        // ── 1. Get title entity's field values ────────────────────────
+        let title_field_name = &kb_meta.title.field;
+        let content_field_names: Vec<&String> = kb_meta
+            .content
+            .iter()
+            .filter(|c| c.entity == *title_entity)
+            .map(|c| &c.field)
+            .collect();
+
+        let mut return_fields = vec![format!("e.{title_field_name} AS _title_val")];
+        for f in &content_field_names {
+            return_fields.push(format!("e.{f} AS {f}"));
+        }
+        let return_clause = return_fields.join(", ");
+        let title_query = format!(
+            "MATCH (e:{title_entity} {{_uuid: $uuid}}) RETURN {return_clause}"
+        );
+        let title_result = self
+            .conn
+            .execute_with_params(
+                &title_query,
+                &[QueryParam::new("uuid", source_uuid.clone())],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if title_result.is_empty() {
+            return Ok(()); // Title entity not found (may have been deleted)
+        }
+
+        let title_max_chars = kb_meta.chunking.title_max_chars;
+        let raw_title = title_result.rows[0]
+            .first()
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let title_text: String = if title_max_chars > 0 && raw_title.len() > title_max_chars {
+            raw_title.chars().take(title_max_chars).collect()
+        } else {
+            raw_title.to_string()
+        };
+
+        // Collect title entity's own contentFor fields
+        let mut sources: Vec<SourceContent> = Vec::new();
+        for (i, f) in content_field_names.iter().enumerate() {
+            let text = title_result.rows[0]
+                .get(i + 1)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !text.is_empty() {
+                sources.push(SourceContent {
+                    entity_name: title_entity.clone(),
+                    entity_uuid: source_uuid.clone(),
+                    field_name: f.to_string(),
+                    text: text.to_string(),
+                });
+            }
+        }
+
+        // ── 2. Collect content from linked entities ───────────────────
+        let other_content_entities: HashSet<&str> = kb_meta
+            .content
+            .iter()
+            .map(|c| c.entity.as_str())
+            .filter(|e| *e != title_entity.as_str())
+            .collect();
+
+        for content_entity_name in &other_content_entities {
+            let relation = self.find_relation_to_entity(title_entity, content_entity_name);
+            if let Some((rel_name, is_forward)) = relation {
+                let entity_fields: Vec<&String> = kb_meta
+                    .content
+                    .iter()
+                    .filter(|c| c.entity == *content_entity_name)
+                    .map(|c| &c.field)
+                    .collect();
+
+                if entity_fields.is_empty() {
+                    continue;
+                }
+
+                let mut fields_return = vec!["c._uuid AS _uuid".to_string()];
+                for f in &entity_fields {
+                    fields_return.push(format!("c.{f} AS {f}"));
+                }
+                let fields_clause = fields_return.join(", ");
+
+                let query = if is_forward {
+                    format!(
+                        "MATCH (t:{title_entity} {{_uuid: $uuid}})-[:{rel_name}]->(c:{content_entity_name}) \
+                         RETURN {fields_clause}"
+                    )
+                } else {
+                    format!(
+                        "MATCH (t:{title_entity} {{_uuid: $uuid}})<-[:{rel_name}]-(c:{content_entity_name}) \
+                         RETURN {fields_clause}"
+                    )
+                };
+
+                let result = self
+                    .conn
+                    .execute_with_params(
+                        &query,
+                        &[QueryParam::new("uuid", source_uuid.clone())],
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                for row in &result.rows {
+                    let entity_uuid = row
+                        .first()
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    for (i, f) in entity_fields.iter().enumerate() {
+                        let text = row
+                            .get(i + 1)
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        if !text.is_empty() {
+                            sources.push(SourceContent {
+                                entity_name: content_entity_name.to_string(),
+                                entity_uuid: entity_uuid.clone(),
+                                field_name: f.to_string(),
+                                text: text.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 3. Sort sources for deterministic output ──────────────────
+        sources.sort_by(|a, b| {
+            a.entity_name
+                .cmp(&b.entity_name)
+                .then(a.entity_uuid.cmp(&b.entity_uuid))
+                .then(a.field_name.cmp(&b.field_name))
+        });
+
+        // ── 4. Rebuild _content and compute hash ──────────────────────
+        let content_text = sources
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let new_hash = content_hash(&format!("{title_text}\n{content_text}"));
+
+        // ── 5. Compare with stored hash ───────────────────────────────
+        let idx_query = format!(
+            "MATCH (idx:{index_table} {{_uuid: $uuid}}) RETURN idx._content_hash"
+        );
+        let idx_result = self
+            .conn
+            .execute_with_params(
+                &idx_query,
+                &[QueryParam::new("uuid", agg.index_entry_uuid.clone())],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let current_hash = idx_result
+            .rows
+            .first()
+            .and_then(|r| r.first())
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        if current_hash == new_hash {
+            return Ok(()); // Content unchanged, skip
+        }
+
+        // ── 6. UPDATE {KB}_Index ──────────────────────────────────────
+        let update_query = format!(
+            "MATCH (idx:{index_table} {{_uuid: $uuid}}) \
+             SET idx._title = $title, idx._content = $content, idx._content_hash = $hash"
+        );
+        self.conn
+            .execute_with_params(
+                &update_query,
+                &[
+                    QueryParam::new("uuid", agg.index_entry_uuid.clone()),
+                    QueryParam::new("title", title_text.clone()),
+                    QueryParam::new("content", content_text),
+                    QueryParam::new("hash", new_hash),
+                ],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // ── 7. Delete old chunks ──────────────────────────────────────
+        let del_chunks = format!(
+            "MATCH (c:{chunk_table} {{_parent_uuid: $uuid}}) DETACH DELETE c"
+        );
+        let _ = self
+            .conn
+            .execute_with_params(
+                &del_chunks,
+                &[QueryParam::new("uuid", agg.index_entry_uuid.clone())],
+            )
+            .await;
+
+        // ── 8. Re-chunk per source field, emit downstream ops ─────────
+        let chunking = &kb_meta.chunking;
+        let chunker_key = ChunkerConfig {
+            max_size: chunking.max_size,
+            overlap: chunking.overlap,
+            strategy: chunking.strategy.clone(),
+        };
+        let chunker = self
+            .chunker_cache
+            .get(&chunker_key)
+            .expect("chunker must be pre-warmed");
+
+        let mut downstream_ops: Vec<CatalogOp> = Vec::new();
+        let mut content_offset: usize = 0;
+
+        for source in &sources {
+            let chunks = chunker.chunk(&source.text);
+            if chunks.is_empty() {
+                continue;
+            }
+
+            for chunk in &chunks {
+                let c_uuid =
+                    chunk_uuid(&agg.index_entry_uuid, &source.field_name, chunk.index);
+
+                let embed_text = if !title_text.is_empty() {
+                    format!("{title_text}\n---\n{}", chunk.text)
+                } else {
+                    chunk.text.clone()
+                };
+
+                let mut chunk_data = BTreeMap::new();
+                chunk_data.insert(
+                    "_uuid".to_string(),
+                    CypherValue::String(c_uuid.clone()),
+                );
+                chunk_data.insert(
+                    "_parent_uuid".to_string(),
+                    CypherValue::String(agg.index_entry_uuid.clone()),
+                );
+                chunk_data.insert(
+                    "_parent_field".to_string(),
+                    CypherValue::String(source.field_name.clone()),
+                );
+                chunk_data.insert(
+                    "_kb_name".to_string(),
+                    CypherValue::String(kb_name.clone()),
+                );
+                chunk_data.insert(
+                    "_source_field".to_string(),
+                    CypherValue::String(source.field_name.clone()),
+                );
+                chunk_data.insert(
+                    "_text".to_string(),
+                    CypherValue::String(chunk.text.clone()),
+                );
+                chunk_data.insert(
+                    "_text_hash".to_string(),
+                    CypherValue::String(content_hash(&chunk.text)),
+                );
+                chunk_data.insert(
+                    "_index".to_string(),
+                    CypherValue::Int(chunk.index as i64),
+                );
+                chunk_data.insert(
+                    "_start_char".to_string(),
+                    CypherValue::Int(chunk.start_byte as i64),
+                );
+                chunk_data.insert(
+                    "_end_char".to_string(),
+                    CypherValue::Int(chunk.end_byte as i64),
+                );
+                chunk_data.insert(
+                    "_start_line".to_string(),
+                    CypherValue::Int(chunk.start_line as i64),
+                );
+                chunk_data.insert(
+                    "_end_line".to_string(),
+                    CypherValue::Int(chunk.end_line as i64),
+                );
+                chunk_data.insert(
+                    "_core_start_char".to_string(),
+                    CypherValue::Int(chunk.core_start_byte as i64),
+                );
+                chunk_data.insert(
+                    "_core_end_char".to_string(),
+                    CypherValue::Int(chunk.core_end_byte as i64),
+                );
+                chunk_data.insert(
+                    "_core_start_line".to_string(),
+                    CypherValue::Int(chunk.core_start_line as i64),
+                );
+                chunk_data.insert(
+                    "_core_end_line".to_string(),
+                    CypherValue::Int(chunk.core_end_line as i64),
+                );
+                chunk_data.insert(
+                    "_content_offset".to_string(),
+                    CypherValue::Int(content_offset as i64),
+                );
+
+                // InsertOp for chunk (prio 2.6 — post-aggregate)
+                let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
+                chunk_resolver.resolve(c_uuid.clone());
+                downstream_ops.push(CatalogOp::Insert(
+                    InsertOp::new(
+                        chunk_table.clone(),
+                        chunk_data,
+                        // We already resolved the ref above, but InsertOp needs a resolver.
+                        // Create a fresh pair; the processor will resolve it again via RETURN ID(n).
+                        {
+                            let (_discard_ref, resolver) = EntityRef::new(&chunk_table);
+                            resolver
+                        },
+                        chunk_ref.clone(),
+                    )
+                    .with_priority(PRIO_POST_AGG_INSERT),
+                ));
+
+                // LinkOp: {KB}_Index_HAS_CHUNK (prio 2.7 — post-aggregate)
+                let has_chunk_rel = format!("{kb_name}_Index_HAS_CHUNK");
+                let (_link_ref, link_resolver) = RelationRef::new(&has_chunk_rel);
+                downstream_ops.push(CatalogOp::Link(
+                    LinkOp::new(
+                        has_chunk_rel,
+                        RefOrUuid::Uuid(agg.index_entry_uuid.clone()),
+                        RefOrUuid::Uuid(c_uuid.clone()),
+                        BTreeMap::new(),
+                        link_resolver,
+                        _link_ref,
+                    )
+                    .with_priority(PRIO_POST_AGG_LINK),
+                ));
+
+                // LinkOp: {Entity}_SOURCED_{KB} (prio 2.7)
+                let sourced_rel = format!("{}_SOURCED_{kb_name}", source.entity_name);
+                let (_src_ref, src_resolver) = RelationRef::new(&sourced_rel);
+                downstream_ops.push(CatalogOp::Link(
+                    LinkOp::new(
+                        sourced_rel,
+                        RefOrUuid::Uuid(source.entity_uuid.clone()),
+                        RefOrUuid::Uuid(c_uuid.clone()),
+                        BTreeMap::new(),
+                        src_resolver,
+                        _src_ref,
+                    )
+                    .with_priority(PRIO_POST_AGG_LINK),
+                ));
+
+                // EmbedOp / DualEmbedOp / SparseEmbedOp (prio 3.0 — default)
+                if self.has_dual && kb_signals.vector() && kb_sparse {
+                    downstream_ops.push(CatalogOp::DualEmbed(DualEmbedOp {
+                        entity_ref: chunk_ref,
+                        kb_name: kb_name.clone(),
+                        texts: vec![embed_text],
+                    }));
+                } else {
+                    if kb_signals.vector() {
+                        downstream_ops.push(CatalogOp::Embed(EmbedOp {
+                            entity_ref: chunk_ref.clone(),
+                            kb_name: kb_name.clone(),
+                            texts: vec![embed_text.clone()],
+                        }));
+                    }
+                    if kb_sparse {
+                        downstream_ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
+                            entity_ref: chunk_ref,
+                            kb_name: kb_name.clone(),
+                            texts: vec![embed_text],
+                        }));
+                    }
+                }
+            }
+            // Advance content_offset past this source's text + the \n separator
+            content_offset += source.text.len() + 1;
+        }
+
+        if !downstream_ops.is_empty() {
+            sender.emit_all(downstream_ops);
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Processor for AggregateProcessor {
+    async fn process(
+        &self,
+        items: &mut [OperationItem],
+        sender: &QueueSender,
+    ) -> Result<(), String> {
+        // Deduplicate by index_entry_uuid (keep first occurrence)
+        let mut seen = HashSet::new();
+        let mut unique_ops: Vec<&AggregateOp> = Vec::new();
+        for item in items.iter() {
+            if let CatalogOp::Aggregate(ref agg) = item.op {
+                if seen.insert(agg.index_entry_uuid.clone()) {
+                    unique_ops.push(agg);
+                }
+            }
+        }
+
+        for agg in unique_ops {
+            self.process_one(agg, sender).await?;
+        }
+
         Ok(())
     }
 }
@@ -2191,13 +2878,14 @@ mod tests {
 
     /// Ops enqueued at create() time: 1 entity insert + 1 ChunkOp.
     fn ops_enqueued_per_create(_body: &str) -> usize {
-        2 // 1 InsertOp + 1 ChunkOp
+        // 1 InsertOp(entity) + 1 InsertOp({KB}_Index) + 1 LinkOp(_IN_) + 1 AggregateOp
+        4
     }
 
-    /// Total ops processed after drain(): ChunkOp + entity insert + N*(chunk insert + link + embed).
-    fn ops_per_create(body: &str) -> usize {
-        let n = count_chunks(body);
-        1 + 1 + n * 3 // 1 ChunkOp + 1 entity insert + N * (chunk insert + link + embed)
+    /// Total ops processed after drain():
+    /// 2 inserts (entity + index) + 1 link (_IN_) + 1 aggregate (no-op stub).
+    fn ops_per_create(_body: &str) -> usize {
+        4
     }
 
     // ── lifecycle ──────────────────────────────────────────────────────
@@ -2579,20 +3267,17 @@ mod tests {
         let data = make_doc_data("Partial", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
-        let n_chunks = count_chunks(body);
-
-        // Flush prio <= 1: ChunkOp (prio 0) → expands → then inserts (prio 1)
-        // Processed: 1 ChunkOp + 1 entity insert + N chunk inserts
+        // Flush prio <= 1.0: 2 InsertOps (entity + {KB}_Index)
         let result = catalog.flush_insertions().await;
-        assert_eq!(result.processed, 1 + 1 + n_chunks);
+        assert_eq!(result.processed, 2);
         assert!(entity_ref.is_ready());
 
-        // Links (prio 2) + embeds (prio 3) still pending
+        // LinkOp (prio 2.0) + AggregateOp (prio 2.5) still pending
         assert!(catalog.has_pending());
 
-        // Drain the rest: N links (prio 2) + N embeds (prio 3)
+        // Drain the rest: 1 link + 1 aggregate
         let result = catalog.drain().await;
-        assert_eq!(result.processed, n_chunks * 2);
+        assert_eq!(result.processed, 2);
         assert!(!catalog.has_pending());
     }
 

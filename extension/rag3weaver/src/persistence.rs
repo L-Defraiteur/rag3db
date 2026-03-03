@@ -14,7 +14,7 @@ use crate::queue::OperationItem;
 pub struct PersistedOp {
     pub uuid: String,
     pub op_type: String,
-    pub priority: u8,
+    pub priority: f32,
     pub state: String,
     pub temp_uuid: Option<String>,
     pub entity_name: Option<String>,

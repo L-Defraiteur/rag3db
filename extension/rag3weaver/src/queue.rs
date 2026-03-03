@@ -10,7 +10,7 @@ use async_broadcast::{InactiveReceiver, Sender};
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::ops::{CatalogOp, InsertOp, LinkOp};
+use crate::ops::{CatalogOp, InsertOp, LinkOp, OrderedPriority};
 use crate::persistence::OperationPersistence;
 
 // ─── QueueEvent ─────────────────────────────────────────────────────────────
@@ -22,33 +22,33 @@ pub enum QueueEvent {
     Enqueued {
         id: String,
         op_type: &'static str,
-        priority: u8,
+        priority: OrderedPriority,
     },
     /// A batch of operations is about to be processed.
     ProcessingBatch {
         op_type: &'static str,
-        priority: u8,
+        priority: OrderedPriority,
         items: Vec<String>,
     },
     /// A batch completed successfully.
     BatchCompleted {
         op_type: &'static str,
-        priority: u8,
+        priority: OrderedPriority,
         items: Vec<String>,
     },
     /// A batch failed.
     BatchFailed {
         op_type: &'static str,
-        priority: u8,
+        priority: OrderedPriority,
         items: Vec<String>,
         error: String,
     },
     /// Downstream ops were injected by a processor into the queue.
     Injected {
         count: usize,
-        source_priority: u8,
+        source_priority: OrderedPriority,
         /// (op_type, priority) pairs for each injected op.
-        ops: Vec<(&'static str, u8)>,
+        ops: Vec<(&'static str, OrderedPriority)>,
     },
     /// A GPU mini-batch completed inside a mega-batch processor (e.g. DualEmbedProcessor).
     GpuBatchCompleted {
@@ -196,7 +196,7 @@ impl Default for FlushConfig {
 pub struct FlushOptions {
     /// Only process operations with `priority <= up_to_priority`.
     /// `None` means all priorities.
-    pub up_to_priority: Option<u8>,
+    pub up_to_priority: Option<OrderedPriority>,
 }
 
 /// Result of a flush cycle.
@@ -324,7 +324,7 @@ impl OperationQueue {
             CatalogOp::Link(LinkOp { relation_ref, .. }) => {
                 relation_ref.set_queue_item_id(id.clone());
             }
-            CatalogOp::Chunk(_) | CatalogOp::Embed(_) | CatalogOp::SparseEmbed(_) | CatalogOp::DualEmbed(_) => {}
+            CatalogOp::Chunk(_) | CatalogOp::Aggregate(_) | CatalogOp::Embed(_) | CatalogOp::SparseEmbed(_) | CatalogOp::DualEmbed(_) => {}
         }
 
         let item = OperationItem {
@@ -369,7 +369,7 @@ impl OperationQueue {
         }
         self.processing = true;
 
-        let max_priority = options.up_to_priority.unwrap_or(u8::MAX);
+        let max_priority = options.up_to_priority.unwrap_or(OrderedPriority(f32::MAX));
         let mut result = FlushResult::default();
 
         // Take all items out to avoid borrow conflicts with self.processors/persistence
@@ -388,7 +388,7 @@ impl OperationQueue {
         }
 
         // Group by priority (BTreeMap guarantees ascending order)
-        let mut prio_groups: BTreeMap<u8, Vec<OperationItem>> = BTreeMap::new();
+        let mut prio_groups: BTreeMap<OrderedPriority, Vec<OperationItem>> = BTreeMap::new();
         for item in to_process {
             prio_groups.entry(item.op.priority()).or_default().push(item);
         }
@@ -518,7 +518,7 @@ impl OperationQueue {
             // Drain expansion channel — merge injected ops into remaining groups
             let drained = receiver.drain();
             if !drained.is_empty() {
-                let ops_info: Vec<(&'static str, u8)> = drained.iter()
+                let ops_info: Vec<(&'static str, OrderedPriority)> = drained.iter()
                     .map(|op| (op.operation_type(), op.priority()))
                     .collect();
                 self.emit(QueueEvent::Injected {
@@ -569,18 +569,18 @@ impl OperationQueue {
         .await
     }
 
-    /// Flush only inserts (priority <= 1).
+    /// Flush only inserts (priority <= 1.0).
     pub async fn flush_insertions(&mut self) -> FlushResult {
         self.flush(FlushOptions {
-            up_to_priority: Some(1),
+            up_to_priority: Some(OrderedPriority(1.0)),
         })
         .await
     }
 
-    /// Flush inserts and links (priority <= 2).
+    /// Flush inserts and links (priority <= 2.0).
     pub async fn flush_links(&mut self) -> FlushResult {
         self.flush(FlushOptions {
-            up_to_priority: Some(2),
+            up_to_priority: Some(OrderedPriority(2.0)),
         })
         .await
     }

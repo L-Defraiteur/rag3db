@@ -895,6 +895,9 @@ pub struct ChunkRecord {
     pub end_char: usize,
     pub start_line: usize,
     pub end_line: usize,
+    /// Offset of this chunk's source field within the parent's concatenated `_content`.
+    /// Used to translate BM25 highlight offsets (relative to `_content`) to chunk-local offsets.
+    pub content_offset: usize,
 }
 
 /// Resolve offsets, fetch entity fields AND child chunks in one query.
@@ -937,6 +940,7 @@ pub async fn resolve_and_enrich_chunked(
     return_cols.push("c._end_char AS c_end".to_string());
     return_cols.push("c._start_line AS c_sline".to_string());
     return_cols.push("c._end_line AS c_eline".to_string());
+    return_cols.push("c._content_offset AS c_content_offset".to_string());
     let return_clause = return_cols.join(", ");
 
     let cypher = format!(
@@ -982,6 +986,7 @@ pub async fn resolve_and_enrich_chunked(
                 end_char: row.get(chunk_col_start + 5).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 start_line: row.get(chunk_col_start + 6).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 end_line: row.get(chunk_col_start + 7).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                content_offset: row.get(chunk_col_start + 8).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
             });
         }
     }
@@ -1517,7 +1522,7 @@ pub async fn resolve_bm25_to_chunks(
         "MATCH (p:{parent_entity})-[:{parent_entity}_HAS_CHUNK]->(c:{chunk_entity}) \
          WHERE p._uuid IN [{uuid_list}] \
          RETURN p._uuid, c._uuid, c._text, c._index, c._parent_field, \
-         c._start_char, c._end_char, c._start_line, c._end_line"
+         c._start_char, c._end_char, c._start_line, c._end_line, c._content_offset"
     );
     let result = conn
         .execute(&cypher)
@@ -1529,11 +1534,11 @@ pub async fn resolve_bm25_to_chunks(
         uuid: String,
         text: String,
         index: usize,
-        parent_field: String,
         start_char: usize,
         end_char: usize,
         start_line: usize,
         end_line: usize,
+        content_offset: usize,
     }
 
     let mut parent_chunks: HashMap<String, Vec<ChunkRecord>> = HashMap::new();
@@ -1542,13 +1547,14 @@ pub async fn resolve_bm25_to_chunks(
         let c_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let parent_field = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let _parent_field = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let start_char = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let end_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let start_line = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let end_line = row.get(8).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let content_offset = row.get(9).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         parent_chunks.entry(p_uuid).or_default().push(ChunkRecord {
-            uuid: c_uuid, text, index, parent_field, start_char, end_char, start_line, end_line,
+            uuid: c_uuid, text, index, start_char, end_char, start_line, end_line, content_offset,
         });
     }
 
@@ -1560,9 +1566,11 @@ pub async fn resolve_bm25_to_chunks(
         if let Some(chunks) = parent_chunks.get(&hit.uuid) {
             for chunk in chunks {
                 let mut overlap = 0usize;
-                if let Some(offsets) = hit.highlights.get(&chunk.parent_field) {
+                let chunk_start_global = chunk.content_offset + chunk.start_char;
+                let chunk_end_global = chunk.content_offset + chunk.end_char;
+                if let Some(offsets) = hit.highlights.get("_content") {
                     for &(h_start, h_end) in offsets {
-                        let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
+                        let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
                         overlap += ov;
                     }
                 }
@@ -1694,13 +1702,19 @@ pub async fn search_bm25_chunked(
 
         let data = if parent.data.is_empty() { None } else { Some(parent.data.clone()) };
 
-        // Find chunks that overlap with highlights
+        // Find chunks that overlap with highlights.
+        // Highlights from Tantivy use field names "_content" / "_title" with offsets
+        // relative to the concatenated _content. Chunks have offsets relative to their
+        // individual source field. We translate via chunk.content_offset.
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
         for chunk in &parent.chunks {
             let mut overlap = 0usize;
-            if let Some(offsets) = highlights.get(&chunk.parent_field) {
+            // Translate chunk's source-local offsets to _content-global offsets
+            let chunk_start_global = chunk.content_offset + chunk.start_char;
+            let chunk_end_global = chunk.content_offset + chunk.end_char;
+            if let Some(offsets) = highlights.get("_content") {
                 for &(h_start, h_end) in offsets {
-                    let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
+                    let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
                     overlap += ov;
                 }
             }

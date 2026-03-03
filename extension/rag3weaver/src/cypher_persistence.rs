@@ -53,7 +53,7 @@ impl CypherPersistence {
                     "CREATE NODE TABLE _Operation(\
                         uuid STRING, \
                         op_type STRING, \
-                        priority INT64, \
+                        priority DOUBLE, \
                         state STRING, \
                         temp_uuid STRING, \
                         entity_name STRING, \
@@ -78,14 +78,14 @@ impl OperationPersistence for CypherPersistence {
     async fn persist(&self, item: &OperationItem) -> Result<String, String> {
         let uuid = generate_op_uuid(item);
         let op_type = item.op.operation_type();
-        let priority = item.op.priority() as i64;
+        let priority = item.op.priority().0 as f64;
         let state = "persisted";
         let (entity_name, temp_uuid, payload) = extract_op_data(&item.op);
 
         let params = vec![
             QueryParam::new("uuid", CypherValue::String(uuid.clone())),
             QueryParam::new("op_type", CypherValue::String(op_type.to_string())),
-            QueryParam::new("priority", CypherValue::Int(priority)),
+            QueryParam::new("priority", CypherValue::Float(priority)),
             QueryParam::new("state", CypherValue::String(state.to_string())),
             QueryParam::new("temp_uuid", optional_string(&temp_uuid)),
             QueryParam::new("entity_name", optional_string(&entity_name)),
@@ -311,6 +311,27 @@ fn extract_op_data(
             let payload = serde_json::to_string(&map).unwrap_or_default();
             (None, Some(op.entity_ref.temp_uuid().to_string()), payload)
         }
+        CatalogOp::Aggregate(agg) => {
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "kb_name".to_string(),
+                serde_json::Value::String(agg.kb_name.clone()),
+            );
+            map.insert(
+                "index_entry_uuid".to_string(),
+                serde_json::Value::String(agg.index_entry_uuid.clone()),
+            );
+            map.insert(
+                "title_entity".to_string(),
+                serde_json::Value::String(agg.title_entity.clone()),
+            );
+            map.insert(
+                "source_uuid".to_string(),
+                serde_json::Value::String(agg.source_uuid.clone()),
+            );
+            let payload = serde_json::to_string(&map).unwrap_or_default();
+            (Some(agg.kb_name.clone()), None, payload)
+        }
         CatalogOp::Chunk(chunk) => {
             let payload = serde_json::to_string(&chunk.data).unwrap_or_default();
             (
@@ -339,7 +360,7 @@ fn row_to_persisted_op(row: &[CypherValue]) -> Result<PersistedOp, String> {
     Ok(PersistedOp {
         uuid: row[0].as_str().unwrap_or_default().to_string(),
         op_type: row[1].as_str().unwrap_or_default().to_string(),
-        priority: row[2].as_i64().unwrap_or(0) as u8,
+        priority: row[2].as_f64().unwrap_or(0.0) as f32,
         state: row[3].as_str().unwrap_or_default().to_string(),
         temp_uuid: row[4].as_str().map(|s| s.to_string()),
         entity_name: row[5].as_str().map(|s| s.to_string()),
@@ -448,7 +469,7 @@ mod tests {
         let row = vec![
             CypherValue::String("uuid-1".into()),
             CypherValue::String("insert".into()),
-            CypherValue::Int(1),
+            CypherValue::Float(1.0),
             CypherValue::String("persisted".into()),
             CypherValue::String("temp-uuid".into()),
             CypherValue::String("Document".into()),
@@ -460,7 +481,7 @@ mod tests {
         let op = row_to_persisted_op(&row).unwrap();
         assert_eq!(op.uuid, "uuid-1");
         assert_eq!(op.op_type, "insert");
-        assert_eq!(op.priority, 1);
+        assert_eq!(op.priority, 1.0);
         assert_eq!(op.state, "persisted");
         assert_eq!(op.temp_uuid, Some("temp-uuid".to_string()));
         assert_eq!(op.entity_name, Some("Document".to_string()));
