@@ -1,7 +1,5 @@
 #include "function/search_function.h"
 
-#include <sstream>
-
 #include "binder/expression/literal_expression.h"
 #include "binder/expression/property_expression.h"
 #include "function/scalar_function.h"
@@ -13,6 +11,7 @@
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
+#include "util/highlights_util.h"
 
 namespace rag3db {
 namespace tantivy_fts_extension {
@@ -20,102 +19,17 @@ namespace tantivy_fts_extension {
 using namespace common;
 using namespace function;
 
-// ── Highlights -> JSON (shared with query_tantivy_index.cpp) ────────────────
-
-static std::string highlightsToJson(const rust::Vec<FieldHighlights>& highlights) {
-    if (highlights.empty()) return "{}";
-    std::string json = "{";
-    for (size_t i = 0; i < highlights.size(); i++) {
-        if (i > 0) json += ",";
-        json += "\"";
-        json += std::string(highlights[i].field_name);
-        json += "\":[";
-        for (size_t j = 0; j < highlights[i].ranges.size(); j++) {
-            if (j > 0) json += ",";
-            json += "[";
-            json += std::to_string(highlights[i].ranges[j].start);
-            json += ",";
-            json += std::to_string(highlights[i].ranges[j].end);
-            json += "]";
-        }
-        json += "]";
-    }
-    json += "}";
-    return json;
-}
-
-// ── JSON escape ─────────────────────────────────────────────────────────────
-
-static std::string escapeJson(const std::string& s) {
-    std::string r;
-    r.reserve(s.size());
-    for (char c : s) {
-        switch (c) {
-        case '"': r += "\\\""; break;
-        case '\\': r += "\\\\"; break;
-        case '\n': r += "\\n"; break;
-        case '\r': r += "\\r"; break;
-        case '\t': r += "\\t"; break;
-        default: r += c;
-        }
-    }
-    return r;
-}
-
-// ── JSON query builder ──────────────────────────────────────────────────────
-
-static std::string buildQueryJson(const std::string& field, const std::string& value,
-    const std::string& mode, int64_t distance) {
-    auto ef = escapeJson(field);
-    auto ev = escapeJson(value);
-
-    if (mode == "contains") {
-        return "{\"type\":\"contains\",\"field\":\"" + ef + "\",\"value\":\"" + ev + "\"}";
-    }
-    if (mode == "contains_split") {
-        std::istringstream iss(value);
-        std::string word;
-        std::string should;
-        bool first = true;
-        while (iss >> word) {
-            if (!first) should += ",";
-            should += "{\"type\":\"contains\",\"field\":\"" + ef +
-                      "\",\"value\":\"" + escapeJson(word) + "\"}";
-            first = false;
-        }
-        if (first) {
-            return "{\"type\":\"contains\",\"field\":\"" + ef + "\",\"value\":\"\"}";
-        }
-        return "{\"type\":\"boolean\",\"should\":[" + should + "]}";
-    }
-    if (mode == "fuzzy") {
-        return "{\"type\":\"contains\",\"field\":\"" + ef + "\",\"value\":\"" + ev +
-               "\",\"distance\":" + std::to_string(distance) + "}";
-    }
-    if (mode == "regex") {
-        return "{\"type\":\"contains\",\"field\":\"" + ef +
-               "\",\"value\":\"" + ev + "\",\"regex\":true}";
-    }
-    if (mode == "parse") {
-        return "{\"type\":\"parse\",\"fields\":[\"" + ef + "\"],\"value\":\"" + ev + "\"}";
-    }
-    throw BinderException(stringFormat(
-        "Unknown SEARCH mode: '{}'. Valid: contains, contains_split, fuzzy, regex, parse.", mode));
-}
-
 // ── SearchBindData ──────────────────────────────────────────────────────────
 
 struct SearchBindData final : IndexSearchBindData {
     table_id_t tableID;
     std::string fieldName;
-    std::string queryJson;
 
     SearchBindData(LogicalType resultType, table_id_t tableID, std::string fieldName,
-        std::string queryJson, IndexSearchFunc searchFunc,
-        std::vector<VirtualExprSpec> virtualExprSpecs)
+        IndexSearchFunc searchFunc, std::vector<VirtualExprSpec> virtualExprSpecs)
         : IndexSearchBindData{std::move(resultType), std::move(searchFunc),
               std::move(virtualExprSpecs)},
-          tableID{tableID}, fieldName{std::move(fieldName)}, queryJson{std::move(queryJson)} {}
+          tableID{tableID}, fieldName{std::move(fieldName)} {}
 
     std::unique_ptr<FunctionBindData> copy() const override {
         std::vector<VirtualExprSpec> specsCopy;
@@ -124,7 +38,7 @@ struct SearchBindData final : IndexSearchBindData {
             specsCopy.push_back(spec.copy());
         }
         return std::make_unique<SearchBindData>(
-            resultType.copy(), tableID, fieldName, queryJson, searchFunc, std::move(specsCopy));
+            resultType.copy(), tableID, fieldName, searchFunc, std::move(specsCopy));
     }
 };
 
@@ -188,18 +102,18 @@ static std::unique_ptr<FunctionBindData> searchBindFunc(const ScalarBindFuncInpu
             "Create one with CREATE_TANTIVY_INDEX first.", tableName));
     }
 
-    // Build query JSON from Cypher parameters.
-    auto queryJson = buildQueryJson(fieldName, queryText, mode, distance);
-
-    // Create search lambda (captures raw pointer — valid for DB lifetime).
+    // Create search lambda — typed bridge call, no JSON.
     auto& tantivyIndex = indexOpt.value()->cast<TantivyIndex>();
     TantivyIndex* indexPtr = &tantivyIndex;
 
-    IndexSearchFunc searchFunc = [indexPtr, queryJson](int64_t limit)
+    IndexSearchFunc searchFunc =
+        [indexPtr, fieldName, queryText, mode,
+            dist = static_cast<uint8_t>(distance)](int64_t limit)
         -> std::vector<IndexSearchResult> {
         indexPtr->flushIfDirty();
-        auto rustResults = search_with_highlights(
-            indexPtr->getHandle(), queryJson, static_cast<uint32_t>(limit));
+        auto rustResults = search_typed_with_highlights(
+            indexPtr->getHandle(), fieldName, queryText, mode, dist,
+            static_cast<uint32_t>(limit));
         std::vector<IndexSearchResult> results;
         results.reserve(rustResults.size());
         for (const auto& r : rustResults) {
@@ -217,7 +131,7 @@ static std::unique_ptr<FunctionBindData> searchBindFunc(const ScalarBindFuncInpu
 
     return std::make_unique<SearchBindData>(
         LogicalType::BOOL(), tableID, fieldName,
-        std::move(queryJson), std::move(searchFunc), std::move(virtualSpecs));
+        std::move(searchFunc), std::move(virtualSpecs));
 }
 
 // ── SEARCH exec (fallback — optimizer should convert to FTS_SCAN) ───────────
