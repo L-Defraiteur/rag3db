@@ -12,6 +12,7 @@
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
+#include "util/highlights_util.h"
 
 namespace rag3db {
 namespace tantivy_fts_extension {
@@ -27,30 +28,6 @@ struct TantivyResult {
     double score;
     std::string highlights; // JSON string
 };
-
-// ── Highlights → JSON ───────────────────────────────────────────────────────
-
-static std::string highlightsToJson(const rust::Vec<FieldHighlights>& highlights) {
-    if (highlights.empty()) return "{}";
-    std::string json = "{";
-    for (size_t i = 0; i < highlights.size(); i++) {
-        if (i > 0) json += ",";
-        json += "\"";
-        json += std::string(highlights[i].field_name);
-        json += "\":[";
-        for (size_t j = 0; j < highlights[i].ranges.size(); j++) {
-            if (j > 0) json += ",";
-            json += "[";
-            json += std::to_string(highlights[i].ranges[j].start);
-            json += ",";
-            json += std::to_string(highlights[i].ranges[j].end);
-            json += "]";
-        }
-        json += "]";
-    }
-    json += "}";
-    return json;
-}
 
 // ── BindData ────────────────────────────────────────────────────────────────
 
