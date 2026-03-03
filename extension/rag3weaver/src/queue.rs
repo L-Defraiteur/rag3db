@@ -10,45 +10,45 @@ use async_broadcast::{InactiveReceiver, Sender};
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::ops::{CatalogOp, InsertOp, LinkOp, OrderedPriority};
+use crate::ops::{CatalogOp, InsertOp, LinkOp, OpSummary, OrderedPriority};
 use crate::persistence::OperationPersistence;
 
 // ─── QueueEvent ─────────────────────────────────────────────────────────────
 
 /// Events emitted by the queue during its lifecycle.
+///
+/// Each variant carries [`OpSummary`] items so subscribers can inspect
+/// what the pipeline is doing without access to the full `CatalogOp`.
 #[derive(Debug, Clone)]
 pub enum QueueEvent {
     /// An operation was added to the queue.
     Enqueued {
-        id: String,
-        op_type: &'static str,
-        priority: OrderedPriority,
+        summary: OpSummary,
     },
     /// A batch of operations is about to be processed.
     ProcessingBatch {
         op_type: &'static str,
         priority: OrderedPriority,
-        items: Vec<String>,
+        items: Vec<OpSummary>,
     },
     /// A batch completed successfully.
     BatchCompleted {
         op_type: &'static str,
         priority: OrderedPriority,
-        items: Vec<String>,
+        items: Vec<OpSummary>,
     },
     /// A batch failed.
     BatchFailed {
         op_type: &'static str,
         priority: OrderedPriority,
-        items: Vec<String>,
+        items: Vec<OpSummary>,
         error: String,
     },
     /// Downstream ops were injected by a processor into the queue.
     Injected {
         count: usize,
         source_priority: OrderedPriority,
-        /// (op_type, priority) pairs for each injected op.
-        ops: Vec<(&'static str, OrderedPriority)>,
+        ops: Vec<OpSummary>,
     },
     /// A GPU mini-batch completed inside a mega-batch processor (e.g. DualEmbedProcessor).
     GpuBatchCompleted {
@@ -341,9 +341,7 @@ impl OperationQueue {
         self.cumulative.total_queued += 1;
         let last = self.items.last().unwrap();
         self.emit(QueueEvent::Enqueued {
-            id: last.id.clone(),
-            op_type: last.op.operation_type(),
-            priority: last.op.priority(),
+            summary: last.op.summary(&last.id),
         });
         last
     }
@@ -448,14 +446,14 @@ impl OperationQueue {
 
                 // Process in batches
                 for batch in processable.chunks_mut(batch_size) {
-                    let batch_ids: Vec<String> = batch.iter().map(|i| i.id.clone()).collect();
+                    let batch_summaries: Vec<OpSummary> = batch.iter().map(|i| i.op.summary(&i.id)).collect();
                     for item in batch.iter_mut() {
                         item.mark_processing();
                     }
                     self.emit(QueueEvent::ProcessingBatch {
                         op_type,
                         priority: prio,
-                        items: batch_ids.clone(),
+                        items: batch_summaries.clone(),
                     });
 
                     if let Some(processor) = self.processors.get(op_type) {
@@ -469,7 +467,7 @@ impl OperationQueue {
                                 self.emit(QueueEvent::BatchCompleted {
                                     op_type,
                                     priority: prio,
-                                    items: batch_ids,
+                                    items: batch_summaries,
                                 });
                             }
                             Err(e) => {
@@ -487,7 +485,7 @@ impl OperationQueue {
                                 self.emit(QueueEvent::BatchFailed {
                                     op_type,
                                     priority: prio,
-                                    items: batch_ids,
+                                    items: batch_summaries,
                                     error: e,
                                 });
                             }
@@ -501,7 +499,7 @@ impl OperationQueue {
                         self.emit(QueueEvent::BatchFailed {
                             op_type,
                             priority: prio,
-                            items: batch_ids,
+                            items: batch_summaries,
                             error: format!("no processor registered for '{op_type}'"),
                         });
                     }
@@ -517,16 +515,8 @@ impl OperationQueue {
 
             // Drain expansion channel — merge injected ops into remaining groups
             let drained = receiver.drain();
-            if !drained.is_empty() {
-                let ops_info: Vec<(&'static str, OrderedPriority)> = drained.iter()
-                    .map(|op| (op.operation_type(), op.priority()))
-                    .collect();
-                self.emit(QueueEvent::Injected {
-                    count: drained.len(),
-                    source_priority: prio,
-                    ops: ops_info,
-                });
-            }
+            let drained_count = drained.len();
+            let mut injected_summaries: Vec<OpSummary> = Vec::with_capacity(drained_count);
             for op in drained {
                 let new_prio = op.priority();
                 assert!(
@@ -539,19 +529,29 @@ impl OperationQueue {
                 );
                 if new_prio > max_priority {
                     // Beyond this flush's scope — keep for later
-                    keep.push(new_operation_item(
+                    let item = new_operation_item(
                         &mut self.counter,
                         &mut self.cumulative,
                         op,
-                    ));
+                    );
+                    injected_summaries.push(item.op.summary(&item.id));
+                    keep.push(item);
                 } else {
                     let item = new_operation_item(
                         &mut self.counter,
                         &mut self.cumulative,
                         op,
                     );
+                    injected_summaries.push(item.op.summary(&item.id));
                     prio_groups.entry(new_prio).or_default().push(item);
                 }
+            }
+            if !injected_summaries.is_empty() {
+                self.emit(QueueEvent::Injected {
+                    count: drained_count,
+                    source_priority: prio,
+                    ops: injected_summaries,
+                });
             }
         }
 

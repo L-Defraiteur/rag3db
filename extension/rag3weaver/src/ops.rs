@@ -8,8 +8,26 @@ use std::collections::BTreeMap;
 
 use crate::connection::CypherValue;
 use crate::refs::{EntityRef, EntityRefResolver, RefError, RelationRef, RelationRefResolver};
+use crate::uuid::hashsafe_uuid;
 
 // ─── RefOrUuid ──────────────────────────────────────────────────────────────
+
+/// Hashsafe lookup: entity name + field values, resolved to a deterministic UUID
+/// via `hashsafe_uuid()` on conversion to `RefOrUuid`.
+#[derive(Debug, Clone)]
+pub struct Hashsafe {
+    pub entity: String,
+    pub values: Vec<String>,
+}
+
+impl Hashsafe {
+    pub fn new(entity: &str, values: &[&str]) -> Self {
+        Self {
+            entity: entity.to_string(),
+            values: values.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
 
 /// Either an unresolved `EntityRef` or an already-known UUID string.
 ///
@@ -61,6 +79,13 @@ impl From<String> for RefOrUuid {
 impl From<&str> for RefOrUuid {
     fn from(s: &str) -> Self {
         Self::Uuid(s.to_string())
+    }
+}
+
+impl From<Hashsafe> for RefOrUuid {
+    fn from(h: Hashsafe) -> Self {
+        let strs: Vec<&str> = h.values.iter().map(|s| s.as_str()).collect();
+        Self::Uuid(hashsafe_uuid(&h.entity, &strs))
     }
 }
 
@@ -387,6 +412,78 @@ pub const OP_DUAL_EMBED: OperationConfig = OperationConfig {
     batch_size: 500,
     max_retries: 3,
 };
+
+// ─── OpSummary ──────────────────────────────────────────────────────────────
+
+/// Lightweight, human-readable summary of a queued operation.
+///
+/// Carried by [`QueueEvent`] variants so subscribers can debug the pipeline
+/// without needing access to the full `CatalogOp` (which isn't `Clone`).
+#[derive(Debug, Clone)]
+pub struct OpSummary {
+    /// Queue item id (e.g. `"opi_3"`).
+    pub id: String,
+    /// Operation type name (e.g. `"insert"`, `"aggregate"`).
+    pub op_type: &'static str,
+    /// Processing priority.
+    pub priority: OrderedPriority,
+    /// Primary target — entity/table/rel name.
+    pub target: String,
+    /// Extra context (UUIDs, KB name, etc.).
+    pub detail: String,
+}
+
+impl std::fmt::Display for OpSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}@{} {} {}", self.id, self.op_type, self.priority, self.target, self.detail)
+    }
+}
+
+impl CatalogOp {
+    /// Build a debug summary for event reporting.
+    pub fn summary(&self, id: &str) -> OpSummary {
+        let (target, detail) = match self {
+            Self::Chunk(op) => (
+                op.entity_name.clone(),
+                format!("parent={}", op.parent_uuid),
+            ),
+            Self::Insert(op) => {
+                let uuid_hint = op.data.get("_uuid")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(op.entity_ref.temp_uuid());
+                (op.entity_name.clone(), format!("uuid={uuid_hint}"))
+            }
+            Self::Link(op) => {
+                let from = op.from.try_resolve().unwrap_or_else(|_| "pending".into());
+                let to = op.to.try_resolve().unwrap_or_else(|_| "pending".into());
+                (op.rel_name.clone(), format!("{from} → {to}"))
+            }
+            Self::Aggregate(op) => (
+                op.kb_name.clone(),
+                format!("{}:{} idx={}", op.title_entity, op.source_uuid, op.index_entry_uuid),
+            ),
+            Self::Embed(op) => (
+                op.kb_name.clone(),
+                format!("ref={} texts={}", op.entity_ref.temp_uuid(), op.texts.len()),
+            ),
+            Self::SparseEmbed(op) => (
+                op.kb_name.clone(),
+                format!("ref={} texts={}", op.entity_ref.temp_uuid(), op.texts.len()),
+            ),
+            Self::DualEmbed(op) => (
+                op.kb_name.clone(),
+                format!("ref={} texts={}", op.entity_ref.temp_uuid(), op.texts.len()),
+            ),
+        };
+        OpSummary {
+            id: id.to_string(),
+            op_type: self.operation_type(),
+            priority: self.priority(),
+            target,
+            detail,
+        }
+    }
+}
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

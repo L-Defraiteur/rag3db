@@ -45,7 +45,7 @@ pub use events::{CatalogEvent, EventBus};
 pub use filter::{FilterBuilder, FilterCompiler, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter, SplitResult};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
-pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
+pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, Hashsafe, InsertOp, LinkOp, OpSummary, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
 pub use persistence::{OperationPersistence, PersistedOp};
 pub use query::{PreparedQuery, QueryBuilder};
 pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueEvent, QueueStats};

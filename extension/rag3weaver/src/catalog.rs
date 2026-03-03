@@ -475,8 +475,8 @@ impl Catalog {
         let from_entity = rel_def.from.clone();
         let to_entity = rel_def.to.clone();
 
-        let from_ref = from.into();
-        let to_ref = to.into();
+        let from_ref: RefOrUuid = from.into();
+        let to_ref: RefOrUuid = to.into();
 
         let (relation_ref, resolver) = RelationRef::new(rel_name);
 
@@ -665,32 +665,38 @@ impl Catalog {
         set_parts.push("n._content_hash = $new_hash".to_string());
         params.push(QueryParam::new("new_hash", new_hash.clone()));
 
-        // Single query: capture old hash via WITH, then SET + RETURN
-        let cypher = format!(
-            "MATCH (n:{entity_name} {{_uuid: $uuid}}) \
-             WITH n, n._content_hash AS old_hash \
-             SET {} \
-             RETURN old_hash",
-            set_parts.join(", ")
+        // Read old hash first (separate query — Kuzu SET+RETURN returns post-SET values)
+        let old_hash_query = format!(
+            "MATCH (n:{entity_name} {{_uuid: $uuid}}) RETURN n._content_hash"
         );
-        let result = self
+        let old_result = self
             .conn
-            .execute_with_params(&cypher, &params)
+            .execute_with_params(&old_hash_query, &[QueryParam::new("uuid", uuid)])
             .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-        if result.is_empty() {
+        if old_result.is_empty() {
             return Err(CatalogError::NotFound {
                 entity: entity_name.to_string(),
                 uuid: uuid.to_string(),
             });
         }
 
-        let old_hash = result.rows[0]
+        let old_hash = old_result.rows[0]
             .get(0)
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let content_changed = old_hash != new_hash;
+
+        // Apply the SET
+        let set_cypher = format!(
+            "MATCH (n:{entity_name} {{_uuid: $uuid}}) SET {}",
+            set_parts.join(", ")
+        );
+        self.conn
+            .execute_with_params(&set_cypher, &params)
+            .await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // If content changed, enqueue AggregateOps for all KBs this entity contributes to.
         // The AggregateProcessor will handle deleting old chunks, re-chunking, and re-embedding.
@@ -730,25 +736,24 @@ impl Catalog {
                             (format!("MATCH (e:{entity_name} {{_uuid: $uuid}})-[:{rel_name}]->(t:{title_entity})"), "t")
                         };
                         let query = format!("{match_pattern} RETURN {return_field}._uuid");
-                        if let Ok(title_results) = self
+                        let title_results = self
                             .conn
                             .execute_with_params(&query, &[QueryParam::new("uuid", uuid)])
                             .await
-                        {
-                            for row in &title_results.rows {
-                                if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
-                                    let index_uuid = hashsafe_uuid(
-                                        &format!("{kb_name}_Index"),
-                                        &[title_entity, title_uuid],
-                                    );
-                                    ops.push(CatalogOp::Aggregate(AggregateOp {
-                                        index_entry_uuid: index_uuid,
-                                        kb_name: kb_name.clone(),
-                                        title_entity: title_entity.clone(),
-                                        source_uuid: title_uuid.to_string(),
-                                    }));
-                                    reembedded = true;
-                                }
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                        for row in &title_results.rows {
+                            if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
+                                let index_uuid = hashsafe_uuid(
+                                    &format!("{kb_name}_Index"),
+                                    &[title_entity, title_uuid],
+                                );
+                                ops.push(CatalogOp::Aggregate(AggregateOp {
+                                    index_entry_uuid: index_uuid,
+                                    kb_name: kb_name.clone(),
+                                    title_entity: title_entity.clone(),
+                                    source_uuid: title_uuid.to_string(),
+                                }));
+                                reembedded = true;
                             }
                         }
                     }
@@ -2141,8 +2146,12 @@ impl AggregateProcessor {
             }
 
             for chunk in &chunks {
+                // Include entity_uuid in the key to prevent collisions when
+                // different entities contribute the same field_name (e.g.
+                // Directory.absolute_path vs File.absolute_path in TreeKB).
+                let source_key = format!("{}:{}", source.entity_uuid, source.field_name);
                 let c_uuid =
-                    chunk_uuid(&agg.index_entry_uuid, &source.field_name, chunk.index);
+                    chunk_uuid(&agg.index_entry_uuid, &source_key, chunk.index);
 
                 let embed_text = if !title_text.is_empty() {
                     format!("{title_text}\n---\n{}", chunk.text)

@@ -505,16 +505,16 @@ pub async fn search_vector(
 
 /// HNSW index search via QUERY_VECTOR_INDEX. O(log N), no filters.
 ///
-/// Index name convention: `{entity}_{kb_name}_vec` (matches schema.rs generation).
+/// Index name convention: `{entity}_vec` (matches schema.rs `{kb}_Index_Chunk_vec`).
 /// Cosine metric returns distance = 1 - similarity, so we convert back.
 async fn search_vector_hnsw(
     conn: &dyn DbConnection,
     entity: &str,
-    kb_name: &str,
+    _kb_name: &str,
     embedding_value: &CypherValue,
     limit: usize,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    let index_name = format!("{entity}_{kb_name}_vec");
+    let index_name = format!("{entity}_vec");
 
     let cypher = format!(
         "CALL QUERY_VECTOR_INDEX('{entity}', '{index_name}', $embedding, {limit}) \
@@ -545,15 +545,15 @@ async fn search_vector_hnsw(
 async fn search_vector_hnsw_filtered(
     conn: &dyn DbConnection,
     entity: &str,
-    kb_name: &str,
+    _kb_name: &str,
     embedding_value: &CypherValue,
     limit: usize,
     extra_where: Option<&str>,
     extra_params: &[QueryParam],
     extra_match: Option<&str>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    let index_name = format!("{entity}_{kb_name}_vec");
-    let graph_name = format!("_vf_{entity}_{kb_name}");
+    let index_name = format!("{entity}_vec");
+    let graph_name = format!("_vf_{entity}");
 
     // Build filter Cypher with inlined parameters (PROJECT_GRAPH_CYPHER doesn't support $params)
     let match_clause = match extra_match {
