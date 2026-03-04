@@ -14,7 +14,7 @@ use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, Relatio
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
-use crate::filter::{FilterCompiler, FilterCondition, FilterParser};
+use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
@@ -1129,62 +1129,52 @@ impl Catalog {
             (None, vec![], None)
         };
 
-        // For BM25 search: split filters into Tantivy-native and Kuzu-only
-        let (tantivy_filters, allowed_ids) = if let Some(ref cond) = condition {
-            let split = FilterCompiler::split(cond);
+        // For BM25 search: resolve ALL filters to allowed_ids via title entity.
+        // Filters are resolved against the KB's title entity (e.g. Directory for TreeKB),
+        // then JOINed to {KB}_Index to get the matching index entry offsets.
+        // Cross-entity filters (e.g. "File.extension") are handled by FilterParser's "." notation.
+        let allowed_ids = if let Some(ref cond) = condition {
+            let title_entity = &kb.title.entity;
+            let in_rel = format!("{title_entity}_IN_{kb_name}");
 
-            // Tantivy-native part → FilterClause JSON
-            let tf = split
-                .tantivy
-                .as_ref()
-                .map(|t| FilterCompiler::to_tantivy_json(t));
+            let mut parser = FilterParser::new(&self.config.relations);
+            let parsed = parser
+                .parse_condition(cond, title_entity, "t")
+                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
 
-            // Kuzu-only part → pre-resolve IDs via Cypher MATCH
-            let aids = if let Some(ref kuzu_cond) = split.kuzu {
-                let mut parser = FilterParser::new(&self.config.relations);
-                let parsed = parser
-                    .parse_condition(kuzu_cond, &entity, "n")
-                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-                if !parsed.where_clauses.is_empty() {
-                    let match_prefix = if parsed.match_clauses.is_empty() {
-                        format!("MATCH (n:{entity})")
-                    } else {
-                        format!(
-                            "MATCH (n:{entity}) {}",
-                            parsed.match_clauses.join(" ")
-                        )
-                    };
-                    let cypher = format!(
-                        "{match_prefix} WHERE {} RETURN OFFSET(id(n))",
-                        parsed.combine_where()
-                    );
-                    let result = if parsed.params.is_empty() {
-                        self.conn
-                            .execute(&cypher)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    } else {
-                        self.conn
-                            .execute_with_params(&cypher, &parsed.params)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    };
-                    let ids: Vec<u64> = result
-                        .rows
-                        .iter()
-                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                        .collect();
-                    Some(ids)
+            if !parsed.where_clauses.is_empty() {
+                let match_extra = if parsed.match_clauses.is_empty() {
+                    String::new()
                 } else {
-                    None
-                }
+                    format!(" {}", parsed.match_clauses.join(" "))
+                };
+                let cypher = format!(
+                    "MATCH (t:{title_entity})-[:{in_rel}]->(idx:{entity}){match_extra} \
+                     WHERE {} RETURN OFFSET(id(idx))",
+                    parsed.combine_where()
+                );
+                let result = if parsed.params.is_empty() {
+                    self.conn
+                        .execute(&cypher)
+                        .await
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?
+                } else {
+                    self.conn
+                        .execute_with_params(&cypher, &parsed.params)
+                        .await
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?
+                };
+                let ids: Vec<u64> = result
+                    .rows
+                    .iter()
+                    .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                    .collect();
+                Some(ids)
             } else {
                 None
-            };
-
-            (tf, aids)
+            }
         } else {
-            (None, None)
+            None
         };
 
         // KB Index always has chunks ({KB}_Index_Chunk)
@@ -1270,15 +1260,13 @@ impl Catalog {
                 search::search_bm25_chunked(
                     self.conn.as_ref(), &entity, &vector_entity, query, &bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
-                    tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    &enrich_fields,
+                    allowed_ids.as_deref(), &enrich_fields,
                 ).await?
             } else {
                 search::search_bm25(
                     self.conn.as_ref(), &entity, query, &bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
-                    tantivy_filters.as_deref(), allowed_ids.as_deref(),
-                    &enrich_fields,
+                    allowed_ids.as_deref(), &enrich_fields,
                 ).await?
             }
         } else {
@@ -3294,7 +3282,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_filter_condition_takes_priority() {
-        use crate::filter::{FilterCondition, FilterOp, FilterValue};
+        use crate::filter::{FilterCondition, FilterValue};
         use crate::search::SearchOptions;
 
         let mut catalog = make_catalog();

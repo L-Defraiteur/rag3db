@@ -42,7 +42,7 @@ pub use config::CatalogConfig;
 pub use connection::{CallbackConnection, DbConnection};
 pub use embedder::{CallbackDualEmbedder, CallbackEmbedder, CallbackSparseEmbedder, DualEmbedFn, DualEmbedder, EmbedError, EmbedFn, Embedder, SparseEmbedder};
 pub use events::{CatalogEvent, EventBus};
-pub use filter::{FilterBuilder, FilterCompiler, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter, SplitResult};
+pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, Hashsafe, InsertOp, LinkOp, OpSummary, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};

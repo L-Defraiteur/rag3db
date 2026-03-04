@@ -1203,15 +1203,13 @@ async fn search_vector_bruteforce(
 ///   QueryParser, standard BM25 term-by-term search.
 ///
 /// Multiple fields → wraps in `{"type":"boolean","should":[...]}`
-/// Optional `tantivy_filters` injects `"filters":[...]` for native Tantivy pre-filtering.
 pub fn build_bm25_query(
     query: &str,
     fields: &[String],
     mode: BM25Mode,
     distance: u8,
-    tantivy_filters: Option<&[serde_json::Value]>,
 ) -> String {
-    let mut obj = match mode {
+    let obj = match mode {
         BM25Mode::Parse => {
             if fields.len() == 1 {
                 serde_json::json!({
@@ -1247,12 +1245,6 @@ pub fn build_bm25_query(
         BM25Mode::Contains => build_contains_clauses(query, fields, distance, false),
         BM25Mode::Regex => build_contains_clauses(query, fields, distance, true),
     };
-
-    if let Some(filters) = tantivy_filters {
-        if !filters.is_empty() {
-            obj["filters"] = serde_json::json!(filters);
-        }
-    }
 
     obj.to_string()
 }
@@ -1294,9 +1286,7 @@ fn build_contains_clauses(
 /// Uses NgramContainsQuery (fuzzy or regex mode) with BM25 scoring.
 /// The query is sent as a JSON QueryConfig to the tantivy_fts extension.
 ///
-/// Pre-filtering (zero post-filter):
-/// - `tantivy_filters`: native Tantivy FilterClause JSON, injected into the query JSON
-/// - `allowed_ids`: pre-resolved node IDs (from Kuzu), passed to QUERY_TANTIVY_INDEX
+/// Pre-filtering: `allowed_ids` are pre-resolved node offsets (from Kuzu), passed to QUERY_TANTIVY_INDEX.
 pub async fn search_bm25(
     conn: &dyn DbConnection,
     entity: &str,
@@ -1305,7 +1295,6 @@ pub async fn search_bm25(
     mode: BM25Mode,
     fuzzy_distance: u8,
     limit: usize,
-    tantivy_filters: Option<&[serde_json::Value]>,
     allowed_ids: Option<&[u64]>,
     return_fields: &[String],
 ) -> Result<Vec<SearchResult>, CatalogError> {
@@ -1313,7 +1302,7 @@ pub async fn search_bm25(
         return Ok(vec![]);
     }
 
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance, tantivy_filters);
+    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
     let escaped_json = json_query.replace('\'', "''");
 
     let cypher = if let Some(ids) = allowed_ids {
@@ -1381,14 +1370,13 @@ pub async fn search_bm25_raw(
     mode: BM25Mode,
     fuzzy_distance: u8,
     limit: usize,
-    tantivy_filters: Option<&[serde_json::Value]>,
     allowed_ids: Option<&[u64]>,
 ) -> Result<Vec<BM25Hit>, CatalogError> {
     if fields.is_empty() {
         return Ok(vec![]);
     }
 
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance, tantivy_filters);
+    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
     let escaped_json = json_query.replace('\'', "''");
 
     let cypher = if let Some(ids) = allowed_ids {
@@ -1631,7 +1619,6 @@ pub async fn search_bm25_chunked(
     mode: BM25Mode,
     fuzzy_distance: u8,
     limit: usize,
-    tantivy_filters: Option<&[serde_json::Value]>,
     allowed_ids: Option<&[u64]>,
     return_fields: &[String],
 ) -> Result<Vec<SearchResult>, CatalogError> {
@@ -1640,7 +1627,7 @@ pub async fn search_bm25_chunked(
     }
 
     // Query 1: CALL QUERY_TANTIVY_INDEX → (offset, score, highlights)
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance, tantivy_filters);
+    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
     let escaped_json = json_query.replace('\'', "''");
 
     let cypher = if let Some(ids) = allowed_ids {
@@ -2434,7 +2421,6 @@ mod tests {
             1,
             10,
             None,
-            None,
             &[],
         )
         .await
@@ -2446,7 +2432,7 @@ mod tests {
     async fn search_bm25_empty_fields() {
         let conn = MockConnection::new();
 
-        let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, None, &[])
+        let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, &[])
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -2457,7 +2443,7 @@ mod tests {
     #[test]
     fn build_bm25_query_single_field_contains() {
         let fields = vec!["body".to_string()];
-        let json = build_bm25_query("programming", &fields, BM25Mode::Contains, 1, None);
+        let json = build_bm25_query("programming", &fields, BM25Mode::Contains, 1);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["type"], "contains");
@@ -2470,7 +2456,7 @@ mod tests {
     #[test]
     fn build_bm25_query_single_field_regex() {
         let fields = vec!["body".to_string()];
-        let json = build_bm25_query("program[a-z]+", &fields, BM25Mode::Regex, 1, None);
+        let json = build_bm25_query("program[a-z]+", &fields, BM25Mode::Regex, 1);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["type"], "contains");
@@ -2483,7 +2469,7 @@ mod tests {
     #[test]
     fn build_bm25_query_multi_field_boolean() {
         let fields = vec!["title".to_string(), "body".to_string()];
-        let json = build_bm25_query("rust", &fields, BM25Mode::Contains, 2, None);
+        let json = build_bm25_query("rust", &fields, BM25Mode::Contains, 2);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["type"], "boolean");
@@ -2498,27 +2484,13 @@ mod tests {
     #[test]
     fn build_bm25_query_multi_field_regex() {
         let fields = vec!["title".to_string(), "body".to_string()];
-        let json = build_bm25_query("prog.*", &fields, BM25Mode::Regex, 1, None);
+        let json = build_bm25_query("prog.*", &fields, BM25Mode::Regex, 1);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["type"], "boolean");
         let should = parsed["should"].as_array().unwrap();
         assert_eq!(should[0]["regex"], true);
         assert_eq!(should[1]["regex"], true);
-    }
-
-    #[test]
-    fn build_bm25_query_with_filters() {
-        let fields = vec!["body".to_string()];
-        let filters = vec![serde_json::json!({"field": "status", "op": "eq", "value": "active"})];
-        let json = build_bm25_query("test", &fields, BM25Mode::Contains, 1, Some(&filters));
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed["type"], "contains");
-        let f = parsed["filters"].as_array().unwrap();
-        assert_eq!(f.len(), 1);
-        assert_eq!(f[0]["field"], "status");
-        assert_eq!(f[0]["op"], "eq");
     }
 
     // ── fuse_results ─────────────────────────────────────────────────────
