@@ -11,7 +11,7 @@ Statut : résumé post-session (étapes 2 et 3 du plan doc 15)
 
 **Fichier** : `tests/e2e_native.rs`
 
-11 tests d'intégration avec une vraie DB rag3db in-memory. Config sans knowledge bases (pas besoin des extensions vector/tantivy_fts). Teste le pipeline CRUD complet.
+11 tests d'intégration avec une vraie DB rag3db in-memory. Config sans knowledge bases (pas besoin des extensions vector/lucivy_fts). Teste le pipeline CRUD complet.
 
 **Config de test** :
 - Entités : `Document` (title STRING, body TEXT, page_count INT64, hashsafe sur title), `Author` (name STRING, hashsafe sur name)
@@ -101,4 +101,4 @@ rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 - Node.js binding : napi-rs vs JS wrapper pur ?
 - WASM packaging : wasm-pack + wasm-bindgen vs emscripten ?
 - Queue flush timing dans le browser ?
-- Extension tantivy_fts via LOAD EXTENSION depuis Rag3dbConnection ?
+- Extension lucivy_fts via LOAD EXTENSION depuis Rag3dbConnection ?

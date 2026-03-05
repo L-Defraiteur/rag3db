@@ -7,7 +7,7 @@
 
 ## Ce qui a été fait cette session
 
-### AutomatonPhraseQuery v1 (code existant dans izihawa-tantivy)
+### AutomatonPhraseQuery v1 (code existant dans izihawa-lucivy)
 
 Fichiers créés :
 - `src/query/phrase_query/automaton_phrase_query.rs` — Query struct
@@ -15,8 +15,8 @@ Fichiers créés :
 
 Principe : cascade par position (exact → fuzzy Levenshtein → substring regex), early termination, puis PhraseScorer pour vérifier les positions consécutives.
 
-- 990/990 tests passent dans izihawa-tantivy (+6 tests spécifiques)
-- tantivy_fts `build_contains_query()` mis à jour pour utiliser AutomatonPhraseQuery
+- 990/990 tests passent dans izihawa-lucivy (+6 tests spécifiques)
+- lucivy_fts `build_contains_query()` mis à jour pour utiliser AutomatonPhraseQuery
 
 ### Problème découvert : "c++"
 
@@ -155,13 +155,13 @@ La distance du match = la distance Levenshtein à la sortie de la phase 2 (avant
 **Implémentation possible** :
 - Construire un NFA combiné (prefix-free + Levenshtein + suffix-free)
 - Le convertir en DFA (ou simuler le NFA à la volée)
-- Implémenter `tantivy_fst::Automaton` pour pouvoir walk le FST
+- Implémenter `lucivy_fst::Automaton` pour pouvoir walk le FST
 
 **Avantage** : modèle unifié, "progam" trouverait "programming" (fuzzy d=1 de "program" qui est substring de "programming").
 
 **Difficulté** : complexité de l'automate. L'espace d'états explose (prefix NFA × Levenshtein NFA × suffix NFA). Probablement besoin d'un NFA simulation plutôt qu'un DFA complet.
 
-**Alternative plus simple** : utiliser le regex `.*` + un pattern Levenshtein-like. Mais `tantivy_fst::Regex` ne supporte pas le fuzzy. On pourrait :
+**Alternative plus simple** : utiliser le regex `.*` + un pattern Levenshtein-like. Mais `lucivy_fst::Regex` ne supporte pas le fuzzy. On pourrait :
 1. Générer toutes les variantes à distance ≤ d du token
 2. Pour chacune, faire un regex `.*{variante}.*`
 3. Combiner en un seul automate union
@@ -221,7 +221,7 @@ Pour chaque document candidat :
   3. Si aucune occurrence ne passe → skip document
 ```
 
-### Fichiers à créer/modifier dans izihawa-tantivy
+### Fichiers à créer/modifier dans izihawa-lucivy
 
 | Fichier | Action | Rôle |
 |---------|--------|------|
@@ -233,7 +233,7 @@ Pour chaque document candidat :
 Pour l'option B, ajouter aussi :
 | `src/query/fuzzy_infix_automaton.rs` | NOUVEAU | Automate fuzzy substring |
 
-### Fichiers à modifier dans tantivy_fts
+### Fichiers à modifier dans lucivy_fts
 
 | Fichier | Action | Rôle |
 |---------|--------|------|

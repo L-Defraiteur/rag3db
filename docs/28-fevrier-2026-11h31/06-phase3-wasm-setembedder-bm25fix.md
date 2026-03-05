@@ -4,7 +4,7 @@
 
 ### Fix BM25 uuid resolution (FAIT)
 
-**Problème** : `QUERY_TANTIVY_INDEX` retourne `node_id` = UINT64 offset, pas un UUID. `search_bm25()` stockait cet offset directement comme "uuid" (`"42"` au lieu de `"abc-def-123"`). En mode hybride, la fusion RRF ne pouvait jamais matcher BM25 avec vector search.
+**Problème** : `QUERY_LUCIVY_INDEX` retourne `node_id` = UINT64 offset, pas un UUID. `search_bm25()` stockait cet offset directement comme "uuid" (`"42"` au lieu de `"abc-def-123"`). En mode hybride, la fusion RRF ne pouvait jamais matcher BM25 avec vector search.
 
 **Fix** : même pattern que `search_sparse_cypher()` — extraction des `(offset, score)` puis résolution via `MATCH (n:Entity) WHERE OFFSET(id(n)) IN [...] RETURN OFFSET(id(n)), n._uuid`. Join en Rust via HashMap.
 
@@ -78,25 +78,25 @@ Test flow : créer Weaver (MockEmbedder) → fetch model HuggingFace → `setEmb
 
 ### Build WASM avec sparse_vector (FAIT, mais tests cassés)
 
-Build WASM reconfiguré avec `BUILD_EXTENSIONS="json;vector;algo;tantivy_fts;sparse_vector"`.
+Build WASM reconfiguré avec `BUILD_EXTENSIONS="json;vector;algo;lucivy_fts;sparse_vector"`.
 - `sparse_vector/CMakeLists.txt` supporte déjà EMSCRIPTEN (target wasm32-unknown-emscripten, nightly, atomics)
 - Build complet réussi : `[100%] Built target rag3db_wasm`
 - Extension linkée statiquement via `generated_extension_loader.cpp`
 
-### Bug découvert : Tantivy schema panic avec sparse_vector linké
+### Bug découvert : Lucivy schema panic avec sparse_vector linké
 
 **Symptôme** : `thread panicked at src/schema/schema.rs:202: Field already exists in schema title`
 
-Le panic arrive dans le SchemaBuilder de ld-tantivy quand `CREATE_TANTIVY_INDEX` est appelé. Le champ `title` est ajouté deux fois au schema Tantivy.
+Le panic arrive dans le SchemaBuilder de ld-lucivy quand `CREATE_LUCIVY_INDEX` est appelé. Le champ `title` est ajouté deux fois au schema Lucivy.
 
 **Important** : Ce bug casse AUSSI le test existant `rag3weaver.spec.js` (qui marchait avant). Ce n'est donc PAS un problème dans nos nouveaux tests.
 
-**Hypothèse probable** : Le `--allow-multiple-definition` dans le linker WASM (nécessaire pour rayon_core dupliqué entre rag3weaver et tantivy_fts) résout mal certains symboles quand `sparse_vector` est ajouté comme troisième lib Rust. Le symbole résolu pourrait pointer vers la mauvaise implémentation.
+**Hypothèse probable** : Le `--allow-multiple-definition` dans le linker WASM (nécessaire pour rayon_core dupliqué entre rag3weaver et lucivy_fts) résout mal certains symboles quand `sparse_vector` est ajouté comme troisième lib Rust. Le symbole résolu pourrait pointer vers la mauvaise implémentation.
 
 **Piste d'investigation** :
 1. Vérifier si le build SANS `sparse_vector` fonctionne toujours (il devrait — c'était le cas avant)
 2. Le problème est dans le linkage, pas dans le code Rust rag3weaver (les 341 tests cargo passent)
-3. Possible conflit de symboles entre `sparse_vector` et `tantivy_fts` — les deux ont des crates Rust avec des dépendances communes (serde, bincode, cxx)
+3. Possible conflit de symboles entre `sparse_vector` et `lucivy_fts` — les deux ont des crates Rust avec des dépendances communes (serde, bincode, cxx)
 
 **Pour tester sans sparse_vector** : supprimer `CMakeCache.txt` dans `build_wasm/`, reconfigurer sans sparse_vector, rebuild.
 
@@ -107,7 +107,7 @@ Le panic arrive dans le SchemaBuilder de ld-tantivy quand `CREATE_TANTIVY_INDEX`
 - `cargo test` : 341 passed, 0 failed, 13 ignored
 - `cargo check --features wasm-emscripten` : 0 erreur, 1 warning préexistant (doc comment sur thread_local)
 - Build WASM : OK (avec sparse_vector)
-- Tests Playwright : CASSÉS (panic Tantivy schema, à investiguer — problème de linkage)
+- Tests Playwright : CASSÉS (panic Lucivy schema, à investiguer — problème de linkage)
 
 ## Commit poussé
 

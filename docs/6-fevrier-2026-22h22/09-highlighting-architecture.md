@@ -19,7 +19,7 @@ Output attendu :
 
 ## Deux chemins de recherche, deux sources d'offsets
 
-### 1. Chemin ngram (principal, tantivy_fts → à déplacer dans ld-tantivy)
+### 1. Chemin ngram (principal, lucivy_fts → à déplacer dans ld-lucivy)
 
 `NgramContainsQuery` : trigram lookup + vérification stored text.
 
@@ -35,7 +35,7 @@ Query token "program"
 
 **Les byte offsets sont un sous-produit gratuit de la vérification.** `tokenize_raw()` n'est pas du travail en double — c'est la logique de vérification elle-même. Il suffit de **stocker les offsets au lieu de les jeter**.
 
-### 2. Chemin cascade (fallback, ld-tantivy)
+### 2. Chemin cascade (fallback, ld-lucivy)
 
 `AutomatonPhraseQuery` : cascade exact→fuzzy→substring→fuzzy_substring sur le FST.
 
@@ -66,11 +66,11 @@ Une première tentative (erronée) a implémenté le highlighting comme post-pro
 
 ## Plan d'implémentation
 
-### Étape 1 : Déplacer NgramContainsQuery dans ld-tantivy
+### Étape 1 : Déplacer NgramContainsQuery dans ld-lucivy
 
-Actuellement dans `tantivy_fts/rust/src/ngram_query.rs`. À déplacer dans `ld-tantivy/src/query/ngram_contains/` (ou `src/query/phrase_query/ngram_contains_scorer.rs`).
+Actuellement dans `lucivy_fts/rust/src/ngram_query.rs`. À déplacer dans `ld-lucivy/src/query/ngram_contains/` (ou `src/query/phrase_query/ngram_contains_scorer.rs`).
 
-Fichiers à créer/déplacer dans ld-tantivy :
+Fichiers à créer/déplacer dans ld-lucivy :
 - `ngram_contains_query.rs` — NgramContainsQuery (impl Query)
 - `ngram_contains_weight.rs` — NgramContainsWeight (impl Weight) + NgramContainsScorer (impl DocSet + Scorer)
 
@@ -84,7 +84,7 @@ Fonctions utilitaires à inclure :
 
 Note : `tokenize_raw` et `edit_distance` sont dupliqués entre contains_scorer.rs et ngram_query.rs. Factoriser dans un module utilitaire commun (`src/query/contains_utils.rs` ou similaire).
 
-tantivy_fts gardera juste le routing dans `build_contains_query()` :
+lucivy_fts gardera juste le routing dans `build_contains_query()` :
 ```rust
 if ngram_field disponible {
     NgramContainsQuery::new(raw_field, ngram_field, stored_field, ...)
@@ -101,7 +101,7 @@ if ngram_field disponible {
 - Rempli pendant le scoring quand un match est confirmé
 - Lu après le search dans `collect_results`
 
-#### NgramContainsScorer (déplacé dans ld-tantivy)
+#### NgramContainsScorer (déplacé dans ld-lucivy)
 
 Dans `verify_single_token()` — quand `token_match_distance()` retourne Some :
 ```rust
@@ -127,7 +127,7 @@ if let Some(ref sink) = self.highlight_sink {
 return true;
 ```
 
-#### ContainsScorer (ld-tantivy, fallback multi-token)
+#### ContainsScorer (ld-lucivy, fallback multi-token)
 
 Dans `validate_separators()` — quand `count += 1` (ligne 395) :
 ```rust
@@ -143,7 +143,7 @@ if let Some(ref sink) = self.highlight_sink {
 count += 1;
 ```
 
-#### ContainsSingleScorer (ld-tantivy, fallback single-token)
+#### ContainsSingleScorer (ld-lucivy, fallback single-token)
 
 Dans `validate_current()` — quand match trouvé (avant `return true`) :
 ```rust
@@ -173,7 +173,7 @@ pub fn with_highlight_sink(mut self, sink: Arc<Mutex<HashMap<DocId, Vec<[usize; 
 }
 ```
 
-### Étape 4 : Wiring dans tantivy_fts
+### Étape 4 : Wiring dans lucivy_fts
 
 **query.rs :**
 - `build_query()` accepte un `highlight_sink: Option<Arc<...>>`
@@ -183,7 +183,7 @@ pub fn with_highlight_sink(mut self, sink: Arc<Mutex<HashMap<DocId, Vec<[usize; 
 - Après le search, si highlight_sink existe, le lire pour remplir `SearchResult.highlights`
 - Le sink mappe `DocId` → offsets, mais on a des `DocAddress` (segment_id + doc_id). Il faudra adapter le mapping.
 
-**lib.rs — tantivy_search / tantivy_search_filtered :**
+**lib.rs — lucivy_search / lucivy_search_filtered :**
 - Si `config.highlight == Some(true)`, créer le sink, le passer à build_query, le lire après search.
 
 ### Étape 5 : Cas term / fuzzy / phrase / parse
@@ -216,12 +216,12 @@ Ou plus simple : utiliser un sink par segment. Le collector itère les segments 
 
 ## Résumé des fichiers
 
-### ld-tantivy (à modifier/créer)
+### ld-lucivy (à modifier/créer)
 
 | Fichier | Action |
 |---------|--------|
-| `src/query/phrase_query/ngram_contains_query.rs` | **NOUVEAU** — déplacé depuis tantivy_fts |
-| `src/query/phrase_query/ngram_contains_weight.rs` | **NOUVEAU** — déplacé depuis tantivy_fts |
+| `src/query/phrase_query/ngram_contains_query.rs` | **NOUVEAU** — déplacé depuis lucivy_fts |
+| `src/query/phrase_query/ngram_contains_weight.rs` | **NOUVEAU** — déplacé depuis lucivy_fts |
 | `src/query/phrase_query/contains_scorer.rs` | **MODIFIER** — ajouter highlight_sink |
 | `src/query/phrase_query/automaton_phrase_weight.rs` | **MODIFIER** — ajouter highlight_sink, propager |
 | `src/query/phrase_query/automaton_phrase_query.rs` | **MODIFIER** — ajouter highlight_sink, with_highlight_sink() |
@@ -229,13 +229,13 @@ Ou plus simple : utiliser un sink par segment. Le collector itère les segments 
 | `src/query/mod.rs` | **MODIFIER** — re-exporter NgramContainsQuery |
 | `src/query/contains_utils.rs` | **NOUVEAU** (optionnel) — factoriser tokenize_raw, edit_distance, etc. |
 
-### tantivy_fts (à modifier/simplifier)
+### lucivy_fts (à modifier/simplifier)
 
 | Fichier | Action |
 |---------|--------|
-| `rust/src/ngram_query.rs` | **SUPPRIMER** — déplacé dans ld-tantivy |
-| `rust/src/matching.rs` | **SUPPRIMER** — utilitaires déplacés dans ld-tantivy |
+| `rust/src/ngram_query.rs` | **SUPPRIMER** — déplacé dans ld-lucivy |
+| `rust/src/matching.rs` | **SUPPRIMER** — utilitaires déplacés dans ld-lucivy |
 | `rust/src/highlight.rs` | **SUPPRIMER** — approche fausse |
-| `rust/src/query.rs` | **MODIFIER** — build_contains_query utilise NgramContainsQuery de ld-tantivy, ajouter wiring sink |
+| `rust/src/query.rs` | **MODIFIER** — build_contains_query utilise NgramContainsQuery de ld-lucivy, ajouter wiring sink |
 | `rust/src/lib.rs` | **MODIFIER** — supprimer mod ngram_query/matching/highlight, ajouter wiring sink |
 | `test/test_ffi.c` | **MODIFIER** — garder tests contains existants, refaire tests highlight |

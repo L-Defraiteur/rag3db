@@ -1,10 +1,10 @@
-# Plan d'intégration rag3db + tantivy_fts — WASM & Node.js
+# Plan d'intégration rag3db + lucivy_fts — WASM & Node.js
 
 ## Contexte
 
-On avait `kuzu-wasm-exp` qui compile kuzu v0.11.3 en WASM avec les extensions fts, json, vector, algo statiquement linkées. L'extension fts de kuzu ne supporte pas le fuzzy search. On a développé rag3db (fork kuzu v0.11.2.2) avec une extension `tantivy_fts` qui supporte fuzzy, phrase, stems, filter fields, highlights, etc.
+On avait `kuzu-wasm-exp` qui compile kuzu v0.11.3 en WASM avec les extensions fts, json, vector, algo statiquement linkées. L'extension fts de kuzu ne supporte pas le fuzzy search. On a développé rag3db (fork kuzu v0.11.2.2) avec une extension `lucivy_fts` qui supporte fuzzy, phrase, stems, filter fields, highlights, etc.
 
-**Objectif** : Compiler rag3db en WASM et en Node.js natif, avec tantivy_fts embarqué.
+**Objectif** : Compiler rag3db en WASM et en Node.js natif, avec lucivy_fts embarqué.
 
 ---
 
@@ -78,7 +78,7 @@ if(${BUILD_WASM})
 endif()
 ```
 
-### 3. `extension_config.cmake` — tantivy_fts déjà listé pour WASM
+### 3. `extension_config.cmake` — lucivy_fts déjà listé pour WASM
 
 ```cmake
 if(${BUILD_WASM})
@@ -86,11 +86,11 @@ if(${BUILD_WASM})
     add_static_link_extension(json)
     add_static_link_extension(vector)
     add_static_link_extension(algo)
-    add_static_link_extension(tantivy_fts)    # ← DÉJÀ LÀ
+    add_static_link_extension(lucivy_fts)    # ← DÉJÀ LÀ
 endif()
 ```
 
-### 4. `tantivy_fts/CMakeLists.txt` — Support Emscripten
+### 4. `lucivy_fts/CMakeLists.txt` — Support Emscripten
 
 ```cmake
 if(EMSCRIPTEN)
@@ -104,10 +104,10 @@ endif()
 
 CMake génère automatiquement `generated_extension_loader.cpp` :
 ```cpp
-tantivy_fts_extension::TantivyFtsExtension extension{};
+lucivy_fts_extension::LucivyFtsExtension extension{};
 extension.load(context);
 ```
-Le naming correspond exactement au header `tantivy_fts_extension.h`. `autoLoadLinkedExtensions()` est appelé au démarrage de la DB.
+Le naming correspond exactement au header `lucivy_fts_extension.h`. `autoLoadLinkedExtensions()` est appelé au démarrage de la DB.
 
 ---
 
@@ -119,7 +119,7 @@ Le naming correspond exactement au header `tantivy_fts_extension.h`. `autoLoadLi
 | Config WASM | Dans CMakeLists.txt parent | Dans son propre CMakeLists.txt |
 | Namespaces | `rag3db::main`, `rag3db::common` | `kuzu::main`, `kuzu::common` |
 | Module name | `rag3db_wasm` → `rag3db` | `kuzu_wasm` |
-| Extensions | tantivy_fts déjà listé | Pas de tantivy_fts |
+| Extensions | lucivy_fts déjà listé | Pas de lucivy_fts |
 | Build script | `build.mjs` (basique) | `build_wasm.sh` (2 passes ESM+CJS) |
 
 ---
@@ -133,9 +133,9 @@ Déjà existant et fonctionnel :
 - API complète : Database, Connection, PreparedStatement, QueryResult
 - Sync + async pour chaque opération
 
-Pour le Node.js natif, tantivy_fts ne sera PAS statiquement linké par défaut (le static linking auto est pour WASM/Android/Swift). Deux options :
-- **Option A** : `LOAD EXTENSION '/path/to/tantivy_fts.rag3db_extension'` au runtime
-- **Option B** : Dé-commenter `set(EXTENSION_STATIC_LINK_LIST tantivy_fts)` dans `extension_config.cmake`
+Pour le Node.js natif, lucivy_fts ne sera PAS statiquement linké par défaut (le static linking auto est pour WASM/Android/Swift). Deux options :
+- **Option A** : `LOAD EXTENSION '/path/to/lucivy_fts.rag3db_extension'` au runtime
+- **Option B** : Dé-commenter `set(EXTENSION_STATIC_LINK_LIST lucivy_fts)` dans `extension_config.cmake`
 
 ---
 
@@ -170,15 +170,15 @@ emmake make -C build/wasm -j$(nproc)
 
 Ceci devrait :
 1. Compiler rag3db en WASM
-2. Statiquement linker fts, json, vector, algo, tantivy_fts
-3. Compiler tantivy_fts Rust vers `wasm32-unknown-emscripten`
+2. Statiquement linker fts, json, vector, algo, lucivy_fts
+3. Compiler lucivy_fts Rust vers `wasm32-unknown-emscripten`
 4. Produire `build/wasm/tools/wasm/build/rag3db/rag3db_wasm.wasm`
 
-### Etape 2 : Adapter tantivy_fts pour threads WASM (optionnel)
+### Etape 2 : Adapter lucivy_fts pour threads WASM (optionnel)
 
 Si on veut des threads Rust réels :
 ```cmake
-# Dans tantivy_fts/CMakeLists.txt
+# Dans lucivy_fts/CMakeLists.txt
 if(EMSCRIPTEN)
     set(CARGO_TOOLCHAIN "+nightly")
     set(CARGO_EXTRA_FLAGS "-Z" "build-std=std,panic_abort")
@@ -192,7 +192,7 @@ endif()
 ```bash
 cd packages/rag3db/build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXTENSIONS="tantivy_fts" \
+  -DBUILD_EXTENSIONS="lucivy_fts" \
   -DBUILD_NODEJS=TRUE
 cmake --build . -j$(nproc)
 ```
@@ -208,7 +208,7 @@ cmake --build . -j$(nproc)
 
 1. **Compilation Rust WASM** : Le cargo build vers `wasm32-unknown-emscripten` peut rencontrer des problèmes de linking avec les libs C/C++ d'emscripten.
 2. **`-Z build-std`** : Expérimental, peut ne pas fonctionner du premier coup.
-3. **Taille WASM** : tantivy ajoute ~5-10MB (marginal).
+3. **Taille WASM** : lucivy ajoute ~5-10MB (marginal).
 4. **rayon threads** : Fallback single-thread si `-Z build-std` ne fonctionne pas.
 
 ## Résumé

@@ -35,7 +35,7 @@ Le pool emscripten est **fini** (16 Web Workers) et **partagé** :
 ```
 Budget total : 16 Web Workers emscripten
   - Kuzu (query parallelism)    : ~4-8 threads
-  - Tantivy/rayon (search/index): ~4 threads
+  - Lucivy/rayon (search/index): ~4 threads
   - Nos opérations async        : 1-2 threads
                                   ─────────
                         → facilement 12-16 au pic
@@ -167,7 +167,7 @@ console.log(result); // {"processed":3,"failed":0,"persisted":3}
 | `link()` | **Sync** | Idem |
 | `count()` | **Sync** | Query simple, rapide |
 | `drain()` | **Async** | Persist + embed + index, potentiellement long |
-| `search()` | **Async** | Tantivy search + DB lookup, peut prendre du temps |
+| `search()` | **Async** | Lucivy search + DB lookup, peut prendre du temps |
 | `version()` | **Sync** | Constante |
 
 ---
@@ -257,7 +257,7 @@ depuis le background thread vers le Worker thread (où JS/Transformers.js tourne
 Actuellement drain() exécute les processors séquentiellement :
 1. PersistProcessor (DB writes)
 2. EmbedProcessor (embeddings)
-3. IndexProcessor (tantivy index)
+3. IndexProcessor (lucivy index)
 
 Avec rayon, certains peuvent tourner en parallèle :
 - Persist et Embed sont **indépendants** sur des items différents → parallélisables
@@ -292,7 +292,7 @@ pub struct WeaverContext {
 impl WeaverContext {
     pub fn new(config: CatalogConfig) -> Self {
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(4)  // Laisse ~12 workers pour Kuzu + tantivy interne
+            .num_threads(4)  // Laisse ~12 workers pour Kuzu + lucivy interne
             .build()
             .expect("Failed to create rayon thread pool");
         Self {
@@ -309,12 +309,12 @@ impl WeaverContext {
 | Composant | Threads | Source |
 |-----------|---------|--------|
 | Kuzu (query parallelism) | ~8 | Pool emscripten global |
-| Tantivy (rayon interne) | ~4 | Pool rayon global de tantivy |
+| Lucivy (rayon interne) | ~4 | Pool rayon global de lucivy |
 | **rag3weaver (notre pool)** | **4** | **Pool rayon dédié** |
 | Total | ~16 | = `PTHREAD_POOL_SIZE` |
 
 Note : rayon supporte plusieurs pools indépendants. Le pool dédié de rag3weaver
-ne partage pas ses threads avec le pool rayon global utilisé par tantivy.
+ne partage pas ses threads avec le pool rayon global utilisé par lucivy.
 
 ### 2.8. Garde contre appels concurrents — PRIORITÉ HAUTE
 
@@ -347,7 +347,7 @@ mais **jamais d'échec fatal**.
 
 **L'ordre critique** :
 - #1 (Mutex WasmDbConnection) **avant** #3 (drain async) — sinon data race sur `CConnection`
-- #2 (pool rayon dédié) **avant** #3 (drain async) — sinon rayon::spawn utilise le pool global partagé avec tantivy
+- #2 (pool rayon dédié) **avant** #3 (drain async) — sinon rayon::spawn utilise le pool global partagé avec lucivy
 
 ---
 

@@ -55,7 +55,7 @@ pub struct WeaverContext {
 
 ### Problème : deux static libs Rust avec rayon
 
-`librag3weaver.a` et `libtantivy_fts.a` compilent chacune leur propre `rayon_core` (target dirs différents). Le linker `wasm-ld` refusait les symboles dupliqués.
+`librag3weaver.a` et `liblucivy_fts.a` compilent chacune leur propre `rayon_core` (target dirs différents). Le linker `wasm-ld` refusait les symboles dupliqués.
 
 **Fix** : `target_link_options(rag3db_wasm PRIVATE "LINKER:--allow-multiple-definition")` dans `tools/wasm/CMakeLists.txt`.
 

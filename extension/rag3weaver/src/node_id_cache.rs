@@ -5,7 +5,7 @@
 //! so the cache never invalidates — only grows on INSERT and shrinks on DELETE.
 //!
 //! Future uses:
-//! - Tantivy `allowed_ids` (which works with offsets)
+//! - Lucivy `allowed_ids` (which works with offsets)
 //! - Fast-path Cypher queries using `WHERE ID(n) = ...` (once CypherValue supports InternalId)
 //! - Direct storage access via extensions
 

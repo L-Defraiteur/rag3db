@@ -42,7 +42,7 @@ pub struct Catalog {
 
 1. Embed query → dense embedder
 2. Vector search → `CALL QUERY_VECTOR_INDEX(...)` (Cypher)
-3. BM25 search → `CALL QUERY_TANTIVY_INDEX(...)` (Cypher)
+3. BM25 search → `CALL QUERY_LUCIVY_INDEX(...)` (Cypher)
 4. Sparse search → `sparse_index.search()` (in-memory)
 5. Fusion RRF ou Weighted 3-way
 

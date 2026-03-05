@@ -2,11 +2,11 @@
 
 ## TOUT EST FAIT (étapes 1-5 complètes)
 
-### Étape 1 : ld-tantivy (handle.rs + query.rs) ✅
+### Étape 1 : ld-lucivy (handle.rs + query.rs) ✅
 
 #### 1a. handle.rs — Ngram pour champs string
 
-**Fichier :** `ld-tantivy/tantivy_fts/rust/src/handle.rs`
+**Fichier :** `ld-lucivy/lucivy_fts/rust/src/handle.rs`
 
 - Branche `"string"` dans `build_schema()` : ajout d'un champ `{name}._ngram` (trigrams, tokenizer `NGRAM_TOKENIZER`, `IndexRecordOption::Basic`) pour chaque champ string
 - Enregistrement dans `ngram_field_pairs` → `auto_duplicate_field()` (bridge.rs) écrit automatiquement les trigrams à l'indexation
@@ -15,7 +15,7 @@
 
 #### 1b. query.rs — FilterClause étendu
 
-**Fichier :** `ld-tantivy/tantivy_fts/rust/src/query.rs`
+**Fichier :** `ld-lucivy/lucivy_fts/rust/src/query.rs`
 
 **Struct FilterClause modifié :**
 ```rust
@@ -30,7 +30,7 @@ pub struct FilterClause {
 
 **Nouveaux ops :** between, not_in, starts_with (TermQuery+RegexQuery combo), contains (NgramContainsQuery avec distance configurable), must/should/must_not (récursif).
 
-**Tests :** 47 tests tantivy-fts (13 nouveaux), 1062 tests ld-tantivy — tout vert.
+**Tests :** 47 tests lucivy-fts (13 nouveaux), 1062 tests ld-lucivy — tout vert.
 
 ### Étape 2 : schema.rs — Indexer tous les champs ✅
 
@@ -39,9 +39,9 @@ pub struct FilterClause {
 - `generate_fts_index_ddl(table, fields, filter_fields)` — 3ème param ajouté
 - Si `filter_fields` non vide → émet `filter_fields := ['col1', 'col2']` dans le DDL
 - `generate_full_schema()` collecte les champs non-texte de chaque entité :
-  - `String/Choice/Tags/Json` → filter field (Kuzu STRING → Tantivy "string")
-  - `Int64/Integer` → filter field (Kuzu INT64 → Tantivy "i64")
-  - `Double/Number` → filter field (Kuzu DOUBLE → Tantivy "f64")
+  - `String/Choice/Tags/Json` → filter field (Kuzu STRING → Lucivy "string")
+  - `Int64/Integer` → filter field (Kuzu INT64 → Lucivy "i64")
+  - `Double/Number` → filter field (Kuzu DOUBLE → Lucivy "f64")
   - `Boolean/Timestamp` → skip V1
 - **Tests :** 24 tests schema (2 nouveaux) — tout vert
 
@@ -52,17 +52,17 @@ pub struct FilterClause {
 **Nouveau struct `SplitResult` :**
 ```rust
 pub struct SplitResult {
-    pub tantivy: Option<FilterCondition>,  // Tantivy-native pre-filter
+    pub lucivy: Option<FilterCondition>,  // Lucivy-native pre-filter
     pub kuzu: Option<FilterCondition>,     // Kuzu Cypher → allowed_ids
 }
 ```
 
 **`FilterCompiler` avec 2 méthodes principales :**
-- `split(condition) → SplitResult` — sépare les ops Tantivy-compat des Kuzu-only
-- `to_tantivy_json(condition) → Vec<serde_json::Value>` — compile en FilterClause JSON
+- `split(condition) → SplitResult` — sépare les ops Lucivy-compat des Kuzu-only
+- `to_lucivy_json(condition) → Vec<serde_json::Value>` — compile en FilterClause JSON
 
 **Règles de split :**
-- Tantivy-compat : Eq, Neq, Lt, Lte, Gt, Gte, In, Between, NotIn, StartsWith, Contains
+- Lucivy-compat : Eq, Neq, Lt, Lte, Gt, Gte, In, Between, NotIn, StartsWith, Contains
 - Kuzu-only : IsNull, IsNotNull, IsEmpty, IsNotEmpty, HasAny, HasAll, HasNone, ValuesCount
 - Must : split récursif (chaque enfant va dans sa catégorie)
 - Should/MustNot : all-or-nothing (si un enfant est Kuzu-only, tout → Kuzu)
@@ -73,9 +73,9 @@ pub struct SplitResult {
 ### Étape 4 : search.rs + catalog.rs — Pipeline branché ✅
 
 **search.rs :**
-- `build_bm25_query()` accepte `tantivy_filters: Option<&[serde_json::Value]>` → injecte `"filters": [...]` dans le JSON
-- `search_bm25()` : `extra_where/extra_params` remplacés par `tantivy_filters` + `allowed_ids`
-  - Si `allowed_ids` → `CALL QUERY_TANTIVY_INDEX(..., allowed_ids := [1, 2, 3])`
+- `build_bm25_query()` accepte `lucivy_filters: Option<&[serde_json::Value]>` → injecte `"filters": [...]` dans le JSON
+- `search_bm25()` : `extra_where/extra_params` remplacés par `lucivy_filters` + `allowed_ids`
+  - Si `allowed_ids` → `CALL QUERY_LUCIVY_INDEX(..., allowed_ids := [1, 2, 3])`
   - **Zéro post-filter** : plus de `MATCH (n) WHERE id(n) = node_id AND {w}`
 - `search_vector()` : inchangé (tout passe par Cypher WHERE, déjà pré-filter)
 
@@ -84,9 +84,9 @@ pub struct SplitResult {
 - Pour vector : toutes les filters → `FilterParser::parse_condition()` → Cypher WHERE (inchangé)
 - Pour BM25 :
   1. `FilterCompiler::split(&condition)` → `SplitResult`
-  2. Partie Tantivy → `to_tantivy_json()` → injectée dans le JSON query
+  2. Partie Lucivy → `to_lucivy_json()` → injectée dans le JSON query
   3. Partie Kuzu → `parse_condition()` → Cypher MATCH → `RETURN id(n)` → `allowed_ids`
-  4. `search_bm25(... tantivy_filters, allowed_ids)` — 100% pré-filter
+  4. `search_bm25(... lucivy_filters, allowed_ids)` — 100% pré-filter
 
 ### Étape 5 : lib.rs — Exports ✅
 
@@ -96,14 +96,14 @@ pub struct SplitResult {
 ## Résumé des tests
 
 ```
-ld-tantivy:    1062 passed, 0 failed
+ld-lucivy:    1062 passed, 0 failed
 rag3weaver:     306 passed, 0 failed
 Total:         1368 passed, 0 failed
 ```
 
 ## Findings
 
-### starts_with et la limitation empty-match tantivy-fst
+### starts_with et la limitation empty-match lucivy-fst
 `RegexQuery("^prefix.*")` échoue : `"Empty match operators are not allowed"`. Solution : `BooleanQuery(Should[TermQuery(exact), RegexQuery(prefix.+)])`.
 
 ### contains via NgramContainsQuery, pas RegexQuery
@@ -116,19 +116,19 @@ Tout champ texte ou string a un counterpart `._ngram`. Les champs numériques n'
 
 | Fichier | Lignes | Quoi |
 |---|---|---|
-| `ld-tantivy/.../handle.rs` | +12 | `._ngram` pour champs `"string"`, rebuild pairs dans `open()` |
-| `ld-tantivy/.../query.rs` | +130 | between, not_in, starts_with, contains, composition must/should/must_not |
+| `ld-lucivy/.../handle.rs` | +12 | `._ngram` pour champs `"string"`, rebuild pairs dans `open()` |
+| `ld-lucivy/.../query.rs` | +130 | between, not_in, starts_with, contains, composition must/should/must_not |
 | `rag3weaver/src/schema.rs` | +20 | filter_fields dans `generate_fts_index_ddl` + `generate_full_schema` |
-| `rag3weaver/src/filter.rs` | +180 | FilterCompiler: split() + to_tantivy_json() + cypher_to_json() |
-| `rag3weaver/src/search.rs` | +30/-20 | tantivy_filters + allowed_ids, suppression post-filter |
+| `rag3weaver/src/filter.rs` | +180 | FilterCompiler: split() + to_lucivy_json() + cypher_to_json() |
+| `rag3weaver/src/search.rs` | +30/-20 | lucivy_filters + allowed_ids, suppression post-filter |
 | `rag3weaver/src/catalog.rs` | +50/-15 | Orchestration split → pré-résolution → appels |
 | `rag3weaver/src/lib.rs` | +1 | Exports FilterCompiler, SplitResult |
 
 ## Commandes de vérification
 
 ```bash
-# ld-tantivy (1062 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+# ld-lucivy (1062 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
 # rag3weaver (306 tests)
 cd packages/rag3db/extension/rag3weaver && cargo test --lib

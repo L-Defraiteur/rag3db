@@ -1,4 +1,4 @@
-# Plan — Fonctions Cypher pour tantivy_fts
+# Plan — Fonctions Cypher pour lucivy_fts
 
 > Analyse de l'extension system rag3db et design des fonctions Cypher.
 > Priorité : QUERY avec NgramContains + highlights.
@@ -13,18 +13,18 @@ Chaque extension hérite de `extension::Extension` et implémente `load()` :
 
 ```cpp
 // extension header
-class TantivyFtsExtension final : public extension::Extension {
+class LucivyFtsExtension final : public extension::Extension {
 public:
-    static constexpr char EXTENSION_NAME[] = "TANTIVY_FTS";
+    static constexpr char EXTENSION_NAME[] = "LUCIVY_FTS";
     static void load(main::ClientContext* context);
 };
 
 // registration dans load()
-void TantivyFtsExtension::load(main::ClientContext* context) {
+void LucivyFtsExtension::load(main::ClientContext* context) {
     auto& db = *context->getDatabase();
-    ExtensionUtils::addTableFunc<QueryTantivyFunction>(db);              // regular
-    ExtensionUtils::addStandaloneTableFunc<CreateTantivyFunction>(db);   // standalone (DDL-like)
-    ExtensionUtils::addStandaloneTableFunc<DropTantivyFunction>(db);     // standalone
+    ExtensionUtils::addTableFunc<QueryLucivyFunction>(db);              // regular
+    ExtensionUtils::addStandaloneTableFunc<CreateLucivyFunction>(db);   // standalone (DDL-like)
+    ExtensionUtils::addStandaloneTableFunc<DropLucivyFunction>(db);     // standalone
 }
 ```
 
@@ -88,7 +88,7 @@ Référence : `extension/fts/src/function/create_fts_index.cpp`
 
 Le FTS extension utilise `rewriteFunc` pour générer du Cypher qui crée des tables internes (docs, terms, appears_in), puis `_CREATE_FTS_INDEX` interne fait le travail lourd (statistiques, catalogue).
 
-Pour tantivy_fts, on n'a pas besoin de tables internes pour le moteur de recherche (Tantivy gère tout ça nativement). En revanche, on utilise **une table de registre interne** `_tantivy_indexes` pour persister les métadonnées des index créés (voir section 2.2).
+Pour lucivy_fts, on n'a pas besoin de tables internes pour le moteur de recherche (Lucivy gère tout ça nativement). En revanche, on utilise **une table de registre interne** `_lucivy_indexes` pour persister les métadonnées des index créés (voir section 2.2).
 
 ### Accès au contexte
 
@@ -104,30 +104,30 @@ auto* db = clientContext->getDatabase();             // Database*
 
 ## 2. Infrastructure commune
 
-### TantivyHandleMap — Stockage global des handles
+### LucivyHandleMap — Stockage global des handles
 
 ```cpp
-// tantivy_handle_map.h
+// lucivy_handle_map.h
 #pragma once
-#include "tantivy_fts.h"
+#include "lucivy_fts.h"
 #include <mutex>
 #include <string>
 #include <unordered_map>
 
 namespace rag3db {
-namespace tantivy_fts_extension {
+namespace lucivy_fts_extension {
 
-class TantivyHandleMap {
+class LucivyHandleMap {
 public:
-    static TantivyHandleMap& instance();
+    static LucivyHandleMap& instance();
 
     // Open or create an index, returns the handle.
     // Thread-safe. Opens only once per indexPath.
-    TantivyHandlePtr getOrOpen(const std::string& indexPath);
-    TantivyHandlePtr getOrCreate(const std::string& indexPath, const std::string& schemaJson);
+    LucivyHandlePtr getOrOpen(const std::string& indexPath);
+    LucivyHandlePtr getOrCreate(const std::string& indexPath, const std::string& schemaJson);
 
     // Get an existing handle (returns nullptr if not found).
-    TantivyHandlePtr get(const std::string& indexPath);
+    LucivyHandlePtr get(const std::string& indexPath);
 
     // Close and remove from map.
     void close(const std::string& indexPath);
@@ -136,31 +136,31 @@ public:
     void closeAll();
 
 private:
-    TantivyHandleMap() = default;
+    LucivyHandleMap() = default;
     std::mutex mutex_;
-    std::unordered_map<std::string, TantivyHandlePtr> handles_;
+    std::unordered_map<std::string, LucivyHandlePtr> handles_;
 };
 
-} // namespace tantivy_fts_extension
+} // namespace lucivy_fts_extension
 } // namespace rag3db
 ```
 
 ### Convention de chemin d'index
 
 ```
-{databasePath}/tantivy_indexes/{tableName}/
+{databasePath}/lucivy_indexes/{tableName}/
 ```
 
-Exemple : `/data/mydb/tantivy_indexes/doc/`
+Exemple : `/data/mydb/lucivy_indexes/doc/`
 
-### 2.2 Table de registre `_tantivy_indexes`
+### 2.2 Table de registre `_lucivy_indexes`
 
-Table interne (nœud) qui persiste les métadonnées de chaque index Tantivy créé. Source de vérité persistante ; le `TantivyHandleMap` en est le cache mémoire.
+Table interne (nœud) qui persiste les métadonnées de chaque index Lucivy créé. Source de vérité persistante ; le `LucivyHandleMap` en est le cache mémoire.
 
 #### Schema
 
 ```cypher
-CREATE NODE TABLE _tantivy_indexes (
+CREATE NODE TABLE _lucivy_indexes (
     table_name STRING PRIMARY KEY,
     index_path STRING,
     fields STRING,       -- JSON array : '["title","body"]'
@@ -170,38 +170,38 @@ CREATE NODE TABLE _tantivy_indexes (
 );
 ```
 
-**Clé primaire `table_name`** : un seul index Tantivy par table pour l'instant. Si on veut plusieurs index par table plus tard, on passera à un PK composite ou SERIAL.
+**Clé primaire `table_name`** : un seul index Lucivy par table pour l'instant. Si on veut plusieurs index par table plus tard, on passera à un PK composite ou SERIAL.
 
 #### Lifecycle
 
 | Moment | Action |
 |--------|--------|
-| **Extension load** | Si `_tantivy_indexes` existe dans le catalogue → lire toutes les lignes → peupler `TantivyHandleMap` (lazy open : on note les paths, on ouvre les handles à la première requête) |
-| **CREATE_TANTIVY_INDEX** | Si `_tantivy_indexes` n'existe pas → la créer. Insérer une ligne avec les métadonnées. |
-| **QUERY_TANTIVY_INDEX** | Lire la ligne pour trouver `index_path`. Si absent → erreur "No index on table X". |
-| **DROP_TANTIVY_INDEX** | Supprimer la ligne. Si table vide → optionnellement la dropper. |
-| **SHOW_TANTIVY_INDEXES** | `MATCH (i:_tantivy_indexes) RETURN i.*` (ou table func dédiée) |
+| **Extension load** | Si `_lucivy_indexes` existe dans le catalogue → lire toutes les lignes → peupler `LucivyHandleMap` (lazy open : on note les paths, on ouvre les handles à la première requête) |
+| **CREATE_LUCIVY_INDEX** | Si `_lucivy_indexes` n'existe pas → la créer. Insérer une ligne avec les métadonnées. |
+| **QUERY_LUCIVY_INDEX** | Lire la ligne pour trouver `index_path`. Si absent → erreur "No index on table X". |
+| **DROP_LUCIVY_INDEX** | Supprimer la ligne. Si table vide → optionnellement la dropper. |
+| **SHOW_LUCIVY_INDEXES** | `MATCH (i:_lucivy_indexes) RETURN i.*` (ou table func dédiée) |
 
 #### Avantages
 
 1. **Persistance** — après un restart, on sait quels index existent sans scanner le filesystem
-2. **Discoverabilité** — `MATCH (i:_tantivy_indexes) RETURN i.*` pour lister les index
+2. **Discoverabilité** — `MATCH (i:_lucivy_indexes) RETURN i.*` pour lister les index
 3. **Validation** — QUERY vérifie dans le registre avant d'essayer d'ouvrir un fichier
 4. **Synchronisation** — comparer `num_docs` avec le count actuel de la table pour détecter des changements
 5. **Métadonnées** — savoir quels champs sont indexés, quel stemmer, quand l'index a été créé
 
 #### Implémentation dans `rewriteFunc`
 
-CREATE_TANTIVY_INDEX utilise `rewriteFunc` pour générer le Cypher de gestion du registre :
+CREATE_LUCIVY_INDEX utilise `rewriteFunc` pour générer le Cypher de gestion du registre :
 
 ```cypher
 -- Créer la table de registre si elle n'existe pas (vérifié via catalog dans bindFunc)
-CREATE NODE TABLE _tantivy_indexes (table_name STRING PRIMARY KEY, ...);
+CREATE NODE TABLE _lucivy_indexes (table_name STRING PRIMARY KEY, ...);
 
 -- Insérer les métadonnées
-CREATE (i:_tantivy_indexes {
+CREATE (i:_lucivy_indexes {
     table_name: 'doc',
-    index_path: '/data/mydb/tantivy_indexes/doc/',
+    index_path: '/data/mydb/lucivy_indexes/doc/',
     fields: '["title","body"]',
     stemmer: 'english',
     num_docs: 0,
@@ -209,44 +209,44 @@ CREATE (i:_tantivy_indexes {
 });
 
 -- Appeler la fonction interne qui fait le travail lourd (scan + index)
-CALL _CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
+CALL _CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
 
 -- Mettre à jour num_docs après indexation
-MATCH (i:_tantivy_indexes {table_name: 'doc'}) SET i.num_docs = <count>;
+MATCH (i:_lucivy_indexes {table_name: 'doc'}) SET i.num_docs = <count>;
 ```
 
-DROP_TANTIVY_INDEX :
+DROP_LUCIVY_INDEX :
 
 ```cypher
 -- Appeler la fonction interne (close handle + rm dir)
-CALL _DROP_TANTIVY_INDEX('doc');
+CALL _DROP_LUCIVY_INDEX('doc');
 
 -- Supprimer du registre
-MATCH (i:_tantivy_indexes {table_name: 'doc'}) DELETE i;
+MATCH (i:_lucivy_indexes {table_name: 'doc'}) DELETE i;
 ```
 
 ---
 
-## 3. QUERY_TANTIVY_INDEX — Priorité #1
+## 3. QUERY_LUCIVY_INDEX — Priorité #1
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL QUERY_TANTIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++","highlight":true}', 10)
+CALL QUERY_LUCIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++","highlight":true}', 10)
 RETURN node_id, score, highlights;
 ```
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `tableName` | STRING | Nom de la table de nœuds |
-| `queryJson` | STRING | JSON de requête (format QueryConfig de tantivy_fts) |
+| `queryJson` | STRING | JSON de requête (format QueryConfig de lucivy_fts) |
 | `limit` | INT64 | Nombre max de résultats (optionnel, default 10) |
 
 ### Output columns
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `node_id` | INT64 | Offset du nœud dans la table (= `_node_id` Tantivy) |
+| `node_id` | INT64 | Offset du nœud dans la table (= `_node_id` Lucivy) |
 | `score` | DOUBLE | Score BM25 |
 | `highlights` | STRING | JSON : `{"body":[[5,16],[20,25]]}` ou `{}` |
 
@@ -256,12 +256,12 @@ RETURN node_id, score, highlights;
 bindFunc:
   1. Parse params (tableName, queryJson, limit)
   2. Vérifier que l'index existe :
-     a. Chercher dans TantivyHandleMap (cache mémoire)
-     b. Si absent → chercher dans _tantivy_indexes via catalog API
-     c. Si absent → erreur "No Tantivy index on table 'X'. Use CREATE_TANTIVY_INDEX first."
+     a. Chercher dans LucivyHandleMap (cache mémoire)
+     b. Si absent → chercher dans _lucivy_indexes via catalog API
+     c. Si absent → erreur "No Lucivy index on table 'X'. Use CREATE_LUCIVY_INDEX first."
   3. Récupérer indexPath (depuis map ou registre)
-  4. Ouvrir/réutiliser handle via TantivyHandleMap::getOrOpen(indexPath)
-  5. Appeler tantivy_search(handle, queryJson, limit)
+  4. Ouvrir/réutiliser handle via LucivyHandleMap::getOrOpen(indexPath)
+  5. Appeler lucivy_search(handle, queryJson, limit)
   6. Parser le JSON résultat → stocker dans BindData
   7. Définir output columns (node_id INT64, score DOUBLE, highlights STRING)
   8. numRows = nombre de résultats
@@ -277,7 +277,7 @@ internalTableFunc (appelé par morsel):
 
 ### Pourquoi exécuter la recherche dans `bindFunc` ?
 
-Le pattern SimpleTableFunc itère par morsels (chunks de DEFAULT_VECTOR_CAPACITY = 2048 lignes). Comme `tantivy_search` retourne tous les résultats d'un coup (JSON array), il est plus simple de :
+Le pattern SimpleTableFunc itère par morsels (chunks de DEFAULT_VECTOR_CAPACITY = 2048 lignes). Comme `lucivy_search` retourne tous les résultats d'un coup (JSON array), il est plus simple de :
 1. Exécuter la recherche une seule fois dans `bindFunc`
 2. Stocker les résultats parsés dans le BindData
 3. Les distribuer par morsel dans `internalTableFunc`
@@ -291,28 +291,28 @@ Alternative : exécuter dans `initSharedState` ou dans le premier appel de `tabl
 ```cpp
 auto* catalog = catalog::Catalog::Get(*context);
 auto* transaction = transaction::Transaction::Get(*context);
-if (catalog->containsTable(transaction, "_tantivy_indexes")) {
+if (catalog->containsTable(transaction, "_lucivy_indexes")) {
     // Table existe → lire la propriété index_path du nœud avec table_name = tableName
-    // Via StorageManager::getTable() + scan direct, ou via TantivyHandleMap déjà peuplé au load
+    // Via StorageManager::getTable() + scan direct, ou via LucivyHandleMap déjà peuplé au load
 }
 ```
 
-En pratique, le plus simple : au `load()` de l'extension, lire le registre et peupler le `TantivyHandleMap` avec les `(tableName → indexPath)`. Ensuite `bindFunc` fait juste `TantivyHandleMap::get(tableName)`.
+En pratique, le plus simple : au `load()` de l'extension, lire le registre et peupler le `LucivyHandleMap` avec les `(tableName → indexPath)`. Ensuite `bindFunc` fait juste `LucivyHandleMap::get(tableName)`.
 
 ### FFI utilisée
 
 ```c
 // Ouvrir l'index (si pas déjà en mémoire)
-TantivyHandlePtr tantivy_open_index(const char* path);
+LucivyHandlePtr lucivy_open_index(const char* path);
 
 // Rechercher
-char* tantivy_search(TantivyHandlePtr handle, const char* query_json, uint32_t limit);
+char* lucivy_search(LucivyHandlePtr handle, const char* query_json, uint32_t limit);
 
 // Libérer le résultat
-void tantivy_free_string(char* ptr);
+void lucivy_free_string(char* ptr);
 ```
 
-Le JSON retourné par `tantivy_search` :
+Le JSON retourné par `lucivy_search` :
 ```json
 [
   {"score": 1.23, "doc": {"body": "Rust programming", "_node_id": 42}, "highlights": {"body": [[5,16]]}},
@@ -328,14 +328,14 @@ On extrait `_node_id`, `score`, et `highlights` pour les output columns.
 
 ---
 
-## 4. CREATE_TANTIVY_INDEX
+## 4. CREATE_LUCIVY_INDEX
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
 -- Avec options :
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], stemmer := 'english');
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'], stemmer := 'english');
 ```
 
 | Param | Type | Description |
@@ -348,22 +348,22 @@ CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], stemmer := 'english');
 
 Comme le FTS extension, on sépare en deux fonctions :
 
-1. **`CREATE_TANTIVY_INDEX`** (publique, standalone) : `rewriteFunc` génère le Cypher pour le registre + appelle la fonction interne
-2. **`_CREATE_TANTIVY_INDEX`** (interne) : fait le travail lourd (scan nodes, FFI Tantivy)
+1. **`CREATE_LUCIVY_INDEX`** (publique, standalone) : `rewriteFunc` génère le Cypher pour le registre + appelle la fonction interne
+2. **`_CREATE_LUCIVY_INDEX`** (interne) : fait le travail lourd (scan nodes, FFI Lucivy)
 
 #### rewriteFunc — Gestion du registre
 
 ```cpp
-std::string createTantivyIndexQuery(ClientContext& context, const TableFuncBindData& bindData) {
-    auto* bd = bindData.constPtrCast<CreateTantivyBindData>();
+std::string createLucivyIndexQuery(ClientContext& context, const TableFuncBindData& bindData) {
+    auto* bd = bindData.constPtrCast<CreateLucivyBindData>();
     context.setUseInternalCatalogEntry(true);
     std::string query;
 
     // 1. Créer la table de registre si elle n'existe pas
     auto* catalog = catalog::Catalog::Get(context);
     auto* txn = transaction::Transaction::Get(context);
-    if (!catalog->containsTable(txn, "_tantivy_indexes")) {
-        query += "CREATE NODE TABLE _tantivy_indexes ("
+    if (!catalog->containsTable(txn, "_lucivy_indexes")) {
+        query += "CREATE NODE TABLE _lucivy_indexes ("
                  "table_name STRING PRIMARY KEY, "
                  "index_path STRING, "
                  "fields STRING, "
@@ -374,7 +374,7 @@ std::string createTantivyIndexQuery(ClientContext& context, const TableFuncBindD
 
     // 2. Insérer les métadonnées
     query += stringFormat(
-        "CREATE (i:_tantivy_indexes {{"
+        "CREATE (i:_lucivy_indexes {{"
         "table_name: '{}', index_path: '{}', fields: '{}', "
         "stemmer: '{}', num_docs: 0, created_at: '{}'}});",
         bd->tableName, bd->indexPath, bd->fieldsJson,
@@ -382,30 +382,30 @@ std::string createTantivyIndexQuery(ClientContext& context, const TableFuncBindD
 
     // 3. Appeler la fonction interne
     query += stringFormat(
-        "CALL _CREATE_TANTIVY_INDEX('{}', {}, stemmer := '{}');",
+        "CALL _CREATE_LUCIVY_INDEX('{}', {}, stemmer := '{}');",
         bd->tableName, bd->fieldsLiteral, bd->stemmer);
 
     // 4. Mettre à jour num_docs (sera calculé par la fonction interne,
-    //    stocké dans une variable globale ou re-compté via tantivy_num_docs)
+    //    stocké dans une variable globale ou re-compté via lucivy_num_docs)
     query += stringFormat(
-        "RETURN 'Tantivy index created on table {}' AS result;",
+        "RETURN 'Lucivy index created on table {}' AS result;",
         bd->tableName);
 
     return query;
 }
 ```
 
-#### _CREATE_TANTIVY_INDEX — Scan + Indexation
+#### _CREATE_LUCIVY_INDEX — Scan + Indexation
 
-Le challenge : scanner TOUS les nœuds de la table et les insérer dans l'index Tantivy via le FFI C. Deux options :
+Le challenge : scanner TOUS les nœuds de la table et les insérer dans l'index Lucivy via le FFI C. Deux options :
 
 **Option A — VertexCompute (scalable, recommandé)**
 
-Comme le FTS extension : `OnDiskGraph` + `VertexCompute` pour itérer par batches. Chaque batch appelle `tantivy_add_document()`.
+Comme le FTS extension : `OnDiskGraph` + `VertexCompute` pour itérer par batches. Chaque batch appelle `lucivy_add_document()`.
 
 ```cpp
-class TantivyIndexCompute final : public VertexCompute {
-    TantivyHandlePtr handle_;
+class LucivyIndexCompute final : public VertexCompute {
+    LucivyHandlePtr handle_;
     std::vector<std::string> fieldNames_;
 
     void vertexCompute(const graph::VertexScanState::Chunk& chunk) override {
@@ -417,7 +417,7 @@ class TantivyIndexCompute final : public VertexCompute {
                 auto val = chunk.getProperties<ku_string_t>(f);
                 doc[fieldNames_[f]] = std::string(val[i].getData(), val[i].len);
             }
-            tantivy_add_document(handle_, doc.dump().c_str());
+            lucivy_add_document(handle_, doc.dump().c_str());
         }
     }
 };
@@ -432,37 +432,37 @@ Problème : charge tous les docs en mémoire. Mauvais pour les grosses tables.
 #### Flux complet
 
 ```
-bindFunc (CREATE_TANTIVY_INDEX — publique):
+bindFunc (CREATE_LUCIVY_INDEX — publique):
   1. Valider que la table existe et que les propriétés sont bien des STRING
   2. Vérifier qu'il n'y a pas déjà un index sur cette table (catalogue + registre)
   3. Construire indexPath, fieldsJson, stemmer
-  4. Retourner CreateTantivyBindData
+  4. Retourner CreateLucivyBindData
 
 rewriteFunc:
-  1. Créer _tantivy_indexes si nécessaire
+  1. Créer _lucivy_indexes si nécessaire
   2. Insérer la ligne de registre
-  3. Appeler _CREATE_TANTIVY_INDEX
+  3. Appeler _CREATE_LUCIVY_INDEX
   4. Retourner message
 
-tableFunc (_CREATE_TANTIVY_INDEX — interne):
+tableFunc (_CREATE_LUCIVY_INDEX — interne):
   1. Construire indexPath et schemaJson
-  2. tantivy_create_index(indexPath, schemaJson) → handle
-  3. Scanner les nœuds via VertexCompute → tantivy_add_document() par batch
-  4. tantivy_commit(handle) + tantivy_reload_reader(handle)
-  5. Stocker handle dans TantivyHandleMap
+  2. lucivy_create_index(indexPath, schemaJson) → handle
+  3. Scanner les nœuds via VertexCompute → lucivy_add_document() par batch
+  4. lucivy_commit(handle) + lucivy_reload_reader(handle)
+  5. Stocker handle dans LucivyHandleMap
   6. Mettre à jour num_docs dans le registre :
-     MATCH (i:_tantivy_indexes {table_name: '...'}) SET i.num_docs = tantivy_num_docs(handle)
+     MATCH (i:_lucivy_indexes {table_name: '...'}) SET i.num_docs = lucivy_num_docs(handle)
   7. Retourner 0
 ```
 
 ---
 
-## 5. DROP_TANTIVY_INDEX
+## 5. DROP_LUCIVY_INDEX
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 ```
 
 ### Architecture : Standalone avec `rewriteFunc` + Internal
@@ -472,33 +472,33 @@ Même pattern que CREATE : publique + interne.
 #### rewriteFunc
 
 ```cpp
-std::string dropTantivyIndexQuery(ClientContext& context, const TableFuncBindData& bindData) {
-    auto* bd = bindData.constPtrCast<DropTantivyBindData>();
+std::string dropLucivyIndexQuery(ClientContext& context, const TableFuncBindData& bindData) {
+    auto* bd = bindData.constPtrCast<DropLucivyBindData>();
     context.setUseInternalCatalogEntry(true);
     std::string query;
 
     // 1. Appeler la fonction interne (close handle + rm dir)
-    query += stringFormat("CALL _DROP_TANTIVY_INDEX('{}');", bd->tableName);
+    query += stringFormat("CALL _DROP_LUCIVY_INDEX('{}');", bd->tableName);
 
     // 2. Supprimer du registre
     query += stringFormat(
-        "MATCH (i:_tantivy_indexes {{table_name: '{}'}}) DELETE i;",
+        "MATCH (i:_lucivy_indexes {{table_name: '{}'}}) DELETE i;",
         bd->tableName);
 
     query += stringFormat(
-        "RETURN 'Tantivy index dropped on table {}' AS result;",
+        "RETURN 'Lucivy index dropped on table {}' AS result;",
         bd->tableName);
 
     return query;
 }
 ```
 
-#### _DROP_TANTIVY_INDEX — Nettoyage
+#### _DROP_LUCIVY_INDEX — Nettoyage
 
 ```
 tableFunc:
-  1. Récupérer indexPath depuis TantivyHandleMap ou le registre
-  2. TantivyHandleMap::close(indexPath) → tantivy_close_index(handle)
+  1. Récupérer indexPath depuis LucivyHandleMap ou le registre
+  2. LucivyHandleMap::close(indexPath) → lucivy_close_index(handle)
   3. std::filesystem::remove_all(indexPath) → supprimer le dossier d'index
   4. Retourner 0
 ```
@@ -506,10 +506,10 @@ tableFunc:
 #### Flux `bindFunc`
 
 ```
-bindFunc (DROP_TANTIVY_INDEX — publique):
-  1. Vérifier que l'index existe (TantivyHandleMap ou registre)
-  2. Si absent → erreur "No Tantivy index on table 'X'"
-  3. Retourner DropTantivyBindData
+bindFunc (DROP_LUCIVY_INDEX — publique):
+  1. Vérifier que l'index existe (LucivyHandleMap ou registre)
+  2. Si absent → erreur "No Lucivy index on table 'X'"
+  3. Retourner DropLucivyBindData
 ```
 
 ---
@@ -519,23 +519,23 @@ bindFunc (DROP_TANTIVY_INDEX — publique):
 ### Nouveaux fichiers
 
 ```
-extension/tantivy_fts/
+extension/lucivy_fts/
 ├── src/
 │   ├── include/
-│   │   ├── main/tantivy_fts_extension.h          (existe déjà)
+│   │   ├── main/lucivy_fts_extension.h          (existe déjà)
 │   │   └── function/
-│   │       ├── tantivy_handle_map.h               ← NEW
-│   │       ├── query_tantivy_index.h              ← NEW
-│   │       ├── create_tantivy_index.h             ← NEW
-│   │       └── drop_tantivy_index.h               ← NEW
+│   │       ├── lucivy_handle_map.h               ← NEW
+│   │       ├── query_lucivy_index.h              ← NEW
+│   │       ├── create_lucivy_index.h             ← NEW
+│   │       └── drop_lucivy_index.h               ← NEW
 │   ├── main/
-│   │   ├── tantivy_fts_extension.cpp              (modifier)
+│   │   ├── lucivy_fts_extension.cpp              (modifier)
 │   │   └── CMakeLists.txt                         (existe déjà)
 │   └── function/
-│       ├── tantivy_handle_map.cpp                 ← NEW
-│       ├── query_tantivy_index.cpp                ← NEW
-│       ├── create_tantivy_index.cpp               ← NEW
-│       ├── drop_tantivy_index.cpp                 ← NEW
+│       ├── lucivy_handle_map.cpp                 ← NEW
+│       ├── query_lucivy_index.cpp                ← NEW
+│       ├── create_lucivy_index.cpp               ← NEW
+│       ├── drop_lucivy_index.cpp                 ← NEW
 │       └── CMakeLists.txt                         ← NEW
 └── CMakeLists.txt                                 (modifier)
 ```
@@ -544,39 +544,39 @@ extension/tantivy_fts/
 
 ### Détail des structs par fichier
 
-#### `create_tantivy_index.h`
+#### `create_lucivy_index.h`
 
 ```cpp
-struct CreateTantivyFunction {
-    static constexpr const char* name = "CREATE_TANTIVY_INDEX";
+struct CreateLucivyFunction {
+    static constexpr const char* name = "CREATE_LUCIVY_INDEX";
     static function::function_set getFunctionSet();
 };
 
-struct InternalCreateTantivyFunction {
-    static constexpr const char* name = "_CREATE_TANTIVY_INDEX";
+struct InternalCreateLucivyFunction {
+    static constexpr const char* name = "_CREATE_LUCIVY_INDEX";
     static function::function_set getFunctionSet();
 };
 ```
 
-#### `query_tantivy_index.h`
+#### `query_lucivy_index.h`
 
 ```cpp
-struct QueryTantivyFunction {
-    static constexpr const char* name = "QUERY_TANTIVY_INDEX";
+struct QueryLucivyFunction {
+    static constexpr const char* name = "QUERY_LUCIVY_INDEX";
     static function::function_set getFunctionSet();
 };
 ```
 
-#### `drop_tantivy_index.h`
+#### `drop_lucivy_index.h`
 
 ```cpp
-struct DropTantivyFunction {
-    static constexpr const char* name = "DROP_TANTIVY_INDEX";
+struct DropLucivyFunction {
+    static constexpr const char* name = "DROP_LUCIVY_INDEX";
     static function::function_set getFunctionSet();
 };
 
-struct InternalDropTantivyFunction {
-    static constexpr const char* name = "_DROP_TANTIVY_INDEX";
+struct InternalDropLucivyFunction {
+    static constexpr const char* name = "_DROP_LUCIVY_INDEX";
     static function::function_set getFunctionSet();
 };
 ```
@@ -590,36 +590,36 @@ add_subdirectory(src/function)
 
 **`src/function/CMakeLists.txt`** — Nouveau :
 ```cmake
-add_library(tantivy_fts_extension_function
+add_library(lucivy_fts_extension_function
     OBJECT
-    tantivy_handle_map.cpp
-    query_tantivy_index.cpp
-    create_tantivy_index.cpp
-    drop_tantivy_index.cpp)
+    lucivy_handle_map.cpp
+    query_lucivy_index.cpp
+    create_lucivy_index.cpp
+    drop_lucivy_index.cpp)
 
-set(TANTIVY_FTS_EXTENSION_OBJECT_FILES
-    ${TANTIVY_FTS_EXTENSION_OBJECT_FILES}
-    $<TARGET_OBJECTS:tantivy_fts_extension_function>
+set(LUCIVY_FTS_EXTENSION_OBJECT_FILES
+    ${LUCIVY_FTS_EXTENSION_OBJECT_FILES}
+    $<TARGET_OBJECTS:lucivy_fts_extension_function>
     PARENT_SCOPE)
 ```
 
-**`src/main/tantivy_fts_extension.cpp`** — Remplacer le stub :
+**`src/main/lucivy_fts_extension.cpp`** — Remplacer le stub :
 
 ```cpp
-void TantivyFtsExtension::load(main::ClientContext* context) {
+void LucivyFtsExtension::load(main::ClientContext* context) {
     auto& db = *context->getDatabase();
 
     // Table functions
-    ExtensionUtils::addTableFunc<QueryTantivyFunction>(db);
+    ExtensionUtils::addTableFunc<QueryLucivyFunction>(db);
 
     // Standalone table functions (DDL)
-    ExtensionUtils::addStandaloneTableFunc<CreateTantivyFunction>(db);
-    ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateTantivyFunction>(db);
-    ExtensionUtils::addStandaloneTableFunc<DropTantivyFunction>(db);
-    ExtensionUtils::addInternalStandaloneTableFunc<InternalDropTantivyFunction>(db);
+    ExtensionUtils::addStandaloneTableFunc<CreateLucivyFunction>(db);
+    ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateLucivyFunction>(db);
+    ExtensionUtils::addStandaloneTableFunc<DropLucivyFunction>(db);
+    ExtensionUtils::addInternalStandaloneTableFunc<InternalDropLucivyFunction>(db);
 
-    // Charger le registre si il existe → peupler TantivyHandleMap
-    TantivyHandleMap::instance().loadFromRegistry(context);
+    // Charger le registre si il existe → peupler LucivyHandleMap
+    LucivyHandleMap::instance().loadFromRegistry(context);
 }
 ```
 
@@ -641,8 +641,8 @@ void TantivyFtsExtension::load(main::ClientContext* context) {
 // Pour l'extension
 #include "extension/extension.h"
 
-// FFI Tantivy
-#include "tantivy_fts.h"
+// FFI Lucivy
+#include "lucivy_fts.h"
 
 // JSON parsing
 #include "nlohmann/json.hpp"
@@ -657,38 +657,38 @@ void TantivyFtsExtension::load(main::ClientContext* context) {
 
 ### Étape 1 : Infrastructure
 
-1. Créer `tantivy_handle_map.h` / `.cpp` (avec `loadFromRegistry`)
+1. Créer `lucivy_handle_map.h` / `.cpp` (avec `loadFromRegistry`)
 2. Créer `src/function/CMakeLists.txt`
 3. Modifier `CMakeLists.txt` racine (ajouter `add_subdirectory(src/function)`)
 
-### Étape 2 : CREATE_TANTIVY_INDEX
+### Étape 2 : CREATE_LUCIVY_INDEX
 
-1. Créer `create_tantivy_index.h` / `.cpp`
-   - `CreateTantivyFunction` (publique, standalone, rewriteFunc)
-   - `InternalCreateTantivyFunction` (interne, tableFunc avec VertexCompute)
-   - Gestion du registre `_tantivy_indexes`
+1. Créer `create_lucivy_index.h` / `.cpp`
+   - `CreateLucivyFunction` (publique, standalone, rewriteFunc)
+   - `InternalCreateLucivyFunction` (interne, tableFunc avec VertexCompute)
+   - Gestion du registre `_lucivy_indexes`
 2. Ajouter au CMakeLists
 3. Build test
 
-### Étape 3 : QUERY_TANTIVY_INDEX
+### Étape 3 : QUERY_LUCIVY_INDEX
 
-1. Créer `query_tantivy_index.h` / `.cpp`
-   - `QueryTantivyFunction` (SimpleTableFunc)
+1. Créer `query_lucivy_index.h` / `.cpp`
+   - `QueryLucivyFunction` (SimpleTableFunc)
    - Lecture du registre / handle map
-   - Appel FFI `tantivy_search` + parse JSON nlohmann
+   - Appel FFI `lucivy_search` + parse JSON nlohmann
 2. Build test
 
-### Étape 4 : DROP_TANTIVY_INDEX
+### Étape 4 : DROP_LUCIVY_INDEX
 
-1. Créer `drop_tantivy_index.h` / `.cpp`
-   - `DropTantivyFunction` (publique, standalone, rewriteFunc)
-   - `InternalDropTantivyFunction` (interne, close handle + rm dir)
+1. Créer `drop_lucivy_index.h` / `.cpp`
+   - `DropLucivyFunction` (publique, standalone, rewriteFunc)
+   - `InternalDropLucivyFunction` (interne, close handle + rm dir)
    - Suppression de la ligne dans le registre
 2. Build test
 
 ### Étape 5 : Extension load + wiring
 
-1. Modifier `tantivy_fts_extension.cpp` (registrations + loadFromRegistry)
+1. Modifier `lucivy_fts_extension.cpp` (registrations + loadFromRegistry)
 2. Build complet : `cmake --build build/release`
 
 ### Étape 6 : Tests end-to-end
@@ -701,26 +701,26 @@ CREATE (d:doc {id: 1, title: "Rust Guide", body: "Rust programming is great"});
 CREATE (d:doc {id: 2, title: "C++ Guide", body: "C++ systems programming language"});
 
 -- Create index
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
 
 -- Verify registry
-MATCH (i:_tantivy_indexes) RETURN i.*;
+MATCH (i:_lucivy_indexes) RETURN i.*;
 
 -- Query with highlights
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"programming","highlight":true}', 10)
 RETURN node_id, score, highlights;
 
 -- Query "c++" (separator validation)
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"c++","highlight":true}', 10)
 RETURN node_id, score, highlights;
 
 -- Drop
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 
 -- Verify cleanup
-MATCH (i:_tantivy_indexes) RETURN i.*;
+MATCH (i:_lucivy_indexes) RETURN i.*;
 ```
 
 ---
@@ -729,22 +729,22 @@ MATCH (i:_tantivy_indexes) RETURN i.*;
 
 | Fonction C | Utilisée par | Purpose |
 |-----------|-------------|---------|
-| `tantivy_create_index` | CREATE | Crée l'index sur disque |
-| `tantivy_open_index` | QUERY (lazy open) | Ouvre un index existant |
-| `tantivy_close_index` | DROP | Ferme et libère le handle |
-| `tantivy_add_document` | CREATE | Ajoute un document |
-| `tantivy_commit` | CREATE | Commit les writes |
-| `tantivy_reload_reader` | CREATE (après commit) | Rend les docs visibles |
-| `tantivy_search` | QUERY | Recherche → JSON résultats |
-| `tantivy_free_string` | QUERY | Libère le JSON retourné |
-| `tantivy_num_docs` | — | Diagnostic |
-| `tantivy_get_schema` | — | Diagnostic |
+| `lucivy_create_index` | CREATE | Crée l'index sur disque |
+| `lucivy_open_index` | QUERY (lazy open) | Ouvre un index existant |
+| `lucivy_close_index` | DROP | Ferme et libère le handle |
+| `lucivy_add_document` | CREATE | Ajoute un document |
+| `lucivy_commit` | CREATE | Commit les writes |
+| `lucivy_reload_reader` | CREATE (après commit) | Rend les docs visibles |
+| `lucivy_search` | QUERY | Recherche → JSON résultats |
+| `lucivy_free_string` | QUERY | Libère le JSON retourné |
+| `lucivy_num_docs` | — | Diagnostic |
+| `lucivy_get_schema` | — | Diagnostic |
 
 ---
 
 ## 10. Points d'attention
 
-1. **Thread safety** : `TantivyHandleMap` est mutex-protégé. Les handles Tantivy eux-mêmes sont thread-safe (writer derrière Mutex<>, reader est lock-free).
+1. **Thread safety** : `LucivyHandleMap` est mutex-protégé. Les handles Lucivy eux-mêmes sont thread-safe (writer derrière Mutex<>, reader est lock-free).
 
 2. **Lifecycle** : Les handles restent ouverts tant que l'extension est chargée. Fermeture propre via `closeAll()` si rag3db s'arrête.
 
@@ -752,17 +752,17 @@ MATCH (i:_tantivy_indexes) RETURN i.*;
 
 4. **nlohmann/json** : Disponible dans `third_party/nlohmann_json/`. Déjà utilisé par d'autres parties de rag3db (extension httpfs, parquet, etc.).
 
-5. **Index inexistant** : Si QUERY est appelé avant CREATE, `tantivy_open_index` retourne null. Il faudra retourner une erreur claire.
+5. **Index inexistant** : Si QUERY est appelé avant CREATE, `lucivy_open_index` retourne null. Il faudra retourner une erreur claire.
 
-6. **Table de registre `_tantivy_indexes`** :
-   - Créée au premier `CREATE_TANTIVY_INDEX` (pas au load de l'extension)
+6. **Table de registre `_lucivy_indexes`** :
+   - Créée au premier `CREATE_LUCIVY_INDEX` (pas au load de l'extension)
    - `useInternalCatalogEntry(true)` pour que les tables internes ne soient pas visibles dans `SHOW TABLES`
    - Le PK `table_name` empêche de créer deux index sur la même table (erreur duplicate key)
-   - Si la DB est supprimée/recréée, le registre est perdu mais les fichiers Tantivy aussi → cohérent
+   - Si la DB est supprimée/recréée, le registre est perdu mais les fichiers Lucivy aussi → cohérent
 
 7. **Registre vs HandleMap** :
-   - Le registre (`_tantivy_indexes`) est la source de vérité **persistante** (survit aux restarts)
-   - Le `TantivyHandleMap` est le cache **mémoire** (handles ouverts, accès rapide)
+   - Le registre (`_lucivy_indexes`) est la source de vérité **persistante** (survit aux restarts)
+   - Le `LucivyHandleMap` est le cache **mémoire** (handles ouverts, accès rapide)
    - `loadFromRegistry()` au load synchronise les deux
    - Les handles sont ouverts en **lazy** : on note le path dans le map, on ouvre le handle au premier QUERY
 

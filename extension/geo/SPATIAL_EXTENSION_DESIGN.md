@@ -740,5 +740,5 @@ RETURN s.name, s.magnitude
 
 ### WASM
 - Tout C++ pur, zéro dépendance externe
-- Compatible WASM statique (comme tantivy_fts)
+- Compatible WASM statique (comme lucivy_fts)
 - `<cmath>` (sin, cos, sqrt, atan2) disponible en WASM

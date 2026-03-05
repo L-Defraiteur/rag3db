@@ -2,7 +2,7 @@
 
 ## Contexte
 
-La `RegexQuery` actuelle de Tantivy fonctionne via un **FST walk** : elle parcourt le term dictionary entier du champ avec un automate, collecte les doc_ids dans un `BitSet`, et retourne un score constant (`ConstScorer`). C'est lent sur de gros index et ca ne donne pas de BM25.
+La `RegexQuery` actuelle de Lucivy fonctionne via un **FST walk** : elle parcourt le term dictionary entier du champ avec un automate, collecte les doc_ids dans un `BitSet`, et retourne un score constant (`ConstScorer`). C'est lent sur de gros index et ca ne donne pas de BM25.
 
 L'objectif : integrer le support regex **dans** `NgramContainsQuery` (pas un nouveau type de query), en reutilisant le pipeline trigram + BM25 existant, et en ajoutant une verification hybride regex + fuzzy.
 
@@ -10,7 +10,7 @@ Voir `04-vision-contains-unifie.md` pour la vision complete et les decisions pri
 
 ## Decouverte cle : `regex-syntax::hir::literal::Extractor`
 
-L'extracteur de litteraux depuis un AST regex **existe deja** dans la crate `regex-syntax` (projet officiel `rust-lang/regex`), deja presente dans le dependency tree de ld-tantivy.
+L'extracteur de litteraux depuis un AST regex **existe deja** dans la crate `regex-syntax` (projet officiel `rust-lang/regex`), deja presente dans le dependency tree de ld-lucivy.
 
 ```rust
 use regex_syntax::hir::literal::Extractor;
@@ -29,9 +29,9 @@ L'`Extractor` gere alternations, repetitions, classes de caracteres, prefixes/su
 |-------|---------|-------|
 | `regex-syntax` | 0.8.9 | Parser HIR + `Extractor` (extraction litteraux) |
 | `regex` | 1.12.3 | `Regex::find_iter()` pour verification sur texte stocke |
-| `tantivy-fst` | 0.5.0 | Automate FST (fallback quand pas de litteraux) |
+| `lucivy-fst` | 0.5.0 | Automate FST (fallback quand pas de litteraux) |
 
-Note : `regex-syntax` est une dependance transitive (via `regex` et `tantivy-fst`). Il faudra l'ajouter en dependance directe dans le `Cargo.toml` de ld-tantivy pour l'utiliser explicitement.
+Note : `regex-syntax` est une dependance transitive (via `regex` et `lucivy-fst`). Il faudra l'ajouter en dependance directe dans le `Cargo.toml` de ld-lucivy pour l'utiliser explicitement.
 
 ---
 
@@ -188,7 +188,7 @@ VerificationMode::Regex { compiled, literals, fuzzy_distance } => {
 
 ### Etape 4 : Routing dans query.rs
 
-**Fichier** : `tantivy_fts/rust/src/query.rs`
+**Fichier** : `lucivy_fts/rust/src/query.rs`
 
 Adapter `build_contains_query()` pour gerer le champ `"regex"` du JSON.
 
@@ -260,14 +260,14 @@ Ajouter dans `ngram_contains_query.rs` ou un module de test dedie :
 6. **Highlights regex** : offsets corrects des matchs
 7. **Litteraux courts** (< 3 chars) : fallback FST, BM25 quand meme
 
-#### 6b. Tests GTest E2E (`tantivy_fts_test.cpp`)
+#### 6b. Tests GTest E2E (`lucivy_fts_test.cpp`)
 
-Ajouter un test `TantivyRegexContainsTest` :
+Ajouter un test `LucivyRegexContainsTest` :
 
 ```cpp
 // Regex accelere par trigrams
 auto r1 = conn->query(
-    "CALL QUERY_TANTIVY_INDEX('doc', "
+    "CALL QUERY_LUCIVY_INDEX('doc', "
     "'{\"type\":\"contains\",\"field\":\"body\","
     "\"value\":\"program[a-z]+\",\"regex\":true}', 10) "
     "RETURN node_id, score, highlights");
@@ -276,7 +276,7 @@ auto r1 = conn->query(
 
 // Regex + fuzzy hybride
 auto r2 = conn->query(
-    "CALL QUERY_TANTIVY_INDEX('doc', "
+    "CALL QUERY_LUCIVY_INDEX('doc', "
     "'{\"type\":\"contains\",\"field\":\"body\","
     "\"value\":\"programing[a-z]+\",\"regex\":true,\"distance\":1}', 10) "
     "RETURN node_id, score");
@@ -284,7 +284,7 @@ auto r2 = conn->query(
 
 // Regex fallback (litteral trop court)
 auto r3 = conn->query(
-    "CALL QUERY_TANTIVY_INDEX('doc', "
+    "CALL QUERY_LUCIVY_INDEX('doc', "
     "'{\"type\":\"contains\",\"field\":\"body\","
     "\"value\":\"v[0-9]+\",\"regex\":true}', 10) "
     "RETURN node_id, score");
@@ -295,16 +295,16 @@ auto r3 = conn->query(
 
 ```bash
 # 1. Tests Rust
-cd extension/tantivy/ld-tantivy && cargo test --lib
+cd extension/lucivy/ld-lucivy && cargo test --lib
 
 # 2. Rebuild Rust + extension (piege cmake)
-cargo build --release -p ld-tantivy -p tantivy-fts
+cargo build --release -p ld-lucivy -p lucivy-fts
 cd ../../../build/release
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
-cmake --build . --target tantivy_fts_test -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
+cmake --build . --target lucivy_fts_test -j$(nproc)
 
 # 3. Tests GTest E2E
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 ```
 
 ---
@@ -314,9 +314,9 @@ LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_f
 | Fichier | Changement |
 |---------|------------|
 | `src/query/phrase_query/ngram_contains_query.rs` | `VerificationMode` enum, adapter verify/count/score, fallback FST |
-| `tantivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing |
-| `Cargo.toml` (ld-tantivy) | Ajouter `regex-syntax = "0.8"` en dependance directe |
-| `extension/tantivy_fts/test/tantivy_fts_test.cpp` | Nouveau test `TantivyRegexContainsTest` |
+| `lucivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing |
+| `Cargo.toml` (ld-lucivy) | Ajouter `regex-syntax = "0.8"` en dependance directe |
+| `extension/lucivy_fts/test/lucivy_fts_test.cpp` | Nouveau test `LucivyRegexContainsTest` |
 
 **Pas de nouveau fichier Rust.** Tout reste dans `ngram_contains_query.rs`.
 

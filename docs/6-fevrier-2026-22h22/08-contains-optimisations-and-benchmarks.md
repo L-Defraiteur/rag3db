@@ -103,7 +103,7 @@ Si un single-token query n'a pas de prefix/suffix a valider (`needs_validation()
 
 ### D1. SmallVec pour les etats actifs
 
-Remplacer `Vec<u32>` par `SmallVec<[u32; 64]>`. Evite l'allocation heap pour les cas typiques (DFA d=1 a ~40 etats, d=2 ~100 etats). Requiert la dependance `smallvec` (deja presente dans tantivy).
+Remplacer `Vec<u32>` par `SmallVec<[u32; 64]>`. Evite l'allocation heap pour les cas typiques (DFA d=1 a ~40 etats, d=2 ~100 etats). Requiert la dependance `smallvec` (deja presente dans lucivy).
 
 ### D2. Bit set au lieu de Vec triee
 
@@ -209,7 +209,7 @@ Le walk FST complet disparait. Le niveau 3 est O(k) lookups (k = nombre de trigr
 
 FuzzySubstring (NFA simulation) devient un **fallback de verification** sur les candidats au lieu d'un walk FST independant.
 
-### Implementation dans tantivy_fts
+### Implementation dans lucivy_fts
 
 **Cote indexation** (`handle.rs`) :
 - Ajouter un champ `{name}._ngram` avec un tokenizer custom qui genere les trigrams de chaque token
@@ -259,11 +259,11 @@ Le DFA Fuzzy et les n-grams sont **complementaires**, pas interchangeables. Le D
 
 | Approche | Pour | Contre |
 |----------|------|--------|
-| **Trigram field** (retenu) | Reutilise l'infra tantivy existante, simple | 3-5x taille index |
+| **Trigram field** (retenu) | Reutilise l'infra lucivy existante, simple | 3-5x taille index |
 | Suffix array sur term dict | O(log n) substring exact | Pas de fuzzy, complexe a persister |
 | BK-tree | Bon pour fuzzy pur | Pas pour substring, complexe |
 | Bigrams au lieu de trigrams | Plus robuste au fuzzy | Moins selectif (plus de candidats) |
-| Trigram → TermOrd map | Plus precis (niveau terme) | Hors infra tantivy, maintenance complexe |
+| Trigram → TermOrd map | Plus precis (niveau terme) | Hors infra lucivy, maintenance complexe |
 
 ---
 
@@ -299,7 +299,7 @@ Le DFA Fuzzy et les n-grams sont **complementaires**, pas interchangeables. Le D
 
 ### Corpus de test
 
-- **Petit** : tantivy codebase elle-meme (~500 fichiers Rust)
+- **Petit** : lucivy codebase elle-meme (~500 fichiers Rust)
 - **Moyen** : linux kernel headers (~10K fichiers)
 - **Grand** : npm top 100 packages (~100K fichiers JS/TS)
 
@@ -312,7 +312,7 @@ Le DFA Fuzzy et les n-grams sont **complementaires**, pas interchangeables. Le D
 2. **B** (classification post-walk) — ameliore la precision du budget, ~20 lignes
 
 ### Moyen terme (quand on a des benchmarks)
-3. **F** (index n-gram) — change la complexite de O(FST) a O(k lookups), le plus gros gain possible. Effort significatif (~200 lignes : tokenizer + champ + query path) mais reutilise l'infra tantivy existante.
+3. **F** (index n-gram) — change la complexite de O(FST) a O(k lookups), le plus gros gain possible. Effort significatif (~200 lignes : tokenizer + champ + query path) mais reutilise l'infra lucivy existante.
 4. **D1** (SmallVec) — micro-opti triviale, 2 lignes
 5. **C1** (early skip) — deja partiellement fait, verifier completude
 

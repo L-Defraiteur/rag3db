@@ -4,7 +4,7 @@
 
 ### Piste 1 : Qdrant et les sparse embeddings
 
-Pour les **documents** (markdown, PDF, FAQ...), les solutions standard marchent très bien : chunking + dense embedding + BM25 hybride. C'est exactement ce qu'on a déjà dans rag3weaver avec Tantivy (FTS) + cosine similarity (vecteurs denses).
+Pour les **documents** (markdown, PDF, FAQ...), les solutions standard marchent très bien : chunking + dense embedding + BM25 hybride. C'est exactement ce qu'on a déjà dans rag3weaver avec Lucivy (FTS) + cosine similarity (vecteurs denses).
 
 Mais il manque une pièce : les **sparse embeddings** (SPLADE, etc.). Qdrant les supporte nativement et c'est une référence à étudier pour comprendre :
 - Comment ils stockent et indexent les vecteurs sparse (inverted index sur tokens pondérés)
@@ -229,7 +229,7 @@ Le même système peut servir pour :
 
 ### Moyen terme
 3. **Implémenter searchWithExplore** dans rag3weaver WASM (Cypher graph traversal après search)
-4. **Extension sparse embedding** : évaluer si c'est faisable comme extension rag3db (comme tantivy_fts) ou si ça nécessite un redesign
+4. **Extension sparse embedding** : évaluer si c'est faisable comme extension rag3db (comme lucivy_fts) ou si ça nécessite un redesign
 5. **Hooks d'enrichissement** : `onResultEnrich` callback pour class boosting, Members enrichment, matchedRange
 
 ### Long terme

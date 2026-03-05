@@ -49,7 +49,7 @@ class Index {
 | **Immédiat** | `false` | Dans `insert()` pendant la transaction | FTS, PrimaryKey |
 | **Différé** | `true` | Dans `commitInsert()` au commit | HNSW |
 
-Pour Tantivy, le mode **différé** est idéal : on accumule les `tantivy_add_document()` pendant la transaction (buffer 50MB), puis `tantivy_commit()` au commit.
+Pour Lucivy, le mode **différé** est idéal : on accumule les `lucivy_add_document()` pendant la transaction (buffer 50MB), puis `lucivy_commit()` au commit.
 
 ---
 
@@ -121,7 +121,7 @@ void NodeTable::commit(ClientContext* context, TableCatalogEntry* tableEntry,
         if (!index.needCommitInsert()) {
             continue;  // FTS skip ici (mode immédiat)
         }
-        // HNSW (et notre TantivyIndex) passe ici
+        // HNSW (et notre LucivyIndex) passe ici
         UncommittedIndexInserter indexInserter{startNodeOffset, this, index.getIndex(),
             getVisibleFunc(transaction)};
         scanIndexColumns(context, indexInserter, localNodeTable.getNodeGroups());
@@ -226,7 +226,7 @@ ExtensionUtils::registerIndexType(db, MyIndex::getIndexType());
 
 ```cpp
 struct IndexType {
-    std::string typeName;              // "HNSW", "FTS", notre "TANTIVY"
+    std::string typeName;              // "HNSW", "FTS", notre "LUCIVY"
     IndexConstraintType constraintType; // SECONDARY_NON_UNIQUE
     IndexDefinitionType definitionType; // EXTENSION
     create_index_func_t createFunc;     // appelé par CREATE INDEX
@@ -338,12 +338,12 @@ void IndexHolder::load(ClientContext* context, StorageManager* storageManager) {
 
 ---
 
-## 7. Implications pour TantivyIndex
+## 7. Implications pour LucivyIndex
 
 On n'a **pas besoin de modifier le core rag3db**. On implémente :
 
 ```cpp
-class TantivyIndex : public storage::Index {
+class LucivyIndex : public storage::Index {
     // IndexType registration
     static storage::IndexType getIndexType();
     static std::unique_ptr<Index> create(ClientContext*, ...);
@@ -351,17 +351,17 @@ class TantivyIndex : public storage::Index {
 
     // CRUD (mode différé, comme HNSW)
     bool needCommitInsert() const override { return true; }
-    void insert(...) override;        // tantivy_add_document (buffered)
-    void delete_(...) override;       // tantivy_delete_by_term
-    void commitInsert(...) override;  // tantivy_commit + reload_reader
+    void insert(...) override;        // lucivy_add_document (buffered)
+    void delete_(...) override;       // lucivy_delete_by_term
+    void commitInsert(...) override;  // lucivy_commit + reload_reader
 
     // Persistence
     void checkpoint(...) override;         // sérialiser StorageInfo
-    void rollbackCheckpoint() override;    // tantivy_rollback
+    void rollbackCheckpoint() override;    // lucivy_rollback
     void finalize(ClientContext*) override; // rattraper les nœuds non-indexés (comme HNSW)
 };
 
-struct TantivyStorageInfo : storage::IndexStorageInfo {
+struct LucivyStorageInfo : storage::IndexStorageInfo {
     std::string indexPath;
     std::string fieldsJson;
     std::string stemmer;
@@ -369,18 +369,18 @@ struct TantivyStorageInfo : storage::IndexStorageInfo {
 };
 ```
 
-Ceci remplace la table de registre `_tantivy_indexes` du doc 02 : les métadonnées sont sérialisées **avec la NodeTable** via le mécanisme standard de checkpoint. Plus besoin de table interne dédiée.
+Ceci remplace la table de registre `_lucivy_indexes` du doc 02 : les métadonnées sont sérialisées **avec la NodeTable** via le mécanisme standard de checkpoint. Plus besoin de table interne dédiée.
 
 ---
 
-## 8. Filtrage natif Tantivy — Indexer toutes les colonnes
+## 8. Filtrage natif Lucivy — Indexer toutes les colonnes
 
 ### Le constat
 
 `NodeTable::insert()` ne passe à l'index que les colonnes listées dans `IndexInfo.columnIDs`. On pourrait croire que c'est limitant, mais **c'est nous qui définissons cette liste**. Rien n'empêche de déclarer toutes les colonnes de la table :
 
 ```cpp
-// Dans CREATE_TANTIVY_INDEX :
+// Dans CREATE_LUCIVY_INDEX :
 IndexInfo info;
 info.columnIDs = {
     title_col_id,      // text → tri-field FTS (stemmed + raw + ngram)
@@ -392,9 +392,9 @@ info.columnIDs = {
 
 `NodeTable::insert()` nous passera alors TOUTES ces colonnes dans `propertyVectors`. Zéro modification du core.
 
-### Mapping types rag3db → types Tantivy
+### Mapping types rag3db → types Lucivy
 
-| Type rag3db | Type Tantivy | Options | Usage |
+| Type rag3db | Type Lucivy | Options | Usage |
 |-------------|-------------|---------|-------|
 | `STRING` (champ texte FTS) | `"text"` | `stored: true` | Tri-field : stemmed + raw + ngram |
 | `STRING` (champ filtre) | `"string"` | `stored: true, indexed: true, fast: true` | Filtrage par valeur exacte |
@@ -403,19 +403,19 @@ info.columnIDs = {
 | `DOUBLE` | `"f64"` | `stored: true, fast: true` | Filtrage par range |
 | `BOOL` | `"u64"` (0/1) | `fast: true` | Filtrage boolean |
 
-Le FFI `tantivy_create_index` supporte déjà tous ces types dans le schema JSON.
+Le FFI `lucivy_create_index` supporte déjà tous ces types dans le schema JSON.
 
 ### Syntaxe Cypher envisagée
 
 ```cypher
 -- Créer un index FTS sur title+body, avec filtres rapides sur category et created_at
-CALL CREATE_TANTIVY_INDEX('doc',
+CALL CREATE_LUCIVY_INDEX('doc',
     ['title', 'body'],                    -- champs FTS
     filter_fields := ['category', 'created_at']  -- champs de filtrage rapide
 );
 
--- Recherche avec filtre natif Tantivy (appliqué PENDANT le scoring, pas après)
-CALL QUERY_TANTIVY_INDEX('doc',
+-- Recherche avec filtre natif Lucivy (appliqué PENDANT le scoring, pas après)
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"rust programming",
       "highlight":true,
       "filters":[
@@ -480,16 +480,16 @@ fn apply_filters(fts_query: Box<dyn Query>, filters: &[FilterClause], schema: &S
 }
 ```
 
-### Pourquoi c'est mieux que `tantivy_search_filtered`
+### Pourquoi c'est mieux que `lucivy_search_filtered`
 
-`tantivy_search_filtered(allowed_ids)` fait du **pré-filtrage** : on passe une liste d'IDs et Tantivy ne score que ceux-là. Ça marche, mais :
+`lucivy_search_filtered(allowed_ids)` fait du **pré-filtrage** : on passe une liste d'IDs et Lucivy ne score que ceux-là. Ça marche, mais :
 
 | Aspect | `search_filtered(ids)` | `filters` natif |
 |--------|----------------------|-----------------|
-| Filtrage | Côté rag3db (Cypher WHERE) puis IDs passés | Côté Tantivy (pendant le scoring) |
+| Filtrage | Côté rag3db (Cypher WHERE) puis IDs passés | Côté Lucivy (pendant le scoring) |
 | Mémoire | Tous les IDs matchants en mémoire | Aucune allocation, filtre à la volée |
 | Performance | O(n) pour construire le HashSet d'IDs | O(1) lookup dans les fast fields |
-| Combinabilité | Difficile de combiner FTS + filtre efficacement | BooleanQuery natif, optimisé par Tantivy |
+| Combinabilité | Difficile de combiner FTS + filtre efficacement | BooleanQuery natif, optimisé par Lucivy |
 | Complexité Cypher | `MATCH ... WHERE ... WITH collect(...) CALL ...` | Un seul CALL avec le JSON |
 
 Les deux approches restent disponibles — `search_filtered` est utile pour des filtres complexes basés sur le graphe (traversées, chemins), tandis que `filters` est optimal pour les filtres simples sur des propriétés directes.
@@ -499,7 +499,7 @@ Les deux approches restent disponibles — `search_filtered` est utile pour des 
 | Pièce | Lignes | Modif core ? |
 |-------|--------|-------------|
 | Déclarer toutes les colonnes dans `IndexInfo.columnIDs` | ~5 C++ | Non |
-| Mapper types rag3db → types Tantivy dans le schema JSON | ~30 C++ | Non |
+| Mapper types rag3db → types Lucivy dans le schema JSON | ~30 C++ | Non |
 | Ajouter `filters` + `FilterClause` à `QueryConfig` (serde) | ~20 Rust | Non |
 | Builder les filter clauses en `BooleanQuery` | ~50 Rust | Non |
 | Supporter `eq`, `range`, `in` (les 3 ops utiles) | ~30 Rust | Non |
@@ -508,9 +508,9 @@ Les deux approches restent disponibles — `search_filtered` est utile pour des 
 
 ### Bonus : UPDATE propre
 
-En déclarant toutes les colonnes dans `columnIDs`, `NodeTable::update()` nous passe le nouveau vecteur de la colonne modifiée. Mais surtout, comme on reçoit TOUTES les colonnes indexées lors de l'INSERT initial, on peut reconstruire un document complet dans Tantivy. Pour un UPDATE :
+En déclarant toutes les colonnes dans `columnIDs`, `NodeTable::update()` nous passe le nouveau vecteur de la colonne modifiée. Mais surtout, comme on reçoit TOUTES les colonnes indexées lors de l'INSERT initial, on peut reconstruire un document complet dans Lucivy. Pour un UPDATE :
 
-1. `delete_()` reçoit le `nodeIDVector` → `tantivy_delete_by_term("_node_id", offset)`
-2. Le prochain `commitInsert()` (ou `insert()` si mode immédiat) re-scanne le nœud avec toutes ses colonnes → `tantivy_add_document()` avec le doc complet
+1. `delete_()` reçoit le `nodeIDVector` → `lucivy_delete_by_term("_node_id", offset)`
+2. Le prochain `commitInsert()` (ou `insert()` si mode immédiat) re-scanne le nœud avec toutes ses colonnes → `lucivy_add_document()` avec le doc complet
 
 Ce mécanisme est identique à celui du HNSW qui gère aussi les updates via delete + re-insert.

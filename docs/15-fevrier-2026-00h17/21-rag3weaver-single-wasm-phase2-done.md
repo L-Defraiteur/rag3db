@@ -60,7 +60,7 @@ La classe JS `Weaver` est exposée via emscripten embind.
 
 ### Architecture des tests browser existants
 
-Le pattern en place (pour IDBFS/tantivy_fts) :
+Le pattern en place (pour IDBFS/lucivy_fts) :
 
 ```
 test/browser/

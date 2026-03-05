@@ -34,11 +34,11 @@ KU_ASSERT(numMagicBytes <= sizeof(magicBytes));
 
 ## Bug 2 : Index path invalide en mode fichier
 
-**Fichier** : `extension/tantivy_fts/src/function/create_tantivy_index.cpp:161`
+**Fichier** : `extension/lucivy_fts/src/function/create_lucivy_index.cpp:161`
 
-**Symptôme** : `filesystem error: cannot create directories: Not a directory [/.../db.kz/tantivy_indexes/doc/]`
+**Symptôme** : `filesystem error: cannot create directories: Not a directory [/.../db.kz/lucivy_indexes/doc/]`
 
-**Cause racine** : `getDatabasePath()` retourne le chemin du **fichier** de la base de données (ex: `/tmp/rag3db/ApiTest.../db.kz`), pas le répertoire parent. Le code faisait `<dbPath>/tantivy_indexes/doc/` → essayait de créer un sous-répertoire sous un fichier.
+**Cause racine** : `getDatabasePath()` retourne le chemin du **fichier** de la base de données (ex: `/tmp/rag3db/ApiTest.../db.kz`), pas le répertoire parent. Le code faisait `<dbPath>/lucivy_indexes/doc/` → essayait de créer un sous-répertoire sous un fichier.
 
 **Fix** :
 ```cpp
@@ -50,14 +50,14 @@ basePath = std::filesystem::path(
     context.clientContext->getDatabasePath()).parent_path().string();
 ```
 
-**Note** : Seul `create_tantivy_index.cpp` construit le chemin initial. Les fonctions `query` et `drop` le lisent depuis le catalogue (`TantivyIndexAuxInfo.indexPath`), donc pas de changement nécessaire ailleurs.
+**Note** : Seul `create_lucivy_index.cpp` construit le chemin initial. Les fonctions `query` et `drop` le lisent depuis le catalogue (`LucivyIndexAuxInfo.indexPath`), donc pas de changement nécessaire ailleurs.
 
 ## Fichiers modifiés
 
 | Fichier | Modification |
 |---------|-------------|
 | `src/storage/database_header.cpp` | Buffer `magicBytes[4]` → `[8]` + assert + ajout `#include "common/assert.h"` |
-| `extension/tantivy_fts/src/function/create_tantivy_index.cpp` | `getDatabasePath()` → `parent_path()` du database path |
+| `extension/lucivy_fts/src/function/create_lucivy_index.cpp` | `getDatabasePath()` → `parent_path()` du database path |
 
 ## Build & vérification
 
@@ -65,26 +65,26 @@ basePath = std::filesystem::path(
 cd packages/rag3db/build/release
 
 # Rebuilder l'extension shared + le core + le test
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
-cmake --build . --target tantivy_fts_test -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
+cmake --build . --target lucivy_fts_test -j$(nproc)
 
 # Mode fichier (auparavant crash)
 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu \
-  ./extension/tantivy_fts/test/tantivy_fts_test
+  ./extension/lucivy_fts/test/lucivy_fts_test
 
 # Mode in-memory (vérification régression zéro)
 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu IN_MEM_MODE=true \
-  ./extension/tantivy_fts/test/tantivy_fts_test
+  ./extension/lucivy_fts/test/lucivy_fts_test
 ```
 
 ## Résultat
 
 ```
 [==========] Running 4 tests from 1 test suite.
-[       OK ] ApiTest.TantivyCreateAndQueryTest (408 ms)
-[       OK ] ApiTest.TantivyDropTest (328 ms)
-[       OK ] ApiTest.TantivyErrorTest (311 ms)
-[       OK ] ApiTest.TantivyStemmerTest (463 ms)
+[       OK ] ApiTest.LucivyCreateAndQueryTest (408 ms)
+[       OK ] ApiTest.LucivyDropTest (328 ms)
+[       OK ] ApiTest.LucivyErrorTest (311 ms)
+[       OK ] ApiTest.LucivyStemmerTest (463 ms)
 [  PASSED  ] 4 tests.
 ```
 
@@ -92,7 +92,7 @@ Les 4 tests passent dans les **deux** modes (fichier et in-memory).
 
 ## Notes techniques
 
-- **Extension dynamique** : tantivy_fts est compilée en shared lib (`.rag3db_extension`), pas en static link. Le test la charge via `LOAD EXTENSION`. Il faut rebuilder la target `rag3db_tantivy_fts_extension` en plus de `tantivy_fts_test` quand on modifie le code de l'extension.
+- **Extension dynamique** : lucivy_fts est compilée en shared lib (`.rag3db_extension`), pas en static link. Le test la charge via `LOAD EXTENSION`. Il faut rebuilder la target `rag3db_lucivy_fts_extension` en plus de `lucivy_fts_test` quand on modifie le code de l'extension.
 - **`EXTENSION_STATIC_LINK_LIST`** est commentée dans `extension_config.cmake` → `__STATIC_LINK_EXTENSION_TEST__` n'est pas défini → les tests chargent l'extension dynamiquement.
 
 ## Mise à jour du doc 08
@@ -102,4 +102,4 @@ La note "Mode fichier crash — bug pré-existant" du doc 08 est maintenant obso
 ## Prochaines étapes
 
 - Phase C : Intégration Rag3Weaver
-- Tests de persistance (redémarrage DB fichier → index Tantivy toujours présent)
+- Tests de persistance (redémarrage DB fichier → index Lucivy toujours présent)

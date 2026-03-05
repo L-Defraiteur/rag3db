@@ -130,7 +130,7 @@ Investigation des internals rag3db (Kuzu fork) :
 - `UNWIND + MATCH {_uuid: item.uuid}` utilise le hash index par row automatiquement
 
 **Conclusion** : Le hash index + page cache est déjà le mécanisme optimal. Le NodeIdCache est une infra pour usage futur :
-- Tantivy `allowed_ids` (qui travaille avec les offsets internes)
+- Lucivy `allowed_ids` (qui travaille avec les offsets internes)
 - Éventuel `BATCH_SET_BY_OFFSET` extension C++ (bypass planner complet)
 - Toute logique Rust qui a besoin du mapping uuid↔offset
 
@@ -228,13 +228,13 @@ L'extension vector existe déjà dans rag3db avec :
 
 Le sparse index in-memory actuel tient ~60 MB pour 100k docs. Au-delà de 1M docs (~600 MB), il ne scale plus.
 
-**Direction retenue : extension C++ dédiée (Option C)** — même pattern que tantivy_fts.
+**Direction retenue : extension C++ dédiée (Option C)** — même pattern que lucivy_fts.
 
 Architecture cible :
 - **Fichier binaire on-disk** : inverted index stocké par token_id (pas par document), format custom compact, mmapped
 - **Cache LRU intégré** : les posting lists des tokens les plus consultés restent en mémoire, les cold restent sur disque
-- **Hooks incrémentaux** : onInsert/onDelete/onCommit câblés dans le storage layer, comme tantivy_fts (lazy commit avec dirty flag)
-- **API Cypher** : `CREATE_SPARSE_INDEX` / `QUERY_SPARSE_INDEX` / `DROP_SPARSE_INDEX` (même pattern que les extensions vector et tantivy_fts)
+- **Hooks incrémentaux** : onInsert/onDelete/onCommit câblés dans le storage layer, comme lucivy_fts (lazy commit avec dirty flag)
+- **API Cypher** : `CREATE_SPARSE_INDEX` / `QUERY_SPARSE_INDEX` / `DROP_SPARSE_INDEX` (même pattern que les extensions vector et lucivy_fts)
 - **cxx bridge** : le code Rust du SparseIndex/SparseVector est déjà écrit, on ajoute un bridge cxx vers l'extension C++
 
 Pourquoi pas les alternatives :
@@ -272,7 +272,7 @@ rag3weaver.drain()
   └→ CALL ACK_INDEX_CHANGELOG('sparse_idx', seq := $new_seq)
 ```
 
-Avantage du design B : l'extension ne sait rien des types d'index, elle fait du change tracking persisté. Toute la logique reste en Rust côté rag3weaver. Et quand on voudra le scaling > 100k, on migrera la logique dans l'extension (design A, style tantivy_fts).
+Avantage du design B : l'extension ne sait rien des types d'index, elle fait du change tracking persisté. Toute la logique reste en Rust côté rag3weaver. Et quand on voudra le scaling > 100k, on migrera la logique dans l'extension (design A, style lucivy_fts).
 
 Question ouverte : est-ce que le design B justifie une extension C++ (changelog, hooks, persistance) alors qu'on pourrait simplement ajouter `RETURN ID(n)` aux INSERT et gérer le tracking côté client ? Le NodeIdCache qu'on a déjà fait est un début de cette approche sans extension.
 

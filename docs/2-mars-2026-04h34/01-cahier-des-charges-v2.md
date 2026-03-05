@@ -33,7 +33,7 @@ Mise à jour du cahier des charges original (28 février, doc 09).
 | B6 | Multi-KB (même entité, 2 KBs) | ✅ | ✅ | config "main" + "authors", phase0 valide metadata |
 | B7 | Sparse embeddings (BM42/BGE-M3) | ✅ | ✅ | phase3, phase5 (DualEmbedder) |
 | B8 | Update → re-embed si contenu changé | ✅ | ✅ | phase0_update_and_delete |
-| B9 | Filter fields (String/Int64/Double dans Tantivy) | ✅ | ❌ | FilterCompiler implémenté + 25 unit tests, pas de test E2E |
+| B9 | Filter fields (String/Int64/Double dans Lucivy) | ✅ | ❌ | FilterCompiler implémenté + 25 unit tests, pas de test E2E |
 
 ### C. Search — ✅ TOUT FAIT (sauf filtres E2E)
 
@@ -45,9 +45,9 @@ Mise à jour du cahier des charges original (28 février, doc 09).
 | C4 | Sparse seul | ✅ | ✅ | phase4_sparse_only |
 | C5 | 3-way hybrid (dense+BM25+sparse) | ✅ | ✅ | phase3_hybrid_3way, phase4_all_three |
 | C6 | BM25 fuzzy (distance > 0) | ✅ | ✅ | phase1_bm25_split_distant_words |
-| C7 | Filtres natifs Tantivy (pre-filtering) | ✅ | ❌ | `to_tantivy_json()` + unit tests, pas E2E |
+| C7 | Filtres natifs Lucivy (pre-filtering) | ✅ | ❌ | `to_lucivy_json()` + unit tests, pas E2E |
 | C8 | Filtres Cypher (pre-resolution IDs) | ✅ | ❌ | `FilterCompiler::split()` + allowed_ids, pas E2E |
-| C9 | Filtres combinés (Tantivy + Cypher) | ✅ | ❌ | Split architecture OK, pas E2E |
+| C9 | Filtres combinés (Lucivy + Cypher) | ✅ | ❌ | Split architecture OK, pas E2E |
 | C10 | Search sur chunks → ChunkInfo | ✅ | ✅ | `search_bm25_chunked()`, `resolve_vector_chunks()` |
 | C11 | Search avec `consistency: immediate` | ✅ | ✅ | Tous les tests E2E utilisent Immediate |
 | C12 | Explore (search + graph traversal) | ✅ | ⚠️ | `search_with_explore()` + `explore_bfs()` implémentés, 2 tests mineurs |
@@ -122,7 +122,7 @@ Tests existants : `catalog_search_with_explore_empty()`, `explore_bfs_empty_seed
 | **Geo extension** | ✅ | R-tree, 5 query modes, 19 scalar functions |
 | **HNSW delete/update** | ✅ | Propagation automatique au HNSW index |
 | **Build infra** | ✅ | `build.sh`, default BUILD_EXTENSIONS, `add_dependencies` |
-| **38 GTests** | ✅ | 24 tantivy_fts + 10 sparse_vector + 4 vector |
+| **38 GTests** | ✅ | 24 lucivy_fts + 10 sparse_vector + 4 vector |
 
 ---
 
@@ -141,9 +141,9 @@ Tests existants : `catalog_search_with_explore_empty()`, `explore_bfs_empty_seed
 
 | # | Test | Ce qu'il valide | Effort |
 |---|------|----------------|--------|
-| **E1** | Filtres Tantivy natifs | `filter_condition` avec category="programming" → pre-filtering Tantivy | Moyen |
-| **E2** | Filtres Cypher (WHERE) | Filtres sur champs non-Tantivy (relations, NULL) → allowed_ids | Moyen |
-| **E3** | Filtres combinés | Tantivy + Cypher simultanés | Petit (dépend de E1+E2) |
+| **E1** | Filtres Lucivy natifs | `filter_condition` avec category="programming" → pre-filtering Lucivy | Moyen |
+| **E2** | Filtres Cypher (WHERE) | Filtres sur champs non-Lucivy (relations, NULL) → allowed_ids | Moyen |
+| **E3** | Filtres combinés | Lucivy + Cypher simultanés | Petit (dépend de E1+E2) |
 | **E4** | Explore avec données réelles | search + BFS depth=1,2, vérifie nœuds + arêtes | Moyen |
 | **E5** | Highlights retournés | Après fix L1 : vérifier que `SearchResult.highlights` contient des byte offsets valides | Petit |
 | **E6** | Chunking explicit | body > maxSize → vérifier chunks créés, search retourne ChunkInfo, delete cascade | Moyen |
@@ -176,19 +176,19 @@ Utilisateur Cypher (end-user)
 ├── WHERE SPARSE_SEARCH(d.ID, [...])    → INDEX_SCAN optimizer → Rust FFI
 ├── WHERE VECTOR_SEARCH(d.emb, [...])   → INDEX_SCAN optimizer → HNSW (bind-time)
 │
-└── CALL QUERY_TANTIVY_INDEX(...)       → Table function → JSON bridge (flexible)
+└── CALL QUERY_LUCIVY_INDEX(...)       → Table function → JSON bridge (flexible)
     CALL QUERY_VECTOR_INDEX(...)        → Table function → C++ HNSW
     CALL QUERY_SPARSE_VECTOR_INDEX(...) → Table function → Rust FFI
 
 Rag3weaver (orchestrateur Rust)
 │
-├── search_bm25()    → CALL QUERY_TANTIVY_INDEX (JSON, allowed_ids, tantivy_filters)
+├── search_bm25()    → CALL QUERY_LUCIVY_INDEX (JSON, allowed_ids, lucivy_filters)
 ├── search_vector()  → CALL QUERY_VECTOR_INDEX (projected graphs, SemiMask)
 ├── search_sparse()  → CALL QUERY_SPARSE_VECTOR_INDEX
 │
 ├── fusion (RRF/weighted/boost) → per-signal config, per-KB
 ├── chunk resolution → parent enrichment + ChunkInfo
-├── filter compiler → split Tantivy-native / Kuzu-only
+├── filter compiler → split Lucivy-native / Kuzu-only
 ├── explore → search + BFS graph expansion
 └── event bus → CatalogEvent + QueueEvent (async_broadcast)
 ```
@@ -210,7 +210,7 @@ Deux API coexistent :
 ### Priorité réelle
 
 1. **Events manquants** — 4 emit() à ajouter, 15 minutes (L2-L4)
-2. **Audit pré-filtre vs post-filtre** — Identifier tout ce qui passe encore en post-filter (Cypher WHERE après search) alors qu'on pourrait le pousser en pré-filter (Tantivy natif ou allowed_ids). Objectif : zéro post-filter, tout en pre-filter pour la perf.
+2. **Audit pré-filtre vs post-filtre** — Identifier tout ce qui passe encore en post-filter (Cypher WHERE après search) alors qu'on pourrait le pousser en pré-filter (Lucivy natif ou allowed_ids). Objectif : zéro post-filter, tout en pre-filter pour la perf.
 3. **Tests E2E filtres** — Valider le FilterCompiler end-to-end avec des données réelles (E1-E3)
 4. **Tests E2E chunking explicit** — body long > maxSize, vérifier chunks, ChunkInfo dans résultats, cascade delete (E6)
 5. **Tests E2E explore** — search + BFS avec relations réelles, depth=1/2 (E4)

@@ -119,7 +119,7 @@ impl Catalog {
     //   2. generate_full_schema(config) → DDL statements
     //   3. Execute DDL via conn
     //   4. Build kb_metadata
-    //   5. Create FTS indexes (CALL CREATE_TANTIVY_INDEX)
+    //   5. Create FTS indexes (CALL CREATE_LUCIVY_INDEX)
     //   6. Register processors on queue
     //   7. Emit CatalogEvent::Ready
 
@@ -324,9 +324,9 @@ pub struct SearchMeta {
 async fn search_vector(conn, kb, embedding, limit) -> Vec<SearchResult>
 // MATCH (n:Entity) RETURN n._uuid, ... ORDER BY cosine_distance(n._embedding_kb, $vec) LIMIT $limit
 
-/// Recherche BM25 via QUERY_TANTIVY_INDEX
+/// Recherche BM25 via QUERY_LUCIVY_INDEX
 async fn search_bm25(conn, kb, query, limit) -> Vec<SearchResult>
-// CALL QUERY_TANTIVY_INDEX('Entity', 'kb_name', $query, $limit) RETURN ...
+// CALL QUERY_LUCIVY_INDEX('Entity', 'kb_name', $query, $limit) RETURN ...
 
 /// Fusion des resultats (delegue a fusion.rs)
 fn fuse_results(vector, bm25, strategy) -> Vec<SearchResult>

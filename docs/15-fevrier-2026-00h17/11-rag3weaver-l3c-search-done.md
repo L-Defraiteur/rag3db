@@ -52,7 +52,7 @@ Fichier : `src/search.rs` (~450 lignes)
 |----------|-------------|
 | `embed_query(embedder, query, cache)` | Embedding avec cache FIFO (max 100 entrees). Cache hit → pas d'appel embedder. |
 | `search_vector(conn, entity, kb_name, embedding, limit)` | `MATCH + array_cosine_similarity + ORDER BY sim DESC LIMIT` |
-| `search_bm25(conn, entity, query, limit)` | `CALL QUERY_TANTIVY_INDEX(entity, 'parse:query', limit) RETURN _uuid, _score` |
+| `search_bm25(conn, entity, query, limit)` | `CALL QUERY_LUCIVY_INDEX(entity, 'parse:query', limit) RETURN _uuid, _score` |
 | `fuse_results(vector, bm25, strategy, kw_weight, boost_factor, rrf_k)` | Delegue a fuse_rrf / fuse_weighted / fuse_boost |
 | `explore_bfs(conn, seed_nodes, outgoing, incoming, depth, top_k)` | BFS sur le graphe, pruning a top_k (seed results prioritaires, puis par profondeur) |
 
@@ -75,7 +75,7 @@ Fichier : `src/search.rs` (~450 lignes)
 
 - **Fonctions libres dans search.rs, methodes d'integration sur Catalog dans catalog.rs** : separation claire entre la logique de recherche (testable independamment) et l'orchestration (qui accede aux champs prives du Catalog).
 - **Cache FIFO (pas LRU)** : HashMap avec eviction du premier element quand taille >= 100. Simple et suffisant pour les queries repetees.
-- **Mode `parse:` pour BM25** : utilise le query parser de Tantivy (supporte AND/OR, multi-mots) plutot que `contains:` (substring).
+- **Mode `parse:` pour BM25** : utilise le query parser de Lucivy (supporte AND/OR, multi-mots) plutot que `contains:` (substring).
 - **Normalisation BM25** : les scores BM25 (0-10+) sont normalises a 0-1 par division par le max avant fusion. Identique au comportement TS.
 - **BM25-only dans boost** : quand un resultat n'a qu'un score BM25 (pas de vector), il recoit un score vector par defaut de 0.5 avant le boost. Copie du comportement TS.
 - **Pas de timing WASM** : `search_time_ms` est a 0 pour l'instant. `std::time::Instant` ne fonctionne pas en WASM. A ajouter avec feature flag.

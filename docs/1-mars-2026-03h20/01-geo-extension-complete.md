@@ -94,9 +94,9 @@ Priorité : OBB > frustum > bbox > radius > KNN.
 | `common/serializer/buffered_serializer.h` supprimé | → `buffer_writer.h` + `buffer_reader.h` |
 | `TableFunction(name, types, func, bind)` 4 args | → 2 args + `func->tableFunc = ...` |
 | `initLocalState(TableFuncInput&, ...)` | → `initLocalState(const TableFuncInitLocalStateInput&)` |
-| `nodeTable.initScanState(tx, columnIDs)` | → pattern tantivy : NodeTableScanState + setToTable + lookup |
+| `nodeTable.initScanState(tx, columnIDs)` | → pattern lucivy : NodeTableScanState + setToTable + lookup |
 | `storageManager->getPageAllocator()` supprimé | → `index->saveToFile()` directement |
-| `copyVector(columns)` — Expression::copy() supprimé | → `*this` (default copy comme tantivy) |
+| `copyVector(columns)` — Expression::copy() supprimé | → `*this` (default copy comme lucivy) |
 | `Index::InsertState` sans qualifier | → `storage::Index::InsertState` |
 | `BufferReader` non inclus | → ajout `#include "common/serializer/buffer_reader.h"` |
 | `condenseTree` non déclaré dans header | → ajout déclaration dans rtree.h |
@@ -179,7 +179,7 @@ Total         : 41/41 PASSED
 ```bash
 cd packages/rag3db/build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
-  -DBUILD_EXTENSIONS="geo;tantivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=TRUE
+  -DBUILD_EXTENSIONS="geo;lucivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=TRUE
 cmake --build . --target rag3db_geo_extension -j$(nproc)
 cmake --build . --target geo_test geo_math_test -j$(nproc)
 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/geo/test/geo_test

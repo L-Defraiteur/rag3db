@@ -126,7 +126,7 @@ Le script rebuildit cmake à chaque invocation, même quand rien n'a changé cô
 - **`--build`** pour forcer un rebuild (quand on change du C++ rag3db)
 - **`--no-build`** gardé pour compat (maintenant le comportement par défaut)
 - **`--no-cuda`** pour compiler sans CUDA (plus rapide pour tests pipeline)
-- **`geo` ajouté** aux extensions : `vector;tantivy_fts;sparse_vector;geo`
+- **`geo` ajouté** aux extensions : `vector;lucivy_fts;sparse_vector;geo`
 - Build cmake reconfigured from scratch (ancien supprimé pour ajouter geo)
 
 ### Usage
@@ -160,7 +160,7 @@ test phase0b_update_content_for_only ............. ok   ← NOUVEAU FIX
 test phase0b_sourced_rels_multi_entity ........... ok
 test phase0b_vector_chunk_to_source_entity ....... ok
 test phase0b_debug_trace_pipeline ................ ok
-test phase0b_tantivy_contains_vs_parse ........... ok
+test phase0b_lucivy_contains_vs_parse ........... ok
 
 test result: ok. 14 passed; 0 failed
 ```

@@ -76,7 +76,7 @@ Aucun test E2E pour sparse search n'existe. Les tests sparse dans search.rs sont
 
 À ajouter dans `tests/e2e_search.rs` — Phase 3 :
 
-1. **`load_extensions()`** : déjà modifié pour charger `sparse_vector` (en plus de vector + tantivy_fts)
+1. **`load_extensions()`** : déjà modifié pour charger `sparse_vector` (en plus de vector + lucivy_fts)
 
 2. **`setup_sparse_catalog()`** à créer :
    - Config avec `sparse: true` sur le KB

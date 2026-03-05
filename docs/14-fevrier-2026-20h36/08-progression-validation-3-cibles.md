@@ -8,22 +8,22 @@ Date : 14 fevrier 2026
 
 ### 1. Fix cmake DEPENDS sur sources Rust (FAIT)
 
-**Fichier** : `extension/tantivy_fts/CMakeLists.txt`
+**Fichier** : `extension/lucivy_fts/CMakeLists.txt`
 
-Le probleme historique : `add_custom_command(OUTPUT libtantivy_fts.a ...)` sans `DEPENDS` sur les `.rs` — cmake ne relancait jamais cargo meme apres modif Rust.
+Le probleme historique : `add_custom_command(OUTPUT liblucivy_fts.a ...)` sans `DEPENDS` sur les `.rs` — cmake ne relancait jamais cargo meme apres modif Rust.
 
 **Fix** : ajout de `file(GLOB_RECURSE)` + `DEPENDS` :
 
 ```cmake
 file(GLOB_RECURSE RUST_SOURCES
     "${RUST_WORKSPACE_DIR}/src/*.rs"
-    "${RUST_WORKSPACE_DIR}/tantivy_fts/rust/src/*.rs"
+    "${RUST_WORKSPACE_DIR}/lucivy_fts/rust/src/*.rs"
     "${RUST_WORKSPACE_DIR}/Cargo.toml"
-    "${RUST_WORKSPACE_DIR}/tantivy_fts/rust/Cargo.toml"
+    "${RUST_WORKSPACE_DIR}/lucivy_fts/rust/Cargo.toml"
 )
 
 add_custom_command(
-    OUTPUT ${TANTIVY_STATIC_LIB}
+    OUTPUT ${LUCIVY_STATIC_LIB}
     COMMAND ... cargo build ...
     DEPENDS ${RUST_SOURCES}
     ...
@@ -56,7 +56,7 @@ Plus besoin de `cp build/rag3dbjs.node src_js/` manuellement.
 [  PASSED  ] 11 tests.
 ```
 
-Tous les tests GTest passent, y compris `TantivyRegexContainsTest` avec les 7 sub-tests (regex trigram, BM25, hybrid, no match, highlights, regression, short-literal).
+Tous les tests GTest passent, y compris `LucivyRegexContainsTest` avec les 7 sub-tests (regex trigram, BM25, hybrid, no match, highlights, regression, short-literal).
 
 ### 4. Validation Node.js natif (OK — 5/5)
 
@@ -82,7 +82,7 @@ CREATE INDEX: OK
 5. Fuzzy regression: OK (2)
 ```
 
-Le fuzzy contains marche (regression OK), mais TOUTES les queries regex retournent 0 resultats. Le cargo WASM a bien ete recompile (on voit `Compiling tantivy-fts` et `Compiling ld-tantivy` dans la sortie cmake), le WASM est re-linke.
+Le fuzzy contains marche (regression OK), mais TOUTES les queries regex retournent 0 resultats. Le cargo WASM a bien ete recompile (on voit `Compiling lucivy-fts` et `Compiling ld-lucivy` dans la sortie cmake), le WASM est re-linke.
 
 **Hypotheses pour le bug WASM regex** :
 
@@ -102,7 +102,7 @@ Le fuzzy contains marche (regression OK), mais TOUTES les queries regex retourne
 
 | Fichier | Changement |
 |---------|------------|
-| `extension/tantivy_fts/CMakeLists.txt` | `file(GLOB_RECURSE)` + `DEPENDS` sur sources Rust |
+| `extension/lucivy_fts/CMakeLists.txt` | `file(GLOB_RECURSE)` + `DEPENDS` sur sources Rust |
 | `tools/nodejs_api/CMakeLists.txt` | Output dir `build` → `src_js` |
 
 ## Commits a faire
@@ -113,5 +113,5 @@ Rien n'est commite. Les 2 fixes cmake + le fix Node.js output dir sont des modif
 
 1. **Debug WASM regex** — comprendre pourquoi les queries regex retournent 0 en WASM
 2. **Commiter** les fixes cmake DEPENDS + Node.js output dir
-3. **Mettre a jour** le submodule ld-tantivy dans rag3db
+3. **Mettre a jour** le submodule ld-lucivy dans rag3db
 4. **Mettre a jour** les BUILD.md (retirer la mention du rebuild manuel, documenter le fix)

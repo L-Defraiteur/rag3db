@@ -7,7 +7,7 @@
 
 ## Résumé
 
-Enrichissement des QueueEvents avec `OpSummary` pour le debug pipeline, puis correction de 3 bugs (B: vector index name, C: update contentFor-only, A: link() hashsafe lookup). Le bug A s'est avéré être un problème de résolution UUID dans `link()`, pas un problème Tantivy.
+Enrichissement des QueueEvents avec `OpSummary` pour le debug pipeline, puis correction de 3 bugs (B: vector index name, C: update contentFor-only, A: link() hashsafe lookup). Le bug A s'est avéré être un problème de résolution UUID dans `link()`, pas un problème Lucivy.
 
 ---
 
@@ -101,7 +101,7 @@ La string `"Directory:/repo/src/"` est un **hashsafe lookup string**, pas un UUI
 1. **LinkProcessor** : `MATCH (a {_uuid: "Directory:/repo/src/"})` ne matche rien car le vrai `_uuid` est `56cd25ce-...` → **le lien HAS_FILE n'est jamais créé en DB**
 2. **AggregateOp** : `source_uuid = "Directory:/repo/src/"` produit un `index_entry_uuid` différent de celui créé par `create()` → **AggregateProcessor ne retrouve pas l'index entry**
 
-Résultat : TreeKB_Index ne contenait que les données du Directory (`_title="src"`, `_content="/repo/src/"`) sans aucun contenu File. Parse ET Contains retournaient 0 pour "auth" — le bug n'était pas Tantivy du tout.
+Résultat : TreeKB_Index ne contenait que les données du Directory (`_title="src"`, `_content="/repo/src/"`) sans aucun contenu File. Parse ET Contains retournaient 0 pour "auth" — le bug n'était pas Lucivy du tout.
 
 Les events enrichis ont rendu ça évident :
 ```
@@ -142,20 +142,20 @@ let to_ref = self.resolve_ref_or_uuid(to.into(), &to_entity);
 - `opi_9: link HAS_FILE "56cd25ce-..." → pending` ✓ (vrai UUID)
 - `opi_10: aggregate TreeKB Directory:56cd25ce-... idx=19512fd6-...` ✓ (même index que opi_4)
 - TreeKB_Index `_content` = `"/repo/src/\n/repo/src/auth.ts\nauth.ts"` ✓ (File content inclus)
-- Tantivy Contains "auth" → **1 résultat** ✓
-- Tantivy Parse "auth" → **1 résultat** ✓
+- Lucivy Contains "auth" → **1 résultat** ✓
+- Lucivy Parse "auth" → **1 résultat** ✓
 - `processed=23` (avant: 17) — les 6 ops supplémentaires sont les chunks/links File
 
 ---
 
 ## 5. Test isolé ajouté
 
-**`phase0b_tantivy_contains_vs_parse`** (test 14) :
+**`phase0b_lucivy_contains_vs_parse`** (test 14) :
 - Souscrit aux queue events
 - Crée Directory + File + link avec lookup string
 - Dump TreeKB_Index et TreeKB_Index_Chunk
-- Teste 8 variantes de queries Tantivy raw (Parse/Contains, single/multi field, distance 0/1)
-- Diagnostic tool réutilisable pour isoler les problèmes Tantivy vs pipeline
+- Teste 8 variantes de queries Lucivy raw (Parse/Contains, single/multi field, distance 0/1)
+- Diagnostic tool réutilisable pour isoler les problèmes Lucivy vs pipeline
 
 ---
 
@@ -180,7 +180,7 @@ let to_ref = self.resolve_ref_or_uuid(to.into(), &to_entity);
 | `src/lib.rs` | +export OpSummary |
 | `src/search.rs` | Fix vector index name: `{entity}_vec` (pas `{entity}_{kb}_vec`) |
 | `src/catalog.rs` | Fix update() error propagation, +resolve_ref_or_uuid(), link() résout lookups |
-| `tests/e2e_phase0b.rs` | +test 14 `phase0b_tantivy_contains_vs_parse` |
+| `tests/e2e_phase0b.rs` | +test 14 `phase0b_lucivy_contains_vs_parse` |
 
 ---
 

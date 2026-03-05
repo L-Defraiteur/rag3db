@@ -918,7 +918,7 @@ pub extern "C" fn rag3weaver_catalog_new(
         return std::ptr::null_mut();
     }
 
-    // Create dedicated rayon pool (4 threads, separate from tantivy's global pool)
+    // Create dedicated rayon pool (4 threads, separate from lucivy's global pool)
     let pool = match rayon::ThreadPoolBuilder::new()
         .num_threads(4)
         .thread_name(|i| format!("weaver-pool-{i}"))
@@ -1404,7 +1404,7 @@ pub extern "C" fn rag3weaver_test_async_pool() -> *const c_char {
     }
 }
 
-/// Test C: rayon par_iter (data parallelism, same lib as tantivy).
+/// Test C: rayon par_iter (data parallelism, same lib as lucivy).
 /// Parallel sum using rayon's work-stealing thread pool.
 /// Returns JSON: {"ok":bool,"total":N,"expected":N,"numChunks":N}
 #[no_mangle]

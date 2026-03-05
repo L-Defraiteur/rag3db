@@ -218,7 +218,7 @@ Recommendation: keep `tokenize_raw()` for single-token for now. The multi-token 
 
 ## Verification plan
 
-1. `cargo test --lib` in ld-tantivy (997+ tests) — no regression
+1. `cargo test --lib` in ld-lucivy (997+ tests) — no regression
 2. `cargo build --release` + FFI tests (129 tests) — separator validation still works
 3. Specific attention to:
    - `c++` query (single token — still uses tokenize_raw)
@@ -243,7 +243,7 @@ if !has_real_offsets {
 }
 ```
 
-Currently in tantivy_fts, the raw field is indexed with `WithFreqsAndPositions` (not offsets). To benefit from this improvement, we'd need to switch the raw field to `WithFreqsAndPositionsAndOffsets` in `handle.rs`. This increases index size slightly (2x more data in `.offsets` file) but eliminates re-tokenization entirely.
+Currently in lucivy_fts, the raw field is indexed with `WithFreqsAndPositions` (not offsets). To benefit from this improvement, we'd need to switch the raw field to `WithFreqsAndPositionsAndOffsets` in `handle.rs`. This increases index size slightly (2x more data in `.offsets` file) but eliminates re-tokenization entirely.
 
 ---
 

@@ -113,7 +113,7 @@ pub struct WeaverContext {
 | Composant | Threads | Source |
 |-----------|---------|--------|
 | Kuzu (query parallelism) | ~8 | Pool emscripten global |
-| Tantivy (rayon interne) | ~4 | Pool rayon global tantivy |
+| Lucivy (rayon interne) | ~4 | Pool rayon global lucivy |
 | rag3weaver (notre pool) | 4 | Pool rayon dedie |
 | Total | ~16 | = PTHREAD_POOL_SIZE |
 
@@ -296,7 +296,7 @@ JS (Web Worker)
 ```
 emscripten PTHREAD_POOL_SIZE=16
   ├── Kuzu query workers     (~8 threads)
-  ├── Tantivy rayon global   (~4 threads)
+  ├── Lucivy rayon global   (~4 threads)
   └── rag3weaver pool dedie  (4 threads, "weaver-pool-{0..3}")
 ```
 

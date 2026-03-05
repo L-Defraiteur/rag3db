@@ -9,9 +9,9 @@ Statut : plan avant implémentation
 
 Doc 18 posait la question : un seul module WASM (rag3weaver + rag3db ensemble) ou deux modules séparés ?
 
-Décision : **un seul module WASM**. rag3weaver est compilé en static lib pour `wasm32-unknown-emscripten` et linké dans le même binaire emscripten que rag3db + tantivy_fts.
+Décision : **un seul module WASM**. rag3weaver est compilé en static lib pour `wasm32-unknown-emscripten` et linké dans le même binaire emscripten que rag3db + lucivy_fts.
 
-Le pattern existe déjà : tantivy_fts est une lib Rust statique linkée dans le WASM. On fait pareil pour rag3weaver, mais dans l'autre direction (Rust appelle C++ au lieu de C++ appelle Rust).
+Le pattern existe déjà : lucivy_fts est une lib Rust statique linkée dans le WASM. On fait pareil pour rag3weaver, mais dans l'autre direction (Rust appelle C++ au lieu de C++ appelle Rust).
 
 ## Architecture cible
 
@@ -42,7 +42,7 @@ Le pattern existe déjà : tantivy_fts est une lib Rust statique linkée dans le
              │  via le C API existant
              │
      ┌───────┴──────────┐
-     │ tantivy_fts .a   │
+     │ lucivy_fts .a   │
      │ (existant)       │
      └──────────────────┘
 
@@ -241,7 +241,7 @@ EMSCRIPTEN_BINDINGS(rag3weaver_wasm) {
 
 ## Build : intégration CMake
 
-En suivant le pattern tantivy_fts, on ajoute dans le build WASM :
+En suivant le pattern lucivy_fts, on ajoute dans le build WASM :
 
 ```cmake
 # extension/rag3weaver/CMakeLists.txt (nouveau)
@@ -385,7 +385,7 @@ Ces crates doivent compiler pour `wasm32-unknown-emscripten` :
     - Crée une DB in-memory via `new Module.Database()`
     - Crée un `new Module.Weaver(config, db)`
     - Insère des documents, drain, vérifie les counts
-    - Optionnel : test FTS si tantivy_fts est chargé
+    - Optionnel : test FTS si lucivy_fts est chargé
 
 ---
 

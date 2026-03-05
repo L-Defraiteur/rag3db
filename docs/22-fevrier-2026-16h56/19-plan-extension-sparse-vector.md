@@ -1,4 +1,4 @@
-# 19 — Plan : extension C++ sparse_vector (type tantivy_fts)
+# 19 — Plan : extension C++ sparse_vector (type lucivy_fts)
 
 ## Contexte
 
@@ -9,7 +9,7 @@ Le sparse index vit actuellement en mémoire dans rag3weaver (`sparse_index.rs`,
 3. **Mémoire** — ~60 MB pour 100k docs, ~600 MB pour 1M docs. Ne scale pas au-delà.
 4. **Pas de filtrage natif** — `search_sparse()` ignore les filtres, pas d'`allowed_ids`
 
-Au lieu de patcher ces problèmes un par un (concessions 2A-2E du doc 17), on fait une vraie extension C++ avec le code Rust existant réutilisé via cxx bridge. Même pattern que tantivy_fts.
+Au lieu de patcher ces problèmes un par un (concessions 2A-2E du doc 17), on fait une vraie extension C++ avec le code Rust existant réutilisé via cxx bridge. Même pattern que lucivy_fts.
 
 ## Pourquoi une extension plutôt que continuer en in-memory
 
@@ -17,10 +17,10 @@ Au lieu de patcher ces problèmes un par un (concessions 2A-2E du doc 17), on fa
 |---|---|---|
 | Persistance | Colonnes DB → rebuild O(N) | Fichier dédié, chargé direct |
 | Hooks INSERT/DELETE | Aucun (drain + rebuild) | Automatiques via NodeTable |
-| Lazy commit | N/A | `dirty_` flag comme tantivy_fts |
+| Lazy commit | N/A | `dirty_` flag comme lucivy_fts |
 | Filtrage | Pas d'accès aux attributs | `allowed_ids` natif |
 | Mémoire | Tout en RAM | Index on-disk + cache LRU (futur) |
-| WASM | Fonctionne (tout en Rust) | Fonctionne (même build que tantivy_fts) |
+| WASM | Fonctionne (tout en Rust) | Fonctionne (même build que lucivy_fts) |
 | API | Code Rust interne, opaque | Cypher : CREATE/QUERY/DROP |
 
 **Argument décisif** : toutes les optimisations qu'on voulait faire (2A rebuild incrémental, 2C filtrage, cache) reviennent à réimplémenter les mécanismes qu'une extension fournit nativement (hooks, persistance, accès storage). Autant le faire proprement une fois.
@@ -51,7 +51,7 @@ Au lieu de patcher ces problèmes un par un (concessions 2A-2E du doc 17), on fa
 └──────────────┬──────────────────────────────────────┘
                │ cxx bridge
 ┌──────────────▼──────────────────────────────────────┐
-│ Rust crate : sparse_fts (dans ld-tantivy ou séparé) │
+│ Rust crate : sparse_fts (dans ld-lucivy ou séparé) │
 │                                                       │
 │  SparseHandle {                                      │
 │    index: SparseIndex,          ← code existant !    │
@@ -88,14 +88,14 @@ Le `SparseIndex` et `SparseVector` sont prêts :
 
 On les copie dans le nouveau crate sparse_fts (ou on les importe si on veut garder une seule source).
 
-### Pattern C++ de tantivy_fts (à reproduire)
+### Pattern C++ de lucivy_fts (à reproduire)
 
-Le squelette C++ est identique — on copie la structure tantivy_fts et on remplace :
+Le squelette C++ est identique — on copie la structure lucivy_fts et on remplace :
 
-| tantivy_fts | sparse_vector |
+| lucivy_fts | sparse_vector |
 |---|---|
-| `TantivyIndex` | `SparseVectorIndex` |
-| `TantivyHandle` | `SparseHandle` |
+| `LucivyIndex` | `SparseVectorIndex` |
+| `LucivyHandle` | `SparseHandle` |
 | `add_document_texts()` | `add_document_sparse()` |
 | `search_with_highlights()` | `search_sparse()` |
 | `DocFieldText` | `DocSparse { indices: Vec<u32>, weights: Vec<f32> }` |
@@ -106,7 +106,7 @@ Le squelette C++ est identique — on copie la structure tantivy_fts et on rempl
 
 ### Phase 1 : Crate Rust `sparse_fts` + cxx bridge
 
-**Fichiers à créer** dans `extension/tantivy/ld-tantivy/sparse_fts/` (ou `extension/sparse_vector/sparse_fts/`) :
+**Fichiers à créer** dans `extension/lucivy/ld-lucivy/sparse_fts/` (ou `extension/sparse_vector/sparse_fts/`) :
 
 ```
 sparse_fts/
@@ -301,18 +301,18 @@ Subtilité importante : l'extension travaille avec des `node_id` (offsets intern
 
 Alternativement, on peut travailler uniquement en `node_id` côté extension et laisser le caller résoudre. C'est ce que fait `QUERY_VECTOR_INDEX` — il retourne directement un `node` pas un uuid.
 
-## Différences clés vs tantivy_fts
+## Différences clés vs lucivy_fts
 
-| Aspect | tantivy_fts | sparse_vector |
+| Aspect | lucivy_fts | sparse_vector |
 |---|---|---|
-| **Backend Rust** | Tantivy (lib externe, 50k LOC) | SparseIndex (~250 LOC, code maison) |
+| **Backend Rust** | Lucivy (lib externe, 50k LOC) | SparseIndex (~250 LOC, code maison) |
 | **Complexité schema** | Multi-champ, stemmer, ngrams, tokenizers | 1 paire de colonnes (indices + weights) |
-| **Persistance** | Segments Tantivy (fichiers multiples) | Binaire simple (1 fichier) |
+| **Persistance** | Segments Lucivy (fichiers multiples) | Binaire simple (1 fichier) |
 | **Query** | JSON DSL complexe (term, fuzzy, phrase, boolean...) | Juste un vecteur sparse (indices + weights) |
 | **Highlights** | Oui (byte offsets) | Non (scores seulement) |
 | **Taille code** | ~800 lignes Rust + ~1500 C++ | ~400 lignes Rust + ~800 C++ (estimé) |
 
-Le sparse est beaucoup plus simple que tantivy_fts. Moins de code, moins de configuration, moins de types. L'essentiel c'est les hooks + persistance + filtrage.
+Le sparse est beaucoup plus simple que lucivy_fts. Moins de code, moins de configuration, moins de types. L'essentiel c'est les hooks + persistance + filtrage.
 
 ## Format de persistance V1
 
@@ -348,7 +348,7 @@ Pour la V1, on peut juste utiliser bincode/serde et optimiser le format plus tar
 | Phase | Effort | Détail |
 |---|---|---|
 | Phase 1 : Crate Rust + bridge | ~3-4h | Copier sparse_index.rs, écrire handle.rs + bridge.rs, persistence bincode |
-| Phase 2 : Extension C++ | ~4-5h | Copier structure tantivy_fts, adapter pour sparse, hooks, catalog entry |
+| Phase 2 : Extension C++ | ~4-5h | Copier structure lucivy_fts, adapter pour sparse, hooks, catalog entry |
 | Phase 3 : Tests GTest E2E | ~2h | CREATE + INSERT + QUERY, DELETE + re-QUERY, persistence, allowed_ids |
 | Phase 4 : Intégration rag3weaver | ~2h | Supprimer in-memory, wiring Cypher QUERY_SPARSE_VECTOR_INDEX |
 | **Total** | **~11-14h** | Un week-end |
@@ -365,7 +365,7 @@ Pour la V1, on peut juste utiliser bincode/serde et optimiser le format plus tar
 
 ## Résumé
 
-Le code Rust du sparse index existe déjà et marche. Ce qu'il manque c'est l'infra extension (hooks, persistance, API Cypher, filtrage). On copie le pattern tantivy_fts — c'est le même squelette C++ avec un backend Rust plus simple. L'effort est ~1 week-end. Le gain : zéro rebuild O(N), hooks INSERT/DELETE automatiques, persistance native, filtrage `allowed_ids`, et une base solide pour le scaling V2 (on-disk + LRU).
+Le code Rust du sparse index existe déjà et marche. Ce qu'il manque c'est l'infra extension (hooks, persistance, API Cypher, filtrage). On copie le pattern lucivy_fts — c'est le même squelette C++ avec un backend Rust plus simple. L'effort est ~1 week-end. Le gain : zéro rebuild O(N), hooks INSERT/DELETE automatiques, persistance native, filtrage `allowed_ids`, et une base solide pour le scaling V2 (on-disk + LRU).
 
 ---
 

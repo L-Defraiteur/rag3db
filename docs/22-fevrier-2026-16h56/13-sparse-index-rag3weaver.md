@@ -120,7 +120,7 @@ Query "machine learning"
       ├─ embed_sparse(query) → SparseVector {indices: [42, 156], values: [0.8, 0.3]}
       │
       ├─ search_vector(dense)     → Vec<SearchResult>  [cosine sim via Cypher]
-      ├─ search_bm25(text)        → Vec<SearchResult>  [BM25 via Tantivy]
+      ├─ search_bm25(text)        → Vec<SearchResult>  [BM25 via Lucivy]
       └─ search_sparse(sparse)    → Vec<SearchResult>  [dot product via index inverse]
               │
               ▼

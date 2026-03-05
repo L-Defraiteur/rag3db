@@ -224,7 +224,7 @@ struct NgramContainsQuery {
 | Fichier | Changement |
 |---------|------------|
 | `src/query/phrase_query/ngram_contains_query.rs` | Ajouter `VerificationMode`, adapter `verify()` et `count_*()` |
-| `tantivy_fts/rust/src/query.rs` | Adapter `build_contains_query()` pour gerer `"regex": true` |
+| `lucivy_fts/rust/src/query.rs` | Adapter `build_contains_query()` pour gerer `"regex": true` |
 | `src/query/phrase_query/scoring_utils.rs` | Eventuellement factoriser des utilitaires partages |
 | `Cargo.toml` | Ajouter `regex-syntax` en dependance directe si pas deja le cas |
 

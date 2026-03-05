@@ -1,6 +1,6 @@
 # Etat des Lieux - 6 Fevrier 2026
 
-> **Objectif final :** Remplacer Neo4j par Kuzu (embedded) + Tantivy (FTS fuzzy/regex) dans un seul module WASM, pour alimenter le framework Rag3Weaver puis ragforge-core et community-docs.
+> **Objectif final :** Remplacer Neo4j par Kuzu (embedded) + Lucivy (FTS fuzzy/regex) dans un seul module WASM, pour alimenter le framework Rag3Weaver puis ragforge-core et community-docs.
 
 ---
 
@@ -30,13 +30,13 @@ Lib Rust complete pour fuzzy string matching :
 - Benchmarks, tests, serialization
 - **Status : code complet, pas encore integre dans rag3db FTS**
 
-### 3. Tantivy / Summa (moteur FTS complet)
+### 3. Lucivy / Summa (moteur FTS complet)
 
-**Emplacement :** `packages/rag3db/extension/tantivy/`
+**Emplacement :** `packages/rag3db/extension/lucivy/`
 
 Trois versions clonees :
-- `izihawa-tantivy/` : Fork Tantivy v0.26.0 avec support WASM
-- `tantivy-latest/` : Version officielle (reference)
+- `izihawa-lucivy/` : Fork Lucivy v0.26.0 avec support WASM
+- `lucivy-latest/` : Version officielle (reference)
 - `summa/` : Wrapper izihawa qui ajoute protobuf API, memory indexes, query parsing
 
 **Ce qu'on a verifie :**
@@ -72,14 +72,14 @@ Build Emscripten de Kuzu avec :
 
 ## Le probleme resolu aujourd'hui
 
-**Question :** Comment integrer Tantivy (Rust) dans un environnement WASM qui supporte les threads ?
+**Question :** Comment integrer Lucivy (Rust) dans un environnement WASM qui supporte les threads ?
 
 | Approche | Target WASM | Threads | Modules | Verdict |
 |----------|------------|---------|---------|---------|
 | wasm-pack seul | `wasm32-unknown-unknown` | Pas de `std::thread` | 2 WASM separes | **Echec** - crash au spawn |
 | C FFI + Emscripten | `wasm32-unknown-emscripten` | pthreads via SharedArrayBuffer | 1 WASM unifie | **La bonne approche** |
 
-La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI), puis **linker avec Kuzu** dans le meme build Emscripten. Resultat : un seul `.wasm` avec graph DB + FTS fuzzy + vector search.
+La solution : compiler Lucivy/Summa en **static lib C** (via `cbindgen` / C FFI), puis **linker avec Kuzu** dans le meme build Emscripten. Resultat : un seul `.wasm` avec graph DB + FTS fuzzy + vector search.
 
 ---
 
@@ -91,14 +91,14 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
   ┌──────────────────────────────────────────────────────────┐
   │                                                          │
-  │  Tantivy/Summa (Rust)                                    │
+  │  Lucivy/Summa (Rust)                                    │
   │  - Full-text search (BM25)                               │
   │  - Fuzzy search (Levenshtein automaton)                  │
   │  - Regex search                                          │
   │  - Phrase queries                                        │
   │                                                          │
   │  Compile: cargo build --target wasm32-unknown-emscripten │
-  │  Output: libtantivy_fts.a (static lib C)                 │
+  │  Output: liblucivy_fts.a (static lib C)                 │
   │                                                          │
   └───────────────────────────┬──────────────────────────────┘
                               │ C FFI link
@@ -109,7 +109,7 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
   │  - Graph database (Cypher)                               │
   │  - Storage engine (columnar, CSR)                        │
   │  - Vector index (HNSW)                                   │
-  │  - Extension FTS → appelle Tantivy via C FFI             │
+  │  - Extension FTS → appelle Lucivy via C FFI             │
   │                                                          │
   │  Compile: emcc + CMake                                   │
   │  Output: rag3db.wasm + rag3db.js + worker.js             │
@@ -145,7 +145,7 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
 1. **Un seul module WASM** - pas de communication JS entre deux modules
 2. **Threads supportes** - Emscripten gere pthreads via SharedArrayBuffer
-3. **FTS superieur** - Tantivy offre fuzzy, regex, phrase queries (vs BM25 exact-match de Kuzu natif)
+3. **FTS superieur** - Lucivy offre fuzzy, regex, phrase queries (vs BM25 exact-match de Kuzu natif)
 4. **Controle total** - on possede le fork, on peut iterer librement
 5. **Embedded** - zero Docker, zero serveur externe, tourne dans le browser
 6. **Filtrage graph→FTS** - pre-filtrage par node IDs Kuzu avant FTS, via `FilterCollector` et champ `_node_id` fast
@@ -154,33 +154,33 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
 ## Ce qui reste a faire
 
-### Phase 1 : Tantivy C FFI (Rust → static lib) — FAIT
+### Phase 1 : Lucivy C FFI (Rust → static lib) — FAIT
 
 - [x] Definir l'API C minimale pour FTS (13 fonctions extern "C", dont filtered search)
-- [x] Compiler Tantivy avec target `wasm32-unknown-emscripten` (17 MB)
+- [x] Compiler Lucivy avec target `wasm32-unknown-emscripten` (17 MB)
 - [x] Compiler en natif (26 MB)
 - [x] Implementer `StdFsDirectory` (agnostique plateforme)
 - [x] Verifier que la static lib `.a` est compatible Emscripten
-- [x] Generer le header C via cbindgen (`include/tantivy_fts.h`)
+- [x] Generer le header C via cbindgen (`include/lucivy_fts.h`)
 - [x] Test natif du cycle complet : 63/63 tests (create → add → commit → search → filtered → delete → reopen → dual-field stemming)
 - [x] Architecture dual-field : champs stemmes + `._raw` pour routing transparent des queries
 
-> **Crate :** `packages/rag3db/extension/tantivy_fts/rust/`
+> **Crate :** `packages/rag3db/extension/lucivy_fts/rust/`
 > **Details :** voir `01-progression.md` et `02-architecture-storage-vfs.md`
 
 ### Phase 2 : Integration CMake + Build — FAIT
 
-- [x] Renommer `extension/tantivy-fts/` → `extension/tantivy_fts/` (convention CMake underscore)
-- [x] Creer `TantivyFtsExtension::load()` (stub minimal, meme pattern que extension/fts/)
+- [x] Renommer `extension/lucivy-fts/` → `extension/lucivy_fts/` (convention CMake underscore)
+- [x] Creer `LucivyFtsExtension::load()` (stub minimal, meme pattern que extension/fts/)
 - [x] CMakeLists.txt qui link la static lib Rust (cargo build via add_custom_command)
-- [x] Ajouter tantivy_fts dans extension_config.cmake + extension/CMakeLists.txt
-- [x] Build natif OK (`libtantivy_fts.kuzu_extension` produit)
-- [x] Build Emscripten OK (libkuzu.a WASM 36 MB avec json+vector+algo+tantivy_fts)
-- [ ] Wrapper C++ `TantivyIndex` qui appelle la FFI Rust
-- [ ] Fonctions Cypher : `CREATE_TANTIVY_INDEX`, `DROP_TANTIVY_INDEX`, `QUERY_TANTIVY_INDEX`
+- [x] Ajouter lucivy_fts dans extension_config.cmake + extension/CMakeLists.txt
+- [x] Build natif OK (`liblucivy_fts.kuzu_extension` produit)
+- [x] Build Emscripten OK (libkuzu.a WASM 36 MB avec json+vector+algo+lucivy_fts)
+- [ ] Wrapper C++ `LucivyIndex` qui appelle la FFI Rust
+- [ ] Fonctions Cypher : `CREATE_LUCIVY_INDEX`, `DROP_LUCIVY_INDEX`, `QUERY_LUCIVY_INDEX`
 - [ ] Serialisation catalog entry (metadata dans Kuzu, segments sur filesystem)
 
-> **Note :** L'extension FTS originale est droppee du build WASM (bug `DOC_FREQUENCY_PROP_NAME`). Extensions WASM cibles : json, vector, algo, tantivy_fts.
+> **Note :** L'extension FTS originale est droppee du build WASM (bug `DOC_FREQUENCY_PROP_NAME`). Extensions WASM cibles : json, vector, algo, lucivy_fts.
 
 ### Phase 3 : Tests
 
@@ -189,7 +189,7 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
 ### Phase 4 : Integration Rag3Weaver
 
-- [ ] Adapter CatalogSearch pour utiliser QUERY_TANTIVY_INDEX
+- [ ] Adapter CatalogSearch pour utiliser QUERY_LUCIVY_INDEX
 - [ ] Ajouter fuzzy/regex dans les options de search
 - [ ] Tests end-to-end
 
@@ -199,13 +199,13 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
 | Question | Reponse |
 |----------|---------|
-| On expose tout Summa ou juste le minimum ? | Minimum : 13 fonctions C (dont `tantivy_search_filtered`), pas de Summa. On utilise izihawa-tantivy directement. |
-| Gestion memoire Rust/C++ ? | Handles opaques (`TantivyHandle*`), lifetime geree par create/close. Strings liberees par `tantivy_free_string`. |
-| Index storage : meme directory que Kuzu ou separe ? | Sous-repertoire `{db_path}/tantivy/{table_id}_{index_name}/`. Meme filesystem, dossier separe. |
-| Taille WASM ? | Static lib Tantivy FFI = 17 MB (.a). Taille finale WASM a mesurer apres link avec Kuzu. |
+| On expose tout Summa ou juste le minimum ? | Minimum : 13 fonctions C (dont `lucivy_search_filtered`), pas de Summa. On utilise izihawa-lucivy directement. |
+| Gestion memoire Rust/C++ ? | Handles opaques (`LucivyHandle*`), lifetime geree par create/close. Strings liberees par `lucivy_free_string`. |
+| Index storage : meme directory que Kuzu ou separe ? | Sous-repertoire `{db_path}/lucivy/{table_id}_{index_name}/`. Meme filesystem, dossier separe. |
+| Taille WASM ? | Static lib Lucivy FFI = 17 MB (.a). Taille finale WASM a mesurer apres link avec Kuzu. |
 | Merge policy sans tokio ? | Oui, la merge policy est du Rust pur. Tokio n'etait que pour le I/O fichier async (feature `mmap`). |
 | Fonctionne en natif ET WASM ? | Oui. `StdFsDirectory` utilise `std::fs` qui fonctionne partout (vrai FS en natif, VFS Emscripten en WASM). |
-| Filtrage graph + FTS ? | Oui. Champ `_node_id` (u64 FAST) auto-ajoute au schema. `tantivy_search_filtered()` prend un tableau d'IDs autorises et utilise `FilterCollector` pour ne scorer que ces documents. Flow : Cypher WHERE → node IDs → FTS filtre. |
+| Filtrage graph + FTS ? | Oui. Champ `_node_id` (u64 FAST) auto-ajoute au schema. `lucivy_search_filtered()` prend un tableau d'IDs autorises et utilise `FilterCollector` pour ne scorer que ces documents. Flow : Cypher WHERE → node IDs → FTS filtre. |
 | Stemming + exact match ? | Architecture dual-field : chaque champ "text" genere `{name}` (stemmed) + `{name}._raw` (lowercase only). Routing transparent : `term/fuzzy/regex` → raw (precision), `phrase/parse` → stemmed (recall). L'utilisateur reference toujours le nom de base. |
 | API publique pour le C++ ? | 4 modes exposes en Cypher : `parse` (defaut, stemmed, recall), `fuzzy` (typo tolerance, raw), `regex` (pattern, raw), `exact` (reroute vers regex `.*{term}.*`, raw). Les 6 types internes FFI (term, fuzzy, phrase, regex, boolean, parse) restent disponibles. |
 
@@ -215,14 +215,14 @@ La solution : compiler Tantivy/Summa en **static lib C** (via `cbindgen` / C FFI
 
 | Sujet | Fichier |
 |-------|---------|
-| **Crate FFI Tantivy** | `packages/rag3db/extension/tantivy-fts/rust/` |
-| **Header C genere** | `packages/rag3db/extension/tantivy-fts/include/tantivy_fts.h` |
-| **Test natif C** | `packages/rag3db/extension/tantivy-fts/test/test_ffi.c` |
+| **Crate FFI Lucivy** | `packages/rag3db/extension/lucivy-fts/rust/` |
+| **Header C genere** | `packages/rag3db/extension/lucivy-fts/include/lucivy_fts.h` |
+| **Test natif C** | `packages/rag3db/extension/lucivy-fts/test/test_ffi.c` |
 | Extension FTS existante | `packages/rag3db/extension/fts/` |
 | Build WASM Kuzu | `kuzu-wasm-exp/CMakeLists.txt` |
 | Prerequis COOP/COEP | `kuzu-wasm-exp/docs/guide/prerequisite.md` |
 | fuzzy-fst lib | `packages/rag3db/third_party/fuzzy-fst/` |
-| izihawa-tantivy fork | `packages/rag3db/extension/tantivy/izihawa-tantivy/` |
+| izihawa-lucivy fork | `packages/rag3db/extension/lucivy/izihawa-lucivy/` |
 | Rag3Weaver search | `kuzu-wasm-exp/src/lib/catalog/modules/CatalogSearch.ts` |
 | Session precedente | `kuzu-wasm-exp/docs/2026-02-01-08h38/` |
 | Architecture storage | `docs/6-fevrier-2026-22h22/02-architecture-storage-vfs.md` |

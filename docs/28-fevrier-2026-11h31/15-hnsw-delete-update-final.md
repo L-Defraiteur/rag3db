@@ -61,9 +61,9 @@ Les fichiers test vector (delete.test, insert.test, filter.test, error.test) uti
 
 Ligne 41-43 : le test SET sur colonne indexée HNSW attendait `---- error` avec le message "Cannot set property vec...". Maintenant que `update()` fonctionne, changé en `---- ok`.
 
-### 5. Push ld-tantivy
+### 5. Push ld-lucivy
 
-5 fichiers modifiés dans ld-tantivy (sessions précédentes, non commités) : filter fields support, query builder amélioré, schema fixes. Commit `8f1a5bd` poussé sur main.
+5 fichiers modifiés dans ld-lucivy (sessions précédentes, non commités) : filter fields support, query builder amélioré, schema fixes. Commit `8f1a5bd` poussé sur main.
 
 ## Architecture finale
 

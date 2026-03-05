@@ -1,0 +1,14 @@
+#pragma once
+
+#include "function/function.h"
+
+namespace rag3db {
+namespace lucivy_fts_extension {
+
+struct QueryLucivyFunction {
+    static constexpr const char* name = "QUERY_LUCIVY_INDEX";
+    static function::function_set getFunctionSet();
+};
+
+} // namespace lucivy_fts_extension
+} // namespace rag3db

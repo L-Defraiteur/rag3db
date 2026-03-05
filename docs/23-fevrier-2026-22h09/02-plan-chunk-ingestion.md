@@ -177,9 +177,9 @@ L'embedding sur `Document.main_embedding` n'est plus utile. Le search passe par 
 - La colonne `{kb}_embedding` sur l'entité peut rester dans le schéma (pas de migration cassante) mais ne sera plus peuplée
 - À terme on pourra la retirer du DDL
 
-### 2. Tantivy sur les chunks : NON
+### 2. Lucivy sur les chunks : NON
 
-BM25 reste sur l'entité parent (texte complet). Un chunk coupé au milieu d'un mot ou d'une phrase casse le `contains`. Pas d'index Tantivy sur `{Entity}_Chunk`.
+BM25 reste sur l'entité parent (texte complet). Un chunk coupé au milieu d'un mot ou d'une phrase casse le `contains`. Pas d'index Lucivy sur `{Entity}_Chunk`.
 
 ### 3. Sparse sur les chunks : OUI
 

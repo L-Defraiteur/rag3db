@@ -57,7 +57,7 @@ Donc oui, c'est faisable et meme plus propre qu'un NgramRegexQuery separe. On ga
       .collect();
   Bm25Weight::for_terms(stats, &terms)
 
-  Pour le mode regex, on n'a pas de "terme" au sens Tantivy. Options :
+  Pour le mode regex, on n'a pas de "terme" au sens Lucivy. Options :
 
   A. Utiliser les litteraux extraits comme termes de reference — Bm25Weight::for_terms(stats, &literal_terms). Approximation raisonnable : l'IDF des litteraux reflete la rarete du pattern.
   //lucie: oui parfait je suis d accord. par contre a voir ce qu'on fait quand on doit fallback car pas d'assez longs literaux

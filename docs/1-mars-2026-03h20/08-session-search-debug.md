@@ -141,9 +141,9 @@ bool FTSScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
 - `src/processor/operator/scan/fts_scan_node_table.cpp` — implémentation (NEW)
 - `src/processor/operator/scan/CMakeLists.txt` — +fts_scan_node_table.cpp
 - `src/processor/map/map_scan_node_table.cpp` — +include fts_scan_node_table.h, +guard VariableExpression dans property loop, +case FTS_SCAN dans switch
-- `src/extension/extension_entries.cpp` — +tantivyFtsExtensionFunctions array, +TANTIVY_FTS entry
-- `extension/tantivy_fts/src/function/search_function.cpp` — +include scalar_function.h (fix compilation)
-- `extension/tantivy_fts/test/tantivy_fts_test.cpp` — +setupSearchTest helper, +9 tests SearchInWhere_*
+- `src/extension/extension_entries.cpp` — +lucivyFtsExtensionFunctions array, +LUCIVY_FTS entry
+- `extension/lucivy_fts/src/function/search_function.cpp` — +include scalar_function.h (fix compilation)
+- `extension/lucivy_fts/test/lucivy_fts_test.cpp` — +setupSearchTest helper, +9 tests SearchInWhere_*
 
 ## Prochaines étapes pour débugger
 

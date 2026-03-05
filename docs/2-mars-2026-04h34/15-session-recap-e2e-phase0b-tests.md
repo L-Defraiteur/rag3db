@@ -21,7 +21,7 @@ Relation : HAS_FILE (Directory → File).
 | # | Test | Statut | Description |
 |---|------|--------|-------------|
 | 1 | `phase0b_ingest_and_schema` | **PASS** | Ingestion complète, vérification schema, KB metadata, Index entries, chunks, SOURCED rels |
-| 2 | `phase0b_bm25_search_multi_entity` | **FAIL** | BM25 search sur TreeKB — raw Tantivy fonctionne, mais `search_bm25_chunked()` retourne 0 |
+| 2 | `phase0b_bm25_search_multi_entity` | **FAIL** | BM25 search sur TreeKB — raw Lucivy fonctionne, mais `search_bm25_chunked()` retourne 0 |
 | 3 | `phase0b_bm25_highlight_chunk_single_entity` | **FAIL** | FileKB search crash: vector index name mismatch (`FileKB_Index_Chunk_FileKB_vec` vs `FileKB_Index_Chunk_vec`) |
 | 4 | `phase0b_vector_chunk_to_source_entity` | **PASS** | Chunks FileKB liés aux bons File via SOURCED |
 | 5 | `phase0b_content_offset_arithmetic` | **PASS** | `_content_offset` arithmétiquement correct (global start/end = offset + local) |
@@ -32,7 +32,7 @@ Relation : HAS_FILE (Directory → File).
 | 10 | `phase0b_aggregate_skip_unchanged` | **PASS** | Re-drain avec même contenu → hash inchangé, chunks identiques |
 | 11 | `phase0b_link_incremental_aggregate` | **PASS** | link() après drain → AggregateOp → contenu File intégré dans TreeKB |
 | 12 | `phase0b_delete_one_of_multiple_files` | **PASS** | Delete alpha.ts → beta.ts reste, search cohérent |
-| 13 | `phase0b_debug_trace_pipeline` | **PASS** | Test debug avec subscribe_queue(), dump DB complet, raw Tantivy query |
+| 13 | `phase0b_debug_trace_pipeline` | **PASS** | Test debug avec subscribe_queue(), dump DB complet, raw Lucivy query |
 
 **Score : 10/13 pass**
 
@@ -60,9 +60,9 @@ Inclure `entity_uuid` dans la clé garantit l'unicité même avec des field name
 ## 3 bugs restants à investiguer
 
 ### Bug A : `search_bm25_chunked` retourne 0 sur TreeKB
-- **Symptôme** : Raw `QUERY_TANTIVY_INDEX` retourne 1 résultat (score=0.396), mais `catalog.search()` retourne 0.
+- **Symptôme** : Raw `QUERY_LUCIVY_INDEX` retourne 1 résultat (score=0.396), mais `catalog.search()` retourne 0.
 - **Cause probable** : `search_bm25_chunked()` utilise le mode `Contains` par défaut (NgramContainsQuery), pas `Parse`. La query "auth" en mode Contains cherche un substring continu, mais le test `phase0b_bm25_search_multi_entity` fait une recherche classique.
-- **Piste** : Le debug test utilise BM25Mode::default (Contains) — tester avec `BM25Mode::Parse` ou `BM25Mode::ContainsSplit`, OU le raw Tantivy retourne bien un résultat mais `resolve_and_enrich_chunked` échoue car le chunk entity name est construit différemment.
+- **Piste** : Le debug test utilise BM25Mode::default (Contains) — tester avec `BM25Mode::Parse` ou `BM25Mode::ContainsSplit`, OU le raw Lucivy retourne bien un résultat mais `resolve_and_enrich_chunked` échoue car le chunk entity name est construit différemment.
 - **Autre piste** : Le mode Contains génère `{"type":"contains","field":"_title","value":"auth"}` qui fait du fuzzy ngram, peut-être que ça ne matche pas "auth.ts" comme attendu.
 
 ### Bug B : Vector index name mismatch sur FileKB
@@ -82,7 +82,7 @@ Inclure `entity_uuid` dans la clé garantit l'unicité même avec des field name
 Le test `phase0b_debug_trace_pipeline` démontre un pattern réutilisable :
 1. `catalog.subscribe_queue()` → écouter les QueueEvent (Enqueued, ProcessingBatch, BatchCompleted/Failed, Injected)
 2. Dump DB état après drain (query raw sur Index, Chunk, SOURCED rels)
-3. Raw Tantivy query pour isoler FTS vs search code
+3. Raw Lucivy query pour isoler FTS vs search code
 4. Très efficace pour diagnostiquer les problèmes de pipeline
 
 ---

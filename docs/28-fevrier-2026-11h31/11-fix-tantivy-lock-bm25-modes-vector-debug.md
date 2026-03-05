@@ -1,24 +1,24 @@
-# 11 — Fix Tantivy lock, 3 modes BM25, debug pipeline vector
+# 11 — Fix Lucivy lock, 3 modes BM25, debug pipeline vector
 
 ## Ce qu'on a fait
 
-### 1. Fix Tantivy lock conflict pour DB in-memory
+### 1. Fix Lucivy lock conflict pour DB in-memory
 
-**Problème** : toutes les DB in-memory partageaient le même chemin Tantivy sur disque (`/tmp/rag3db_tantivy/tantivy_indexes/<table>/`). Deux DB créant la même table se battaient pour le même lock Tantivy → `LockBusy`.
+**Problème** : toutes les DB in-memory partageaient le même chemin Lucivy sur disque (`/tmp/rag3db_lucivy/lucivy_indexes/<table>/`). Deux DB créant la même table se battaient pour le même lock Lucivy → `LockBusy`.
 
 **Fix** : utiliser l'adresse du `Database*` comme identifiant unique dans le chemin :
 
 ```cpp
 // Avant (bugué)
-basePath = std::filesystem::temp_directory_path().string() + "/rag3db_tantivy";
+basePath = std::filesystem::temp_directory_path().string() + "/rag3db_lucivy";
 
 // Après (unique par instance)
 auto dbId = std::to_string(reinterpret_cast<uintptr_t>(context.clientContext->getDatabase()));
-basePath = std::filesystem::temp_directory_path().string() + "/rag3db_tantivy/" + dbId;
+basePath = std::filesystem::temp_directory_path().string() + "/rag3db_lucivy/" + dbId;
 ```
 
 **Fichiers modifiés** :
-- `extension/tantivy_fts/src/function/create_tantivy_index.cpp` (lignes 238-248)
+- `extension/lucivy_fts/src/function/create_lucivy_index.cpp` (lignes 238-248)
 - `extension/sparse_vector/src/function/create_sparse_vector_index.cpp` (lignes 150-160)
 
 **Résultat** : les 6 tests Phase 0 passent **en parallèle** (plus besoin de `--test-threads=1`), y compris `phase0_hashsafe_dedup` qui crée 2 catalogs dans le même process.
@@ -33,7 +33,7 @@ Le mode `Contains` (NgramContainsQuery) fait du substring matching — "Rust saf
 |------|-------------|
 | `Contains` | Substring fuzzy exact (existant, inchangé) |
 | `ContainsSplit` | **Nouveau** — split les mots, boolean `should` de contains par mot. "Rust safety" → cherche docs contenant "Rust" ET/OU "safety" n'importe où |
-| `Parse` | **Nouveau** — native Tantivy QueryParser, BM25 standard term-by-term |
+| `Parse` | **Nouveau** — native Lucivy QueryParser, BM25 standard term-by-term |
 | `Regex` | Regex substring (existant, inchangé) |
 
 **Fichiers modifiés** :
@@ -79,7 +79,7 @@ Le mode `Contains` (NgramContainsQuery) fait du substring matching — "Rust saf
 
 | Fichier | Action |
 |---------|--------|
-| `extension/tantivy_fts/src/function/create_tantivy_index.cpp` | Fix lock — dbId unique |
+| `extension/lucivy_fts/src/function/create_lucivy_index.cpp` | Fix lock — dbId unique |
 | `extension/sparse_vector/src/function/create_sparse_vector_index.cpp` | Fix lock — dbId unique |
 | `extension/rag3weaver/src/search.rs` | 3 modes BM25 (ContainsSplit, Parse) |
 | `extension/rag3weaver/tests/e2e_search.rs` | Phase 1 (6 tests) + Phase 2 (10 tests) + LazyLock embedders |

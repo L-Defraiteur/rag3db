@@ -170,7 +170,7 @@ Catalog::search("kb", query, options)
 1. **Tester le workaround SET individuel** → devrait faire passer les 2 tests restants (10/10)
 2. **Investiguer le bug UNWIND + HNSW update** → probablement dans `update()` (hnsw_index.cpp), state non réinitialisé entre itérations UNWIND
 3. **Phase B : BM25 highlights → chunk matching** → pour Hybrid fusion correcte :
-   - Capturer `highlights` JSON depuis QUERY_TANTIVY_INDEX (colonne 3, actuellement ignorée)
+   - Capturer `highlights` JSON depuis QUERY_LUCIVY_INDEX (colonne 3, actuellement ignorée)
    - Matcher highlight byte ranges avec chunk `_start_char/_end_char`
    - Permettre fusion BM25+vector au niveau chunk
 4. **Phases suivantes du cahier des charges** (doc 09) : Sparse, Hybrid, Fusion, Filtres, Explore

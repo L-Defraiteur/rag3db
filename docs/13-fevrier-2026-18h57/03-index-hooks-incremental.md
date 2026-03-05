@@ -1,13 +1,13 @@
 # Approche : Index hooks dans NodeTable pour indexation incrémentale
 
-> Idée d'architecture pour que Tantivy se mette à jour automatiquement
+> Idée d'architecture pour que Lucivy se mette à jour automatiquement
 > quand des nœuds sont insérés/supprimés dans rag3db.
 
 ---
 
 ## Problème
 
-Actuellement, `CREATE_TANTIVY_INDEX` fait un bulk scan de toute la table. Si l'utilisateur ajoute des nœuds après, l'index est périmé. Options manuelles (ADD_TANTIVY_DOC, SYNC) = friction pour l'utilisateur, erreur-prone.
+Actuellement, `CREATE_LUCIVY_INDEX` fait un bulk scan de toute la table. Si l'utilisateur ajoute des nœuds après, l'index est périmé. Options manuelles (ADD_LUCIVY_DOC, SYNC) = friction pour l'utilisateur, erreur-prone.
 
 ## Idée : hooks dans `storage::Index`
 
@@ -79,11 +79,11 @@ void Transaction::commit() {
 }
 ```
 
-### Implémentation TantivyIndex (dans l'extension)
+### Implémentation LucivyIndex (dans l'extension)
 
 ```cpp
-class TantivyIndex : public Index {
-    TantivyHandlePtr handle_;
+class LucivyIndex : public Index {
+    LucivyHandlePtr handle_;
     std::vector<std::string> indexedFields_;  // noms des propriétés indexées
 
     void onInsert(const std::vector<nodeID_t>& nodeIDs,
@@ -94,26 +94,26 @@ class TantivyIndex : public Index {
             for (size_t f = 0; f < indexedFields_.size(); f++) {
                 doc[indexedFields_[f]] = props[f]->getAsString(i);
             }
-            tantivy_add_document(handle_, doc.dump().c_str());
-            // Pas de commit — buffered dans le heap Tantivy (50MB)
+            lucivy_add_document(handle_, doc.dump().c_str());
+            // Pas de commit — buffered dans le heap Lucivy (50MB)
         }
     }
 
     void onDelete(const std::vector<nodeID_t>& nodeIDs) override {
         for (auto& nid : nodeIDs) {
-            tantivy_delete_by_term(handle_, "_node_id",
+            lucivy_delete_by_term(handle_, "_node_id",
                 std::to_string(nid.offset).c_str());
         }
     }
 
     void onCommit() override {
-        tantivy_commit(handle_);
-        tantivy_reload_reader(handle_);
-        // TODO: mettre à jour num_docs dans le registre _tantivy_indexes
+        lucivy_commit(handle_);
+        lucivy_reload_reader(handle_);
+        // TODO: mettre à jour num_docs dans le registre _lucivy_indexes
     }
 
     void onRollback() override {
-        tantivy_rollback(handle_);
+        lucivy_rollback(handle_);
     }
 };
 ```
@@ -123,24 +123,24 @@ class TantivyIndex : public Index {
 | Aspect | Bénéfice |
 |--------|----------|
 | **Transparent** | `CREATE (:doc {...})` met à jour l'index automatiquement |
-| **Transactionnel** | Rollback Tantivy si rollback rag3db → cohérence |
-| **Batché** | Buffer 50MB Tantivy, commit une seule fois par transaction |
+| **Transactionnel** | Rollback Lucivy si rollback rag3db → cohérence |
+| **Batché** | Buffer 50MB Lucivy, commit une seule fois par transaction |
 | **Générique** | Mécanisme réutilisable pour tout type d'index custom |
 | **Minimal** | ~20 lignes dans le core rag3db, le reste dans l'extension |
 | **Compatible COPY** | COPY passe par `NodeTable::insert()` → indexé automatiquement |
 
 ## Impact sur le plan Cypher
 
-- **CREATE_TANTIVY_INDEX** : bulk initial (VertexCompute) + `NodeTable::addIndex(tantivyIndex)` → après ça, tout INSERT/DELETE est automatique
-- **Plus besoin** de fonctions `ADD_TANTIVY_DOC` ou `SYNC_TANTIVY_INDEX`
-- **QUERY_TANTIVY_INDEX** : inchangé
-- **DROP_TANTIVY_INDEX** : retire l'index de NodeTable + close handle + rm dir
+- **CREATE_LUCIVY_INDEX** : bulk initial (VertexCompute) + `NodeTable::addIndex(lucivyIndex)` → après ça, tout INSERT/DELETE est automatique
+- **Plus besoin** de fonctions `ADD_LUCIVY_DOC` ou `SYNC_LUCIVY_INDEX`
+- **QUERY_LUCIVY_INDEX** : inchangé
+- **DROP_LUCIVY_INDEX** : retire l'index de NodeTable + close handle + rm dir
 
 ## Points à explorer avant implémentation
 
 1. **NodeTable::insert() / delete()** — où exactement sont-ils implémentés ? Les `ValueVector*` contiennent-ils les données texte des propriétés qu'on veut indexer ?
 2. **Cycle transactionnel** — comment brancher `onCommit`/`onRollback` ? Depuis `Transaction::commit()` ou un autre point ?
 3. **COPY bulk** — passe-t-il par le même `NodeTable::insert()` ou un chemin séparé (batch insert) ?
-4. **Reconstruction au restart** — au `load()` de l'extension, les index sont-ils rechargés automatiquement via `NodeTable::addIndex()`, ou faut-il le refaire manuellement depuis le registre `_tantivy_indexes` ?
-5. **Thread safety** — `onInsert` peut-il être appelé depuis plusieurs threads en parallèle ? Si oui, le `tantivy_add_document` est déjà thread-safe (writer derrière Mutex).
+4. **Reconstruction au restart** — au `load()` de l'extension, les index sont-ils rechargés automatiquement via `NodeTable::addIndex()`, ou faut-il le refaire manuellement depuis le registre `_lucivy_indexes` ?
+5. **Thread safety** — `onInsert` peut-il être appelé depuis plusieurs threads en parallèle ? Si oui, le `lucivy_add_document` est déjà thread-safe (writer derrière Mutex).
 6. **UPDATE** — Kuzu/rag3db fait-il un DELETE+INSERT ou un update in-place ? Si in-place, il faudra un hook `onUpdate` aussi.

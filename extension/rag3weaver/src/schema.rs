@@ -356,8 +356,8 @@ pub fn generate_vector_index_ddl(
     )
 }
 
-/// Generate CALL CREATE_TANTIVY_INDEX for FTS on text fields,
-/// with optional filter fields for native Tantivy pre-filtering.
+/// Generate CALL CREATE_LUCIVY_INDEX for FTS on text fields,
+/// with optional filter fields for native Lucivy pre-filtering.
 pub fn generate_fts_index_ddl(table: &str, fields: &[&str], filter_fields: &[&str]) -> String {
     let cols = fields
         .iter()
@@ -365,14 +365,14 @@ pub fn generate_fts_index_ddl(table: &str, fields: &[&str], filter_fields: &[&st
         .collect::<Vec<_>>()
         .join(", ");
     if filter_fields.is_empty() {
-        format!("CALL CREATE_TANTIVY_INDEX('{table}', [{cols}])")
+        format!("CALL CREATE_LUCIVY_INDEX('{table}', [{cols}])")
     } else {
         let ff = filter_fields
             .iter()
             .map(|f| format!("'{f}'"))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("CALL CREATE_TANTIVY_INDEX('{table}', [{cols}], filter_fields := [{ff}])")
+        format!("CALL CREATE_LUCIVY_INDEX('{table}', [{cols}], filter_fields := [{ff}])")
     }
 }
 
@@ -883,7 +883,7 @@ mod tests {
         let ddl = generate_fts_index_ddl("Document", &["title", "body"], &[]);
         assert_eq!(
             ddl,
-            "CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'])"
+            "CALL CREATE_LUCIVY_INDEX('Document', ['title', 'body'])"
         );
     }
 
@@ -896,7 +896,7 @@ mod tests {
         );
         assert_eq!(
             ddl,
-            "CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'], filter_fields := ['page_count', 'status'])"
+            "CALL CREATE_LUCIVY_INDEX('Document', ['title', 'body'], filter_fields := ['page_count', 'status'])"
         );
     }
 
@@ -960,7 +960,7 @@ mod tests {
             "vector index on chunks: {:?}", schema.indexes
         );
         assert!(
-            schema.indexes.iter().any(|s| s.contains("CREATE_TANTIVY_INDEX") && s.contains("main_Index")),
+            schema.indexes.iter().any(|s| s.contains("CREATE_LUCIVY_INDEX") && s.contains("main_Index")),
             "FTS index on index table: {:?}", schema.indexes
         );
     }
@@ -973,7 +973,7 @@ mod tests {
         let fts = schema
             .indexes
             .iter()
-            .find(|s| s.contains("CREATE_TANTIVY_INDEX"))
+            .find(|s| s.contains("CREATE_LUCIVY_INDEX"))
             .expect("should have FTS index");
 
         // FTS is on {KB}_Index with _title + _content, and _source_entity as filter
@@ -1076,7 +1076,7 @@ mod tests {
 
         // FTS on TreeKB_Index
         assert!(
-            schema.indexes.iter().any(|s| s.contains("TreeKB_Index") && s.contains("CREATE_TANTIVY_INDEX")),
+            schema.indexes.iter().any(|s| s.contains("TreeKB_Index") && s.contains("CREATE_LUCIVY_INDEX")),
             "FTS on TreeKB_Index"
         );
 
@@ -1163,7 +1163,7 @@ mod tests {
         assert!(!doc_ddl.contains("embedding"));
 
         // main_Index has FTS
-        assert!(schema.indexes.iter().any(|s| s.contains("main_Index") && s.contains("TANTIVY")));
+        assert!(schema.indexes.iter().any(|s| s.contains("main_Index") && s.contains("LUCIVY")));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

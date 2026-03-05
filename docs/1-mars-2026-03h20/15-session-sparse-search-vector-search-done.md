@@ -6,7 +6,7 @@ Les 3 types d'index search dans WHERE sont opérationnels. 38/38 tests verts.
 
 | Extension | Syntaxe WHERE | Virtual funcs | Tests |
 |-----------|--------------|---------------|-------|
-| tantivy_fts | `SEARCH(d.body, 'rust')` | `SEARCH_SCORE()`, `SEARCH_HIGHLIGHTS()` | 24/24 |
+| lucivy_fts | `SEARCH(d.body, 'rust')` | `SEARCH_SCORE()`, `SEARCH_HIGHLIGHTS()` | 24/24 |
 | sparse_vector | `SPARSE_SEARCH(d.ID, [1,2], [0.5,0.3])` | `SPARSE_SCORE()` | 10/10 |
 | vector | `VECTOR_SEARCH(d.emb, [0.1,0.2,0.5], 10)` | `VECTOR_DISTANCE()` | 4/4 |
 
@@ -49,7 +49,7 @@ IndexSearchFunc searchFunc = [precomputed = std::move(results)](int64_t limit) {
 
 ### Trouver l'index HNSW par propriété
 
-Contrairement à tantivy_fts/sparse_vector (index trouvé par nom de table via `nodeTable.getIndex(tableName)`), l'index HNSW est trouvé par propriété :
+Contrairement à lucivy_fts/sparse_vector (index trouvé par nom de table via `nodeTable.getIndex(tableName)`), l'index HNSW est trouvé par propriété :
 
 ```cpp
 auto indexEntries = catalog->getIndexEntries(transaction, tableID);
@@ -81,7 +81,7 @@ for (auto* entry : indexEntries) {
 | `vector/src/function/CMakeLists.txt` | +`vector_search_function.cpp` |
 | `vector/src/main/vector_extension.cpp` | +`addScalarFunc<VectorSearchFunction/VectorDistanceFunction>` |
 | `vector/test/CMakeLists.txt` | +`vector_search_test` + `add_dependencies` |
-| `extension/extension_config.cmake` | Default BUILD_EXTENSIONS = tantivy_fts;sparse_vector;vector;geo |
+| `extension/extension_config.cmake` | Default BUILD_EXTENSIONS = lucivy_fts;sparse_vector;vector;geo |
 
 ## Infra build améliorée
 

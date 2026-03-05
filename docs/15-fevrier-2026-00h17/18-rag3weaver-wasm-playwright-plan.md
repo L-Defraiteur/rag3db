@@ -37,7 +37,7 @@ L'infrastructure Playwright est déjà en place :
 - `test/browser/idbfs.spec.js` — test Playwright (Phase 1: create+persist, Phase 2: reload+verify)
 - `playwright.config.js` — headless chromium, timeout 120s
 
-Le WASM build existe : `package/nodejs/rag3db/rag3db_wasm.js` + `.wasm` (17MB, tantivy_fts linké statiquement).
+Le WASM build existe : `package/nodejs/rag3db/rag3db_wasm.js` + `.wasm` (17MB, lucivy_fts linké statiquement).
 
 API JS synchrone (dans le worker) :
 ```js
@@ -57,7 +57,7 @@ conn.delete(); db.delete();
 2. Insère des documents (même Cypher que `InsertProcessor`)
 3. Crée des relations (même Cypher que `LinkProcessor`)
 4. Requête les données (MATCH, count, exists)
-5. Optionnel : test FTS via QUERY_TANTIVY_INDEX + vector via QUERY_VECTOR_INDEX
+5. Optionnel : test FTS via QUERY_LUCIVY_INDEX + vector via QUERY_VECTOR_INDEX
 
 **Avantage** : simple, valide que le Cypher généré par rag3weaver est compatible WASM
 **Inconvénient** : ne teste pas rag3weaver Rust lui-même en WASM

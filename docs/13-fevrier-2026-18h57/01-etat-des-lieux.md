@@ -1,28 +1,28 @@
 # État des lieux — 13 février 2026
 
 > Consolidation de toutes les sessions depuis le 1er février 2026.
-> Dernière vérification : 13 février, 1015 tests ld-tantivy + 153 tests FFI = tout vert, build rag3db C++ OK.
+> Dernière vérification : 13 février, 1015 tests ld-lucivy + 153 tests FFI = tout vert, build rag3db C++ OK.
 
 ---
 
 ## Vue d'ensemble
 
-Le projet vise à intégrer un moteur de recherche full-text (Tantivy) dans un fork de Kuzu (graph DB), renommé **rag3db**, pour servir de backend à **Rag3Weaver** (framework RAG TypeScript).
+Le projet vise à intégrer un moteur de recherche full-text (Lucivy) dans un fork de Kuzu (graph DB), renommé **rag3db**, pour servir de backend à **Rag3Weaver** (framework RAG TypeScript).
 
 ### Repos
 
 | Repo | Branche | Description |
 |------|---------|-------------|
 | `rag3db` | `feature/fuzzy-fts` | Fork Kuzu v0.11.2.2, renommé rag3db |
-| `ld-tantivy` | `main` | Fork Tantivy v0.26.0, submodule de rag3db |
+| `ld-lucivy` | `main` | Fork Lucivy v0.26.0, submodule de rag3db |
 
 ### Arborescence clé
 
 ```
 packages/rag3db/                          ← Fork Kuzu, renommé rag3db
-├── extension/tantivy/
-│   └── ld-tantivy/                       ← Submodule git (fork Tantivy)
-│       ├── src/                          ← Moteur Tantivy modifié
+├── extension/lucivy/
+│   └── ld-lucivy/                       ← Submodule git (fork Lucivy)
+│       ├── src/                          ← Moteur Lucivy modifié
 │       │   ├── query/
 │       │   │   ├── phrase_query/
 │       │   │   │   ├── automaton_phrase_query.rs
@@ -34,14 +34,14 @@ packages/rag3db/                          ← Fork Kuzu, renommé rag3db
 │       │   │   └── automaton_weight.rs
 │       │   ├── schema/index_record_option.rs  ← WithFreqsAndPositionsAndOffsets
 │       │   └── postings/                      ← Offsets dans les postings
-│       └── tantivy_fts/                  ← Crate FFI (dans le submodule)
+│       └── lucivy_fts/                  ← Crate FFI (dans le submodule)
 │           ├── rust/src/
 │           │   ├── lib.rs                ← 13 fonctions extern "C"
 │           │   ├── handle.rs             ← Gestion index, tri-field layout
 │           │   └── query.rs              ← build_query, build_contains_query
-│           ├── include/tantivy_fts.h     ← Header C (cbindgen)
+│           ├── include/lucivy_fts.h     ← Header C (cbindgen)
 │           └── test/test_ffi.c           ← 153 tests C
-├── extension/tantivy_fts/
+├── extension/lucivy_fts/
 │   └── CMakeLists.txt                    ← Build CMake → submodule
 ├── src/                                  ← Code C++ rag3db (ex-Kuzu)
 └── build/release/                        ← Build C++ vérifié OK
@@ -51,14 +51,14 @@ packages/rag3db/                          ← Fork Kuzu, renommé rag3db
 
 ## Travail complété
 
-### Phase 1 : Crate Rust FFI `tantivy_fts` (1er-6 février)
+### Phase 1 : Crate Rust FFI `lucivy_fts` (1er-6 février)
 
-13 fonctions `extern "C"` exposant Tantivy via une API C :
-- `tantivy_create_index` / `tantivy_open_index` / `tantivy_close_index`
-- `tantivy_add_document` / `tantivy_commit` / `tantivy_delete_by_term`
-- `tantivy_search` / `tantivy_search_filtered` (JSON in/out)
-- `tantivy_num_docs` / `tantivy_free_string` / `tantivy_last_error`
-- `tantivy_reload_searcher` / `tantivy_optimize`
+13 fonctions `extern "C"` exposant Lucivy via une API C :
+- `lucivy_create_index` / `lucivy_open_index` / `lucivy_close_index`
+- `lucivy_add_document` / `lucivy_commit` / `lucivy_delete_by_term`
+- `lucivy_search` / `lucivy_search_filtered` (JSON in/out)
+- `lucivy_num_docs` / `lucivy_free_string` / `lucivy_last_error`
+- `lucivy_reload_searcher` / `lucivy_optimize`
 
 **Tri-field layout** automatique : pour chaque champ texte `body`, l'index crée :
 - `body` — stemmed (English stemmer, pour recall : "run" → "running")
@@ -69,11 +69,11 @@ Le routage est transparent : l'utilisateur référence `body`, le code dirige ve
 
 ### Phase 2 : Build CMake (6 février)
 
-`CMakeLists.txt` dans rag3db appelle `cargo build --release` sur le workspace ld-tantivy et link `libtantivy_fts.a`.
+`CMakeLists.txt` dans rag3db appelle `cargo build --release` sur le workspace ld-lucivy et link `liblucivy_fts.a`.
 
 ### Phase 3 : WithFreqsAndPositionsAndOffsets (6-7 février)
 
-Nouveau variant `IndexRecordOption::WithFreqsAndPositionsAndOffsets` dans ld-tantivy :
+Nouveau variant `IndexRecordOption::WithFreqsAndPositionsAndOffsets` dans ld-lucivy :
 - Les byte offsets (`offset_from`, `offset_to`) de chaque token sont stockés dans les postings
 - 21 fichiers modifiés, 1015 tests passent
 - Nécessaire pour la validation des séparateurs et le highlighting
@@ -131,8 +131,8 @@ Side-channel pour capturer les byte offsets pendant le scoring :
 
 ### Phase 7 : Réorganisation repos (8 février)
 
-1. `tantivy_fts/` (crate FFI) déplacé dans le repo `ld-tantivy` (workspace member)
-2. `ld-tantivy` ajouté comme submodule git de `rag3db`
+1. `lucivy_fts/` (crate FFI) déplacé dans le repo `ld-lucivy` (workspace member)
+2. `ld-lucivy` ajouté comme submodule git de `rag3db`
 3. Remote upstream `kuzudb` supprimé de rag3db
 
 ### Phase 8 : Rename kuzu → rag3db (8-13 février)
@@ -151,8 +151,8 @@ Side-channel pour capturer les byte offsets pendant le scoring :
 
 | Suite | Résultat | Commande |
 |-------|----------|----------|
-| ld-tantivy lib | 1015 pass, 0 fail | `cd ld-tantivy && cargo test --lib` |
-| tantivy_fts FFI | 153 pass, 0 fail | `cc test_ffi.c ... && ./test_ffi` |
+| ld-lucivy lib | 1015 pass, 0 fail | `cd ld-lucivy && cargo test --lib` |
+| lucivy_fts FFI | 153 pass, 0 fail | `cc test_ffi.c ... && ./test_ffi` |
 | rag3db C++ build | 100% OK | `cmake --build build/release` |
 
 ---
@@ -161,31 +161,31 @@ Side-channel pour capturer les byte offsets pendant le scoring :
 
 ### Phase A : Extension C++ dans rag3db
 
-Créer les fonctions Cypher pour piloter Tantivy depuis rag3db :
+Créer les fonctions Cypher pour piloter Lucivy depuis rag3db :
 
 ```cypher
 -- Créer un index FTS sur une table de noeuds
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], {fuzzy := true});
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'], {fuzzy := true});
 
 -- Rechercher avec contains (auto-cascade + séparateurs)
-CALL QUERY_TANTIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++"}')
+CALL QUERY_LUCIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++"}')
 RETURN node_id, score, highlights;
 
 -- Supprimer l'index
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 ```
 
-**Fichiers à créer** dans `extension/tantivy_fts/` :
-- `src/tantivy_fts_extension.cpp` — Point d'entrée extension
-- `src/tantivy_fts_functions.cpp` — Implémentation des fonctions Cypher
-- `src/include/tantivy_fts_functions.h` — Déclarations
+**Fichiers à créer** dans `extension/lucivy_fts/` :
+- `src/lucivy_fts_extension.cpp` — Point d'entrée extension
+- `src/lucivy_fts_functions.cpp` — Implémentation des fonctions Cypher
+- `src/include/lucivy_fts_functions.h` — Déclarations
 
-**Lien avec le FFI** : les fonctions C++ appellent les 13 fonctions `extern "C"` de `libtantivy_fts.a`.
+**Lien avec le FFI** : les fonctions C++ appellent les 13 fonctions `extern "C"` de `liblucivy_fts.a`.
 
 ### Phase B : Tests end-to-end
 
-Pipeline complet : Cypher → C++ extension → FFI C → Tantivy Rust
-- Tests d'intégration dans `extension/tantivy_fts/test/`
+Pipeline complet : Cypher → C++ extension → FFI C → Lucivy Rust
+- Tests d'intégration dans `extension/lucivy_fts/test/`
 - Cas : create index, add docs, search (term/fuzzy/contains/phrase), highlights, delete
 
 ### Phase C : Intégration Rag3Weaver
@@ -201,8 +201,8 @@ Adapter le framework RAG TypeScript pour utiliser rag3db comme backend :
 
 | Approche | Statut | Raison d'abandon |
 |----------|--------|------------------|
-| fuzzy-fst (lib standalone) | Code complet | Tantivy fait déjà tout ça nativement, redondant |
-| Summa/Tantivy WASM | Bloqué | writer_threads issue, architecture trop lourde |
+| fuzzy-fst (lib standalone) | Code complet | Lucivy fait déjà tout ça nativement, redondant |
+| Summa/Lucivy WASM | Bloqué | writer_threads issue, architecture trop lourde |
 | Option A (cascade sans fuzzy substring) | Remplacée | Option B (fuzzy substring) plus puissante, implémentée |
 | Séparateurs comme tokens dans l'index | Abandonnée | Validation post-hoc via byte offsets plus propre |
 
@@ -211,16 +211,16 @@ Adapter le framework RAG TypeScript pour utiliser rag3db comme backend :
 ## Commandes de build
 
 ```bash
-# Tests ld-tantivy (1015 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy
+# Tests ld-lucivy (1015 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy
 cargo test --lib
 
-# Build + tests FFI tantivy_fts (153 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy
-cargo build --release -p tantivy-fts
-cd tantivy_fts/test
+# Build + tests FFI lucivy_fts (153 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy
+cargo build --release -p lucivy-fts
+cd lucivy_fts/test
 cc -o test_ffi test_ffi.c -I../include -L../../target/release \
-   -ltantivy_fts -lpthread -lm -ldl
+   -llucivy_fts -lpthread -lm -ldl
 ./test_ffi
 
 # Build rag3db C++ (release, sans extensions)

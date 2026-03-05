@@ -98,7 +98,7 @@ Après : `std::vector<idx_t> virtualVectorIndices` (N indices).
 - `processor/operator/scan/CMakeLists.txt` : `fts_scan_node_table.cpp` → `index_scan_node_table.cpp`
 - `extension_entries.cpp` : +`VECTOR_SEARCH`, `VECTOR_DISTANCE` dans vector ; +`SPARSE_SEARCH`, `SPARSE_SCORE`, `CREATE_SPARSE_VECTOR_INDEX`, `QUERY_SPARSE_VECTOR_INDEX`, `DROP_SPARSE_VECTOR_INDEX` dans sparse_vector
 
-### Extension tantivy_fts — Adapté aux nouveaux types
+### Extension lucivy_fts — Adapté aux nouveaux types
 
 `search_function.cpp` :
 - `SearchBindData` hérite de `IndexSearchBindData` (plus `FTSSearchBindData`)
@@ -122,8 +122,8 @@ Après : `std::vector<idx_t> virtualVectorIndices` (N indices).
 
 La build compile sans erreur :
 ```
-cmake --build . --target tantivy_fts_test -j$(nproc)
-[100%] Built target tantivy_fts_test
+cmake --build . --target lucivy_fts_test -j$(nproc)
+[100%] Built target lucivy_fts_test
 ```
 
 ### Tests
@@ -135,7 +135,7 @@ cmake --build . --target tantivy_fts_test -j$(nproc)
 
 Problème connu (cf MEMORY.md) : cmake ne détecte pas les changements dans les fichiers `.cpp` de l'extension ni dans les headers core inclus par l'extension. Le `.o` de `search_function.cpp` n'est pas recréé automatiquement même après `touch`.
 
-**Solution en cours** : forcer la recompilation en supprimant les `.o` et en buildant le target intermédiaire `tantivy_fts_extension_function` explicitement, puis relinkant le test.
+**Solution en cours** : forcer la recompilation en supprimant les `.o` et en buildant le target intermédiaire `lucivy_fts_extension_function` explicitement, puis relinkant le test.
 
 Le segfault est probablement dû à un **mismatch binaire** : le `search_function.cpp.o` compilé avec l'ancien `FTSSearchBindData` (sans `virtualExprSpecs`) est linké avec le nouveau core qui attend `IndexSearchBindData` (avec `virtualExprSpecs`). Le `dynamic_cast` dans l'optimizer réussit mais les champs mémoire sont décalés → crash.
 
@@ -165,7 +165,7 @@ Le segfault est probablement dû à un **mismatch binaire** : le `search_functio
 |---------|--------|
 | `src/processor/operator/scan/fts_scan_node_table.cpp` | Supprimé (remplacé) |
 
-### Extension tantivy_fts
+### Extension lucivy_fts
 | Fichier | Action |
 |---------|--------|
 | `src/function/search_function.cpp` | Adapté nouveaux types + virtualExprSpecs |

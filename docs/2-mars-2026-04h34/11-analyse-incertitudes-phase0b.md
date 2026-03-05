@@ -178,7 +178,7 @@ Chunks créés :
 ```
 
 Recherche BM25 pour "auth" :
-- Tantivy retourne : `{"_content": [[6, 10], [19, 23]]}`
+- Lucivy retourne : `{"_content": [[6, 10], [19, 23]]}`
 - Offset [6,10] pointe vers "auth" dans "/src/auth.ts" (position globale dans _content)
 - Offset [19,23] pointe vers "auth" dans "auth.ts"
 - Mais chunk_2 a `start_char=0, end_char=12` (relatif à son champ source)
@@ -217,9 +217,9 @@ Translation au search time : trouver quel champ contient l'offset global, puis s
 **Avantage :** pas de colonne en plus sur les chunks.
 **Inconvénient :** JSON parsing au search time, plus complexe.
 
-#### Option C : Chercher les highlights par champ source dans Tantivy
+#### Option C : Chercher les highlights par champ source dans Lucivy
 
-Indexer dans Tantivy un document avec des champs dynamiques par source (`Directory_absolute_path`, `File_name`, etc.) au lieu d'un seul `_content`.
+Indexer dans Lucivy un document avec des champs dynamiques par source (`Directory_absolute_path`, `File_name`, etc.) au lieu d'un seul `_content`.
 
 **Avantage :** highlights déjà par champ source, pas de translation nécessaire.
 **Inconvénient :** restructuration majeure du FTS index, et problème d'IDF (les champs seraient séparés, pas un seul corpus).

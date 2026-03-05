@@ -18,7 +18,7 @@ Deux problèmes critiques dans l'extension vector HNSW :
 - **`HNSWInsertState`** contient tout : searchState, relDeleteState, relInsertState, nodesToShrink
 - **Entry points** : `upperEntryPoint` et `lowerEntryPoint` dans `HNSWStorageInfo`, persistés
 - **NULL embeddings** : skippés partout (insert, search, shrink) — un nœud supprimé retourne null → filtré
-- **Tantivy FTS** sert de référence : son `update()` fait delete → re-read all columns → replace → re-insert
+- **Lucivy FTS** sert de référence : son `update()` fait delete → re-read all columns → replace → re-insert
 
 ### Stratégie choisie : lazy cleanup des back-edges
 
@@ -97,7 +97,7 @@ Toutes les méthodes sont implémentées après `checkpoint()` (~ligne 643), AVA
 
 **Solutions possibles** (à investiguer) :
 1. Vérifier si `Transaction::Get(ClientContext&)` est un pattern existant — on pourrait passer par le NodeTable qui a accès au context
-2. Regarder comment Tantivy gère ça — son `initDeleteState` ne crée pas de state complexe
+2. Regarder comment Lucivy gère ça — son `initDeleteState` ne crée pas de state complexe
 3. **Approche simplifiée** : dans `initDeleteState`, retourner un state léger (juste un flag). Reporter la création du `HNSWInsertState` au premier appel de `delete_()` qui reçoit un `Transaction*` (et on peut essayer de retrouver le context)
 4. **Mieux** : changer `initDeleteState` pour accepter un `ClientContext*` dans la signature — mais c'est une interface virtuelle de la classe `Index` base, modifiable car c'est notre fork
 

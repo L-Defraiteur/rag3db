@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Deux changements dans tantivy_fts :
+Deux changements dans lucivy_fts :
 
 1. **Ngram toujours actif** : les champs `._raw` et `._ngram` doivent etre crees meme sans stemmer, pour que le contains utilise toujours le fast path (trigram lookup + verification) au lieu du fallback AutomatonPhraseQuery.
 
@@ -15,7 +15,7 @@ Deux changements dans tantivy_fts :
 ### Schema sans stemmer (le probleme)
 
 ```
-CREATE_TANTIVY_INDEX('docs', ['body'])
+CREATE_LUCIVY_INDEX('docs', ['body'])
 → 1 champ : body (tokenizer "default", TEXT | STORED)
 → raw_field_pairs = []
 → ngram_field_pairs = []
@@ -25,7 +25,7 @@ CREATE_TANTIVY_INDEX('docs', ['body'])
 ### Schema avec stemmer (ce qu'on veut toujours)
 
 ```
-CREATE_TANTIVY_INDEX('docs', ['body'], stemmer := 'french')
+CREATE_LUCIVY_INDEX('docs', ['body'], stemmer := 'french')
 → 3 champs : body (stemmed), body._raw (lowercase), body._ngram (trigrams)
 → raw_field_pairs = [("body", "body._raw")]
 → ngram_field_pairs = [("body", "body._ngram")]
@@ -47,7 +47,7 @@ impl Scorer for NgramContainsScorer {
 
 ## Changement 1 : Ngram sans stemmer
 
-### Fichier : `ld-tantivy/tantivy_fts/rust/src/handle.rs`
+### Fichier : `ld-lucivy/lucivy_fts/rust/src/handle.rs`
 
 #### 1a. `build_schema()` — toujours creer raw + ngram
 
@@ -101,7 +101,7 @@ impl Scorer for NgramContainsScorer {
 
 ```rust
 fn configure_tokenizers(index: &Index, config: &SchemaConfig) {
-    use ld_tantivy::tokenizer::{LowerCaser, SimpleTokenizer, TextAnalyzer};
+    use ld_lucivy::tokenizer::{LowerCaser, SimpleTokenizer, TextAnalyzer};
     use crate::tokenizer::NgramFilter;
 
     // N-gram tokenizer : TOUJOURS enregistre
@@ -113,11 +113,11 @@ fn configure_tokenizers(index: &Index, config: &SchemaConfig) {
 
     // Stemmer : seulement si demande
     if let Some(ref stemmer_lang) = config.stemmer {
-        use ld_tantivy::tokenizer::Stemmer;
+        use ld_lucivy::tokenizer::Stemmer;
 
         let lang = match stemmer_lang.as_str() {
-            "english" => ld_tantivy::tokenizer::Language::English,
-            "french" => ld_tantivy::tokenizer::Language::French,
+            "english" => ld_lucivy::tokenizer::Language::English,
+            "french" => ld_lucivy::tokenizer::Language::French,
             // ... autres langues ...
             _ => return,
         };
@@ -131,7 +131,7 @@ fn configure_tokenizers(index: &Index, config: &SchemaConfig) {
 }
 ```
 
-#### 1c. Commentaires du struct `TantivyHandle`
+#### 1c. Commentaires du struct `LucivyHandle`
 
 Mettre a jour les commentaires des champs `raw_field_pairs` et `ngram_field_pairs` :
 - Avant : "Only populated when a stemmer is active"
@@ -149,14 +149,14 @@ Mettre a jour le header `handle.rs` ligne 6-9 :
 
 ### Approche
 
-Suivre le pattern de `TermQuery` / `TermWeight` / `TermScorer` de Tantivy :
+Suivre le pattern de `TermQuery` / `TermWeight` / `TermScorer` de Lucivy :
 
 1. Dans `NgramContainsQuery::weight()` : calculer `Bm25Weight` via `EnableScoring`
 2. Passer le `Bm25Weight` a `NgramContainsWeight`
 3. Dans `NgramContainsWeight::scorer()` : lire le `FieldNormReader` du segment
 4. Dans `NgramContainsScorer` : compter les occurrences pendant `verify()`, scorer via BM25
 
-### Fichier : `ld-tantivy/src/query/phrase_query/ngram_contains_query.rs`
+### Fichier : `ld-lucivy/src/query/phrase_query/ngram_contains_query.rs`
 
 #### 2a. Imports
 
@@ -315,7 +315,7 @@ impl Scorer for NgramContainsScorer {
 
 ## Tests
 
-### Tests Rust unitaires (ld-tantivy)
+### Tests Rust unitaires (ld-lucivy)
 
 Ajouter des tests dans `ngram_contains_query.rs` ou un fichier de test dedie :
 
@@ -323,7 +323,7 @@ Ajouter des tests dans `ngram_contains_query.rs` ou un fichier de test dedie :
 2. **BM25 score ordering** : inserer des docs avec des frequences differentes du meme terme, verifier que le score BM25 est plus eleve pour le doc avec plus d'occurrences
 3. **BM25 vs boost constant** : verifier que le score n'est plus constant (score doc_A != score doc_B quand les longueurs ou frequences different)
 
-### Tests GTest E2E (tantivy_fts_test.cpp)
+### Tests GTest E2E (lucivy_fts_test.cpp)
 
 Les 9 tests existants doivent continuer de passer sans modification :
 - Les tests sans stemmer vont maintenant creer des champs `._raw` et `._ngram` — plus de donnees indexees mais meme comportement
@@ -362,6 +362,6 @@ Pour un index typique, l'augmentation de taille est d'environ **3-4x** sur les c
 
 | Fichier | Changement |
 |---------|------------|
-| `ld-tantivy/tantivy_fts/rust/src/handle.rs` | Triple-field layout toujours, tokenizer ngram toujours |
-| `ld-tantivy/src/query/phrase_query/ngram_contains_query.rs` | BM25Weight, FieldNormReader, count_matches, score BM25 |
-| `ld-tantivy/tantivy_fts/test/tantivy_fts_test.cpp` | Adapter assertions score si necessaire |
+| `ld-lucivy/lucivy_fts/rust/src/handle.rs` | Triple-field layout toujours, tokenizer ngram toujours |
+| `ld-lucivy/src/query/phrase_query/ngram_contains_query.rs` | BM25Weight, FieldNormReader, count_matches, score BM25 |
+| `ld-lucivy/lucivy_fts/test/lucivy_fts_test.cpp` | Adapter assertions score si necessaire |

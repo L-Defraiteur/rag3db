@@ -4,7 +4,7 @@ Basé sur le design 03 et l'exploration du code existant.
 
 ## État des lieux (ce qu'on a lu)
 
-### Côté Tantivy (ld-tantivy/tantivy_fts)
+### Côté Lucivy (ld-lucivy/lucivy_fts)
 
 **query.rs — FilterClause existant :**
 ```rust
@@ -34,7 +34,7 @@ build_contains_query() — cascade 3 niveaux :
 "text" → {name} (stemmed) + {name}._raw (lowercase) + {name}._ngram (trigrams)
 "string" → {name} seul (exact match STRING, pas de _raw, pas de _ngram)
 ```
-- `raw_field_pairs` et `ngram_field_pairs` dans TantivyHandle : mapping user field → counterpart
+- `raw_field_pairs` et `ngram_field_pairs` dans LucivyHandle : mapping user field → counterpart
 - `auto_duplicate_field()` (bridge.rs) écrit automatiquement dans `_raw` et `_ngram` à l'indexation
 - Les champs `"string"` n'ont PAS de `_ngram` actuellement → pas de `NgramContainsQuery` possible
 
@@ -46,17 +46,17 @@ fn search_with_highlights(handle, query_json, limit) -> Vec<SearchResultWithHigh
 - `allowed_ids` passe par un `FilterCollector` avec HashSet<u64> — O(1) par doc
 - Le JSON query peut contenir `"filters": [...]` en plus de la text query
 
-### Côté C++ (extension tantivy_fts)
+### Côté C++ (extension lucivy_fts)
 
-**create_tantivy_index.cpp :**
-- `CREATE_TANTIVY_INDEX('table', ['field1', 'field2'], filter_fields := ['status', 'price'])`
+**create_lucivy_index.cpp :**
+- `CREATE_LUCIVY_INDEX('table', ['field1', 'field2'], filter_fields := ['status', 'price'])`
 - Champs texte → `{"type":"text","stored":true}` dans le schema JSON
 - Filter fields → `{"type":"i64/u64/f64/string","stored":true,"indexed":true,"fast":true}`
-- `mapLogicalTypeToTantivy()` : INT64→i64, UINT64→u64, DOUBLE→f64, STRING→string
+- `mapLogicalTypeToLucivy()` : INT64→i64, UINT64→u64, DOUBLE→f64, STRING→string
 - Scan toutes les rows existantes, `add_document_mixed()` pour indexer
 
-**query_tantivy_index.cpp :**
-- `CALL QUERY_TANTIVY_INDEX('table', '{json}', limit, allowed_ids := [...])`
+**query_lucivy_index.cpp :**
+- `CALL QUERY_LUCIVY_INDEX('table', '{json}', limit, allowed_ids := [...])`
 - `allowed_ids` est un optional param — si présent → `search_filtered_with_highlights()`
 - `flushIfDirty()` appelé avant chaque query (lazy commit)
 - Retourne : `node_id UINT64, score DOUBLE, highlights STRING`
@@ -66,7 +66,7 @@ fn search_with_highlights(handle, query_json, limit) -> Vec<SearchResultWithHigh
 **schema.rs — `generate_fts_index_ddl()` :**
 ```rust
 fn generate_fts_index_ddl(table: &str, fields: &[&str]) -> String {
-    // CALL CREATE_TANTIVY_INDEX('table', ['field1', 'field2'])
+    // CALL CREATE_LUCIVY_INDEX('table', ['field1', 'field2'])
 }
 ```
 - Appelé uniquement pour les champs `title_for`/`content_for` d'une KB
@@ -77,7 +77,7 @@ fn generate_fts_index_ddl(table: &str, fields: &[&str]) -> String {
 fn search_bm25(conn, entity, query, fields, mode, fuzzy_distance, limit, extra_where, extra_params)
 ```
 - Construit un JSON query via `build_bm25_query()` (type contains/boolean)
-- Cypher : `CALL QUERY_TANTIVY_INDEX('{entity}', '{json}', {limit}) RETURN node_id, score`
+- Cypher : `CALL QUERY_LUCIVY_INDEX('{entity}', '{json}', {limit}) RETURN node_id, score`
 - **Pas de `filters` dans le JSON**, pas de `allowed_ids` dans le CALL
 - Le `extra_where` actuel fait du post-filter Cypher (ce qu'on veut éliminer)
 
@@ -85,7 +85,7 @@ fn search_bm25(conn, entity, query, fields, mode, fuzzy_distance, limit, extra_w
 - `FilterOp` a tous les ops (Eq, Neq, Lt, Gte, Between, In, NotIn, StartsWith, Contains, IsNull, HasAny, etc.)
 - `FilterCondition` : Must/Should/MustNot récursif
 - `FilterParser::parse()` compile en Cypher WHERE + params
-- **Manque** : compilation vers Tantivy FilterClause JSON
+- **Manque** : compilation vers Lucivy FilterClause JSON
 
 ## Plan par étapes
 
@@ -93,12 +93,12 @@ fn search_bm25(conn, entity, query, fields, mode, fuzzy_distance, limit, extra_w
 
 #### 1a. handle.rs — Ajouter `_ngram` aux champs string (~15 lignes)
 
-**Fichier :** `ld-tantivy/tantivy_fts/rust/src/handle.rs`
+**Fichier :** `ld-lucivy/lucivy_fts/rust/src/handle.rs`
 
 Modifier la branche `"string"` dans `build_schema()` (ligne 274) :
 ```rust
 "string" => {
-    use ld_tantivy::schema::STRING;
+    use ld_lucivy::schema::STRING;
     let opts = if field_def.stored.unwrap_or(true) {
         STRING | STORED
     } else {
@@ -125,11 +125,11 @@ Modifier aussi `open()` (ligne 126-138) : reconstruire `ngram_field_pairs` pour 
 
 #### 1b. query.rs — Étendre `build_filter_clause()` (~45 lignes)
 
-**Fichier :** `ld-tantivy/tantivy_fts/rust/src/query.rs`
+**Fichier :** `ld-lucivy/lucivy_fts/rust/src/query.rs`
 
 Ajouter les nouveaux ops à `build_filter_clause()` :
 
-| Op | Implémentation Tantivy |
+| Op | Implémentation Lucivy |
 |---|---|
 | `between` | `BooleanQuery(Must[RangeQuery(>=lo), RangeQuery(<=hi)])` |
 | `not_in` | `BooleanQuery(MustNot[BooleanQuery(Should[TermQuery, ...])])` |
@@ -175,7 +175,7 @@ pub struct FilterClause {
 
 **Tests :** 7 nouveaux tests (between, not_in, starts_with, contains via NgramContainsQuery, must/should composite, string ngram field existence).
 
-### Étape 2 : Indexer tous les champs dans Tantivy (~30 lignes)
+### Étape 2 : Indexer tous les champs dans Lucivy (~30 lignes)
 
 **Fichier :** `rag3weaver/src/schema.rs`
 
@@ -190,13 +190,13 @@ Modifier `generate_full_schema()` pour passer tous les champs au lieu de seuleme
 
 Résultat DDL :
 ```sql
-CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'],
+CALL CREATE_LUCIVY_INDEX('Document', ['title', 'body'],
     filter_fields := ['status', 'page_count', 'price'])
 ```
 
 **Tests :** 2-3 tests schema.
 
-### Étape 3 : FilterCompiler — split + to_tantivy_json (~100 lignes)
+### Étape 3 : FilterCompiler — split + to_lucivy_json (~100 lignes)
 
 **Fichier :** `rag3weaver/src/filter.rs`
 
@@ -204,30 +204,30 @@ Nouveau struct `FilterCompiler` avec :
 
 ```rust
 pub struct SplitResult {
-    /// Ops compilables en Tantivy FilterClause
-    pub tantivy: Option<FilterCondition>,
+    /// Ops compilables en Lucivy FilterClause
+    pub lucivy: Option<FilterCondition>,
     /// Ops nécessitant Cypher (listes, null, cross-entity)
     pub kuzu: Option<FilterCondition>,
 }
 
 impl FilterCompiler {
-    /// Sépare une FilterCondition en partie Tantivy-native et partie Kuzu-only.
+    /// Sépare une FilterCondition en partie Lucivy-native et partie Kuzu-only.
     pub fn split(condition: &FilterCondition) -> SplitResult;
 
-    /// Compile la partie Tantivy en JSON FilterClause array.
-    pub fn to_tantivy_json(condition: &FilterCondition) -> Vec<serde_json::Value>;
+    /// Compile la partie Lucivy en JSON FilterClause array.
+    pub fn to_lucivy_json(condition: &FilterCondition) -> Vec<serde_json::Value>;
 }
 ```
 
 Règles de split :
-- **Tantivy-compatible** : Eq, Neq, Lt, Lte, Gt, Gte, Between, In, NotIn, StartsWith, Contains
+- **Lucivy-compatible** : Eq, Neq, Lt, Lte, Gt, Gte, Between, In, NotIn, StartsWith, Contains
 - **Kuzu-only** : IsNull, IsNotNull, IsEmpty, IsNotEmpty, HasAny, HasAll, HasNone, ValuesCount
 - **Must** : split récursif, chaque enfant va dans sa catégorie
-- **Should** : si tous les enfants sont Tantivy-compat → Tantivy, sinon tout → Kuzu (pas de split d'un OR entre deux systèmes)
+- **Should** : si tous les enfants sont Lucivy-compat → Lucivy, sinon tout → Kuzu (pas de split d'un OR entre deux systèmes)
 - **MustNot** : même logique que Should
 - **Cross-entity** (clé contient ".") : toujours Kuzu
 
-**Tests :** 8-10 tests (split simple, split mixte, Should full Tantivy, Should mixte → Kuzu, to_tantivy_json).
+**Tests :** 8-10 tests (split simple, split mixte, Should full Lucivy, Should mixte → Kuzu, to_lucivy_json).
 
 ### Étape 4 : Brancher dans search pipeline (~80 lignes)
 
@@ -237,12 +237,12 @@ Modifier `search_bm25()` :
 ```rust
 pub async fn search_bm25(
     conn, entity, query, fields, mode, fuzzy_distance, limit,
-    tantivy_filters: Option<&[serde_json::Value]>,  // FilterClause JSON
+    lucivy_filters: Option<&[serde_json::Value]>,  // FilterClause JSON
     allowed_ids: Option<&[u64]>,                      // pré-résolu via Kuzu
 ) -> Result<Vec<SearchResult>, CatalogError>
 ```
 
-- Si `tantivy_filters` présent → injecter `"filters": [...]` dans le JSON query
+- Si `lucivy_filters` présent → injecter `"filters": [...]` dans le JSON query
 - Si `allowed_ids` présent → ajouter `allowed_ids := [...]` dans le CALL Cypher
 - Supprimer `extra_where` / `extra_params` (plus de post-filter)
 
@@ -257,8 +257,8 @@ Modifier `search()` :
 // 1. Split les filtres
 let split = FilterCompiler::split(&condition);
 
-// 2. Compiler la partie Tantivy
-let tantivy_filters = split.tantivy.map(|t| FilterCompiler::to_tantivy_json(&t));
+// 2. Compiler la partie Lucivy
+let lucivy_filters = split.lucivy.map(|t| FilterCompiler::to_lucivy_json(&t));
 
 // 3. Pré-résoudre la partie Kuzu → allowed_ids
 let allowed_ids = if let Some(ref kuzu_cond) = split.kuzu {
@@ -270,7 +270,7 @@ let allowed_ids = if let Some(ref kuzu_cond) = split.kuzu {
     None
 };
 
-// 4. Appeler search_bm25 avec tantivy_filters + allowed_ids
+// 4. Appeler search_bm25 avec lucivy_filters + allowed_ids
 // 5. Appeler search_vector avec all_filters en Cypher WHERE
 ```
 
@@ -286,11 +286,11 @@ let allowed_ids = if let Some(ref kuzu_cond) = split.kuzu {
 
 | Fichier | Lignes ~  | Quoi |
 |---|---|---|
-| `ld-tantivy/.../handle.rs` | +15 | `_ngram` counterpart pour champs `"string"`, rebuild pairs dans `open()` |
-| `ld-tantivy/.../query.rs` | +45 | between, not_in, starts_with, contains (via `build_contains_query`), composition |
+| `ld-lucivy/.../handle.rs` | +15 | `_ngram` counterpart pour champs `"string"`, rebuild pairs dans `open()` |
+| `ld-lucivy/.../query.rs` | +45 | between, not_in, starts_with, contains (via `build_contains_query`), composition |
 | `rag3weaver/src/schema.rs` | +30 | generate_fts_index_ddl_full, tous les champs |
-| `rag3weaver/src/filter.rs` | +100 | FilterCompiler: split() + to_tantivy_json() |
-| `rag3weaver/src/search.rs` | +50/-30 | tantivy_filters + allowed_ids, supprimer post-filter |
+| `rag3weaver/src/filter.rs` | +100 | FilterCompiler: split() + to_lucivy_json() |
+| `rag3weaver/src/search.rs` | +50/-30 | lucivy_filters + allowed_ids, supprimer post-filter |
 | `rag3weaver/src/catalog.rs` | +40/-20 | Orchestration split → pré-résolution → appels |
 | `rag3weaver/src/lib.rs` | +2 | Exports |
 
@@ -300,7 +300,7 @@ let allowed_ids = if let Some(ref kuzu_cond) = split.kuzu {
 
 ```bash
 # Étape 1 (handle.rs + query.rs)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
 # Étapes 2-5
 cd packages/rag3db/extension/rag3weaver && cargo test --lib
@@ -308,8 +308,8 @@ cd packages/rag3db/extension/rag3weaver && cargo test --lib
 
 ## Ce qu'on ne fait PAS (V1)
 
-- Pas de vector search via Tantivy
+- Pas de vector search via Lucivy
 - Pas de seuil adaptatif sur allowed_ids
 - Pas d'optimisation Should mixte (tout tombe en Kuzu)
 - Pas de cache de pré-résolution Kuzu
-- Pas de filter-only query Tantivy (pour pré-filtrer le vector search aussi)
+- Pas de filter-only query Lucivy (pour pré-filtrer le vector search aussi)

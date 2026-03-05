@@ -77,7 +77,7 @@ Appelé pour chaque paire (entity, kb) qui a `sparse=true`. Idempotent — les e
 
 ### Bug découvert (non corrigé, à noter)
 
-**`search_bm25` retourne des offsets au lieu de UUIDs** : `QUERY_TANTIVY_INDEX` retourne `node_id` (UINT64 offset), et `search_bm25()` le stocke tel quel comme "uuid" dans `SearchResult`. En mode hybride, la fusion ne peut pas matcher les résultats BM25 (uuid="42") avec les résultats vector (uuid="abc-def-123"). Même problème potentiel pour `allowed_ids` : `RETURN id(n)` retourne un `InternalID` qui passe par le catch-all `CypherValue::String("table_id:offset")` dans `rag3db_value_to_cypher`, et `as_i64()` dessus retourne `None`.
+**`search_bm25` retourne des offsets au lieu de UUIDs** : `QUERY_LUCIVY_INDEX` retourne `node_id` (UINT64 offset), et `search_bm25()` le stocke tel quel comme "uuid" dans `SearchResult`. En mode hybride, la fusion ne peut pas matcher les résultats BM25 (uuid="42") avec les résultats vector (uuid="abc-def-123"). Même problème potentiel pour `allowed_ids` : `RETURN id(n)` retourne un `InternalID` qui passe par le catch-all `CypherValue::String("table_id:offset")` dans `rag3db_value_to_cypher`, et `as_i64()` dessus retourne `None`.
 
 **Fix suggéré** : utiliser `OFFSET(id(n))` au lieu de `id(n)` pour les allowed_ids, et résoudre les node_ids → UUIDs dans `search_bm25` (même pattern que `search_sparse_cypher`).
 

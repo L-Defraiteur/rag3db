@@ -1,11 +1,11 @@
-# Implementation : WithFreqsAndPositionsAndOffsets dans izihawa-tantivy
+# Implementation : WithFreqsAndPositionsAndOffsets dans izihawa-lucivy
 
 > Ajouter le stockage des offsets caracteres (offset_from, offset_to) dans les postings, comme Lucene `DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS`.
 
 ## Base path
 
 ```
-packages/rag3db/extension/tantivy/izihawa-tantivy/
+packages/rag3db/extension/lucivy/izihawa-lucivy/
 ```
 
 ## Decisions d'architecture prises
@@ -256,7 +256,7 @@ Interleaved dans .offsets:
 ## Tests
 
 - 984/984 tests lib passent (7 ignores dont 2 compat format)
-- tantivy_fts crate compile sans erreur
+- lucivy_fts crate compile sans erreur
 - Test round-trip `test_offsets_round_trip` : indexe "hello world" et "abc be be be abc" avec `WithFreqsAndPositionsAndOffsets`, relit positions ET offsets, verifie les valeurs exactes
 
 ## Prochaines etapes

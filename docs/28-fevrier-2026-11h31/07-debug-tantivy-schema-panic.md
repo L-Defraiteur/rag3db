@@ -1,4 +1,4 @@
-# 07 — Debug Tantivy schema panic WASM
+# 07 — Debug Lucivy schema panic WASM
 
 ## Le bug
 
@@ -10,22 +10,22 @@ Tous les tests WASM Playwright cassés (rag3weaver.spec.js ET set_embedder.spec.
 
 Le DDL exécuté par `initialize()` est :
 ```
-CALL CREATE_TANTIVY_INDEX('Document', ['title'], filter_fields := ['body', 'title'])
+CALL CREATE_LUCIVY_INDEX('Document', ['title'], filter_fields := ['body', 'title'])
 ```
 
 Mais le code Rust `generate_fts_index_ddl()` génère :
 ```
-CALL CREATE_TANTIVY_INDEX('Document', ['title'])
+CALL CREATE_LUCIVY_INDEX('Document', ['title'])
 ```
 **SANS filter_fields** (vérifié par test unitaire `wasm_test_config_ddl` — les deux champs sont `FieldType::Text`, donc exclus des filter_fields).
 
 ## Chaîne de debug complète
 
-1. **`[initialize]`** exécute `CALL CREATE_TANTIVY_INDEX('Document', ['title'], filter_fields := ['body', 'title'])` — le DDL contient `filter_fields` QUI N'EXISTE PAS dans le code Rust !
+1. **`[initialize]`** exécute `CALL CREATE_LUCIVY_INDEX('Document', ['title'], filter_fields := ['body', 'title'])` — le DDL contient `filter_fields` QUI N'EXISTE PAS dans le code Rust !
 
 2. **`[bindFunc PUBLIC]`** reçoit `optionalParams.size=1` avec `filter_fields = [body, title]` — Kuzu injecte ce paramètre alors que le Cypher n'en contient pas
 
-3. **`[rewriteFunc]`** génère `CALL _CREATE_TANTIVY_INDEX('Document', 'Document', ['title'], stemmer := 'english', filter_fields := ['body', 'title'])` — propage le filter_fields injecté
+3. **`[rewriteFunc]`** génère `CALL _CREATE_LUCIVY_INDEX('Document', 'Document', ['title'], stemmer := 'english', filter_fields := ['body', 'title'])` — propage le filter_fields injecté
 
 4. **`[bindFuncInternal]`** reçoit `filterFields.size=2` → body (string) + title (string)
 
@@ -48,14 +48,14 @@ Possibilités :
 
 | Fichier | Log ajouté |
 |---------|-----------|
-| `ld-tantivy/tantivy_fts/rust/src/handle.rs` | `eprintln!` dans `build_schema()` : dump des champs config |
-| `ld-tantivy/src/schema/schema.rs` | `eprintln!` dans `SchemaBuilder::add_field()` : dump keys existantes |
-| `extension/tantivy_fts/src/function/create_tantivy_index.cpp` | `fprintf(stderr)` dans `bindFunc`, `bindFuncInternal`, `rewriteFunc`, `tableFunc` |
+| `ld-lucivy/lucivy_fts/rust/src/handle.rs` | `eprintln!` dans `build_schema()` : dump des champs config |
+| `ld-lucivy/src/schema/schema.rs` | `eprintln!` dans `SchemaBuilder::add_field()` : dump keys existantes |
+| `extension/lucivy_fts/src/function/create_lucivy_index.cpp` | `fprintf(stderr)` dans `bindFunc`, `bindFuncInternal`, `rewriteFunc`, `tableFunc` |
 | `extension/rag3weaver/src/catalog.rs` | `eprintln!` dans `initialize()` pour les index DDL |
 
 ### Script rebuild.sh créé
 
-**`tools/wasm/rebuild.sh`** — force toujours un clean configure (supprime CMakeCache.txt + generated_extension_loader), accepte `--no-sparse`, `--no-tantivy`, `--only-configure`, `--dir`, `-jN`.
+**`tools/wasm/rebuild.sh`** — force toujours un clean configure (supprime CMakeCache.txt + generated_extension_loader), accepte `--no-sparse`, `--no-lucivy`, `--only-configure`, `--dir`, `-jN`.
 
 ### extension_config.cmake modifié
 
@@ -75,9 +75,9 @@ Ajouté `WASM_EXCLUDE_EXTENSIONS` variable cmake pour pouvoir exclure des extens
 ## Prochaines étapes
 
 1. **Investiguer pourquoi Kuzu injecte `filter_fields`** dans les optionalParams en WASM mais pas en natif
-   - Comparer le parsing du Cypher `CALL CREATE_TANTIVY_INDEX('Document', ['title'])` entre WASM et natif
+   - Comparer le parsing du Cypher `CALL CREATE_LUCIVY_INDEX('Document', ['title'])` entre WASM et natif
    - Ajouter un log dans `src/binder/bind/bind_table_function.cpp` pour voir les expressions parsées
-   - Vérifier si c'est un problème de `--allow-multiple-definition` sur le BINDER (pas le Tantivy)
+   - Vérifier si c'est un problème de `--allow-multiple-definition` sur le BINDER (pas le Lucivy)
 
 2. **Alternative : filtrer côté C++** — dans `bindFunc`/`bindFuncInternal`, exclure de filterFields les champs qui sont déjà dans propertyNames (fix rapide)
 
@@ -89,9 +89,9 @@ Ajouté `WASM_EXCLUDE_EXTENSIONS` variable cmake pour pouvoir exclure des extens
 |---------|-----------|
 | `tools/wasm/rebuild.sh` | Nouveau — script de build WASM avec clean configure |
 | `extension/extension_config.cmake` | Ajouté WASM_EXCLUDE_EXTENSIONS |
-| `extension/tantivy_fts/src/function/create_tantivy_index.cpp` | Logs debug (à retirer) |
-| `extension/tantivy/ld-tantivy/tantivy_fts/rust/src/handle.rs` | Logs debug (à retirer) |
-| `extension/tantivy/ld-tantivy/src/schema/schema.rs` | Logs debug (à retirer) |
+| `extension/lucivy_fts/src/function/create_lucivy_index.cpp` | Logs debug (à retirer) |
+| `extension/lucivy/ld-lucivy/lucivy_fts/rust/src/handle.rs` | Logs debug (à retirer) |
+| `extension/lucivy/ld-lucivy/src/schema/schema.rs` | Logs debug (à retirer) |
 | `extension/rag3weaver/src/catalog.rs` | Log debug dans initialize() (à retirer) |
 | `extension/rag3weaver/src/schema.rs` | Test unitaire `wasm_test_config_ddl` (à garder) |
 
@@ -99,5 +99,5 @@ Ajouté `WASM_EXCLUDE_EXTENSIONS` variable cmake pour pouvoir exclure des extens
 
 - `cargo test` : 342 passed (1 nouveau test), 0 failed
 - Build WASM (sans sparse_vector) : OK
-- Tests WASM Playwright : CASSÉS (panic Tantivy — filter_fields injecté par Kuzu)
+- Tests WASM Playwright : CASSÉS (panic Lucivy — filter_fields injecté par Kuzu)
 - Tests natifs GTest : 15 passed

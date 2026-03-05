@@ -1,7 +1,7 @@
 //! E2E integration tests: Catalog with realistic KB config + search.
 //!
 //! Tests the full pipeline: config → schema → create → drain → search
-//! with actual Tantivy FTS and HNSW vector indexes.
+//! with actual Lucivy FTS and HNSW vector indexes.
 //!
 //! Run with: ./run_e2e.sh [filter]
 //! Example:   ./run_e2e.sh phase0
@@ -221,7 +221,7 @@ fn rag3db_root() -> String {
     })
 }
 
-/// Load required extensions (vector, tantivy_fts, sparse_vector) into a native connection.
+/// Load required extensions (vector, lucivy_fts, sparse_vector) into a native connection.
 /// Extensions are found in build/native-test/ (built by run_e2e.sh).
 async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
@@ -229,7 +229,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     // cmake places .rag3db_extension files in extension/<name>/build/ (source tree)
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
-        ("tantivy_fts", format!("{root}/extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")),
+        ("lucivy_fts", format!("{root}/extension/lucivy_fts/build/liblucivy_fts.rag3db_extension")),
         ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ];
     for (name, ext_path) in &extensions {
@@ -793,7 +793,7 @@ async fn phase1_bm25_split_french() {
     assert!(response.results.len() > 0, "ContainsSplit should find French cuisine doc");
 }
 
-// ── Parse (native Tantivy QueryParser) ──────────────────────────────────
+// ── Parse (native Lucivy QueryParser) ──────────────────────────────────
 
 #[tokio::test]
 #[ignore]

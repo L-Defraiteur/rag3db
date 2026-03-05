@@ -433,7 +433,7 @@ async function embedder(texts) {
 | Feature | kuzu-wasm-exp (JS) | rag3weaver (Rust) |
 |---|---|---|
 | Graph DB | Kuzu WASM (JS bindings) | rag3db (fork Kuzu, Rust C API) |
-| Fulltext search | Kuzu FTS (limité) | Tantivy (complet, fuzzy, phrase, regex) |
+| Fulltext search | Kuzu FTS (limité) | Lucivy (complet, fuzzy, phrase, regex) |
 | Pipeline | JS queues (L4 Orchestrator) | Rust Catalog + rayon pool + drain async |
 | Embedding | TEI externe | MockEmbedder (ONNX WASM à venir) |
 | Chunking | JS (L2 DocumentStore) | Rust (dans Catalog) |
@@ -451,7 +451,7 @@ async function embedder(texts) {
 | **formatExploreAsMarkdown** | Pas implémenté |
 | **Multi-KB search routing** | Partiellement (une KB à la fois) |
 | **Container enrichment (Members:)** | Côté JS seulement (codeparsersToEntities) |
-| **Filter engine (range/choice/tags)** | Pas implémenté (Tantivy filter_fields partiel) |
+| **Filter engine (range/choice/tags)** | Pas implémenté (Lucivy filter_fields partiel) |
 | **Grep/Read APIs** | Pas implémenté |
 | **Schema universel YAML** | Pas implémenté |
 

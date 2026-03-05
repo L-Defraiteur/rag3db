@@ -207,7 +207,7 @@ RETURN chunk_count
 
 ### Le constat
 
-On controle tout : rag3db (fork Kuzu), l'extension tantivy_fts (C++/Rust), et rag3weaver (Rust). Ca signifie qu'au lieu de contourner les limitations Kuzu cote client, **on peut penser les optimisations en amont, cote DB**.
+On controle tout : rag3db (fork Kuzu), l'extension lucivy_fts (C++/Rust), et rag3weaver (Rust). Ca signifie qu'au lieu de contourner les limitations Kuzu cote client, **on peut penser les optimisations en amont, cote DB**.
 
 ### Etat des lieux des IDs
 
@@ -216,11 +216,11 @@ Il y a actuellement **deux systemes d'identification** en parallele :
 | Systeme | Type | Ou | Usage |
 |---|---|---|---|
 | `_uuid` | STRING (PRIMARY KEY) | Colonnes des tables, rag3weaver | Toutes les queries Cypher : MATCH, WHERE, SET |
-| `table_id:offset` | u64 interne | Kuzu storage layer | Tantivy `allowed_ids`, internal node refs |
+| `table_id:offset` | u64 interne | Kuzu storage layer | Lucivy `allowed_ids`, internal node refs |
 
 **Aujourd'hui** :
 - `_uuid` est PRIMARY KEY → hash lookup O(1) dans Kuzu pour les MATCH simples
-- Tantivy utilise les offsets internes (u64) pour `allowed_ids` — deja optimal
+- Lucivy utilise les offsets internes (u64) pour `allowed_ids` — deja optimal
 - Mais les UNWIND/batch ops passent par `_uuid` STRING → hash lookup par row
 
 ### Piste : exposer les internal IDs pour le batch path
@@ -269,7 +269,7 @@ Le gain est modeste par item (2-3x), mais **se multiplie par le nombre d'items d
 
 1. **`ID(n)` existe-t-il dans Kuzu ?** — Est-ce qu'on peut recuperer et utiliser l'internal ID dans Cypher ?
 2. **Stabilite des offsets** : Les offsets internes changent-ils apres un DELETE ? (compaction) Si oui, le cache uuid→offset est invalide apres un delete.
-3. **BATCH_SET_BY_ID** : Quel effort pour creer cette extension C++ ? On a deja le pattern avec tantivy_fts.
+3. **BATCH_SET_BY_ID** : Quel effort pour creer cette extension C++ ? On a deja le pattern avec lucivy_fts.
 4. **Alternative : virtual column** : Kuzu pourrait exposer l'offset comme une virtual column `_internal_id` sur chaque table, accessible en Cypher sans extension.
 
 ### Exploration approfondie : ce que Kuzu fait deja en interne
@@ -299,13 +299,13 @@ Apres analyse du code source rag3db :
 
 ### Trois options architecturales cote rag3db
 
-**Option A : Extension "uuid_offset_index" (style tantivy_fts)**
+**Option A : Extension "uuid_offset_index" (style lucivy_fts)**
 
 - Nouvelle extension C++ qui registre un IndexType
 - Auto-hooking sur INSERT/DELETE/UPDATE du NodeTable
 - Maintient un `unordered_map<string, offset_t>` en memoire + persiste sur disque
 - Expose une fonction `CALL RESOLVE_UUID('Doc', $uuid) RETURN offset`
-- **Effort** : ~500 lignes C++ (copier la structure tantivy_fts)
+- **Effort** : ~500 lignes C++ (copier la structure lucivy_fts)
 - **Gain** : bypass le hash index pour les batch ops, lookup en memoire pure
 
 **Option B : Fonction Cypher `BATCH_SET_BY_OFFSET`**

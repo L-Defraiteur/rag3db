@@ -9,19 +9,19 @@ Statut : 257 tests, 20 modules
 
 ### 1. BM25 : `contains:` au lieu de `parse:`
 
-Le search.rs v1 generait un appel QUERY_TANTIVY_INDEX avec `parse:query` — le query parser standard de Tantivy (AND/OR, multi-mots). Mais notre feature principale dans ld-tantivy c'est **NgramContainsQuery** : fuzzy substring + trigram + BM25 scoring.
+Le search.rs v1 generait un appel QUERY_LUCIVY_INDEX avec `parse:query` — le query parser standard de Lucivy (AND/OR, multi-mots). Mais notre feature principale dans ld-lucivy c'est **NgramContainsQuery** : fuzzy substring + trigram + BM25 scoring.
 
 **Avant** :
 ```
-CALL QUERY_TANTIVY_INDEX('Document', 'parse:hello world', 10) RETURN _uuid, _score
+CALL QUERY_LUCIVY_INDEX('Document', 'parse:hello world', 10) RETURN _uuid, _score
 ```
 
 **Apres** :
 ```
-CALL QUERY_TANTIVY_INDEX('Document', '{"type":"contains","field":"body","value":"hello world","distance":1}', 10) RETURN node_id, score
+CALL QUERY_LUCIVY_INDEX('Document', '{"type":"contains","field":"body","value":"hello world","distance":1}', 10) RETURN node_id, score
 ```
 
-Le format est un JSON `QueryConfig` qui correspond exactement au struct Rust `query.rs::QueryConfig` dans tantivy_fts. C'est le meme format utilise dans les 9 tests GTest E2E.
+Le format est un JSON `QueryConfig` qui correspond exactement au struct Rust `query.rs::QueryConfig` dans lucivy_fts. C'est le meme format utilise dans les 9 tests GTest E2E.
 
 #### Changements
 

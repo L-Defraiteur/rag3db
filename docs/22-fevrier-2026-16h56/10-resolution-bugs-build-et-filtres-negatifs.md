@@ -3,36 +3,36 @@
 ## Contexte
 
 Suite a l'investigation documentee dans les docs 08 et 09 :
-- Le test `TantivyStringFilterFieldTest` echouait (0 resultats au lieu de 1)
-- Les debug prints ajoutes dans `intersection.rs` (ld-tantivy) etaient strippes du binaire final
+- Le test `LucivyStringFilterFieldTest` echouait (0 resultats au lieu de 1)
+- Les debug prints ajoutes dans `intersection.rs` (ld-lucivy) etaient strippes du binaire final
 - Le build cmake/cargo avait des problemes de cache et de re-link
 
-## Bug 1 : Linker strip les objets internes de ld-tantivy
+## Bug 1 : Linker strip les objets internes de ld-lucivy
 
 ### Probleme
 
-`libtantivy_fts.a` contient tous les `.o` de Rust (ld-tantivy + tantivy-fts). Mais le linker n'inclut que les `.o` qui resolvent des symboles non-resolus depuis le C++. Les objets internes a Rust (ex: `intersection.rs` appele par `boolean_weight.rs`) peuvent etre strippes si le compilateur les a inlines en release.
+`liblucivy_fts.a` contient tous les `.o` de Rust (ld-lucivy + lucivy-fts). Mais le linker n'inclut que les `.o` qui resolvent des symboles non-resolus depuis le C++. Les objets internes a Rust (ex: `intersection.rs` appele par `boolean_weight.rs`) peuvent etre strippes si le compilateur les a inlines en release.
 
 ### Fix : `--whole-archive` + suppression du bridge duplique
 
-**Fichier :** `extension/tantivy_fts/CMakeLists.txt`
+**Fichier :** `extension/lucivy_fts/CMakeLists.txt`
 
 ```cmake
 # AVANT
-add_library(tantivy_fts_lib INTERFACE)
-target_link_libraries(tantivy_fts_lib INTERFACE ${TANTIVY_STATIC_LIB})
+add_library(lucivy_fts_lib INTERFACE)
+target_link_libraries(lucivy_fts_lib INTERFACE ${LUCIVY_STATIC_LIB})
 
 # cxx bridge compile separement
-add_library(tantivy_fts_extension_bridge OBJECT ${CXX_BRIDGE_CC})
-set(TANTIVY_FTS_EXTENSION_OBJECT_FILES $<TARGET_OBJECTS:tantivy_fts_extension_bridge>)
+add_library(lucivy_fts_extension_bridge OBJECT ${CXX_BRIDGE_CC})
+set(LUCIVY_FTS_EXTENSION_OBJECT_FILES $<TARGET_OBJECTS:lucivy_fts_extension_bridge>)
 
 # APRES
-add_library(tantivy_fts_lib INTERFACE)
-target_link_libraries(tantivy_fts_lib INTERFACE
-    -Wl,--whole-archive ${TANTIVY_STATIC_LIB} -Wl,--no-whole-archive)
+add_library(lucivy_fts_lib INTERFACE)
+target_link_libraries(lucivy_fts_lib INTERFACE
+    -Wl,--whole-archive ${LUCIVY_STATIC_LIB} -Wl,--no-whole-archive)
 
 # Plus de compilation separee de bridge.rs.cc
-set(TANTIVY_FTS_EXTENSION_OBJECT_FILES "")
+set(LUCIVY_FTS_EXTENSION_OBJECT_FILES "")
 ```
 
 **Pourquoi supprimer le bridge OBJECT :**
@@ -59,11 +59,11 @@ BooleanQuery::new(vec![
 ])
 ```
 
-C'est un probleme classique de Tantivy/Lucene : **un BooleanQuery avec uniquement des clauses MustNot (sans clause positive Must ou Should) ne matche aucun document**. Il n'y a pas de candidats a exclure.
+C'est un probleme classique de Lucivy/Lucene : **un BooleanQuery avec uniquement des clauses MustNot (sans clause positive Must ou Should) ne matche aucun document**. Il n'y a pas de candidats a exclure.
 
 ### Fix : AllQuery comme clause positive
 
-**Fichier :** `tantivy_fts/rust/src/query.rs`
+**Fichier :** `lucivy_fts/rust/src/query.rs`
 
 3 operateurs corriges :
 
@@ -110,4 +110,4 @@ Tous les `eprintln!("[DEBUG ...")` temporaires ont ete supprimes de :
 
 ## Lecon retenue
 
-Quand un BooleanQuery Tantivy/Lucene n'a que des clauses MustNot, il faut toujours ajouter `AllQuery` comme clause Must. C'est un piege classique qui s'applique a tout operateur de negation.
+Quand un BooleanQuery Lucivy/Lucene n'a que des clauses MustNot, il faut toujours ajouter `AllQuery` comme clause Must. C'est un piege classique qui s'applique a tout operateur de negation.

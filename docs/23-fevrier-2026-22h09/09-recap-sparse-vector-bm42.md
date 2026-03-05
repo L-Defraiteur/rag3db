@@ -12,7 +12,7 @@ Deux gros morceaux : l'extension C++ `sparse_vector` pour rag3db, et le `Bm42Emb
 
 ```
 extension/sparse_vector/
-├── rust/                          ← Crate Rust STANDALONE (PAS dans ld-tantivy)
+├── rust/                          ← Crate Rust STANDALONE (PAS dans ld-lucivy)
 │   ├── Cargo.toml                 (staticlib, deps: cxx, serde, bincode)
 │   ├── build.rs                   (cxx_build + flags emscripten)
 │   └── src/
@@ -71,13 +71,13 @@ extern "Rust" {
 }
 ```
 
-### Extension C++ — pattern identique à tantivy_fts
+### Extension C++ — pattern identique à lucivy_fts
 
 - `SparseVectorIndex` : hooks `insert()`, `delete_()`, `update()` + `dirty_` flag + `flushIfDirty()` (commit avant QUERY)
 - `extractSparseVector()` helper : extrait `LIST[INT64]` + `LIST[DOUBLE]` via `ListVector::getDataVector()` + `list_entry_t`
 - CREATE : bind public/internal, `rewriteFunc`, scan rows existantes, commit, catalog entry, `nodeTable.addIndex()`
 - QUERY : `inferInputTypes` avec `LIST(INT64)` + `LIST(DOUBLE)` (pas juste `LIST` — sinon binder error), `flushIfDirty()`, optional `allowed_ids`
-- DROP : même pattern que tantivy_fts
+- DROP : même pattern que lucivy_fts
 - Catalog entry : `SparseVectorIndexAuxInfo` (indexPath, indicesColumnName, weightsColumnName)
 
 ### Tests E2E (6/6 verts)
@@ -180,7 +180,7 @@ cargo test --features candle-embedder bm42 -- --ignored
 | `getValue()` rvalue bind error | `auto&` sur une rvalue retournée par `getValue()` | Changé en `auto` (copie par valeur) |
 | `LogicalType` private copy constructor | Initializer list `{LogicalType::STRING(), ...}` dans `inferInputTypes` | Utilisé `push_back` au lieu d'initializer list |
 | Test ne rebuild pas l'extension | `sparse_vector_test` ne dépendait pas de `rag3db_sparse_vector_extension` | Ajouté `add_dependencies()` dans `test/CMakeLists.txt` |
-| Wrong test include | `graph_test/api_graph_test.h` n'existe pas | Changé en `api_test/api_test.h` (pattern tantivy_fts) |
+| Wrong test include | `graph_test/api_graph_test.h` n'existe pas | Changé en `api_test/api_test.h` (pattern lucivy_fts) |
 
 ### BM42 embedder
 
@@ -194,7 +194,7 @@ Aucun bug — compilé et testé du premier coup.
 
 | Composant | Statut |
 |---|---|
-| Extension tantivy_fts (BM25) | ✓ 9 tests E2E, Node.js natif, WASM |
+| Extension lucivy_fts (BM25) | ✓ 9 tests E2E, Node.js natif, WASM |
 | Extension sparse_vector | ✓ 6 tests E2E, Rust 13 tests |
 | BM42 Embedder (candle) | ✓ 6 tests, même modèle que dense |
 | Extension vector (HNSW) | ✓ (préexistant + wiring doc 01) |

@@ -36,11 +36,11 @@ RETURN node._uuid, distance
 
 ---
 
-## 2. Extension C++ `sparse_vector` (type tantivy_fts)
+## 2. Extension C++ `sparse_vector` (type lucivy_fts)
 
 **Le problème** : le sparse index vit en mémoire dans rag3weaver. Pas de persistance (rebuild O(N) au cold start), pas de hooks INSERT/DELETE, pas de filtrage, ne scale pas au-delà de 100k docs.
 
-**La solution** : une extension C++ avec le pattern exact de tantivy_fts. Le code Rust du SparseIndex existe déjà (~250 lignes), il suffit d'ajouter :
+**La solution** : une extension C++ avec le pattern exact de lucivy_fts. Le code Rust du SparseIndex existe déjà (~250 lignes), il suffit d'ajouter :
 - Un cxx bridge (structs typés, ~15 fonctions)
 - Un wrapper C++ avec hooks NodeTable + dirty_ flag + lazy commit
 - Une persistance binaire simple (1 fichier)
@@ -72,6 +72,6 @@ Extension C++ (sparse_vector)
 ## Ordre recommandé
 
 1. **HNSW d'abord** (~2-3h) — gain immédiat énorme, peu de code, zéro risque
-2. **Extension sparse ensuite** (~11-14h) — plus gros chantier, mais le pattern est connu (copier tantivy_fts)
+2. **Extension sparse ensuite** (~11-14h) — plus gros chantier, mais le pattern est connu (copier lucivy_fts)
 
 Les deux sont indépendants.

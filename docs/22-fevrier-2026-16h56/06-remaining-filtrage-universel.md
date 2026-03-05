@@ -43,9 +43,9 @@
 - **307 tests rag3weaver — tout vert**
 
 **C++ : ✅ FAIT** (résolu entre-temps)
-- `create_tantivy_index.cpp` : `mapLogicalTypeToTantivy()` gère BOOL et TIMESTAMP → "i64"
-- `create_tantivy_index.cpp` : `originalTypeID` stocké, conversion bool→0/1 dans bulk indexing
-- `tantivy_index.cpp` : `keyDataTypes[f] == PhysicalTypeID::BOOL` → `getValue<bool>() ? 1 : 0` dans insert() et finalize()
+- `create_lucivy_index.cpp` : `mapLogicalTypeToLucivy()` gère BOOL et TIMESTAMP → "i64"
+- `create_lucivy_index.cpp` : `originalTypeID` stocké, conversion bool→0/1 dans bulk indexing
+- `lucivy_index.cpp` : `keyDataTypes[f] == PhysicalTypeID::BOOL` → `getValue<bool>() ? 1 : 0` dans insert() et finalize()
 - `IndexInfo.keyDataTypes` existait déjà dans rag3db (hérité de Kuzu) — pas besoin d'Option B/C du doc 07
 
 **Timestamp : ✅ FAIT**
@@ -55,11 +55,11 @@
 ## Priorité 4 : Tests E2E C++ ✅ FAIT
 
 **15 tests E2E couvrent tout :**
-- `TantivyBoolTimestampFilterTest` : boolean eq 1/0, timestamp gt/lt (5 sous-tests)
-- `TantivyStringFilterFieldTest` : string eq/ne/starts_with/contains (6 sous-tests)
-- `TantivyBetweenAndInFilterTest` : between, in, not_in sur i64/f64
-- `TantivyFiltersWithAllowedIdsTest` : allowed_ids + filters combinés
-- `TantivyFilterFieldsTest` : i64/f64/string filter fields basiques
+- `LucivyBoolTimestampFilterTest` : boolean eq 1/0, timestamp gt/lt (5 sous-tests)
+- `LucivyStringFilterFieldTest` : string eq/ne/starts_with/contains (6 sous-tests)
+- `LucivyBetweenAndInFilterTest` : between, in, not_in sur i64/f64
+- `LucivyFiltersWithAllowedIdsTest` : allowed_ids + filters combinés
+- `LucivyFilterFieldsTest` : i64/f64/string filter fields basiques
 
 ## Résumé
 
@@ -80,14 +80,14 @@
 ## Commandes de vérification
 
 ```bash
-# Rust (ld-tantivy + tantivy-fts : 1062 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+# Rust (ld-lucivy + lucivy-fts : 1062 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
 # Rust (rag3weaver : 307 tests)
 cd packages/rag3db/extension/rag3weaver && cargo test --lib
 
 # C++ E2E (15 tests)
 cd packages/rag3db/build/release
-cmake --build . --target tantivy_fts_test -j$(nproc)
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+cmake --build . --target lucivy_fts_test -j$(nproc)
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 ```

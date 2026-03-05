@@ -2,7 +2,7 @@
 
 ## Symptome
 
-Le test E2E `TantivyStringFilterFieldTest` (test #5) echoue : 0 resultats au lieu de 1.
+Le test E2E `LucivyStringFilterFieldTest` (test #5) echoue : 0 resultats au lieu de 1.
 
 ```json
 {"type":"contains","field":"body","value":"programming",
@@ -125,7 +125,7 @@ Le test Rust passe, le E2E echoue. Les differences :
 | Collecteur | `TopDocs::with_limit(10).order_by_score()` | `execute_top_docs()` (meme collecteur) |
 | Writer threads | Multi-thread (defaut) | Multi-thread (defaut) |
 
-Le path semble identique. Mais il y a un probleme de **linking** qui empeche de voir les debug prints de `ld-tantivy` dans le binaire final (voir doc 09), ce qui bloque l'investigation.
+Le path semble identique. Mais il y a un probleme de **linking** qui empeche de voir les debug prints de `ld-lucivy` dans le binaire final (voir doc 09), ce qui bloque l'investigation.
 
 ## Prochaines etapes
 

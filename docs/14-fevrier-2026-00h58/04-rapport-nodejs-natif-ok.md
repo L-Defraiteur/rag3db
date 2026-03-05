@@ -1,8 +1,8 @@
-# Rapport — Node.js natif avec tantivy_fts : VALIDÉ
+# Rapport — Node.js natif avec lucivy_fts : VALIDÉ
 
 ## Ce qui a été fait
 
-### Build Node.js natif avec tantivy_fts
+### Build Node.js natif avec lucivy_fts
 
 1. **npm install** dans `packages/rag3db/tools/nodejs_api/` (cmake-js, node-addon-api)
 
@@ -10,7 +10,7 @@
 ```bash
 cd packages/rag3db/build/nodejs
 cmake ../.. -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXTENSIONS="tantivy_fts" \
+  -DBUILD_EXTENSIONS="lucivy_fts" \
   -DBUILD_NODEJS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE -DBUILD_BENCHMARK=FALSE
 ```
@@ -18,23 +18,23 @@ cmake ../.. -DCMAKE_BUILD_TYPE=Release \
 3. **Build en parallèle** (deux targets) :
 ```bash
 cmake --build . --target rag3dbjs -j$(nproc)
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
 ```
 
 4. **Outputs** :
    - `tools/nodejs_api/build/rag3dbjs.node` — addon Node.js natif
-   - `extension/tantivy_fts/build/libtantivy_fts.rag3db_extension` — extension dynamique
+   - `extension/lucivy_fts/build/liblucivy_fts.rag3db_extension` — extension dynamique
 
 ### Tests — TOUS PASSENT
 
 ```
-=== Test rag3db Node.js + tantivy_fts ===
+=== Test rag3db Node.js + lucivy_fts ===
 Version: 0.11.2.2
 Database initialized (in-memory)
 Connection initialized
 Extension loaded OK
 Table created, 3 docs inserted
-Tantivy index created
+Lucivy index created
 
 --- Test 1: Contains query ---
 Results: 2 (expected 2)
@@ -68,16 +68,16 @@ const conn = new rag3db.Connection(db);
 await conn.init();
 
 // Charger l'extension (path absolu)
-await conn.query(`LOAD EXTENSION '/path/to/libtantivy_fts.rag3db_extension'`);
+await conn.query(`LOAD EXTENSION '/path/to/liblucivy_fts.rag3db_extension'`);
 
 // Créer table + index
 await conn.query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, PRIMARY KEY (ID))");
 await conn.query("CREATE (:doc {ID: 0, title: 'Rust', body: 'Rust is a systems programming language'})");
-await conn.query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+await conn.query("CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'])");
 
 // Fuzzy search !
 const result = await conn.query(`
-  CALL QUERY_TANTIVY_INDEX('doc',
+  CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"fuzzy","field":"body","value":"programing","distance":1}', 10)
   RETURN node_id, score
 `);
@@ -94,16 +94,16 @@ const rows = await result.getAll();
 - Tests mocha (`test/`)
 - Le CMakeLists.txt parent a déjà toute la config WASM (pthreads, memory, modularize, idbfs)
 
-### 2. tantivy_fts en mode dynamique pour Node.js
+### 2. lucivy_fts en mode dynamique pour Node.js
 
 Le static linking automatique n'est activé que pour WASM/Android/Swift (dans `extension_config.cmake`). Pour Node.js, l'extension est dynamique → `LOAD EXTENSION` au runtime.
 
-Pour du static linking Node.js, il faudrait dé-commenter `set(EXTENSION_STATIC_LINK_LIST tantivy_fts)` dans `extension_config.cmake`.
+Pour du static linking Node.js, il faudrait dé-commenter `set(EXTENSION_STATIC_LINK_LIST lucivy_fts)` dans `extension_config.cmake`.
 
 ### 3. Auto-enregistrement statique vérifié
 
-Le mécanisme `generated_extension_loader.cpp` est fonctionnel pour tantivy_fts :
-- CMake génère `tantivy_fts_extension::TantivyFtsExtension::load(context)`
+Le mécanisme `generated_extension_loader.cpp` est fonctionnel pour lucivy_fts :
+- CMake génère `lucivy_fts_extension::LucivyFtsExtension::load(context)`
 - Le naming correspond exactement au header
 - `autoLoadLinkedExtensions()` appelé au démarrage de la DB
 
@@ -118,5 +118,5 @@ Exit code 139 au `db.close()` final — segfault dans le destructeur. N'affecte 
 emcmake cmake -B build/wasm -DCMAKE_BUILD_TYPE=Release -DBUILD_WASM=TRUE -DBUILD_SHELL=FALSE
 emmake make -C build/wasm -j$(nproc)
 ```
-- Tout est en place : config WASM, extension_config.cmake, tantivy_fts emscripten support.
+- Tout est en place : config WASM, extension_config.cmake, lucivy_fts emscripten support.
 - Emscripten n'est pas installé sur la machine actuellement.

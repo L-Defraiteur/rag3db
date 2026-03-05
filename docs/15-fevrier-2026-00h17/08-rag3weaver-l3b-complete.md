@@ -98,7 +98,7 @@ L3b est la base. La suite est L3c puis L3d :
 | Sous-etape | Modules | Deps | Tests estimes |
 |------------|---------|------|:---:|
 | **L3c** | `pipeline.rs`, `catalog.rs` | MockConnection + MockEmbedder + queue | ~33 |
-| **L3d** | `search.rs`, `explore.rs` | DB + embedder + tantivy (via Cypher) | ~18 |
+| **L3d** | `search.rs`, `explore.rs` | DB + embedder + lucivy (via Cypher) | ~18 |
 
 ### L3c — pipeline.rs + catalog.rs
 
@@ -108,7 +108,7 @@ L3b est la base. La suite est L3c puis L3d :
 
 ### L3d — search.rs + explore.rs
 
-- `search.rs` : recherche hybride (FTS tantivy + vector + fusion)
+- `search.rs` : recherche hybride (FTS lucivy + vector + fusion)
 - `explore.rs` : exploration du graphe a partir d'un noeud
 
 ### Apres L3

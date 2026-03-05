@@ -1,14 +1,14 @@
-# 02 — Plan d'integration Tantivy dans le Cypher natif rag3db
+# 02 — Plan d'integration Lucivy dans le Cypher natif rag3db
 
 ## Contexte
 
-Actuellement, rag3weaver utilise tantivy_fts via des `CALL` explicites + multiples round-trips Cypher.
+Actuellement, rag3weaver utilise lucivy_fts via des `CALL` explicites + multiples round-trips Cypher.
 L'objectif : integrer FTS directement dans le Cypher pour eliminer les round-trips, pousser les predicats, et simplifier l'API.
 
 ## Etat actuel : pipeline rag3weaver pour 1 search BM25
 
 ```
-Requete 1: CALL QUERY_TANTIVY_INDEX('Document', jsonQuery, limit)
+Requete 1: CALL QUERY_LUCIVY_INDEX('Document', jsonQuery, limit)
            → (offset, score, highlights)
 
 Requete 2: MATCH (n:Document) WHERE OFFSET(id(n)) IN [offsets]
@@ -31,8 +31,8 @@ Requete 4: MATCH (n:Document) WHERE n._uuid IN [uuids]
 
 | Operation | Cypher actuel | Frequence |
 |-----------|--------------|-----------|
-| **CREATE index** | `CALL CREATE_TANTIVY_INDEX('T', ['f1','f2'], filter_fields := ['ff1'])` | 1x init |
-| **BM25 search** | `CALL QUERY_TANTIVY_INDEX('T', jsonQuery, limit) RETURN node_id, score` | chaque search |
+| **CREATE index** | `CALL CREATE_LUCIVY_INDEX('T', ['f1','f2'], filter_fields := ['ff1'])` | 1x init |
+| **BM25 search** | `CALL QUERY_LUCIVY_INDEX('T', jsonQuery, limit) RETURN node_id, score` | chaque search |
 | **BM25 raw** | `...RETURN node_id, score, highlights` | chaque search chunked |
 | **Offset → UUID** | `MATCH (n:T) WHERE OFFSET(id(n)) IN [...] RETURN OFFSET(id(n)), n._uuid` | chaque search |
 | **Chunk resolution** | `MATCH (p:T)-[:T_HAS_CHUNK]->(c:T_Chunk) WHERE p._uuid IN [...] RETURN ...` | si chunked |
@@ -42,7 +42,7 @@ Requete 4: MATCH (n:Document) WHERE n._uuid IN [uuids]
 
 ### 4 modes de query JSON
 
-| Mode | JSON passe a QUERY_TANTIVY_INDEX |
+| Mode | JSON passe a QUERY_LUCIVY_INDEX |
 |------|----------------------------------|
 | Parse | `{"type":"parse","fields":["title","body"],"value":"rust"}` |
 | Contains | `{"type":"contains","field":"body","value":"rust","distance":1}` |
@@ -78,14 +78,14 @@ Pipeline complet : `MATCH → LogicalScanNodeTable(SCAN) → Optimizer → PRIMA
 - Pas de support : `IN`, `>`, `<`, ni predicats sur colonnes secondaires
 - Zone maps existent pour range queries mais limites
 
-### Extensions vector et tantivy — aucune integration planner
+### Extensions vector et lucivy — aucune integration planner
 
 Les deux utilisent un pattern identique : **TABLE FUNCTION** avec `CALL`.
 
-| Aspect | Vector (HNSW) | Tantivy (FTS) |
+| Aspect | Vector (HNSW) | Lucivy (FTS) |
 |--------|--------------|---------------|
-| Create | `CALL CREATE_VECTOR_INDEX(...)` | `CALL CREATE_TANTIVY_INDEX(...)` |
-| Query | `CALL QUERY_VECTOR_INDEX(...)` | `CALL QUERY_TANTIVY_INDEX(...)` |
+| Create | `CALL CREATE_VECTOR_INDEX(...)` | `CALL CREATE_LUCIVY_INDEX(...)` |
+| Query | `CALL QUERY_VECTOR_INDEX(...)` | `CALL QUERY_LUCIVY_INDEX(...)` |
 | Retour | `(internal_id, distance)` | `(node_id_offset, score, highlights)` |
 | Filtres | SemiMask via Cypher filter graph | `allowed_ids` pre-compute OU JSON filters |
 | Planner | Aucune integration | Aucune integration |
@@ -108,7 +108,7 @@ Le vector extension a un mecanisme elegant : il accepte un `filter := 'MATCH (n:
 
 ```cypher
 -- BM25 + resolution UUID + enrichment en 1 requete
-CALL QUERY_TANTIVY_INDEX('Document', $query_json, $limit)
+CALL QUERY_LUCIVY_INDEX('Document', $query_json, $limit)
 WITH node_id, score, highlights
 MATCH (d:Document) WHERE OFFSET(id(d)) = node_id
 RETURN d._uuid, d.title, d.body, score, highlights
@@ -117,7 +117,7 @@ ORDER BY score DESC
 
 ```cypher
 -- BM25 + chunks + enrichment en 1 requete
-CALL QUERY_TANTIVY_INDEX('Document', $query_json, $limit)
+CALL QUERY_LUCIVY_INDEX('Document', $query_json, $limit)
 WITH node_id, score, highlights
 MATCH (d:Document) WHERE OFFSET(id(d)) = node_id
 OPTIONAL MATCH (d)-[:Document_HAS_CHUNK]->(c:Document_Chunk)
@@ -131,7 +131,7 @@ ORDER BY score DESC
 
 ```cypher
 -- Avec filtres Cypher (post-filter au lieu de pre-fetch)
-CALL QUERY_TANTIVY_INDEX('Document', $query_json, $over_fetch_limit)
+CALL QUERY_LUCIVY_INDEX('Document', $query_json, $over_fetch_limit)
 WITH node_id, score, highlights
 MATCH (d:Document) WHERE OFFSET(id(d)) = node_id
   AND d.year >= 2024 AND d.category = 'programming'
@@ -146,50 +146,50 @@ ORDER BY score DESC LIMIT $limit
 - Chunk resolution dans le meme pipeline
 
 **Limites** :
-- Filtres Cypher = post-filter (pas pushdown vers Tantivy)
-- Over-fetch necessaire si filtres (demander plus que `limit` a Tantivy)
+- Filtres Cypher = post-filter (pas pushdown vers Lucivy)
+- Over-fetch necessaire si filtres (demander plus que `limit` a Lucivy)
 - JSON query toujours present
 
 **Effort** : rag3weaver seulement (Rust), zero changement C++/moteur.
 
 **Impact** : immediat et significatif. C'est le quick win.
 
-### Niveau 1b : Filtres Tantivy-natifs + composition
+### Niveau 1b : Filtres Lucivy-natifs + composition
 
-Combiner les filtres Tantivy JSON (pre-filter efficace au niveau segment) avec la composition Cypher :
+Combiner les filtres Lucivy JSON (pre-filter efficace au niveau segment) avec la composition Cypher :
 
 ```cypher
--- Filtres sur colonnes indexees Tantivy = pre-filter segment-level
+-- Filtres sur colonnes indexees Lucivy = pre-filter segment-level
 -- Filtres Cypher restants = post-filter sur resultats
-CALL QUERY_TANTIVY_INDEX('Document',
+CALL QUERY_LUCIVY_INDEX('Document',
   '{"type":"parse","fields":["title","body"],"value":"rust",
     "filters":[{"field":"year","op":"gte","value":2024}]}',
   $limit)
 WITH node_id, score, highlights
 MATCH (d:Document) WHERE OFFSET(id(d)) = node_id
-  AND d.archived = false  -- filtre Cypher restant (pas dans Tantivy)
+  AND d.archived = false  -- filtre Cypher restant (pas dans Lucivy)
 RETURN d._uuid, d.title, score, highlights
 ORDER BY score DESC
 ```
 
-**Gains supplementaires** : split intelligent des filtres = pre-filter Tantivy (rapide, segment-level) + post-filter Cypher (flexible).
+**Gains supplementaires** : split intelligent des filtres = pre-filter Lucivy (rapide, segment-level) + post-filter Cypher (flexible).
 
 rag3weaver fait deja ce split (FilterCompiler). Il suffit de l'integrer dans la composition.
 
-### Niveau 2 : QUERY_TANTIVY_INDEX ameliore (changements C++ extension)
+### Niveau 2 : QUERY_LUCIVY_INDEX ameliore (changements C++ extension)
 
-**Principe** : QUERY_TANTIVY_INDEX retourne directement des node IDs (pas des offsets) et fait le lookup properties en interne.
+**Principe** : QUERY_LUCIVY_INDEX retourne directement des node IDs (pas des offsets) et fait le lookup properties en interne.
 
 ```cypher
--- QUERY_TANTIVY_INDEX retourne des nœuds, pas des offsets
-CALL QUERY_TANTIVY_INDEX('Document', $query_json, $limit,
+-- QUERY_LUCIVY_INDEX retourne des nœuds, pas des offsets
+CALL QUERY_LUCIVY_INDEX('Document', $query_json, $limit,
     return_fields := ['_uuid', 'title', 'body'])
 RETURN _uuid, title, body, score, highlights
 ORDER BY score DESC
 ```
 
 **Changements C++** :
-1. `query_tantivy_index.cpp` : apres search Tantivy, faire un NodeTable::lookup pour chaque hit
+1. `query_lucivy_index.cpp` : apres search Lucivy, faire un NodeTable::lookup pour chaque hit
 2. Ajouter les colonnes demandees au output schema
 3. Retourner `(field1, field2, ..., score, highlights)` au lieu de `(node_id, score, highlights)`
 
@@ -200,13 +200,13 @@ ORDER BY score DESC
 
 **Option bonus** : supporter un parametre `filter` comme le vector extension :
 ```cypher
-CALL QUERY_TANTIVY_INDEX('Document', $query_json, $limit,
+CALL QUERY_LUCIVY_INDEX('Document', $query_json, $limit,
     filter := 'MATCH (n:Document) WHERE n.year >= 2024 RETURN n',
     return_fields := ['_uuid', 'title'])
 RETURN _uuid, title, score, highlights
 ```
 
-Cela permettrait le SemiMask pattern (filter Cypher → mask → Tantivy search avec mask).
+Cela permettrait le SemiMask pattern (filter Cypher → mask → Lucivy search avec mask).
 
 ### Niveau 3 : Predicat FTS dans WHERE (changements optimizer)
 
@@ -229,9 +229,9 @@ ORDER BY score DESC LIMIT 10
 2. FilterPushDownOptimizer (etendu) :
    → Detecte SEARCH(d, 'rust') dans les predicats
    → Extrait : {table: Document, query: 'rust', mode: 'parse'}
-   → Detecte d.year >= 2024 comme filtre pushable vers Tantivy
+   → Detecte d.year >= 2024 comme filtre pushable vers Lucivy
    → scan.setScanType(FTS_SCAN)
-   → scan.setExtraInfo(FTSScanInfo{query, tantivyFilters, cypherFilters})
+   → scan.setExtraInfo(FTSScanInfo{query, lucivyFilters, cypherFilters})
 
 3. PlanMapper :
    → Cree FTSScanNodeTable (nouvel operateur physique)
@@ -250,7 +250,7 @@ ORDER BY score DESC LIMIT 10
 |-----------|---------|-------------|
 | `LogicalScanNodeTableType::FTS_SCAN` | `logical_scan_node_table.h` | Nouveau type de scan |
 | `FTSScanInfo` | `logical_scan_node_table.h` | Query, filtres, config |
-| `FTSScanNodeTable` | Nouveau operateur physique | Execute le search Tantivy |
+| `FTSScanNodeTable` | Nouveau operateur physique | Execute le search Lucivy |
 | Extension `FilterPushDownOptimizer` | `filter_push_down_optimizer.cpp` | Detection SEARCH() |
 | `SEARCH()` scalar function | Nouvelle function enregistree | Marqueur pour l'optimizer |
 | `SEARCH_SCORE()` | Nouvelle function | Acces au score FTS |
@@ -258,8 +258,8 @@ ORDER BY score DESC LIMIT 10
 
 **Challenges** :
 - `SEARCH_SCORE(d)` et `SEARCH_HIGHLIGHTS(d)` sont des "colonnes virtuelles" qui n'existent que dans le contexte d'un FTS_SCAN. Il faut un mecanisme pour les transporter dans le pipeline.
-- Le LIMIT doit etre pousse vers le scan (sinon Tantivy retourne tout).
-- Le ORDER BY score doit aussi etre pousse (Tantivy retourne deja ordonne).
+- Le LIMIT doit etre pousse vers le scan (sinon Lucivy retourne tout).
+- Le ORDER BY score doit aussi etre pousse (Lucivy retourne deja ordonne).
 - La coexistence avec d'autres predicats (graph patterns, joins) est complexe.
 
 **Effort** : significatif. Modification du core rag3db (optimizer, planner, mapper, nouvel operateur).
@@ -334,7 +334,7 @@ Le gain principal vient de l'elimination des round-trips (niveau 1). Les niveaux
 1. Refactorer `search_bm25()` pour composer une seule requete CALL + WITH + MATCH + RETURN
 2. Refactorer `search_bm25_raw()` pour inclure le chunk OPTIONAL MATCH
 3. Integrer `enrich_results_with_data()` dans la meme requete
-4. Adapter le FilterCompiler pour generer les filtres JSON (Tantivy) + WHERE (Cypher) dans la meme requete
+4. Adapter le FilterCompiler pour generer les filtres JSON (Lucivy) + WHERE (Cypher) dans la meme requete
 5. Supprimer les fonctions separees `resolve_offsets_to_uuids()` et `enrich_results_with_data()`
 6. Tests : re-run cahier des charges phases 0-2
 
@@ -342,14 +342,14 @@ Le gain principal vient de l'elimination des round-trips (niveau 1). Les niveaux
 
 Avant (non-chunked) :
 ```
-1. CALL QUERY_TANTIVY_INDEX(...) RETURN node_id, score
+1. CALL QUERY_LUCIVY_INDEX(...) RETURN node_id, score
 2. MATCH (n:T) WHERE OFFSET(id(n)) IN [...] RETURN ..., n._uuid
 3. MATCH (n:T) WHERE n._uuid IN [...] RETURN n._uuid, n.title, ...
 ```
 
 Apres (non-chunked) :
 ```
-1. CALL QUERY_TANTIVY_INDEX(...) WITH node_id, score
+1. CALL QUERY_LUCIVY_INDEX(...) WITH node_id, score
    MATCH (d:T) WHERE OFFSET(id(d)) = node_id
    RETURN d._uuid, d.title, d.body, score
    ORDER BY score DESC
@@ -357,7 +357,7 @@ Apres (non-chunked) :
 
 Avant (chunked) :
 ```
-1. CALL QUERY_TANTIVY_INDEX(...) RETURN node_id, score, highlights
+1. CALL QUERY_LUCIVY_INDEX(...) RETURN node_id, score, highlights
 2. MATCH (n:T) WHERE OFFSET(id(n)) IN [...] RETURN ..., n._uuid
 3. MATCH (p:T)-[:T_HAS_CHUNK]->(c:T_Chunk) WHERE p._uuid IN [...]
    RETURN p._uuid, c._uuid, c._text, c._start_char, c._end_char, ...
@@ -366,7 +366,7 @@ Avant (chunked) :
 
 Apres (chunked) :
 ```
-1. CALL QUERY_TANTIVY_INDEX(...) WITH node_id, score, highlights
+1. CALL QUERY_LUCIVY_INDEX(...) WITH node_id, score, highlights
    MATCH (d:T) WHERE OFFSET(id(d)) = node_id
    OPTIONAL MATCH (d)-[:T_HAS_CHUNK]->(c:T_Chunk)
    RETURN d._uuid, d.title, score, highlights,
@@ -377,12 +377,12 @@ Apres (chunked) :
    ORDER BY score DESC
 ```
 
-### Phase B : Niveau 2 — QUERY_TANTIVY_INDEX ameliore
+### Phase B : Niveau 2 — QUERY_LUCIVY_INDEX ameliore
 
-**Effort** : 2-3 sessions. Changement C++ extension tantivy_fts.
+**Effort** : 2-3 sessions. Changement C++ extension lucivy_fts.
 
-1. Ajouter parametre `return_fields` a QUERY_TANTIVY_INDEX
-2. Faire le NodeTable::lookup dans le tableFunc (apres search Tantivy)
+1. Ajouter parametre `return_fields` a QUERY_LUCIVY_INDEX
+2. Faire le NodeTable::lookup dans le tableFunc (apres search Lucivy)
 3. Ajouter parametre `filter` (pattern SemiMask comme vector extension)
 4. Retourner `(field1, field2, ..., score, highlights)` au lieu de `(node_id, score, highlights)`
 5. Adapter rag3weaver pour utiliser la nouvelle API
@@ -406,15 +406,15 @@ Apres (chunked) :
 
 Le bug corrige (HashMap → BTreeMap) affectait la composition Cypher. Maintenant corrige, la composition au niveau 1 est fiable.
 
-Mais attention : la composition `CALL ... WITH ... MATCH ... WHERE OFFSET(id(d)) = node_id` utilise un pattern similaire au CROSS_PRODUCT + FLATTEN + FILTER. Il faut verifier que le bug `selectFunc` (doc 18) ne reapparait pas avec N resultats Tantivy.
+Mais attention : la composition `CALL ... WITH ... MATCH ... WHERE OFFSET(id(d)) = node_id` utilise un pattern similaire au CROSS_PRODUCT + FLATTEN + FILTER. Il faut verifier que le bug `selectFunc` (doc 18) ne reapparait pas avec N resultats Lucivy.
 
 **Action** : tester la composition avec 10+ resultats avant de deployer.
 
 ### Performances du pattern OFFSET(id(n)) = node_id
 
-Ce pattern force un scan de table + filter (pas d'index scan, car ce n'est pas le PK). Pour N resultats Tantivy, c'est O(N * table_size).
+Ce pattern force un scan de table + filter (pas d'index scan, car ce n'est pas le PK). Pour N resultats Lucivy, c'est O(N * table_size).
 
-**Alternative** : si QUERY_TANTIVY_INDEX retournait des internal_id (type INTERNAL_ID) au lieu d'offsets UINT64, le planner pourrait faire un index lookup direct. C'est un changement de type de retour de QUERY_TANTIVY_INDEX.
+**Alternative** : si QUERY_LUCIVY_INDEX retournait des internal_id (type INTERNAL_ID) au lieu d'offsets UINT64, le planner pourrait faire un index lookup direct. C'est un changement de type de retour de QUERY_LUCIVY_INDEX.
 
 Autre alternative : utiliser `WHERE id(d) = $internal_id` avec un INTERNAL_ID construit.
 
@@ -439,7 +439,7 @@ Le Cypher compose (niveau 1) permet deja de faire 2 CALL + fusion en Rust cote r
 | Phase 1 (BM25) | Query unique au lieu de 2 | Niveau 1 |
 | Phase 2 (Vector) | Idem pour vector + enrichment | Niveau 1 |
 | Phase 3 (Hybrid) | 2 CALL composes + fusion Rust | Niveau 1 |
-| Phase 4 (Filtres) | Split Tantivy/Cypher dans 1 query | Niveau 1b |
+| Phase 4 (Filtres) | Split Lucivy/Cypher dans 1 query | Niveau 1b |
 | Phase 5 (Chunking) | OPTIONAL MATCH chunk dans 1 query | Niveau 1 |
 | Phase 8 (Explore) | Search + graph traversal en 1 query | Niveau 1 |
 
@@ -449,7 +449,7 @@ Le Cypher compose (niveau 1) permet deja de faire 2 CALL + fusion en Rust cote r
 |------|-------------|
 | `composed_bm25_simple` | CALL + WITH + MATCH + RETURN, verifier resultats identiques |
 | `composed_bm25_chunks` | CALL + WITH + MATCH + OPTIONAL MATCH chunks |
-| `composed_bm25_filters` | CALL (filtres Tantivy) + WITH + MATCH + WHERE (filtres Cypher) |
+| `composed_bm25_filters` | CALL (filtres Lucivy) + WITH + MATCH + WHERE (filtres Cypher) |
 | `composed_bm25_enriched` | Verifier que tous les champs enrichis sont presents |
 | `composed_bm25_10plus` | Tester avec 10+ resultats (regression bug UNWIND) |
 | `composed_hybrid_single_query` | 2 CALL (BM25 + vector) composes + fusion |
@@ -462,7 +462,7 @@ Le Cypher compose (niveau 1) permet deja de faire 2 CALL + fusion en Rust cote r
 | Priorite | Action | Effort | Gain |
 |----------|--------|--------|------|
 | **1** | Niveau 1 : composition Cypher unique | 1-2 sessions | 4x moins de round-trips |
-| **2** | Niveau 1b : + filtres Tantivy integres | +1 session | pre-filtering efficace |
+| **2** | Niveau 1b : + filtres Lucivy integres | +1 session | pre-filtering efficace |
 | **3** | Niveau 2 : QUERY ameliore + return_fields | 2-3 sessions | elimine le MATCH post-CALL |
 | **4** | Niveau 3 : MATCH WHERE SEARCH() | 5-10 sessions | Cypher idiomatique |
 | long terme | Niveau 4 : search unifie | 10+ sessions | vision finale |

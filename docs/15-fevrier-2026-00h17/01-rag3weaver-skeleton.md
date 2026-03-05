@@ -26,7 +26,7 @@ packages/rag3db/extension/rag3weaver/    ← Crate Rust standalone
     └── connection.rs     (trait DbConnection async + CypherValue + MockConnection)
 ```
 
-**Pourquoi dans `extension/` et pas dans `ld-tantivy/`** : rag3weaver utilise rag3db ET tantivy_fts ET l'extension vector. C'est un consommateur de ces composants, pas un composant de Tantivy. Le placer dans ld-tantivy (qui est un submodule git) serait semantiquement faux et compliquerait le versioning.
+**Pourquoi dans `extension/` et pas dans `ld-lucivy/`** : rag3weaver utilise rag3db ET lucivy_fts ET l'extension vector. C'est un consommateur de ces composants, pas un composant de Lucivy. Le placer dans ld-lucivy (qui est un submodule git) serait semantiquement faux et compliquerait le versioning.
 
 **Pas encore une extension rag3db** : pour la v1, c'est une crate Rust standalone. L'integration comme extension C++ (fonctions Cypher CREATE_CATALOG, CATALOG_SEARCH) viendra en v2 si le besoin se confirme.
 
@@ -201,7 +201,7 @@ cd packages/rag3db/extension/rag3weaver && cargo test
 - `fusion.rs` : scoring (boost, RRF, weighted)
 
 ### Etape 2 — Catalog CRUD + pipeline async + persistence
-### Etape 3 — Search + Explore via Tantivy direct
+### Etape 3 — Search + Explore via Lucivy direct
 ### Etape 4 — Providers embedding + code parsing (callbacks TS)
 ### Etape 5 — WASM + Tests E2E
 

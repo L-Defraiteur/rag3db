@@ -189,13 +189,13 @@ CALL CREATE_VECTOR_INDEX('Document_Chunk', 'Document_Chunk_vec', 'embedding', me
 
 ### generate_fts_index_ddl
 
-Pour chaque entite × KB, on cree un index Tantivy sur les champs `title_for` et `content_for` :
+Pour chaque entite × KB, on cree un index Lucivy sur les champs `title_for` et `content_for` :
 
 ```
-CALL CREATE_TANTIVY_INDEX('Document', ['title', 'body'])
+CALL CREATE_LUCIVY_INDEX('Document', ['title', 'body'])
 ```
 
-Note : on utilise `CREATE_TANTIVY_INDEX` (pas `CREATE_FTS_INDEX`). C'est notre extension custom rag3db.
+Note : on utilise `CREATE_LUCIVY_INDEX` (pas `CREATE_FTS_INDEX`). C'est notre extension custom rag3db.
 
 ### generate_meta_table_ddl
 
@@ -450,7 +450,7 @@ Cette fonction est reutilisee par :
 | `rel_table_with_properties` | CREATE REL TABLE avec properties mappees |
 | `rel_table_validates_endpoints` | echoue si from/to referencent des entites inconnues |
 | `vector_index_ddl` | CALL CREATE_VECTOR_INDEX correct |
-| `fts_index_ddl` | CALL CREATE_TANTIVY_INDEX correct |
+| `fts_index_ddl` | CALL CREATE_LUCIVY_INDEX correct |
 | `meta_table_ddl` | CREATE NODE TABLE _catalog_meta |
 | `insert_cypher_basic` | CREATE (:Entity {_uuid: $_uuid, ...}) |
 | `full_schema_order` | meta → nodes → chunks → rels, dans l'ordre |

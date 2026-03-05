@@ -5,31 +5,31 @@
 
 ## Statut : TERMINÉ
 
-**Commits** sur `ld-tantivy:main` (13 février 2026) :
+**Commits** sur `ld-lucivy:main` (13 février 2026) :
 1. `127c15b` — ajout du bridge cxx (9 structs, 15 fonctions, ~350 lignes)
 2. `9daf73e` — suppression de l'ancien API extern "C" (-1571 lignes)
 
 **Fichiers finaux** :
-- `tantivy_fts/rust/Cargo.toml` — `cxx = "1.0"` + `cxx-build = "1.0"`
-- `tantivy_fts/rust/build.rs` — `cxx_build::bridge("src/bridge.rs")`
-- `tantivy_fts/rust/src/bridge.rs` — le bridge complet (9 structs, 15 fonctions)
-- `tantivy_fts/rust/src/lib.rs` — déclarations de modules uniquement
+- `lucivy_fts/rust/Cargo.toml` — `cxx = "1.0"` + `cxx-build = "1.0"`
+- `lucivy_fts/rust/build.rs` — `cxx_build::bridge("src/bridge.rs")`
+- `lucivy_fts/rust/src/bridge.rs` — le bridge complet (9 structs, 15 fonctions)
+- `lucivy_fts/rust/src/lib.rs` — déclarations de modules uniquement
 
 **Supprimé** :
-- `tantivy_fts/include/tantivy_fts.h` — ancien header C (cbindgen)
-- `tantivy_fts/test/test_ffi.c` — anciens 153 tests C
+- `lucivy_fts/include/lucivy_fts.h` — ancien header C (cbindgen)
+- `lucivy_fts/test/test_ffi.c` — anciens 153 tests C
 - 13 fonctions `extern "C"` dans lib.rs, helpers (`cstr_to_str`, `error_json`, `free_string`)
 - Code mort dans query.rs (`execute_search`, `collect_results`, `SearchResult`)
 - Code mort dans handle.rs (`raw_field_name`)
 
-**Tests** : 1015 ld-tantivy = tout vert, 0 warning.
+**Tests** : 1015 ld-lucivy = tout vert, 0 warning.
 
 **Différences vs le design initial ci-dessous** :
 - `SchemaField` et `DocField` retirés (inutiles, schema reste JSON)
 - `highlight` retiré de `QueryConfig` (le C++ choisit `search` vs `search_with_highlights`)
 - `get_field_ids` filtre automatiquement les champs internes (`._raw`, `._ngram`)
 - `add_document_texts` / `add_document_mixed` auto-dupliquent vers `._raw` et `._ngram` (le C++ ne voit que les champs user)
-- `delete_by_node_id` utilise `Term::from_field_u64` (corrige un bug de l'ancien `tantivy_delete_by_term` qui utilisait `from_field_text` sur un champ u64)
+- `delete_by_node_id` utilise `Term::from_field_u64` (corrige un bug de l'ancien `lucivy_delete_by_term` qui utilisait `from_field_text` sur un champ u64)
 - `extract_node_id` utilise `CompactDocValue::as_value().as_u64()` (pas de roundtrip JSON)
 
 ---
@@ -39,10 +39,10 @@
 | Actuel (extern C + JSON) | Cible (cxx) |
 |--------------------------|-------------|
 | Sérialisation JSON sur le hot path (add_document) | Structs typés, zéro sérialisation |
-| `tantivy_free_string()` manuel | Ownership automatique (Box, String, Vec) |
-| Erreurs via `tantivy_last_error()` ou JSON `{"error":"..."}` | `Result<T>` → exceptions C++ |
+| `lucivy_free_string()` manuel | Ownership automatique (Box, String, Vec) |
+| Erreurs via `lucivy_last_error()` ou JSON `{"error":"..."}` | `Result<T>` → exceptions C++ |
 | Header C généré par cbindgen | Header C++ généré par cxx |
-| Pointeurs opaques (`TantivyHandlePtr`) | `Box<TantivyHandle>` avec ownership |
+| Pointeurs opaques (`LucivyHandlePtr`) | `Box<LucivyHandle>` avec ownership |
 | Tests en C (`test_ffi.c`) | Tests en C++ (ou Rust) |
 
 ---
@@ -51,7 +51,7 @@
 
 ### Le bridge (côté Rust)
 
-**Fichier** : `tantivy_fts/rust/src/bridge.rs`
+**Fichier** : `lucivy_fts/rust/src/bridge.rs`
 
 ```rust
 #[cxx::bridge]
@@ -122,25 +122,25 @@ mod ffi {
     // ── Fonctions Rust exposées au C++ ──
 
     extern "Rust" {
-        type TantivyHandle;
+        type LucivyHandle;
 
         // Lifecycle
-        fn create_index(path: &str, schema_json: &str) -> Result<Box<TantivyHandle>>;
-        fn open_index(path: &str) -> Result<Box<TantivyHandle>>;
-        // close = drop du Box<TantivyHandle> (automatique)
+        fn create_index(path: &str, schema_json: &str) -> Result<Box<LucivyHandle>>;
+        fn open_index(path: &str) -> Result<Box<LucivyHandle>>;
+        // close = drop du Box<LucivyHandle> (automatique)
 
         // Schema introspection
-        fn get_field_ids(handle: &TantivyHandle) -> Vec<IndexFieldInfo>;
+        fn get_field_ids(handle: &LucivyHandle) -> Vec<IndexFieldInfo>;
 
         // Document operations (hot path — typé, zéro JSON)
         fn add_document_texts(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             node_id: u64,
             fields: &[DocFieldText],
         ) -> Result<i64>;
 
         fn add_document_mixed(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             node_id: u64,
             text_fields: &[DocFieldText],
             u64_fields: &[DocFieldU64],
@@ -148,50 +148,50 @@ mod ffi {
             f64_fields: &[DocFieldF64],
         ) -> Result<i64>;
 
-        fn delete_by_node_id(handle: &TantivyHandle, node_id: u64) -> Result<i64>;
+        fn delete_by_node_id(handle: &LucivyHandle, node_id: u64) -> Result<i64>;
 
         // Transaction
-        fn commit(handle: &TantivyHandle) -> Result<i64>;
-        fn rollback(handle: &TantivyHandle);
-        fn reload_reader(handle: &TantivyHandle);
+        fn commit(handle: &LucivyHandle) -> Result<i64>;
+        fn rollback(handle: &LucivyHandle);
+        fn reload_reader(handle: &LucivyHandle);
 
         // Search (query reste en JSON — flexible, appelé rarement)
         fn search(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             query_json: &str,
             limit: u32,
         ) -> Result<Vec<SearchResult>>;
 
         fn search_with_highlights(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             query_json: &str,
             limit: u32,
         ) -> Result<Vec<SearchResultWithHighlights>>;
 
         fn search_filtered(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             query_json: &str,
             limit: u32,
             allowed_ids: &[u64],
         ) -> Result<Vec<SearchResult>>;
 
         fn search_filtered_with_highlights(
-            handle: &TantivyHandle,
+            handle: &LucivyHandle,
             query_json: &str,
             limit: u32,
             allowed_ids: &[u64],
         ) -> Result<Vec<SearchResultWithHighlights>>;
 
         // Info
-        fn num_docs(handle: &TantivyHandle) -> u64;
-        fn get_schema_json(handle: &TantivyHandle) -> String;
+        fn num_docs(handle: &LucivyHandle) -> u64;
+        fn get_schema_json(handle: &LucivyHandle) -> String;
     }
 }
 ```
 
 ### Côté C++ (généré automatiquement par cxx)
 
-cxx génère un header `tantivy_fts/rust/src/bridge.rs.h` qu'on inclut :
+cxx génère un header `lucivy_fts/rust/src/bridge.rs.h` qu'on inclut :
 
 ```cpp
 #include "bridge.rs.h"
@@ -223,19 +223,19 @@ for (const auto& r : results) {
 
 | Fonction actuelle (extern C) | Équivalent cxx | Changement |
 |------------------------------|---------------|------------|
-| `tantivy_create_index(path, schema_json)` | `create_index(path, schema_json)` | Retourne `Result<Box<>>` au lieu de ptr nullable |
-| `tantivy_open_index(path)` | `open_index(path)` | Idem |
-| `tantivy_close_index(handle)` | Drop du `Box<TantivyHandle>` | Automatique |
-| `tantivy_add_document(handle, doc_json)` | `add_document_texts(handle, node_id, fields)` | **Typé, plus de JSON** |
-| `tantivy_delete_by_term(handle, field, value)` | `delete_by_node_id(handle, node_id)` | Simplifié (on delete toujours par node_id) |
-| `tantivy_commit(handle)` | `commit(handle)` | `Result<i64>` |
-| `tantivy_rollback(handle)` | `rollback(handle)` | Identique |
-| `tantivy_reload_reader(handle)` | `reload_reader(handle)` | Identique |
-| `tantivy_search(handle, query_json, limit)` | `search(handle, query_json, limit)` | Retourne `Vec<SearchResult>` typé |
-| `tantivy_search_filtered(handle, query_json, limit, ids, n)` | `search_filtered(handle, query_json, limit, ids)` | `&[u64]` slice au lieu de ptr+len |
-| `tantivy_num_docs(handle)` | `num_docs(handle)` | Identique |
-| `tantivy_get_schema(handle)` | `get_schema_json(handle)` | Retourne `String` (ownership auto) |
-| `tantivy_free_string(ptr)` | **Supprimée** | Plus nécessaire — ownership automatique |
+| `lucivy_create_index(path, schema_json)` | `create_index(path, schema_json)` | Retourne `Result<Box<>>` au lieu de ptr nullable |
+| `lucivy_open_index(path)` | `open_index(path)` | Idem |
+| `lucivy_close_index(handle)` | Drop du `Box<LucivyHandle>` | Automatique |
+| `lucivy_add_document(handle, doc_json)` | `add_document_texts(handle, node_id, fields)` | **Typé, plus de JSON** |
+| `lucivy_delete_by_term(handle, field, value)` | `delete_by_node_id(handle, node_id)` | Simplifié (on delete toujours par node_id) |
+| `lucivy_commit(handle)` | `commit(handle)` | `Result<i64>` |
+| `lucivy_rollback(handle)` | `rollback(handle)` | Identique |
+| `lucivy_reload_reader(handle)` | `reload_reader(handle)` | Identique |
+| `lucivy_search(handle, query_json, limit)` | `search(handle, query_json, limit)` | Retourne `Vec<SearchResult>` typé |
+| `lucivy_search_filtered(handle, query_json, limit, ids, n)` | `search_filtered(handle, query_json, limit, ids)` | `&[u64]` slice au lieu de ptr+len |
+| `lucivy_num_docs(handle)` | `num_docs(handle)` | Identique |
+| `lucivy_get_schema(handle)` | `get_schema_json(handle)` | Retourne `String` (ownership auto) |
+| `lucivy_free_string(ptr)` | **Supprimée** | Plus nécessaire — ownership automatique |
 
 **+2 nouvelles** : `search_with_highlights`, `search_filtered_with_highlights` — les highlights sont des structs typés au lieu de JSON imbriqué.
 
@@ -263,25 +263,25 @@ cxx-build = "1.0"
 fn main() {
     cxx_build::bridge("src/bridge.rs")
         .flag_if_supported("-std=c++17")
-        .compile("tantivy_fts_cxx");
+        .compile("lucivy_fts_cxx");
 }
 ```
 
-### CMakeLists.txt (extension tantivy_fts)
+### CMakeLists.txt (extension lucivy_fts)
 
 Le `cargo build` produit maintenant :
-- `libtantivy_fts.a` — la lib statique Rust (comme avant)
-- `target/cxxbridge/tantivy_fts/src/bridge.rs.h` — le header C++ généré
+- `liblucivy_fts.a` — la lib statique Rust (comme avant)
+- `target/cxxbridge/lucivy_fts/src/bridge.rs.h` — le header C++ généré
 
 ```cmake
 # Ajouter le chemin du header cxx généré
 include_directories(
-    ${RUST_WORKSPACE_DIR}/target/cxxbridge/tantivy_fts/src/
+    ${RUST_WORKSPACE_DIR}/target/cxxbridge/lucivy_fts/src/
     ${RUST_WORKSPACE_DIR}/target/cxxbridge/rust/  # cxx runtime headers
 )
 ```
 
-Le linkage reste identique (`libtantivy_fts.a` + pthread + m + dl).
+Le linkage reste identique (`liblucivy_fts.a` + pthread + m + dl).
 
 ---
 
@@ -322,7 +322,7 @@ Les `SearchResult` et `SearchResultWithHighlights` évitent de parser du JSON c�
 
 ### Ownership
 
-- `Box<TantivyHandle>` côté C++ → drop automatique à la destruction
+- `Box<LucivyHandle>` côté C++ → drop automatique à la destruction
 - `String` et `Vec` traversent la frontière avec ownership correct
 - Plus de `free_string`, plus de leaks possibles
 
@@ -330,6 +330,6 @@ Les `SearchResult` et `SearchResultWithHighlights` évitent de parser du JSON c�
 
 ## Impact sur les autres docs
 
-- **Doc 02** : QUERY_TANTIVY_INDEX utilise `search_with_highlights()` au lieu de `tantivy_search()` + JSON parse. Plus besoin de nlohmann/json pour les résultats.
+- **Doc 02** : QUERY_LUCIVY_INDEX utilise `search_with_highlights()` au lieu de `lucivy_search()` + JSON parse. Plus besoin de nlohmann/json pour les résultats.
 - **Doc 03** : Obsolète — pas de modification du core nécessaire (voir doc 04).
-- **Doc 04** : `TantivyIndex::onInsert` appelle `add_document_texts()` / `add_document_mixed()` directement. `onCommit` appelle `commit()` + `reload_reader()`. `onRollback` appelle `rollback()`.
+- **Doc 04** : `LucivyIndex::onInsert` appelle `add_document_texts()` / `add_document_mixed()` directement. `onCommit` appelle `commit()` + `reload_reader()`. `onRollback` appelle `rollback()`.

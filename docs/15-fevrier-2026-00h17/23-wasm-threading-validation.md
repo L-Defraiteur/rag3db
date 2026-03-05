@@ -11,7 +11,7 @@ a été soulevée. Une recherche initiale (basée sur des rapports de bugs de 20
 suggérait que `std::thread::spawn` ne fonctionnait pas sur `wasm32-unknown-emscripten`.
 
 **C'est faux pour notre build.** L'analyse de la configuration réelle, l'historique
-du projet (extension tantivy nécessitant plus de threads que prévu), et les tests
+du projet (extension lucivy nécessitant plus de threads que prévu), et les tests
 de validation ci-dessous confirment que le multi-threading fonctionne pleinement.
 
 ---
@@ -31,7 +31,7 @@ endif()
 16 Web Workers pré-alloués. Kuzu (moteur de requêtes rag3db) les utilise pour le
 parallélisme de ses requêtes.
 
-### Rust — tantivy_fts (extension/tantivy_fts/CMakeLists.txt)
+### Rust — lucivy_fts (extension/lucivy_fts/CMakeLists.txt)
 
 ```cmake
 EMCC_CFLAGS=-pthread -fexceptions -sDISABLE_EXCEPTION_CATCHING=0
@@ -42,7 +42,7 @@ Avec `+nightly` et `-Z build-std=std,panic_abort`.
 
 ### Rust — rag3weaver (extension/rag3weaver/CMakeLists.txt)
 
-Configuration identique à tantivy_fts.
+Configuration identique à lucivy_fts.
 
 ### Headers navigateur (serve.js)
 
@@ -58,7 +58,7 @@ COOP/COEP requis pour SharedArrayBuffer.
 | Composant | Threading | Mécanisme |
 |-----------|-----------|-----------|
 | rag3db (Kuzu C++) | Multi-thread | emscripten pthreads, 16 workers |
-| tantivy_fts (Rust) | Multi-thread | rayon + atomics réelles via `-Z build-std` |
+| lucivy_fts (Rust) | Multi-thread | rayon + atomics réelles via `-Z build-std` |
 | rag3weaver (Rust) | **Multi-thread (validé)** | `std::thread::spawn` + `futures::executor::ThreadPool` |
 | Navigateur | SharedArrayBuffer | COOP/COEP headers |
 
@@ -75,8 +75,8 @@ Les rapports de bugs cités datent de 2021-2022 :
   wasm-ld (emscripten 5.0.1 utilise une version à jour).
 - **`Instant::now()` cassé sur emscripten** : corrigé dans les nightly récents.
 
-La preuve empirique : l'extension tantivy_fts utilise rayon pour le parallélisme, et
-lors des tests WASM, il a fallu **augmenter** `PTHREAD_POOL_SIZE` parce que tantivy
+La preuve empirique : l'extension lucivy_fts utilise rayon pour le parallélisme, et
+lors des tests WASM, il a fallu **augmenter** `PTHREAD_POOL_SIZE` parce que lucivy
 créait plus de threads que le pool ne le permettait.
 
 ---
@@ -199,7 +199,7 @@ pub extern "C" fn rag3weaver_test_rayon() -> *const c_char {
 ```
 
 **Conclusions** :
-- Rayon fonctionne dans rag3weaver (pas seulement dans tantivy)
+- Rayon fonctionne dans rag3weaver (pas seulement dans lucivy)
 - `par_iter()`, `par_chunks()`, work-stealing : tout opérationnel
 - Idéal pour le batch embedding (paralléliser les appels embed)
 
@@ -207,7 +207,7 @@ pub extern "C" fn rag3weaver_test_rayon() -> *const c_char {
 
 tokio `Builder::new_current_thread().enable_all()` crée des threads internes
 (timer driver, signal handler) qui consomment des workers du pool emscripten.
-Avec 16 workers partagés entre Kuzu, tantivy (rayon), et les tests A/B/C, le
+Avec 16 workers partagés entre Kuzu, lucivy (rayon), et les tests A/B/C, le
 pool est épuisé et tokio deadlock.
 
 ```
@@ -272,7 +272,7 @@ callback quand c'est fini).
 | `futures::executor::ThreadPool` | **Validé** | Runtime async multi-thread sans tokio |
 | Rayon `par_iter` | **Validé** | Data parallelism, work-stealing, batch processing |
 | Atomiques réelles | **Validé** | Arc, Mutex, AtomicU64 fonctionnent |
-| Rayon (tantivy) | **Déjà actif** | Search/indexing parallèles en WASM |
+| Rayon (lucivy) | **Déjà actif** | Search/indexing parallèles en WASM |
 | tokio `rt-multi-thread` | **Bloqué** | `compile_error!` explicite dans tokio sur WASM |
 | tokio `current_thread` | **Bloqué** | `enable_all()` épuise le pool de threads emscripten |
 | tokio `sync` | **Fonctionne** | Channels, watch, oneshot — compilent et fonctionnent |
@@ -290,7 +290,7 @@ JS (main thread ou Worker)
                                     ├── ThreadPool (2-4 workers)
                                     │     ├── PersistProcessor (DB writes)
                                     │     ├── EmbedProcessor (callback → JS → Transformers.js)
-                                    │     └── IndexProcessor (tantivy, rayon interne)
+                                    │     └── IndexProcessor (lucivy, rayon interne)
                                     │
                                     └── block_on(drain_future) → retour JSON au JS
 ```

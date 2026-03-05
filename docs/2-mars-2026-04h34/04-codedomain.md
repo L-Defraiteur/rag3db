@@ -515,7 +515,7 @@ WHERE f.absolute_path STARTS WITH '/virtual/owner/repo/'
   AND f.content =~ '.*TODO.*fix.*'
 RETURN f.absolute_path, f.name
 ```
-Ou via BM25 pour une recherche plus rapide (Tantivy, pas regex line-by-line) :
+Ou via BM25 pour une recherche plus rapide (Lucivy, pas regex line-by-line) :
 ```
 catalog.search("FileContentKB", "TODO fix", { signals: BM25, limit: 50 })
 ```
@@ -523,7 +523,7 @@ catalog.search("FileContentKB", "TODO fix", { signals: BM25, limit: 50 })
 **grep avec numéros de lignes :**
 Pour un vrai grep (pattern + ligne + contexte), il faut extraire les lignes matchantes du `content`. Deux options :
 - **Côté client** : fetch `f.content`, split par `\n`, filtrer en mémoire. Simple, mais transfère tout le fichier.
-- **Côté Tantivy** : BM25 search sur FileContentKB retourne des highlights avec byte offsets → convertir en numéros de lignes via les coordonnées des chunks. Plus efficace pour des gros volumes.
+- **Côté Lucivy** : BM25 search sur FileContentKB retourne des highlights avec byte offsets → convertir en numéros de lignes via les coordonnées des chunks. Plus efficace pour des gros volumes.
 
 **Alternative : reconstruction depuis les chunks ?**
 
@@ -586,7 +586,7 @@ Pour les très gros fichiers (> 100KB), on pourrait envisager un seuil : au-del�
 
 10. **Scope content : dedented ou original ?** codeparsers fournit `content` (avec indentation originale) et `content_dedented` (indentation normalisée). Pour le chunking et l'embedding, dedented est probablement mieux (moins de bruit d'indentation). Mais pour l'affichage, on veut l'original. Stocker les deux ? Ou stocker dedented + indent_level pour reconstruire ?
 
-11. **Cross-entity search (TreeKB) : implémentation UNION.** Aujourd'hui le search ne query que la `title.entity`. Pour TreeKB (Directory + File), il faut un UNION sur `Directory_Chunk` et `File_Chunk` (pour BM25 via Tantivy) et sur les embeddings des deux entités (pour vector). Options :
+11. **Cross-entity search (TreeKB) : implémentation UNION.** Aujourd'hui le search ne query que la `title.entity`. Pour TreeKB (Directory + File), il faut un UNION sur `Directory_Chunk` et `File_Chunk` (pour BM25 via Lucivy) et sur les embeddings des deux entités (pour vector). Options :
     - **Option A** : UNION Cypher explicite dans le search query builder quand `kb.entities.len() > 1`
     - **Option B** : lancer N recherches parallèles (une par entité) puis fusionner avec RRF
     - **Option C** : une seule table de chunks partagée `TreeKB_Chunk` au lieu de `Directory_Chunk` / `File_Chunk`

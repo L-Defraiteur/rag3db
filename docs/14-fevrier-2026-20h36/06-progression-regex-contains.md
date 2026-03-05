@@ -23,7 +23,7 @@ Date : 14 fevrier 2026
 - `src/query/phrase_query/ngram_contains_query.rs` — restructuration complete
 - `src/query/phrase_query/mod.rs` — export `FuzzyParams`, `VerificationMode`
 - `src/query/mod.rs` — re-export `FuzzyParams`, `VerificationMode`
-- `tantivy_fts/rust/src/query.rs` — import + construction `VerificationMode::Fuzzy(FuzzyParams {...})`
+- `lucivy_fts/rust/src/query.rs` — import + construction `VerificationMode::Fuzzy(FuzzyParams {...})`
 
 ### Etape 2+3 : VerificationMode::Regex pure + hybride (FAIT)
 
@@ -44,7 +44,7 @@ Date : 14 fevrier 2026
 
 ### Etape 4 : Routing dans query.rs (FAIT)
 
-**Fichier** : `tantivy_fts/rust/src/query.rs`
+**Fichier** : `lucivy_fts/rust/src/query.rs`
 
 - Ajout `regex: Option<bool>` dans `QueryConfig` (serde deserialization)
 - `build_contains_query()` refactorise : dispatch vers `build_contains_fuzzy()` (defaut) ou `build_contains_regex()` (quand `regex: true`)
@@ -56,8 +56,8 @@ Date : 14 fevrier 2026
   5. Si litteraux suffisants + ngram field dispo → `NgramContainsQuery` avec `VerificationMode::Regex`
   6. Sinon → fallback `RegexQuery` standard (FST walk, pas de BM25)
 - Dependances ajoutees :
-  - `Cargo.toml` (ld-tantivy) : `regex-syntax = "0.8"`
-  - `tantivy_fts/rust/Cargo.toml` : `regex = "1"` + `regex-syntax = "0.8"`
+  - `Cargo.toml` (ld-lucivy) : `regex-syntax = "0.8"`
+  - `lucivy_fts/rust/Cargo.toml` : `regex = "1"` + `regex-syntax = "0.8"`
 - Imports ajoutes dans query.rs : `use regex::Regex`, `use regex_syntax::hir::literal::Extractor`, `RegexParams`
 - **Validation** : 1025 tests passes (1015 existants + 10 nouveaux)
 
@@ -86,7 +86,7 @@ Module `ngram_contains_query::tests` ajoute dans `ngram_contains_query.rs` :
 
 #### Tests GTest E2E : ECRIT, PAS ENCORE BUILDE/RUN
 
-Test `TantivyRegexContainsTest` ajoute dans `extension/tantivy_fts/test/tantivy_fts_test.cpp` :
+Test `LucivyRegexContainsTest` ajoute dans `extension/lucivy_fts/test/lucivy_fts_test.cpp` :
 
 1. Regex accelere par trigrams : `program[a-z]+` → 3 docs (programming x2, programmer x1)
 2. BM25 scoring variable (pas constant)
@@ -99,8 +99,8 @@ Test `TantivyRegexContainsTest` ajoute dans `extension/tantivy_fts/test/tantivy_
 
 ### 1. Builder et lancer les tests GTest E2E
 
-Le build Rust release est fait (`cargo build --release -p ld-tantivy -p tantivy-fts` OK).
-L'extension est re-linkee (`cmake --build . --target rag3db_tantivy_fts_extension` OK).
+Le build Rust release est fait (`cargo build --release -p ld-lucivy -p lucivy-fts` OK).
+L'extension est re-linkee (`cmake --build . --target rag3db_lucivy_fts_extension` OK).
 
 **Il reste** :
 
@@ -108,13 +108,13 @@ L'extension est re-linkee (`cmake --build . --target rag3db_tantivy_fts_extensio
 cd /home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/build/release
 
 # 1. Builder le test executable
-cmake --build . --target tantivy_fts_test -j$(nproc)
+cmake --build . --target lucivy_fts_test -j$(nproc)
 
 # 2. Lancer les tests (attention au LD_LIBRARY_PATH miniconda)
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 ```
 
-Si le test `TantivyRegexContainsTest` echoue, les causes probables :
+Si le test `LucivyRegexContainsTest` echoue, les causes probables :
 - Le test 1 (3 resultats) pourrait etre 2 si "programmer" n'est pas dans les candidats trigram. Verifier que le litteral "program" (7 chars, 5 trigrams) genere bien des candidats couvrant les 3 docs.
 - Le test 3 (hybride) depend du fait que les trigrams de "programing" couvrent assez de candidats avec fuzzy_distance=1.
 
@@ -123,14 +123,14 @@ Si le test `TantivyRegexContainsTest` echoue, les causes probables :
 Une fois les tests E2E verts :
 
 ```bash
-# Dans ld-tantivy (branch main)
-cd /home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/tantivy/ld-tantivy
+# Dans ld-lucivy (branch main)
+cd /home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db/extension/lucivy/ld-lucivy
 git add -A && git commit -m "feat: unified contains with regex mode (trigram-accelerated + hybrid fuzzy)"
 
 # Dans rag3db (branch feature/fuzzy-fts)
 cd /home/luciedefraiteur/LR_CodeRag/community-docs/packages/rag3db
-git add extension/tantivy_fts/test/tantivy_fts_test.cpp
-git commit -m "test: add TantivyRegexContainsTest E2E"
+git add extension/lucivy_fts/test/lucivy_fts_test.cpp
+git commit -m "test: add LucivyRegexContainsTest E2E"
 ```
 
 ### 3. (Optionnel) Etape 5 complete — Fallback FST avec BM25
@@ -149,10 +149,10 @@ C'est un cas edge, pas prioritaire.
 | `src/query/phrase_query/ngram_contains_query.rs` | `VerificationMode`, `FuzzyParams`, `RegexParams`, `verify_regex()`, candidats union, 10 tests |
 | `src/query/phrase_query/mod.rs` | Export `FuzzyParams`, `RegexParams`, `VerificationMode` |
 | `src/query/mod.rs` | Re-export |
-| `tantivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing |
-| `Cargo.toml` (ld-tantivy) | `regex-syntax = "0.8"` |
-| `tantivy_fts/rust/Cargo.toml` | `regex = "1"` + `regex-syntax = "0.8"` |
-| `extension/tantivy_fts/test/tantivy_fts_test.cpp` | Nouveau test `TantivyRegexContainsTest` |
+| `lucivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing |
+| `Cargo.toml` (ld-lucivy) | `regex-syntax = "0.8"` |
+| `lucivy_fts/rust/Cargo.toml` | `regex = "1"` + `regex-syntax = "0.8"` |
+| `extension/lucivy_fts/test/lucivy_fts_test.cpp` | Nouveau test `LucivyRegexContainsTest` |
 
 ## API finale
 

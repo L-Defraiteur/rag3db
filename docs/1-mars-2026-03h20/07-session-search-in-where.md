@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Permettre `WHERE SEARCH(d.body, 'rust programming', 'contains_split')` directement dans Cypher, avec `SEARCH_SCORE()` et `SEARCH_HIGHLIGHTS()` accessibles dans RETURN/ORDER BY. Uniquement quand un index Tantivy existe sur la table.
+Permettre `WHERE SEARCH(d.body, 'rust programming', 'contains_split')` directement dans Cypher, avec `SEARCH_SCORE()` et `SEARCH_HIGHLIGHTS()` accessibles dans RETURN/ORDER BY. Uniquement quand un index Lucivy existe sur la table.
 
 **Syntaxe cible :**
 ```cypher
@@ -50,21 +50,21 @@ Ajouté `bool isIndexScanPredicate = false;` après `isVarLength` dans `ScalarFu
 
 **Fichiers créés :**
 
-1. **`extension/tantivy_fts/src/include/function/search_function.h`** :
+1. **`extension/lucivy_fts/src/include/function/search_function.h`** :
    - `SearchFunction` (name = "SEARCH")
    - `SearchScoreFunction` (name = "SEARCH_SCORE")
    - `SearchHighlightsFunction` (name = "SEARCH_HIGHLIGHTS")
 
-2. **`extension/tantivy_fts/src/function/search_function.cpp`** :
+2. **`extension/lucivy_fts/src/function/search_function.cpp`** :
    - `SearchBindData` extends `FTSSearchBindData` (core), ajoute `tableID`, `fieldName`, `queryJson`
    - `searchBindFunc()` :
      - Arg 0 = PropertyExpression (d.body) → extrait tableID + fieldName
      - Arg 1 = LiteralExpression (query text)
      - Arg 2 (opt) = mode string (défaut "contains")
      - Arg 3 (opt) = distance int64 (défaut 1)
-     - Vérifie l'index Tantivy via `nodeTable.getIndex(tableName)`
+     - Vérifie l'index Lucivy via `nodeTable.getIndex(tableName)`
      - Construit le JSON query via `buildQueryJson(field, value, mode, distance)`
-     - Crée un lambda `FTSSearchFunc` capturant le `TantivyIndex*`
+     - Crée un lambda `FTSSearchFunc` capturant le `LucivyIndex*`
    - `buildQueryJson()` : construit le JSON pour chaque mode (contains, contains_split, fuzzy, regex, parse)
    - `searchExecFunc()` : fallback retourne false (l'optimizer devrait intercepter)
    - `searchScoreExecFunc()` / `searchHighlightsExecFunc()` : retournent NULL
@@ -73,11 +73,11 @@ Ajouté `bool isIndexScanPredicate = false;` après `isVarLength` dans `ScalarFu
 
 **Fichiers modifiés :**
 
-3. **`extension/tantivy_fts/src/main/tantivy_fts_extension.cpp`** :
+3. **`extension/lucivy_fts/src/main/lucivy_fts_extension.cpp`** :
    - Ajouté `#include "function/search_function.h"`
    - Ajouté `addScalarFunc<SearchFunction/SearchScoreFunction/SearchHighlightsFunction>(db)`
 
-4. **`extension/tantivy_fts/src/function/CMakeLists.txt`** :
+4. **`extension/lucivy_fts/src/function/CMakeLists.txt`** :
    - Ajouté `search_function.cpp`
 
 ### Task #85 — FilterPushDownOptimizer pour FTS_SCAN ✅
@@ -143,19 +143,19 @@ Note : `ScanNodeTableInfo` a `EXPLICIT_COPY_DEFAULT_MOVE` — vérifier que le c
 
 3. **`src/extension/extension_entries.cpp`** — ajouter :
    ```cpp
-   {"SEARCH", "tantivy_fts"},
-   {"SEARCH_SCORE", "tantivy_fts"},
-   {"SEARCH_HIGHLIGHTS", "tantivy_fts"},
+   {"SEARCH", "lucivy_fts"},
+   {"SEARCH_SCORE", "lucivy_fts"},
+   {"SEARCH_HIGHLIGHTS", "lucivy_fts"},
    ```
 
 ### Task #88 — GTest tests
 
-Ajouter ~10 tests dans `extension/tantivy_fts/test/tantivy_fts_test.cpp` :
+Ajouter ~10 tests dans `extension/lucivy_fts/test/lucivy_fts_test.cpp` :
 - `SearchInWhere_Contains` — défaut
 - `SearchInWhere_ContainsSplit` — multi-mots
 - `SearchInWhere_Fuzzy` — tolérant typos
 - `SearchInWhere_Regex` — pattern regex
-- `SearchInWhere_Parse` — Tantivy QueryParser
+- `SearchInWhere_Parse` — Lucivy QueryParser
 - `SearchInWhere_Score` — SEARCH_SCORE() retourne > 0
 - `SearchInWhere_Highlights` — SEARCH_HIGHLIGHTS() retourne JSON valide
 - `SearchInWhere_NoIndex_Error` — erreur si pas d'index
@@ -167,9 +167,9 @@ Ajouter ~10 tests dans `extension/tantivy_fts/test/tantivy_fts_test.cpp` :
 ```bash
 cd packages/rag3db/build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
-  -DBUILD_EXTENSIONS="tantivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
+  -DBUILD_EXTENSIONS="lucivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 cmake --build . -j$(nproc)
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 ```
 
 ## Architecture résumée
@@ -208,7 +208,7 @@ Parser ──→ Binder:
                                       → ReferenceEvaluator (reads from scan output)
 ```
 
-**Découplage core/extension** : le core ne connaît PAS TantivyIndex. La recherche est encapsulée dans un `std::function` stocké dans `FTSSearchBindData` (défini dans core), créé au bind time par l'extension.
+**Découplage core/extension** : le core ne connaît PAS LucivyIndex. La recherche est encapsulée dans un `std::function` stocké dans `FTSSearchBindData` (défini dans core), créé au bind time par l'extension.
 
 ## Fichiers créés/modifiés (résumé)
 
@@ -223,12 +223,12 @@ Parser ──→ Binder:
 - `src/include/optimizer/filter_push_down_optimizer.h` — +popSearchPredicate()
 - `src/optimizer/filter_push_down_optimizer.cpp` — FTS_SCAN logic + popSearchPredicate
 
-### Extension tantivy_fts (créés) :
+### Extension lucivy_fts (créés) :
 - `src/include/function/search_function.h`
 - `src/function/search_function.cpp`
 
-### Extension tantivy_fts (modifiés) :
-- `src/main/tantivy_fts_extension.cpp` — +3 addScalarFunc
+### Extension lucivy_fts (modifiés) :
+- `src/main/lucivy_fts_extension.cpp` — +3 addScalarFunc
 - `src/function/CMakeLists.txt` — +search_function.cpp
 
 ### Pas encore créés/modifiés :
@@ -236,4 +236,4 @@ Parser ──→ Binder:
 - `src/processor/map/map_scan_node_table.cpp` — +case FTS_SCAN
 - `src/processor/CMakeLists.txt` — +fts_scan_node_table.cpp
 - `src/extension/extension_entries.cpp` — +SEARCH entries
-- `extension/tantivy_fts/test/tantivy_fts_test.cpp` — +~10 tests
+- `extension/lucivy_fts/test/lucivy_fts_test.cpp` — +~10 tests

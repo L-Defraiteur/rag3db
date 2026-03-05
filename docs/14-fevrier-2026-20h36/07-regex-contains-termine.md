@@ -33,7 +33,7 @@ Le doc 06 marquait l'etape 5 comme "PARTIEL" — quand les litteraux regex sont 
    - Toujours utiliser `NgramContainsQuery` quand un ngram_field existe, meme sans litteraux
    - Le `RegexQuery` standard ne sert plus que s'il n'y a pas de ngram_field du tout (cas theorique)
 
-3. **`tantivy_fts_test.cpp`** — nouveau sub-test (#7) :
+3. **`lucivy_fts_test.cpp`** — nouveau sub-test (#7) :
    - Regex `v[0-9]` sur doc contenant "version v2.0 systems"
    - Litteraux < 3 chars → full-scan → match avec BM25
 
@@ -45,7 +45,7 @@ Les tests GTest E2E (doc 06) etaient ecrits mais pas encore buildes/lances. C'es
 [  PASSED  ] 11 tests.
 ```
 
-11/11 tests passent, dont `TantivyRegexContainsTest` avec 7 sub-tests :
+11/11 tests passent, dont `LucivyRegexContainsTest` avec 7 sub-tests :
 
 1. Regex accelere par trigrams : `program[a-z]+` → 3 docs
 2. BM25 scoring variable (pas constant)
@@ -61,7 +61,7 @@ Les tests GTest E2E (doc 06) etaient ecrits mais pas encore buildes/lances. C'es
 test result: ok. 1025 passed; 0 failed; 7 ignored
 ```
 
-### README ld-tantivy mis a jour
+### README ld-lucivy mis a jour
 
 - Description enrichie (fuzzy + regex + hybrid)
 - Tableaux d'exemples separes pour fuzzy et regex
@@ -72,11 +72,11 @@ test result: ok. 1025 passed; 0 failed; 7 ignored
 
 | Repo | Branche | Commit | Contenu |
 |------|---------|--------|---------|
-| ld-tantivy | `main` | `80159c1` | feat: unified contains with regex mode (6 fichiers, +622/-302) |
-| ld-tantivy | `main` | `77c4ca6` | docs: update README |
+| ld-lucivy | `main` | `80159c1` | feat: unified contains with regex mode (6 fichiers, +622/-302) |
+| ld-lucivy | `main` | `77c4ca6` | docs: update README |
 | rag3db | `feature/fuzzy-fts` | `e0186a809` | feat: regex contains E2E tests + submodule update |
 
-ld-tantivy pushe sur origin/main. rag3db non pushe (a faire quand pret).
+ld-lucivy pushe sur origin/main. rag3db non pushe (a faire quand pret).
 
 ## Verification de la vision (doc 04)
 
@@ -117,11 +117,11 @@ Defaut `regex`: false. Defaut `distance` en mode regex: 0 (regex pur).
 | `src/query/phrase_query/ngram_contains_query.rs` | `VerificationMode`, `FuzzyParams`, `RegexParams`, `verify_regex()`, candidats union, full-scan fallback, 10 tests |
 | `src/query/phrase_query/mod.rs` | Export `FuzzyParams`, `RegexParams`, `VerificationMode` |
 | `src/query/mod.rs` | Re-export |
-| `tantivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing, full-scan path |
-| `Cargo.toml` (ld-tantivy) | `regex-syntax = "0.8"` |
-| `tantivy_fts/rust/Cargo.toml` | `regex = "1"` + `regex-syntax = "0.8"` |
-| `ld-tantivy/README.md` | Mise a jour avec regex mode |
-| `extension/tantivy_fts/test/tantivy_fts_test.cpp` | `TantivyRegexContainsTest` (7 sub-tests) |
+| `lucivy_fts/rust/src/query.rs` | `regex` dans `QueryConfig`, `build_contains_regex()`, routing, full-scan path |
+| `Cargo.toml` (ld-lucivy) | `regex-syntax = "0.8"` |
+| `lucivy_fts/rust/Cargo.toml` | `regex = "1"` + `regex-syntax = "0.8"` |
+| `ld-lucivy/README.md` | Mise a jour avec regex mode |
+| `extension/lucivy_fts/test/lucivy_fts_test.cpp` | `LucivyRegexContainsTest` (7 sub-tests) |
 
 ## Architecture finale du NgramContainsQuery
 

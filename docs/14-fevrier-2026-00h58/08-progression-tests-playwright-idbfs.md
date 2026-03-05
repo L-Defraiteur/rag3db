@@ -42,10 +42,10 @@ Chromium headless installé : `~/.cache/ms-playwright/chromium-1208/`
 Phase 1 (/?phase=1) :
   - Init WASM module
   - Mount IDBFS at /database
-  - Create DB at /database/mydb (tantivy indexes iront sous /database/)
+  - Create DB at /database/mydb (lucivy indexes iront sous /database/)
   - Create table docs (id, title, body, embedding FLOAT[4])
   - Insert 4 documents
-  - CREATE_TANTIVY_INDEX (title, body)
+  - CREATE_LUCIVY_INDEX (title, body)
   - CREATE_VECTOR_INDEX (embedding, cosine)
   - Test contains → vérifier résultats
   - Test fuzzy → vérifier résultats
@@ -106,7 +106,7 @@ const url = parsedUrl.pathname === "/" ? "/index.html" : parsedUrl.pathname;
 1. **Fixer serve.js** : parser la query string (2 lignes à changer)
 2. **Relancer** : `npx playwright test --reporter=line`
 3. **Si ça passe** : les 8 tests (4 en phase 1 + 4 en phase 2) valident :
-   - tantivy_fts (contains, fuzzy, phrase) dans le browser
+   - lucivy_fts (contains, fuzzy, phrase) dans le browser
    - vector HNSW (cosine) dans le browser
    - Persistance IDBFS (create → save → reload → re-query)
 4. **Si ça échoue** : possibles problèmes avec :

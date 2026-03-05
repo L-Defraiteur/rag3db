@@ -29,11 +29,11 @@ std::unique_ptr<Index::DeleteState> OnDiskHNSWIndex::initDeleteState(
 }
 ```
 
-### 3. Build réussi (vector + tantivy_fts + sparse_vector)
+### 3. Build réussi (vector + lucivy_fts + sparse_vector)
 
 ```bash
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
-  -DBUILD_EXTENSIONS="vector;tantivy_fts;sparse_vector" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
+  -DBUILD_EXTENSIONS="vector;lucivy_fts;sparse_vector" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 cmake --build . --target e2e_test rag3db_vector_extension -j$(nproc)
 # ✅ Build OK, zéro erreur
 ```

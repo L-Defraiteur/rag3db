@@ -148,7 +148,7 @@ Les fichiers TS sources sont dans :
 |------------|---------|------|:---:|
 | **L3b** (en cours) | `refs.rs`, `ops.rs`, `queue.rs` | tokio sync | ~25 |
 | **L3c** | `pipeline.rs`, `catalog.rs`, `persistence.rs` | MockConnection + MockEmbedder | ~33 |
-| **L3d** | `search.rs`, `explore.rs` | DB + embedder + tantivy (via Cypher) | ~18 |
+| **L3d** | `search.rs`, `explore.rs` | DB + embedder + lucivy (via Cypher) | ~18 |
 
 Ordre strict : L3b → L3c → L3d (chaque couche depend de la precedente).
 

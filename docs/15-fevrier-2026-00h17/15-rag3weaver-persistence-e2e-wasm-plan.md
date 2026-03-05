@@ -146,4 +146,4 @@ await rag3db.FS.syncfs(false); // sauver vers IndexedDB
 - **Node.js binding** : napi-rs (compile rag3weaver + rag3db natif en .node) vs JS wrapper pur ?
 - **WASM packaging** : wasm-pack + wasm-bindgen vs emscripten (comme rag3db) ?
 - **Queue flush timing** : flush auto dans le browser (avant `syncfs(false)`) ou explicite ?
-- **Extension tantivy_fts** : tester le chargement via `LOAD EXTENSION` depuis Rag3dbConnection (nécessite `-rdynamic` dans le build)
+- **Extension lucivy_fts** : tester le chargement via `LOAD EXTENSION` depuis Rag3dbConnection (nécessite `-rdynamic` dans le build)

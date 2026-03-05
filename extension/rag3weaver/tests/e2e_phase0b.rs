@@ -143,7 +143,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
-        ("tantivy_fts", format!("{root}/extension/tantivy_fts/build/libtantivy_fts.rag3db_extension")),
+        ("lucivy_fts", format!("{root}/extension/lucivy_fts/build/liblucivy_fts.rag3db_extension")),
     ];
     for (name, ext_path) in &extensions {
         if !std::path::Path::new(ext_path).exists() {
@@ -1078,17 +1078,17 @@ async fn phase0b_debug_trace_pipeline() {
     eprintln!("File_SOURCED_FileKB: {}", file_sourced_file.len());
     for row in &file_sourced_file { eprintln!("  {:?}", row); }
 
-    // Try Tantivy raw query to check if FTS index has data
-    eprintln!("\n══ RAW TANTIVY QUERY ══");
+    // Try Lucivy raw query to check if FTS index has data
+    eprintln!("\n══ RAW LUCIVY QUERY ══");
     let fts_result = catalog.execute_raw(
-        "CALL QUERY_TANTIVY_INDEX('TreeKB_Index', '{\"type\":\"parse\",\"fields\":[\"_title\",\"_content\"],\"value\":\"auth\"}', 10) RETURN node_id, score"
+        "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{\"type\":\"parse\",\"fields\":[\"_title\",\"_content\"],\"value\":\"auth\"}', 10) RETURN node_id, score"
     ).await;
     match fts_result {
         Ok(r) => {
-            eprintln!("Tantivy 'auth' on TreeKB_Index: {} results", r.rows.len());
+            eprintln!("Lucivy 'auth' on TreeKB_Index: {} results", r.rows.len());
             for row in &r.rows { eprintln!("  {:?}", row); }
         }
-        Err(e) => eprintln!("Tantivy error: {e:?}"),
+        Err(e) => eprintln!("Lucivy error: {e:?}"),
     }
 
     // Try search through Catalog API
@@ -1104,12 +1104,12 @@ async fn phase0b_debug_trace_pipeline() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Test 14: Isolate Tantivy query modes — Contains vs Parse on same index
+// Test 14: Isolate Lucivy query modes — Contains vs Parse on same index
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[tokio::test]
 #[ignore]
-async fn phase0b_tantivy_contains_vs_parse() {
+async fn phase0b_lucivy_contains_vs_parse() {
     let mut catalog = make_catalog().await;
     catalog.initialize().await.unwrap();
 
@@ -1144,7 +1144,7 @@ async fn phase0b_tantivy_contains_vs_parse() {
     eprintln!("TreeKB_Index_Chunk rows:");
     for row in &chunks { eprintln!("  {:?}", row); }
 
-    // ── Test raw Tantivy queries directly ──
+    // ── Test raw Lucivy queries directly ──
     let queries = vec![
         ("parse, fields=[_title,_content], 'auth'",
          r#"{"type":"parse","fields":["_title","_content"],"value":"auth"}"#),
@@ -1164,11 +1164,11 @@ async fn phase0b_tantivy_contains_vs_parse() {
          r#"{"type":"contains","field":"_content","value":"authenticate","distance":1}"#),
     ];
 
-    eprintln!("\n══ RAW TANTIVY QUERY COMPARISON ══");
+    eprintln!("\n══ RAW LUCIVY QUERY COMPARISON ══");
     for (label, json) in &queries {
         let escaped = json.replace('\'', "''");
         let cypher = format!(
-            "CALL QUERY_TANTIVY_INDEX('TreeKB_Index', '{}', 10) RETURN node_id, score, highlights",
+            "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{}', 10) RETURN node_id, score, highlights",
             escaped,
         );
         match catalog.execute_raw(&cypher).await {

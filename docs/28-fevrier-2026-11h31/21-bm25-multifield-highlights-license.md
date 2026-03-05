@@ -2,7 +2,7 @@
 
 ## Ce qu'on a fait
 
-### 1. HighlightSink per-field dans ld-tantivy (Phase B)
+### 1. HighlightSink per-field dans ld-lucivy (Phase B)
 
 **Probleme** : `HighlightSink` ne supportait pas les requetes multi-champs. Pour une KB avec title + body + summary, `build_boolean_query()` construisait un `boolean should` mais passait `None` pour `highlight_sink` aux sous-requetes. Resultat : highlights vides pour le cas standard rag3weaver.
 
@@ -24,8 +24,8 @@
 | `automaton_phrase_query.rs`, `automaton_phrase_weight.rs` | Idem |
 | `contains_scorer.rs` | Idem (2 structs: ContainsScorer + ContainsSingleScorer) |
 | `ngram_contains_query.rs` | Le plus complexe — 3 helpers + tests mis a jour pour HashMap |
-| `query.rs` (tantivy_fts) | Tous les `with_highlight_sink(sink)` → `with_highlight_sink(sink, field_name)`, `build_boolean_query` propage le sink |
-| `bridge.rs` (tantivy_fts) | `collect_search_results_with_highlights` utilise per-field `sink.get()`, retire param `highlight_field` |
+| `query.rs` (lucivy_fts) | Tous les `with_highlight_sink(sink)` → `with_highlight_sink(sink, field_name)`, `build_boolean_query` propage le sink |
+| `bridge.rs` (lucivy_fts) | `collect_search_results_with_highlights` utilise per-field `sink.get()`, retire param `highlight_field` |
 
 **Tests** : 1064 lib tests OK, 15 GTest E2E OK.
 
@@ -51,24 +51,24 @@
 
 | Repo | LICENSE | NOTICE |
 |------|---------|--------|
-| ld-tantivy | LRSL v1.2 (fork Tantivy v0.26.0) | MIT originale Tantivy |
-| rag3db | LRSL v1.2 (fork Kuzu v0.11.2.2) | MIT originale Kuzu + mention Tantivy |
+| ld-lucivy | LRSL v1.2 (fork Lucivy v0.26.0) | MIT originale Lucivy |
+| rag3db | LRSL v1.2 (fork Kuzu v0.11.2.2) | MIT originale Kuzu + mention Lucivy |
 
 community-docs reste en v1.1 (monthly) — a corriger separement.
 
 ### 4. README rag3db
 
 Reecrit pour refleter l'etat actuel :
-- 3 extensions documentees : tantivy_fts, vector (avec DELETE/UPDATE), sparse_vector
+- 3 extensions documentees : lucivy_fts, vector (avec DELETE/UPDATE), sparse_vector
 - Section rag3weaver complete (Catalog API, chunking, search hybride, filtrage, embedders, queue, WASM FFI)
 - Architecture mise a jour
 - License LRSL v1.2 referencee
 
 ### 5. Commits et push
 
-**ld-tantivy** (2 commits) :
+**ld-lucivy** (2 commits) :
 1. `feat: per-field highlight tracking in HighlightSink` (16 files, +215 -97)
-2. `chore: LRSL v1.2 license, add NOTICE for Tantivy MIT attribution`
+2. `chore: LRSL v1.2 license, add NOTICE for Lucivy MIT attribution`
 
 **rag3db** (1 commit) :
 - `feat: rag3weaver chunk resolution, BM25 multi-field highlights, HNSW delete/update` (38 files, +5315 -316)
@@ -77,8 +77,8 @@ Reecrit pour refleter l'etat actuel :
 
 | Suite | Resultat |
 |-------|----------|
-| ld-tantivy `cargo test --lib` | 1064 OK |
-| tantivy_fts GTest E2E | 15 OK |
+| ld-lucivy `cargo test --lib` | 1064 OK |
+| lucivy_fts GTest E2E | 15 OK |
 | rag3weaver `cargo test` | 345 OK |
 | E2E phase0 (CRUD) | 6/6 OK |
 | E2E phase1 (BM25) | 6/6 OK |
@@ -86,23 +86,23 @@ Reecrit pour refleter l'etat actuel :
 
 ## Prochaines etapes
 
-1. **Explorer l'integration Tantivy dans le query planner rag3db** (niveau 2) — faire de l'extension tantivy un vrai index provider integre au Cypher, avec predicate pushdown pour les filtres
+1. **Explorer l'integration Lucivy dans le query planner rag3db** (niveau 2) — faire de l'extension lucivy un vrai index provider integre au Cypher, avec predicate pushdown pour les filtres
 2. **Phase 3 tests** (hybrid dense+BM25) — les infra sont pretes, il manque les tests e2e
 3. **Phase 5 tests** (chunking) — l'infra chunk resolution est complete, il faut des tests qui verifient `ChunkInfo` dans les resultats
-4. **Simplifier les filtres** — potentiellement tout passer par Cypher (retirer les filter_fields Tantivy) si le niveau 2 se concretise
+4. **Simplifier les filtres** — potentiellement tout passer par Cypher (retirer les filter_fields Lucivy) si le niveau 2 se concretise
 
 ## Fichiers crees/modifies cette session
 
 | Fichier | Action |
 |---------|--------|
-| `ld-tantivy/src/query/phrase_query/scoring_utils.rs` | HighlightSink per-field |
-| `ld-tantivy/src/query/**/*.rs` (14 fichiers) | Propagation highlight_field_name |
-| `ld-tantivy/tantivy_fts/rust/src/query.rs` | with_highlight_sink + boolean propagation |
-| `ld-tantivy/tantivy_fts/rust/src/bridge.rs` | Per-field sink.get(), retire highlight_field |
-| `ld-tantivy/LICENSE` | LRSL v1.2 |
-| `ld-tantivy/NOTICE` | MIT Tantivy attribution |
+| `ld-lucivy/src/query/phrase_query/scoring_utils.rs` | HighlightSink per-field |
+| `ld-lucivy/src/query/**/*.rs` (14 fichiers) | Propagation highlight_field_name |
+| `ld-lucivy/lucivy_fts/rust/src/query.rs` | with_highlight_sink + boolean propagation |
+| `ld-lucivy/lucivy_fts/rust/src/bridge.rs` | Per-field sink.get(), retire highlight_field |
+| `ld-lucivy/LICENSE` | LRSL v1.2 |
+| `ld-lucivy/NOTICE` | MIT Lucivy attribution |
 | `rag3db/extension/rag3weaver/src/search.rs` | search_bm25_raw, resolve_bm25_to_chunks |
 | `rag3db/extension/rag3weaver/src/catalog.rs` | Cablage BM25 chunk resolution |
 | `rag3db/LICENSE` | LRSL v1.2 |
-| `rag3db/NOTICE` | MIT Kuzu + Tantivy attribution |
+| `rag3db/NOTICE` | MIT Kuzu + Lucivy attribution |
 | `rag3db/README.md` | Reecrit complet |

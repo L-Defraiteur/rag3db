@@ -36,7 +36,7 @@ Attendu : MATCH avec score BM25
 
 ---
 
-## Architecture Tantivy : ce qu'on a pour construire ca
+## Architecture Lucivy : ce qu'on a pour construire ca
 
 ### Chaine Query → Weight → Scorer
 
@@ -47,7 +47,7 @@ Query (recette, pas de segment)
               implements DocSet (iteration) + score() (BM25)
 ```
 
-Fichiers cles dans `izihawa-tantivy/src/query/` :
+Fichiers cles dans `izihawa-lucivy/src/query/` :
 
 | Composant | Fichier | Role |
 |-----------|---------|------|
@@ -201,7 +201,7 @@ Seuil:   distance max = 2
 
 ### Etat actuel
 
-Le Token de Tantivy a deja `offset_from` et `offset_to` (remplis par le tokenizer), mais ils sont **jetes** a l'indexation. Les postings ne stockent que :
+Le Token de Lucivy a deja `offset_from` et `offset_to` (remplis par le tokenizer), mais ils sont **jetes** a l'indexation. Les postings ne stockent que :
 
 ```
 terme → [(doc_id, frequency, [positions])]
@@ -246,7 +246,7 @@ Le post-filtre du ContainsQuery a besoin des offsets caracteres pour :
 
 Sans les offsets dans les postings, il faut re-tokeniser le texte stocke (possible mais inelegant). Avec les offsets, le post-filtre a tout ce qu'il faut directement depuis l'index.
 
-### Fichiers a modifier dans izihawa-tantivy
+### Fichiers a modifier dans izihawa-lucivy
 
 | Fichier | Modification |
 |---------|-------------|
@@ -313,7 +313,7 @@ Pour `PositionMatcher::Auto`, le Weight construit l'union de 3 automatons :
 2. Fuzzy : `DfaWrapper` (Levenshtein automaton)
 3. Substring : `Regex(".*{escaped_term}.*")`
 
-### Etape C : Integration dans tantivy_fts
+### Etape C : Integration dans lucivy_fts
 
 Le `build_contains_query()` dans notre crate FFI :
 1. Tokenize la valeur avec le `SeparatorAwareTokenizer`
@@ -324,7 +324,7 @@ Le `build_contains_query()` dans notre crate FFI :
 
 ## Fichiers a modifier/creer
 
-### Dans izihawa-tantivy (le fork)
+### Dans izihawa-lucivy (le fork)
 
 | Fichier | Action |
 |---------|--------|
@@ -335,7 +335,7 @@ Le `build_contains_query()` dans notre crate FFI :
 | `src/query/phrase_query/mod.rs` | Ajouter exports |
 | `src/query/mod.rs` | Ajouter exports |
 
-### Dans tantivy_fts (notre crate FFI)
+### Dans lucivy_fts (notre crate FFI)
 
 | Fichier | Action |
 |---------|--------|
@@ -365,7 +365,7 @@ Le plus gros morceau est le `AutomatonPhraseWeight` qui doit gerer l'union de 3 
 ### RegexPhraseQuery — le modele a suivre
 
 ```
-izihawa-tantivy/src/query/phrase_query/regex_phrase_query.rs
+izihawa-lucivy/src/query/phrase_query/regex_phrase_query.rs
 
 pub struct RegexPhraseQuery {
     field: Field,
@@ -378,7 +378,7 @@ pub struct RegexPhraseQuery {
 ### RegexPhraseWeight — construction union postings
 
 ```
-izihawa-tantivy/src/query/phrase_query/regex_phrase_weight.rs:42
+izihawa-lucivy/src/query/phrase_query/regex_phrase_weight.rs:42
 
 fn phrase_scorer():
   Pour chaque (offset, regex_pattern):
@@ -392,7 +392,7 @@ fn phrase_scorer():
 ### AutomatonWeight — generique sur le type d'automaton
 
 ```
-izihawa-tantivy/src/query/automaton_weight.rs
+izihawa-lucivy/src/query/automaton_weight.rs
 
 pub struct AutomatonWeight<A: Automaton> { ... }
 
@@ -404,7 +404,7 @@ fn get_match_term_infos(&self, reader: &SegmentReader) -> Result<Vec<TermInfo>>
 ### PhraseScorer — generique sur Postings
 
 ```
-izihawa-tantivy/src/query/phrase_query/phrase_scorer.rs
+izihawa-lucivy/src/query/phrase_query/phrase_scorer.rs
 
 pub struct PhraseScorer<TPostings: Postings> { ... }
 
@@ -416,7 +416,7 @@ fn compute_phrase_match():
 ### SimpleTokenizer — reference pour le nouveau tokenizer
 
 ```
-izihawa-tantivy/src/tokenizer/simple_tokenizer.rs
+izihawa-lucivy/src/tokenizer/simple_tokenizer.rs
 
 Coupe sur !char::is_alphanumeric()
 Emet un token par sequence alphanumerique

@@ -24,7 +24,7 @@ Créé `extension/rag3weaver/run_e2e.sh` — script dédié pour les tests E2E n
 
 Configuré et compilé `build/native-test/` avec les 3 extensions :
 - `vector` (HNSW index)
-- `tantivy_fts` (FTS)
+- `lucivy_fts` (FTS)
 - `sparse_vector`
 
 Les `.rag3db_extension` sont placés par cmake dans `extension/*/build/` (arbre source, PAS dans le build dir).
@@ -33,7 +33,7 @@ Les `.rag3db_extension` sont placés par cmake dans `extension/*/build/` (arbre 
 
 Créé `extension/rag3weaver/tests/e2e_search.rs` avec :
 - Config KB réaliste (Document + Author, 2 KBs, filter fields, relations avec propriétés)
-- Helper `load_extensions()` qui charge vector + tantivy_fts via `LOAD EXTENSION`
+- Helper `load_extensions()` qui charge vector + lucivy_fts via `LOAD EXTENSION`
 - Phase 0 : 6 tests CRUD
 - Phase 1 : 4 tests BM25 search (prêts mais pas encore exécutés)
 
@@ -48,7 +48,7 @@ Créé `extension/rag3weaver/tests/e2e_search.rs` avec :
 | `phase0_link_relations` | ✅ PASS | 3 inserts + 3 links (dont CITES avec propriété) |
 | `phase0_update_and_delete` | ✅ PASS | Update body+score, delete, verification |
 | `phase0_error_cases` | ✅ PASS | UnknownEntity, UnknownRelation, UnknownKB, NotFound |
-| `phase0_hashsafe_dedup` | ❌ FAIL | Lock conflict Tantivy |
+| `phase0_hashsafe_dedup` | ❌ FAIL | Lock conflict Lucivy |
 
 ### Phase 1 (BM25) — pas encore exécutée
 
@@ -56,7 +56,7 @@ Créé `extension/rag3weaver/tests/e2e_search.rs` avec :
 
 ## Problèmes identifiés
 
-### Bug 1 : Tantivy lock conflict entre catalogs in-memory
+### Bug 1 : Lucivy lock conflict entre catalogs in-memory
 
 **Symptôme** : quand on crée 2 `Catalog` avec `Rag3dbConnection::in_memory()` dans le même process, le 2ème `initialize()` échoue :
 ```
@@ -64,20 +64,20 @@ cannot create writer: Failed to acquire Lockfile: LockBusy.
 "there is already an IndexWriter working on this Directory"
 ```
 
-**Cause probable** : les DB in-memory utilisent toutes le même chemin par défaut pour les index Tantivy (car `getDatabasePath()` retourne un chemin fixe ou vide pour les DB in-memory). Deux instances se battent pour le même directory Tantivy sur disque.
+**Cause probable** : les DB in-memory utilisent toutes le même chemin par défaut pour les index Lucivy (car `getDatabasePath()` retourne un chemin fixe ou vide pour les DB in-memory). Deux instances se battent pour le même directory Lucivy sur disque.
 
 **Impact** : empêche tout test qui crée 2 catalogs dans le même process (hashsafe dedup entre catalogs, tests de concurrence).
 
 **Fix à investiguer** :
 - Comment `getDatabasePath()` se comporte pour les DB in-memory dans rag3db ?
-- Le chemin des index Tantivy est `parent_path(getDatabasePath()) + /tantivy_indexes/<table>/` — si le DB path est vide ou toujours le même, tous les indexes atterrissent au même endroit
+- Le chemin des index Lucivy est `parent_path(getDatabasePath()) + /lucivy_indexes/<table>/` — si le DB path est vide ou toujours le même, tous les indexes atterrissent au même endroit
 - Solution possible : donner un temp dir unique à chaque DB in-memory, OU passer un path au lieu d'utiliser `in_memory()`
 
 ### Bug 2 : Tests parallèles → même lock conflict
 
 **Symptôme** : sans `--test-threads=1`, TOUS les tests échouent avec le même LockBusy (sauf 1 qui gagne la course).
 
-**Cause** : même que Bug 1 — tous les catalogs partagent le même chemin d'index Tantivy.
+**Cause** : même que Bug 1 — tous les catalogs partagent le même chemin d'index Lucivy.
 
 **Fix** : `--test-threads=1` contourne le problème MAIS c'est lent et masque le vrai bug. La vraie fix est la même que Bug 1 : des chemins uniques.
 
@@ -97,7 +97,7 @@ cmake place les shared libs compilées dans `extension/<name>/build/` (arbre sou
 
 ## Prochaines étapes
 
-1. **Fixer le lock Tantivy** (Bug 1+2) — chemin unique par DB in-memory
+1. **Fixer le lock Lucivy** (Bug 1+2) — chemin unique par DB in-memory
 2. **Exécuter Phase 1 BM25** — les tests sont écrits, il faut les lancer
 3. **Investiguer search 0 résultats** — BM25 et vector retournent 0 (probablement lié à contentFor manquant dans les anciens tests WASM, mais à vérifier en natif maintenant)
 4. Continuer les phases 2-10 du cahier des charges

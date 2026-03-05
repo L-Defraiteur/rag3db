@@ -196,7 +196,7 @@ pub use validator::{validate_schema, KBFieldRef};  // KBFieldRef ajoute
 Fonctions libres pour la recherche hybride, appelees par des methodes sur Catalog :
 
 - `search_vector(conn, entity, kb, embedding, limit)` — MATCH + ORDER BY cosine_distance
-- `search_bm25(conn, entity, kb, query, limit)` — CALL QUERY_TANTIVY_INDEX
+- `search_bm25(conn, entity, kb, query, limit)` — CALL QUERY_LUCIVY_INDEX
 - `fuse_results(vector, bm25, strategy, keyword_weight)` — delegue a fusion.rs
 - `embed_query(embedder, query, cache)` — embedding avec cache HashMap
 

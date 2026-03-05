@@ -106,7 +106,7 @@ pub struct Rag3dbConnection {
 
 3. **Build system** : le crate rag3db compile tout rag3db via CMake. C'est lourd (~5-10 min le premier build). Alternative : pré-builder et pointer RAG3DB_LIBRARY_DIR vers `build/release/src/`.
 
-4. **Extensions** : pour que LOAD EXTENSION marche, il faut `-rdynamic` dans le linker (build.rs du crate rag3db le fait déjà en mode static). tantivy_fts doit être loadable.
+4. **Extensions** : pour que LOAD EXTENSION marche, il faut `-rdynamic` dans le linker (build.rs du crate rag3db le fait déjà en mode static). lucivy_fts doit être loadable.
 
 ### Plan d'exécution
 
@@ -121,7 +121,7 @@ pub struct Rag3dbConnection {
    - Insèrent des données
    - Querent et vérifient les résultats
    - Testent les prepared statements avec params
-7. Tester avec l'extension tantivy_fts chargée (LOAD EXTENSION)
+7. Tester avec l'extension lucivy_fts chargée (LOAD EXTENSION)
 8. Éventuellement : test E2E complet (Catalog + Rag3dbConnection + CandleEmbedder)
 
 ### Architecture résultante

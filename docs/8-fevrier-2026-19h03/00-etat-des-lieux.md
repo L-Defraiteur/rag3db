@@ -1,6 +1,6 @@
 # Etat des Lieux — 8 Fevrier 2026
 
-> **Objectif final :** Remplacer Neo4j par Kuzu (embedded) + Tantivy (FTS fuzzy/regex/contains) dans un seul module WASM, pour alimenter le framework Rag3Weaver puis ragforge-core et community-docs.
+> **Objectif final :** Remplacer Neo4j par Kuzu (embedded) + Lucivy (FTS fuzzy/regex/contains) dans un seul module WASM, pour alimenter le framework Rag3Weaver puis ragforge-core et community-docs.
 
 ---
 
@@ -18,14 +18,14 @@ Un fork de Kuzu avec :
 - L'extension Vector (HNSW index)
 - Build WASM via Emscripten avec support **pthreads** (`-s USE_PTHREADS`, `SharedArrayBuffer`)
 
-### 2. ld-tantivy (Fork Tantivy)
+### 2. ld-lucivy (Fork Lucivy)
 
-**Emplacement :** `packages/rag3db/extension/tantivy/ld-tantivy/`
-**Repo :** https://github.com/L-Defraiteur/tantivy
+**Emplacement :** `packages/rag3db/extension/lucivy/ld-lucivy/`
+**Repo :** https://github.com/L-Defraiteur/lucivy
 **License :** MIT
-**Lignee :** `quickwit-oss/tantivy v0.22` → `izihawa/tantivy v0.26.0` → `ld-tantivy`
+**Lignee :** `quickwit-oss/lucivy v0.22` → `izihawa/lucivy v0.26.0` → `ld-lucivy`
 
-Fork de Tantivy avec extensions pour la recherche de contenu :
+Fork de Lucivy avec extensions pour la recherche de contenu :
 - **ContainsQuery** — recherche multi-strategie avec auto-cascade (exact → fuzzy → substring → fuzzy substring)
 - **ContainsScorer** — validation des separateurs et distance cumulative
 - **NgramContainsQuery** — recherche contains acceleree par index trigram
@@ -33,13 +33,13 @@ Fork de Tantivy avec extensions pour la recherche de contenu :
 - **HighlightSink** — capture side-channel des byte offsets pour tous les types de query
 - **FuzzySubstringAutomaton** — automate combine `.*{levenshtein(token,d)}.*`
 
-**48 fichiers modifies** par rapport a izihawa/tantivy. **1015 tests** (7 ignored).
+**48 fichiers modifies** par rapport a izihawa/lucivy. **1015 tests** (7 ignored).
 
-### 3. tantivy_fts (Crate FFI C)
+### 3. lucivy_fts (Crate FFI C)
 
-**Emplacement :** `packages/rag3db/extension/tantivy_fts/rust/`
+**Emplacement :** `packages/rag3db/extension/lucivy_fts/rust/`
 
-Crate Rust exposant ld-tantivy via une API C FFI :
+Crate Rust exposant ld-lucivy via une API C FFI :
 - Fonctions extern "C" : lifecycle, ecriture, lecture, info
 - Architecture tri-field : `{name}` (stemmed), `{name}._raw` (lowercase), `{name}._ngram` (trigrams)
 - Routing transparent des queries par type
@@ -81,7 +81,7 @@ Build Emscripten de Kuzu avec :
 
   ┌──────────────────────────────────────────────────────────┐
   │                                                          │
-  │  ld-tantivy + tantivy_fts (Rust)                         │
+  │  ld-lucivy + lucivy_fts (Rust)                         │
   │  - Full-text search (BM25)                               │
   │  - Fuzzy search (Levenshtein automaton)                  │
   │  - Contains search (multi-cascade + ngram)               │
@@ -89,7 +89,7 @@ Build Emscripten de Kuzu avec :
   │  - Highlighting (byte offsets) pour tous les types       │
   │                                                          │
   │  Compile: cargo build --target wasm32-unknown-emscripten │
-  │  Output: libtantivy_fts.a (static lib C)                 │
+  │  Output: liblucivy_fts.a (static lib C)                 │
   │                                                          │
   └───────────────────────────┬──────────────────────────────┘
                               │ C FFI link
@@ -100,7 +100,7 @@ Build Emscripten de Kuzu avec :
   │  - Graph database (Cypher)                               │
   │  - Storage engine (columnar, CSR)                        │
   │  - Vector index (HNSW)                                   │
-  │  - Extension FTS → appelle Tantivy via C FFI             │
+  │  - Extension FTS → appelle Lucivy via C FFI             │
   │                                                          │
   │  Compile: emcc + CMake                                   │
   │  Output: rag3db.wasm + rag3db.js + worker.js             │
@@ -146,8 +146,8 @@ Build Emscripten de Kuzu avec :
 ### Phase 2 : Integration CMake — FAIT (6 fevrier)
 
 - [x] CMakeLists.txt liant la static lib Rust (cargo via add_custom_command)
-- [x] Build natif : `libtantivy_fts.kuzu_extension` (15 KB)
-- [x] Build WASM : `libkuzu.a` (36 MB) avec json+vector+algo+tantivy_fts
+- [x] Build natif : `liblucivy_fts.kuzu_extension` (15 KB)
+- [x] Build WASM : `libkuzu.a` (36 MB) avec json+vector+algo+lucivy_fts
 
 ### Phase 3 : WithFreqsAndPositionsAndOffsets — FAIT (6-7 fevrier)
 
@@ -160,7 +160,7 @@ Nouveau variant `IndexRecordOption` qui stocke les byte offsets `(offset_from, o
 - [x] Propagation unions : LoadedPostings, SimpleUnion, BitSetPostingUnion, PostingsWithOffset
 - [x] Methode jointe `append_positions_and_offsets()` sur le trait Postings
 
-**21 fichiers modifies dans ld-tantivy.**
+**21 fichiers modifies dans ld-lucivy.**
 
 ### Phase 4 : ContainsQuery — FAIT (6-7 fevrier)
 
@@ -220,13 +220,13 @@ Extension du highlighting a tous les types de query en lisant les byte offsets d
 
 **Bug corrige :** desynchronisation `segment_ord` — `next_segment()` doit etre appele meme pour les segments vides (terme absent) pour rester en sync avec les ordinals reels de TopDocs.
 
-**9 fichiers modifies dans ld-tantivy.**
+**9 fichiers modifies dans ld-lucivy.**
 
 ---
 
 ## Architecture tri-field (stemming actif)
 
-Quand `"stemmer": "english"` est specifie, chaque champ "text" genere trois champs Tantivy :
+Quand `"stemmer": "english"` est specifie, chaque champ "text" genere trois champs Lucivy :
 
 | Champ | Tokenizer | IndexRecordOption | Stocke | Usage |
 |-------|-----------|-------------------|--------|-------|
@@ -272,19 +272,19 @@ Option `"highlight": true` sur n'importe quel type → les resultats incluent un
 
 ### Phase A : Extension C++ (wrapper rag3db)
 
-Exposer tantivy_fts comme extension Cypher dans rag3db. Pattern identique a l'extension FTS existante.
+Exposer lucivy_fts comme extension Cypher dans rag3db. Pattern identique a l'extension FTS existante.
 
 **Fichiers a creer :**
 ```
-extension/tantivy_fts/src/
+extension/lucivy_fts/src/
 ├── function/
-│   ├── create_tantivy_index.cpp     ← CREATE_TANTIVY_INDEX
-│   ├── drop_tantivy_index.cpp       ← DROP_TANTIVY_INDEX
-│   └── query_tantivy_index.cpp      ← QUERY_TANTIVY_INDEX (modes: parse, fuzzy, regex, exact, contains)
+│   ├── create_lucivy_index.cpp     ← CREATE_LUCIVY_INDEX
+│   ├── drop_lucivy_index.cpp       ← DROP_LUCIVY_INDEX
+│   └── query_lucivy_index.cpp      ← QUERY_LUCIVY_INDEX (modes: parse, fuzzy, regex, exact, contains)
 ├── index/
-│   └── tantivy_index.cpp            ← TantivyIndex (wrapper FFI, insert/delete/checkpoint)
+│   └── lucivy_index.cpp            ← LucivyIndex (wrapper FFI, insert/delete/checkpoint)
 └── catalog/
-    └── tantivy_catalog_entry.cpp    ← Serialisation metadata dans catalog Kuzu
+    └── lucivy_catalog_entry.cpp    ← Serialisation metadata dans catalog Kuzu
 ```
 
 **Modes Cypher publics :**
@@ -299,23 +299,23 @@ extension/tantivy_fts/src/
 
 **Exemples Cypher :**
 ```sql
-CALL CREATE_TANTIVY_INDEX('Article', 'article_fts', ['title', 'body'],
+CALL CREATE_LUCIVY_INDEX('Article', 'article_fts', ['title', 'body'],
     stemmer := 'english');
 
-CALL QUERY_TANTIVY_INDEX('Article', 'article_fts', 'running programs')
+CALL QUERY_LUCIVY_INDEX('Article', 'article_fts', 'running programs')
 RETURN node, score;
 
-CALL QUERY_TANTIVY_INDEX('Article', 'article_fts', 'std::collections',
+CALL QUERY_LUCIVY_INDEX('Article', 'article_fts', 'std::collections',
     mode := 'contains')
 RETURN node, score;
 
 MATCH (n:Article) WHERE n.year > 2020
 WITH collect(n._node_id) AS ids
-CALL QUERY_TANTIVY_INDEX('Article', 'article_fts', 'query',
+CALL QUERY_LUCIVY_INDEX('Article', 'article_fts', 'query',
     filter_ids := ids)
 RETURN node, score;
 
-CALL DROP_TANTIVY_INDEX('Article', 'article_fts');
+CALL DROP_LUCIVY_INDEX('Article', 'article_fts');
 ```
 
 ### Phase B : Tests end-to-end
@@ -327,7 +327,7 @@ CALL DROP_TANTIVY_INDEX('Article', 'article_fts');
 
 ### Phase C : Integration Rag3Weaver
 
-- [ ] Modifier `CatalogSearch` pour utiliser `QUERY_TANTIVY_INDEX`
+- [ ] Modifier `CatalogSearch` pour utiliser `QUERY_LUCIVY_INDEX`
 - [ ] Ajouter options `mode`, `distance`, `highlight` dans les parametres de search
 - [ ] Tests end-to-end avec pipeline complet (ingestion → search → highlights → results)
 
@@ -335,12 +335,12 @@ CALL DROP_TANTIVY_INDEX('Article', 'article_fts');
 
 ## Stockage
 
-### Segments Tantivy
+### Segments Lucivy
 
 ```
-{kuzu_db_path}/tantivy/{table_id}_{index_name}/
+{kuzu_db_path}/lucivy/{table_id}_{index_name}/
 ├── _config.json          ← Config (stemmer, champs) pour reopen
-├── meta.json             ← Metadata Tantivy (segment list, schema)
+├── meta.json             ← Metadata Lucivy (segment list, schema)
 ├── {seg_id}.idx          ← Inverted index
 ├── {seg_id}.pos          ← Term positions
 ├── {seg_id}.offsets      ← Byte offsets (NOUVEAU)
@@ -352,7 +352,7 @@ CALL DROP_TANTIVY_INDEX('Article', 'article_fts');
 
 ### Plateforme
 
-| Plateforme | Directory Tantivy | Stockage | Persistence |
+| Plateforme | Directory Lucivy | Stockage | Persistence |
 |------------|-------------------|----------|-------------|
 | **Natif** | `StdFsDirectory` (→ `MmapDirectory`) | Vrai filesystem | Automatique |
 | **WASM** | `StdFsDirectory` (→ VFS Emscripten) | MEMFS | IDBFS → IndexedDB via `FS.syncfs()` |
@@ -365,24 +365,24 @@ Le choix est fait a la compilation via `#[cfg()]`. Le code C++ n'a pas besoin de
 ## Commandes build
 
 ```bash
-# ld-tantivy (1015 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+# ld-lucivy (1015 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
-# tantivy_fts build
-cd packages/rag3db/extension/tantivy_fts/rust && cargo build --release
+# lucivy_fts build
+cd packages/rag3db/extension/lucivy_fts/rust && cargo build --release
 
 # FFI tests (153 tests)
-cd packages/rag3db/extension/tantivy_fts/test && \
-  cc -o test_ffi test_ffi.c -I../include -L../rust/target/release -ltantivy_fts -lpthread -lm -ldl && \
+cd packages/rag3db/extension/lucivy_fts/test && \
+  cc -o test_ffi test_ffi.c -I../include -L../rust/target/release -llucivy_fts -lpthread -lm -ldl && \
   ./test_ffi
 
-# rag3db natif (avec extension tantivy_fts)
+# rag3db natif (avec extension lucivy_fts)
 cd packages/rag3db && mkdir -p build && cd build && \
-  cmake .. -DBUILD_EXTENSIONS="tantivy_fts" && make -j$(nproc)
+  cmake .. -DBUILD_EXTENSIONS="lucivy_fts" && make -j$(nproc)
 
 # rag3db WASM
 source .../emsdk/emsdk_env.sh && cd packages/rag3db/build-wasm && \
-  emcmake cmake .. -DBUILD_EXTENSIONS="json;vector;algo;tantivy_fts" -DBUILD_WASM=FALSE && \
+  emcmake cmake .. -DBUILD_EXTENSIONS="json;vector;algo;lucivy_fts" -DBUILD_WASM=FALSE && \
   emmake make -j$(nproc)
 ```
 
@@ -392,11 +392,11 @@ source .../emsdk/emsdk_env.sh && cd packages/rag3db/build-wasm && \
 
 | Sujet | Emplacement |
 |-------|-------------|
-| **ld-tantivy** (fork Tantivy) | `packages/rag3db/extension/tantivy/ld-tantivy/` |
-| **tantivy_fts** (crate FFI) | `packages/rag3db/extension/tantivy_fts/rust/` |
-| Header C genere | `packages/rag3db/extension/tantivy_fts/include/tantivy_fts.h` |
-| Tests FFI | `packages/rag3db/extension/tantivy_fts/test/test_ffi.c` |
-| Extension C++ (stub) | `packages/rag3db/extension/tantivy_fts/src/` |
+| **ld-lucivy** (fork Lucivy) | `packages/rag3db/extension/lucivy/ld-lucivy/` |
+| **lucivy_fts** (crate FFI) | `packages/rag3db/extension/lucivy_fts/rust/` |
+| Header C genere | `packages/rag3db/extension/lucivy_fts/include/lucivy_fts.h` |
+| Tests FFI | `packages/rag3db/extension/lucivy_fts/test/test_ffi.c` |
+| Extension C++ (stub) | `packages/rag3db/extension/lucivy_fts/src/` |
 | Extension FTS existante | `packages/rag3db/extension/fts/` |
 | Build WASM Kuzu | `kuzu-wasm-exp/CMakeLists.txt` |
 | Rag3Weaver search | `kuzu-wasm-exp/src/lib/catalog/modules/CatalogSearch.ts` |
@@ -409,10 +409,10 @@ source .../emsdk/emsdk_env.sh && cd packages/rag3db/build-wasm && \
 
 | Question | Reponse |
 |----------|---------|
-| Tantivy en WASM avec threads ? | C FFI + Emscripten. Un seul `.wasm` avec graph DB + FTS. |
-| Gestion memoire Rust/C++ ? | Handles opaques (`TantivyHandle*`), lifetime par create/close. Strings par `tantivy_free_string`. |
-| Index storage ? | `{db_path}/tantivy/{table_id}_{index_name}/`. Meme filesystem, dossier separe. |
+| Lucivy en WASM avec threads ? | C FFI + Emscripten. Un seul `.wasm` avec graph DB + FTS. |
+| Gestion memoire Rust/C++ ? | Handles opaques (`LucivyHandle*`), lifetime par create/close. Strings par `lucivy_free_string`. |
+| Index storage ? | `{db_path}/lucivy/{table_id}_{index_name}/`. Meme filesystem, dossier separe. |
 | Stemming + exact match ? | Tri-field : stemmed + `._raw` + `._ngram`. Routing transparent par type de query. |
 | Recherche de code (`c++`, `std::collections`) ? | ContainsQuery avec cascade 4 niveaux + validation separateurs + NgramContainsQuery. |
 | Highlighting ? | HighlightSink side-channel. Byte offsets depuis les posting lists pour tous les types de query. |
-| Taille WASM ? | Static lib Tantivy FFI = 17 MB. Build complet rag3db = 36 MB (libkuzu.a). Taille .wasm finale a mesurer. |
+| Taille WASM ? | Static lib Lucivy FFI = 17 MB. Build complet rag3db = 36 MB (libkuzu.a). Taille .wasm finale a mesurer. |

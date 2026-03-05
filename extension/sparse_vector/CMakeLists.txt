@@ -1,5 +1,5 @@
 # --- Build Rust static lib via cargo ---
-# The Rust FFI crate lives inside the extension directory (standalone, not in ld-tantivy).
+# The Rust FFI crate lives inside the extension directory (standalone, not in ld-lucivy).
 set(RUST_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rust)
 
 include_directories(

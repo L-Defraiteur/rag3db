@@ -62,7 +62,7 @@ IndexSearchFunc searchFunc = [indexPtr, queryIndices, queryWeights](int64_t limi
 | `sparse_vector/test/sparse_vector_test.cpp` | **À FAIRE** — tests SearchInWhere |
 | `sparse_vector/test/CMakeLists.txt` | **À FAIRE** — add_dependencies sur extension target |
 
-**Bind** : copier le pattern de `search_function.cpp` (tantivy_fts) :
+**Bind** : copier le pattern de `search_function.cpp` (lucivy_fts) :
 - Arg 0 : PropertyExpression → `propExpr.getSingleTableID()` → `tableID`
 - Lookup index : `nodeTable.getIndex(tableName)` → cast `SparseVectorIndex`
 - Extraire query indices/weights depuis LiteralExpression → `LIST[INT64]`/`LIST[DOUBLE]` via `NestedVal::getChildVal`
@@ -181,5 +181,5 @@ Ou plus simple si on suppose un seul HNSW index par table : `nodeTable.getIndex(
 1. **isVarLength = true** sur SPARSE_SEARCH (args optionnels) et VECTOR_SEARCH
 2. **isNonFoldable = true** sur SPARSE_SCORE() et VECTOR_DISTANCE() (0 args, pas constant-foldable)
 3. **Extension .so dans source tree** : toujours builder le target extension ET le test (cf doc 13)
-4. **cmake add_dependencies** : ajouter dans les test CMakeLists comme on l'a fait pour tantivy_fts
-5. **RTTI cross-library** : le `dynamic_cast<IndexSearchBindData*>` dans l'optimizer doit fonctionner. Comme ça marchait pour tantivy_fts après rebuild correct du .so, ça devrait marcher pour sparse_vector et vector aussi.
+4. **cmake add_dependencies** : ajouter dans les test CMakeLists comme on l'a fait pour lucivy_fts
+5. **RTTI cross-library** : le `dynamic_cast<IndexSearchBindData*>` dans l'optimizer doit fonctionner. Comme ça marchait pour lucivy_fts après rebuild correct du .so, ça devrait marcher pour sparse_vector et vector aussi.

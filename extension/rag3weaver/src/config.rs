@@ -552,7 +552,7 @@ mod tests {
     }
 
     /// Reproduces the WASM test config exactly as JS sends it (camelCase keys,
-    /// PascalCase FieldType values). This was the root cause of the Tantivy
+    /// PascalCase FieldType values). This was the root cause of the Lucivy
     /// schema panic: "fieldType" key was not recognized, defaulting to String.
     #[test]
     fn js_style_config_deserialization() {

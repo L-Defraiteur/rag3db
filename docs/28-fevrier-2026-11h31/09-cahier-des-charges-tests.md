@@ -39,7 +39,7 @@ Principe : **chaque fonctionnalité doit être testée en natif d'abord**, puis 
 | B6 | Multi-KB (même entité, 2 KBs) | ❌ | ❌ |
 | B7 | Sparse embeddings (BM42) | ❌ | ❌ |
 | B8 | Update → re-embed si contenu changé | ❌ | ❌ |
-| B9 | Filter fields (String/Int64/Double dans Tantivy) | ❌ | ❌ |
+| B9 | Filter fields (String/Int64/Double dans Lucivy) | ❌ | ❌ |
 
 ### C. Search
 
@@ -51,9 +51,9 @@ Principe : **chaque fonctionnalité doit être testée en natif d'abord**, puis 
 | C4 | Sparse seul (via sparse_vector extension) | ❌ | ❌ |
 | C5 | 3-way hybrid (dense+BM25+sparse) | ❌ | ❌ |
 | C6 | BM25 fuzzy (distance > 0) | ❌ | ❌ |
-| C7 | Filtres natifs Tantivy (pre-filtering) | ❌ | ❌ |
+| C7 | Filtres natifs Lucivy (pre-filtering) | ❌ | ❌ |
 | C8 | Filtres Cypher (post-filtering WHERE) | ❌ | ❌ |
-| C9 | Filtres combinés (Tantivy + Cypher) | ❌ | ❌ |
+| C9 | Filtres combinés (Lucivy + Cypher) | ❌ | ❌ |
 | C10 | Search sur chunks (résultats = chunks, pas parents) | ❌ | ❌ |
 | C11 | Search avec `consistency: immediate` | ❌ | ❌ |
 | C12 | Explore (search + graph traversal) | ❌ | ❌ |
@@ -171,7 +171,7 @@ Cette config couvre :
 - **Hashsafe** sur Document.title → déduplication
 - **Chunking** activé sur main → chunks testés
 - **Sparse** activé sur main → 3-way hybrid
-- **Filter fields** : category (String), year (Integer), score (Double), archived (Boolean) → filtrage natif Tantivy
+- **Filter fields** : category (String), year (Integer), score (Double), archived (Boolean) → filtrage natif Lucivy
 
 ### Jeu de données
 
@@ -227,7 +227,7 @@ Relations :
 
 ### Phase 1 — BM25 seul (natif puis WASM)
 
-**But :** valider que le FTS Tantivy fonctionne via Catalog.search().
+**But :** valider que le FTS Lucivy fonctionne via Catalog.search().
 
 **Prérequis :** MockEmbedder (BM25 ne nécessite pas de vrais embeddings).
 
@@ -245,8 +245,8 @@ Relations :
 | 1.7 | meta.searchType = "BM25Only" ou "Fulltext" | |
 
 **Ce que ça valide :**
-- `CREATE_TANTIVY_INDEX` fonctionne après drain (hooks insert)
-- `QUERY_TANTIVY_INDEX` retourne des résultats
+- `CREATE_LUCIVY_INDEX` fonctionne après drain (hooks insert)
+- `QUERY_LUCIVY_INDEX` retourne des résultats
 - Résolution offset → UUID fonctionne
 - contentFor fait que body est bien dans le FTS index
 
@@ -302,7 +302,7 @@ Relations :
 
 ### Phase 4 — Filtres (natif puis WASM)
 
-**But :** valider le filtrage natif Tantivy + filtrage Cypher.
+**But :** valider le filtrage natif Lucivy + filtrage Cypher.
 
 **Embedder :** CandleEmbedder MiniLM-L6.
 
@@ -318,9 +318,9 @@ Relations :
 | 4.7 | Filtre sans résultat : category="nonexistent" | results.length = 0 |
 
 **Ce que ça valide :**
-- `filter_fields` passés à Tantivy → pre-filtering segment-level
+- `filter_fields` passés à Lucivy → pre-filtering segment-level
 - FilterCompiler → Cypher WHERE génère les bonnes clauses
-- SplitResult sépare correctement Tantivy-natif vs post-filtre
+- SplitResult sépare correctement Lucivy-natif vs post-filtre
 
 ---
 
@@ -465,6 +465,6 @@ Relations :
 
 ## Bugs à investiguer en priorité
 
-1. **Pourquoi BM25 retourne 0 ?** — le hook Tantivy insert est-il déclenché par `drain()` ? Le `flushIfDirty()` est-il appelé ?
+1. **Pourquoi BM25 retourne 0 ?** — le hook Lucivy insert est-il déclenché par `drain()` ? Le `flushIfDirty()` est-il appelé ?
 2. **Pourquoi HNSW retourne 0 ?** — `CREATE_VECTOR_INDEX` sur table vide → les rows insérées après sont-elles indexées ?
 3. **Config actuelle des tests WASM** — `body` n'a pas `contentFor: "main"` → body n'est pas dans le KB

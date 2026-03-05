@@ -73,7 +73,7 @@ Il reste du debug temporaire à nettoyer dans :
 
 1. **`src/processor/operator/scan/fts_scan_node_table.cpp`** — fprintf FTS_DEBUG (initLocalState, getNextTuples, outVectors dump)
 2. **`src/processor/operator/result_collector.cpp`** — fprintf RC_DEBUG (executeInternal loop)
-3. **`extension/tantivy_fts/test/tantivy_fts_test.cpp`** — test Contains modifié avec debug print (numColumns, colNames, row values)
+3. **`extension/lucivy_fts/test/lucivy_fts_test.cpp`** — test Contains modifié avec debug print (numColumns, colNames, row values)
 
 ## Prochaines étapes
 

@@ -210,7 +210,7 @@ pub fn drain_parallel(&mut self, pool: &rayon::ThreadPool) -> FlushResult {
 }
 ```
 
-**Pourquoi `pool.install(|| rayon::join(...))`** : `pool.install` exécute la closure sur notre pool dédié (4 threads), pas le pool rayon global (partagé avec tantivy). `rayon::join` fork les deux tâches sur ce pool.
+**Pourquoi `pool.install(|| rayon::join(...))`** : `pool.install` exécute la closure sur notre pool dédié (4 threads), pas le pool rayon global (partagé avec lucivy). `rayon::join` fork les deux tâches sur ce pool.
 
 **Pas de persistence** : en WASM il n'y a pas de `OperationPersistence`, donc on skip l'étape persist que fait `flush()` (lignes 276-292 de queue.rs).
 

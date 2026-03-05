@@ -1,6 +1,6 @@
 # 08 — Fix serde FieldType + Plan tests WASM réalistes
 
-## Bug corrigé : Tantivy schema panic
+## Bug corrigé : Lucivy schema panic
 
 ### Root cause
 
@@ -14,7 +14,7 @@ Le `rename = "type"` **override** le `rename_all = "camelCase"` du struct. Donc 
 
 Mais le JS (weaver_worker.js, set_embedder_worker.js) envoyait `"fieldType"` (camelCase). Cette clé ne matchait rien → `#[serde(default)]` → `FieldType::String` (au lieu de `Text`).
 
-Conséquence : tous les champs étaient `FieldType::String`, pas `Text` → inclus dans `filter_fields` → DDL généré avec `filter_fields := ['body', 'title']` → `title` à la fois dans fts_fields ET filter_fields → doublon dans le schema Tantivy → **PANIC**.
+Conséquence : tous les champs étaient `FieldType::String`, pas `Text` → inclus dans `filter_fields` → DDL généré avec `filter_fields := ['body', 'title']` → `title` à la fois dans fts_fields ET filter_fields → doublon dans le schema Lucivy → **PANIC**.
 
 Le test unitaire `wasm_test_config_ddl` ne détectait pas le bug car il construisait le config directement en Rust, sans passer par la désérialisation JSON.
 
@@ -49,17 +49,17 @@ Car le JS envoie `"Text"` (PascalCase) mais serde attend `"text"` (lowercase via
 
 Retirés tous les `eprintln!`/`fprintf(stderr)` de la session 07 :
 - `handle.rs` — 3 eprintln! retirés
-- `schema.rs` (ld-tantivy) — 1 eprintln! retiré, message panic simplifié
-- `create_tantivy_index.cpp` — 8 fprintf retirés (bindFunc, bindFuncInternal, rewriteFunc, tableFunc)
+- `schema.rs` (ld-lucivy) — 1 eprintln! retiré, message panic simplifié
+- `create_lucivy_index.cpp` — 8 fprintf retirés (bindFunc, bindFuncInternal, rewriteFunc, tableFunc)
 - `catalog.rs` — 1 eprintln! retiré
 
 ## État après fix
 
 - `cargo test` (rag3weaver) : **345 passed**, 0 failed
-- `cargo test --lib` (ld-tantivy) : **1062 passed**, 0 failed
-- Build WASM (toutes extensions : json, vector, algo, tantivy_fts, sparse_vector) : **OK**
+- `cargo test --lib` (ld-lucivy) : **1062 passed**, 0 failed
+- Build WASM (toutes extensions : json, vector, algo, lucivy_fts, sparse_vector) : **OK**
 - Playwright : **7/9 passed**
-  - ✅ `rag3weaver.spec.js` — PASS (plus de panic Tantivy !)
+  - ✅ `rag3weaver.spec.js` — PASS (plus de panic Lucivy !)
   - ✅ `idbfs.spec.js` — PASS (phase 1 + phase 2 persistence)
   - ✅ `threading.spec.js` — PASS (3 tests)
   - ❌ `set_embedder.spec.js` — 2 FAIL (MiniLM + Multilingual)
@@ -127,7 +127,7 @@ Réécrire les tests WASM avec une config KB réaliste, couvrant toutes les stra
 
 ### Avant de coder les tests
 
-1. **Investiguer pourquoi BM25 retourne 0** — même avec un MockEmbedder, BM25 devrait trouver des résultats textuels. Le problème est peut-être que les hooks Tantivy insert ne fonctionnent pas après `drain()` en WASM.
+1. **Investiguer pourquoi BM25 retourne 0** — même avec un MockEmbedder, BM25 devrait trouver des résultats textuels. Le problème est peut-être que les hooks Lucivy insert ne fonctionnent pas après `drain()` en WASM.
 
 2. **Investiguer pourquoi vector retourne 0** — le HNSW index est créé sur table vide. Les rows insérées après `CREATE_VECTOR_INDEX` sont-elles automatiquement indexées ?
 
@@ -139,7 +139,7 @@ Réécrire les tests WASM avec une config KB réaliste, couvrant toutes les stra
 |---------|-----------|
 | `extension/rag3weaver/src/config.rs` | Fix serde: alias `fieldType` + PascalCase variants + 2 tests |
 | `extension/rag3weaver/src/schema.rs` | Test `wasm_test_config_ddl_from_json` |
-| `extension/tantivy_fts/src/function/create_tantivy_index.cpp` | Retrait logs debug |
-| `extension/tantivy/ld-tantivy/tantivy_fts/rust/src/handle.rs` | Retrait logs debug |
-| `extension/tantivy/ld-tantivy/src/schema/schema.rs` | Retrait logs debug, simplification panic msg |
+| `extension/lucivy_fts/src/function/create_lucivy_index.cpp` | Retrait logs debug |
+| `extension/lucivy/ld-lucivy/lucivy_fts/rust/src/handle.rs` | Retrait logs debug |
+| `extension/lucivy/ld-lucivy/src/schema/schema.rs` | Retrait logs debug, simplification panic msg |
 | `extension/rag3weaver/src/catalog.rs` | Retrait log debug initialize |

@@ -18,16 +18,16 @@ Il suffit de **stocker ces offsets au lieu de les jeter** quand un match est con
 ## Etat actuel
 
 ### Code en place
-- `NgramContainsQuery` dans `ld-tantivy/src/query/phrase_query/ngram_contains_query.rs` (chemin ngram, principal)
-- `AutomatonPhraseQuery` + `ContainsScorer` + `ContainsSingleScorer` dans `ld-tantivy/src/query/phrase_query/` (chemin cascade, fallback)
-- `scoring_utils.rs` dans `ld-tantivy/src/query/phrase_query/` (fonctions partagees)
-- `tantivy_fts/rust/src/query.rs` : `QueryConfig.highlight: Option<bool>` et `SearchResult.highlights: Option<HashMap<String, Vec<[usize;2]>>>` deja en place (mais `highlights` toujours `None`)
-- 1015 tests ld-tantivy, 129 tests FFI — tout passe
+- `NgramContainsQuery` dans `ld-lucivy/src/query/phrase_query/ngram_contains_query.rs` (chemin ngram, principal)
+- `AutomatonPhraseQuery` + `ContainsScorer` + `ContainsSingleScorer` dans `ld-lucivy/src/query/phrase_query/` (chemin cascade, fallback)
+- `scoring_utils.rs` dans `ld-lucivy/src/query/phrase_query/` (fonctions partagees)
+- `lucivy_fts/rust/src/query.rs` : `QueryConfig.highlight: Option<bool>` et `SearchResult.highlights: Option<HashMap<String, Vec<[usize;2]>>>` deja en place (mais `highlights` toujours `None`)
+- 1015 tests ld-lucivy, 129 tests FFI — tout passe
 
 ### Architecture des scorers
 
 ```
-tantivy_fts/query.rs::build_contains_query()
+lucivy_fts/query.rs::build_contains_query()
   ├── ngram_field disponible → NgramContainsQuery (chemin rapide)
   │     └─ NgramContainsWeight::scorer()
   │          └─ NgramContainsScorer (verify via stored text + tokenize_raw)
@@ -65,12 +65,12 @@ pub struct HighlightSink {
 
 ### Pourquoi `(segment_ord, doc_id)` et pas `DocAddress` ?
 
-`DocAddress { segment_ord, doc_id }` est le type Tantivy mais il derive `Hash + Eq`. On pourrait l'utiliser directement. **Mais** le scorer ne connait pas son `segment_ord` — `SegmentReader` ne l'expose pas. La solution : un compteur atomique dans le sink, incremente a chaque `Weight::scorer()` (appele exactement 1 fois par segment, dans l'ordre). Le scorer recoit son `segment_ord` a la construction.
+`DocAddress { segment_ord, doc_id }` est le type Lucivy mais il derive `Hash + Eq`. On pourrait l'utiliser directement. **Mais** le scorer ne connait pas son `segment_ord` — `SegmentReader` ne l'expose pas. La solution : un compteur atomique dans le sink, incremente a chaque `Weight::scorer()` (appele exactement 1 fois par segment, dans l'ordre). Le scorer recoit son `segment_ord` a la construction.
 
 ### Flux
 
 ```
-1. tantivy_fts : config.highlight == true
+1. lucivy_fts : config.highlight == true
    → creer Arc<HighlightSink>
    → passer au Query via with_highlight_sink()
 
@@ -85,7 +85,7 @@ pub struct HighlightSink {
      sink.insert(segment_ord, doc_id, offsets)
 
 5. Apres la recherche
-   → tantivy_fts lit le sink
+   → lucivy_fts lit le sink
    → pour chaque (score, DocAddress) dans les resultats :
      offsets = sink.get(doc_address.segment_ord, doc_address.doc_id)
    → remplir SearchResult.highlights
@@ -97,7 +97,7 @@ pub struct HighlightSink {
 
 ### Etape 1 : `scoring_utils.rs` — ajouter HighlightSink
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/scoring_utils.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/scoring_utils.rs`
 
 Ajouter :
 ```rust
@@ -135,11 +135,11 @@ impl HighlightSink {
 }
 ```
 
-**Visibilite** : `pub` (utilise depuis tantivy_fts).
+**Visibilite** : `pub` (utilise depuis lucivy_fts).
 
 ### Etape 2 : `NgramContainsQuery` — ajouter capture d'offsets
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/ngram_contains_query.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/ngram_contains_query.rs`
 
 Modifications :
 
@@ -176,13 +176,13 @@ Modifications :
 
 ### Etape 3 : `AutomatonPhraseQuery` + Weight + Scorers — ajouter capture d'offsets
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/automaton_phrase_query.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/automaton_phrase_query.rs`
 
 1. **AutomatonPhraseQuery** : ajouter champ `highlight_sink: Option<Arc<HighlightSink>>`
    - Methode `with_highlight_sink(mut self, sink: Arc<HighlightSink>) -> Self`
    - Propager dans `automaton_phrase_weight()` vers `AutomatonPhraseWeight::new()`
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/automaton_phrase_weight.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/automaton_phrase_weight.rs`
 
 2. **AutomatonPhraseWeight** : ajouter champ `highlight_sink: Option<Arc<HighlightSink>>`
    - `new()` : ajouter parametre
@@ -201,7 +201,7 @@ Modifications :
      }
      ```
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/contains_scorer.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/contains_scorer.rs`
 
 3. **ContainsScorer** : ajouter champs `highlight_sink: Option<Arc<HighlightSink>>` + `segment_ord: u32`
    - `new()` : ajouter parametres
@@ -232,19 +232,19 @@ Modifications :
 
 ### Etape 4 : Exports et re-exports
 
-**Fichier** : `ld-tantivy/src/query/phrase_query/mod.rs`
+**Fichier** : `ld-lucivy/src/query/phrase_query/mod.rs`
 
-- `scoring_utils` passe de `pub(crate)` a `pub` (pour que tantivy_fts puisse importer `HighlightSink`)
+- `scoring_utils` passe de `pub(crate)` a `pub` (pour que lucivy_fts puisse importer `HighlightSink`)
 
-**Fichier** : `ld-tantivy/src/query/mod.rs`
+**Fichier** : `ld-lucivy/src/query/mod.rs`
 
 - Ajouter : `pub use self::phrase_query::scoring_utils::HighlightSink;`
 
-### Etape 5 : Wiring dans tantivy_fts
+### Etape 5 : Wiring dans lucivy_fts
 
-**Fichier** : `tantivy_fts/rust/src/query.rs`
+**Fichier** : `lucivy_fts/rust/src/query.rs`
 
-1. **Import** : `use ld_tantivy::query::HighlightSink;` + `use std::sync::Arc;`
+1. **Import** : `use ld_lucivy::query::HighlightSink;` + `use std::sync::Arc;`
 
 2. **`build_query()`** : ajouter parametre `highlight_sink: Option<Arc<HighlightSink>>`
    - Propager aux sous-fonctions `build_contains_query`, `build_boolean_query`
@@ -272,9 +272,9 @@ Modifications :
 
 5. **`execute_search()` et `execute_search_filtered()`** : ajouter parametres et propager
 
-**Fichier** : `tantivy_fts/rust/src/lib.rs`
+**Fichier** : `lucivy_fts/rust/src/lib.rs`
 
-6. **`tantivy_search()` et `tantivy_search_filtered()`** :
+6. **`lucivy_search()` et `lucivy_search_filtered()`** :
    ```rust
    let highlight_sink = if config.highlight.unwrap_or(false) {
        Some(Arc::new(HighlightSink::new()))
@@ -302,7 +302,7 @@ Les autres types de queries retournent `highlights: None` :
 
 ## Tests
 
-### Tests unitaires ld-tantivy
+### Tests unitaires ld-lucivy
 
 Dans `ngram_contains_query.rs` (section `#[cfg(test)]`) :
 1. **single token + highlight** : chercher "world" dans "hello world" → `[[6, 11]]`
@@ -314,7 +314,7 @@ Dans `automaton_phrase_weight.rs` (section `#[cfg(test)]`) :
 5. **cascade exact + highlight** : "hello" exact → offsets
 6. **cascade fuzzy + highlight** : "helo" → offsets de "hello"
 
-### Tests FFI tantivy_fts
+### Tests FFI lucivy_fts
 
 Dans `test/test_ffi.c` (~8 tests) :
 7. `{"type":"contains","field":"body","value":"world","highlight":true}` → verifier `highlights.body = [[6,11]]`
@@ -331,15 +331,15 @@ Dans `test/test_ffi.c` (~8 tests) :
 ## Verification
 
 ```bash
-# 1. Tests unitaires ld-tantivy (devrait passer ~1025+ tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+# 1. Tests unitaires ld-lucivy (devrait passer ~1025+ tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
 # 2. Clippy
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo clippy --features mmap,stopwords,lz4-compression,stemmer --no-default-features -- -D warnings -A clippy::uninlined_format_args -A clippy::identity_op -A clippy::let_and_return -A clippy::redundant_closure -A clippy::too_many_arguments -A clippy::assertions_on_constants -A dead_code -A unused_imports
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo clippy --features mmap,stopwords,lz4-compression,stemmer --no-default-features -- -D warnings -A clippy::uninlined_format_args -A clippy::identity_op -A clippy::let_and_return -A clippy::redundant_closure -A clippy::too_many_arguments -A clippy::assertions_on_constants -A dead_code -A unused_imports
 
 # 3. Build + tests FFI
-cd packages/rag3db/extension/tantivy_fts/rust && cargo build --release
-cd ../test && cc -o test_ffi test_ffi.c -I../include -L../rust/target/release -ltantivy_fts -lpthread -lm -ldl && LD_LIBRARY_PATH=../rust/target/release ./test_ffi
+cd packages/rag3db/extension/lucivy_fts/rust && cargo build --release
+cd ../test && cc -o test_ffi test_ffi.c -I../include -L../rust/target/release -llucivy_fts -lpthread -lm -ldl && LD_LIBRARY_PATH=../rust/target/release ./test_ffi
 ```
 
 ---
@@ -352,5 +352,5 @@ cd ../test && cc -o test_ffi test_ffi.c -I../include -L../rust/target/release -l
 | 2 | Capture dans NgramContainsScorer | ngram_contains_query.rs | +30 |
 | 3 | Capture dans Contains + Single + propagation APQ | automaton_phrase_query.rs, automaton_phrase_weight.rs, contains_scorer.rs | +50 |
 | 4 | Exports | mod.rs (x2) | +3 |
-| 5 | Wiring tantivy_fts | query.rs, lib.rs | +30 |
+| 5 | Wiring lucivy_fts | query.rs, lib.rs | +30 |
 | - | Tests unitaires + FFI | 3 fichiers | +150 |

@@ -75,7 +75,7 @@ Chemin de base : `packages/rag3db/extension/rag3weaver/src/`
 
 ### 7. Sparse search ignore les filtres
 
-**Concession** : `search_sparse()` n'applique aucun filtre — ni les filtres Kuzu (`extra_where`), ni les filtres Tantivy. Les filtres sont appliques indirectement via la fusion (un document filtre-out du vector/BM25 aura un score plus bas dans la fusion).
+**Concession** : `search_sparse()` n'applique aucun filtre — ni les filtres Kuzu (`extra_where`), ni les filtres Lucivy. Les filtres sont appliques indirectement via la fusion (un document filtre-out du vector/BM25 aura un score plus bas dans la fusion).
 
 **Pourquoi** : Le SparseIndex en memoire n'a pas de notion d'attributs. Pour filtrer, il faudrait soit :
 - Maintenir les attributs dans l'index (complexite)
@@ -83,7 +83,7 @@ Chemin de base : `packages/rag3db/extension/rag3weaver/src/`
 
 **Impact** : Pour la V1, c'est acceptable. Les filtres vector + BM25 couvrent la majorite des cas. Un document qui passe le filtre dense mais pas le sparse aura quand meme son score dense dans la fusion.
 
-**Fix futur** : Ajouter `allowed_ids: Option<&HashSet<String>>` sur `search_sparse()` — le meme pattern que `allowed_ids` sur Tantivy.
+**Fix futur** : Ajouter `allowed_ids: Option<&HashSet<String>>` sur `search_sparse()` — le meme pattern que `allowed_ids` sur Lucivy.
 
 ### 8. SparseEmbedOp textes clones
 

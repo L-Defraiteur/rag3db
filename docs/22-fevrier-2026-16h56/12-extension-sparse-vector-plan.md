@@ -2,16 +2,16 @@
 
 ## Contexte
 
-Suite au doc 11 (reflexion sparse vectors) et a la preuve que candle tourne en WASM (test Playwright passe, all-MiniLM-L6-v2 384d, 10s total), on decide de creer une extension dediee pour les sparse vectors plutot que de passer par Tantivy.
+Suite au doc 11 (reflexion sparse vectors) et a la preuve que candle tourne en WASM (test Playwright passe, all-MiniLM-L6-v2 384d, 10s total), on decide de creer une extension dediee pour les sparse vectors plutot que de passer par Lucivy.
 
-## Pourquoi pas Tantivy ?
+## Pourquoi pas Lucivy ?
 
-Tantivy fait du full-text search avec sa propre tokenisation (stemming, stop words, lowercase, etc.). Les sparse vectors de type BM42 travaillent sur des tokens **WordPiece** bruts issus du transformer — ce sont des sous-mots comme `["hel", "##lo", "wor", "##ld"]`, pas des mots stemmes.
+Lucivy fait du full-text search avec sa propre tokenisation (stemming, stop words, lowercase, etc.). Les sparse vectors de type BM42 travaillent sur des tokens **WordPiece** bruts issus du transformer — ce sont des sous-mots comme `["hel", "##lo", "wor", "##ld"]`, pas des mots stemmes.
 
-Mettre des tokens WordPiece dans Tantivy poserait des problemes :
-- Tantivy applique ses analyzers (stemming, stopwords) → corrompt les tokens
+Mettre des tokens WordPiece dans Lucivy poserait des problemes :
+- Lucivy applique ses analyzers (stemming, stopwords) → corrompt les tokens
 - Les poids d'attention BM42 sont des floats arbitraires, pas du TF-IDF
-- L'index inverse de Tantivy est optimise pour BM25 (term frequency + doc frequency), pas pour un dot product sparse generique
+- L'index inverse de Lucivy est optimise pour BM25 (term frequency + doc frequency), pas pour un dot product sparse generique
 - On melangerait deux responsabilites differentes dans le meme index
 
 ## Pourquoi une nouvelle extension (pas dans vector) ?
@@ -140,7 +140,7 @@ Search:
   query → candle → dense_query (384d) + sparse_query (attention weights)
   QUERY_VECTOR_INDEX(dense_query, k=20)  → dense_scores
   QUERY_SPARSE_INDEX(sparse_query, k=20) → sparse_scores
-  BM25 Tantivy(text_query, k=20)         → bm25_scores
+  BM25 Lucivy(text_query, k=20)         → bm25_scores
   RRF fusion(dense, sparse, bm25)        → final_ranked_results
 ```
 
@@ -167,7 +167,7 @@ Cela prouve que la generation BM42 (extraction attention weights) fonctionnera a
 3. API : CREATE_SPARSE_INDEX, QUERY_SPARSE_INDEX, DROP_SPARSE_INDEX
 4. Format colonne : STRUCT(indices INT32[], values FLOAT[])
 5. Tests E2E GTest avec sparse vectors manuels
-6. Support DELETE/UPDATE via hooks (comme tantivy_fts)
+6. Support DELETE/UPDATE via hooks (comme lucivy_fts)
 
 ### V2 : Generation BM42 dans candle_embedder
 **Effort : ~200 lignes Rust**
@@ -202,7 +202,7 @@ Cela prouve que la generation BM42 (extraction attention weights) fonctionnera a
 | Composant | Fichier |
 |---|---|
 | Extension vector (modele) | `extension/vector/src/` |
-| Extension tantivy_fts (modele hooks) | `extension/tantivy_fts/src/` |
+| Extension lucivy_fts (modele hooks) | `extension/lucivy_fts/src/` |
 | CandleEmbedder + from_bytes() | `extension/rag3weaver/src/candle_embedder.rs` |
 | Trait Embedder | `extension/rag3weaver/src/embedder.rs` |
 | Fusion RRF existante | `extension/rag3weaver/src/fusion.rs` |

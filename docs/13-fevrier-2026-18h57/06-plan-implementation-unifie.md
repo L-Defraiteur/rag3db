@@ -1,4 +1,4 @@
-# Plan d'implémentation unifié — Extension Tantivy dans rag3db
+# Plan d'implémentation unifié — Extension Lucivy dans rag3db
 
 > Consolidation des docs 02, 03, 04, 05.
 > Ce document remplace les docs précédents comme référence pour l'implémentation.
@@ -10,7 +10,7 @@
 | Doc | Contenu | Statut |
 |-----|---------|--------|
 | 01 | État des lieux | Toujours valide |
-| 02 | Fonctions Cypher (registre, HandleMap, FFI C) | **Partiellement obsolète** — les patterns Cypher sont valides, mais le registre `_tantivy_indexes` et le `TantivyHandleMap` sont remplacés par l'infra native `storage::Index` (doc 04) |
+| 02 | Fonctions Cypher (registre, HandleMap, FFI C) | **Partiellement obsolète** — les patterns Cypher sont valides, mais le registre `_lucivy_indexes` et le `LucivyHandleMap` sont remplacés par l'infra native `storage::Index` (doc 04) |
 | 03 | Hooks incrémentaux dans le core | **Entièrement obsolète** — doc 04 montre que les hooks existent déjà |
 | 04 | Infra d'index existante (storage::Index) | **Valide** — source de vérité pour l'architecture |
 | 05 | Migration cxx bridge | **TERMINÉ** (commits `127c15b`, `9daf73e`) |
@@ -23,10 +23,10 @@
 
 | Aspect | Doc 02 (initial) | Maintenant |
 |--------|------------------|------------|
-| Persistance métadonnées | Table registre `_tantivy_indexes` | `IndexStorageInfo` natif (sérialisé avec la NodeTable) |
-| Cache handles | `TantivyHandleMap` singleton | `TantivyIndex` instances dans `NodeTable::indexes` |
+| Persistance métadonnées | Table registre `_lucivy_indexes` | `IndexStorageInfo` natif (sérialisé avec la NodeTable) |
+| Cache handles | `LucivyHandleMap` singleton | `LucivyIndex` instances dans `NodeTable::indexes` |
 | FFI | 13 fonctions extern "C" + JSON | cxx bridge (9 structs, 15 fonctions typées) |
-| Incrémental | Manuel (ADD_TANTIVY_DOC, SYNC) | Automatique (hooks `insert`/`delete_`/`checkpoint`) |
+| Incrémental | Manuel (ADD_LUCIVY_DOC, SYNC) | Automatique (hooks `insert`/`delete_`/`checkpoint`) |
 | Modification core | Possible (doc 03) | **Aucune** |
 
 ### Vue d'ensemble
@@ -34,46 +34,46 @@
 ```
 Cypher                    C++ Extension              cxx bridge              Rust
 ──────                    ─────────────              ──────────              ────
-CREATE_TANTIVY_INDEX ──→ TantivyIndex::create() ──→ create_index()      ──→ TantivyHandle::create()
-                          scan nodes              ──→ add_document_texts() ──→ TantivyHandle writer
+CREATE_LUCIVY_INDEX ──→ LucivyIndex::create() ──→ create_index()      ──→ LucivyHandle::create()
+                          scan nodes              ──→ add_document_texts() ──→ LucivyHandle writer
                                                   ──→ commit()            ──→ IndexWriter::commit()
                           nodeTable.addIndex()
 
-QUERY_TANTIVY_INDEX  ──→ bindFunc: get TantivyIndex ──→ search_with_highlights() ──→ TopDocs + HighlightSink
+QUERY_LUCIVY_INDEX  ──→ bindFunc: get LucivyIndex ──→ search_with_highlights() ──→ TopDocs + HighlightSink
                           tableFunc: emit results
 
-DROP_TANTIVY_INDEX   ──→ TantivyIndex::drop()     ──→ (drop Box<TantivyHandle>) ──→ automatic cleanup
+DROP_LUCIVY_INDEX   ──→ LucivyIndex::drop()     ──→ (drop Box<LucivyHandle>) ──→ automatic cleanup
                           nodeTable.removeIndex()
                           rm -rf index dir
 
-INSERT (:doc {...})  ──→ TantivyIndex::insert()   ──→ add_document_texts() ──→ buffered in writer
+INSERT (:doc {...})  ──→ LucivyIndex::insert()   ──→ add_document_texts() ──→ buffered in writer
 (automatique)             NodeTable::checkpoint()  ──→ commit()             ──→ flush segments
                                                    ──→ reload_reader()      ──→ visible aux searchers
 
-DELETE (d:doc)       ──→ TantivyIndex::delete_()  ──→ delete_by_node_id()  ──→ buffered
+DELETE (d:doc)       ──→ LucivyIndex::delete_()  ──→ delete_by_node_id()  ──→ buffered
 (automatique)             NodeTable::checkpoint()  ──→ commit() + reload    ──→ visible
 ```
 
 ---
 
-## 1. TantivyIndex — Classe principale
+## 1. LucivyIndex — Classe principale
 
 ```cpp
-// extension/tantivy_fts/src/include/index/tantivy_index.h
+// extension/lucivy_fts/src/include/index/lucivy_index.h
 
 #include "storage/index/index.h"
-#include "tantivy_fts/rust/src/bridge.rs.h"  // cxx-generated header
+#include "lucivy_fts/rust/src/bridge.rs.h"  // cxx-generated header
 
 namespace rag3db {
-namespace tantivy_fts_extension {
+namespace lucivy_fts_extension {
 
-struct TantivyStorageInfo final : storage::IndexStorageInfo {
+struct LucivyStorageInfo final : storage::IndexStorageInfo {
     std::string indexPath;    // chemin sur disque
-    std::string schemaJson;   // schéma Tantivy (JSON, une fois à la création)
+    std::string schemaJson;   // schéma Lucivy (JSON, une fois à la création)
     std::string stemmer;      // "english", "" si pas de stemming
     common::offset_t numCheckpointedNodes;
 
-    TantivyStorageInfo(std::string indexPath, std::string schemaJson,
+    LucivyStorageInfo(std::string indexPath, std::string schemaJson,
         std::string stemmer, common::offset_t numCheckpointedNodes);
 
     std::shared_ptr<common::BufferWriter> serialize() const override;
@@ -81,12 +81,12 @@ struct TantivyStorageInfo final : storage::IndexStorageInfo {
         std::unique_ptr<common::BufferReader> reader);
 };
 
-class TantivyIndex final : public storage::Index {
+class LucivyIndex final : public storage::Index {
 public:
     // Construction (après create_index ou open_index)
-    TantivyIndex(storage::IndexInfo indexInfo,
-        std::unique_ptr<TantivyStorageInfo> storageInfo,
-        rust::Box<TantivyHandle> handle);
+    LucivyIndex(storage::IndexInfo indexInfo,
+        std::unique_ptr<LucivyStorageInfo> storageInfo,
+        rust::Box<LucivyHandle> handle);
 
     // Registration dans l'extension
     static storage::IndexType getIndexType();
@@ -101,7 +101,7 @@ public:
     std::unique_ptr<InsertState> initInsertState(main::ClientContext* context,
         visible_func isVisible) override;
 
-    // Ajoute les documents au writer Tantivy (buffered, pas encore visible)
+    // Ajoute les documents au writer Lucivy (buffered, pas encore visible)
     void insert(transaction::Transaction* transaction,
         const common::ValueVector& nodeIDVector,
         const std::vector<common::ValueVector*>& propertyVectors,
@@ -121,10 +121,10 @@ public:
 
     // ── Persistence ──
 
-    // Flush segments Tantivy → disque, rend les changements visibles
+    // Flush segments Lucivy → disque, rend les changements visibles
     void checkpointInMemory() override;
 
-    // Sérialise TantivyStorageInfo
+    // Sérialise LucivyStorageInfo
     void checkpoint(main::ClientContext* context,
         storage::PageAllocator& pageAllocator) override;
 
@@ -136,13 +136,13 @@ public:
 
     // ── Accesseur pour QUERY ──
 
-    const TantivyHandle& getHandle() const { return *handle_; }
+    const LucivyHandle& getHandle() const { return *handle_; }
 
 private:
-    rust::Box<TantivyHandle> handle_;
+    rust::Box<LucivyHandle> handle_;
 };
 
-} // namespace tantivy_fts_extension
+} // namespace lucivy_fts_extension
 } // namespace rag3db
 ```
 
@@ -151,7 +151,7 @@ private:
 **`insert()`** — appelé par `NodeTable::insert()` pour chaque batch de nœuds insérés :
 
 ```cpp
-void TantivyIndex::insert(Transaction* transaction,
+void LucivyIndex::insert(Transaction* transaction,
     const ValueVector& nodeIDVector,
     const std::vector<ValueVector*>& propertyVectors,
     InsertState& insertState) {
@@ -166,14 +166,14 @@ void TantivyIndex::insert(Transaction* transaction,
             if (propertyVectors[f]->isNull(pos)) continue;
             auto text = propertyVectors[f]->getValue<ku_string_t>(pos).getAsString();
             fields.push_back(DocFieldText{
-                static_cast<uint32_t>(fieldIds_[f]),  // field_id du schema Tantivy
+                static_cast<uint32_t>(fieldIds_[f]),  // field_id du schema Lucivy
                 rust::String(text)
             });
         }
         add_document_texts(*handle_, nodeOffset, fields);
     }
     // Note: pas de commit ici — sera fait dans checkpointInMemory()
-    auto& si = storageInfo->cast<TantivyStorageInfo>();
+    auto& si = storageInfo->cast<LucivyStorageInfo>();
     si.numCheckpointedNodes = nodeIDVector.getValue<nodeID_t>(
         nodeIDVector.state->getSelVector()[0]).offset + 1;
 }
@@ -182,7 +182,7 @@ void TantivyIndex::insert(Transaction* transaction,
 **`delete_()`** — appelé par `NodeTable::delete_()` :
 
 ```cpp
-void TantivyIndex::delete_(Transaction* transaction,
+void LucivyIndex::delete_(Transaction* transaction,
     const ValueVector& nodeIDVector, DeleteState& deleteState) {
     for (auto i = 0u; i < nodeIDVector.state->getSelSize(); i++) {
         auto pos = nodeIDVector.state->getSelVector()[i];
@@ -192,10 +192,10 @@ void TantivyIndex::delete_(Transaction* transaction,
 }
 ```
 
-**`checkpointInMemory()`** — flush Tantivy :
+**`checkpointInMemory()`** — flush Lucivy :
 
 ```cpp
-void TantivyIndex::checkpointInMemory() {
+void LucivyIndex::checkpointInMemory() {
     commit(*handle_);
     reload_reader(*handle_);
 }
@@ -204,8 +204,8 @@ void TantivyIndex::checkpointInMemory() {
 **`finalize()`** — rattrapage au restart :
 
 ```cpp
-void TantivyIndex::finalize(ClientContext* context) {
-    auto& si = storageInfo->cast<TantivyStorageInfo>();
+void LucivyIndex::finalize(ClientContext* context) {
+    auto& si = storageInfo->cast<LucivyStorageInfo>();
     auto* storageManager = StorageManager::Get(*context);
     auto& nodeTable = storageManager->getTable(indexInfo.tableID)->cast<NodeTable>();
     auto numTotalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
@@ -223,12 +223,12 @@ void TantivyIndex::finalize(ClientContext* context) {
 }
 ```
 
-### TantivyStorageInfo — Sérialisation
+### LucivyStorageInfo — Sérialisation
 
 Pattern identique à FTS/HNSW :
 
 ```cpp
-std::shared_ptr<BufferWriter> TantivyStorageInfo::serialize() const {
+std::shared_ptr<BufferWriter> LucivyStorageInfo::serialize() const {
     auto writer = std::make_shared<BufferWriter>();
     auto ser = Serializer(writer);
     ser.writeString(indexPath);
@@ -238,7 +238,7 @@ std::shared_ptr<BufferWriter> TantivyStorageInfo::serialize() const {
     return writer;
 }
 
-std::unique_ptr<IndexStorageInfo> TantivyStorageInfo::deserialize(
+std::unique_ptr<IndexStorageInfo> LucivyStorageInfo::deserialize(
     std::unique_ptr<BufferReader> reader) {
     Deserializer deSer{std::move(reader)};
     std::string indexPath, schemaJson, stemmer;
@@ -247,7 +247,7 @@ std::unique_ptr<IndexStorageInfo> TantivyStorageInfo::deserialize(
     deSer.deserializeValue(schemaJson);
     deSer.deserializeValue(stemmer);
     deSer.deserializeValue(numCheckpointedNodes);
-    return std::make_unique<TantivyStorageInfo>(
+    return std::make_unique<LucivyStorageInfo>(
         std::move(indexPath), std::move(schemaJson),
         std::move(stemmer), numCheckpointedNodes);
 }
@@ -256,53 +256,53 @@ std::unique_ptr<IndexStorageInfo> TantivyStorageInfo::deserialize(
 ### IndexType Registration
 
 ```cpp
-IndexType TantivyIndex::getIndexType() {
-    static const IndexType TANTIVY_INDEX_TYPE{
-        "TANTIVY",
+IndexType LucivyIndex::getIndexType() {
+    static const IndexType LUCIVY_INDEX_TYPE{
+        "LUCIVY",
         IndexConstraintType::SECONDARY_NON_UNIQUE,
         IndexDefinitionType::EXTENSION,
-        TantivyIndex::load
+        LucivyIndex::load
     };
-    return TANTIVY_INDEX_TYPE;
+    return LUCIVY_INDEX_TYPE;
 }
 ```
 
 ### Chargement au restart
 
 ```cpp
-std::unique_ptr<Index> TantivyIndex::load(ClientContext* context, StorageManager*,
+std::unique_ptr<Index> LucivyIndex::load(ClientContext* context, StorageManager*,
     IndexInfo indexInfo, std::span<uint8_t> storageInfoBuffer) {
     auto reader = std::make_unique<BufferReader>(
         storageInfoBuffer.data(), storageInfoBuffer.size());
-    auto storageInfo = TantivyStorageInfo::deserialize(std::move(reader));
-    auto& si = storageInfo->cast<TantivyStorageInfo>();
-    // Rouvrir l'index Tantivy sur disque
+    auto storageInfo = LucivyStorageInfo::deserialize(std::move(reader));
+    auto& si = storageInfo->cast<LucivyStorageInfo>();
+    // Rouvrir l'index Lucivy sur disque
     auto handle = open_index(si.indexPath);
-    return std::make_unique<TantivyIndex>(
+    return std::make_unique<LucivyIndex>(
         std::move(indexInfo), std::move(storageInfo), std::move(handle));
 }
 ```
 
 ---
 
-## 2. CREATE_TANTIVY_INDEX
+## 2. CREATE_LUCIVY_INDEX
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], stemmer := 'english');
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'], stemmer := 'english');
 ```
 
 ### Architecture : Standalone + rewriteFunc + Internal
 
 Comme HNSW/FTS : fonction publique avec `rewriteFunc` qui appelle la fonction interne.
 
-**Publique** (`CREATE_TANTIVY_INDEX`) — standalone :
+**Publique** (`CREATE_LUCIVY_INDEX`) — standalone :
 - `bindFunc`: valide la table et les colonnes, construit les params
-- `rewriteFunc`: génère le Cypher pour appeler `_CREATE_TANTIVY_INDEX`
+- `rewriteFunc`: génère le Cypher pour appeler `_CREATE_LUCIVY_INDEX`
 
-**Interne** (`_CREATE_TANTIVY_INDEX`) :
+**Interne** (`_CREATE_LUCIVY_INDEX`) :
 - `tableFunc`: scan les nœuds, crée l'index, appelle le cxx bridge
 
 ### rewriteFunc
@@ -310,20 +310,20 @@ Comme HNSW/FTS : fonction publique avec `rewriteFunc` qui appelle la fonction in
 ```cpp
 static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& bindData) {
     context.setUseInternalCatalogEntry(true);
-    auto* bd = bindData.constPtrCast<CreateTantivyBindData>();
+    auto* bd = bindData.constPtrCast<CreateLucivyBindData>();
     // Pas de tables internes à créer (contrairement à FTS).
     // Juste appeler la fonction interne.
     return stringFormat(
-        "CALL _CREATE_TANTIVY_INDEX('{}', {}, stemmer := '{}');"
-        "RETURN 'Tantivy index created on table {}' AS result;",
+        "CALL _CREATE_LUCIVY_INDEX('{}', {}, stemmer := '{}');"
+        "RETURN 'Lucivy index created on table {}' AS result;",
         bd->tableName, bd->fieldsLiteral, bd->stemmer, bd->tableName);
 }
 ```
 
-### _CREATE_TANTIVY_INDEX — tableFunc
+### _CREATE_LUCIVY_INDEX — tableFunc
 
 ```
-1. Construire indexPath = "{dbPath}/tantivy_indexes/{tableName}/"
+1. Construire indexPath = "{dbPath}/lucivy_indexes/{tableName}/"
 2. Construire schemaJson depuis les colonnes de la table
    - STRING → type "text" (tri-field: stemmed + raw + ngram)
    - INT64  → type "i64" (fast field)
@@ -334,8 +334,8 @@ static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& 
    - Pour chaque nœud : add_document_texts(handle, node_offset, fields)
 6. commit(handle) + reload_reader(handle)
 7. Créer IndexCatalogEntry dans le catalogue
-8. Créer TantivyIndex avec le handle et le storageInfo
-9. nodeTable->addIndex(std::move(tantivyIndex))
+8. Créer LucivyIndex avec le handle et le storageInfo
+9. nodeTable->addIndex(std::move(lucivyIndex))
 10. transaction->setForceCheckpoint()
 ```
 
@@ -360,12 +360,12 @@ Si les performances sont insuffisantes, on migrera vers VertexCompute.
 
 ---
 
-## 3. QUERY_TANTIVY_INDEX
+## 3. QUERY_LUCIVY_INDEX
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"c++"}', 10)
 RETURN node_id, score, highlights;
 ```
@@ -400,16 +400,16 @@ static std::unique_ptr<TableFuncBindData> bindFunc(
     auto& nodeTable = storageManager->getTable(tableEntry->getTableID())
         ->cast<NodeTable>();
 
-    // Récupérer le TantivyIndex depuis la NodeTable
-    auto indexOpt = nodeTable.getIndex("tantivy");  // ou par type
+    // Récupérer le LucivyIndex depuis la NodeTable
+    auto indexOpt = nodeTable.getIndex("lucivy");  // ou par type
     if (!indexOpt.has_value()) {
-        throw BinderException("No Tantivy index on table '" + tableName + "'");
+        throw BinderException("No Lucivy index on table '" + tableName + "'");
     }
-    auto& tantivyIndex = indexOpt.value()->cast<TantivyIndex>();
+    auto& lucivyIndex = indexOpt.value()->cast<LucivyIndex>();
 
     // Exécuter la recherche dans bindFunc (résultats en mémoire)
     auto results = search_with_highlights(
-        tantivyIndex.getHandle(), queryJson, static_cast<uint32_t>(limit));
+        lucivyIndex.getHandle(), queryJson, static_cast<uint32_t>(limit));
 
     // Stocker les résultats dans le BindData
     // ... (voir ci-dessous)
@@ -421,7 +421,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(
 ```cpp
 static offset_t internalTableFunc(
     const TableFuncMorsel& morsel, const TableFuncInput& input, DataChunk& output) {
-    auto* bd = input.bindData->constPtrCast<QueryTantivyBindData>();
+    auto* bd = input.bindData->constPtrCast<QueryLucivyBindData>();
     auto count = std::min(morsel.endOffset - morsel.startOffset,
         static_cast<offset_t>(bd->results.size() - morsel.startOffset));
     for (offset_t i = 0; i < count; i++) {
@@ -460,23 +460,23 @@ static std::string highlightsToJson(const rust::Vec<FieldHighlights>& highlights
 
 ---
 
-## 4. DROP_TANTIVY_INDEX
+## 4. DROP_LUCIVY_INDEX
 
 ### Syntaxe Cypher
 
 ```cypher
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 ```
 
 ### Architecture : Standalone + rewriteFunc + Internal
 
 Même pattern que CREATE.
 
-### _DROP_TANTIVY_INDEX — tableFunc
+### _DROP_LUCIVY_INDEX — tableFunc
 
 ```
 1. Trouver l'index sur la NodeTable
-2. nodeTable.removeIndex("tantivy")  → drop du Box<TantivyHandle> (automatique via cxx)
+2. nodeTable.removeIndex("lucivy")  → drop du Box<LucivyHandle> (automatique via cxx)
 3. catalog->dropIndex(transaction, tableID, indexName)
 4. std::filesystem::remove_all(indexPath)  → supprimer les fichiers
 5. Retourner message de confirmation
@@ -486,38 +486,38 @@ Même pattern que CREATE.
 
 ## 5. Extension Load + Wiring
 
-### tantivy_fts_extension.cpp
+### lucivy_fts_extension.cpp
 
 ```cpp
-void TantivyFtsExtension::load(ClientContext* context) {
+void LucivyFtsExtension::load(ClientContext* context) {
     auto& db = *context->getDatabase();
 
     // Table functions
-    ExtensionUtils::addTableFunc<QueryTantivyFunction>(db);
+    ExtensionUtils::addTableFunc<QueryLucivyFunction>(db);
 
     // Standalone (DDL-like)
-    ExtensionUtils::addStandaloneTableFunc<CreateTantivyFunction>(db);
-    ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateTantivyFunction>(db);
-    ExtensionUtils::addStandaloneTableFunc<DropTantivyFunction>(db);
-    ExtensionUtils::addInternalStandaloneTableFunc<InternalDropTantivyFunction>(db);
+    ExtensionUtils::addStandaloneTableFunc<CreateLucivyFunction>(db);
+    ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateLucivyFunction>(db);
+    ExtensionUtils::addStandaloneTableFunc<DropLucivyFunction>(db);
+    ExtensionUtils::addInternalStandaloneTableFunc<InternalDropLucivyFunction>(db);
 
     // Register index type (pour load/finalize au restart)
-    ExtensionUtils::registerIndexType(db, TantivyIndex::getIndexType());
+    ExtensionUtils::registerIndexType(db, LucivyIndex::getIndexType());
 }
 ```
 
 ### Séquence au restart
 
 1. `NodeTable::deserialize()` → crée les `IndexHolder` non-chargés (storageInfoBuffer)
-2. Extension `load()` → appelle `registerIndexType("TANTIVY", loadFunc)`
-3. Quand l'index est accédé → `IndexHolder::load()` → appelle `TantivyIndex::load()` → `open_index()`
-4. `IndexHolder::finalize()` → `TantivyIndex::finalize()` → rattrape les nœuds manquants
+2. Extension `load()` → appelle `registerIndexType("LUCIVY", loadFunc)`
+3. Quand l'index est accédé → `IndexHolder::load()` → appelle `LucivyIndex::load()` → `open_index()`
+4. `IndexHolder::finalize()` → `LucivyIndex::finalize()` → rattrape les nœuds manquants
 
 ---
 
-## 6. Mapping types rag3db → Tantivy
+## 6. Mapping types rag3db → Lucivy
 
-| Type rag3db | Type Tantivy (schema JSON) | Options | Usage |
+| Type rag3db | Type Lucivy (schema JSON) | Options | Usage |
 |-------------|---------------------------|---------|-------|
 | STRING (champ FTS) | `"text"` | `stored: true` | Tri-field auto (stemmed + raw + ngram) |
 | STRING (champ filtre) | `"string"` | `stored: true, indexed: true` | Filtrage valeur exacte |
@@ -533,9 +533,9 @@ Pour v1, seuls les champs texte FTS sont supportés. Les filter fields (string, 
 
 ### Headers cxx
 
-Le `cargo build` de tantivy_fts produit maintenant :
-- `libtantivy_fts.a` — lib statique Rust (comme avant)
-- `target/cxxbridge/tantivy-fts/src/bridge.rs.h` — header C++ généré par cxx
+Le `cargo build` de lucivy_fts produit maintenant :
+- `liblucivy_fts.a` — lib statique Rust (comme avant)
+- `target/cxxbridge/lucivy-fts/src/bridge.rs.h` — header C++ généré par cxx
 - `target/cxxbridge/rust/cxx.h` — runtime cxx (types `rust::String`, `rust::Vec`, etc.)
 
 ### Modifications CMakeLists.txt
@@ -544,7 +544,7 @@ Le `cargo build` de tantivy_fts produit maintenant :
 # Ajouter les headers cxx (remplace l'ancien include cbindgen)
 set(CXX_BRIDGE_DIR ${RUST_WORKSPACE_DIR}/target/cxxbridge)
 include_directories(
-    ${CXX_BRIDGE_DIR}/tantivy-fts/src/  # bridge.rs.h
+    ${CXX_BRIDGE_DIR}/lucivy-fts/src/  # bridge.rs.h
     ${CXX_BRIDGE_DIR}/rust/             # cxx.h runtime
 )
 
@@ -558,39 +558,39 @@ add_subdirectory(src/function)
 cxx génère aussi un fichier source C++ qu'il faut compiler :
 ```cmake
 # Le fichier glue cxx (généré par cargo build)
-set(CXX_GLUE_SRC ${RUST_WORKSPACE_DIR}/target/cxxbridge/tantivy-fts/src/bridge.rs.cc)
+set(CXX_GLUE_SRC ${RUST_WORKSPACE_DIR}/target/cxxbridge/lucivy-fts/src/bridge.rs.cc)
 # L'ajouter aux sources de l'extension
 ```
 
-Note: le glue file est déjà compilé dans `libtantivy_fts.a` via `cxx-build` dans `build.rs`. Vérifier s'il faut le recompiler côté CMake ou s'il est linké automatiquement.
+Note: le glue file est déjà compilé dans `liblucivy_fts.a` via `cxx-build` dans `build.rs`. Vérifier s'il faut le recompiler côté CMake ou s'il est linké automatiquement.
 
 ---
 
 ## 8. Fichiers à créer / modifier
 
-### Nouveaux fichiers (dans `extension/tantivy_fts/`)
+### Nouveaux fichiers (dans `extension/lucivy_fts/`)
 
 ```
 src/include/index/
-    tantivy_index.h                 ← TantivyIndex + TantivyStorageInfo
+    lucivy_index.h                 ← LucivyIndex + LucivyStorageInfo
 src/index/
-    tantivy_index.cpp               ← Implémentation des hooks + load
+    lucivy_index.cpp               ← Implémentation des hooks + load
     CMakeLists.txt                  ← Build
 src/include/function/
-    create_tantivy_index.h          ← CreateTantivyFunction + InternalCreateTantivyFunction
-    query_tantivy_index.h           ← QueryTantivyFunction
-    drop_tantivy_index.h            ← DropTantivyFunction + InternalDropTantivyFunction
+    create_lucivy_index.h          ← CreateLucivyFunction + InternalCreateLucivyFunction
+    query_lucivy_index.h           ← QueryLucivyFunction
+    drop_lucivy_index.h            ← DropLucivyFunction + InternalDropLucivyFunction
 src/function/
-    create_tantivy_index.cpp        ← Scan + indexation + registration
-    query_tantivy_index.cpp         ← SimpleTableFunc + search_with_highlights
-    drop_tantivy_index.cpp          ← Cleanup + removeIndex
+    create_lucivy_index.cpp        ← Scan + indexation + registration
+    query_lucivy_index.cpp         ← SimpleTableFunc + search_with_highlights
+    drop_lucivy_index.cpp          ← Cleanup + removeIndex
     CMakeLists.txt                  ← Build
 ```
 
 ### Fichiers modifiés
 
 ```
-src/main/tantivy_fts_extension.cpp  ← Remplacer stub par registration complète
+src/main/lucivy_fts_extension.cpp  ← Remplacer stub par registration complète
 CMakeLists.txt                      ← Ajouter subdirectories + headers cxx
 ```
 
@@ -606,44 +606,44 @@ CMakeLists.txt                      ← Ajouter subdirectories + headers cxx
 2. Créer `src/index/CMakeLists.txt` et `src/function/CMakeLists.txt`
 3. Vérifier que le build compile (sans code métier)
 
-### Étape 2 : TantivyIndex + StorageInfo
+### Étape 2 : LucivyIndex + StorageInfo
 
-1. Créer `tantivy_index.h` / `.cpp`
+1. Créer `lucivy_index.h` / `.cpp`
 2. Implémenter : constructeur, `getIndexType()`, `load()`, `serialize()`/`deserialize()`
 3. Stubs pour `insert()`, `delete_()`, `checkpoint()`, `finalize()`
 4. Build test
 
-### Étape 3 : QUERY_TANTIVY_INDEX
+### Étape 3 : QUERY_LUCIVY_INDEX
 
 Commencer par QUERY (priorité #1) pour pouvoir tester rapidement :
-1. Créer `query_tantivy_index.h` / `.cpp`
+1. Créer `query_lucivy_index.h` / `.cpp`
 2. SimpleTableFunc : `bindFunc` + `internalTableFunc`
 3. Build test
-4. Test manuel : créer un index Tantivy à la main (via test Rust), puis QUERY depuis rag3db
+4. Test manuel : créer un index Lucivy à la main (via test Rust), puis QUERY depuis rag3db
 
-### Étape 4 : CREATE_TANTIVY_INDEX
+### Étape 4 : CREATE_LUCIVY_INDEX
 
-1. Créer `create_tantivy_index.h` / `.cpp`
+1. Créer `create_lucivy_index.h` / `.cpp`
 2. Standalone + rewriteFunc + Internal
 3. Scan séquentiel des nœuds + indexation
 4. Registration de l'index sur la NodeTable
 5. Build test
 
-### Étape 5 : DROP_TANTIVY_INDEX
+### Étape 5 : DROP_LUCIVY_INDEX
 
-1. Créer `drop_tantivy_index.h` / `.cpp`
+1. Créer `drop_lucivy_index.h` / `.cpp`
 2. Standalone + rewriteFunc + Internal
 3. Cleanup fichiers + catalogue
 4. Build test
 
 ### Étape 6 : Extension wiring
 
-1. Modifier `tantivy_fts_extension.cpp` : registrations + registerIndexType
+1. Modifier `lucivy_fts_extension.cpp` : registrations + registerIndexType
 2. Build complet : `cmake --build build/release`
 
 ### Étape 7 : Hooks incrémentaux
 
-1. Implémenter `insert()` et `delete_()` dans TantivyIndex
+1. Implémenter `insert()` et `delete_()` dans LucivyIndex
 2. Implémenter `checkpointInMemory()` et `checkpoint()`
 3. Implémenter `finalize()` pour le rattrapage au restart
 4. Tests : INSERT → QUERY → vérifier que les nouveaux docs sont visibles
@@ -657,15 +657,15 @@ CREATE (d:doc {id: 1, title: "Rust Guide", body: "Rust programming is great"});
 CREATE (d:doc {id: 2, title: "C++ Guide", body: "C++ systems programming language"});
 
 -- Create index
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
 
 -- Query contains + highlights
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"programming"}', 10)
 RETURN node_id, score, highlights;
 
 -- Query "c++" (separator validation)
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"c++"}', 10)
 RETURN node_id, score, highlights;
 
@@ -673,12 +673,12 @@ RETURN node_id, score, highlights;
 CREATE (d:doc {id: 3, title: "Python Guide", body: "Python scripting language"});
 
 -- Verify new doc is searchable (after checkpoint)
-CALL QUERY_TANTIVY_INDEX('doc',
+CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"contains","field":"body","value":"python"}', 10)
 RETURN node_id, score, highlights;
 
 -- Drop
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 ```
 
 ---
@@ -688,7 +688,7 @@ CALL DROP_TANTIVY_INDEX('doc');
 ### Mode immédiat vs différé
 
 On utilise le mode **immédiat** (`needCommitInsert() = false`), comme FTS :
-- `insert()` ajoute les docs au writer Tantivy (buffered dans le heap 50MB)
+- `insert()` ajoute les docs au writer Lucivy (buffered dans le heap 50MB)
 - `checkpointInMemory()` flush (commit + reload_reader)
 - Plus simple que le mode différé (pas de re-scan au commit)
 
@@ -700,18 +700,18 @@ Les documents insérés ne sont visibles aux recherches qu'après `checkpointInM
 
 ### Pas de table registre
 
-Contrairement au plan initial (doc 02), on n'utilise PAS de table `_tantivy_indexes`. Les métadonnées sont dans `TantivyStorageInfo`, sérialisées avec la NodeTable. Avantages :
+Contrairement au plan initial (doc 02), on n'utilise PAS de table `_lucivy_indexes`. Les métadonnées sont dans `LucivyStorageInfo`, sérialisées avec la NodeTable. Avantages :
 - Zéro table interne à gérer
 - Atomic avec le checkpoint de la NodeTable
 - Pattern identique à FTS et HNSW
 
 ### Handle ownership
 
-Le `Box<TantivyHandle>` vit dans `TantivyIndex`, qui vit dans `IndexHolder` de `NodeTable::indexes`. Drop automatique quand l'index est supprimé ou la DB fermée.
+Le `Box<LucivyHandle>` vit dans `LucivyIndex`, qui vit dans `IndexHolder` de `NodeTable::indexes`. Drop automatique quand l'index est supprimé ou la DB fermée.
 
 ### Pas de HandleMap
 
-Chaque `TantivyIndex` possède son propre handle. Pas de singleton global. Thread safety : le writer est derrière un `Mutex<IndexWriter>` côté Rust, le reader est lock-free.
+Chaque `LucivyIndex` possède son propre handle. Pas de singleton global. Thread safety : le writer est derrière un `Mutex<IndexWriter>` côté Rust, le reader est lock-free.
 
 ### Recherche dans bindFunc
 
@@ -720,7 +720,7 @@ Comme FTS, on exécute la recherche dans `bindFunc` (une seule fois) et on stock
 ### Convention de chemin
 
 ```
-{databasePath}/tantivy_indexes/{tableName}/
+{databasePath}/lucivy_indexes/{tableName}/
 ```
 
-Stocké dans `TantivyStorageInfo::indexPath`. Créé par CREATE, supprimé par DROP.
+Stocké dans `LucivyStorageInfo::indexPath`. Créé par CREATE, supprimé par DROP.

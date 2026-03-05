@@ -20,7 +20,7 @@ Extensions au-delà des use cases concrets du doc 02. Fonctionnalités transvers
 
 **Mécanisme :** `catalog.upsert()` compare le content hash. Si inchangé → skip. Si changé → update entité, re-chunk, re-embed uniquement les chunks modifiés. Les relations existantes sont préservées sauf si la structure change.
 
-**Ce qui existe déjà :** le hash detection dans `catalog.update()` + le lazy commit Tantivy. Manque : l'exposition comme service réactif (HTTP webhook handler ou queue listener).
+**Ce qui existe déjà :** le hash detection dans `catalog.update()` + le lazy commit Lucivy. Manque : l'exposition comme service réactif (HTTP webhook handler ou queue listener).
 
 ---
 
@@ -83,7 +83,7 @@ Entité quelconque
 
 **Règles d'inférence :**
 
-| Pattern détecté | Type inféré | Filter Tantivy |
+| Pattern détecté | Type inféré | Filter Lucivy |
 |-----------------|-------------|----------------|
 | < 20 valeurs uniques string | String | exact match |
 | Numérique, grande variance | Double/Int64 | range |

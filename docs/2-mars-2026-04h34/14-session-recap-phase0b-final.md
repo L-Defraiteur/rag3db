@@ -46,10 +46,10 @@
 
 ### 6. Git — branches et commits (FAIT)
 
-- **ld-tantivy `main`** : commit + push `search_typed_with_highlights` bridge function
+- **ld-lucivy `main`** : commit + push `search_typed_with_highlights` bridge function
 - **rag3db `master`** : 2 commits pushés :
   - `refactor: extract highlightsToJson to shared header, use typed search bridge`
-  - `chore: update ld-tantivy submodule + add highlights_util.h shared header`
+  - `chore: update ld-lucivy submodule + add highlights_util.h shared header`
 - **rag3db `feature/kb-index-architecture`** : branche créée, 1 commit Phase 0a+0b, merge master dedans, pushée
 
 ---
@@ -78,10 +78,10 @@ warning: function `count_chunks` is never used
 
 | Fichier | Changements |
 |---------|-----------|
-| `query_tantivy_index.cpp` | Extract `highlightsToJson` vers header partagé |
+| `query_lucivy_index.cpp` | Extract `highlightsToJson` vers header partagé |
 | `search_function.cpp` | Migration vers `search_typed_with_highlights`, suppression JSON query builder |
 | `highlights_util.h` | Nouveau header partagé |
-| `ld-tantivy` (submodule) | +`search_typed_with_highlights` bridge function |
+| `ld-lucivy` (submodule) | +`search_typed_with_highlights` bridge function |
 
 ---
 
@@ -103,6 +103,6 @@ Schema Code Domain + CRUD E2E test (doc 06)
 
 | Repo | Branche | État |
 |------|---------|------|
-| ld-tantivy | `main` | pushé, à jour |
+| ld-lucivy | `main` | pushé, à jour |
 | rag3db | `master` | pushé, à jour (highlights refactor) |
 | rag3db | `feature/kb-index-architecture` | pushé, à jour (Phase 0a+0b + merge master) |

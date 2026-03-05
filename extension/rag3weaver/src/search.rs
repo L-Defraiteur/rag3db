@@ -212,7 +212,7 @@ impl<'de> Deserialize<'de> for SearchSignals {
     }
 }
 
-/// BM25 query mode for keyword search via QUERY_TANTIVY_INDEX.
+/// BM25 query mode for keyword search via QUERY_LUCIVY_INDEX.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BM25Mode {
     /// NgramContainsQuery fuzzy — substring match + trigram + Levenshtein + BM25.
@@ -224,7 +224,7 @@ pub enum BM25Mode {
     ContainsSplit,
     /// NgramContainsQuery regex — trigram-accelerated regex + optional fuzzy hybrid.
     Regex,
-    /// Native Tantivy QueryParser — standard BM25 term-by-term search.
+    /// Native Lucivy QueryParser — standard BM25 term-by-term search.
     /// Each word is tokenized independently, docs matching more terms score higher.
     Parse,
 }
@@ -1193,13 +1193,13 @@ async fn search_vector_bruteforce(
         .collect())
 }
 
-/// Build the JSON query config for QUERY_TANTIVY_INDEX.
+/// Build the JSON query config for QUERY_LUCIVY_INDEX.
 ///
 /// - **Contains**: `{"type":"contains","field":"f","value":"full query","distance":1}`
 /// - **ContainsSplit**: splits query into words, each word becomes a contains clause
 ///   combined with boolean should — "Rust safety" matches docs with both words anywhere.
 /// - **Regex**: like Contains but adds `"regex":true`
-/// - **Parse**: `{"type":"parse","fields":["f1","f2"],"value":"query"}` — native Tantivy
+/// - **Parse**: `{"type":"parse","fields":["f1","f2"],"value":"query"}` — native Lucivy
 ///   QueryParser, standard BM25 term-by-term search.
 ///
 /// Multiple fields → wraps in `{"type":"boolean","should":[...]}`
@@ -1281,12 +1281,12 @@ fn build_contains_clauses(
     }
 }
 
-/// BM25 keyword search via QUERY_TANTIVY_INDEX.
+/// BM25 keyword search via QUERY_LUCIVY_INDEX.
 ///
 /// Uses NgramContainsQuery (fuzzy or regex mode) with BM25 scoring.
-/// The query is sent as a JSON QueryConfig to the tantivy_fts extension.
+/// The query is sent as a JSON QueryConfig to the lucivy_fts extension.
 ///
-/// Pre-filtering: `allowed_ids` are pre-resolved node offsets (from Kuzu), passed to QUERY_TANTIVY_INDEX.
+/// Pre-filtering: `allowed_ids` are pre-resolved node offsets (from Kuzu), passed to QUERY_LUCIVY_INDEX.
 pub async fn search_bm25(
     conn: &dyn DbConnection,
     entity: &str,
@@ -1312,13 +1312,13 @@ pub async fn search_bm25(
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
              allowed_ids := [{ids_str}]) \
              RETURN node_id, score"
         )
     } else {
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
              RETURN node_id, score"
         )
     };
@@ -1386,13 +1386,13 @@ pub async fn search_bm25_raw(
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
              allowed_ids := [{ids_str}]) \
              RETURN node_id, score, highlights"
         )
     } else {
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
              RETURN node_id, score, highlights"
         )
     };
@@ -1626,7 +1626,7 @@ pub async fn search_bm25_chunked(
         return Ok(vec![]);
     }
 
-    // Query 1: CALL QUERY_TANTIVY_INDEX → (offset, score, highlights)
+    // Query 1: CALL QUERY_LUCIVY_INDEX → (offset, score, highlights)
     let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
     let escaped_json = json_query.replace('\'', "''");
 
@@ -1637,13 +1637,13 @@ pub async fn search_bm25_chunked(
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
              allowed_ids := [{ids_str}]) \
              RETURN node_id, score, highlights"
         )
     } else {
         format!(
-            "CALL QUERY_TANTIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
+            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
              RETURN node_id, score, highlights"
         )
     };
@@ -1690,7 +1690,7 @@ pub async fn search_bm25_chunked(
         let data = if parent.data.is_empty() { None } else { Some(parent.data.clone()) };
 
         // Find chunks that overlap with highlights.
-        // Highlights from Tantivy use field names "_content" / "_title" with offsets
+        // Highlights from Lucivy use field names "_content" / "_title" with offsets
         // relative to the concatenated _content. Chunks have offsets relative to their
         // individual source field. We translate via chunk.content_offset.
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();

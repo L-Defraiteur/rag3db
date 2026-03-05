@@ -25,22 +25,22 @@ Les queries **term, fuzzy, regex, phrase, parse** ne retournent pas de highlight
 ### A1. TermQuery — FAIT
 
 **Fichiers modifiés** :
-- `ld-tantivy/src/query/term_query/term_query.rs` — `highlight_sink: Option<Arc<HighlightSink>>`, `with_highlight_sink()`, propagation vers TermWeight
-- `ld-tantivy/src/query/term_query/term_weight.rs` — sink field, force `WithFreqsAndPositionsAndOffsets` quand sink présent, `next_segment()` dans `specialized_scorer()`
-- `ld-tantivy/src/query/term_query/term_scorer.rs` — sink + segment_ord, `capture_offsets()` dans `advance()`, `seek()`, et `with_highlight_sink()` (initial doc)
-- `tantivy_fts/rust/src/query.rs` — `build_term_query()` passe le sink
+- `ld-lucivy/src/query/term_query/term_query.rs` — `highlight_sink: Option<Arc<HighlightSink>>`, `with_highlight_sink()`, propagation vers TermWeight
+- `ld-lucivy/src/query/term_query/term_weight.rs` — sink field, force `WithFreqsAndPositionsAndOffsets` quand sink présent, `next_segment()` dans `specialized_scorer()`
+- `ld-lucivy/src/query/term_query/term_scorer.rs` — sink + segment_ord, `capture_offsets()` dans `advance()`, `seek()`, et `with_highlight_sink()` (initial doc)
+- `lucivy_fts/rust/src/query.rs` — `build_term_query()` passe le sink
 
-**Statut** : Code compilé, 1015 tests ld-tantivy passent. **FFI test FAIL** — les offsets ne sont pas retrouvés dans le sink après la recherche. Debug en cours (voir section "Debug").
+**Statut** : Code compilé, 1015 tests ld-lucivy passent. **FFI test FAIL** — les offsets ne sont pas retrouvés dans le sink après la recherche. Debug en cours (voir section "Debug").
 
 ### A2. FuzzyQuery + RegexQuery (via AutomatonWeight) — FAIT
 
 **Fichiers modifiés** :
-- `ld-tantivy/src/query/automaton_weight.rs` — sink field, `with_highlight_sink()`. Quand sink présent : pour chaque terme FST, lit postings avec `WithFreqsAndPositionsAndOffsets`, itère tous les docs et capture les offsets. Sinon : chemin block postings original (Basic)
-- `ld-tantivy/src/query/fuzzy_query.rs` — sink field, `with_highlight_sink()`, custom `impl Debug` (exclut le sink pour éviter casser les tests de debug output), propagation vers AutomatonWeight
-- `ld-tantivy/src/query/regex_query.rs` — sink field, `with_highlight_sink()`, propagation vers AutomatonWeight
-- `tantivy_fts/rust/src/query.rs` — `build_fuzzy_query()` et `build_regex_query()` passent le sink
+- `ld-lucivy/src/query/automaton_weight.rs` — sink field, `with_highlight_sink()`. Quand sink présent : pour chaque terme FST, lit postings avec `WithFreqsAndPositionsAndOffsets`, itère tous les docs et capture les offsets. Sinon : chemin block postings original (Basic)
+- `ld-lucivy/src/query/fuzzy_query.rs` — sink field, `with_highlight_sink()`, custom `impl Debug` (exclut le sink pour éviter casser les tests de debug output), propagation vers AutomatonWeight
+- `ld-lucivy/src/query/regex_query.rs` — sink field, `with_highlight_sink()`, propagation vers AutomatonWeight
+- `lucivy_fts/rust/src/query.rs` — `build_fuzzy_query()` et `build_regex_query()` passent le sink
 
-**Statut** : Code compilé, 1015 tests ld-tantivy passent. **FFI test PASS** — fuzzy highlight fonctionne correctement (`"rrust"~1` → `[0,4]`).
+**Statut** : Code compilé, 1015 tests ld-lucivy passent. **FFI test PASS** — fuzzy highlight fonctionne correctement (`"rrust"~1` → `[0,4]`).
 
 ### A3. Pourquoi fuzzy marche mais term non
 
@@ -67,11 +67,11 @@ Les queries **term, fuzzy, regex, phrase, parse** ne retournent pas de highlight
 **Approche choisie** : Option B1 — upgrader le champ stemmed à `WithFreqsAndPositionsAndOffsets`.
 
 **Fichiers modifiés** :
-- `tantivy_fts/rust/src/handle.rs` — champ stemmed upgradé de `WithFreqsAndPositions` → `WithFreqsAndPositionsAndOffsets`
-- `ld-tantivy/src/query/phrase_query/phrase_scorer.rs` — sink + segment_ord, refactoring constructeurs (extracted `build()` method), `new_with_highlight()`, `drain_or_capture_offsets()` pour maintenir sync lecteurs position/offset
-- `ld-tantivy/src/query/phrase_query/phrase_weight.rs` — sink field, force `WithFreqsAndPositionsAndOffsets`, crée PhraseScorer via `new_with_highlight()`
-- `ld-tantivy/src/query/phrase_query/phrase_query.rs` — sink field, `with_highlight_sink()`, propagation vers PhraseWeight
-- `tantivy_fts/rust/src/query.rs` — `build_phrase_query()` passe le sink
+- `lucivy_fts/rust/src/handle.rs` — champ stemmed upgradé de `WithFreqsAndPositions` → `WithFreqsAndPositionsAndOffsets`
+- `ld-lucivy/src/query/phrase_query/phrase_scorer.rs` — sink + segment_ord, refactoring constructeurs (extracted `build()` method), `new_with_highlight()`, `drain_or_capture_offsets()` pour maintenir sync lecteurs position/offset
+- `ld-lucivy/src/query/phrase_query/phrase_weight.rs` — sink field, force `WithFreqsAndPositionsAndOffsets`, crée PhraseScorer via `new_with_highlight()`
+- `ld-lucivy/src/query/phrase_query/phrase_query.rs` — sink field, `with_highlight_sink()`, propagation vers PhraseWeight
+- `lucivy_fts/rust/src/query.rs` — `build_phrase_query()` passe le sink
 
 **Détail PhraseScorer** :
 - Le PhraseScorer évalue `phrase_match()` pour chaque doc candidat (en lisant les positions)
@@ -79,7 +79,7 @@ Les queries **term, fuzzy, regex, phrase, parse** ne retournent pas de highlight
 - `drain_or_capture_offsets(matched)` : pour CHAQUE doc candidat (matché ou non), consomme les offsets via `append_offsets()` pour garder le lecteur sync. Si matched, insère dans le sink.
 - Appelé dans `build()` (initial doc), `advance()`, `seek()`, `seek_into_the_danger_zone()`
 
-**Statut** : Code compilé, 1015 tests ld-tantivy passent. **FFI test FAIL** — même symptôme que term query (pas de highlights dans la réponse).
+**Statut** : Code compilé, 1015 tests ld-lucivy passent. **FFI test FAIL** — même symptôme que term query (pas de highlights dans la réponse).
 
 **Note** : En fait, le `PositionReader` supporte le random access (pas séquentiel pur), donc le draining n'est peut-être pas nécessaire. Mais ça ne devrait pas empêcher de marcher.
 
@@ -87,7 +87,7 @@ Les queries **term, fuzzy, regex, phrase, parse** ne retournent pas de highlight
 
 ## Phase C — ParseQuery — DIFFÉRÉ
 
-`ParseQuery` utilise le `QueryParser` de tantivy qui produit un arbre de queries. On ne peut pas facilement injecter un `HighlightSink` dans ces queries générées.
+`ParseQuery` utilise le `QueryParser` de lucivy qui produit un arbre de queries. On ne peut pas facilement injecter un `HighlightSink` dans ces queries générées.
 
 **Recommandation** : différer. Le highlight pour parse query peut venir plus tard.
 
@@ -139,7 +139,7 @@ Le `HighlightSink` stocke `(segment_ord, doc_id) → Vec<[usize; 2]>` où `segme
 
 ## Fichiers modifiés (récapitulatif)
 
-### ld-tantivy
+### ld-lucivy
 - `src/query/term_query/term_query.rs` — sink + propagation
 - `src/query/term_query/term_weight.rs` — sink + force record option + segment_ord
 - `src/query/term_query/term_scorer.rs` — sink + capture_offsets dans advance/seek
@@ -150,11 +150,11 @@ Le `HighlightSink` stocke `(segment_ord, doc_id) → Vec<[usize; 2]>` où `segme
 - `src/query/phrase_query/phrase_weight.rs` — sink + force record option
 - `src/query/phrase_query/phrase_scorer.rs` — sink + drain_or_capture_offsets + refactored constructors
 
-### tantivy_fts
+### lucivy_fts
 - `rust/src/query.rs` — sink passé à tous les builders (term, fuzzy, regex, phrase, contains)
 - `rust/src/handle.rs` — stemmed field upgradé à WithFreqsAndPositionsAndOffsets
 - `test/test_ffi.c` — 3 tests highlight ajoutés (term, fuzzy, phrase)
 
 ### Compilation
-- 1015 tests ld-tantivy : tous passent
+- 1015 tests ld-lucivy : tous passent
 - 150/153 tests FFI : 3 FAIL (term + phrase highlights)

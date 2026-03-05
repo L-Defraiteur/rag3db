@@ -75,14 +75,14 @@ CREATE REL TABLE Entity_HAS_CHUNK(FROM Entity TO Entity_Chunk)
 
 -- Index
 CREATE VECTOR INDEX {Entity}_{KB}_vec ON Entity({KB}_embedding) METRIC cosine
-CALL CREATE_TANTIVY_INDEX('{Entity}', ['{title_field}', '{content_fields...}'])
+CALL CREATE_LUCIVY_INDEX('{Entity}', ['{title_field}', '{content_fields...}'])
 ```
 
 ### Hybrid search — fusion
 
 ```
 Vector : array_cosine_similarity(embedding, $query_embedding)
-FTS    : QUERY_TANTIVY_INDEX(table, query_json, limit)
+FTS    : QUERY_LUCIVY_INDEX(table, query_json, limit)
 
 Fusion strategies :
   boost    : vector_score * (1 + normalized_bm25 * boost_factor)
@@ -164,8 +164,8 @@ Pour la v1, un mode **sync** (pas de queue, batch a l'appel de `drain()`) serait
 
 ```
 packages/rag3db/
-└── extension/tantivy/ld-tantivy/
-    ├── tantivy_fts/              ← Crate existante (FTS bridge cxx)
+└── extension/lucivy/ld-lucivy/
+    ├── lucivy_fts/              ← Crate existante (FTS bridge cxx)
     └── rag3weaver/               ← Nouvelle crate Rust (workspace member)
         ├── Cargo.toml
         └── src/
@@ -193,7 +193,7 @@ packages/rag3db/
             ├── persistence.rs    ← Tables systeme (_catalog_meta, _queue, _kb)
             │
             │  -- Etape 3 : search + explore --
-            ├── search.rs         ← Hybrid search, appel TantivyHandle direct
+            ├── search.rs         ← Hybrid search, appel LucivyHandle direct
             ├── explore.rs        ← Graph BFS exploration
             │
             │  -- Etape 4 : providers + code parsing --
@@ -321,12 +321,12 @@ Schema/DDL via Cypher (rare), mais insert/search via API interne (frequent).
 
 **Recommandation** : Option A pour la v1 (simplicite), Option C pour optimiser ensuite.
 
-### Interaction avec tantivy_fts
+### Interaction avec lucivy_fts
 
-Le catalog peut appeler tantivy_fts de deux facons :
+Le catalog peut appeler lucivy_fts de deux facons :
 
-1. **Via Cypher** : `CALL QUERY_TANTIVY_INDEX(...)` — simple, passe par rag3db
-2. **Via Rust directement** : les deux crates sont dans le meme workspace, le catalog peut importer `tantivy_fts` et appeler `TantivyHandle::search()` directement — zero overhead
+1. **Via Cypher** : `CALL QUERY_LUCIVY_INDEX(...)` — simple, passe par rag3db
+2. **Via Rust directement** : les deux crates sont dans le meme workspace, le catalog peut importer `lucivy_fts` et appeler `LucivyHandle::search()` directement — zero overhead
 
 L'option 2 est tres interessante pour le hot path (search).
 
@@ -339,7 +339,7 @@ L'option 2 est tres interessante pour le hot path (search).
 | Langages supportes | JS/TS uniquement | Tous (via FFI/WASM) |
 | Dependances | npm + kuzu bindings | Zero (self-contained) |
 | Performance chunking | ~OK (V8) | 5-10x plus rapide |
-| Performance search | Overhead Cypher | Appel Tantivy direct possible |
+| Performance search | Overhead Cypher | Appel Lucivy direct possible |
 | WASM browser | Necessite build TS separe | Inclus dans le .wasm |
 | Taille deployable | rag3db.wasm + rag3weaver.js | rag3db.wasm seul |
 | Tests | Jest/Mocha | cargo test (1000+ tests existants) |
@@ -393,13 +393,13 @@ Le coeur du systeme : ingestion batch via Cypher, persiste dans rag3db.
 - Tous les modules emettent via `event_tx.send(CatalogEvent::...)`
 - Tests avec MockConnection + MockEmbedder
 
-### Etape 3 — Search + Explore via Tantivy direct
+### Etape 3 — Search + Explore via Lucivy direct
 
 Recherche hybride sans passer par Cypher pour le FTS.
 
-- `search.rs` : hybrid fusion (boost, RRF, weighted), appel `TantivyHandle` direct
+- `search.rs` : hybrid fusion (boost, RRF, weighted), appel `LucivyHandle` direct
 - `explore.rs` : BFS graph traversal, relations configurables, profondeur variable
-- Dependance `tantivy-fts` (meme workspace)
+- Dependance `lucivy-fts` (meme workspace)
 - Cypher pour la partie vector (HNSW) et graph traversal (MATCH)
 - Events : `SearchStarted`, `SearchCompleted`
 - Tests E2E avec rag3db reel (index file + in-memory)
@@ -418,7 +418,7 @@ Embedders HTTP integres, auto-contenus.
 
 Build WASM et validation navigateur.
 
-- Build WASM (meme pipeline emscripten que tantivy_fts)
+- Build WASM (meme pipeline emscripten que lucivy_fts)
 - Adaptation async pour WASM (`wasm-bindgen-futures`, `gloo-timers` au lieu de tokio timers)
 - `reqwest` en mode WASM (utilise `fetch()`)
 - Events via `postMessage` dans le Web Worker
@@ -497,11 +497,11 @@ let results = catalog.search("CodeKB", "query", &opts).await?;
 
 **Pour les bindings sync** (C FFI, extension Cypher) : un wrapper `block_on()` autour de l'API async.
 
-### 4. Tantivy → Appel Rust direct
+### 4. Lucivy → Appel Rust direct
 
-**Decision** : le catalog importe `tantivy_fts` et appelle `TantivyHandle` directement.
+**Decision** : le catalog importe `lucivy_fts` et appelle `LucivyHandle` directement.
 
-- Les deux crates sont dans le meme workspace (`ld-tantivy`)
+- Les deux crates sont dans le meme workspace (`ld-lucivy`)
 - Zero overhead : pas de parsing Cypher, pas de serialisation JSON
 - Acces direct aux scores BM25 bruts, highlights avec byte offsets
 - Le DDL (CREATE/DROP index) passe aussi par Rust (pas besoin de Cypher)
@@ -509,18 +509,18 @@ let results = catalog.search("CodeKB", "query", &opts).await?;
 ```rust
 // Dans rag3weaver/Cargo.toml
 [dependencies]
-tantivy-fts = { path = "../tantivy_fts/rust" }
+lucivy-fts = { path = "../lucivy_fts/rust" }
 
 // Dans search.rs
-use tantivy_fts::handle::TantivyHandle;
+use lucivy_fts::handle::LucivyHandle;
 
-let handle = TantivyHandle::open(index_path)?;
+let handle = LucivyHandle::open(index_path)?;
 let results = handle.search_filtered_with_highlights(
     query_json, limit, &allowed_ids
 )?;
 ```
 
-**Consequence** : rag3weaver depend de tantivy_fts au niveau Rust, mais c'est interne au workspace. Les consommateurs externes ne voient que l'API rag3weaver.
+**Consequence** : rag3weaver depend de lucivy_fts au niveau Rust, mais c'est interne au workspace. Les consommateurs externes ne voient que l'API rag3weaver.
 
 ### 5. Extension Cypher → Non pour v1, API Rust seule
 
@@ -531,7 +531,7 @@ let results = handle.search_filtered_with_highlights(
 - Accelere la v1 significativement (pas de couche extension)
 - L'extension Cypher (CREATE_CATALOG, CATALOG_SEARCH) pourra etre ajoutee en v2 si le besoin se confirme
 
-**Consequence sur l'architecture** : on retire `extension/rag3weaver/` du plan. La crate vit dans le workspace ld-tantivy et est consommee directement.
+**Consequence sur l'architecture** : on retire `extension/rag3weaver/` du plan. La crate vit dans le workspace ld-lucivy et est consommee directement.
 
 ### 6. Queue → Configurable (drain explicite par defaut, auto-flush optionnel)
 
@@ -576,7 +576,7 @@ let stats = catalog.drain().await?;  // flush les restes
 - Graph exploration BFS
 - Embedders integres (TEI, OpenAI) + trait custom
 - Queue configurable (drain explicite + auto-flush optionnel)
-- Tantivy direct (zero Cypher overhead pour FTS)
+- Lucivy direct (zero Cypher overhead pour FTS)
 - Persistence complete dans rag3db
 
 **v2 (plus tard)** :
@@ -648,7 +648,7 @@ Les consumers (Node.js, Python, WASM) s'abonnent et traduisent en leur systeme d
 | Entites | Tables utilisateur (File, Scope, etc.) |
 | Chunks | Tables `{Entity}_Chunk` |
 | Relations | Tables REL (DEFINED_IN, HAS_CHUNK, etc.) |
-| Index FTS | Disque : `tantivy_indexes/{table}/` |
+| Index FTS | Disque : `lucivy_indexes/{table}/` |
 | Index HNSW | Disque : extension vector |
 | Queue state | Table `_catalog_queue` (ops en attente, pour reprise apres crash) |
 | KB metadata | Table `_catalog_kb` (title/content fields resolus, stats) |

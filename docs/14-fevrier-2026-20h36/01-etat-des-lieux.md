@@ -6,13 +6,13 @@
 
 ## Vue d'ensemble
 
-Le projet integre un moteur de recherche full-text fuzzy (Tantivy) dans **rag3db** (fork de Kuzu v0.11.2.2), compile en natif, Node.js et WASM browser, pour servir de backend a **Rag3Weaver** (framework RAG TypeScript).
+Le projet integre un moteur de recherche full-text fuzzy (Lucivy) dans **rag3db** (fork de Kuzu v0.11.2.2), compile en natif, Node.js et WASM browser, pour servir de backend a **Rag3Weaver** (framework RAG TypeScript).
 
 ### Repos
 
 | Repo | Branche | Dernier commit | Description |
 |------|---------|----------------|-------------|
-| `ld-tantivy` | `main` | `77c4ca6` | Fork Tantivy v0.26.0, submodule de rag3db |
+| `ld-lucivy` | `main` | `77c4ca6` | Fork Lucivy v0.26.0, submodule de rag3db |
 | `rag3db` | `feature/fuzzy-fts` | `e0186a809` | Fork Kuzu v0.11.2.2, renomme rag3db |
 
 ---
@@ -58,11 +58,11 @@ Le type `"contains"` utilise **NgramContainsQuery**, qui est le coeur du moteur.
 | Type | Moteur interne | Usage | Scoring |
 |------|---------------|-------|---------|
 | **`contains`** | **NgramContainsQuery** | **Recherche principale** — fuzzy/regex/hybride + BM25 | **BM25** |
-| `term` | TermQuery | Lookup exact d'un seul mot | BM25 (natif Tantivy) |
-| `fuzzy` | FuzzyTermQuery | Fuzzy whole-word (PAS substring) d'un seul mot | BM25 (natif Tantivy) |
-| `phrase` | PhraseQuery | Sequence exacte de mots adjacents | BM25 (natif Tantivy) |
-| `regex` | RegexQuery | Pattern regex sur le term dict | BM25 (natif Tantivy) |
-| `parse` | QueryParser | Syntaxe Lucene-like (AND, OR, champs, etc.) | BM25 (natif Tantivy) |
+| `term` | TermQuery | Lookup exact d'un seul mot | BM25 (natif Lucivy) |
+| `fuzzy` | FuzzyTermQuery | Fuzzy whole-word (PAS substring) d'un seul mot | BM25 (natif Lucivy) |
+| `phrase` | PhraseQuery | Sequence exacte de mots adjacents | BM25 (natif Lucivy) |
+| `regex` | RegexQuery | Pattern regex sur le term dict | BM25 (natif Lucivy) |
+| `parse` | QueryParser | Syntaxe Lucene-like (AND, OR, champs, etc.) | BM25 (natif Lucivy) |
 | `boolean` | BooleanQuery | Combinaison de sous-queries | Combine |
 
 **Distinction importante** : `"fuzzy"` (FuzzyTermQuery) est **strictement inferieur** a `"contains"` pour le use case RAG :
@@ -78,7 +78,7 @@ Le type `"fuzzy"` existe pour compatibilite et cas specifiques (match exact d'un
                             |
               +-------------+-------------+
               |                           |
-     QUERY_TANTIVY_INDEX           QUERY_VECTOR_INDEX
+     QUERY_LUCIVY_INDEX           QUERY_VECTOR_INDEX
      type: "contains"              metric: cosine
      fuzzy distance=1              top_k=100
      BM25 scoring                  embedding similarity
@@ -95,11 +95,11 @@ Le type `"fuzzy"` existe pour compatibilite et cas specifiques (match exact d'un
 
 ## Tout ce qui a ete fait (chronologique)
 
-### Phases 1-8 (1er-13 fevrier) — Moteur Tantivy
+### Phases 1-8 (1er-13 fevrier) — Moteur Lucivy
 
 Details dans `docs/13-fevrier-2026-18h57/01-etat-des-lieux.md`.
 
-- **Crate Rust FFI** `tantivy_fts` — bridge cxx type (9 structs, 15 fonctions)
+- **Crate Rust FFI** `lucivy_fts` — bridge cxx type (9 structs, 15 fonctions)
 - **Triple-field layout** automatique : `body` -> stemmed + `._raw` + `._ngram`
 - **Cascade 4 niveaux** : exact -> fuzzy -> substring -> fuzzy substring
 - **ContainsScorer** (multi-token) + **ContainsSingleScorer** (resout "c++")
@@ -107,25 +107,25 @@ Details dans `docs/13-fevrier-2026-18h57/01-etat-des-lieux.md`.
 - **HighlightSink** — byte offsets pour tous les types de query
 - **WithFreqsAndPositionsAndOffsets** — offsets dans les postings (21 fichiers)
 - **Rename kuzu -> rag3db** (2538 fichiers)
-- **Tests** : 1025 ld-tantivy = tout vert
+- **Tests** : 1025 ld-lucivy = tout vert
 
-### Phase A (13-14 fevrier) — Extension C++ `tantivy_fts`
+### Phase A (13-14 fevrier) — Extension C++ `lucivy_fts`
 
 3 fonctions Cypher implementees :
 
 ```cypher
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body']);
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], stemmer := 'french');
-CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'], filter_fields := ['category', 'score']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body']);
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'], stemmer := 'french');
+CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'], filter_fields := ['category', 'score']);
 
-CALL QUERY_TANTIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++"}', 10)
+CALL QUERY_LUCIVY_INDEX('doc', '{"type":"contains","field":"body","value":"c++"}', 10)
 RETURN node_id, score, highlights;
 
-CALL DROP_TANTIVY_INDEX('doc');
+CALL DROP_LUCIVY_INDEX('doc');
 ```
 
 Architecture :
-- `TantivyIndex` herite de `storage::Index` — hooks automatiques (`insert`/`delete_`/`update`)
+- `LucivyIndex` herite de `storage::Index` — hooks automatiques (`insert`/`delete_`/`update`)
 - `QUERY` = `TableFunc` (necessite RETURN), `CREATE`/`DROP` = `StandaloneTableFunc`
 - Bridge cxx type (zero JSON sur hot path)
 
@@ -135,17 +135,17 @@ Architecture :
 
 ### DELETE/UPDATE + Lazy Commit (14 fevrier)
 
-- **Probleme identifie** : writer != reader dans Tantivy (les mutations ne sont visibles qu'apres commit+reload)
+- **Probleme identifie** : writer != reader dans Lucivy (les mutations ne sont visibles qu'apres commit+reload)
 - **Solution implementee** : lazy commit via flag `dirty_`
   - `insert()`, `delete_()`, `update()` -> `dirty_ = true`
-  - `QUERY_TANTIVY_INDEX` appelle `flushIfDirty()` avant la recherche (commit + reload une seule fois)
-- **Tests E2E** : `TantivyDeleteTest2` et `TantivyUpdateTest` — passent
+  - `QUERY_LUCIVY_INDEX` appelle `flushIfDirty()` avant la recherche (commit + reload une seule fois)
+- **Tests E2E** : `LucivyDeleteTest2` et `LucivyUpdateTest` — passent
 
 ### Node.js natif (14 fevrier)
 
 - Build `rag3dbjs.node` + extension `.rag3db_extension`
 - **139 tests mocha** : tous passent
-- tantivy_fts teste manuellement (contains, fuzzy, phrase, parse) — OK
+- lucivy_fts teste manuellement (contains, fuzzy, phrase, parse) — OK
 - Extension chargee dynamiquement via `LOAD EXTENSION`
 
 ### Build WASM (14 fevrier)
@@ -158,14 +158,14 @@ Architecture :
 5. `libfuzzy_fst.a` natif -> retire `fts` du build WASM
 
 Sortie : `rag3db_wasm.js` 17MB (WASM inline, single file)
-Extensions statiquement linkees : json, vector, algo, tantivy_fts
+Extensions statiquement linkees : json, vector, algo, lucivy_fts
 
 ### Tests WASM complets (14 fevrier)
 
 - **WASM NODEFS** : 94 tests mocha passent
-- **WASM standard** : tantivy_fts 3/3 + vector HNSW 5/5
+- **WASM standard** : lucivy_fts 3/3 + vector HNSW 5/5
 - **Playwright browser (IDBFS)** : 2 tests (8 sub-tests) — persistence validee
-  - Phase 1 : create DB -> tables -> index tantivy + vector -> query -> syncfs -> IndexedDB
+  - Phase 1 : create DB -> tables -> index lucivy + vector -> query -> syncfs -> IndexedDB
   - Phase 2 : reload depuis IndexedDB -> re-query -> memes resultats
 
 ### Ngram sans stemmer + BM25 contains (14 fevrier)
@@ -195,8 +195,8 @@ API : `{"type":"contains", "value":"program[a-z]+", "regex":true}` et `{"regex":
 
 3 documents de build crees :
 - `rag3db/BUILD.md` — guide complet tous targets
-- `extension/tantivy_fts/BUILD.md` — architecture 3 couches, piege cmake/cargo
-- `ld-tantivy/README.md` — restructure (NgramContainsQuery + BM25 en avant)
+- `extension/lucivy_fts/BUILD.md` — architecture 3 couches, piege cmake/cargo
+- `ld-lucivy/README.md` — restructure (NgramContainsQuery + BM25 en avant)
 
 ---
 
@@ -204,8 +204,8 @@ API : `{"type":"contains", "value":"program[a-z]+", "regex":true}` et `{"regex":
 
 | Suite | Resultat | Commande |
 |-------|----------|----------|
-| Rust (ld-tantivy) | **1025 pass** | `cargo test --lib` |
-| Natif GTest E2E | **11 pass** | `./tantivy_fts_test` |
+| Rust (ld-lucivy) | **1025 pass** | `cargo test --lib` |
+| Natif GTest E2E | **11 pass** | `./lucivy_fts_test` |
 | Node.js natif mocha | **139 pass** | `npm test` (nodejs_api) |
 | WASM NODEFS mocha | **94 pass** | `npm test` (tools/wasm) |
 | WASM browser Playwright | **2 pass** (8 sub-tests) | `npx playwright test` |
@@ -244,8 +244,8 @@ API : `{"type":"contains", "value":"program[a-z]+", "regex":true}` et `{"regex":
 
 | Fonctionnalite | Statut |
 |----------------|--------|
-| CREATE_TANTIVY_INDEX (bulk scan + indexation) | OK |
-| DROP_TANTIVY_INDEX (cleanup complet) | OK |
+| CREATE_LUCIVY_INDEX (bulk scan + indexation) | OK |
+| DROP_LUCIVY_INDEX (cleanup complet) | OK |
 | Indexation incrementale (INSERT -> index auto) | OK |
 | DELETE hook (suppression auto de l'index) | OK |
 | UPDATE hook (delete + re-insert auto) | OK |
@@ -267,15 +267,15 @@ API : `{"type":"contains", "value":"program[a-z]+", "regex":true}` et `{"regex":
 | Node.js natif (NAPI addon) | OK |
 | WASM browser (Emscripten, pthreads, IDBFS) | OK |
 | Vector HNSW (cosine, L2) en WASM | OK |
-| Hybrid search (tantivy_fts contains + vector cosine) | OK |
+| Hybrid search (lucivy_fts contains + vector cosine) | OK |
 
 ---
 
 ## 3 builds disponibles
 
-| Build | Output | Taille | Extensions tantivy_fts | Tests |
+| Build | Output | Taille | Extensions lucivy_fts | Tests |
 |-------|--------|--------|----------------------|-------|
-| Natif (Linux x86_64) | `tantivy_fts_test` + `.rag3db_extension` | — | Dynamique (LOAD EXTENSION) | 11 GTest E2E |
+| Natif (Linux x86_64) | `lucivy_fts_test` + `.rag3db_extension` | — | Dynamique (LOAD EXTENSION) | 11 GTest E2E |
 | Node.js natif (NAPI) | `rag3dbjs.node` + `.rag3db_extension` | ~50MB | Dynamique (LOAD EXTENSION) | 139 mocha |
 | WASM browser | `rag3db_wasm.js` (single file) | 17MB | Statique (auto-chargee) | 94 mocha + 2 Playwright |
 
@@ -287,30 +287,30 @@ API : `{"type":"contains", "value":"program[a-z]+", "regex":true}` et `{"regex":
 packages/rag3db/
 ├── BUILD.md                            <- Guide complet des builds
 ├── README.md                           <- Presentation du projet
-├── extension/tantivy/
-│   └── ld-tantivy/                     <- Submodule (fork Tantivy v0.26.0)
+├── extension/lucivy/
+│   └── ld-lucivy/                     <- Submodule (fork Lucivy v0.26.0)
 │       ├── README.md                   <- NgramContainsQuery + BM25 en avant
-│       ├── src/                        <- Moteur Tantivy modifie (1025 tests)
+│       ├── src/                        <- Moteur Lucivy modifie (1025 tests)
 │       │   └── query/phrase_query/
 │       │       └── ngram_contains_query.rs  <- BM25 scoring
-│       └── tantivy_fts/rust/src/
+│       └── lucivy_fts/rust/src/
 │           ├── bridge.rs               <- cxx bridge (9 structs, 15 fonctions)
-│           ├── handle.rs               <- TantivyHandle, triple-field layout
+│           ├── handle.rs               <- LucivyHandle, triple-field layout
 │           └── query.rs                <- build_query, FilterClause, routing
-├── extension/tantivy_fts/
+├── extension/lucivy_fts/
 │   ├── BUILD.md                        <- Architecture 3 couches, piege cmake/cargo
 │   ├── CMakeLists.txt                  <- Build Rust + C++ + cxx (natif + WASM)
 │   ├── src/
-│   │   ├── main/tantivy_fts_extension.cpp
-│   │   ├── index/tantivy_index.cpp     <- TantivyIndex, hooks, lazy commit
+│   │   ├── main/lucivy_fts_extension.cpp
+│   │   ├── index/lucivy_index.cpp     <- LucivyIndex, hooks, lazy commit
 │   │   ├── catalog/
 │   │   └── function/
-│   │       ├── create_tantivy_index.cpp  <- filter_fields, add_document_mixed
-│   │       ├── query_tantivy_index.cpp   <- allowed_ids, flushIfDirty, highlights
-│   │       └── drop_tantivy_index.cpp
+│   │       ├── create_lucivy_index.cpp  <- filter_fields, add_document_mixed
+│   │       ├── query_lucivy_index.cpp   <- allowed_ids, flushIfDirty, highlights
+│   │       └── drop_lucivy_index.cpp
 │   └── test/
-│       └── tantivy_fts_test.cpp        <- 11 tests GTest E2E
-├── extension/extension_config.cmake    <- WASM: json, vector, algo, tantivy_fts
+│       └── lucivy_fts_test.cpp        <- 11 tests GTest E2E
+├── extension/extension_config.cmake    <- WASM: json, vector, algo, lucivy_fts
 ├── tools/
 │   ├── nodejs_api/                     <- Build + tests Node.js natif (139 mocha)
 │   └── wasm/                           <- Build + tests WASM
@@ -328,10 +328,10 @@ packages/rag3db/
 
 | Repo | Branche | Commit | Contenu |
 |------|---------|--------|---------|
-| ld-tantivy | `main` | `4c4e7ad` | handle.rs + ngram_contains_query.rs (ngram sans stemmer + BM25) |
-| ld-tantivy | `main` | `76ed60f` | README restructure (NgramContainsQuery + BM25 en avant) |
-| ld-tantivy | `main` | `80159c1` | Contains unifie regex (VerificationMode, trigram accel, hybrid, full-scan) |
-| ld-tantivy | `main` | `77c4ca6` | README mis a jour (regex mode, hybrid, full-scan fallback) |
+| ld-lucivy | `main` | `4c4e7ad` | handle.rs + ngram_contains_query.rs (ngram sans stemmer + BM25) |
+| ld-lucivy | `main` | `76ed60f` | README restructure (NgramContainsQuery + BM25 en avant) |
+| ld-lucivy | `main` | `80159c1` | Contains unifie regex (VerificationMode, trigram accel, hybrid, full-scan) |
+| ld-lucivy | `main` | `77c4ca6` | README mis a jour (regex mode, hybrid, full-scan fallback) |
 | rag3db | `feature/fuzzy-fts` | `7ed62275e` | Extension C++ complete + 10 tests + BUILD.md + submodule update |
 | rag3db | `feature/fuzzy-fts` | `e0186a809` | Regex contains E2E tests (7 sub-tests) + submodule update |
 
@@ -341,12 +341,12 @@ packages/rag3db/
 
 | Bug | Cause | Fix |
 |-----|-------|-----|
-| cmake ne detecte pas les changements Rust | `add_custom_command` sans `DEPENDS` | Rebuild manuel : `cargo build --release` puis `cmake --build . --target rag3db_tantivy_fts_extension` |
+| cmake ne detecte pas les changements Rust | `add_custom_command` sans `DEPENDS` | Rebuild manuel : `cargo build --release` puis `cmake --build . --target rag3db_lucivy_fts_extension` |
 | Buffer overflow magicBytes | MAGIC_BYTES="RAG3DB" (6 chars) mais buffer [4] | Buffer [8] + assert |
 | getDatabasePath() retourne le fichier | Utilise pour le path index | `parent_path()` |
 | miniconda LD_LIBRARY_PATH | Vieux libstdc++ injecte | `LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` |
 | f64 manquant dans handle.rs | build_schema() sans branche "f64" | Ajout du cas "f64" |
-| Writer != reader Tantivy | Mutations invisibles sans commit | Lazy commit via `dirty_` flag |
+| Writer != reader Lucivy | Mutations invisibles sans commit | Lazy commit via `dirty_` flag |
 | WASM cxx exceptions | build.rs sans `-fexceptions` | `-fexceptions -sDISABLE_EXCEPTION_CATCHING=0` pour emscripten |
 | WASM atomics | Rust WASM sans support pthreads | nightly + `-Z build-std` + `+atomics,+bulk-memory` + `-C panic=abort` |
 | BM25 scores tous a 1.0 | Extension pas re-linkee (piege cmake) | Rebuild cargo + cmake extension re-link |
@@ -356,22 +356,22 @@ packages/rag3db/
 ## Commandes de build
 
 ```bash
-# Tests ld-tantivy (1025 tests)
-cd packages/rag3db/extension/tantivy/ld-tantivy && cargo test --lib
+# Tests ld-lucivy (1025 tests)
+cd packages/rag3db/extension/lucivy/ld-lucivy && cargo test --lib
 
 # Build natif + tests E2E (11 tests)
 cd packages/rag3db/build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
-  -DBUILD_EXTENSIONS="tantivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
-cmake --build . --target tantivy_fts_test -j$(nproc)
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+  -DBUILD_EXTENSIONS="lucivy_fts" -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
+cmake --build . --target lucivy_fts_test -j$(nproc)
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 
 # Build Node.js natif (139 mocha)
 cd packages/rag3db/build/nodejs
-cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS="tantivy_fts" \
+cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS="lucivy_fts" \
   -DBUILD_NODEJS=TRUE -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 cmake --build . --target rag3dbjs -j$(nproc)
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
 
 # Build WASM browser (94 mocha + 2 Playwright)
 cd packages/rag3db/build/wasm
@@ -381,10 +381,10 @@ emcmake cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_WASM=TRUE \
 emmake cmake --build . -j$(nproc)
 
 # Apres modif Rust : rebuild manuel obligatoire
-cd packages/rag3db/extension/tantivy/ld-tantivy && \
-  cargo build --release -p ld-tantivy -p tantivy-fts && \
+cd packages/rag3db/extension/lucivy/ld-lucivy && \
+  cargo build --release -p ld-lucivy -p lucivy-fts && \
   cd ../../../build/release && \
-  cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
+  cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
 ```
 
 ---
@@ -409,7 +409,7 @@ cd packages/rag3db/extension/tantivy/ld-tantivy && \
 ### Limitations connues
 
 - Le WASM single-file fait 17MB (compressible avec gzip/brotli)
-- Tantivy utilise 1 seul writer thread en WASM (vs 8 en natif) pour eviter l'epuisement du pool de pthreads
+- Lucivy utilise 1 seul writer thread en WASM (vs 8 en natif) pour eviter l'epuisement du pool de pthreads
 - Les headers COOP/COEP sont obligatoires pour le navigateur (SharedArrayBuffer)
 - L'ancienne extension `fts` (BM25 natif de Kuzu) n'est pas disponible en WASM
 

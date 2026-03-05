@@ -4,14 +4,14 @@
 
 ### Node.js natif (addon NAPI)
 - **139 tests mocha** : tous passent (2s)
-- **tantivy_fts** : testé manuellement (contains, fuzzy, phrase, parse) — tout OK
+- **lucivy_fts** : testé manuellement (contains, fuzzy, phrase, parse) — tout OK
 - Extension chargée dynamiquement via `LOAD EXTENSION`
 - Segfault mineur au `db.close()` (exit code 139), n'affecte pas le fonctionnement
 
 ### WASM (build standard, MEMFS)
 - **Build OK** : `rag3db_wasm.js` 17MB (WASM inline)
-- **Extensions statiques** : json, vector, algo, tantivy_fts
-- **tantivy_fts** : testé manuellement in-memory (contains, fuzzy, phrase) — tout OK
+- **Extensions statiques** : json, vector, algo, lucivy_fts
+- **lucivy_fts** : testé manuellement in-memory (contains, fuzzy, phrase) — tout OK
 - Tests mocha non exécutés (nécessitent variante NODEFS)
 
 ### Bugs corrigés pendant le build WASM
@@ -97,18 +97,18 @@ RETURN node.name, node.id, distance;
 - Écrire un test E2E :
   1. Charger `rag3db_wasm.js` dans Chromium
   2. Monter IDBFS
-  3. Créer DB + table + tantivy_fts index + vector index
+  3. Créer DB + table + lucivy_fts index + vector index
   4. Insérer des documents avec embeddings
-  5. Recherche tantivy_fts (fuzzy) → récupérer node_ids
+  5. Recherche lucivy_fts (fuzzy) → récupérer node_ids
   6. Recherche vector (cosine) → récupérer les plus proches
   7. Vérifier résultats
   8. syncfs → recharger la page → re-query → même résultats (persistence)
 
-### Étape 4 : Test combiné tantivy_fts + vector (le use case RAG)
+### Étape 4 : Test combiné lucivy_fts + vector (le use case RAG)
 ```sql
 -- Le vrai use case : hybrid search
--- 1. Full-text search avec tantivy_fts
-CALL QUERY_TANTIVY_INDEX('docs', '{"type":"fuzzy","field":"content","value":"machine lerning","distance":1}', 100)
+-- 1. Full-text search avec lucivy_fts
+CALL QUERY_LUCIVY_INDEX('docs', '{"type":"fuzzy","field":"content","value":"machine lerning","distance":1}', 100)
 RETURN node_id, score AS text_score;
 
 -- 2. Vector search avec HNSW
@@ -127,7 +127,7 @@ RETURN node.id, distance AS vector_dist;
                             │
                 ┌───────────┼───────────┐
                 │           │           │
-          tantivy_fts    vector       json/algo
+          lucivy_fts    vector       json/algo
           (fuzzy FTS)  (HNSW/cosine)  (utilities)
                 │           │
                 └─────┬─────┘
@@ -137,7 +137,7 @@ RETURN node.id, distance AS vector_dist;
 ```
 
 **État actuel** :
-- tantivy_fts : VALIDÉ en WASM
+- lucivy_fts : VALIDÉ en WASM
 - vector : LINKÉ mais PAS TESTÉ ← priorité
 - json/algo : linkés, testés indirectement via les 139 tests mocha natif
 
@@ -148,6 +148,6 @@ RETURN node.id, distance AS vector_dist;
 | Fichier | Modification |
 |---------|-------------|
 | `extension/fts/src/function/query_fts_index.cpp` | Fix forward declaration constexpr |
-| `extension/tantivy/ld-tantivy/tantivy_fts/rust/build.rs` | `-fexceptions` pour emscripten |
-| `extension/tantivy_fts/CMakeLists.txt` | nightly + atomics + build-std + panic=abort |
+| `extension/lucivy/ld-lucivy/lucivy_fts/rust/build.rs` | `-fexceptions` pour emscripten |
+| `extension/lucivy_fts/CMakeLists.txt` | nightly + atomics + build-std + panic=abort |
 | `extension/extension_config.cmake` | Retiré `fts` de la liste WASM |

@@ -68,7 +68,7 @@ CREATE NODE TABLE IF NOT EXISTS {KB}_Index(
 ```
 
 - **BM25 indexe cette table** (champs `_title` + `_content`). Document entier. IDF partagé sur toute la KB.
-- **`_source_entity`** est un filter field Tantivy (toujours le même pour une KB donnée, mais utile en code générique).
+- **`_source_entity`** est un filter field Lucivy (toujours le même pour une KB donnée, mais utile en code générique).
 - **L'embedding** du document complet est stocké ici (re-ranking, comparaison document-level).
 
 ### `{KB}_Index_Chunk` — chunks pour dense/sparse/highlights
@@ -124,7 +124,7 @@ Note : pour les KBs multi-entity, seule l'entité titre a un `_IN_{KB}`. Les ent
 
 ```sql
 -- FTS sur le document complet
-CALL CREATE_TANTIVY_INDEX('{KB}_Index', ['_title', '_content'])
+CALL CREATE_LUCIVY_INDEX('{KB}_Index', ['_title', '_content'])
 
 -- Vector HNSW sur les chunks
 CALL CREATE_VECTOR_INDEX('{KB}_Index_Chunk', '{KB}_Index_Chunk_vec',
@@ -285,7 +285,7 @@ Au drain() : l'AggregateOp (dédupliqué si N links vers le même Directory) :
 ### BM25
 
 ```
-1. QUERY_TANTIVY_INDEX('{KB}_Index', query, fields=['_title', '_content'])
+1. QUERY_LUCIVY_INDEX('{KB}_Index', query, fields=['_title', '_content'])
    → retourne des {KB}_Index entries avec scores + highlight offsets
 2. Résolution highlights → chunks :
    pour chaque highlight offset dans le document,

@@ -4,18 +4,18 @@
 
 ```
 rag3db (cmake)
-  └── extension/tantivy_fts/ (cmake)
+  └── extension/lucivy_fts/ (cmake)
         ├── CMakeLists.txt ← orchestre le build Rust + C++
         ├── src/ (C++) ← extension rag3db (create/query/drop)
-        └── ../tantivy/ld-tantivy/ (cargo workspace)
-              ├── src/ ← fork de Tantivy (ld-tantivy crate)
-              ├── tantivy_fts/rust/ ← crate FFI bridge (tantivy-fts crate)
+        └── ../lucivy/ld-lucivy/ (cargo workspace)
+              ├── src/ ← fork de Lucivy (ld-lucivy crate)
+              ├── lucivy_fts/rust/ ← crate FFI bridge (lucivy-fts crate)
               └── target/release/
-                    ├── libtantivy_fts.a ← staticlib finale (inclut ld-tantivy + deps)
+                    ├── liblucivy_fts.a ← staticlib finale (inclut ld-lucivy + deps)
                     └── cxxbridge/ ← headers + .cc generes par cxx
 ```
 
-La chaine : `cmake → cargo build → libtantivy_fts.a → link dans tantivy_fts_test`
+La chaine : `cmake → cargo build → liblucivy_fts.a → link dans lucivy_fts_test`
 
 ## Probleme 1 : cmake ne re-run pas cargo
 
@@ -24,10 +24,10 @@ La chaine : `cmake → cargo build → libtantivy_fts.a → link dans tantivy_ft
 ```cmake
 file(GLOB_RECURSE RUST_SOURCES "${RUST_WORKSPACE_DIR}/src/*.rs" ...)
 add_custom_command(
-    OUTPUT ${TANTIVY_STATIC_LIB}
+    OUTPUT ${LUCIVY_STATIC_LIB}
     COMMAND cargo build --release
     DEPENDS ${RUST_SOURCES})
-add_custom_target(tantivy_fts_rust DEPENDS ${TANTIVY_STATIC_LIB})
+add_custom_target(lucivy_fts_rust DEPENDS ${LUCIVY_STATIC_LIB})
 ```
 
 **Problemes :**
@@ -39,10 +39,10 @@ add_custom_target(tantivy_fts_rust DEPENDS ${TANTIVY_STATIC_LIB})
 ### Fix applique
 
 ```cmake
-add_custom_target(tantivy_fts_rust
+add_custom_target(lucivy_fts_rust
     COMMAND cargo build --release
-    BYPRODUCTS ${TANTIVY_STATIC_LIB}
-    COMMENT "Building tantivy-fts Rust static library")
+    BYPRODUCTS ${LUCIVY_STATIC_LIB}
+    COMMENT "Building lucivy-fts Rust static library")
 ```
 
 - `add_custom_target` (sans OUTPUT) est **toujours** considere out-of-date → cargo tourne a chaque build
@@ -57,19 +57,19 @@ add_custom_target(tantivy_fts_rust
 ### Ancien CMakeLists.txt
 
 ```cmake
-add_library(tantivy_fts_lib STATIC IMPORTED GLOBAL)
-set_target_properties(tantivy_fts_lib PROPERTIES
-    IMPORTED_LOCATION ${TANTIVY_STATIC_LIB})
+add_library(lucivy_fts_lib STATIC IMPORTED GLOBAL)
+set_target_properties(lucivy_fts_lib PROPERTIES
+    IMPORTED_LOCATION ${LUCIVY_STATIC_LIB})
 ```
 
-**Probleme :** `STATIC IMPORTED` ne track pas le mtime du fichier `.a` pour decider de re-linker les targets dependantes. Meme si le `.a` change, cmake ne re-link pas `tantivy_fts_test`.
+**Probleme :** `STATIC IMPORTED` ne track pas le mtime du fichier `.a` pour decider de re-linker les targets dependantes. Meme si le `.a` change, cmake ne re-link pas `lucivy_fts_test`.
 
 ### Fix applique
 
 ```cmake
-add_library(tantivy_fts_lib INTERFACE)
-target_link_libraries(tantivy_fts_lib INTERFACE ${TANTIVY_STATIC_LIB})
-add_dependencies(tantivy_fts_lib tantivy_fts_rust)
+add_library(lucivy_fts_lib INTERFACE)
+target_link_libraries(lucivy_fts_lib INTERFACE ${LUCIVY_STATIC_LIB})
+add_dependencies(lucivy_fts_lib lucivy_fts_rust)
 ```
 
 - `INTERFACE` library avec `target_link_libraries(INTERFACE ...)` passe le `.a` comme flag de link direct
@@ -78,20 +78,20 @@ add_dependencies(tantivy_fts_lib tantivy_fts_rust)
 
 **Statut : APPLIQUE dans le CMakeLists.txt courant**
 
-## Probleme 3 : le linker strip les objets de ld-tantivy du .a
+## Probleme 3 : le linker strip les objets de ld-lucivy du .a
 
 ### Symptome observe
 
-Les strings de debug de `ld-tantivy/src/query/intersection.rs` sont **presentes dans libtantivy_fts.a** mais **absentes du binaire final tantivy_fts_test**.
+Les strings de debug de `ld-lucivy/src/query/intersection.rs` sont **presentes dans liblucivy_fts.a** mais **absentes du binaire final lucivy_fts_test**.
 
-Pourtant les strings de `tantivy_fts/rust/src/query.rs` et `ld-tantivy/src/query/phrase_query/ngram_contains_query.rs` apparaissaient dans le binaire (quand il etait correctement linke).
+Pourtant les strings de `lucivy_fts/rust/src/query.rs` et `ld-lucivy/src/query/phrase_query/ngram_contains_query.rs` apparaissaient dans le binaire (quand il etait correctement linke).
 
 ### Explication probable
 
 Le linker (ld/gold/lld) inclut les `.o` d'un `.a` **uniquement** si ils resolvent un symbole non-resolu. La chaine d'appel est :
 
 ```
-C++ (cxx bridge) → tantivy-fts (bridge.rs) → ld-tantivy (query, search, etc.)
+C++ (cxx bridge) → lucivy-fts (bridge.rs) → ld-lucivy (query, search, etc.)
 ```
 
 Si le compilateur Rust a inline `intersect_scorers` dans `boolean_weight.rs` au moment de la compilation (LTO ou inlining standard en release), l'objet `.o` contenant `intersect_scorers` n'est plus reference par aucun symbole non-resolu → le linker le drop.
@@ -103,8 +103,8 @@ Les fonctions de `ngram_contains_query.rs` et `query.rs` sont probablement dans 
 #### A. `--whole-archive` (force l'inclusion de tout le .a)
 
 ```cmake
-target_link_libraries(tantivy_fts_lib INTERFACE
-    -Wl,--whole-archive ${TANTIVY_STATIC_LIB} -Wl,--no-whole-archive)
+target_link_libraries(lucivy_fts_lib INTERFACE
+    -Wl,--whole-archive ${LUCIVY_STATIC_LIB} -Wl,--no-whole-archive)
 ```
 
 Avantage : simple, garantit que tout le code Rust est dans le binaire.
@@ -131,7 +131,7 @@ lto = false
 Avantage : chaque crate produit ses propres `.o`, pas de cross-crate inlining.
 Inconvenient : binaire potentiellement plus gros/lent, changement temporaire.
 
-#### D. Utiliser `cdylib` au lieu de `staticlib` pour tantivy-fts
+#### D. Utiliser `cdylib` au lieu de `staticlib` pour lucivy-fts
 
 Au lieu de compiler en `.a` (staticlib), compiler en `.so` (cdylib). Un `.so` inclut tout le code necessaire et n'est pas strip par le linker.
 
@@ -155,7 +155,7 @@ libstdc++.so.6: version 'GLIBCXX_3.4.31' not found
 
 ### Workaround
 ```bash
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./tantivy_fts_test
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./lucivy_fts_test
 ```
 
 ### Fix propre
@@ -175,14 +175,14 @@ Retirer miniconda du PATH/LD_LIBRARY_PATH dans le shell de dev, ou ajouter le wo
 ```bash
 # Une seule commande — cmake invoque cargo, cargo est incremental, cmake re-link si besoin
 cd packages/rag3db/build/release
-cmake --build . --target tantivy_fts_test -j$(nproc)
+cmake --build . --target lucivy_fts_test -j$(nproc)
 
 # Lancer le test
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/tantivy_fts/test/tantivy_fts_test
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./extension/lucivy_fts/test/lucivy_fts_test
 ```
 
 Plus besoin de :
 - `cargo build --release` manuellement
-- `rm -f tantivy_fts_test` pour forcer le re-link
+- `rm -f lucivy_fts_test` pour forcer le re-link
 - `touch` des fichiers `.rs`
 - `cmake --build . -j$(nproc)` complet

@@ -281,14 +281,14 @@ catalog.drain()
 | ProductKB | title | description + tags (hybrid) | hybrid 3-way |
 | CollectionKB | title | description | hybrid |
 
-**Filter fields Tantivy :**
+**Filter fields Lucivy :**
 - `vendor` (String) — `category="Nike"`
 - `product_type` (String) — `category="shoes"`
 - `price_min`, `price_max` (Double) — range queries
 - `inventory` (Int64) — stock filtering
 - `on_sale` (Bool) — promotions only
 
-**Avantage rag3db vs Qdrant :** relations de graphe natives (Product→Variant, Product→Collection, Collection→SubCollection), explore BFS pour naviguer le catalogue, filtres Tantivy natifs en pré-filter.
+**Avantage rag3db vs Qdrant :** relations de graphe natives (Product→Variant, Product→Collection, Collection→SubCollection), explore BFS pour naviguer le catalogue, filtres Lucivy natifs en pré-filter.
 
 **Pattern agentique :**
 L'agent peut faire : `search("ProductKB", "chaussures de running rouges", filters: { price_max: 100, in_stock: true })` puis explorer le graphe `Product→Collection` pour recommander des produits similaires dans la même collection.
@@ -334,7 +334,7 @@ catalog.drain()
 
 **Search patterns :**
 - "tous les fichiers qui parlent d'authentification" → BM25+vector sur FileContentKB
-- "documents modifiés cette semaine dans /src/" → filtres Tantivy (date, path prefix)
+- "documents modifiés cette semaine dans /src/" → filtres Lucivy (date, path prefix)
 - "quel fichier mentionne ce contact ?" → explore BFS File→MENTIONS_CONTACT→Contact
 
 ---
@@ -382,7 +382,7 @@ catalog.drain()
 
 **Search patterns :**
 - "mails de Jean sur le contrat Shopify" → hybrid MailKB + filtre contact
-- "toutes les pièces jointes PDF du mois dernier" → filtre Tantivy date + mimeType
+- "toutes les pièces jointes PDF du mois dernier" → filtre Lucivy date + mimeType
 - "qui a répondu au thread sur le budget ?" → explore Mail→IN_THREAD + Mail→FROM→Contact
 
 ---
@@ -426,9 +426,9 @@ fields:
 ### Ce que ça devient dans rag3weaver
 
 Le schéma YAML pilote la configuration de `Catalog` :
-- Les `fields` mappent vers les colonnes rag3db + filter fields Tantivy
+- Les `fields` mappent vers les colonnes rag3db + filter fields Lucivy
 - Les `knowledge_bases` mappent vers les KB rag3weaver avec `titleFor` / `contentFor`
-- Les `filter` mappent vers `FilterCompiler` (pre-filter Tantivy pour number/choice/boolean, pre-resolution Cypher pour relations)
+- Les `filter` mappent vers `FilterCompiler` (pre-filter Lucivy pour number/choice/boolean, pre-resolution Cypher pour relations)
 - Les `sources` avec `link: X → Y` mappent vers `catalog.link()`
 
 **Priorité basse** — le code-first est plus pragmatique pour l'instant, mais le schéma YAML reste la vision cible pour l'adoption non-développeur.
@@ -492,10 +492,10 @@ Ce pipeline est **exactement** ce que rag3weaver Rust fait déjà, mais côté W
 | **Variété de types** (Text, String, Int64, Double, Bool, Tags) | Shopify (prix, stock, tags, on_sale), Catalogue universel |
 | **Relations riches** (hiérarchies, citations, structurelles) | Code RAG (class→method, scope→library), Mails (thread→mail→contact), Fichiers (dir→file) |
 | **Chunking à l'échelle** (milliers de docs, > 100KB) | Documents binaires (PDF 50+ pages), Code RAG (gros repos) |
-| **Filtres pré-filtre Tantivy** (range, string match, boolean) | Shopify (price range, vendor, in_stock), Mails (date range), Catalogue universel |
+| **Filtres pré-filtre Lucivy** (range, string match, boolean) | Shopify (price range, vendor, in_stock), Mails (date range), Catalogue universel |
 | **Multi-KB** (même entité, stratégies différentes) | Code RAG (ScopeKB hybrid + FileKB fts), Catalogue (ProduitsKB + AvisKB + FaqKB) |
 | **Explore BFS** (navigation graphe post-search) | Code RAG (scope→consumes→scope→defined_in→file), Mails (mail→thread→mail→contact) |
 | **Fusion 3-way** (BM25 + vector + sparse) | Code RAG (docstrings sémantiques + keywords exacts + sparse termes rares) |
 | **Ingestion incrémentale** (update si contenu changé, hash) | GitHub re-ingestion, Google Drive sync |
 | **OCR multi-provider** (free-first, fallback qualité) | Documents binaires (PDF image-only, photos) |
-| **Filtres combinés** (Tantivy natif + Cypher allowed_ids) | Shopify (prix + collection via graphe), Code RAG (language + scope type + file path) |
+| **Filtres combinés** (Lucivy natif + Cypher allowed_ids) | Shopify (prix + collection via graphe), Code RAG (language + scope type + file path) |

@@ -53,7 +53,7 @@ pub enum FilterValue {
 | **Full-text match** | `full_text_match: { text }` | **MANQUE** (BM25 = search only) | Gap 7 |
 | **Datetime range** | Via range sur timestamps | Timestamp FieldType existe, pas de filtre | Gap 8 |
 | **Geo radius/bbox** | `geo_radius`, `geo_bounding_box` | **MANQUE** | Gap 9 |
-| **Has ID** | `has_id: { has_id: [...] }` | `allowed_ids` (Tantivy-side) | Partiel |
+| **Has ID** | `has_id: { has_id: [...] }` | `allowed_ids` (Lucivy-side) | Partiel |
 | **Nested object** | `nested: { key, filter }` | Cross-entity via `Entity.field` | Different mais fonctionnel |
 
 ## Plan d'implementation
@@ -156,7 +156,7 @@ pub enum FilterOp {
     IsEmpty,                           // size(n.field) = 0  (pour lists/strings)
     IsNotEmpty,                        // size(n.field) > 0
     ValuesCount { min: Option<usize>, max: Option<usize> },  // size(n.field) >= min AND <= max
-    TextMatch(String),                 // QUERY_TANTIVY_INDEX sur un champ specifique
+    TextMatch(String),                 // QUERY_LUCIVY_INDEX sur un champ specifique
     Between(CypherValue, CypherValue), // n.field >= $p0 AND n.field <= $p1 (sugar)
     NotIn(Vec<CypherValue>),           // NOT (n.field IN $p)
     StartsWith(String),                // starts_with(n.field, $p)
@@ -173,13 +173,13 @@ pub enum FilterOp {
 | `IsEmpty` | `size({prop}) = 0` |
 | `IsNotEmpty` | `size({prop}) > 0` |
 | `ValuesCount { min: 2, max: 5 }` | `size({prop}) >= 2 AND size({prop}) <= 5` |
-| `TextMatch("rust")` | sous-requete QUERY_TANTIVY_INDEX (complexe, voir ci-dessous) |
+| `TextMatch("rust")` | sous-requete QUERY_LUCIVY_INDEX (complexe, voir ci-dessous) |
 | `Between(a, b)` | `{prop} >= $p0 AND {prop} <= $p1` |
 | `NotIn([...])` | `NOT ({prop} IN $p)` |
 | `StartsWith("pre")` | `starts_with({prop}, $p)` |
 | `Contains("sub")` | `contains({prop}, $p)` |
 
-**TextMatch** est le plus complexe — il necessite une sous-requete Tantivy pour recuperer les node IDs, puis un filtre `_uuid IN [...]`. Alternative : generer un EXISTS avec QUERY_TANTIVY_INDEX. A etudier selon les capacites de Kuzu.
+**TextMatch** est le plus complexe — il necessite une sous-requete Lucivy pour recuperer les node IDs, puis un filtre `_uuid IN [...]`. Alternative : generer un EXISTS avec QUERY_LUCIVY_INDEX. A etudier selon les capacites de Kuzu.
 
 **Effort** : ~100 lignes.
 

@@ -16,7 +16,7 @@ Le code TypeScript a porter est reparti sur 3 couches distinctes :
 | **Queue** (generique) | `queue/` | 1 988 | OperationItem, GenericOperationQueue, KuzuPersistence |
 | **Total** | | **~6 500** | |
 
-**Approche** : decouper en sous-etapes, du plus pur (zero DB) au plus integre (DB + embedder + tantivy). Chaque sous-etape est testable independamment avec les mocks existants (`MockConnection`, `MockEmbedder`).
+**Approche** : decouper en sous-etapes, du plus pur (zero DB) au plus integre (DB + embedder + lucivy). Chaque sous-etape est testable independamment avec les mocks existants (`MockConnection`, `MockEmbedder`).
 
 **Ce qui existe deja** (Etapes 0–1 + text-splitter) :
 
@@ -94,7 +94,7 @@ User                    Catalog                Queue                   DB
   |-- search(kb, q) ----->|                      |                      |
   |                       |-- embed(query) ---------------------------------->  (embedder)
   |                       |-- vector search ---->|                      |
-  |                       |-- BM25 search ------>|  (QUERY_TANTIVY_INDEX)
+  |                       |-- BM25 search ------>|  (QUERY_LUCIVY_INDEX)
   |                       |-- fuse results ----->|                      |
   |<-- SearchResponse ----|                      |                      |
 ```
@@ -919,17 +919,17 @@ Le TS procede ainsi :
 6. **Sort + limit + offset**
 7. **Retourner** SearchResponse avec meta (incluant pending_count, waited, fallback flag)
 
-#### Integration Tantivy
+#### Integration Lucivy
 
 En v1 (via Cypher) :
 ```sql
-CALL QUERY_TANTIVY_INDEX('Entity', $query, $limit)
+CALL QUERY_LUCIVY_INDEX('Entity', $query, $limit)
 RETURN _uuid, _score, _highlights
 ```
 
 En v2 (direct Rust, Etape 3 du plan principal) :
 ```rust
-use tantivy_fts::handle::TantivyHandle;
+use lucivy_fts::handle::LucivyHandle;
 let results = handle.search_filtered_with_highlights(query_json, limit, &allowed_ids)?;
 ```
 
@@ -1052,7 +1052,7 @@ Pas de nouvelles crates pour L3a/L3b/L3c. `tokio` est deja en dev-dependencies.
 
 Pour les tests async, on utilise deja `#[tokio::test]`.
 
-Pour L3d (search), la dependance `tantivy-fts` (meme workspace) sera ajoutee a l'Etape 3 du plan principal. En attendant, les tests search passent par Cypher via MockConnection.
+Pour L3d (search), la dependance `lucivy-fts` (meme workspace) sera ajoutee a l'Etape 3 du plan principal. En attendant, les tests search passent par Cypher via MockConnection.
 
 ---
 
@@ -1103,7 +1103,7 @@ Le TS persiste les operations dans `_Operation` pour le crash recovery. En v1 Ru
 
 ### Search : Cypher pour le BM25 en v1
 
-Le TS appelle QUERY_FTS_INDEX via Cypher. En v1 Rust, on fait pareil (via `DbConnection`). L'appel Tantivy direct (`TantivyHandle::search()`) viendra a l'Etape 3.
+Le TS appelle QUERY_FTS_INDEX via Cypher. En v1 Rust, on fait pareil (via `DbConnection`). L'appel Lucivy direct (`LucivyHandle::search()`) viendra a l'Etape 3.
 
 ### Explore : pas de hooks en v1
 

@@ -17,7 +17,7 @@ Avantage : combine le meilleur du lexical (exact match, interpretable) et du sem
 ### BM25 (ce qu'on a)
 
 - TF × IDF classique
-- Tantivy le fait nativement (notre fork ld-tantivy)
+- Lucivy le fait nativement (notre fork ld-lucivy)
 - Tres rapide, zero modele
 - Faiblesse : sur des petits chunks (RAG), TF ≈ 1 toujours → perd de l'information
 
@@ -76,11 +76,11 @@ Un seul modele produit dense + sparse + colbert en un seul forward pass.
 - **all-MiniLM-L6-v2** (384d, ~22MB) — le modele par defaut pour WASM
 - **bge-base-en-v1.5** (768d, ~110MB) — le modele par defaut pour qualite
 - Trait `Embedder` generique (candle, TEI server, Ollama, OpenAI)
-- Hybrid search existant : vector cosine + BM25 Tantivy, fusion RRF/Weighted/Boost
+- Hybrid search existant : vector cosine + BM25 Lucivy, fusion RRF/Weighted/Boost
 
 ### BM25 (deja en place)
 
-- Tantivy (ld-tantivy) avec NgramContainsQuery, fuzzy, filtres pre-filter
+- Lucivy (ld-lucivy) avec NgramContainsQuery, fuzzy, filtres pre-filter
 - 15 tests E2E, 1062 tests Rust
 
 ### Sparse vectors : rien pour l'instant
@@ -113,14 +113,14 @@ On a deja candle + all-MiniLM-L6-v2 dans rag3weaver. Il faut :
 1. Modifier le forward pass pour extraire les **poids d'attention du [CLS]** (candle donne acces aux tenseurs d'attention)
 2. Re-merger les sous-mots WordPiece (somme des poids)
 3. Produire un sparse vector `Vec<(u32, f32)>` — (token_index, attention_weight)
-4. Stocker dans Tantivy comme index inverse (token_id → doc_id + weight)
+4. Stocker dans Lucivy comme index inverse (token_id → doc_id + weight)
 5. Au query time : meme extraction d'attention sur la query, dot product avec IDF
 
 **Avantages :**
 - Meme modele que le dense (pas de download supplementaire)
 - ~22MB quantize, viable en WASM
 - Candle WASM est prouve (demos HF en production)
-- IDF calculable en temps reel par Tantivy (on a deja l'infra)
+- IDF calculable en temps reel par Lucivy (on a deja l'infra)
 
 **Limites :**
 - Pas d'expansion de termes (contrairement a SPLADE)
@@ -137,7 +137,7 @@ HuggingFace TEI implemente deja SPLADE pooling en candle (code de reference disp
 2. Forward pass MaskedLM head
 3. ReLU + log(1+x) sur les logits
 4. Max pooling → sparse vector ~30k dimensions
-5. Stocker + rechercher dans Tantivy
+5. Stocker + rechercher dans Lucivy
 
 **Avantages :**
 - Meilleure qualite, expansion de termes
@@ -148,14 +148,14 @@ HuggingFace TEI implemente deja SPLADE pooling en candle (code de reference disp
 - Plus lent a l'inference
 - Modele separe du dense embedding
 
-### Option C : Support generique sparse dans Tantivy (stockage seul)
+### Option C : Support generique sparse dans Lucivy (stockage seul)
 
 **Effort : faible (~100 lignes Rust)**
 
 Ne pas generer les sparse vectors dans notre stack — juste les stocker et les chercher. L'utilisateur les genere cote serveur (fastembed-rs, TEI, etc.) et nous les passe.
 
 1. API bridge : `add_sparse_vector(doc_id, Vec<(u32, f32)>)`
-2. Index inverse dans Tantivy : chaque token_id → liste de (doc_id, weight)
+2. Index inverse dans Lucivy : chaque token_id → liste de (doc_id, weight)
 3. Search : dot product sparse query × sparse doc via index inverse
 
 **Avantages :**
@@ -169,7 +169,7 @@ Ne pas generer les sparse vectors dans notre stack — juste les stocker et les 
 
 ### Option D : Les trois (incrementale)
 
-1. **V1 :** Option C — support stockage/search sparse dans Tantivy (utile immediatement)
+1. **V1 :** Option C — support stockage/search sparse dans Lucivy (utile immediatement)
 2. **V2 :** Option A — BM42 via candle (generation embarquee, WASM-compatible)
 3. **V3 :** Option B — SPLADE optionnel (qualite maximale, natif seulement)
 
@@ -198,7 +198,7 @@ Ne pas generer les sparse vectors dans notre stack — juste les stocker et les 
 | Test | Ce qu'il valide |
 |---|---|
 | `rag3weaver.spec.js` | API Weaver WASM, MockEmbedder (zero vectors), opaque handles, async drain/search |
-| `idbfs.spec.js` | Persistance IDBFS, Tantivy FTS (contains/fuzzy/phrase/regex), vector HNSW 4D, reload |
+| `idbfs.spec.js` | Persistance IDBFS, Lucivy FTS (contains/fuzzy/phrase/regex), vector HNSW 4D, reload |
 | `threading.spec.js` | std::thread, rayon par_iter, futures::ThreadPool — validation pthreads emscripten |
 
 Les tests WASM utilisent un `MockEmbedder` (zero vectors, dim 4) — le provider d'embedding est pluggable.
@@ -222,9 +222,9 @@ Un seul forward pass → dense embedding + sparse BM42 vector, dans les deux sta
 
 ## Questions ouvertes
 
-1. **Stockage sparse dans Tantivy** : utiliser l'index inverse existant (avec poids flottants) ou creer une structure dediee ?
+1. **Stockage sparse dans Lucivy** : utiliser l'index inverse existant (avec poids flottants) ou creer une structure dediee ?
 2. **Fusion hybrid 3-way** : dense + BM25 + sparse — comment fusionner les 3 scores ? RRF s'etend bien a 3+ listes.
-3. **IDF temps reel** : Tantivy calcule deja l'IDF pour BM25. Peut-on le reutiliser pour BM42 ?
+3. **IDF temps reel** : Lucivy calcule deja l'IDF pour BM25. Peut-on le reutiliser pour BM42 ?
 4. **Quantisation attention** : les poids d'attention sont des floats — peut-on les quantiser en u8 pour economiser de la memoire ?
 
 ## Fichiers cles pour l'implementation
@@ -234,9 +234,9 @@ Un seul forward pass → dense embedding + sparse BM42 vector, dans les deux sta
 | Candle embedder (Rust) | `rag3weaver/src/candle_embedder.rs` |
 | Trait Embedder | `rag3weaver/src/embedder.rs` |
 | Hybrid search + fusion | `rag3weaver/src/search.rs`, `rag3weaver/src/fusion.rs` |
-| Tantivy index (stockage) | `ld-tantivy/tantivy_fts/rust/src/handle.rs` |
-| Tantivy bridge | `ld-tantivy/tantivy_fts/rust/src/bridge.rs` |
-| Extension C++ | `extension/tantivy_fts/src/` |
+| Lucivy index (stockage) | `ld-lucivy/lucivy_fts/rust/src/handle.rs` |
+| Lucivy bridge | `ld-lucivy/lucivy_fts/rust/src/bridge.rs` |
+| Extension C++ | `extension/lucivy_fts/src/` |
 | Browser RAG (Transformers.js) | `ragforge-core-exp-kuzu/kuzu-wasm-exp/dist/browser-rag.js` |
 | Tests Playwright WASM | `tools/wasm/test/browser/{rag3weaver,idbfs,threading}.spec.js` |
 | Playwright config | `tools/wasm/playwright.config.js` |

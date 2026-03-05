@@ -33,7 +33,7 @@ Reprise du projet rag3weaver après une semaine de pause. Ce document résume l'
 
 ### Build
 - **Binaire unique** : `rag3db_wasm.js` (17 MB) avec rag3weaver linké statiquement
-- **Extensions WASM** : json, vector, algo, tantivy_fts (fts retirée)
+- **Extensions WASM** : json, vector, algo, lucivy_fts (fts retirée)
 
 ### Tests
 - **271 tests Rust** (cargo test --lib) : tous verts
@@ -130,7 +130,7 @@ for (const r of result.resolved) {
 | Repo | Branche | Dernier commit |
 |------|---------|----------------|
 | rag3db | master | `67a8712` feat: rag3weaver — full WASM integration |
-| ld-tantivy | main | `30d5c96` feat: add ngram contains scoring utils |
+| ld-lucivy | main | `30d5c96` feat: add ngram contains scoring utils |
 
 ## Commandes build
 

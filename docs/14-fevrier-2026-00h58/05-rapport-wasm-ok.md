@@ -1,4 +1,4 @@
-# Rapport — Build WASM rag3db + tantivy_fts : VALIDÉ
+# Rapport — Build WASM rag3db + lucivy_fts : VALIDÉ
 
 ## Ce qui a été fait
 
@@ -25,7 +25,7 @@ Prérequis Rust (déjà installés) :
 
 #### Bug 2 : `cannot use 'throw' with exceptions disabled` (cxx bridge)
 - **Problème** : cc-rs compile le bridge C++ avec `-fno-exceptions` par défaut sur emscripten
-- **Fix** : modifié `tantivy_fts/rust/build.rs` pour ajouter `-fexceptions -sDISABLE_EXCEPTION_CATCHING=0` quand target contient "emscripten"
+- **Fix** : modifié `lucivy_fts/rust/build.rs` pour ajouter `-fexceptions -sDISABLE_EXCEPTION_CATCHING=0` quand target contient "emscripten"
 
 #### Bug 3 : `--shared-memory disallowed` (atomics manquants)
 - **Problème** : Rust compilé sans `+atomics,+bulk-memory` mais rag3db WASM utilise pthreads (shared memory)
@@ -37,15 +37,15 @@ Prérequis Rust (déjà installés) :
 
 #### Bug 5 : `fuzzy_fst` non compilé pour WASM (extension fts originale)
 - **Problème** : `libfuzzy_fst.a` compilé en x86_64, pas en wasm32
-- **Fix** : retiré `fts` de la liste static link WASM (tantivy_fts la remplace)
+- **Fix** : retiré `fts` de la liste static link WASM (lucivy_fts la remplace)
 
 ### 3. Fichiers modifiés
 
 | Fichier | Modification |
 |---------|-------------|
 | `extension/fts/src/function/query_fts_index.cpp` | Déplacé constexpr avant usage |
-| `extension/tantivy/ld-tantivy/tantivy_fts/rust/build.rs` | `-fexceptions` pour emscripten |
-| `extension/tantivy_fts/CMakeLists.txt` | nightly + atomics + build-std + panic=abort |
+| `extension/lucivy/ld-lucivy/lucivy_fts/rust/build.rs` | `-fexceptions` pour emscripten |
+| `extension/lucivy_fts/CMakeLists.txt` | nightly + atomics + build-std + panic=abort |
 | `extension/extension_config.cmake` | Retiré `fts` de la liste WASM |
 
 ### 4. Commandes de build
@@ -65,12 +65,12 @@ emmake cmake --build . -j$(nproc)
 ### 5. Outputs
 
 - `tools/wasm/build/rag3db/rag3db_wasm.js` — 17MB, contient le WASM inline (single-file)
-- Extensions statiquement linkées : json, vector, algo, tantivy_fts
+- Extensions statiquement linkées : json, vector, algo, lucivy_fts
 
 ### 6. Tests — TOUS PASSENT
 
 ```
-=== Test rag3db WASM + tantivy_fts ===
+=== Test rag3db WASM + lucivy_fts ===
 Loading WASM module...
 WASM module loaded
 Database created
@@ -79,7 +79,7 @@ Table created: true
 Doc 0 inserted: true
 Doc 1 inserted: true
 Doc 2 inserted: true
-Tantivy index created: true
+Lucivy index created: true
 
 --- Test 1: Contains query ---
 Results: 2 (expected 2)
@@ -107,13 +107,13 @@ const config = new module.SystemConfig();
 const db = new module.Database(':memory:', config);
 const conn = new module.Connection(db);
 
-// tantivy_fts auto-chargé (static link), pas besoin de LOAD EXTENSION
+// lucivy_fts auto-chargé (static link), pas besoin de LOAD EXTENSION
 conn.query("CREATE NODE TABLE doc (ID UINT64, title STRING, body STRING, PRIMARY KEY (ID))");
 conn.query("CREATE (:doc {ID: 0, title: 'Rust', body: 'Rust is a systems programming language'})");
-conn.query("CALL CREATE_TANTIVY_INDEX('doc', ['title', 'body'])");
+conn.query("CALL CREATE_LUCIVY_INDEX('doc', ['title', 'body'])");
 
 const result = conn.query(`
-  CALL QUERY_TANTIVY_INDEX('doc',
+  CALL QUERY_LUCIVY_INDEX('doc',
     '{"type":"fuzzy","field":"body","value":"programing","distance":1}', 10)
   RETURN node_id, score
 `);
@@ -125,7 +125,7 @@ const rows = result.getAsJsArrayOfObjects();
 
 | Aspect | WASM | Node.js natif |
 |--------|------|---------------|
-| tantivy_fts | Static link (auto-chargé) | Dynamic link (`LOAD EXTENSION`) |
+| lucivy_fts | Static link (auto-chargé) | Dynamic link (`LOAD EXTENSION`) |
 | Threads Rust | nightly + build-std + atomics | Natif (full threads) |
 | Taille | 17MB .js (inline wasm) | ~50MB .node |
 | API | `module.Database()`, `module.Connection()` | `rag3db.Database()`, `rag3db.Connection()` |
@@ -135,6 +135,6 @@ const rows = result.getAsJsArrayOfObjects();
 ## Notes techniques
 
 - Le warning `-pthread + ALLOW_MEMORY_GROWTH may run non-wasm code slowly` est normal et documenté
-- L'extension `fts` originale a été retirée du build WASM (tantivy_fts la remplace)
+- L'extension `fts` originale a été retirée du build WASM (lucivy_fts la remplace)
 - Le mode single-file (WASM inline dans le .js) est le défaut ; pour séparer, ajouter `-sSINGLE_FILE=0`
 - Rayon (multi-thread Rust) fonctionne grâce à `-Z build-std` + atomics (nightly requis)

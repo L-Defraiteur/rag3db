@@ -199,7 +199,7 @@ pub fn boost_fuse(vector_score: f32, bm25_normalized: f32, boost_factor: f32) ->
 - Patterns d'abstraction provider
 
 **On ne l'utilise PAS comme dependance** car :
-- On a notre propre stack (rag3db + tantivy_fts)
+- On a notre propre stack (rag3db + lucivy_fts)
 - Ses vector stores sont des backends externes (Qdrant, LanceDB) — on a deja HNSW dans rag3db
 - Ajouter rig-core tirerait un arbre de deps enorme
 
@@ -252,8 +252,8 @@ text-splitter = { version = "0.18", features = ["markdown"] }
 uuid = { version = "1", features = ["v5", "serde"] }
 blake3 = "1"
 
-# Tantivy (meme workspace)
-tantivy-fts = { path = "../tantivy_fts/rust" }
+# Lucivy (meme workspace)
+lucivy-fts = { path = "../lucivy_fts/rust" }
 
 # Code parsing (JS runtime embarque pour Rust standalone)
 rquickjs = { version = "0.11", features = ["full-async"], optional = true }

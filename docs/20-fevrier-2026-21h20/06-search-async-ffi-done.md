@@ -88,7 +88,7 @@ Long-lived (jamais libérés) :
 Disponibles pour threads temporaires : 10
   - futures::executor::block_on (search, drain interne)
   - std::thread::spawn (tests threading)
-  - rayon global pool si tantivy l'utilise
+  - rayon global pool si lucivy l'utilise
 ```
 
 ## Prochaines étapes possibles

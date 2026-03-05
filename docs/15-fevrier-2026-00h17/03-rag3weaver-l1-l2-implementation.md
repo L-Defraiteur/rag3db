@@ -52,7 +52,7 @@ Source TS : `NodeTableBuilder.toCypher()`, `RelTableBuilder.toCypher()`, `Schema
 | `generate_chunk_rel_ddl(entity)` | CREATE REL TABLE Entity_HAS_CHUNK |
 | `generate_rel_table_ddl(name, rel, config)` | CREATE REL TABLE avec validation des endpoints |
 | `generate_vector_index_ddl(table, col, idx)` | CALL CREATE_VECTOR_INDEX(..., metric := 'cosine') |
-| `generate_fts_index_ddl(table, fields)` | CALL CREATE_TANTIVY_INDEX('Table', ['col1', 'col2']) |
+| `generate_fts_index_ddl(table, fields)` | CALL CREATE_LUCIVY_INDEX('Table', ['col1', 'col2']) |
 | `generate_meta_table_ddl()` | CREATE NODE TABLE _catalog_meta (_key, _value, PK) |
 | `generate_insert_cypher(table, cols)` | CREATE (:Table {col: $col, ...}) |
 | `entity_has_chunks(entity)` | true si au moins un champ chunked |

@@ -23,7 +23,7 @@ L'expression `SEARCH_SCORE()` dans la Projection avait unique name `_3_` et type
        return false;
    }
    ```
-3. **`extension/tantivy_fts/src/function/search_function.cpp`** — `func->isNonFoldable = true` sur SEARCH_SCORE et SEARCH_HIGHLIGHTS
+3. **`extension/lucivy_fts/src/function/search_function.cpp`** — `func->isNonFoldable = true` sur SEARCH_SCORE et SEARCH_HIGHLIGHTS
 
 ## Bug 2 : Expressions non résolues dans le plan tree
 
@@ -61,7 +61,7 @@ void FilterPushDownOptimizer::rewrite(LogicalPlan* plan) {
 Tout le debug fprintf temporaire supprimé :
 - `src/processor/operator/scan/fts_scan_node_table.cpp` — suppression `#include <cstdio>` et tous les `fprintf(stderr, "[FTS_DEBUG]...`
 - `src/processor/operator/result_collector.cpp` — suppression des `fprintf(stderr, "[RC_DEBUG]...` et variable `loopCount`
-- `extension/tantivy_fts/test/tantivy_fts_test.cpp` — test `SearchInWhere_Contains` restauré à `ASSERT_EQ(countResults(*result), 2u)`
+- `extension/lucivy_fts/test/lucivy_fts_test.cpp` — test `SearchInWhere_Contains` restauré à `ASSERT_EQ(countResults(*result), 2u)`
 
 ## Résultat final
 
@@ -86,8 +86,8 @@ Tout le debug fprintf temporaire supprimé :
 | `src/processor/operator/result_collector.cpp` | nettoyage debug |
 | `src/processor/operator/scan/fts_scan_node_table.cpp` | nettoyage debug |
 
-### Extension tantivy_fts
+### Extension lucivy_fts
 | Fichier | Action |
 |---------|--------|
 | `src/function/search_function.cpp` | +`isNonFoldable=true` sur SEARCH_SCORE/HIGHLIGHTS |
-| `test/tantivy_fts_test.cpp` | nettoyage debug test Contains |
+| `test/lucivy_fts_test.cpp` | nettoyage debug test Contains |

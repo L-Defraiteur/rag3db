@@ -44,7 +44,7 @@ Remplace le stub no-op. Logique complète dans `process_one()` :
 ### 3. `_content_offset INT64` — BM25 highlight-to-chunk resolution (FAIT)
 
 **Bugs corrigés :**
-- **Bug A :** `highlights.get(&chunk.parent_field)` cherchait `"body"` mais Tantivy retourne les highlights sous les clés `"_content"` / `"_title"` → corrigé en `highlights.get("_content")`
+- **Bug A :** `highlights.get(&chunk.parent_field)` cherchait `"body"` mais Lucivy retourne les highlights sous les clés `"_content"` / `"_title"` → corrigé en `highlights.get("_content")`
 - **Bug B :** Les offsets highlight sont relatifs au `_content` concaténé, les offsets chunks sont relatifs au champ source individuel → translation via `chunk.content_offset`
 
 **Changements :**

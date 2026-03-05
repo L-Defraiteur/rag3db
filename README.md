@@ -1,6 +1,6 @@
 # rag3db
 
-Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (Tantivy), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
+Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (Lucivy), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
 
 ## Cypher-Native Index Search
 
@@ -32,32 +32,32 @@ The table function API (`CALL QUERY_*`) remains available for advanced use cases
 
 ## Extensions
 
-### tantivy_fts — Full-Text Search
+### lucivy_fts — Full-Text Search
 
-Full-text search via [ld-tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of Tantivy v0.26.0, cxx bridge):
+Full-text search via [ld-lucivy](https://github.com/L-Defraiteur/lucivy/) (fork of Lucivy v0.26.0, cxx bridge):
 
 ```cypher
 -- Create index (text fields + optional filter fields)
-CALL CREATE_TANTIVY_INDEX('docs', ['title', 'body'],
+CALL CREATE_LUCIVY_INDEX('docs', ['title', 'body'],
      filter_fields := [('category', 'STRING'), ('year', 'INT64')])
 
 -- Substring (trigram-accelerated, BM25, multi-field highlights)
-CALL QUERY_TANTIVY_INDEX('docs',
+CALL QUERY_LUCIVY_INDEX('docs',
      '{"type":"contains","field":"body","value":"programming"}', 10)
 RETURN node_id, score, highlights
 
 -- Fuzzy (tolerates typos)
-CALL QUERY_TANTIVY_INDEX('docs',
+CALL QUERY_LUCIVY_INDEX('docs',
      '{"type":"contains","field":"body","value":"programing","distance":1}', 10)
 RETURN node_id, score, highlights
 
 -- Regex (trigram-accelerated + regex check + BM25)
-CALL QUERY_TANTIVY_INDEX('docs',
+CALL QUERY_LUCIVY_INDEX('docs',
      '{"type":"contains","field":"body","value":"program[a-z]+","regex":true}', 10)
 RETURN node_id, score, highlights
 
 -- Boolean multi-field
-CALL QUERY_TANTIVY_INDEX('docs',
+CALL QUERY_LUCIVY_INDEX('docs',
      '{"type":"boolean","should":[
        {"type":"contains","field":"title","value":"rust"},
        {"type":"contains","field":"body","value":"rust"}
@@ -65,11 +65,11 @@ CALL QUERY_TANTIVY_INDEX('docs',
 RETURN node_id, score, highlights
 
 -- Filter by IDs
-CALL QUERY_TANTIVY_INDEX('docs', '...', 10, allowed_ids := [1, 5, 12])
+CALL QUERY_LUCIVY_INDEX('docs', '...', 10, allowed_ids := [1, 5, 12])
 RETURN node_id, score, highlights
 
 -- Drop index
-CALL DROP_TANTIVY_INDEX('docs')
+CALL DROP_LUCIVY_INDEX('docs')
 ```
 
 8 query types: contains, fuzzy, regex, phrase, term, boolean, parse, regex+fuzzy hybrid.
@@ -170,18 +170,18 @@ let response = catalog.search("main", "rust programming", &options).await?;
 
 | Target | Status | Tests |
 |--------|--------|-------|
-| Native (Linux x86_64) | OK | 15 GTest E2E + 1064 Rust tests (ld-tantivy) + 380 Rust tests (rag3weaver) |
+| Native (Linux x86_64) | OK | 15 GTest E2E + 1064 Rust tests (ld-lucivy) + 380 Rust tests (rag3weaver) |
 | Node.js native (NAPI) | OK | contains/fuzzy/regex/phrase/parse verified |
 | Browser WASM | OK | Playwright (FTS + vector + persistence IDBFS) |
 
-Statically linked extensions in WASM: tantivy_fts, vector, sparse_vector, json, algo.
+Statically linked extensions in WASM: lucivy_fts, vector, sparse_vector, json, algo.
 
 ## Build
 
 See **[BUILD.md](BUILD.md)** for the full guide.
 
 ```bash
-# Quick build (all extensions: tantivy_fts, sparse_vector, vector, geo)
+# Quick build (all extensions: lucivy_fts, sparse_vector, vector, geo)
 ./build.sh
 
 # Build + run all extension tests
@@ -190,7 +190,7 @@ See **[BUILD.md](BUILD.md)** for the full guide.
 # Build + test a single extension
 ./build.sh sparse_vector
 
-# Manual cmake (extensions default to tantivy_fts;sparse_vector;vector;geo)
+# Manual cmake (extensions default to lucivy_fts;sparse_vector;vector;geo)
 mkdir -p build/release && cd build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
@@ -204,9 +204,9 @@ cd extension/rag3weaver && bash run_e2e.sh phase0
 
 ```
 rag3db (fork Kuzu v0.11.2.2)
-|-- extension/tantivy_fts/           C++ FTS extension (CREATE/QUERY/DROP)
-|-- extension/tantivy/ld-tantivy/    Submodule (fork Tantivy v0.26.0)
-|   +-- tantivy_fts/rust/            FFI crate (cxx bridge)
+|-- extension/lucivy_fts/           C++ FTS extension (CREATE/QUERY/DROP)
+|-- extension/lucivy/ld-lucivy/    Submodule (fork Lucivy v0.26.0)
+|   +-- lucivy_fts/rust/            FFI crate (cxx bridge)
 |-- extension/vector/                HNSW extension (+ DELETE/UPDATE)
 |-- extension/sparse_vector/         Sparse vector extension
 |-- extension/geo/                   Spatial extension (R-tree + 19 geo functions)
@@ -222,7 +222,7 @@ The **cxx** bridge (not extern C) provides typed Rust <-> C++ structs, zero JSON
 ## Provenance
 
 - **Kuzu**: [kuzudb/kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 (MIT License, see NOTICE)
-- **Tantivy**: [L-Defraiteur/tantivy](https://github.com/L-Defraiteur/tantivy/) (fork of v0.26.0, LRSL v1.2)
+- **Lucivy**: [L-Defraiteur/lucivy](https://github.com/L-Defraiteur/lucivy/) (fork of v0.26.0, LRSL v1.2)
 
 ## License
 

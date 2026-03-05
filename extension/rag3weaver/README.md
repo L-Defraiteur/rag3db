@@ -51,14 +51,14 @@ SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE  // All thre
 
 ### BM25 Full-Text
 
-Powered by rag3db's Tantivy extension. 4 query modes:
+Powered by rag3db's Lucivy extension. 4 query modes:
 
 | Mode | Behavior |
 |------|----------|
 | `Contains` | Trigram-accelerated substring, fuzzy-tolerant |
 | `ContainsSplit` | Auto-splits multi-word queries with boolean OR |
 | `Regex` | Trigram-accelerated regex matching |
-| `Parse` | Native Tantivy QueryParser (standard BM25) |
+| `Parse` | Native Lucivy QueryParser (standard BM25) |
 
 Multi-field highlights with per-field byte offsets. Chunk-level resolution maps BM25 hits to the correct chunk via `ChunkInfo`.
 

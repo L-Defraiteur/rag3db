@@ -49,7 +49,7 @@ ORDER BY score DESC LIMIT 10
 
 **Déjà générique (fonctionne pour tout index) :**
 - `popSearchPredicate()` — check `isIndexScanPredicate`, pas le nom
-- `FTSScanNodeTable` — prend un `FTSSearchFunc` lambda, ne connaît pas Tantivy
+- `FTSScanNodeTable` — prend un `FTSSearchFunc` lambda, ne connaît pas Lucivy
 - PlanMapper — crée FTSScanNodeTable à partir de FTSScanInfo
 - `setGroupAsSingleState` pour FTS_SCAN
 - `resolveSearchExpressions` — walk le plan, remplace par unique name
@@ -95,8 +95,8 @@ La post-pass walk déjà le plan et remplace par unique name. Il suffit que chaq
 
 | Extension | Prédicat | Virtual function | Unique name |
 |-----------|----------|-----------------|-------------|
-| tantivy_fts | `SEARCH()` | `SEARCH_SCORE()` | `"SEARCH_SCORE()"` |
-| tantivy_fts | `SEARCH()` | `SEARCH_HIGHLIGHTS()` | `"SEARCH_HIGHLIGHTS()"` |
+| lucivy_fts | `SEARCH()` | `SEARCH_SCORE()` | `"SEARCH_SCORE()"` |
+| lucivy_fts | `SEARCH()` | `SEARCH_HIGHLIGHTS()` | `"SEARCH_HIGHLIGHTS()"` |
 | vector | `VECTOR_SEARCH()` | `VECTOR_DISTANCE()` | `"VECTOR_DISTANCE()"` |
 | sparse_vector | `SPARSE_SEARCH()` | `SPARSE_SCORE()` | `"SPARSE_SCORE()"` |
 
@@ -194,6 +194,6 @@ auto searchFunc = [sparseIndex, queryIndices, queryWeights](int64_t limit) -> ve
 | Query input | string | float[] vector | string (→ indices/weights) |
 | Score sémantique | BM25 score (↑ = meilleur) | distance (↓ = meilleur) | dot product score (↑ = meilleur) |
 | Metadata | highlights (JSON) | aucun | aucun |
-| Index type | Tantivy | HNSW | Sparse (Rust FFI) |
+| Index type | Lucivy | HNSW | Sparse (Rust FFI) |
 | Flush needed | oui (dirty_ flag) | non (in-memory graph) | oui (dirty_ flag) |
 | k/limit | limit param (défaut 1000) | k param (obligatoire) | limit param |

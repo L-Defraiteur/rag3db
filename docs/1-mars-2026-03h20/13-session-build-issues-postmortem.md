@@ -22,18 +22,18 @@ Après la refacto Option A (doc 12), les 9 tests SearchInWhere segfaultaient (ex
 
 **Symptôme** : `dynamic_cast<IndexSearchBindData*>` retourne NULL → segfault dans `visitScanNodeTableReplace`.
 
-**Cause racine** : cmake `set_extension_properties` configure `LIBRARY_OUTPUT_DIRECTORY` vers `${PROJECT_SOURCE_DIR}/extension/tantivy_fts/build/`, c'est-à-dire dans le **source tree**. Quand on fait `rm -rf extension/tantivy_fts/` depuis le **build tree**, ça ne touche pas le `.rag3db_extension` réel.
+**Cause racine** : cmake `set_extension_properties` configure `LIBRARY_OUTPUT_DIRECTORY` vers `${PROJECT_SOURCE_DIR}/extension/lucivy_fts/build/`, c'est-à-dire dans le **source tree**. Quand on fait `rm -rf extension/lucivy_fts/` depuis le **build tree**, ça ne touche pas le `.rag3db_extension` réel.
 
 **Conséquence** : le test charge un ancien `.rag3db_extension` compilé avec l'ancien `FTSSearchBindData` (sans `virtualExprSpecs`). Le core fait `dynamic_cast<IndexSearchBindData*>` sur un objet créé dans l'ancien `.so` → RTTI mismatch → NULL → crash.
 
-**Résolution** : builder explicitement le target `rag3db_tantivy_fts_extension` :
+**Résolution** : builder explicitement le target `rag3db_lucivy_fts_extension` :
 ```bash
-cmake --build . --target rag3db_tantivy_fts_extension -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension -j$(nproc)
 ```
 
-## Problème 3 : `tantivy_fts_test` ne dépend pas de `rag3db_tantivy_fts_extension`
+## Problème 3 : `lucivy_fts_test` ne dépend pas de `rag3db_lucivy_fts_extension`
 
-**Symptôme** : `cmake --build . --target tantivy_fts_test` ne rebuild PAS l'extension `.so`.
+**Symptôme** : `cmake --build . --target lucivy_fts_test` ne rebuild PAS l'extension `.so`.
 
 **Cause** : `add_rag3db_test` ne fait que :
 ```cmake
@@ -43,11 +43,11 @@ Le test charge l'extension via `LOAD EXTENSION` (dlopen), donc cmake ne voit pas
 
 **Le `.rag3db_extension` peut être stale** : le test compilera et linkera sans erreur même si l'extension `.so` est vieille de jours/semaines.
 
-## Problème 4 : `tantivy_fts_extension_function` non inclus dans `tantivy_fts_test`
+## Problème 4 : `lucivy_fts_extension_function` non inclus dans `lucivy_fts_test`
 
 **Symptôme** : `find . -name "search_function.cpp.o"` → rien après le build du test.
 
-**Cause** : les `.o` de l'extension sont des OBJECT libraries cmake. Ils sont compilés uniquement quand le target `rag3db_tantivy_fts_extension` (la shared lib) est demandé. Le test ne les inclut pas.
+**Cause** : les `.o` de l'extension sont des OBJECT libraries cmake. Ils sont compilés uniquement quand le target `rag3db_lucivy_fts_extension` (la shared lib) est demandé. Le test ne les inclut pas.
 
 ## Solutions recommandées
 
@@ -55,31 +55,31 @@ Le test charge l'extension via `LOAD EXTENSION` (dlopen), donc cmake ne voit pas
 
 Toujours builder les deux targets :
 ```bash
-cmake --build . --target rag3db_tantivy_fts_extension --target tantivy_fts_test -j$(nproc)
+cmake --build . --target rag3db_lucivy_fts_extension --target lucivy_fts_test -j$(nproc)
 ```
 
 Ou un alias :
 ```bash
-alias build-tantivy='cmake --build . --target rag3db_tantivy_fts_extension --target tantivy_fts_test -j$(nproc)'
+alias build-lucivy='cmake --build . --target rag3db_lucivy_fts_extension --target lucivy_fts_test -j$(nproc)'
 ```
 
 ### Solution cmake (optionnelle, plus propre)
 
-Ajouter une dépendance cmake dans `extension/tantivy_fts/test/CMakeLists.txt` :
+Ajouter une dépendance cmake dans `extension/lucivy_fts/test/CMakeLists.txt` :
 ```cmake
 if (${BUILD_EXTENSION_TESTS})
-    add_rag3db_test(tantivy_fts_test tantivy_fts_test.cpp)
-    add_dependencies(tantivy_fts_test rag3db_tantivy_fts_extension)
+    add_rag3db_test(lucivy_fts_test lucivy_fts_test.cpp)
+    add_dependencies(lucivy_fts_test rag3db_lucivy_fts_extension)
 endif ()
 ```
 
-Ainsi, `cmake --build . --target tantivy_fts_test` rebuildera automatiquement le `.so` si nécessaire.
+Ainsi, `cmake --build . --target lucivy_fts_test` rebuildera automatiquement le `.so` si nécessaire.
 
 ### Checklist debug pour segfaults futurs
 
 1. **Espace disque** : `df -h /` — vérifier > 10G libres
-2. **Extension .so** : `ls -la ../../extension/tantivy_fts/build/libtantivy_fts.rag3db_extension` — vérifier le timestamp
-3. **Rebuild extension** : `cmake --build . --target rag3db_tantivy_fts_extension`
+2. **Extension .so** : `ls -la ../../extension/lucivy_fts/build/liblucivy_fts.rag3db_extension` — vérifier le timestamp
+3. **Rebuild extension** : `cmake --build . --target rag3db_lucivy_fts_extension`
 4. **RTTI cross-library** : si `dynamic_cast` échoue, vérifier que le `.so` et l'exécutable sont compilés avec les mêmes headers
 
 ## Résultat final
@@ -97,6 +97,6 @@ Après rebuild correct de l'extension + test :
 | Fichier | Rôle |
 |---------|------|
 | `extension/CMakeLists.txt` | `set_extension_properties` → output dans source tree |
-| `extension/tantivy_fts/CMakeLists.txt` | `build_extension_lib` → crée la shared lib |
-| `extension/tantivy_fts/test/CMakeLists.txt` | `add_rag3db_test` → pas de dépendance sur la shared lib |
-| `extension/tantivy_fts/build/libtantivy_fts.rag3db_extension` | Le .so chargé par les tests |
+| `extension/lucivy_fts/CMakeLists.txt` | `build_extension_lib` → crée la shared lib |
+| `extension/lucivy_fts/test/CMakeLists.txt` | `add_rag3db_test` → pas de dépendance sur la shared lib |
+| `extension/lucivy_fts/build/liblucivy_fts.rag3db_extension` | Le .so chargé par les tests |
