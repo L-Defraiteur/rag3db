@@ -9,8 +9,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-use async_trait::async_trait;
-
 use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef};
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
@@ -18,15 +16,20 @@ use crate::events::{CatalogEvent, EventBus};
 use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
-use crate::node_id_cache::{InternalNodeId, NodeIdCache};
-use crate::ops::{AggregateOp, CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid, PRIO_POST_AGG_INSERT, PRIO_POST_AGG_LINK};
-use crate::queue::{FlushResult, OperationItem, OperationQueue, Processor, QueueEvent, QueueSender, QueueStats};
+use crate::node_id_cache::NodeIdCache;
+use crate::ops::{AggregateOp, CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::queue::{FlushResult, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
-use crate::schema::{entity_has_chunks, generate_full_schema, generate_insert_cypher, resolve_entity_kbs};
-use crate::sparse_index::SparseVector;
+use crate::schema::{entity_has_chunks, generate_full_schema, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::{chunk_uuid, hashsafe_uuid};
 use crate::validator::{validate_schema, KBFieldRef};
+use crate::dataflow::graph::DataflowGraph;
+use crate::dataflow::ingestion_nodes::{
+    AggregateBatchNode, ChunkBatchNode, DualEmbedBatchNode, EmbedBatchNode,
+    InsertBatchNode, LinkBatchNode, SparseEmbedBatchNode,
+};
+use crate::dataflow::runtime::DataflowRuntime;
 
 // ─── KBMetadata ────────────────────────────────────────────────────────────
 
@@ -98,19 +101,29 @@ pub struct DeleteResult {
 
 // ─── Catalog ───────────────────────────────────────────────────────────────
 
+/// Cumulative drain statistics (not reset on clear).
+#[derive(Debug, Default)]
+struct DrainStats {
+    total_queued: usize,
+    total_processed: usize,
+    total_failed: usize,
+    flush_count: usize,
+}
+
 pub struct Catalog {
     conn: Arc<dyn DbConnection>,
     embedder: Arc<dyn Embedder>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
-    queue: OperationQueue,
+    pending_ops: Vec<CatalogOp>,
+    drain_stats: DrainStats,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
-    /// Shared with InsertProcessor (populated on INSERT via RETURN ID(n)).
+    /// Populated by InsertBatchNode on each INSERT via RETURN ID(n).
     node_id_cache: Arc<RwLock<NodeIdCache>>,
     /// Cached chunkers keyed by config to avoid re-instantiation.
     chunker_cache: HashMap<ChunkerConfig, Chunker>,
@@ -124,18 +137,14 @@ impl Catalog {
         embedder: Box<dyn Embedder>,
         config: CatalogConfig,
     ) -> Self {
-        let queue_config = crate::queue::FlushConfig {
-            auto: config.flush.auto_flush,
-            max_count: config.flush.max_count,
-            completed_retention_ms: config.flush.completed_retention_ms,
-        };
         Self {
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
             sparse_embedder: None,
             dual_embedder: None,
             config,
-            queue: OperationQueue::new(queue_config),
+            pending_ops: Vec::new(),
+            drain_stats: DrainStats::default(),
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
             initialized: false,
@@ -235,83 +244,8 @@ impl Catalog {
             );
         }
 
-        // 6. Register processors
-
-        // Pre-warm chunker cache and register chunk processor
+        // 6. Pre-warm chunker cache for ingestion nodes
         self.warm_chunker_cache();
-        self.queue.register_processor(
-            "chunk",
-            Box::new(ChunkProcessor {
-                config: self.config.clone(),
-                kb_metadata: self.kb_metadata.clone(),
-                chunker_cache: std::mem::take(&mut self.chunker_cache),
-                has_sparse: self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
-                has_dual: self.dual_embedder.is_some(),
-            }),
-        );
-
-        self.queue.register_processor(
-            "insert",
-            Box::new(InsertProcessor {
-                conn: self.conn.clone(),
-                node_id_cache: self.node_id_cache.clone(),
-            }),
-        );
-        self.queue.register_processor(
-            "link",
-            Box::new(LinkProcessor {
-                conn: self.conn.clone(),
-            }),
-        );
-
-        // Aggregate processor: rebuilds {KB}_Index content, chunks per source field.
-        self.warm_chunker_cache();
-        self.queue.register_processor(
-            "aggregate",
-            Box::new(AggregateProcessor {
-                conn: self.conn.clone(),
-                config: self.config.clone(),
-                kb_metadata: self.kb_metadata.clone(),
-                chunker_cache: std::mem::take(&mut self.chunker_cache),
-                has_sparse: self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
-                has_dual: self.dual_embedder.is_some(),
-            }),
-        );
-        // Register dual embed processor if dual embedder is available,
-        // otherwise fall back to separate embed + sparse_embed processors.
-        if let Some(ref dual_emb) = self.dual_embedder {
-            self.queue.register_processor(
-                "dual_embed",
-                Box::new(DualEmbedProcessor {
-                    conn: self.conn.clone(),
-                    embedder: dual_emb.clone(),
-                    embedding_dim: self.config.embedding_dim,
-                    gpu_batch_size: 32,
-                    event_tx: Some(self.queue.event_sender()),
-                }),
-            );
-        }
-
-        // Always register single-mode processors (used when dual is not available,
-        // or for KBs that need only dense or only sparse).
-        self.queue.register_processor(
-            "embed",
-            Box::new(EmbedProcessor {
-                conn: self.conn.clone(),
-                embedder: self.embedder.clone(),
-                embedding_dim: self.config.embedding_dim,
-            }),
-        );
-
-        if let Some(ref sparse_emb) = self.sparse_embedder {
-            self.queue.register_processor(
-                "sparse_embed",
-                Box::new(SparseEmbedProcessor {
-                    conn: self.conn.clone(),
-                    sparse_embedder: sparse_emb.clone(),
-                }),
-            );
-        }
 
         // Create sparse vector indexes via extension for KBs that have sparse=true.
         // Sparse embeddings live on {KB}_Index_Chunk (one index per KB).
@@ -458,7 +392,8 @@ impl Catalog {
             }));
         }
 
-        self.queue.enqueue_all(ops);
+        self.drain_stats.total_queued += ops.len();
+        self.pending_ops.extend(ops);
         Ok(entity_ref)
     }
 
@@ -520,7 +455,8 @@ impl Catalog {
             }
         }
 
-        self.queue.enqueue_all(ops);
+        self.drain_stats.total_queued += ops.len();
+        self.pending_ops.extend(ops);
         Ok(relation_ref)
     }
 
@@ -761,7 +697,8 @@ impl Catalog {
                 }
             }
             if !ops.is_empty() {
-                self.queue.enqueue_all(ops);
+                self.drain_stats.total_queued += ops.len();
+        self.pending_ops.extend(ops);
             }
         }
 
@@ -897,7 +834,8 @@ impl Catalog {
         }
 
         if !aggregate_ops.is_empty() {
-            self.queue.enqueue_all(aggregate_ops);
+            self.drain_stats.total_queued += aggregate_ops.len();
+            self.pending_ops.extend(aggregate_ops);
         }
 
         // DETACH DELETE the entity
@@ -932,74 +870,276 @@ impl Catalog {
 
     // ── Queue control ──────────────────────────────────────────────────
 
-    pub async fn drain(&mut self) -> FlushResult {
-        self.queue.drain().await
-        // No sparse rebuild needed: the sparse_vector extension maintains
-        // its index via INSERT/DELETE/UPDATE hooks automatically.
-    }
-
-    /// Parallel drain: inserts + embeds via rayon::join, then links sequentially.
-    /// Uses block_on internally (no async runtime needed). WASM-only.
-    #[cfg(feature = "wasm-emscripten")]
-    pub fn drain_parallel(&mut self, pool: &rayon::ThreadPool) -> FlushResult {
-        use crate::queue::{run_processor, queue_channel};
-
-        let mut groups = self.queue.take_pending_grouped();
-        if groups.is_empty() {
-            return FlushResult::default();
+    /// Build a dataflow graph from all pending operations in the queue.
+    ///
+    /// Partitions ops by type, creates batch nodes, and wires them with
+    /// edges that encode the dependency ordering (insert → link → aggregate → embed).
+    /// Returns `(graph, op_count)` where `op_count` is the total number of ops taken.
+    fn build_ingestion_graph(&mut self) -> (DataflowGraph, usize) {
+        let ops = std::mem::take(&mut self.pending_ops);
+        if ops.is_empty() {
+            return (DataflowGraph::new(), 0);
         }
 
-        let mut inserts = Vec::new();
-        let mut embeds = Vec::new();
-        let mut links = Vec::new();
-        for (op_type, items) in groups.drain(..) {
-            match op_type {
-                "insert" => inserts = items,
-                "embed" => embeds = items,
-                "link" => links = items,
-                _ => {}
+        let op_count = ops.len();
+        let mut graph = DataflowGraph::new();
+
+        // Partition ops by type
+        let mut chunks: Vec<crate::ops::ChunkOp> = Vec::new();
+        let mut inserts: Vec<InsertOp> = Vec::new();
+        let mut links: Vec<LinkOp> = Vec::new();
+        let mut aggregates: Vec<AggregateOp> = Vec::new();
+        let mut embeds: Vec<EmbedOp> = Vec::new();
+        let mut sparse_embeds: Vec<SparseEmbedOp> = Vec::new();
+        let mut dual_embeds: Vec<DualEmbedOp> = Vec::new();
+
+        for op in ops {
+            match op {
+                CatalogOp::Chunk(o) => chunks.push(o),
+                CatalogOp::Insert(o) => inserts.push(o),
+                CatalogOp::Link(o) => links.push(o),
+                CatalogOp::Aggregate(o) => aggregates.push(o),
+                CatalogOp::Embed(o) => embeds.push(o),
+                CatalogOp::SparseEmbed(o) => sparse_embeds.push(o),
+                CatalogOp::DualEmbed(o) => dual_embeds.push(o),
             }
         }
 
-        let insert_proc = self.queue.get_processor("insert");
-        let embed_proc = self.queue.get_processor("embed");
-        let link_proc = self.queue.get_processor("link");
-        let (sender, _receiver) = queue_channel();
+        let has_chunks = !chunks.is_empty();
+        let has_inserts = !inserts.is_empty();
+        let has_links = !links.is_empty();
+        let has_aggregates = !aggregates.is_empty();
 
-        // Phase 1: inserts + embeds in parallel
-        let (r_insert, r_embed) = pool.install(|| {
-            rayon::join(
-                || run_processor(insert_proc.as_deref(), &mut inserts, &sender),
-                || run_processor(embed_proc.as_deref(), &mut embeds, &sender),
-            )
-        });
+        // 1. ChunkBatchNode (DynamicNode, priority 0)
+        if has_chunks {
+            self.warm_chunker_cache();
+            graph.add_dynamic_node(Box::new(ChunkBatchNode::new(
+                self.config.clone(),
+                self.kb_metadata.clone(),
+                std::mem::take(&mut self.chunker_cache),
+                self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
+                self.dual_embedder.is_some(),
+                chunks,
+                self.conn.clone(),
+                self.node_id_cache.clone(),
+                self.embedder.clone(),
+                self.sparse_embedder.clone(),
+                self.dual_embedder.clone(),
+                self.config.embedding_dim,
+            ))).unwrap();
+        }
 
-        // Phase 2: links sequential (need resolved UUIDs from inserts)
-        let r_link = run_processor(link_proc.as_deref(), &mut links, &sender);
+        // 2. InsertBatchNode (priority 1)
+        if has_inserts {
+            graph.add_node(Box::new(InsertBatchNode::new(
+                "inserts".to_string(),
+                inserts,
+                self.conn.clone(),
+                self.node_id_cache.clone(),
+            ))).unwrap();
+            if has_chunks {
+                graph.connect("chunk_batch", "done", "inserts", "trigger").unwrap();
+            }
+        }
 
-        // Return non-completed items to the queue
-        let mut all = inserts;
-        all.extend(embeds);
-        all.extend(links);
-        self.queue.return_items(all);
+        // 3. LinkBatchNode (priority 2)
+        if has_links {
+            graph.add_node(Box::new(LinkBatchNode::new(
+                "links".to_string(),
+                links,
+                self.conn.clone(),
+            ))).unwrap();
+            if has_inserts {
+                graph.connect("inserts", "done", "links", "trigger").unwrap();
+            } else if has_chunks {
+                graph.connect("chunk_batch", "done", "links", "trigger").unwrap();
+            }
+        }
 
-        FlushResult {
-            processed: r_insert.processed + r_embed.processed + r_link.processed,
-            failed: r_insert.failed + r_embed.failed + r_link.failed,
-            persisted: 0,
+        // 4. AggregateBatchNode (DynamicNode, priority 2.5)
+        if has_aggregates {
+            self.warm_chunker_cache();
+            graph.add_dynamic_node(Box::new(AggregateBatchNode::new(
+                aggregates,
+                self.conn.clone(),
+                self.config.clone(),
+                self.kb_metadata.clone(),
+                std::mem::take(&mut self.chunker_cache),
+                self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
+                self.dual_embedder.is_some(),
+                self.node_id_cache.clone(),
+                self.embedder.clone(),
+                self.sparse_embedder.clone(),
+                self.dual_embedder.clone(),
+                self.config.embedding_dim,
+            ))).unwrap();
+            if has_links {
+                graph.connect("links", "done", "aggregate_batch", "trigger").unwrap();
+            } else if has_inserts {
+                graph.connect("inserts", "done", "aggregate_batch", "trigger").unwrap();
+            } else if has_chunks {
+                graph.connect("chunk_batch", "done", "aggregate_batch", "trigger").unwrap();
+            }
+        }
+
+        // 5. Embed nodes (priority 3) — depend on the last non-embed node
+        let embed_trigger = if has_aggregates {
+            Some("aggregate_batch")
+        } else if has_links {
+            Some("links")
+        } else if has_inserts {
+            Some("inserts")
+        } else if has_chunks {
+            Some("chunk_batch")
+        } else {
+            None
+        };
+
+        if !embeds.is_empty() {
+            graph.add_node(Box::new(EmbedBatchNode::new(
+                "embeds".to_string(),
+                embeds,
+                self.conn.clone(),
+                self.embedder.clone(),
+                self.config.embedding_dim,
+            ))).unwrap();
+            if let Some(trigger) = embed_trigger {
+                graph.connect(trigger, "done", "embeds", "trigger").unwrap();
+            }
+        }
+
+        if !sparse_embeds.is_empty() {
+            if let Some(ref sparse_emb) = self.sparse_embedder {
+                graph.add_node(Box::new(SparseEmbedBatchNode::new(
+                    "sparse_embeds".to_string(),
+                    sparse_embeds,
+                    self.conn.clone(),
+                    sparse_emb.clone(),
+                ))).unwrap();
+                if let Some(trigger) = embed_trigger {
+                    graph.connect(trigger, "done", "sparse_embeds", "trigger").unwrap();
+                }
+            }
+        }
+
+        if !dual_embeds.is_empty() {
+            if let Some(ref dual_emb) = self.dual_embedder {
+                graph.add_node(Box::new(DualEmbedBatchNode::new(
+                    "dual_embeds".to_string(),
+                    dual_embeds,
+                    self.conn.clone(),
+                    dual_emb.clone(),
+                    self.config.embedding_dim,
+                    32,
+                ))).unwrap();
+                if let Some(trigger) = embed_trigger {
+                    graph.connect(trigger, "done", "dual_embeds", "trigger").unwrap();
+                }
+            }
+        }
+
+        (graph, op_count)
+    }
+
+    /// Drain all pending operations via the dataflow runtime.
+    pub async fn drain(&mut self) -> FlushResult {
+        let (mut graph, op_count) = self.build_ingestion_graph();
+        if graph.nodes.is_empty() {
+            return FlushResult::default();
+        }
+
+        let node_count = graph.nodes.len();
+        // max_iterations: generous bound — DynamicNodes may expand the graph
+        let runtime = DataflowRuntime::new(node_count + 20);
+        match runtime.execute(&mut graph).await {
+            Ok(_output) => {
+                self.drain_stats.total_processed += op_count;
+                self.drain_stats.flush_count += 1;
+                FlushResult { processed: op_count, failed: 0, persisted: 0 }
+            }
+            Err(e) => {
+                self.event_bus.emit(CatalogEvent::Error {
+                    context: "drain".to_string(),
+                    message: format!("ingestion dataflow failed: {e}"),
+                });
+                self.drain_stats.total_failed += op_count;
+                self.drain_stats.flush_count += 1;
+                FlushResult { processed: 0, failed: op_count, persisted: 0 }
+            }
         }
     }
 
+    /// Synchronous drain via block_on (WASM-only).
+    /// Uses the same dataflow pipeline as `drain()`.
+    #[cfg(feature = "wasm-emscripten")]
+    pub fn drain_parallel(&mut self, _pool: &rayon::ThreadPool) -> FlushResult {
+        futures::executor::block_on(self.drain())
+    }
+
+    /// Flush only InsertOps via a minimal dataflow graph.
+    /// Leaves all other ops (Link, Aggregate, Embed, etc.) in `pending_ops`.
     pub async fn flush_insertions(&mut self) -> FlushResult {
-        self.queue.flush_insertions().await
+        let all_ops = std::mem::take(&mut self.pending_ops);
+        let (insert_ops, rest): (Vec<_>, Vec<_>) = all_ops
+            .into_iter()
+            .partition(|op| matches!(op, CatalogOp::Insert(_)));
+        self.pending_ops = rest;
+
+        if insert_ops.is_empty() {
+            return FlushResult::default();
+        }
+
+        let op_count = insert_ops.len();
+        let inserts: Vec<InsertOp> = insert_ops
+            .into_iter()
+            .filter_map(|op| match op {
+                CatalogOp::Insert(i) => Some(i),
+                _ => None,
+            })
+            .collect();
+
+        let mut graph = DataflowGraph::new();
+        graph
+            .add_node(Box::new(InsertBatchNode::new(
+                "inserts".to_string(),
+                inserts,
+                self.conn.clone(),
+                self.node_id_cache.clone(),
+            )))
+            .unwrap();
+
+        let runtime = DataflowRuntime::new(5);
+        match runtime.execute(&mut graph).await {
+            Ok(_) => {
+                self.drain_stats.total_processed += op_count;
+                self.drain_stats.flush_count += 1;
+                FlushResult { processed: op_count, failed: 0, persisted: 0 }
+            }
+            Err(e) => {
+                self.event_bus.emit(CatalogEvent::Error {
+                    context: "flush_insertions".to_string(),
+                    message: format!("insert-only dataflow failed: {e}"),
+                });
+                self.drain_stats.total_failed += op_count;
+                self.drain_stats.flush_count += 1;
+                FlushResult { processed: 0, failed: op_count, persisted: 0 }
+            }
+        }
     }
 
     pub fn has_pending(&self) -> bool {
-        self.queue.has_pending()
+        !self.pending_ops.is_empty()
     }
 
     pub fn queue_stats(&self) -> QueueStats {
-        self.queue.stats()
+        QueueStats {
+            pending: self.pending_ops.len(),
+            total_queued: self.drain_stats.total_queued,
+            total_processed: self.drain_stats.total_processed,
+            total_failed: self.drain_stats.total_failed,
+            flush_count: self.drain_stats.flush_count,
+            ..Default::default()
+        }
     }
 
     /// Direct access to the underlying connection (useful for debugging/tests).
@@ -1023,15 +1163,10 @@ impl Catalog {
         self.event_bus.subscribe()
     }
 
-    /// Subscribe to queue-level events (enqueue, processing, completed, injected).
-    pub fn subscribe_queue(&self) -> async_broadcast::Receiver<QueueEvent> {
-        self.queue.subscribe()
-    }
-
     // ── Node ID cache ─────────────────────────────────────────────────
 
     /// Access the shared node ID cache (uuid → internal rag3db node ID).
-    /// Populated automatically by InsertProcessor on each INSERT.
+    /// Populated automatically by InsertBatchNode on each INSERT.
     pub fn node_id_cache(&self) -> &Arc<RwLock<NodeIdCache>> {
         &self.node_id_cache
     }
@@ -1074,12 +1209,12 @@ impl Catalog {
             .ok_or_else(|| CatalogError::UnknownKB(kb_name.to_string()))?
             .clone();
 
-        let pending_count = self.queue.stats().pending;
+        let pending_count = self.pending_ops.len();
 
         // Consistency
         match options.consistency {
             search::Consistency::Strict => {
-                self.queue.drain().await;
+                self.drain().await;
             }
             search::Consistency::Eventual => {
                 if self.has_pending() {
@@ -1602,30 +1737,6 @@ impl Catalog {
         }
     }
 
-    /// Check if entity has chunks and enqueue a ChunkOp if so.
-    fn maybe_enqueue_chunk_op(
-        &self,
-        entity_name: &str,
-        parent_uuid: &str,
-        entity_ref: &EntityRef,
-        data: &BTreeMap<String, CypherValue>,
-    ) -> Option<CatalogOp> {
-        let entity_def = self.config.entities.get(entity_name)?;
-        if !entity_has_chunks(entity_def) {
-            return None;
-        }
-        let kbs = self.get_kbs_for_entity(entity_name);
-        if kbs.is_empty() {
-            return None;
-        }
-        Some(CatalogOp::Chunk(ChunkOp {
-            entity_name: entity_name.to_string(),
-            parent_uuid: parent_uuid.to_string(),
-            entity_ref: entity_ref.clone(),
-            data: data.clone(),
-        }))
-    }
-
     fn row_to_map(
         &self,
         columns: &[String],
@@ -1755,7 +1866,7 @@ impl Catalog {
 
 /// Build InsertOps, LinkOps, EmbedOps, SparseEmbedOps for all chunks of an entity.
 /// Standalone function (no &self) for use by ChunkProcessor in parallel via rayon.
-fn compute_chunk_ops(
+pub fn compute_chunk_ops(
     entity_name: &str,
     parent_uuid: &str,
     entity_ref: &EntityRef,
@@ -1913,1119 +2024,6 @@ fn compute_chunk_ops(
     }
 
     ops
-}
-
-// ─── ChunkProcessor ───────────────────────────────────────────────────────
-
-/// Processes ChunkOps by running the chunker (in parallel via rayon) and
-/// emitting downstream InsertOp/LinkOp/EmbedOp/SparseEmbedOp via the sender.
-struct ChunkProcessor {
-    config: CatalogConfig,
-    kb_metadata: HashMap<String, KBMetadata>,
-    chunker_cache: HashMap<ChunkerConfig, Chunker>,
-    has_sparse: bool,
-    has_dual: bool,
-}
-
-#[async_trait]
-impl Processor for ChunkProcessor {
-    async fn process(&self, items: &mut [OperationItem], sender: &QueueSender) -> Result<(), String> {
-        use rayon::prelude::*;
-
-        // Collect ChunkOps from items
-        let chunk_ops: Vec<&ChunkOp> = items
-            .iter()
-            .filter_map(|item| match &item.op {
-                CatalogOp::Chunk(c) => Some(c),
-                _ => None,
-            })
-            .collect();
-
-        // Parallel chunking via rayon
-        let all_downstream: Vec<Vec<CatalogOp>> = chunk_ops
-            .par_iter()
-            .map(|chunk_op| {
-                compute_chunk_ops(
-                    &chunk_op.entity_name,
-                    &chunk_op.parent_uuid,
-                    &chunk_op.entity_ref,
-                    &chunk_op.data,
-                    &self.config,
-                    &self.kb_metadata,
-                    &self.chunker_cache,
-                    self.has_sparse,
-                    self.has_dual,
-                )
-            })
-            .collect();
-
-        // Emit all downstream ops
-        for ops in all_downstream {
-            sender.emit_all(ops);
-        }
-
-        Ok(())
-    }
-}
-
-// ─── InsertProcessor ───────────────────────────────────────────────────────
-
-struct InsertProcessor {
-    conn: Arc<dyn DbConnection>,
-    node_id_cache: Arc<RwLock<NodeIdCache>>,
-}
-
-#[async_trait]
-impl Processor for InsertProcessor {
-    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
-        for item in items.iter_mut() {
-            if let CatalogOp::Insert(ref mut insert) = item.op {
-                let mut columns: Vec<&str> =
-                    insert.data.keys().map(|k| k.as_str()).collect();
-                columns.sort();
-
-                // Append RETURN ID(n) to capture the internal node ID
-                let base_cypher = generate_insert_cypher(&insert.entity_name, &columns);
-                let cypher = base_cypher.replace(
-                    &format!("(:{}", insert.entity_name),
-                    &format!("(n:{}", insert.entity_name),
-                ) + " RETURN ID(n)";
-
-                let params: Vec<QueryParam> = columns
-                    .iter()
-                    .map(|&col| QueryParam {
-                        name: col.to_string(),
-                        value: insert
-                            .data
-                            .get(col)
-                            .cloned()
-                            .unwrap_or(CypherValue::Null),
-                    })
-                    .collect();
-
-                let result = self
-                    .conn
-                    .execute_with_params(&cypher, &params)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                // Resolve the entity ref with the generated UUID
-                let uuid = insert
-                    .data
-                    .get("_uuid")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                // Cache the internal node ID if returned (format: "table_id:offset")
-                if let Some(id_val) = result.rows.first().and_then(|row| row.first()) {
-                    if let Some(id_str) = id_val.as_str() {
-                        if let Some(node_id) = InternalNodeId::parse(id_str) {
-                            if let Ok(mut cache) = self.node_id_cache.write() {
-                                cache.insert(&uuid, node_id);
-                            }
-                        }
-                    }
-                }
-
-                if let Some(resolver) = insert.take_resolver() {
-                    resolver.resolve(uuid);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-// ─── LinkProcessor ─────────────────────────────────────────────────────────
-
-struct LinkProcessor {
-    conn: Arc<dyn DbConnection>,
-}
-
-#[async_trait]
-impl Processor for LinkProcessor {
-    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
-        for item in items.iter_mut() {
-            if let CatalogOp::Link(ref mut link) = item.op {
-                let from_uuid = link
-                    .from
-                    .resolve()
-                    .await
-                    .map_err(|e| format!("link from resolution failed: {e}"))?;
-                let to_uuid = link
-                    .to
-                    .resolve()
-                    .await
-                    .map_err(|e| format!("link to resolution failed: {e}"))?;
-
-                // Build MATCH...CREATE cypher
-                let mut cypher = format!(
-                    "MATCH (a {{_uuid: $from_uuid}}), (b {{_uuid: $to_uuid}}) \
-                     CREATE (a)-[:{}", link.rel_name
-                );
-                let mut params = vec![
-                    QueryParam::new("from_uuid", from_uuid.clone()),
-                    QueryParam::new("to_uuid", to_uuid.clone()),
-                ];
-
-                if !link.properties.is_empty() {
-                    let mut prop_keys: Vec<&String> = link.properties.keys().collect();
-                    prop_keys.sort();
-                    let prop_strs: Vec<String> =
-                        prop_keys.iter().map(|k| format!("{k}: ${k}")).collect();
-                    cypher.push_str(&format!(" {{{}}}", prop_strs.join(", ")));
-                    for key in prop_keys {
-                        params.push(QueryParam {
-                            name: key.clone(),
-                            value: link.properties[key].clone(),
-                        });
-                    }
-                }
-                cypher.push_str("]->(b)");
-
-                self.conn
-                    .execute_with_params(&cypher, &params)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                if let Some(resolver) = link.take_resolver() {
-                    resolver.resolve(from_uuid, to_uuid);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-// ─── AggregateProcessor ────────────────────────────────────────────────────
-
-/// Processes AggregateOps: rebuilds `_content` on `{KB}_Index`, deletes stale
-/// chunks, re-chunks per source field, and emits InsertOps + LinkOps (at post-
-/// aggregate priority 2.6/2.7) + EmbedOps (at 3.0) via the queue sender.
-struct AggregateProcessor {
-    conn: Arc<dyn DbConnection>,
-    config: CatalogConfig,
-    kb_metadata: HashMap<String, KBMetadata>,
-    chunker_cache: HashMap<ChunkerConfig, Chunker>,
-    has_sparse: bool,
-    has_dual: bool,
-}
-
-/// Content collected from a single source field of a contributing entity.
-struct SourceContent {
-    entity_name: String,
-    entity_uuid: String,
-    field_name: String,
-    text: String,
-}
-
-impl AggregateProcessor {
-    /// Find a relation in the config that connects `title_entity` to `content_entity`.
-    /// Returns `(rel_name, is_forward)` where is_forward=true means title→content.
-    fn find_relation_to_entity(
-        &self,
-        title_entity: &str,
-        content_entity: &str,
-    ) -> Option<(String, bool)> {
-        for (rel_name, rel_def) in &self.config.relations {
-            if rel_def.from == title_entity && rel_def.to == content_entity {
-                return Some((rel_name.clone(), true));
-            }
-            if rel_def.from == content_entity && rel_def.to == title_entity {
-                return Some((rel_name.clone(), false));
-            }
-        }
-        None
-    }
-
-    /// Process a single (deduplicated) AggregateOp.
-    async fn process_one(
-        &self,
-        agg: &AggregateOp,
-        sender: &QueueSender,
-    ) -> Result<(), String> {
-        let kb_name = &agg.kb_name;
-        let kb_meta = match self.kb_metadata.get(kb_name) {
-            Some(m) => m,
-            None => return Ok(()),
-        };
-        let kb_config = self.config.knowledge_bases.get(kb_name);
-        let kb_signals = kb_config.map(|c| c.signals).unwrap_or(search::SearchSignals::HYBRID);
-        let kb_sparse = kb_signals.sparse() && self.has_sparse;
-
-        let index_table = format!("{kb_name}_Index");
-        let chunk_table = format!("{kb_name}_Index_Chunk");
-        let title_entity = &agg.title_entity;
-        let source_uuid = &agg.source_uuid;
-
-        // ── 1. Get title entity's field values ────────────────────────
-        let title_field_name = &kb_meta.title.field;
-        let content_field_names: Vec<&String> = kb_meta
-            .content
-            .iter()
-            .filter(|c| c.entity == *title_entity)
-            .map(|c| &c.field)
-            .collect();
-
-        let mut return_fields = vec![format!("e.{title_field_name} AS _title_val")];
-        for f in &content_field_names {
-            return_fields.push(format!("e.{f} AS {f}"));
-        }
-        let return_clause = return_fields.join(", ");
-        let title_query = format!(
-            "MATCH (e:{title_entity} {{_uuid: $uuid}}) RETURN {return_clause}"
-        );
-        let title_result = self
-            .conn
-            .execute_with_params(
-                &title_query,
-                &[QueryParam::new("uuid", source_uuid.clone())],
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if title_result.is_empty() {
-            return Ok(()); // Title entity not found (may have been deleted)
-        }
-
-        let title_max_chars = kb_meta.chunking.title_max_chars;
-        let raw_title = title_result.rows[0]
-            .first()
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let title_text: String = if title_max_chars > 0 && raw_title.len() > title_max_chars {
-            raw_title.chars().take(title_max_chars).collect()
-        } else {
-            raw_title.to_string()
-        };
-
-        // Collect title entity's own contentFor fields
-        let mut sources: Vec<SourceContent> = Vec::new();
-        for (i, f) in content_field_names.iter().enumerate() {
-            let text = title_result.rows[0]
-                .get(i + 1)
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if !text.is_empty() {
-                sources.push(SourceContent {
-                    entity_name: title_entity.clone(),
-                    entity_uuid: source_uuid.clone(),
-                    field_name: f.to_string(),
-                    text: text.to_string(),
-                });
-            }
-        }
-
-        // ── 2. Collect content from linked entities ───────────────────
-        let other_content_entities: HashSet<&str> = kb_meta
-            .content
-            .iter()
-            .map(|c| c.entity.as_str())
-            .filter(|e| *e != title_entity.as_str())
-            .collect();
-
-        for content_entity_name in &other_content_entities {
-            let relation = self.find_relation_to_entity(title_entity, content_entity_name);
-            if let Some((rel_name, is_forward)) = relation {
-                let entity_fields: Vec<&String> = kb_meta
-                    .content
-                    .iter()
-                    .filter(|c| c.entity == *content_entity_name)
-                    .map(|c| &c.field)
-                    .collect();
-
-                if entity_fields.is_empty() {
-                    continue;
-                }
-
-                let mut fields_return = vec!["c._uuid AS _uuid".to_string()];
-                for f in &entity_fields {
-                    fields_return.push(format!("c.{f} AS {f}"));
-                }
-                let fields_clause = fields_return.join(", ");
-
-                let query = if is_forward {
-                    format!(
-                        "MATCH (t:{title_entity} {{_uuid: $uuid}})-[:{rel_name}]->(c:{content_entity_name}) \
-                         RETURN {fields_clause}"
-                    )
-                } else {
-                    format!(
-                        "MATCH (t:{title_entity} {{_uuid: $uuid}})<-[:{rel_name}]-(c:{content_entity_name}) \
-                         RETURN {fields_clause}"
-                    )
-                };
-
-                let result = self
-                    .conn
-                    .execute_with_params(
-                        &query,
-                        &[QueryParam::new("uuid", source_uuid.clone())],
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                for row in &result.rows {
-                    let entity_uuid = row
-                        .first()
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    for (i, f) in entity_fields.iter().enumerate() {
-                        let text = row
-                            .get(i + 1)
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        if !text.is_empty() {
-                            sources.push(SourceContent {
-                                entity_name: content_entity_name.to_string(),
-                                entity_uuid: entity_uuid.clone(),
-                                field_name: f.to_string(),
-                                text: text.to_string(),
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── 3. Sort sources for deterministic output ──────────────────
-        sources.sort_by(|a, b| {
-            a.entity_name
-                .cmp(&b.entity_name)
-                .then(a.entity_uuid.cmp(&b.entity_uuid))
-                .then(a.field_name.cmp(&b.field_name))
-        });
-
-        // ── 4. Rebuild _content and compute hash ──────────────────────
-        let content_text = sources
-            .iter()
-            .map(|s| s.text.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let new_hash = content_hash(&format!("{title_text}\n{content_text}"));
-
-        // ── 5. Compare with stored hash ───────────────────────────────
-        let idx_query = format!(
-            "MATCH (idx:{index_table} {{_uuid: $uuid}}) RETURN idx._content_hash"
-        );
-        let idx_result = self
-            .conn
-            .execute_with_params(
-                &idx_query,
-                &[QueryParam::new("uuid", agg.index_entry_uuid.clone())],
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let current_hash = idx_result
-            .rows
-            .first()
-            .and_then(|r| r.first())
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        if current_hash == new_hash {
-            return Ok(()); // Content unchanged, skip
-        }
-
-        // ── 6. UPDATE {KB}_Index ──────────────────────────────────────
-        let update_query = format!(
-            "MATCH (idx:{index_table} {{_uuid: $uuid}}) \
-             SET idx._title = $title, idx._content = $content, idx._content_hash = $hash"
-        );
-        self.conn
-            .execute_with_params(
-                &update_query,
-                &[
-                    QueryParam::new("uuid", agg.index_entry_uuid.clone()),
-                    QueryParam::new("title", title_text.clone()),
-                    QueryParam::new("content", content_text),
-                    QueryParam::new("hash", new_hash),
-                ],
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-
-        // ── 7. Delete old chunks ──────────────────────────────────────
-        let del_chunks = format!(
-            "MATCH (c:{chunk_table} {{_parent_uuid: $uuid}}) DETACH DELETE c"
-        );
-        let _ = self
-            .conn
-            .execute_with_params(
-                &del_chunks,
-                &[QueryParam::new("uuid", agg.index_entry_uuid.clone())],
-            )
-            .await;
-
-        // ── 8. Re-chunk per source field, emit downstream ops ─────────
-        let chunking = &kb_meta.chunking;
-        let chunker_key = ChunkerConfig {
-            max_size: chunking.max_size,
-            overlap: chunking.overlap,
-            strategy: chunking.strategy.clone(),
-        };
-        let chunker = self
-            .chunker_cache
-            .get(&chunker_key)
-            .expect("chunker must be pre-warmed");
-
-        let mut downstream_ops: Vec<CatalogOp> = Vec::new();
-        let mut content_offset: usize = 0;
-
-        for source in &sources {
-            let chunks = chunker.chunk(&source.text);
-            if chunks.is_empty() {
-                continue;
-            }
-
-            for chunk in &chunks {
-                // Include entity_uuid in the key to prevent collisions when
-                // different entities contribute the same field_name (e.g.
-                // Directory.absolute_path vs File.absolute_path in TreeKB).
-                let source_key = format!("{}:{}", source.entity_uuid, source.field_name);
-                let c_uuid =
-                    chunk_uuid(&agg.index_entry_uuid, &source_key, chunk.index);
-
-                let embed_text = if !title_text.is_empty() {
-                    format!("{title_text}\n---\n{}", chunk.text)
-                } else {
-                    chunk.text.clone()
-                };
-
-                let mut chunk_data = BTreeMap::new();
-                chunk_data.insert(
-                    "_uuid".to_string(),
-                    CypherValue::String(c_uuid.clone()),
-                );
-                chunk_data.insert(
-                    "_parent_uuid".to_string(),
-                    CypherValue::String(agg.index_entry_uuid.clone()),
-                );
-                chunk_data.insert(
-                    "_parent_field".to_string(),
-                    CypherValue::String(source.field_name.clone()),
-                );
-                chunk_data.insert(
-                    "_kb_name".to_string(),
-                    CypherValue::String(kb_name.clone()),
-                );
-                chunk_data.insert(
-                    "_source_field".to_string(),
-                    CypherValue::String(source.field_name.clone()),
-                );
-                chunk_data.insert(
-                    "_source_entity".to_string(),
-                    CypherValue::String(source.entity_name.clone()),
-                );
-                chunk_data.insert(
-                    "_source_uuid".to_string(),
-                    CypherValue::String(source.entity_uuid.clone()),
-                );
-                chunk_data.insert(
-                    "_text".to_string(),
-                    CypherValue::String(chunk.text.clone()),
-                );
-                chunk_data.insert(
-                    "_text_hash".to_string(),
-                    CypherValue::String(content_hash(&chunk.text)),
-                );
-                chunk_data.insert(
-                    "_index".to_string(),
-                    CypherValue::Int(chunk.index as i64),
-                );
-                chunk_data.insert(
-                    "_start_char".to_string(),
-                    CypherValue::Int(chunk.start_byte as i64),
-                );
-                chunk_data.insert(
-                    "_end_char".to_string(),
-                    CypherValue::Int(chunk.end_byte as i64),
-                );
-                chunk_data.insert(
-                    "_start_line".to_string(),
-                    CypherValue::Int(chunk.start_line as i64),
-                );
-                chunk_data.insert(
-                    "_end_line".to_string(),
-                    CypherValue::Int(chunk.end_line as i64),
-                );
-                chunk_data.insert(
-                    "_core_start_char".to_string(),
-                    CypherValue::Int(chunk.core_start_byte as i64),
-                );
-                chunk_data.insert(
-                    "_core_end_char".to_string(),
-                    CypherValue::Int(chunk.core_end_byte as i64),
-                );
-                chunk_data.insert(
-                    "_core_start_line".to_string(),
-                    CypherValue::Int(chunk.core_start_line as i64),
-                );
-                chunk_data.insert(
-                    "_core_end_line".to_string(),
-                    CypherValue::Int(chunk.core_end_line as i64),
-                );
-                chunk_data.insert(
-                    "_content_offset".to_string(),
-                    CypherValue::Int(content_offset as i64),
-                );
-
-                // InsertOp for chunk (prio 2.6 — post-aggregate)
-                let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
-                chunk_resolver.resolve(c_uuid.clone());
-                downstream_ops.push(CatalogOp::Insert(
-                    InsertOp::new(
-                        chunk_table.clone(),
-                        chunk_data,
-                        // We already resolved the ref above, but InsertOp needs a resolver.
-                        // Create a fresh pair; the processor will resolve it again via RETURN ID(n).
-                        {
-                            let (_discard_ref, resolver) = EntityRef::new(&chunk_table);
-                            resolver
-                        },
-                        chunk_ref.clone(),
-                    )
-                    .with_priority(PRIO_POST_AGG_INSERT),
-                ));
-
-                // LinkOp: {KB}_Index_HAS_CHUNK (prio 2.7 — post-aggregate)
-                let has_chunk_rel = format!("{kb_name}_Index_HAS_CHUNK");
-                let (_link_ref, link_resolver) = RelationRef::new(&has_chunk_rel);
-                downstream_ops.push(CatalogOp::Link(
-                    LinkOp::new(
-                        has_chunk_rel,
-                        RefOrUuid::Uuid(agg.index_entry_uuid.clone()),
-                        RefOrUuid::Uuid(c_uuid.clone()),
-                        BTreeMap::new(),
-                        link_resolver,
-                        _link_ref,
-                    )
-                    .with_priority(PRIO_POST_AGG_LINK),
-                ));
-
-                // LinkOp: {Entity}_SOURCED_{KB} (prio 2.7)
-                let sourced_rel = format!("{}_SOURCED_{kb_name}", source.entity_name);
-                let (_src_ref, src_resolver) = RelationRef::new(&sourced_rel);
-                downstream_ops.push(CatalogOp::Link(
-                    LinkOp::new(
-                        sourced_rel,
-                        RefOrUuid::Uuid(source.entity_uuid.clone()),
-                        RefOrUuid::Uuid(c_uuid.clone()),
-                        BTreeMap::new(),
-                        src_resolver,
-                        _src_ref,
-                    )
-                    .with_priority(PRIO_POST_AGG_LINK),
-                ));
-
-                // EmbedOp / DualEmbedOp / SparseEmbedOp (prio 3.0 — default)
-                if self.has_dual && kb_signals.vector() && kb_sparse {
-                    downstream_ops.push(CatalogOp::DualEmbed(DualEmbedOp {
-                        entity_ref: chunk_ref,
-                        kb_name: kb_name.clone(),
-                        texts: vec![embed_text],
-                    }));
-                } else {
-                    if kb_signals.vector() {
-                        downstream_ops.push(CatalogOp::Embed(EmbedOp {
-                            entity_ref: chunk_ref.clone(),
-                            kb_name: kb_name.clone(),
-                            texts: vec![embed_text.clone()],
-                        }));
-                    }
-                    if kb_sparse {
-                        downstream_ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
-                            entity_ref: chunk_ref,
-                            kb_name: kb_name.clone(),
-                            texts: vec![embed_text],
-                        }));
-                    }
-                }
-            }
-            // Advance content_offset past this source's text + the \n separator
-            content_offset += source.text.len() + 1;
-        }
-
-        if !downstream_ops.is_empty() {
-            sender.emit_all(downstream_ops);
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl Processor for AggregateProcessor {
-    async fn process(
-        &self,
-        items: &mut [OperationItem],
-        sender: &QueueSender,
-    ) -> Result<(), String> {
-        // Deduplicate by index_entry_uuid (keep first occurrence)
-        let mut seen = HashSet::new();
-        let mut unique_ops: Vec<&AggregateOp> = Vec::new();
-        for item in items.iter() {
-            if let CatalogOp::Aggregate(ref agg) = item.op {
-                if seen.insert(agg.index_entry_uuid.clone()) {
-                    unique_ops.push(agg);
-                }
-            }
-        }
-
-        for agg in unique_ops {
-            self.process_one(agg, sender).await?;
-        }
-
-        Ok(())
-    }
-}
-
-// ─── EmbedProcessor ────────────────────────────────────────────────────────
-
-struct EmbedProcessor {
-    conn: Arc<dyn DbConnection>,
-    embedder: Arc<dyn Embedder>,
-    embedding_dim: usize,
-}
-
-#[async_trait]
-impl Processor for EmbedProcessor {
-    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
-        // Phase 1: Wait for all entity refs to resolve, collect embed work
-        struct EmbedWork {
-            uuid: String,
-            text: String,
-            entity_name: String,
-            embedding_col: String,
-        }
-
-        let mut works = Vec::new();
-
-        for item in items.iter_mut() {
-            if let CatalogOp::Embed(ref mut embed) = item.op {
-                let uuid = embed
-                    .entity_ref
-                    .ready()
-                    .await
-                    .map_err(|e| format!("embed ref resolution failed: {e}"))?;
-
-                if embed.texts.is_empty() {
-                    continue;
-                }
-
-                works.push(EmbedWork {
-                    uuid,
-                    text: embed.texts.join("\n"),
-                    entity_name: embed.entity_ref.entity().to_string(),
-                    embedding_col: format!("{}_embedding", embed.kb_name),
-                });
-            }
-        }
-
-        if works.is_empty() {
-            return Ok(());
-        }
-
-        // Phase 2: Batch embed all texts in a single call
-        let texts: Vec<String> = works.iter().map(|w| w.text.clone()).collect();
-        let vectors = self
-            .embedder
-            .embed(&texts)
-            .await
-            .map_err(|e| format!("embedding failed: {e}"))?;
-
-        if vectors.len() != works.len() {
-            return Err(format!(
-                "embedder returned {} vectors for {} texts",
-                vectors.len(),
-                works.len()
-            ));
-        }
-
-        // Phase 3: Batch store embeddings via UNWIND (one query per entity+col group)
-        let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &Vec<f32>)>> = HashMap::new();
-        for (work, vector) in works.iter().zip(vectors.iter()) {
-            if vector.len() != self.embedding_dim {
-                return Err(format!(
-                    "embedding dimension mismatch: expected {}, got {}",
-                    self.embedding_dim,
-                    vector.len()
-                ));
-            }
-            groups
-                .entry((&work.entity_name, &work.embedding_col))
-                .or_default()
-                .push((work, vector));
-        }
-
-        for ((entity_name, col), group) in &groups {
-            let items_param = CypherValue::List(
-                group
-                    .iter()
-                    .map(|(work, vec)| {
-                        let mut map = BTreeMap::new();
-                        map.insert(
-                            "uuid".to_string(),
-                            CypherValue::String(work.uuid.clone()),
-                        );
-                        map.insert(
-                            "emb".to_string(),
-                            CypherValue::List(
-                                vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                            ),
-                        );
-                        CypherValue::Map(map)
-                    })
-                    .collect(),
-            );
-
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                 SET n.{col} = item.emb"
-            );
-
-            self.conn
-                .execute_with_params(
-                    &cypher,
-                    &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }],
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
-    }
-}
-
-// ─── SparseEmbedProcessor ──────────────────────────────────────────────────
-
-struct SparseEmbedProcessor {
-    conn: Arc<dyn DbConnection>,
-    sparse_embedder: Arc<dyn SparseEmbedder>,
-}
-
-#[async_trait]
-impl Processor for SparseEmbedProcessor {
-    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
-        struct SparseWork {
-            uuid: String,
-            text: String,
-            entity_name: String,
-            kb_name: String,
-        }
-
-        let mut works = Vec::new();
-
-        for item in items.iter_mut() {
-            if let CatalogOp::SparseEmbed(ref mut op) = item.op {
-                let uuid = op
-                    .entity_ref
-                    .ready()
-                    .await
-                    .map_err(|e| format!("sparse embed ref resolution failed: {e}"))?;
-
-                if op.texts.is_empty() {
-                    continue;
-                }
-
-                works.push(SparseWork {
-                    uuid,
-                    text: op.texts.join("\n"),
-                    entity_name: op.entity_ref.entity().to_string(),
-                    kb_name: op.kb_name.clone(),
-                });
-            }
-        }
-
-        if works.is_empty() {
-            return Ok(());
-        }
-
-        // Batch embed
-        let texts: Vec<String> = works.iter().map(|w| w.text.clone()).collect();
-        let sparse_vecs = self
-            .sparse_embedder
-            .embed_sparse(&texts)
-            .await
-            .map_err(|e| format!("sparse embedding failed: {e}"))?;
-
-        if sparse_vecs.len() != works.len() {
-            return Err(format!(
-                "sparse embedder returned {} vectors for {} texts",
-                sparse_vecs.len(),
-                works.len()
-            ));
-        }
-
-        // Batch store sparse vectors via UNWIND (one query per entity+kb group)
-        let mut groups: HashMap<(&str, &str), Vec<(&SparseWork, &SparseVector)>> = HashMap::new();
-        for (work, sv) in works.iter().zip(sparse_vecs.iter()) {
-            groups
-                .entry((&work.entity_name, &work.kb_name))
-                .or_default()
-                .push((work, sv));
-        }
-
-        for ((entity_name, kb_name), group) in &groups {
-            let indices_col = format!("{kb_name}_sparse_indices");
-            let weights_col = format!("{kb_name}_sparse_weights");
-
-            let items_param = CypherValue::List(
-                group
-                    .iter()
-                    .map(|(work, sv)| {
-                        let mut map = BTreeMap::new();
-                        map.insert(
-                            "uuid".to_string(),
-                            CypherValue::String(work.uuid.clone()),
-                        );
-                        map.insert(
-                            "indices".to_string(),
-                            CypherValue::List(
-                                sv.indices
-                                    .iter()
-                                    .map(|&i| CypherValue::Int(i as i64))
-                                    .collect(),
-                            ),
-                        );
-                        map.insert(
-                            "weights".to_string(),
-                            CypherValue::List(
-                                sv.values
-                                    .iter()
-                                    .map(|&f| CypherValue::Float(f as f64))
-                                    .collect(),
-                            ),
-                        );
-                        CypherValue::Map(map)
-                    })
-                    .collect(),
-            );
-
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                 SET n.{indices_col} = item.indices, n.{weights_col} = item.weights"
-            );
-
-            self.conn
-                .execute_with_params(
-                    &cypher,
-                    &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }],
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
-    }
-}
-
-// ─── DualEmbedProcessor ─────────────────────────────────────────────────────
-
-/// Processes DualEmbedOps: single forward pass for dense + sparse, then
-/// batch UNWIND for each. Receives mega-batches (~500) from the queue,
-/// subdivides into GPU mini-batches of `gpu_batch_size` internally.
-struct DualEmbedProcessor {
-    conn: Arc<dyn DbConnection>,
-    embedder: Arc<dyn DualEmbedder>,
-    embedding_dim: usize,
-    gpu_batch_size: usize,
-    event_tx: Option<async_broadcast::Sender<QueueEvent>>,
-}
-
-#[async_trait]
-impl Processor for DualEmbedProcessor {
-    async fn process(&self, items: &mut [OperationItem], _sender: &QueueSender) -> Result<(), String> {
-        struct DualWork {
-            uuid: String,
-            text: String,
-            entity_name: String,
-            kb_name: String,
-        }
-
-        // Phase 1: resolve refs, collect work
-        let mut works = Vec::new();
-        for item in items.iter_mut() {
-            if let CatalogOp::DualEmbed(ref mut op) = item.op {
-                let uuid = op
-                    .entity_ref
-                    .ready()
-                    .await
-                    .map_err(|e| format!("dual embed ref resolution failed: {e}"))?;
-
-                if op.texts.is_empty() {
-                    continue;
-                }
-
-                works.push(DualWork {
-                    uuid,
-                    text: op.texts.join("\n"),
-                    entity_name: op.entity_ref.entity().to_string(),
-                    kb_name: op.kb_name.clone(),
-                });
-            }
-        }
-
-        if works.is_empty() {
-            return Ok(());
-        }
-
-        // Phase 2: GPU embedding in mini-batches of gpu_batch_size
-        let mut dense_results: Vec<(&DualWork, Vec<f32>)> = Vec::with_capacity(works.len());
-        let mut sparse_results: Vec<(&DualWork, SparseVector)> = Vec::with_capacity(works.len());
-
-        for chunk in works.chunks(self.gpu_batch_size) {
-            let t0 = std::time::Instant::now();
-
-            let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-            let (dense_vecs, sparse_vecs) = self.embedder.embed_dual(&texts).await
-                .map_err(|e| format!("dual embed failed: {e}"))?;
-
-            if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
-                return Err(format!(
-                    "dual embedder returned {}/{} vectors for {} texts",
-                    dense_vecs.len(), sparse_vecs.len(), chunk.len()
-                ));
-            }
-
-            let gpu_ms = t0.elapsed().as_millis() as u64;
-            if let Some(ref tx) = self.event_tx {
-                let _ = tx.try_broadcast(QueueEvent::GpuBatchCompleted {
-                    op_type: "dual_embed",
-                    batch_size: chunk.len(),
-                    duration_ms: gpu_ms,
-                });
-            }
-
-            // Find the index into works for this chunk
-            let base_idx = dense_results.len();
-            for (i, (dense, sparse)) in dense_vecs.into_iter().zip(sparse_vecs.into_iter()).enumerate() {
-                dense_results.push((&works[base_idx + i], dense));
-                sparse_results.push((&works[base_idx + i], sparse));
-            }
-        }
-
-        // Phase 3: UNWIND dense (1 transaction for all)
-        {
-            let t1 = std::time::Instant::now();
-
-            // Group by (entity_name, embedding_col)
-            let mut groups: HashMap<(&str, String), Vec<(&DualWork, &Vec<f32>)>> = HashMap::new();
-            for (work, vec) in &dense_results {
-                if vec.len() != self.embedding_dim {
-                    return Err(format!(
-                        "embedding dimension mismatch: expected {}, got {}",
-                        self.embedding_dim, vec.len()
-                    ));
-                }
-                let col = format!("{}_embedding", work.kb_name);
-                groups.entry((&work.entity_name, col)).or_default().push((work, vec));
-            }
-
-            for ((entity_name, col), group) in &groups {
-                let items_param = CypherValue::List(
-                    group.iter().map(|(work, vec)| {
-                        let mut map = BTreeMap::new();
-                        map.insert("uuid".to_string(), CypherValue::String(work.uuid.clone()));
-                        map.insert("emb".to_string(), CypherValue::List(
-                            vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                        ));
-                        CypherValue::Map(map)
-                    }).collect(),
-                );
-
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                     SET n.{col} = item.emb"
-                );
-
-                self.conn
-                    .execute_with_params(&cypher, &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }])
-                    .await
-                    .map_err(|e| e.to_string())?;
-            }
-
-            let dense_ms = t1.elapsed().as_millis() as u64;
-            if let Some(ref tx) = self.event_tx {
-                let _ = tx.try_broadcast(QueueEvent::DbWriteCompleted {
-                    op_type: "dual_embed",
-                    column: "dense".into(),
-                    item_count: dense_results.len(),
-                    duration_ms: dense_ms,
-                });
-            }
-        }
-
-        // Phase 4: UNWIND sparse (1 transaction for all)
-        {
-            let t2 = std::time::Instant::now();
-
-            let mut groups: HashMap<(&str, &str), Vec<(&DualWork, &SparseVector)>> = HashMap::new();
-            for (work, sv) in &sparse_results {
-                groups.entry((&work.entity_name, &work.kb_name as &str)).or_default().push((work, sv));
-            }
-
-            for ((entity_name, kb_name), group) in &groups {
-                let indices_col = format!("{kb_name}_sparse_indices");
-                let weights_col = format!("{kb_name}_sparse_weights");
-
-                let items_param = CypherValue::List(
-                    group.iter().map(|(work, sv)| {
-                        let mut map = BTreeMap::new();
-                        map.insert("uuid".to_string(), CypherValue::String(work.uuid.clone()));
-                        map.insert("indices".to_string(), CypherValue::List(
-                            sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
-                        ));
-                        map.insert("weights".to_string(), CypherValue::List(
-                            sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                        ));
-                        CypherValue::Map(map)
-                    }).collect(),
-                );
-
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                     SET n.{indices_col} = item.indices, n.{weights_col} = item.weights"
-                );
-
-                self.conn
-                    .execute_with_params(&cypher, &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }])
-                    .await
-                    .map_err(|e| e.to_string())?;
-            }
-
-            let sparse_ms = t2.elapsed().as_millis() as u64;
-            if let Some(ref tx) = self.event_tx {
-                let _ = tx.try_broadcast(QueueEvent::DbWriteCompleted {
-                    op_type: "dual_embed",
-                    column: "sparse".into(),
-                    item_count: sparse_results.len(),
-                    duration_ms: sparse_ms,
-                });
-            }
-        }
-
-        Ok(())
-    }
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────

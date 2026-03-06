@@ -424,16 +424,16 @@ async fn e2e_full_pipeline() {
 
     // Link documents to authors
     catalog
-        .link("WRITTEN_BY", doc1.clone(), alice.clone(), HashMap::new())
+        .link("WRITTEN_BY", doc1.clone(), alice.clone(), BTreeMap::new())
         .unwrap();
     catalog
-        .link("WRITTEN_BY", doc2.clone(), bob.clone(), HashMap::new())
+        .link("WRITTEN_BY", doc2.clone(), bob.clone(), BTreeMap::new())
         .unwrap();
     catalog
-        .link("WRITTEN_BY", doc3.clone(), alice.clone(), HashMap::new())
+        .link("WRITTEN_BY", doc3.clone(), alice.clone(), BTreeMap::new())
         .unwrap();
     catalog
-        .link("WRITTEN_BY", doc3.clone(), bob.clone(), HashMap::new())
+        .link("WRITTEN_BY", doc3.clone(), bob.clone(), BTreeMap::new())
         .unwrap();
 
     // Queue: 5 inserts + 4 links = 9

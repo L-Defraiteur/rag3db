@@ -1,4 +1,4 @@
-//! E2E integration tests: Phase 0b — cross-entity KB, AggregateProcessor,
+//! E2E integration tests: Phase 0b — cross-entity KB, AggregateBatchNode,
 //! highlight→chunk resolution, _content_offset, SOURCED rels, title truncation,
 //! delete/update contentFor-only propagation.
 //!
@@ -860,7 +860,7 @@ async fn phase0b_aggregate_skip_unchanged() {
     same_data.insert("name".into(), CypherValue::String("src".into()));
     catalog.update("Directory", &dir_uuid, same_data).await.unwrap();
 
-    // Second drain: AggregateProcessor should detect hash unchanged and skip
+    // Second drain: AggregateBatchNode should detect hash unchanged and skip
     let drain2 = catalog.drain().await;
     eprintln!("After drain 2: processed={}, failed={}", drain2.processed, drain2.failed);
     assert_eq!(drain2.failed, 0);
@@ -995,9 +995,6 @@ async fn phase0b_debug_trace_pipeline() {
     let mut catalog = make_catalog().await;
     catalog.initialize().await.unwrap();
 
-    // Subscribe to queue events
-    let mut queue_rx = catalog.subscribe_queue();
-
     // Create Directory + File + link
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -1006,19 +1003,8 @@ async fn phase0b_debug_trace_pipeline() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    eprintln!("\n══ QUEUE AFTER CREATE+LINK (before drain) ══");
-    while let Ok(ev) = queue_rx.try_recv() {
-        eprintln!("  [Q] {:?}", ev);
-    }
-
-    eprintln!("\n══ DRAIN ══");
     let result = catalog.drain().await;
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
-
-    eprintln!("\n══ QUEUE EVENTS DURING DRAIN ══");
-    while let Ok(ev) = queue_rx.try_recv() {
-        eprintln!("  [Q] {:?}", ev);
-    }
 
     // Dump DB state
     eprintln!("\n══ DB STATE ══");
@@ -1113,8 +1099,6 @@ async fn phase0b_lucivy_contains_vs_parse() {
     let mut catalog = make_catalog().await;
     catalog.initialize().await.unwrap();
 
-    let mut queue_rx = catalog.subscribe_queue();
-
     catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
         "File",
@@ -1122,18 +1106,8 @@ async fn phase0b_lucivy_contains_vs_parse() {
     ).unwrap();
     catalog.link("HAS_FILE", Hashsafe::new("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    eprintln!("\n══ QUEUE AFTER CREATE+LINK ══");
-    while let Ok(ev) = queue_rx.try_recv() {
-        eprintln!("  [Q] {:?}", ev);
-    }
-
     let result = catalog.drain().await;
-    eprintln!("\ndrain: processed={}, failed={}", result.processed, result.failed);
-
-    eprintln!("\n══ QUEUE EVENTS DURING DRAIN ══");
-    while let Ok(ev) = queue_rx.try_recv() {
-        eprintln!("  [Q] {:?}", ev);
-    }
+    eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
 
     // Dump what's in the index
     let idx = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content").await;

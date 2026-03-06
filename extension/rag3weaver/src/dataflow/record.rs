@@ -96,6 +96,31 @@ impl DataflowRecorder {
         Ok(())
     }
 
+    /// Ensure the dataflow recording schema exists (node tables + rel tables).
+    async fn ensure_schema(conn: &Arc<dyn DbConnection>) -> Result<(), RecordError> {
+        let stmts = [
+            "CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(\
+                _uuid STRING, pipeline_name STRING, status STRING, \
+                duration_ms INT64, node_count INT64, edge_count INT64, \
+                expanded_count INT64, created_at INT64, PRIMARY KEY(_uuid))",
+            "CREATE NODE TABLE IF NOT EXISTS _DataflowNodeRun(\
+                _uuid STRING, node_name STRING, status STRING, \
+                duration_ms INT64, output_ports STRING, PRIMARY KEY(_uuid))",
+            "CREATE NODE TABLE IF NOT EXISTS _DataflowEdgeRun(\
+                _uuid STRING, from_node STRING, from_port STRING, \
+                to_node STRING, to_port STRING, value_summary STRING, \
+                PRIMARY KEY(_uuid))",
+            "CREATE REL TABLE IF NOT EXISTS _NodeRunOf(\
+                FROM _DataflowNodeRun TO _DataflowExecution)",
+            "CREATE REL TABLE IF NOT EXISTS _EdgeRunOf(\
+                FROM _DataflowEdgeRun TO _DataflowExecution)",
+        ];
+        for stmt in &stmts {
+            conn.execute(stmt).await.map_err(RecordError::Db)?;
+        }
+        Ok(())
+    }
+
     /// Write a single Cypher batch that creates the execution + node runs + edge runs.
     async fn record_to_db(
         &self,
@@ -103,9 +128,16 @@ impl DataflowRecorder {
         pipeline_name: &str,
         report: &ExecutionReport,
     ) -> Result<(), RecordError> {
+        Self::ensure_schema(conn).await?;
+
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+
         let exec_uuid = crate::uuid::hashsafe_uuid(
             "_DataflowExecution",
-            &[pipeline_name, &report.total_duration_ms.to_string()],
+            &[pipeline_name, &now_ms.to_string()],
         );
 
         let status = match &report.status {
@@ -117,7 +149,7 @@ impl DataflowRecorder {
         let create_exec = format!(
             "CREATE (e:_DataflowExecution {{_uuid: $uuid, pipeline_name: $pipeline, \
              status: $status, duration_ms: $duration, node_count: $nodes, \
-             edge_count: $edges, expanded_count: $expanded}})",
+             edge_count: $edges, expanded_count: $expanded, created_at: $created_at}})",
         );
         conn.execute_with_params(
             &create_exec,
@@ -129,6 +161,7 @@ impl DataflowRecorder {
                 QueryParam::new("nodes", report.nodes.len() as i64),
                 QueryParam::new("edges", report.edges.len() as i64),
                 QueryParam::new("expanded", report.expanded_nodes.len() as i64),
+                QueryParam::new("created_at", now_ms),
             ],
         )
         .await
@@ -146,7 +179,7 @@ impl DataflowRecorder {
             let cypher = "MATCH (e:_DataflowExecution {_uuid: $exec_uuid}) \
                           CREATE (n:_DataflowNodeRun {_uuid: $uuid, node_name: $name, \
                           status: $status, duration_ms: $duration, \
-                          output_ports: $ports})-[:PART_OF]->(e)";
+                          output_ports: $ports})-[:_NodeRunOf]->(e)";
             conn.execute_with_params(
                 cypher,
                 &[
@@ -168,7 +201,7 @@ impl DataflowRecorder {
             let cypher = "MATCH (e:_DataflowExecution {_uuid: $exec_uuid}) \
                           CREATE (r:_DataflowEdgeRun {_uuid: $uuid, from_node: $from_node, \
                           from_port: $from_port, to_node: $to_node, to_port: $to_port, \
-                          value_summary: $summary})-[:PART_OF]->(e)";
+                          value_summary: $summary})-[:_EdgeRunOf]->(e)";
             conn.execute_with_params(
                 cypher,
                 &[
@@ -250,16 +283,14 @@ impl DataflowRecorder {
                                 "MATCH (e:_DataflowExecution {{pipeline_name: $pipeline}}) \
                                  WHERE e.status = 'completed' \
                                  WITH e ORDER BY e._uuid LIMIT {} \
-                                 OPTIONAL MATCH (r)-[:PART_OF]->(e) \
-                                 DETACH DELETE r, e",
+                                 DETACH DELETE e",
                                 excess
                             )
                         } else {
                             format!(
                                 "MATCH (e:_DataflowExecution {{pipeline_name: $pipeline}}) \
                                  WITH e ORDER BY e._uuid LIMIT {} \
-                                 OPTIONAL MATCH (r)-[:PART_OF]->(e) \
-                                 DETACH DELETE r, e",
+                                 DETACH DELETE e",
                                 excess
                             )
                         };

@@ -10,6 +10,7 @@
 //! - [`record`] — Persist reports to rag3db or JSONL
 
 pub mod graph;
+pub mod ingestion_nodes;
 pub mod node;
 pub mod observe;
 pub mod port;
@@ -30,3 +31,7 @@ pub use search_nodes::{
     ComposeNode, ExpansionNode, FetchRelatedNode, PrimarySearchNode, QuerySourceNode,
 };
 pub use services::ServiceRegistry;
+pub use ingestion_nodes::{
+    AggregateBatchNode, ChunkBatchNode, DualEmbedBatchNode, EmbedBatchNode,
+    InsertBatchNode, LinkBatchNode, SparseEmbedBatchNode,
+};

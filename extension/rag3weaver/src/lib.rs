@@ -50,7 +50,7 @@ pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, Hashsafe, InsertOp, LinkOp, OpSummary, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
 pub use persistence::{OperationPersistence, PersistedOp};
 pub use query::{PreparedQuery, QueryBuilder};
-pub use queue::{FlushConfig, FlushResult, ItemState, OperationQueue, Processor, QueueEvent, QueueStats};
+pub use queue::{FlushResult, QueueStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;

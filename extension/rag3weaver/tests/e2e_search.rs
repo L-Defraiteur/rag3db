@@ -889,9 +889,6 @@ async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     catalog.set_embedder(embedder);
     catalog.initialize().await.unwrap();
 
-    // Subscribe to queue events for debugging
-    let mut queue_rx = catalog.subscribe_queue();
-
     // 3 distinct topics
     let docs = [
         ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
@@ -907,10 +904,6 @@ async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
 
     let result = catalog.drain().await;
     eprintln!("Vector setup drain: processed={}, failed={}", result.processed, result.failed);
-    // Drain queue events synchronously
-    while let Ok(event) = queue_rx.try_recv() {
-        eprintln!("[queue] {:?}", event);
-    }
     assert_eq!(result.failed, 0);
 
     // Debug: verify DB state after drain
@@ -1773,7 +1766,7 @@ async fn setup_dual_catalog() -> Catalog {
     let config = make_sparse_config();
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
     // Still need a dense embedder for Catalog::new (required param),
-    // but DualEmbedProcessor will be used instead for KBs with vector+sparse.
+    // but DualEmbedBatchNode will be used instead for KBs with vector+sparse.
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
     catalog.set_dual_embedder(dual);
     catalog.initialize().await.unwrap();

@@ -521,7 +521,7 @@ async fn observe_record_database() {
 
     // Query back: _DataflowNodeRun
     let node_result = conn
-        .execute("MATCH (n:_DataflowNodeRun)-[:PART_OF]->(e:_DataflowExecution) RETURN n.node_name, n.status ORDER BY n.node_name")
+        .execute("MATCH (n:_DataflowNodeRun)-[:_NodeRunOf]->(e:_DataflowExecution) RETURN n.node_name, n.status ORDER BY n.node_name")
         .await
         .unwrap();
     eprintln!("node runs: {:?}", node_result.rows);
@@ -533,7 +533,7 @@ async fn observe_record_database() {
 
     // Query back: _DataflowEdgeRun
     let edge_result = conn
-        .execute("MATCH (r:_DataflowEdgeRun)-[:PART_OF]->(e:_DataflowExecution) RETURN r.from_node, r.to_node, r.value_summary")
+        .execute("MATCH (r:_DataflowEdgeRun)-[:_EdgeRunOf]->(e:_DataflowExecution) RETURN r.from_node, r.to_node, r.value_summary")
         .await
         .unwrap();
     eprintln!("edge runs: {:?}", edge_result.rows);
