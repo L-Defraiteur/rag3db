@@ -1007,6 +1007,11 @@ impl Catalog {
         self.conn.as_ref()
     }
 
+    /// Get a cloned Arc to the connection (for recording, observability).
+    pub fn conn_arc(&self) -> Arc<dyn DbConnection> {
+        self.conn.clone()
+    }
+
     /// Execute raw Cypher (useful for debugging/tests).
     pub async fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).await.map_err(|e| CatalogError::DbError(e.to_string()))
@@ -1637,74 +1642,112 @@ impl Catalog {
 
     // ── Strategy Search ──────────────────────────────────────────────
 
-    /// Build a configured [`SearchQueue`] ready for processing.
+    /// Build a configured [`DataflowGraph`] for search with strategy.
     ///
-    /// Call [`SearchQueue::subscribe()`] before [`SearchQueue::process()`] to
-    /// observe pipeline events. Use [`Self::search_with_strategy()`] for the
-    /// simple one-shot API.
-    pub async fn build_search_queue(
+    /// Use with [`DataflowRuntime`] for event observation:
+    /// ```ignore
+    /// let mut graph = Catalog::build_dataflow_graph(catalog, kb, q, strategy).await;
+    /// let runtime = DataflowRuntime::new(10);
+    /// let mut rx = runtime.subscribe();
+    /// let output = runtime.execute(&mut graph).await?;
+    /// ```
+    pub async fn build_dataflow_graph(
         catalog: Arc<tokio::sync::Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
-    ) -> crate::search_queue::SearchQueue {
-        use crate::processors::*;
-        use crate::search_queue::*;
+    ) -> crate::dataflow::DataflowGraph {
+        use crate::dataflow::*;
 
         let conn = { catalog.lock().await.conn.clone() };
+        let mut graph = DataflowGraph::new();
 
-        let mut queue = SearchQueue::new(strategy.max_rounds);
+        // Source node
+        graph
+            .add_node(Box::new(QuerySourceNode::new(
+                kb_name,
+                query,
+                &strategy.search,
+            )))
+            .unwrap();
 
-        queue.register(Arc::new(PrimarySearchProcessor::new(catalog.clone())));
-        queue.register(Arc::new(ExpansionProcessor));
-        queue.register(Arc::new(FetchRelatedProcessor::new(conn)));
-        queue.register(Arc::new(ComposeProcessor));
+        // Primary search
+        graph
+            .add_node(Box::new(PrimarySearchNode::new(catalog.clone())))
+            .unwrap();
+        graph
+            .connect("query_source", "query", "primary_search", "query")
+            .unwrap();
 
-        // Enqueue pipeline — Compose is NOT enqueued here.
-        // ExpansionProcessor defers it via emit.all(fetch_handles).then(Compose).
-        queue.enqueue(SearchOp::PrimarySearch {
-            kb_name: kb_name.to_string(),
-            query: query.to_string(),
-            options: strategy.search.clone(),
-        });
         if !strategy.expansions.is_empty() {
-            queue.enqueue(SearchOp::Expansion {
-                rules: strategy.expansions,
-            });
+            // Expansion (dynamic — emits FetchRelated + Compose at runtime)
+            graph
+                .add_dynamic_node(Box::new(ExpansionNode::new(
+                    conn,
+                    strategy.expansions,
+                )))
+                .unwrap();
+            graph
+                .connect("primary_search", "results", "expansion", "results")
+                .unwrap();
         }
 
-        queue
+        graph
     }
 
     /// Run a search with reactive expansion (graph traversal after search).
     ///
     /// This is an associated function taking `Arc<Mutex<Catalog>>` so that
-    /// processors can call `catalog.search()` (needed for SearchRelated).
+    /// nodes can call `catalog.search()`.
     ///
-    /// For event observation, use [`Self::build_search_queue()`] +
-    /// [`SearchQueue::subscribe()`] + [`SearchQueue::process()`] instead.
+    /// For event observation, use [`Self::build_dataflow_graph()`] +
+    /// [`DataflowRuntime::subscribe()`] + [`DataflowRuntime::execute()`].
     pub async fn search_with_strategy(
         catalog: Arc<tokio::sync::Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
     ) -> Result<crate::search_strategy::SearchStrategyResponse, CatalogError> {
-        let mut queue =
-            Self::build_search_queue(catalog, kb_name, query, strategy).await;
+        use crate::dataflow::PortValue;
 
-        queue
-            .process()
+        let max_rounds = strategy.max_rounds;
+        let has_expansions = !strategy.expansions.is_empty();
+        let mut graph =
+            Self::build_dataflow_graph(catalog, kb_name, query, strategy).await;
+
+        let runtime = crate::dataflow::DataflowRuntime::new(max_rounds);
+        let output = runtime
+            .execute(&mut graph)
             .await
             .map_err(|e| CatalogError::DbError(e))?;
 
-        let context = queue.into_context();
-        let meta = context.meta.ok_or_else(|| {
-            CatalogError::DbError("search_with_strategy: no meta after processing".into())
-        })?;
-        Ok(crate::search_strategy::SearchStrategyResponse {
-            results: context.root_results,
-            meta,
-        })
+        // Results from terminal node
+        let results_node = if has_expansions {
+            "compose"
+        } else {
+            "primary_search"
+        };
+        let results = output
+            .get(results_node, "results")
+            .and_then(|v| match v {
+                PortValue::Results(r) => Some(r.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        let meta = output
+            .get("primary_search", "meta")
+            .and_then(|v| match v {
+                PortValue::Meta(m) => Some(m.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                CatalogError::DbError(
+                    "search_with_strategy: no meta after processing".into(),
+                )
+            })?;
+
+        Ok(crate::search_strategy::SearchStrategyResponse { results, meta })
     }
 }
 

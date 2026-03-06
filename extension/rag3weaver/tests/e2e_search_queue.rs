@@ -1,4 +1,4 @@
-//! E2E integration tests: SearchQueue (search_with_strategy).
+//! E2E integration tests: Dataflow search (search_with_strategy).
 //!
 //! Uses the same Directory + File + HAS_FILE schema as e2e_result_mode.
 //!
@@ -13,9 +13,9 @@ use rag3weaver::config::{
     CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
 };
 use rag3weaver::connection::CypherValue;
+use rag3weaver::dataflow::{DataflowEvent, DataflowRuntime};
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
-use rag3weaver::search_queue::SearchQueueEvent;
 use rag3weaver::search_strategy::{
     ExpansionDirection, ExpansionRule, SearchStrategy,
 };
@@ -296,8 +296,8 @@ async fn strategy_expand_has_file() {
         max_rounds: 10,
     };
 
-    // Use build_search_queue + subscribe for event tracing
-    let mut queue = Catalog::build_search_queue(
+    // Use build_dataflow_graph + runtime.subscribe for event tracing
+    let mut graph = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -305,24 +305,30 @@ async fn strategy_expand_has_file() {
     )
     .await;
 
-    let mut rx = queue.subscribe();
-    queue.process().await.unwrap();
+    let runtime = DataflowRuntime::new(10);
+    let mut rx = runtime.subscribe();
+    let output = runtime.execute(&mut graph).await.unwrap();
 
     // Dump all events
     while let Ok(ev) = rx.try_recv() {
         eprintln!("  [event] {ev:?}");
     }
 
-    let context = queue.into_context();
-    let results = &context.root_results;
+    // Get results from compose node (terminal after expansion)
+    let results = output
+        .get("compose", "results")
+        .and_then(|v| match v {
+            rag3weaver::dataflow::PortValue::Results(r) => Some(r),
+            _ => None,
+        })
+        .expect("compose node should have results output");
 
     eprintln!(
-        "expand_has_file 'src': {} results, children_map_keys={:?}",
+        "expand_has_file 'src': {} results",
         results.len(),
-        context.children.keys().collect::<Vec<_>>(),
     );
 
-    // Debug: print result data to understand source_info resolution
+    // Debug: print result data
     for (i, r) in results.iter().enumerate() {
         let src_entity = r.data.as_ref().and_then(|d| d.get("_source_entity")).and_then(|v| v.as_str());
         let src_uuid = r.data.as_ref().and_then(|d| d.get("_source_uuid")).and_then(|v| v.as_str());
@@ -414,14 +420,6 @@ async fn strategy_entity_filter() {
             r.other_children.as_ref().map(|c| c.len()),
         );
     }
-
-    // In Aggregated mode, results are TreeKB_Index entries. source_info resolves
-    // the source entity. If the source is a File (matched via "auth" in content),
-    // it should NOT be expanded because the filter is source_entity="Directory".
-    // If a Directory also matched, it may have children.
-    // The key assertion: no result whose source entity is File should have children.
-    // (We can't easily check source_entity from here, but we verify the filter works
-    // by checking that not all results have children.)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -522,7 +520,7 @@ async fn strategy_max_rounds_guard() {
     let err = result.unwrap_err().to_string();
     eprintln!("max_rounds error: {err}");
     assert!(
-        err.contains("max_rounds"),
-        "Error should mention max_rounds, got: {err}"
+        err.contains("max iterations") || err.contains("max_rounds"),
+        "Error should mention max iterations, got: {err}"
     );
 }

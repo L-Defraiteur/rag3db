@@ -111,7 +111,7 @@ impl Default for SearchStrategy {
 }
 
 /// A rule that triggers graph expansion for matching search results.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ExpansionRule {
     /// The relation to traverse (e.g. "HAS_FILE", "PARENT_OF").
     pub relation: String,
@@ -136,7 +136,7 @@ impl Default for ExpansionRule {
 }
 
 /// Direction of relation traversal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ExpansionDirection {
     Outgoing,
     Incoming,
