@@ -55,8 +55,9 @@ pub use sparse_index::SparseVector;
 pub use uuid::{chunk_uuid, hashsafe_uuid};
 pub use catalog::{Catalog, CatalogError, DeleteResult, KBMetadata, UpdateResult, UpdateStatus};
 pub use search::{
-    BM25Mode, BoostType, Consistency, ExploreGraph, ExploreOptions, ExploreResult,
-    FusionConfig, FusionStrategy, GraphEdge, GraphNode, NormalizeMode, SearchMeta,
+    AttributedChunk, BM25HitDiagnostic, BM25Mode, BoostType, ChunkInfo, ChunkOverlapDiag,
+    Consistency, ExploreGraph, ExploreOptions, ExploreResult, FusionConfig, FusionStrategy,
+    GraphEdge, GraphNode, NormalizeMode, ResultMode, SearchDiagnostics, SearchMeta,
     SearchOptions, SearchResponse, SearchResult, SearchSignals, SignalConfig, SignalRole,
 };
 pub use validator::{validate_schema, KBFieldRef};

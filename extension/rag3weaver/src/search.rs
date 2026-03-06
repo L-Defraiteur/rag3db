@@ -80,6 +80,19 @@ pub enum NormalizeMode {
     Rank,
 }
 
+/// Controls how search results are shaped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResultMode {
+    /// Index entry + best chunk (current behavior).
+    #[default]
+    Aggregated,
+    /// Resolved to source entity — uuid/entity/data are the original entity's.
+    SourceResolved,
+    /// Index entry + ALL matched chunks with source attribution per chunk.
+    Detailed,
+}
+
 /// Per-signal configuration for fusion.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SignalConfig {
@@ -255,6 +268,11 @@ pub struct SearchOptions {
     pub signals: Option<SearchSignals>,
     /// Override KB's default fusion config. If None, derived from KBConfig.
     pub fusion: Option<FusionConfig>,
+    /// Controls how results are shaped (aggregated, source-resolved, or detailed).
+    pub result_mode: ResultMode,
+    /// When true, populate SearchMeta.diagnostics with detailed per-hit BM25
+    /// highlight/chunk overlap info and per-phase timing.
+    pub diagnostics: bool,
 }
 
 impl Default for SearchOptions {
@@ -270,6 +288,8 @@ impl Default for SearchOptions {
             fuzzy_distance: 1,
             signals: None,
             fusion: None,
+            result_mode: ResultMode::default(),
+            diagnostics: false,
         }
     }
 }
@@ -285,6 +305,8 @@ pub struct SearchResult {
     pub entity: Option<String>,
     pub data: Option<BTreeMap<String, CypherValue>>,
     pub chunk: Option<ChunkInfo>,
+    /// All matched chunks with source attribution (Detailed mode only).
+    pub chunks: Option<Vec<AttributedChunk>>,
 }
 
 /// Chunk information attached to a search result.
@@ -299,6 +321,75 @@ pub struct ChunkInfo {
     pub end_line: usize,
     pub start_char: usize,
     pub end_char: usize,
+}
+
+/// Chunk with source entity attribution (used in Detailed mode).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttributedChunk {
+    pub uuid: String,
+    pub text: String,
+    pub index: usize,
+    pub score: f64,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+    /// Source entity type (e.g. "File", "Directory", "Scope").
+    pub source_entity: String,
+    /// Source entity UUID.
+    pub source_uuid: String,
+    /// Source field name (e.g. "content", "summary", "absolute_path").
+    pub source_field: String,
+}
+
+/// Per-result BM25 diagnostic: what happened when matching highlights to chunks.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BM25HitDiagnostic {
+    pub parent_uuid: String,
+    pub score: f64,
+    /// Raw highlight JSON from Lucivy.
+    pub highlights_raw: String,
+    /// Parsed highlights: field_name → [(start, end), ...].
+    pub highlights_parsed: HashMap<String, Vec<(usize, usize)>>,
+    /// Number of chunks available for this parent.
+    pub chunks_available: usize,
+    /// Number of chunks that had overlap > 0 with highlights.
+    pub chunks_matched: usize,
+    /// Per-chunk overlap details (only for chunks with overlap > 0).
+    pub chunk_overlaps: Vec<ChunkOverlapDiag>,
+}
+
+/// Diagnostic for a single chunk's overlap with highlights.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChunkOverlapDiag {
+    pub chunk_uuid: String,
+    pub content_offset: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+    pub global_start: usize,
+    pub global_end: usize,
+    pub overlap: usize,
+}
+
+/// Search diagnostics: detailed info about what happened internally.
+/// Only populated when `SearchOptions.diagnostics == true`.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchDiagnostics {
+    /// BM25 hit-level diagnostics (highlights vs chunks).
+    pub bm25_hits: Vec<BM25HitDiagnostic>,
+    /// Per-phase timing in milliseconds.
+    pub embed_ms: u64,
+    pub vector_ms: u64,
+    pub bm25_ms: u64,
+    pub sparse_ms: u64,
+    pub resolve_ms: u64,
+    pub fuse_ms: u64,
+    pub enrich_ms: u64,
+    pub total_ms: u64,
 }
 
 /// Metadata about a search operation.
@@ -316,6 +407,9 @@ pub struct SearchMeta {
     pub sparse_count: usize,
     pub fused_count: usize,
     pub search_time_ms: u64,
+    /// Detailed diagnostics (only when SearchOptions.diagnostics == true).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<SearchDiagnostics>,
 }
 
 /// Complete search response.
@@ -630,6 +724,7 @@ fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> 
                 entity: Some(entity.to_string()),
                 data: None,
                 chunk: None,
+                chunks: None,
             }
         })
         .collect()
@@ -731,6 +826,7 @@ pub async fn resolve_chunk_results(
             entity: Some(parent_entity.to_string()),
             data: None,
             chunk: Some(chunk_info),
+            chunks: None,
         })
         .collect();
     resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
@@ -872,6 +968,7 @@ pub async fn resolve_and_enrich(
                 entity: Some(entity.to_string()),
                 data: data.clone(),
                 chunk: None,
+                chunks: None,
             })
         })
         .collect())
@@ -898,6 +995,10 @@ pub struct ChunkRecord {
     /// Offset of this chunk's source field within the parent's concatenated `_content`.
     /// Used to translate BM25 highlight offsets (relative to `_content`) to chunk-local offsets.
     pub content_offset: usize,
+    /// Source entity type (e.g. "File", "Directory").
+    pub source_entity: String,
+    /// Source entity UUID.
+    pub source_uuid: String,
 }
 
 /// Resolve offsets, fetch entity fields AND child chunks in one query.
@@ -941,6 +1042,8 @@ pub async fn resolve_and_enrich_chunked(
     return_cols.push("c._start_line AS c_sline".to_string());
     return_cols.push("c._end_line AS c_eline".to_string());
     return_cols.push("c._content_offset AS c_content_offset".to_string());
+    return_cols.push("c._source_entity AS c_source_entity".to_string());
+    return_cols.push("c._source_uuid AS c_source_uuid".to_string());
     let return_clause = return_cols.join(", ");
 
     let cypher = format!(
@@ -987,6 +1090,8 @@ pub async fn resolve_and_enrich_chunked(
                 start_line: row.get(chunk_col_start + 6).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 end_line: row.get(chunk_col_start + 7).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 content_offset: row.get(chunk_col_start + 8).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                source_entity: row.get(chunk_col_start + 9).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                source_uuid: row.get(chunk_col_start + 10).and_then(|v| v.as_str()).unwrap_or("").to_string(),
             });
         }
     }
@@ -1006,6 +1111,7 @@ pub async fn resolve_vector_chunks(
     parent_entity: &str,
     results: Vec<SearchResult>,
     return_fields: &[String],
+    result_mode: ResultMode,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if results.is_empty() {
         return Ok(vec![]);
@@ -1029,6 +1135,9 @@ pub async fn resolve_vector_chunks(
         "c._end_line AS c_eline".to_string(),
         "c._start_char AS c_start".to_string(),
         "c._end_char AS c_end".to_string(),
+        "c._source_entity AS c_source_entity".to_string(),
+        "c._source_uuid AS c_source_uuid".to_string(),
+        "c._source_field AS c_source_field".to_string(),
     ];
     for f in return_fields {
         return_cols.push(format!("p.{f} AS {f}"));
@@ -1054,9 +1163,13 @@ pub async fn resolve_vector_chunks(
         end_line: usize,
         start_char: usize,
         end_char: usize,
+        source_entity: String,
+        source_uuid: String,
+        source_field: String,
         parent_data: Option<BTreeMap<String, CypherValue>>,
     }
 
+    let parent_field_offset = 11; // columns after source_field
     let mut chunk_info_map: HashMap<String, ResolvedChunk> = HashMap::new();
     for row in &result.rows {
         let chunk_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1067,10 +1180,13 @@ pub async fn resolve_vector_chunks(
         let end_line = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let start_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+        let source_entity = row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let source_uuid = row.get(9).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let source_field = row.get(10).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let parent_data = if !return_fields.is_empty() {
             let mut data = BTreeMap::new();
             for (i, field) in return_fields.iter().enumerate() {
-                if let Some(val) = row.get(i + 8) {
+                if let Some(val) = row.get(i + parent_field_offset) {
                     data.insert(field.clone(), val.clone());
                 }
             }
@@ -1079,11 +1195,60 @@ pub async fn resolve_vector_chunks(
             None
         };
         chunk_info_map.insert(chunk_uuid, ResolvedChunk {
-            parent_uuid, text, index, start_line, end_line, start_char, end_char, parent_data,
+            parent_uuid, text, index, start_line, end_line, start_char, end_char,
+            source_entity, source_uuid, source_field, parent_data,
         });
     }
 
-    // 4. Group by parent, keep best-scoring chunk per parent
+    if result_mode == ResultMode::Detailed {
+        // Detailed mode: group ALL chunks per parent
+        struct ParentAcc {
+            score: f64,
+            data: Option<BTreeMap<String, CypherValue>>,
+            chunks: Vec<AttributedChunk>,
+        }
+        let mut parent_map: HashMap<String, ParentAcc> = HashMap::new();
+        for r in &results {
+            if let Some(meta) = chunk_info_map.get(&r.uuid) {
+                let acc = parent_map.entry(meta.parent_uuid.clone()).or_insert_with(|| ParentAcc {
+                    score: r.score,
+                    data: meta.parent_data.clone(),
+                    chunks: Vec::new(),
+                });
+                if r.score > acc.score {
+                    acc.score = r.score;
+                }
+                acc.chunks.push(AttributedChunk {
+                    uuid: r.uuid.clone(),
+                    text: meta.text.clone(),
+                    index: meta.index,
+                    score: r.score,
+                    start_line: meta.start_line,
+                    end_line: meta.end_line,
+                    start_char: meta.start_char,
+                    end_char: meta.end_char,
+                    source_entity: meta.source_entity.clone(),
+                    source_uuid: meta.source_uuid.clone(),
+                    source_field: meta.source_field.clone(),
+                });
+            }
+        }
+        let mut resolved: Vec<SearchResult> = parent_map
+            .into_iter()
+            .map(|(parent_uuid, acc)| SearchResult {
+                uuid: parent_uuid,
+                score: acc.score,
+                entity: Some(parent_entity.to_string()),
+                data: acc.data,
+                chunk: None,
+                chunks: Some(acc.chunks),
+            })
+            .collect();
+        resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        return Ok(resolved);
+    }
+
+    // 4. Aggregated/SourceResolved: group by parent, keep best-scoring chunk per parent
     let mut parent_best: HashMap<String, (f64, String, ChunkInfo, Option<BTreeMap<String, CypherValue>>)> =
         HashMap::new();
     for r in &results {
@@ -1121,6 +1286,7 @@ pub async fn resolve_vector_chunks(
             entity: Some(parent_entity.to_string()),
             data,
             chunk: Some(chunk_info),
+            chunks: None,
         })
         .collect();
     resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
@@ -1188,6 +1354,7 @@ async fn search_vector_bruteforce(
                 entity: Some(entity.to_string()),
                 data: None,
                 chunk: None,
+                chunks: None,
             }
         })
         .collect())
@@ -1576,6 +1743,7 @@ pub async fn resolve_bm25_to_chunks(
                 entity: Some(parent_entity.to_string()),
                 data: None,
                 chunk: None,
+                chunks: None,
             });
         } else {
             // Sort by descending overlap
@@ -1596,6 +1764,7 @@ pub async fn resolve_bm25_to_chunks(
                         start_char: c.start_char,
                         end_char: c.end_char,
                     }),
+                    chunks: None,
                 });
             }
         }
@@ -1621,6 +1790,8 @@ pub async fn search_bm25_chunked(
     limit: usize,
     allowed_ids: Option<&[u64]>,
     return_fields: &[String],
+    result_mode: ResultMode,
+    mut diagnostics: Option<&mut SearchDiagnostics>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if fields.is_empty() {
         return Ok(vec![]);
@@ -1694,20 +1865,45 @@ pub async fn search_bm25_chunked(
         // relative to the concatenated _content. Chunks have offsets relative to their
         // individual source field. We translate via chunk.content_offset.
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
+        let mut diag_overlaps: Vec<ChunkOverlapDiag> = Vec::new();
         for chunk in &parent.chunks {
             let mut overlap = 0usize;
             // Translate chunk's source-local offsets to _content-global offsets
             let chunk_start_global = chunk.content_offset + chunk.start_char;
             let chunk_end_global = chunk.content_offset + chunk.end_char;
-            if let Some(offsets) = highlights.get("_content") {
-                for &(h_start, h_end) in offsets {
+            if let Some(hl_offsets) = highlights.get("_content") {
+                for &(h_start, h_end) in hl_offsets {
                     let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
                     overlap += ov;
                 }
             }
+            if diagnostics.is_some() {
+                diag_overlaps.push(ChunkOverlapDiag {
+                    chunk_uuid: chunk.uuid.clone(),
+                    content_offset: chunk.content_offset,
+                    start_char: chunk.start_char,
+                    end_char: chunk.end_char,
+                    global_start: chunk_start_global,
+                    global_end: chunk_end_global,
+                    overlap,
+                });
+            }
             if overlap > 0 {
                 matched_chunks.push((overlap, chunk));
             }
+        }
+
+        // Record BM25 hit diagnostic
+        if let Some(ref mut diag) = diagnostics {
+            diag.bm25_hits.push(BM25HitDiagnostic {
+                parent_uuid: parent.uuid.clone(),
+                score: *score,
+                highlights_raw: hl_json.clone(),
+                highlights_parsed: highlights.clone(),
+                chunks_available: parent.chunks.len(),
+                chunks_matched: matched_chunks.len(),
+                chunk_overlaps: diag_overlaps,
+            });
         }
 
         if matched_chunks.is_empty() {
@@ -1718,16 +1914,15 @@ pub async fn search_bm25_chunked(
                 entity: Some(entity.to_string()),
                 data: data.clone(),
                 chunk: None,
+                chunks: if result_mode == ResultMode::Detailed { Some(vec![]) } else { None },
             });
         } else {
             matched_chunks.sort_by(|a, b| b.0.cmp(&a.0));
-            for (_, c) in matched_chunks {
-                results.push(SearchResult {
-                    uuid: parent.uuid.clone(),
-                    score: *score,
-                    entity: Some(entity.to_string()),
-                    data: data.clone(),
-                    chunk: Some(ChunkInfo {
+            if result_mode == ResultMode::Detailed {
+                // Detailed: one result per parent with all attributed chunks
+                let attributed: Vec<AttributedChunk> = matched_chunks
+                    .iter()
+                    .map(|(_, c)| AttributedChunk {
                         uuid: c.uuid.clone(),
                         text: c.text.clone(),
                         index: c.index,
@@ -1736,8 +1931,40 @@ pub async fn search_bm25_chunked(
                         end_line: c.end_line,
                         start_char: c.start_char,
                         end_char: c.end_char,
-                    }),
+                        source_entity: c.source_entity.clone(),
+                        source_uuid: c.source_uuid.clone(),
+                        source_field: c.parent_field.clone(),
+                    })
+                    .collect();
+                results.push(SearchResult {
+                    uuid: parent.uuid.clone(),
+                    score: *score,
+                    entity: Some(entity.to_string()),
+                    data: data.clone(),
+                    chunk: None,
+                    chunks: Some(attributed),
                 });
+            } else {
+                // Aggregated/SourceResolved: one result per chunk (best first)
+                for (_, c) in matched_chunks {
+                    results.push(SearchResult {
+                        uuid: parent.uuid.clone(),
+                        score: *score,
+                        entity: Some(entity.to_string()),
+                        data: data.clone(),
+                        chunk: Some(ChunkInfo {
+                            uuid: c.uuid.clone(),
+                            text: c.text.clone(),
+                            index: c.index,
+                            score: *score,
+                            start_line: c.start_line,
+                            end_line: c.end_line,
+                            start_char: c.start_char,
+                            end_char: c.end_char,
+                        }),
+                        chunks: None,
+                    });
+                }
             }
         }
     }
@@ -1834,9 +2061,10 @@ pub fn fuse_results(
         }
     }
 
-    // Build chunk + data lookups from all inputs
+    // Build chunk + data + detailed chunks lookups from all inputs
     let mut chunk_map: HashMap<String, ChunkInfo> = HashMap::new();
     let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
+    let mut chunks_map: HashMap<String, Vec<AttributedChunk>> = HashMap::new();
     for list in &lists {
         for r in list.iter() {
             if let Some(ref chunk) = r.chunk {
@@ -1849,6 +2077,19 @@ pub fn fuse_results(
                         if chunk.score > e.get().score {
                             e.insert(chunk.clone());
                         }
+                    }
+                }
+            }
+            if let Some(ref chunks) = r.chunks {
+                let merged = chunks_map.entry(r.uuid.clone()).or_default();
+                for ac in chunks {
+                    // Deduplicate by chunk UUID, keep best score
+                    if let Some(existing) = merged.iter_mut().find(|c| c.uuid == ac.uuid) {
+                        if ac.score > existing.score {
+                            *existing = ac.clone();
+                        }
+                    } else {
+                        merged.push(ac.clone());
                     }
                 }
             }
@@ -1948,15 +2189,23 @@ pub fn fuse_results(
                 score,
                 data: None,
                 chunk: None,
+                chunks: None,
             }
         })
         .collect();
 
-    // Re-attach chunk info and data from inputs
+    // Re-attach chunk info, detailed chunks, and data from inputs
     for r in &mut fused {
         if r.chunk.is_none() {
             if let Some(chunk) = chunk_map.remove(&r.uuid) {
                 r.chunk = Some(chunk);
+            }
+        }
+        if r.chunks.is_none() {
+            if let Some(chunks) = chunks_map.remove(&r.uuid) {
+                if !chunks.is_empty() {
+                    r.chunks = Some(chunks);
+                }
             }
         }
         if r.data.is_none() {
@@ -2249,6 +2498,7 @@ mod tests {
             entity: Some("Document".to_string()),
             data: None,
             chunk: None,
+            chunks: None,
         }
     }
 

@@ -223,6 +223,8 @@ pub fn generate_index_chunk_table_ddl(
         "_parent_field STRING".to_string(),
         "_kb_name STRING".to_string(),
         "_source_field STRING".to_string(),
+        "_source_entity STRING".to_string(),
+        "_source_uuid STRING".to_string(),
         "_text STRING".to_string(),
         "_text_hash STRING".to_string(),
         "_index INT64".to_string(),

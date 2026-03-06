@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 use async_trait::async_trait;
 
@@ -1189,10 +1190,19 @@ impl Catalog {
             "_content_hash".to_string(),
         ];
 
+        // ── Timing + diagnostics ───────────────────────────────────────
+        let search_start = Instant::now();
+        let mut diag = if options.diagnostics {
+            Some(search::SearchDiagnostics::default())
+        } else {
+            None
+        };
+
         // ── Embed query: use dual embedder when both dense+sparse are needed ──
         let need_dense = signals.vector();
         let need_sparse = signals.sparse();
 
+        let t_embed = Instant::now();
         let (embedding, query_sparse) = if need_dense && need_sparse {
             if let Some(ref dual_emb) = self.dual_embedder {
                 // Single forward pass → dense + sparse
@@ -1238,7 +1248,10 @@ impl Catalog {
             (vec![], None)
         };
 
+        if let Some(ref mut d) = diag { d.embed_ms = t_embed.elapsed().as_millis() as u64; }
+
         // ── Run searches based on signals ─────────────────────────────────
+        let t_vector = Instant::now();
         let vector_results = if need_dense {
             search::search_vector(
                 self.conn.as_ref(),
@@ -1255,12 +1268,16 @@ impl Catalog {
             vec![]
         };
 
+        if let Some(ref mut d) = diag { d.vector_ms = t_vector.elapsed().as_millis() as u64; }
+
+        let t_bm25 = Instant::now();
         let bm25_results = if signals.bm25() {
             if is_chunked {
                 search::search_bm25_chunked(
                     self.conn.as_ref(), &entity, &vector_entity, query, &bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
-                    allowed_ids.as_deref(), &enrich_fields,
+                    allowed_ids.as_deref(), &enrich_fields, options.result_mode,
+                    diag.as_mut(),
                 ).await?
             } else {
                 search::search_bm25(
@@ -1273,9 +1290,12 @@ impl Catalog {
             vec![]
         };
 
+        if let Some(ref mut d) = diag { d.bm25_ms = t_bm25.elapsed().as_millis() as u64; }
+
         let vector_count = vector_results.len();
         let bm25_count = bm25_results.len();
 
+        let t_sparse = Instant::now();
         let sparse_results = if let Some(qv) = query_sparse {
             let sparse_fields = if is_chunked { &[][..] } else { &enrich_fields };
             search::search_sparse_cypher(
@@ -1289,20 +1309,27 @@ impl Catalog {
         } else {
             vec![]
         };
+        if let Some(ref mut d) = diag { d.sparse_ms = t_sparse.elapsed().as_millis() as u64; }
         let sparse_count = sparse_results.len();
 
         // Resolve chunk-level results to parent-level with ChunkInfo + enrichment
+        let t_resolve = Instant::now();
         let vector_results = if is_chunked && !vector_results.is_empty() {
             search::resolve_vector_chunks(
                 self.conn.as_ref(), &vector_entity, &entity, vector_results, &enrich_fields,
+                options.result_mode,
             ).await?
         } else { vector_results };
         let sparse_results = if is_chunked && !sparse_results.is_empty() {
             search::resolve_vector_chunks(
                 self.conn.as_ref(), &vector_entity, &entity, sparse_results, &enrich_fields,
+                options.result_mode,
             ).await?
         } else { sparse_results };
 
+        if let Some(ref mut d) = diag { d.resolve_ms = t_resolve.elapsed().as_millis() as u64; }
+
+        let t_fuse = Instant::now();
         let fusion_config = options.fusion.as_ref()
             .cloned()
             .unwrap_or_else(|| kb_config.fusion_config());
@@ -1324,7 +1351,10 @@ impl Catalog {
         }
         fused.truncate(options.limit);
 
+        if let Some(ref mut d) = diag { d.fuse_ms = t_fuse.elapsed().as_millis() as u64; }
+
         // Enrich results that don't already have data (e.g. vector non-chunked)
+        let t_enrich = Instant::now();
         let needs_enrich: bool = fused.iter().any(|r| r.data.is_none());
         if needs_enrich && !enrich_fields.is_empty() {
             search::enrich_results_with_data(
@@ -1332,10 +1362,20 @@ impl Catalog {
             ).await?;
         }
 
+        // SourceResolved: resolve index entries → source entities
+        if options.result_mode == search::ResultMode::SourceResolved {
+            self.resolve_to_source_entities(&mut fused).await?;
+        }
+
+        if let Some(ref mut d) = diag { d.enrich_ms = t_enrich.elapsed().as_millis() as u64; }
+
+        let total_ms = search_start.elapsed().as_millis() as u64;
+        if let Some(ref mut d) = diag { d.total_ms = total_ms; }
+
         self.event_bus.emit(CatalogEvent::SearchCompleted {
             kb: kb_name.to_string(),
             results: fused.len(),
-            duration_ms: 0,
+            duration_ms: total_ms,
         });
 
         Ok(search::SearchResponse {
@@ -1352,9 +1392,102 @@ impl Catalog {
                 bm25_count,
                 sparse_count,
                 fused_count,
-                search_time_ms: 0,
+                search_time_ms: total_ms,
+                diagnostics: diag,
             },
         })
+    }
+
+    /// Resolve index entry results to their source entities.
+    ///
+    /// Reads `_source_entity` and `_source_uuid` from each result's data,
+    /// batch-fetches the source entities, and replaces uuid/entity/data.
+    /// Deduplicates by source UUID, keeping the highest score.
+    async fn resolve_to_source_entities(
+        &self,
+        results: &mut Vec<search::SearchResult>,
+    ) -> Result<(), CatalogError> {
+        use crate::connection::CypherValue;
+
+        // 1. Group by entity type → [source_uuid]
+        let mut by_entity: HashMap<String, Vec<String>> = HashMap::new();
+        for r in results.iter() {
+            if let Some(ref data) = r.data {
+                let entity = data.get("_source_entity").and_then(|v| v.as_str());
+                let uuid = data.get("_source_uuid").and_then(|v| v.as_str());
+                if let (Some(e), Some(u)) = (entity, uuid) {
+                    by_entity.entry(e.to_string()).or_default().push(u.to_string());
+                }
+            }
+        }
+
+        // 2. Batch fetch source entity data
+        let mut source_data: HashMap<String, (String, BTreeMap<String, CypherValue>)> = HashMap::new();
+        for (entity_name, uuids) in &by_entity {
+            let deduped: HashSet<&str> = uuids.iter().map(|s| s.as_str()).collect();
+            let uuid_list = deduped
+                .iter()
+                .map(|u| format!("'{}'", u.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let cypher = format!(
+                "MATCH (n:{entity_name}) WHERE n._uuid IN [{uuid_list}] RETURN n"
+            );
+            let result = self.conn
+                .execute(&cypher)
+                .await
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+            for row in &result.rows {
+                if let Some(CypherValue::Map(map)) = row.first() {
+                    if let Some(uuid) = map.get("_uuid").and_then(|v| v.as_str()) {
+                        source_data.insert(
+                            uuid.to_string(),
+                            (entity_name.clone(), map.clone()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // 3. Replace uuid/entity/data for each result
+        for r in results.iter_mut() {
+            let source_uuid = r.data.as_ref()
+                .and_then(|d| d.get("_source_uuid"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            if let Some(su) = source_uuid {
+                if let Some((entity_name, data)) = source_data.get(&su) {
+                    r.uuid = su;
+                    r.entity = Some(entity_name.clone());
+                    r.data = Some(data.clone());
+                }
+            }
+        }
+
+        // 4. Deduplicate by UUID (same source entity), keep highest score
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        let mut to_remove: Vec<usize> = Vec::new();
+        for (i, r) in results.iter().enumerate() {
+            if let Some(&prev_idx) = seen.get(&r.uuid) {
+                if r.score > results[prev_idx].score {
+                    to_remove.push(prev_idx);
+                    seen.insert(r.uuid.clone(), i);
+                } else {
+                    to_remove.push(i);
+                }
+            } else {
+                seen.insert(r.uuid.clone(), i);
+            }
+        }
+        to_remove.sort_unstable();
+        to_remove.dedup();
+        for idx in to_remove.into_iter().rev() {
+            results.remove(idx);
+        }
+
+        Ok(())
     }
 
     pub async fn search_with_explore(
@@ -2167,6 +2300,14 @@ impl AggregateProcessor {
                 chunk_data.insert(
                     "_source_field".to_string(),
                     CypherValue::String(source.field_name.clone()),
+                );
+                chunk_data.insert(
+                    "_source_entity".to_string(),
+                    CypherValue::String(source.entity_name.clone()),
+                );
+                chunk_data.insert(
+                    "_source_uuid".to_string(),
+                    CypherValue::String(source.entity_uuid.clone()),
                 );
                 chunk_data.insert(
                     "_text".to_string(),

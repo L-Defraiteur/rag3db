@@ -916,9 +916,9 @@ async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     // Debug: verify DB state after drain
     let docs = catalog.execute_raw("MATCH (d:Document) RETURN count(d) AS cnt").await.unwrap();
     eprintln!("  Documents: {:?}", docs.rows);
-    let chunks = catalog.execute_raw("MATCH (c:Document_Chunk) RETURN count(c) AS cnt").await.unwrap();
+    let chunks = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN count(c) AS cnt").await.unwrap();
     eprintln!("  Chunks: {:?}", chunks.rows);
-    let embs = catalog.execute_raw("MATCH (c:Document_Chunk) RETURN c._uuid, c._parent_uuid, c._text, size(c.kb_embedding) AS dim").await.unwrap();
+    let embs = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN c._uuid, c._parent_uuid, c._text, size(c.kb_embedding) AS dim").await.unwrap();
     for row in &embs.rows {
         let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("?");
         let parent = row.get(1).and_then(|v| v.as_str()).unwrap_or("?");
@@ -968,7 +968,7 @@ async fn assert_vector_top_result(
     let top_title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("title"))
+        .and_then(|d| d.get("_title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[{model_name}] Top result: '{}' (score={})", top_title, top.score);
@@ -1388,7 +1388,7 @@ async fn phase3_sparse_top_result_programming() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("title"))
+        .and_then(|d| d.get("_title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[sparse] Top result: '{}' (score={})", title, top.score);
@@ -1426,7 +1426,7 @@ async fn phase3_sparse_data_enriched() {
         );
         let data = r.data.as_ref().unwrap();
         assert!(
-            data.contains_key("title"),
+            data.contains_key("_title"),
             "Result {i} data should contain 'title'"
         );
     }
@@ -1744,7 +1744,7 @@ async fn phase4_all_three() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("title"))
+        .and_then(|d| d.get("_title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[all-three] Top: '{}' (score={})", title, top.score);
@@ -1855,7 +1855,7 @@ async fn phase5_dual_top_result() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("title"))
+        .and_then(|d| d.get("_title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[dual-top] Top: '{}' (score={})", title, top.score);

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run rag3weaver E2E tests with a dedicated native build.
 #
-# This build includes all required extensions (vector, tantivy_fts, sparse_vector, geo)
+# This build includes all required extensions (vector, lucivy_fts, sparse_vector, geo)
 # and is isolated from other builds (WASM, nodejs, etc.).
 #
 # Usage:
@@ -58,7 +58,7 @@ if [ "$NEED_BUILD" = true ]; then
     cd "$BUILD"
     cmake "$ROOT" \
       -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_EXTENSIONS="vector;tantivy_fts;sparse_vector;geo" \
+      -DBUILD_EXTENSIONS="vector;lucivy_fts;sparse_vector;geo" \
       -DBUILD_SHELL=FALSE \
       -DBUILD_TESTS=FALSE \
       -DBUILD_EXTENSION_TESTS=FALSE
