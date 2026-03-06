@@ -1634,6 +1634,78 @@ impl Catalog {
         }
         data
     }
+
+    // ── Strategy Search ──────────────────────────────────────────────
+
+    /// Build a configured [`SearchQueue`] ready for processing.
+    ///
+    /// Call [`SearchQueue::subscribe()`] before [`SearchQueue::process()`] to
+    /// observe pipeline events. Use [`Self::search_with_strategy()`] for the
+    /// simple one-shot API.
+    pub async fn build_search_queue(
+        catalog: Arc<tokio::sync::Mutex<Catalog>>,
+        kb_name: &str,
+        query: &str,
+        strategy: crate::search_strategy::SearchStrategy,
+    ) -> crate::search_queue::SearchQueue {
+        use crate::processors::*;
+        use crate::search_queue::*;
+
+        let conn = { catalog.lock().await.conn.clone() };
+
+        let mut queue = SearchQueue::new(strategy.max_rounds);
+
+        queue.register(Arc::new(PrimarySearchProcessor::new(catalog.clone())));
+        queue.register(Arc::new(ExpansionProcessor));
+        queue.register(Arc::new(FetchRelatedProcessor::new(conn)));
+        queue.register(Arc::new(ComposeProcessor));
+
+        // Enqueue pipeline — Compose is NOT enqueued here.
+        // ExpansionProcessor defers it via emit.all(fetch_handles).then(Compose).
+        queue.enqueue(SearchOp::PrimarySearch {
+            kb_name: kb_name.to_string(),
+            query: query.to_string(),
+            options: strategy.search.clone(),
+        });
+        if !strategy.expansions.is_empty() {
+            queue.enqueue(SearchOp::Expansion {
+                rules: strategy.expansions,
+            });
+        }
+
+        queue
+    }
+
+    /// Run a search with reactive expansion (graph traversal after search).
+    ///
+    /// This is an associated function taking `Arc<Mutex<Catalog>>` so that
+    /// processors can call `catalog.search()` (needed for SearchRelated).
+    ///
+    /// For event observation, use [`Self::build_search_queue()`] +
+    /// [`SearchQueue::subscribe()`] + [`SearchQueue::process()`] instead.
+    pub async fn search_with_strategy(
+        catalog: Arc<tokio::sync::Mutex<Catalog>>,
+        kb_name: &str,
+        query: &str,
+        strategy: crate::search_strategy::SearchStrategy,
+    ) -> Result<crate::search_strategy::SearchStrategyResponse, CatalogError> {
+        let mut queue =
+            Self::build_search_queue(catalog, kb_name, query, strategy).await;
+
+        queue
+            .process()
+            .await
+            .map_err(|e| CatalogError::DbError(e))?;
+
+        let context = queue.into_context();
+        let meta = context.meta.ok_or_else(|| {
+            CatalogError::DbError("search_with_strategy: no meta after processing".into())
+        })?;
+        Ok(crate::search_strategy::SearchStrategyResponse {
+            results: context.root_results,
+            meta,
+        })
+    }
 }
 
 // ─── compute_chunk_ops (standalone) ────────────────────────────────────────

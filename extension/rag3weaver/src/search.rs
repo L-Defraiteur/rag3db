@@ -445,7 +445,8 @@ impl Default for ExploreOptions {
 }
 
 /// A node in the explore graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GraphNode {
     pub uuid: String,
     pub entity: String,
@@ -456,7 +457,8 @@ pub struct GraphNode {
 }
 
 /// An edge in the explore graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GraphEdge {
     pub from_uuid: String,
     pub to_uuid: String,
@@ -466,7 +468,8 @@ pub struct GraphEdge {
 }
 
 /// The graph part of an explore result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExploreGraph {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,

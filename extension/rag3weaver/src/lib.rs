@@ -28,11 +28,14 @@ pub mod hash;
 pub mod node_id_cache;
 pub mod ops;
 pub mod persistence;
+pub mod processors;
 pub mod query;
 pub mod queue;
 pub mod refs;
 pub mod schema;
 pub mod search;
+pub mod search_queue;
+pub mod search_strategy;
 pub mod sparse_index;
 pub mod uuid;
 pub mod validator;
@@ -59,6 +62,10 @@ pub use search::{
     Consistency, ExploreGraph, ExploreOptions, ExploreResult, FusionConfig, FusionStrategy,
     GraphEdge, GraphNode, NormalizeMode, ResultMode, SearchDiagnostics, SearchMeta,
     SearchOptions, SearchResponse, SearchResult, SearchSignals, SignalConfig, SignalRole,
+};
+pub use search_strategy::{
+    UnifiedResult, ChildSummary, SearchStrategy, SearchStrategyResponse,
+    ExpansionRule, ExpansionDirection,
 };
 pub use validator::{validate_schema, KBFieldRef};
 pub use cypher_persistence::CypherPersistence;
