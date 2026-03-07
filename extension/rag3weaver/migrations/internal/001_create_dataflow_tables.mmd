@@ -1,0 +1,19 @@
+%% Internal migration: create dataflow system tables.
+%%
+%% Tables created:
+%%   _DataflowExecution   — execution checkpoint headers
+%%   _DataflowNodeState   — per-node checkpoint state (outputs, undo context)
+%%   _DataflowMigration   — migration tracking (version, status, checksum)
+%%   _DataflowMigrationLock — advisory lock for migration runner
+%%
+%% All use CREATE NODE TABLE IF NOT EXISTS (idempotent).
+
+graph LR
+    create_execution["CypherNode(query='CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(_uuid STRING, pipeline_name STRING, status STRING, graph_json STRING, graph_hash STRING, node_count INT64, edge_count INT64, expanded_count INT64, inputs_json STRING, error STRING, duration_ms INT64, created_at INT64, updated_at INT64, PRIMARY KEY(_uuid))')"]
+    create_node_state["CypherNode(query='CREATE NODE TABLE IF NOT EXISTS _DataflowNodeState(_uuid STRING, execution_id STRING, node_name STRING, status STRING, output_ports STRING, undo_json STRING, duration_ms INT64, error STRING, completed_at INT64, PRIMARY KEY(_uuid))')"]
+    create_migration["CypherNode(query='CREATE NODE TABLE IF NOT EXISTS _DataflowMigration(_uuid STRING, version INT64, name STRING, status STRING, direction STRING, checksum STRING, execution_id STRING, applied_at INT64, duration_ms INT64, error STRING, PRIMARY KEY(_uuid))')"]
+    create_lock["CypherNode(query='CREATE NODE TABLE IF NOT EXISTS _DataflowMigrationLock(_uuid STRING, locked_by STRING, locked_at INT64, expires_at INT64, PRIMARY KEY(_uuid))')"]
+
+    create_execution -->|done:trigger| create_node_state
+    create_node_state -->|done:trigger| create_migration
+    create_migration -->|done:trigger| create_lock

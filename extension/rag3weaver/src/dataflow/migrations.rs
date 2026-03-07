@@ -1109,4 +1109,96 @@ mod tests {
         };
         assert!(err.to_string().contains("duplicate version 1"));
     }
+
+    // ── Internal migration template tests ────────────────────────────────
+
+    fn builtin_registry() -> super::NodeRegistry {
+        let mut registry = super::NodeRegistry::new();
+        super::super::node_factories::register_builtins(&mut registry);
+        registry
+    }
+
+    #[test]
+    fn internal_001_parses_and_builds() {
+        let mmd = include_str!("../../migrations/internal/001_create_dataflow_tables.mmd");
+        let def = super::parse_mermaid_template(mmd, &HashMap::new()).unwrap();
+
+        assert_eq!(def.nodes.len(), 4, "expected 4 CypherNode declarations");
+        assert_eq!(def.edges.len(), 3, "expected 3 sequential edges");
+
+        // All nodes are CypherNode
+        for node in &def.nodes {
+            assert_eq!(node.node_type, "CypherNode", "node '{}' should be CypherNode", node.name);
+            assert!(
+                node.config["query"].as_str().unwrap().contains("CREATE NODE TABLE IF NOT EXISTS"),
+                "node '{}' query should be CREATE NODE TABLE",
+                node.name,
+            );
+        }
+
+        // Build the graph via registry
+        let registry = builtin_registry();
+        let graph = super::DataflowGraph::from_definition(&def, &registry).unwrap();
+        assert_eq!(graph.node_names().len(), 4);
+
+        // Topological order: sequential chain
+        let order = graph.topological_sort().unwrap();
+        assert_eq!(order[0], "create_execution");
+        assert_eq!(order[1], "create_node_state");
+        assert_eq!(order[2], "create_migration");
+        assert_eq!(order[3], "create_lock");
+    }
+
+    #[test]
+    fn internal_001_not_reversible() {
+        let mmd = include_str!("../../migrations/internal/001_create_dataflow_tables.mmd");
+        let def = super::parse_mermaid_template(mmd, &HashMap::new()).unwrap();
+        let registry = builtin_registry();
+        let graph = super::DataflowGraph::from_definition(&def, &registry).unwrap();
+
+        // DDL migrations have no capture_query → not reversible
+        for node in &graph.nodes {
+            assert!(
+                !node.can_undo(),
+                "DDL node '{}' should not be reversible",
+                node.name(),
+            );
+        }
+    }
+
+    #[test]
+    fn internal_001_tables_match_checkpoint_store() {
+        // Verify the migration creates the same tables as CypherCheckpointStore::initialize()
+        let mmd = include_str!("../../migrations/internal/001_create_dataflow_tables.mmd");
+        let def = super::parse_mermaid_template(mmd, &HashMap::new()).unwrap();
+
+        let table_names: Vec<&str> = def
+            .nodes
+            .iter()
+            .filter_map(|n| {
+                let query = n.config["query"].as_str()?;
+                let start = query.find("_Dataflow")?;
+                let end = query[start..].find('(')? + start;
+                Some(&query[start..end])
+            })
+            .collect();
+
+        assert!(table_names.contains(&"_DataflowExecution"));
+        assert!(table_names.contains(&"_DataflowNodeState"));
+        assert!(table_names.contains(&"_DataflowMigration"));
+        assert!(table_names.contains(&"_DataflowMigrationLock"));
+    }
+
+    #[test]
+    fn internal_001_scan_from_disk() {
+        // Verify the migration file is properly scannable
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("migrations")
+            .join("internal");
+        let files = scan_migration_dir(&dir).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].version, 1);
+        assert_eq!(files[0].name, "create_dataflow_tables");
+        assert!(!files[0].checksum.is_empty());
+    }
 }
