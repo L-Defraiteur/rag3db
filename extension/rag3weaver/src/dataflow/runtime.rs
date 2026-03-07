@@ -111,6 +111,19 @@ impl DataflowRuntime {
         }
     }
 
+    /// Create a runtime sharing an existing service registry (for sub-graph execution).
+    pub fn with_services_arc(max_iterations: usize, services: Arc<ServiceRegistry>) -> Self {
+        let (mut tx, rx) = async_broadcast::broadcast(128);
+        tx.set_overflow(true);
+        Self {
+            max_iterations,
+            event_tx: tx,
+            _inactive_rx: rx.deactivate(),
+            taps: TapRegistry::new(),
+            services,
+        }
+    }
+
     /// Subscribe to execution events.
     pub fn subscribe(&self) -> async_broadcast::Receiver<DataflowEvent> {
         self._inactive_rx.activate_cloned()

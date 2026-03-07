@@ -19,6 +19,7 @@ pub mod record;
 pub mod record_nodes;
 pub mod report;
 pub mod runtime;
+pub mod graph_node;
 pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;
@@ -37,6 +38,7 @@ pub use search_nodes::{
 };
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
+pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use mermaid::{parse_mermaid, parse_mermaid_template, to_mermaid, MermaidError};
 pub use node_factories::register_builtins;
 pub use checkpoint::{

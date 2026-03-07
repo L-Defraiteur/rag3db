@@ -75,6 +75,11 @@ impl NodeContext {
         self.services.get::<T>(key)
     }
 
+    /// Get the shared service registry (for sub-graph execution).
+    pub fn services(&self) -> Arc<ServiceRegistry> {
+        self.services.clone()
+    }
+
     /// Read an input port value (borrow).
     pub fn input(&self, port: &str) -> Option<&PortValue> {
         self.inputs.get(port)
