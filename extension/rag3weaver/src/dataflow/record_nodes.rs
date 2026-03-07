@@ -46,11 +46,12 @@ use super::port::{BatchPayload, PortDef, PortType, PortValue};
 /// **Services**: `conn` (DbConnection), `node_id_cache` (RwLock<NodeIdCache>)
 pub struct InsertRecordNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl InsertRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -193,10 +194,55 @@ impl Node for InsertRecordNode {
             }
         }
 
+        // Capture undo data: entity_name → [uuid] for DELETE
+        let mut undo_groups: HashMap<String, Vec<String>> = HashMap::new();
+        for rec in &items {
+            if let Some(uuid) = rec.data.get("_uuid").and_then(|v| v.as_str()) {
+                undo_groups.entry(rec.entity_name.clone()).or_default().push(uuid.to_string());
+            }
+        }
+        self.undo_data = Some(serde_json::json!(undo_groups));
+
         ctx.set_output("done", PortValue::Empty);
         ctx.set_output("inserted", PortValue::Batch(
             BatchPayload::new(PortType::Entities, items),
         ));
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("InsertRecordNode undo: 'conn' service not registered")?;
+
+        let groups = undo_ctx.as_object()
+            .ok_or("InsertRecordNode undo: expected object")?;
+
+        for (entity_name, uuids) in groups {
+            let uuid_list: Vec<&str> = uuids.as_array()
+                .ok_or("InsertRecordNode undo: expected array of uuids")?
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+
+            if uuid_list.is_empty() { continue; }
+
+            let uuid_params = CypherValue::List(
+                uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
+            );
+            let cypher = format!(
+                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) DETACH DELETE n"
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "uuids".into(), value: uuid_params }],
+            ).await.map_err(|e| format!("InsertRecordNode undo failed: {e}"))?;
+        }
         Ok(())
     }
 }
@@ -212,11 +258,12 @@ impl Node for InsertRecordNode {
 /// **Services**: `conn` (DbConnection)
 pub struct LinkRecordNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl LinkRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -355,7 +402,58 @@ impl Node for LinkRecordNode {
             }
         }
 
+        // Capture undo data: rel_name → [{from, to}]
+        let mut undo_groups: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+        for rl in &resolved {
+            let rel = &items[rl.index];
+            undo_groups.entry(rel.rel_name.clone()).or_default().push(
+                serde_json::json!({"from": rl.from_uuid, "to": rl.to_uuid})
+            );
+        }
+        self.undo_data = Some(serde_json::json!(undo_groups));
+
         ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("LinkRecordNode undo: 'conn' service not registered")?;
+
+        let groups = undo_ctx.as_object()
+            .ok_or("LinkRecordNode undo: expected object")?;
+
+        for (rel_name, links) in groups {
+            let link_list = links.as_array()
+                .ok_or("LinkRecordNode undo: expected array of links")?;
+
+            let items_param = CypherValue::List(
+                link_list.iter().filter_map(|link| {
+                    let from = link["from"].as_str()?;
+                    let to = link["to"].as_str()?;
+                    let mut m = BTreeMap::new();
+                    m.insert("from".into(), CypherValue::String(from.to_string()));
+                    m.insert("to".into(), CypherValue::String(to.to_string()));
+                    Some(CypherValue::Map(m))
+                }).collect()
+            );
+
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MATCH (a {{_uuid: item.from}})-[r:{rel_name}]->(b {{_uuid: item.to}}) \
+                 DELETE r"
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".into(), value: items_param }],
+            ).await.map_err(|e| format!("LinkRecordNode undo failed: {e}"))?;
+        }
         Ok(())
     }
 }
@@ -375,6 +473,7 @@ impl Node for LinkRecordNode {
 pub struct EmbedRecordNode {
     name: String,
     gpu_batch_size: usize,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl EmbedRecordNode {
@@ -382,6 +481,7 @@ impl EmbedRecordNode {
         Self {
             name: name.into(),
             gpu_batch_size,
+            undo_data: None,
         }
     }
 }
@@ -807,7 +907,58 @@ impl Node for EmbedRecordNode {
             }
         }
 
+        // Capture undo data: entity_name → [uuid] for all embedded uuids
+        let mut undo_groups: HashMap<&str, Vec<&str>> = HashMap::new();
+        for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
+            undo_groups.entry(&w.entity_name).or_default().push(&w.uuid);
+        }
+        let undo_map: HashMap<String, Vec<String>> = undo_groups.into_iter()
+            .map(|(k, v)| (k.to_string(), v.into_iter().map(|u| u.to_string()).collect()))
+            .collect();
+        if !undo_map.is_empty() {
+            self.undo_data = Some(serde_json::json!(undo_map));
+        }
+
         ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("EmbedRecordNode undo: 'conn' service not registered")?;
+
+        let groups = undo_ctx.as_object()
+            .ok_or("EmbedRecordNode undo: expected object")?;
+
+        for (entity_name, uuids) in groups {
+            let uuid_list: Vec<&str> = uuids.as_array()
+                .ok_or("EmbedRecordNode undo: expected array of uuids")?
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+
+            if uuid_list.is_empty() { continue; }
+
+            let uuid_params = CypherValue::List(
+                uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
+            );
+            // Reset embedding columns + hash — can't know which KB columns, so NULL the hash
+            // to trigger re-embedding on next ingestion
+            let cypher = format!(
+                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) \
+                 SET n._embed_hash = NULL"
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "uuids".into(), value: uuid_params }],
+            ).await.map_err(|e| format!("EmbedRecordNode undo failed: {e}"))?;
+        }
         Ok(())
     }
 }
@@ -1524,11 +1675,12 @@ impl Node for GatherKBNode {
 /// **Services**: `conn`
 pub struct UpdateKBNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl UpdateKBNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -1571,9 +1723,46 @@ impl Node for UpdateKBNode {
         let mut total_updated: usize = 0;
         let mut total_deleted: usize = 0;
 
+        // Capture old values for undo before updating
+        let mut undo_entries: Vec<serde_json::Value> = Vec::new();
+
         for (kb_name, indices) in &groups {
             let index_table = format!("{kb_name}_Index");
             let chunk_table = format!("{kb_name}_Index_Chunk");
+
+            // Capture old values before update
+            {
+                let items_param = CypherValue::List(
+                    indices.iter().map(|&i| {
+                        let mut m = BTreeMap::new();
+                        m.insert("uuid".into(), CypherValue::String(items[i].index_entry_uuid.clone()));
+                        CypherValue::Map(m)
+                    }).collect()
+                );
+                let cypher = format!(
+                    "UNWIND $items AS item \
+                     MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
+                     RETURN idx._uuid, idx._title, idx._content, idx._content_hash"
+                );
+                if let Ok(result) = conn.execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "items".into(), value: items_param }],
+                ).await {
+                    for row in &result.rows {
+                        let uuid = row[0].as_str().unwrap_or("").to_string();
+                        let title = row[1].as_str().unwrap_or("").to_string();
+                        let content = row[2].as_str().unwrap_or("").to_string();
+                        let hash = row[3].as_str().unwrap_or("").to_string();
+                        undo_entries.push(serde_json::json!({
+                            "kb_name": kb_name,
+                            "uuid": uuid,
+                            "title": title,
+                            "content": content,
+                            "hash": hash,
+                        }));
+                    }
+                }
+            }
 
             // Step 5: UNWIND UPDATE changed indexes
             {
@@ -1626,6 +1815,10 @@ impl Node for UpdateKBNode {
             }
         }
 
+        if !undo_entries.is_empty() {
+            self.undo_data = Some(serde_json::json!(undo_entries));
+        }
+
         ctx.log_metric("items", items.len());
         ctx.log_metric("updated", total_updated);
         ctx.log_metric("deleted", total_deleted);
@@ -1634,6 +1827,53 @@ impl Node for UpdateKBNode {
         ctx.set_output("kb_content", PortValue::Batch(
             BatchPayload::new(PortType::KBContent, items),
         ));
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("UpdateKBNode undo: 'conn' service not registered")?;
+
+        let entries = undo_ctx.as_array()
+            .ok_or("UpdateKBNode undo: expected array of entries")?;
+
+        // Group by kb_name for UNWIND
+        let mut groups: HashMap<String, Vec<&serde_json::Value>> = HashMap::new();
+        for entry in entries {
+            let kb_name = entry["kb_name"].as_str().unwrap_or("").to_string();
+            groups.entry(kb_name).or_default().push(entry);
+        }
+
+        for (kb_name, entries) in &groups {
+            let index_table = format!("{kb_name}_Index");
+
+            let items_param = CypherValue::List(
+                entries.iter().map(|e| {
+                    let mut m = BTreeMap::new();
+                    m.insert("uuid".into(), CypherValue::String(e["uuid"].as_str().unwrap_or("").to_string()));
+                    m.insert("title".into(), CypherValue::String(e["title"].as_str().unwrap_or("").to_string()));
+                    m.insert("content".into(), CypherValue::String(e["content"].as_str().unwrap_or("").to_string()));
+                    m.insert("hash".into(), CypherValue::String(e["hash"].as_str().unwrap_or("").to_string()));
+                    CypherValue::Map(m)
+                }).collect()
+            );
+
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
+                 SET idx._title = item.title, idx._content = item.content, idx._content_hash = item.hash"
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".into(), value: items_param }],
+            ).await.map_err(|e| format!("UpdateKBNode undo failed: {e}"))?;
+        }
         Ok(())
     }
 }
@@ -1743,11 +1983,12 @@ impl Node for ChunkKBNode {
 /// **Services**: `conn` (DbConnection), `flush_kb_names` (Vec<String>)
 pub struct FlushFTSNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl FlushFTSNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -1783,9 +2024,36 @@ impl Node for FlushFTSNode {
             }
         }
 
+        // Capture kb_names for undo (re-flush)
+        self.undo_data = Some(serde_json::json!(kb_names.as_ref()));
+
         ctx.log_metric("kb_count", kb_names.len());
         ctx.log_metric("flushed", flushed);
         ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("FlushFTSNode undo: 'conn' service not registered")?;
+
+        let kb_names = undo_ctx.as_array()
+            .ok_or("FlushFTSNode undo: expected array of kb_names")?;
+
+        for kb in kb_names {
+            if let Some(kb_name) = kb.as_str() {
+                let table = format!("{kb_name}_Index");
+                conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')"))
+                    .await
+                    .ok(); // Best-effort
+            }
+        }
         Ok(())
     }
 }

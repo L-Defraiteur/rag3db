@@ -623,8 +623,13 @@ fn cypher_value_to_json(val: &CypherValue) -> serde_json::Value {
         CypherValue::List(items) => {
             serde_json::Value::Array(items.iter().map(cypher_value_to_json).collect())
         }
-        // Fallback for types without direct JSON mapping
-        other => serde_json::Value::String(format!("{other:?}")),
+        CypherValue::Map(map) => {
+            let obj: serde_json::Map<String, serde_json::Value> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), cypher_value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(obj)
+        }
     }
 }
 

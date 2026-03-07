@@ -25,6 +25,7 @@ pub mod node_factories;
 pub mod node_registry;
 pub mod search_nodes;
 pub mod migration_nodes;
+pub mod migrations;
 pub mod services;
 
 pub use graph::{DataflowGraph, Edge};
@@ -41,6 +42,7 @@ pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
 pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use migration_nodes::{CypherNode, CypherNodeFactory, ValidateNode, ValidateNodeFactory, Assertion};
+pub use migrations::{MigrationRunner, MigrationFile, MigrationStatus, MigrationState, MigrationResult, MigrationError};
 pub use mermaid::{parse_mermaid, parse_mermaid_template, to_mermaid, MermaidError};
 pub use node_factories::register_builtins;
 pub use checkpoint::{

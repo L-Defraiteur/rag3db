@@ -17,6 +17,7 @@ use super::record_nodes::{
     ChunkKBNode, ChunkRecordNode, EmbedRecordNode, FlushFTSNode, GatherKBNode,
     InsertRecordNode, LinkRecordNode, UpdateKBNode,
 };
+use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
 
 use crate::search_strategy::ExpansionDirection;
 
@@ -358,7 +359,7 @@ impl NodeFactory for EmbedRecordNodeFactory {
 
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 13 built-in node types.
+/// Populate a NodeRegistry with all 14 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes
     registry.register(Box::new(ComposeNodeFactory));
@@ -374,6 +375,9 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(UpdateKBNodeFactory));
     registry.register(Box::new(ChunkKBNodeFactory));
     registry.register(Box::new(FlushFTSNodeFactory));
+    // Migration nodes
+    registry.register(Box::new(CypherNodeFactory));
+    registry.register(Box::new(ValidateNodeFactory));
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -389,13 +393,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_13_types() {
+    fn register_builtins_has_all_14_types() {
         let registry = builtin_registry();
-        let mut types = registry.types();
-        types.sort();
-        assert_eq!(types.len(), 12); // 12 because QuerySourceNode exists but is 13th type
-        // Actually let's just check count
-        assert_eq!(registry.types().len(), 12);
+        assert_eq!(registry.types().len(), 14);
     }
 
     #[test]
