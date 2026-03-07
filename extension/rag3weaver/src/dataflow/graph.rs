@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use super::checkpoint::GraphDefinition;
 use super::node::Node;
 use super::node_registry::NodeRegistry;
 use super::port::{PortType, PortValue};
@@ -209,6 +210,21 @@ impl DataflowGraph {
         } else {
             Ok(order)
         }
+    }
+
+    /// Build a graph from a serializable definition using the registry.
+    pub fn from_definition(
+        def: &GraphDefinition,
+        registry: &NodeRegistry,
+    ) -> Result<Self, String> {
+        let mut graph = Self::new();
+        for node in &def.nodes {
+            graph.add_from_registry(registry, &node.node_type, &node.name, &node.config)?;
+        }
+        for edge in &def.edges {
+            graph.connect(&edge.from_node, &edge.from_port, &edge.to_node, &edge.to_port)?;
+        }
+        Ok(graph)
     }
 
     /// List all node names.
