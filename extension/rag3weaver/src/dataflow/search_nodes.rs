@@ -25,6 +25,7 @@ use super::services::ConnService;
 
 /// Emits the search query and options as a PortValue.
 pub struct QuerySourceNode {
+    node_name: String,
     kb_name: String,
     query: String,
     options: crate::search::SearchOptions,
@@ -33,6 +34,16 @@ pub struct QuerySourceNode {
 impl QuerySourceNode {
     pub fn new(kb_name: &str, query: &str, options: &crate::search::SearchOptions) -> Self {
         Self {
+            node_name: "query_source".to_string(),
+            kb_name: kb_name.to_string(),
+            query: query.to_string(),
+            options: options.clone(),
+        }
+    }
+
+    pub fn named(name: &str, kb_name: &str, query: &str, options: &crate::search::SearchOptions) -> Self {
+        Self {
+            node_name: name.to_string(),
             kb_name: kb_name.to_string(),
             query: query.to_string(),
             options: options.clone(),
@@ -43,7 +54,7 @@ impl QuerySourceNode {
 #[async_trait]
 impl Node for QuerySourceNode {
     fn name(&self) -> &str {
-        "query_source"
+        &self.node_name
     }
     fn node_type(&self) -> &'static str {
         "QuerySourceNode"
@@ -76,18 +87,20 @@ impl Node for QuerySourceNode {
 /// Runs `Catalog::search()` and outputs results + meta.
 ///
 /// Retrieves `catalog` from the service registry (`Arc<Mutex<Catalog>>`).
-pub struct PrimarySearchNode;
+pub struct PrimarySearchNode {
+    node_name: String,
+}
 
 impl PrimarySearchNode {
-    pub fn new() -> Self {
-        Self
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string() }
     }
 }
 
 #[async_trait]
 impl Node for PrimarySearchNode {
     fn name(&self) -> &str {
-        "primary_search"
+        &self.node_name
     }
     fn node_type(&self) -> &'static str {
         "PrimarySearchNode"
@@ -321,18 +334,20 @@ impl Node for FetchRelatedNode {
 // ─── ComposeNode ─────────────────────────────────────────────────────────────
 
 /// Attaches fetched children to root results.
-pub struct ComposeNode;
+pub struct ComposeNode {
+    node_name: String,
+}
 
 impl ComposeNode {
-    pub fn new() -> Self {
-        Self
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string() }
     }
 }
 
 #[async_trait]
 impl Node for ComposeNode {
     fn name(&self) -> &str {
-        "compose"
+        &self.node_name
     }
     fn node_type(&self) -> &'static str {
         "ComposeNode"
@@ -444,7 +459,7 @@ mod tests {
 
     #[test]
     fn primary_search_node_ports() {
-        let node = PrimarySearchNode::new();
+        let node = PrimarySearchNode::new("primary_search");
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
         assert_eq!(node.outputs().len(), 2);
@@ -468,7 +483,7 @@ mod tests {
 
     #[tokio::test]
     async fn compose_attaches_children() {
-        let mut node = ComposeNode;
+        let mut node = ComposeNode::new("compose");
         let mut ctx = NodeContext::new();
 
         ctx.set_input(
@@ -503,7 +518,7 @@ mod tests {
 
     #[tokio::test]
     async fn compose_no_children_passthrough() {
-        let mut node = ComposeNode;
+        let mut node = ComposeNode::new("compose");
         let mut ctx = NodeContext::new();
 
         ctx.set_input(

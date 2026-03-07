@@ -1,0 +1,12 @@
+%% Template: Basic search pipeline
+%% Variables: $kb_name, $query
+%%
+%% QuerySourceNode emits the search query,
+%% PrimarySearchNode executes it via Catalog::search().
+%% Outputs: ps.results (Vec<UnifiedResult>), ps.meta (SearchMeta)
+
+graph LR
+    qs["QuerySourceNode(kb_name='$kb_name', query='$query')"]
+    ps["PrimarySearchNode"]
+
+    qs -->|query| ps

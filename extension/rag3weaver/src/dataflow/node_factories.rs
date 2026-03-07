@@ -4,7 +4,6 @@
 //! - Manual factories for nodes with config params
 //! - `register_builtins()` populates a registry with all 13 node types
 
-use crate::simple_factory;
 use crate::named_factory;
 
 use super::node_registry::{
@@ -23,7 +22,7 @@ use crate::search_strategy::ExpansionDirection;
 
 // ─── Macro-generated factories (simple_factory!) ────────────────────────────
 
-simple_factory!(
+named_factory!(
     ComposeNodeFactory,
     ComposeNode,
     "ComposeNode",
@@ -35,7 +34,7 @@ simple_factory!(
     &[PortDef { name: "results", port_type: PortType::Results, required: false }],
 );
 
-simple_factory!(
+named_factory!(
     PrimarySearchNodeFactory,
     PrimarySearchNode,
     "PrimarySearchNode",
@@ -152,7 +151,7 @@ pub struct QuerySourceNodeFactory;
 impl NodeFactory for QuerySourceNodeFactory {
     fn create(
         &self,
-        _name: &str,
+        name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
         let kb_name = config
@@ -169,7 +168,7 @@ impl NodeFactory for QuerySourceNodeFactory {
         } else {
             crate::search::SearchOptions::default()
         };
-        Ok(Box::new(QuerySourceNode::new(kb_name, query, &options)))
+        Ok(Box::new(QuerySourceNode::named(name, kb_name, query, &options)))
     }
 
     fn node_type(&self) -> &'static str {
@@ -418,7 +417,7 @@ mod tests {
             .create("ComposeNode", "my_compose", &serde_json::json!({}))
             .unwrap();
         assert_eq!(node.node_type(), "ComposeNode");
-        assert_eq!(node.name(), "compose"); // ComposeNode always returns "compose"
+        assert_eq!(node.name(), "my_compose");
     }
 
     #[test]

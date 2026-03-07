@@ -1,0 +1,17 @@
+%% Template: Search with graph expansion
+%% Variables: $kb_name, $query, $relation, $direction, $limit
+%%
+%% Extends the basic search with a FetchRelatedNode that traverses
+%% graph relationships, then ComposeNode attaches children to results.
+%% Add more fetch_N nodes for multiple expansion rules.
+
+graph LR
+    qs["QuerySourceNode(kb_name='$kb_name', query='$query')"]
+    ps["PrimarySearchNode"]
+    fetch_0["FetchRelatedNode(relation='$relation', direction='$direction', limit=$limit)"]
+    compose["ComposeNode"]
+
+    qs -->|query| ps
+    ps -->|results| fetch_0
+    ps -->|results| compose
+    fetch_0 -->|children| compose

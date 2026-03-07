@@ -1,0 +1,31 @@
+%% Template: KB index pipeline (sub-graph)
+%% Variables: $gpu_batch_size (default: 32)
+%%
+%% Processes KB aggregates: gather changed content, update index entries,
+%% chunk into smaller pieces, insert + link + embed chunks, flush FTS.
+%% Designed as a composable sub-graph (GraphNode).
+%%
+%% Free inputs: gather_kb.aggregates, gather_kb.trigger
+%% Free outputs: agg_embeds.done, flush_fts.done
+
+graph LR
+    gather_kb["GatherKBNode"]
+    update_kb["UpdateKBNode"]
+    chunk_kb["ChunkKBNode"]
+
+    gather_kb -->|kb_content| update_kb
+    update_kb -->|kb_content| chunk_kb
+
+    agg_inserts["InsertRecordNode"]
+    chunk_kb -->|entities| agg_inserts
+
+    agg_links["LinkRecordNode"]
+    chunk_kb -->|relations| agg_links
+    agg_inserts -->|done:trigger| agg_links
+
+    agg_embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    agg_inserts -->|inserted:entities| agg_embeds
+    agg_links -->|done:trigger| agg_embeds
+
+    flush_fts["FlushFTSNode"]
+    update_kb -->|done:trigger| flush_fts

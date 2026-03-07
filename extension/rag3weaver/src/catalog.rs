@@ -1902,7 +1902,7 @@ impl Catalog {
 
         // Primary search (catalog resolved via service)
         graph
-            .add_node(Box::new(PrimarySearchNode::new()))
+            .add_node(Box::new(PrimarySearchNode::new("primary_search")))
             .unwrap();
         graph
             .connect("query_source", "query", "primary_search", "query")
@@ -1926,7 +1926,7 @@ impl Catalog {
                     .unwrap();
             }
 
-            graph.add_node(Box::new(ComposeNode)).unwrap();
+            graph.add_node(Box::new(ComposeNode::new("compose"))).unwrap();
             graph
                 .connect("primary_search", "results", "compose", "results")
                 .unwrap();

@@ -626,4 +626,111 @@ graph LR
         let def = parse_mermaid(input).unwrap();
         assert_eq!(def.nodes.len(), 1);
     }
+
+    // ── Built-in template tests ──────────────────────────────────────
+
+    use crate::dataflow::node::Node;
+
+    fn builtin_registry() -> crate::dataflow::node_registry::NodeRegistry {
+        let mut registry = crate::dataflow::node_registry::NodeRegistry::new();
+        crate::dataflow::node_factories::register_builtins(&mut registry);
+        registry
+    }
+
+    #[test]
+    fn template_search_parses_and_builds() {
+        let mmd = include_str!("../../templates/search.mmd");
+        let mut vars = HashMap::new();
+        vars.insert("kb_name".into(), "TestKB".into());
+        vars.insert("query".into(), "hello".into());
+
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 2);
+        assert_eq!(def.edges.len(), 1);
+
+        let registry = builtin_registry();
+        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
+        graph.validate().unwrap();
+        assert_eq!(graph.node_names().len(), 2);
+    }
+
+    #[test]
+    fn template_search_expansion_parses_and_builds() {
+        let mmd = include_str!("../../templates/search_expansion.mmd");
+        let mut vars = HashMap::new();
+        vars.insert("kb_name".into(), "TestKB".into());
+        vars.insert("query".into(), "hello".into());
+        vars.insert("relation".into(), "HAS_FILE".into());
+        vars.insert("direction".into(), "Outgoing".into());
+        vars.insert("limit".into(), "10".into());
+
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 4);
+        assert_eq!(def.edges.len(), 4);
+
+        let registry = builtin_registry();
+        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
+        graph.validate().unwrap();
+
+        let order = graph.topological_sort().unwrap();
+        assert_eq!(order[0], "qs");
+        assert_eq!(order[1], "ps");
+    }
+
+    #[test]
+    fn template_ingestion_parses_and_builds() {
+        let mmd = include_str!("../../templates/ingestion.mmd");
+        let mut vars = HashMap::new();
+        vars.insert("gpu_batch_size".into(), "32".into());
+
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 10);
+
+        let registry = builtin_registry();
+        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
+        let order = graph.topological_sort().unwrap();
+        // inserts must come before links, gather_kb, etc.
+        let inserts_pos = order.iter().position(|n| n == "inserts").unwrap();
+        let links_pos = order.iter().position(|n| n == "links").unwrap();
+        let gather_pos = order.iter().position(|n| n == "gather_kb").unwrap();
+        assert!(inserts_pos < links_pos);
+        assert!(links_pos < gather_pos);
+    }
+
+    #[test]
+    fn template_kb_pipeline_parses_and_builds() {
+        let mmd = include_str!("../../templates/kb_pipeline.mmd");
+        let mut vars = HashMap::new();
+        vars.insert("gpu_batch_size".into(), "32".into());
+
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 7);
+
+        let registry = builtin_registry();
+        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
+        let order = graph.topological_sort().unwrap();
+        assert_eq!(order[0], "gather_kb");
+    }
+
+    #[test]
+    fn template_kb_pipeline_as_graph_node() {
+        let mmd = include_str!("../../templates/kb_pipeline.mmd");
+        let mut vars = HashMap::new();
+        vars.insert("gpu_batch_size".into(), "32".into());
+
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        let registry = std::sync::Arc::new(builtin_registry());
+        let gn = crate::dataflow::graph_node::GraphNode::from_definition(
+            "kb_sub", def, registry,
+        ).unwrap();
+
+        // Free inputs should include gather_kb.aggregates (required)
+        let input_names: Vec<&str> = gn.inputs().iter().map(|p| p.name).collect();
+        assert!(input_names.contains(&"gather_kb.aggregates"), "inputs: {:?}", input_names);
+
+        // Free outputs should include agg_embeds.done and flush_fts.done
+        let output_names: Vec<&str> = gn.outputs().iter().map(|p| p.name).collect();
+        assert!(output_names.contains(&"agg_embeds.done"), "outputs: {:?}", output_names);
+        assert!(output_names.contains(&"flush_fts.done"), "outputs: {:?}", output_names);
+    }
 }

@@ -1,0 +1,43 @@
+%% Template: Full ingestion pipeline
+%% Variables: $gpu_batch_size (default: 32)
+%%
+%% Processes entities → relations → KB aggregates in sequence.
+%% Entities are inserted, chunked, embedded.
+%% Relations are linked after inserts complete.
+%% KB aggregates gather content, update index, chunk, insert, link, embed, flush FTS.
+
+graph LR
+    %% Stage 1: Raw entities
+    inserts["InsertRecordNode"]
+    embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    inserts -->|inserted:entities| embeds
+
+    %% Stage 2: Raw relations (after inserts)
+    links["LinkRecordNode"]
+    inserts -->|done:trigger| links
+
+    %% Stage 3: KB pipeline (after links)
+    gather_kb["GatherKBNode"]
+    links -->|done:trigger| gather_kb
+
+    update_kb["UpdateKBNode"]
+    gather_kb -->|kb_content| update_kb
+
+    chunk_kb["ChunkKBNode"]
+    update_kb -->|kb_content| chunk_kb
+
+    %% Stage 4: KB chunks → insert, link, embed
+    agg_inserts["InsertRecordNode"]
+    chunk_kb -->|entities| agg_inserts
+
+    agg_links["LinkRecordNode"]
+    chunk_kb -->|relations| agg_links
+    agg_inserts -->|done:trigger| agg_links
+
+    agg_embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    agg_inserts -->|inserted:entities| agg_embeds
+    agg_links -->|done:trigger| agg_embeds
+
+    %% Stage 5: Flush FTS (parallel with chunk pipeline)
+    flush_fts["FlushFTSNode"]
+    update_kb -->|done:trigger| flush_fts
