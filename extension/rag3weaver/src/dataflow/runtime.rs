@@ -238,6 +238,7 @@ impl DataflowRuntime {
                         NodeCheckpoint {
                             status: NodeCheckpointStatus::Pending,
                             output_ports: HashMap::new(),
+                            undo_context: None,
                             duration_ms: None,
                             error: None,
                             completed_at: None,
@@ -436,6 +437,9 @@ impl DataflowRuntime {
                         let metrics = ctx.drain_metrics();
                         let output_ports: Vec<String> = outputs.keys().cloned().collect();
 
+                        // Capture undo context if the node supports it
+                        let undo_ctx = graph.nodes[node_idx].undo_context();
+
                         // Serialize outputs for checkpoint persistence
                         let mut checkpoint_outputs = HashMap::new();
                         for (port, value) in &outputs {
@@ -449,6 +453,7 @@ impl DataflowRuntime {
                                 execution_id,
                                 node_name,
                                 &checkpoint_outputs,
+                                undo_ctx.as_ref(),
                                 duration_ms,
                             )
                             .await?;

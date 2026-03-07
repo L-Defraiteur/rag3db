@@ -62,6 +62,7 @@ impl CheckpointStore for CypherCheckpointStore {
                      node_name STRING, \
                      status STRING, \
                      output_ports STRING, \
+                     undo_json STRING, \
                      duration_ms INT64, \
                      error STRING, \
                      completed_at INT64, \
@@ -181,7 +182,7 @@ impl CheckpointStore for CypherCheckpointStore {
             .execute_with_params(
                 "MATCH (n:_DataflowNodeState {execution_id: $exec_id}) \
                  RETURN n.node_name, n.status, n.output_ports, n.duration_ms, \
-                        n.error, n.completed_at",
+                        n.error, n.completed_at, n.undo_json",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
             .await
@@ -195,6 +196,7 @@ impl CheckpointStore for CypherCheckpointStore {
             let duration_ms = row[3].as_i64().unwrap_or(0) as u64;
             let error_str = row[4].as_str().unwrap_or("").to_string();
             let completed_at = row[5].as_i64().unwrap_or(0) as u64;
+            let undo_json_str = row.get(6).and_then(|v| v.as_str()).unwrap_or("");
 
             let output_ports: HashMap<String, CheckpointPortValue> = if output_ports_json.is_empty()
             {
@@ -203,11 +205,18 @@ impl CheckpointStore for CypherCheckpointStore {
                 serde_json::from_str(output_ports_json).unwrap_or_default()
             };
 
+            let undo_context = if undo_json_str.is_empty() {
+                None
+            } else {
+                serde_json::from_str(undo_json_str).ok()
+            };
+
             nodes.insert(
                 node_name,
                 NodeCheckpoint {
                     status: node_status,
                     output_ports,
+                    undo_context,
                     duration_ms: if duration_ms > 0 {
                         Some(duration_ms)
                     } else {
@@ -262,23 +271,30 @@ impl CheckpointStore for CypherCheckpointStore {
         execution_id: &str,
         node_name: &str,
         outputs: &HashMap<String, CheckpointPortValue>,
+        undo_context: Option<&serde_json::Value>,
         duration_ms: u64,
     ) -> Result<(), String> {
         let uuid = format!("{execution_id}:{node_name}");
         let now = timestamp_ms();
         let outputs_json = serde_json::to_string(outputs).map_err(|e| e.to_string())?;
+        let undo_json = match undo_context {
+            Some(ctx) => serde_json::to_string(ctx).map_err(|e| e.to_string())?,
+            None => String::new(),
+        };
 
         self.conn
             .execute_with_params(
                 "MERGE (n:_DataflowNodeState {_uuid: $uuid}) \
                  SET n.status = $status, \
                      n.output_ports = $output_ports, \
+                     n.undo_json = $undo_json, \
                      n.duration_ms = $duration_ms, \
                      n.completed_at = $completed_at",
                 &[
                     QueryParam::new("uuid", CypherValue::String(uuid)),
                     QueryParam::new("status", CypherValue::String("completed".to_string())),
                     QueryParam::new("output_ports", CypherValue::String(outputs_json)),
+                    QueryParam::new("undo_json", CypherValue::String(undo_json)),
                     QueryParam::new("duration_ms", CypherValue::Int(duration_ms as i64)),
                     QueryParam::new("completed_at", CypherValue::Int(now as i64)),
                 ],
@@ -506,6 +522,7 @@ impl CheckpointStore for MockCheckpointStore {
         execution_id: &str,
         node_name: &str,
         outputs: &HashMap<String, CheckpointPortValue>,
+        undo_context: Option<&serde_json::Value>,
         duration_ms: u64,
     ) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
@@ -518,6 +535,7 @@ impl CheckpointStore for MockCheckpointStore {
             .ok_or("node not found")?;
         node.status = NodeCheckpointStatus::Completed;
         node.output_ports = outputs.clone();
+        node.undo_context = undo_context.cloned();
         node.duration_ms = Some(duration_ms);
         node.completed_at = Some(timestamp_ms());
         cp.updated_at = timestamp_ms();
@@ -591,6 +609,7 @@ mod tests {
             NodeCheckpoint {
                 status: NodeCheckpointStatus::Pending,
                 output_ports: HashMap::new(),
+                undo_context: None,
                 duration_ms: None,
                 error: None,
                 completed_at: None,
@@ -601,6 +620,7 @@ mod tests {
             NodeCheckpoint {
                 status: NodeCheckpointStatus::Pending,
                 output_ports: HashMap::new(),
+                undo_context: None,
                 duration_ms: None,
                 error: None,
                 completed_at: None,
@@ -664,7 +684,7 @@ mod tests {
             },
         );
         store
-            .save_node_completed("exec-2", "inserts", &outputs, 42)
+            .save_node_completed("exec-2", "inserts", &outputs, None, 42)
             .await
             .unwrap();
 
@@ -728,7 +748,7 @@ mod tests {
             },
         );
         store
-            .save_node_completed("exec-4", "inserts", &outputs, 10)
+            .save_node_completed("exec-4", "inserts", &outputs, None, 10)
             .await
             .unwrap();
 

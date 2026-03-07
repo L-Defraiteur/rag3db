@@ -39,6 +39,33 @@ pub trait Node: Send + Sync {
     fn node_config(&self) -> serde_json::Value {
         serde_json::Value::Object(serde_json::Map::new())
     }
+
+    /// Whether this node supports undo (rollback).
+    ///
+    /// Nodes that perform mutations (INSERT, SET, DELETE) should return `true`
+    /// and implement [`undo_context`] + [`undo`]. Read-only nodes return `false`.
+    fn can_undo(&self) -> bool {
+        false
+    }
+
+    /// Undo context captured during execute(), serialized into the checkpoint.
+    ///
+    /// Called by the runtime AFTER a successful `execute()`. The returned JSON
+    /// is persisted and later passed to `undo()` for rollback.
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Reverse the operation using the previously captured undo context.
+    ///
+    /// Called during rollback in reverse topological order.
+    async fn undo(
+        &mut self,
+        _ctx: &mut NodeContext,
+        _undo_ctx: serde_json::Value,
+    ) -> Result<(), String> {
+        Err("undo not supported".into())
+    }
 }
 
 // ─── NodeContext ─────────────────────────────────────────────────────────────

@@ -303,6 +303,9 @@ pub enum NodeCheckpointStatus {
 pub struct NodeCheckpoint {
     pub status: NodeCheckpointStatus,
     pub output_ports: HashMap<String, CheckpointPortValue>,
+    /// Undo context captured after successful execution (for rollback).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undo_context: Option<serde_json::Value>,
     pub duration_ms: Option<u64>,
     pub error: Option<String>,
     pub completed_at: Option<u64>,
@@ -349,12 +352,13 @@ pub trait CheckpointStore: Send + Sync {
     /// Find incomplete executions (status = Running) for resume.
     async fn find_incomplete(&self) -> Result<Vec<String>, String>;
 
-    /// Mark a node as completed with its output port data.
+    /// Mark a node as completed with its output port data and optional undo context.
     async fn save_node_completed(
         &self,
         execution_id: &str,
         node_name: &str,
         outputs: &HashMap<String, CheckpointPortValue>,
+        undo_context: Option<&serde_json::Value>,
         duration_ms: u64,
     ) -> Result<(), String>;
 
