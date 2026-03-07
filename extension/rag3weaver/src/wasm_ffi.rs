@@ -1106,7 +1106,7 @@ pub extern "C" fn rag3weaver_link(
 
 /// Build the drain result JSON including resolved handles.
 fn build_drain_json(
-    result: &crate::queue::FlushResult,
+    result: &crate::records::FlushResult,
     refs: &[crate::refs::EntityRef],
 ) -> String {
     let mut resolved = Vec::new();

@@ -119,6 +119,21 @@ impl EntityRef {
         self.queue_item_id.get().map(|s| s.as_str())
     }
 
+    /// Create a pre-resolved EntityRef (for checkpoint resume).
+    ///
+    /// The watch channel is initialized to `Ready(uuid)`. No sender exists
+    /// (the resolver was already consumed in the original execution).
+    pub fn pre_resolved(entity: &str, temp_uuid: &str, uuid: &str) -> Self {
+        let (tx, rx) = watch::channel(EntityState::Ready(uuid.to_string()));
+        drop(tx);
+        Self {
+            entity: entity.to_string(),
+            temp_uuid: temp_uuid.to_string(),
+            rx,
+            queue_item_id: Arc::new(OnceLock::new()),
+        }
+    }
+
     /// Wait asynchronously for resolution.
     ///
     /// Returns immediately if already resolved/failed.
@@ -254,6 +269,24 @@ impl RelationRef {
     /// Get the queue item ID, if set.
     pub fn queue_item_id(&self) -> Option<&str> {
         self.queue_item_id.get().map(|s| s.as_str())
+    }
+
+    /// Create a pre-resolved RelationRef (for checkpoint resume).
+    ///
+    /// The watch channel is initialized to `Ready(RelResolved)`. No sender exists.
+    pub fn pre_resolved(relation: &str, temp_uuid: &str, from_uuid: &str, to_uuid: &str) -> Self {
+        let resolved = RelResolved {
+            from_uuid: from_uuid.to_string(),
+            to_uuid: to_uuid.to_string(),
+        };
+        let (tx, rx) = watch::channel(RelState::Ready(resolved));
+        drop(tx);
+        Self {
+            relation: relation.to_string(),
+            temp_uuid: temp_uuid.to_string(),
+            rx,
+            queue_item_id: Arc::new(OnceLock::new()),
+        }
     }
 
     /// Wait asynchronously for resolution.

@@ -12,7 +12,6 @@ pub mod bm42_embedder;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod candle_embedder;
 pub mod catalog;
-pub mod cypher_persistence;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
 #[cfg(feature = "wasm-emscripten")]
@@ -26,12 +25,9 @@ pub mod filter;
 pub mod fusion;
 pub mod hash;
 pub mod node_id_cache;
-pub mod ops;
 pub mod records;
-pub mod persistence;
 pub mod dataflow;
 pub mod query;
-pub mod queue;
 pub mod refs;
 pub mod schema;
 pub mod search;
@@ -48,11 +44,8 @@ pub use events::{CatalogEvent, EventBus};
 pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
-pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, Hashsafe, InsertOp, LinkOp, OpSummary, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
-pub use records::{EntityRecord, RelationRecord, AggregateRecord, PendingWork};
-pub use persistence::{OperationPersistence, PersistedOp};
+pub use records::{EntityRecord, RelationRecord, AggregateRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
 pub use query::{PreparedQuery, QueryBuilder};
-pub use queue::{FlushResult, QueueStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;
@@ -69,7 +62,6 @@ pub use search_strategy::{
     ExpansionRule, ExpansionDirection,
 };
 pub use validator::{validate_schema, KBFieldRef};
-pub use cypher_persistence::CypherPersistence;
 #[cfg(feature = "rag3db-native")]
 pub use rag3db_connection::Rag3dbConnection;
 #[cfg(feature = "wasm-emscripten")]

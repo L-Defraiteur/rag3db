@@ -11,6 +11,11 @@ use async_broadcast::{InactiveReceiver, Sender};
 use serde::Serialize;
 
 
+use super::checkpoint::{
+    CheckpointStore, ExecutionCheckpoint, CheckpointExecutionStatus,
+    NodeCheckpoint, NodeCheckpointStatus, GraphDefinition,
+    port_value_to_checkpoint, port_value_from_checkpoint, timestamp_ms,
+};
 use super::graph::{DataflowGraph, NodeSlot};
 use super::node::{GraphEmitter, NodeContext};
 use super::observe::{TapRegistry, TapSpec, TapEvent};
@@ -39,6 +44,11 @@ pub enum DataflowEvent {
         by_node: String,
         added_nodes: Vec<String>,
         added_edges: usize,
+    },
+    /// Checkpoint resume: a node was skipped (already completed in a prior run).
+    CheckpointResumed {
+        node: String,
+        output_ports: Vec<String>,
     },
     /// All processing completed.
     Completed {
@@ -161,6 +171,346 @@ impl DataflowRuntime {
 
         let report = ExecutionReport::build(&events, graph, &output);
         Ok((output, report))
+    }
+
+    /// Execute the graph with checkpoint persistence for crash recovery.
+    ///
+    /// - If `execution_id` exists in the store with status Running, resumes from
+    ///   the last completed node (skips completed, injects saved outputs).
+    /// - If new, creates a checkpoint and persists after each node completes.
+    /// - On success: marks execution completed and cleans up node data.
+    /// - On failure: marks execution failed (node data preserved for resume).
+    pub async fn execute_with_checkpoint(
+        &self,
+        graph: &mut DataflowGraph,
+        store: &dyn CheckpointStore,
+        execution_id: &str,
+    ) -> Result<DataflowOutput, String> {
+        let graph_def = graph.to_definition();
+        let graph_hash = graph_def.hash();
+
+        // Check for existing checkpoint
+        let existing = store.load_execution(execution_id).await?;
+
+        if let Some(ref cp) = existing {
+            // Validate graph hash matches
+            if cp.graph_hash != graph_hash {
+                return Err(format!(
+                    "checkpoint graph_hash mismatch: stored={}, current={} — \
+                     the graph structure has changed since the checkpoint was created",
+                    cp.graph_hash, graph_hash
+                ));
+            }
+            if cp.status == CheckpointExecutionStatus::Completed {
+                // Already completed — no-op
+                return Ok(DataflowOutput::empty());
+            }
+        }
+
+        // Build initial checkpoint if new execution
+        let checkpoint = match existing {
+            Some(cp) => {
+                // Resume: restore initial_inputs from checkpoint into the graph
+                for (node_name, ports) in &cp.initial_inputs {
+                    for (port_name, cpv) in ports {
+                        let port_value = port_value_from_checkpoint(cpv.clone())?;
+                        graph
+                            .initial_inputs
+                            .entry(node_name.clone())
+                            .or_default()
+                            .insert(port_name.clone(), port_value);
+                    }
+                }
+                cp
+            }
+            None => {
+                let now = timestamp_ms();
+                let mut nodes = HashMap::new();
+                for slot in &graph.nodes {
+                    nodes.insert(
+                        slot.name().to_string(),
+                        NodeCheckpoint {
+                            status: NodeCheckpointStatus::Pending,
+                            output_ports: HashMap::new(),
+                            duration_ms: None,
+                            error: None,
+                            completed_at: None,
+                        },
+                    );
+                }
+
+                // Serialize initial_inputs for resume
+                let mut cp_initial_inputs = HashMap::new();
+                for (node_name, ports) in &graph.initial_inputs {
+                    let mut cp_ports = HashMap::new();
+                    for (port_name, value) in ports {
+                        let cpv = port_value_to_checkpoint(value)?;
+                        cp_ports.insert(port_name.clone(), cpv);
+                    }
+                    cp_initial_inputs.insert(node_name.clone(), cp_ports);
+                }
+
+                let cp = ExecutionCheckpoint {
+                    execution_id: execution_id.to_string(),
+                    status: CheckpointExecutionStatus::Running,
+                    graph_def,
+                    graph_hash,
+                    nodes,
+                    initial_inputs: cp_initial_inputs,
+                    created_at: now,
+                    updated_at: now,
+                };
+                store.create_execution(&cp).await?;
+                cp
+            }
+        };
+
+        // Run with checkpoint awareness
+        let result = self
+            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint)
+            .await;
+
+        match &result {
+            Ok(_) => {
+                store.mark_completed(execution_id).await?;
+            }
+            Err(error) => {
+                let _ = store.mark_failed(execution_id, error).await;
+            }
+        }
+
+        result
+    }
+
+    /// Inner execution loop with checkpoint skip/save logic.
+    async fn execute_inner_with_checkpoint(
+        &self,
+        graph: &mut DataflowGraph,
+        store: &dyn CheckpointStore,
+        execution_id: &str,
+        checkpoint: &ExecutionCheckpoint,
+    ) -> Result<DataflowOutput, String> {
+        let start = Instant::now();
+        graph.validate()?;
+
+        let mut port_data: HashMap<(String, String), PortValue> = HashMap::new();
+        let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
+            std::mem::take(&mut graph.initial_inputs);
+        let mut completed: HashSet<String> = HashSet::new();
+        let order = graph.topological_sort()?;
+
+        // Inject saved outputs from completed nodes in the checkpoint
+        for (node_name, node_cp) in &checkpoint.nodes {
+            if node_cp.status == NodeCheckpointStatus::Completed {
+                completed.insert(node_name.clone());
+
+                // Restore output port values into port_data
+                for (port_name, cpv) in &node_cp.output_ports {
+                    let port_value = port_value_from_checkpoint(cpv.clone())?;
+                    port_data.insert((node_name.clone(), port_name.clone()), port_value);
+                }
+
+                self.emit(DataflowEvent::CheckpointResumed {
+                    node: node_name.clone(),
+                    output_ports: node_cp.output_ports.keys().cloned().collect(),
+                });
+            }
+        }
+
+        // Main execution loop (same structure as execute(), with checkpoint saves)
+        for _iteration in 0..self.max_iterations {
+            let ready: Vec<String> = order
+                .iter()
+                .filter(|name| !completed.contains(*name))
+                .filter(|name| {
+                    let node = graph.nodes.iter().find(|n| n.name() == *name).unwrap();
+                    node.inputs().iter().all(|input| {
+                        if !input.required {
+                            return true;
+                        }
+                        let has_edge_data = graph.edges.iter().any(|e| {
+                            e.to_node == **name
+                                && e.to_port == input.name
+                                && port_data
+                                    .contains_key(&(e.from_node.clone(), e.from_port.clone()))
+                        });
+                        let has_initial = initial_inputs
+                            .get(*name)
+                            .map_or(false, |ports| ports.contains_key(input.name));
+                        has_edge_data || has_initial
+                    })
+                })
+                .cloned()
+                .collect();
+
+            if ready.is_empty() {
+                if completed.len() == graph.nodes.len() {
+                    break;
+                }
+                let remaining: Vec<String> = order
+                    .iter()
+                    .filter(|n| !completed.contains(*n))
+                    .cloned()
+                    .collect();
+                let error = format!("deadlock: nodes {:?} cannot execute", remaining);
+                self.emit(DataflowEvent::Failed {
+                    error: error.clone(),
+                });
+                return Err(error);
+            }
+
+            for node_name in &ready {
+                let mut ctx = NodeContext::with_services(self.services.clone());
+                let edges_for_node: Vec<_> = graph
+                    .edges
+                    .iter()
+                    .filter(|e| e.to_node == *node_name)
+                    .collect();
+
+                let mut port_inputs: HashMap<String, Vec<PortValue>> = HashMap::new();
+                for edge in &edges_for_node {
+                    if let Some(value) =
+                        port_data.get(&(edge.from_node.clone(), edge.from_port.clone()))
+                    {
+                        self.taps.check_and_emit(edge, value);
+                        port_inputs
+                            .entry(edge.to_port.clone())
+                            .or_default()
+                            .push(value.clone());
+                    }
+                }
+
+                for (port, values) in port_inputs {
+                    let merged = values.into_iter().reduce(|a, b| {
+                        match merge_port_values(a, b) {
+                            Ok(v) => v,
+                            Err(_) => PortValue::Empty,
+                        }
+                    });
+                    if let Some(v) = merged {
+                        ctx.set_input(&port, v);
+                    }
+                }
+
+                if let Some(node_initials) = initial_inputs.remove(node_name) {
+                    for (port, value) in node_initials {
+                        ctx.set_input(&port, value);
+                    }
+                }
+
+                self.emit(DataflowEvent::NodeStarted {
+                    node: node_name.clone(),
+                });
+                let node_start = Instant::now();
+
+                let node_idx = graph
+                    .nodes
+                    .iter()
+                    .position(|n| n.name() == *node_name)
+                    .unwrap();
+
+                // Fail injection for testing: register a String service "fail_node"
+                // in the ServiceRegistry to make a named node fail on execution.
+                let should_fail = self
+                    .services
+                    .get::<String>("fail_node")
+                    .map_or(false, |v| *v == *node_name);
+
+                let exec_result = if should_fail {
+                    Err(format!("injected failure for node '{}'", node_name))
+                } else {
+                    // No DynamicNode support in checkpoint mode (ingestion graph is static)
+                    match &mut graph.nodes[node_idx] {
+                        NodeSlot::Static(node) => node.execute(&mut ctx).await,
+                        NodeSlot::Dynamic(_) => {
+                            Err("DynamicNodes are not supported in checkpoint mode".to_string())
+                        }
+                    }
+                };
+
+                let duration_ms = node_start.elapsed().as_millis() as u64;
+
+                match exec_result {
+                    Ok(()) => {
+                        let outputs = ctx.drain_outputs();
+                        let metrics = ctx.drain_metrics();
+                        let output_ports: Vec<String> = outputs.keys().cloned().collect();
+
+                        // Serialize outputs for checkpoint persistence
+                        let mut checkpoint_outputs = HashMap::new();
+                        for (port, value) in &outputs {
+                            let cpv = port_value_to_checkpoint(value)?;
+                            checkpoint_outputs.insert(port.clone(), cpv);
+                        }
+
+                        // Persist to checkpoint store
+                        store
+                            .save_node_completed(
+                                execution_id,
+                                node_name,
+                                &checkpoint_outputs,
+                                duration_ms,
+                            )
+                            .await?;
+
+                        for (port, value) in outputs {
+                            port_data.insert((node_name.clone(), port), value);
+                        }
+
+                        completed.insert(node_name.clone());
+                        self.emit(DataflowEvent::NodeCompleted {
+                            node: node_name.clone(),
+                            duration_ms,
+                            output_ports,
+                            metrics,
+                        });
+                    }
+                    Err(error) => {
+                        let _ = store
+                            .save_node_failed(execution_id, node_name, &error)
+                            .await;
+                        self.emit(DataflowEvent::NodeFailed {
+                            node: node_name.clone(),
+                            error: error.clone(),
+                        });
+                        self.emit(DataflowEvent::Failed {
+                            error: error.clone(),
+                        });
+                        return Err(error);
+                    }
+                }
+            }
+
+            if completed.len() == graph.nodes.len() {
+                break;
+            }
+        }
+
+        if completed.len() != graph.nodes.len() {
+            let error = format!(
+                "max iterations ({}) exceeded, {} of {} nodes completed",
+                self.max_iterations,
+                completed.len(),
+                graph.nodes.len()
+            );
+            self.emit(DataflowEvent::Failed {
+                error: error.clone(),
+            });
+            return Err(error);
+        }
+
+        let total_ms = start.elapsed().as_millis() as u64;
+        self.emit(DataflowEvent::Completed {
+            total_nodes: completed.len(),
+            duration_ms: total_ms,
+        });
+
+        let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
+        for ((node, port), value) in port_data {
+            data.entry(node).or_default().insert(port, value);
+        }
+
+        Ok(DataflowOutput { data })
     }
 
     /// Execute the graph. Returns all output values.
@@ -411,6 +761,7 @@ impl NodeEventFilter {
             DataflowEvent::NodeStarted { node } => self.nodes.contains(node),
             DataflowEvent::NodeCompleted { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
+            DataflowEvent::CheckpointResumed { node, .. } => self.nodes.contains(node),
             DataflowEvent::GraphExpanded { by_node, .. } => self.nodes.contains(by_node),
             DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,
         }
@@ -864,5 +1215,273 @@ mod tests {
         let runtime = DataflowRuntime::new(5);
         let err = runtime.execute(&mut graph).await.unwrap_err();
         assert!(err.contains("max iterations"));
+    }
+
+    // ── Checkpoint tests ────────────────────────────────────────────────
+
+    mod checkpoint_tests {
+        use super::*;
+        use crate::dataflow::checkpoint_store::MockCheckpointStore;
+        use crate::dataflow::checkpoint::{
+            CheckpointExecutionStatus, NodeCheckpointStatus,
+        };
+
+        /// Trigger node that emits Empty (checkpointable).
+        struct TriggerNode {
+            name: String,
+        }
+
+        #[async_trait::async_trait]
+        impl Node for TriggerNode {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn node_type(&self) -> &'static str {
+                "TriggerNode"
+            }
+            fn inputs(&self) -> &[PortDef] {
+                &[]
+            }
+            fn outputs(&self) -> &[PortDef] {
+                &[PortDef {
+                    name: "done",
+                    port_type: PortType::Empty,
+                    required: false,
+                }]
+            }
+            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                ctx.set_output("done", PortValue::Empty);
+                Ok(())
+            }
+        }
+
+        /// Receiver node that accepts a trigger.
+        struct ReceiverNode {
+            name: String,
+        }
+
+        #[async_trait::async_trait]
+        impl Node for ReceiverNode {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn node_type(&self) -> &'static str {
+                "ReceiverNode"
+            }
+            fn inputs(&self) -> &[PortDef] {
+                &[PortDef {
+                    name: "trigger",
+                    port_type: PortType::Empty,
+                    required: true,
+                }]
+            }
+            fn outputs(&self) -> &[PortDef] {
+                &[PortDef {
+                    name: "done",
+                    port_type: PortType::Empty,
+                    required: false,
+                }]
+            }
+            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                let _ = ctx.take_input("trigger");
+                ctx.set_output("done", PortValue::Empty);
+                Ok(())
+            }
+        }
+
+        /// Node that fails on first call, succeeds on second.
+        struct FailOnceNode {
+            name: String,
+            fail: bool,
+        }
+
+        #[async_trait::async_trait]
+        impl Node for FailOnceNode {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn node_type(&self) -> &'static str {
+                "FailOnceNode"
+            }
+            fn inputs(&self) -> &[PortDef] {
+                &[PortDef {
+                    name: "trigger",
+                    port_type: PortType::Empty,
+                    required: false,
+                }]
+            }
+            fn outputs(&self) -> &[PortDef] {
+                &[PortDef {
+                    name: "done",
+                    port_type: PortType::Empty,
+                    required: false,
+                }]
+            }
+            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                if self.fail {
+                    self.fail = false;
+                    Err("simulated crash".to_string())
+                } else {
+                    ctx.set_output("done", PortValue::Empty);
+                    Ok(())
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn checkpoint_full_execution() {
+            let store = MockCheckpointStore::new();
+
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+            graph.add_node(Box::new(ReceiverNode { name: "receiver".into() })).unwrap();
+            graph.connect("trigger", "done", "receiver", "trigger").unwrap();
+
+            let runtime = DataflowRuntime::new(10);
+            let output = runtime
+                .execute_with_checkpoint(&mut graph, &store, "exec-full")
+                .await
+                .unwrap();
+
+            assert!(output.get("trigger", "done").is_some());
+
+            let cp = store.load_execution("exec-full").await.unwrap().unwrap();
+            assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
+        }
+
+        #[tokio::test]
+        async fn checkpoint_resume_after_failure() {
+            let store = MockCheckpointStore::new();
+
+            // First run: trigger succeeds, crasher fails
+            {
+                let mut graph = DataflowGraph::new();
+                graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+                graph
+                    .add_node(Box::new(FailOnceNode {
+                        name: "crasher".into(),
+                        fail: true,
+                    }))
+                    .unwrap();
+                graph.connect("trigger", "done", "crasher", "trigger").unwrap();
+
+                let runtime = DataflowRuntime::new(10);
+                let err = runtime
+                    .execute_with_checkpoint(&mut graph, &store, "exec-resume")
+                    .await
+                    .unwrap_err();
+                assert!(err.contains("simulated crash"));
+            }
+
+            // Check store: execution failed, trigger completed, crasher failed
+            let cp = store.load_execution("exec-resume").await.unwrap().unwrap();
+            assert_eq!(cp.status, CheckpointExecutionStatus::Failed);
+            assert_eq!(cp.nodes["trigger"].status, NodeCheckpointStatus::Completed);
+            assert_eq!(cp.nodes["crasher"].status, NodeCheckpointStatus::Failed);
+
+            // Reset for resume
+            store.mutate("exec-resume", |cp| {
+                cp.status = CheckpointExecutionStatus::Running;
+                let crasher = cp.nodes.get_mut("crasher").unwrap();
+                crasher.status = NodeCheckpointStatus::Pending;
+                crasher.error = None;
+            });
+
+            // Second run: should skip trigger, re-execute crasher (succeeds)
+            {
+                let mut graph = DataflowGraph::new();
+                graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+                graph
+                    .add_node(Box::new(FailOnceNode {
+                        name: "crasher".into(),
+                        fail: false,
+                    }))
+                    .unwrap();
+                graph.connect("trigger", "done", "crasher", "trigger").unwrap();
+
+                let runtime = DataflowRuntime::new(10);
+                let mut rx = runtime.subscribe();
+                let output = runtime
+                    .execute_with_checkpoint(&mut graph, &store, "exec-resume")
+                    .await
+                    .unwrap();
+
+                assert!(output.get("crasher", "done").is_some());
+
+                // Should have emitted CheckpointResumed for trigger
+                let mut events = Vec::new();
+                while let Ok(ev) = rx.try_recv() {
+                    events.push(ev);
+                }
+                let resumed = events.iter().any(|e| {
+                    matches!(e, DataflowEvent::CheckpointResumed { node, .. } if node == "trigger")
+                });
+                assert!(resumed, "should emit CheckpointResumed for trigger");
+            }
+
+            let cp = store.load_execution("exec-resume").await.unwrap().unwrap();
+            assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
+        }
+
+        #[tokio::test]
+        async fn checkpoint_graph_hash_mismatch() {
+            let store = MockCheckpointStore::new();
+
+            // First run
+            {
+                let mut graph = DataflowGraph::new();
+                graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+
+                let runtime = DataflowRuntime::new(10);
+                runtime
+                    .execute_with_checkpoint(&mut graph, &store, "exec-hash")
+                    .await
+                    .unwrap();
+            }
+
+            // Reset to Running
+            store.mutate("exec-hash", |cp| {
+                cp.status = CheckpointExecutionStatus::Running;
+            });
+
+            // Second run with different graph → hash mismatch
+            {
+                let mut graph = DataflowGraph::new();
+                graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+                graph.add_node(Box::new(ReceiverNode { name: "extra".into() })).unwrap();
+                graph.connect("trigger", "done", "extra", "trigger").unwrap();
+
+                let runtime = DataflowRuntime::new(10);
+                let err = runtime
+                    .execute_with_checkpoint(&mut graph, &store, "exec-hash")
+                    .await
+                    .unwrap_err();
+                assert!(err.contains("graph_hash mismatch"));
+            }
+        }
+
+        #[tokio::test]
+        async fn checkpoint_already_completed_is_noop() {
+            let store = MockCheckpointStore::new();
+
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+
+            let runtime = DataflowRuntime::new(10);
+            runtime
+                .execute_with_checkpoint(&mut graph, &store, "exec-done")
+                .await
+                .unwrap();
+
+            // Second call → no-op
+            let mut graph2 = DataflowGraph::new();
+            graph2.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
+            let output = runtime
+                .execute_with_checkpoint(&mut graph2, &store, "exec-done")
+                .await
+                .unwrap();
+
+            assert!(output.get("trigger", "done").is_none());
+        }
     }
 }

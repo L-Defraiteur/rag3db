@@ -6,19 +6,18 @@
 //! [`BatchPayload`] wraps non-serializable ingestion data (ops) for port transport.
 
 use std::any::Any;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::connection::CypherValue;
 use crate::search::{SearchMeta, SearchOptions};
 use crate::search_strategy::{ChildSummary, ExpansionRule, UnifiedResult};
 
 // ─── PortType ────────────────────────────────────────────────────────────────
 
 /// Static type of a port — checked at graph build time via `connect()`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PortType {
     // ── Search ports ──────────────────────────────────────────────────
     /// `Vec<UnifiedResult>`
@@ -40,28 +39,12 @@ pub enum PortType {
     /// Trigger / unit signal
     Empty,
     // ── Ingestion ports ───────────────────────────────────────────────
-    /// `Vec<CatalogOp>` — mixed ops before split
-    Ops,
-    /// `Vec<InsertOp>`
-    Inserts,
-    /// `Vec<LinkOp>`
-    Links,
-    /// `Vec<ChunkOp>`
-    Chunks,
-    /// `Vec<AggregateOp>`
-    Aggregates,
-    /// `Vec<EmbedOp>`
-    Embeds,
-    /// `Vec<SparseEmbedOp>`
-    SparseEmbeds,
-    /// `Vec<DualEmbedOp>`
-    DualEmbeds,
-    // ── New record-based ports (doc 23 — ops elimination) ─────────
     /// `Vec<EntityRecord>`
     Entities,
     /// `Vec<RelationRecord>`
     Relations,
-    // Note: Aggregates already exists above (reused for AggregateRecord)
+    /// `Vec<AggregateRecord>`
+    Aggregates,
     /// `Vec<KBContentRecord>` — changed KB Index entries with aggregated content
     KBContent,
 }
@@ -78,13 +61,13 @@ impl PortType {
 
 /// Type-erased batch data for ingestion ports.
 ///
-/// Wraps `Vec<T>` (InsertOp, LinkOp, etc.) behind `Arc<Mutex<Option<...>>>`:
+/// Wraps `Vec<T>` (EntityRecord, RelationRecord, etc.) behind `Arc<Mutex<Option<...>>>`:
 /// - **Clone** via Arc sharing (cheap, no deep copy)
-/// - **Serialize** as a summary `{ batch_type, count }` (ops aren't serializable)
+/// - **Serialize** as a summary `{ batch_type, count }` (records aren't serializable)
 /// - **take()** extracts the inner data, consuming it (subsequent takes return None)
 ///
-/// Used by ingestion nodes to move ops through ports without requiring
-/// the op types to implement Clone or Serialize.
+/// Used by record nodes to move data through ports without requiring
+/// the record types to implement Clone or Serialize.
 #[derive(Clone)]
 pub struct BatchPayload {
     pub batch_type: PortType,
@@ -121,6 +104,18 @@ impl BatchPayload {
                 None
             }
         }
+    }
+
+    /// Borrow the inner data for read-only access (e.g., checkpoint serialization).
+    ///
+    /// Returns a `MutexGuard` wrapping `Option<Box<dyn Any + Send>>`.
+    /// Use `downcast_ref::<Vec<T>>()` on the inner `Box` to access typed data.
+    pub fn data_lock(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Option<Box<dyn Any + Send>>>, String> {
+        self.data
+            .lock()
+            .map_err(|e| format!("BatchPayload lock poisoned: {e}"))
     }
 
     /// Whether the data has already been consumed.
@@ -173,7 +168,7 @@ pub enum PortValue {
     Any(serde_json::Value),
     Empty,
     // ── Ingestion values ──────────────────────────────────────────────
-    /// Type-erased batch data (ops). Use `payload.take::<Vec<InsertOp>>()` to extract.
+    /// Type-erased batch data. Use `payload.take::<Vec<EntityRecord>>()` to extract.
     Batch(BatchPayload),
 }
 
@@ -258,6 +253,7 @@ pub fn merge_port_values(a: PortValue, b: PortValue) -> Result<PortValue, String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn port_value_serialize_roundtrip() {
@@ -319,18 +315,18 @@ mod tests {
 
     #[test]
     fn ingestion_port_types_compatible() {
-        assert!(PortType::Inserts.compatible_with(&PortType::Inserts));
-        assert!(PortType::Ops.compatible_with(&PortType::Ops));
-        assert!(!PortType::Inserts.compatible_with(&PortType::Links));
-        assert!(!PortType::Inserts.compatible_with(&PortType::Results));
+        assert!(PortType::Entities.compatible_with(&PortType::Entities));
+        assert!(PortType::Aggregates.compatible_with(&PortType::Aggregates));
+        assert!(!PortType::Entities.compatible_with(&PortType::Relations));
+        assert!(!PortType::Entities.compatible_with(&PortType::Results));
         // Any is compatible with ingestion types too
-        assert!(PortType::Any.compatible_with(&PortType::Inserts));
-        assert!(PortType::Chunks.compatible_with(&PortType::Any));
+        assert!(PortType::Any.compatible_with(&PortType::Entities));
+        assert!(PortType::KBContent.compatible_with(&PortType::Any));
     }
 
     #[test]
     fn batch_payload_take_and_clone() {
-        let payload = BatchPayload::new(PortType::Inserts, vec![1i32, 2, 3]);
+        let payload = BatchPayload::new(PortType::Entities, vec![1i32, 2, 3]);
         assert_eq!(payload.count(), 3);
         assert!(!payload.is_taken());
 
@@ -354,7 +350,7 @@ mod tests {
 
     #[test]
     fn batch_payload_wrong_type_preserves_data() {
-        let payload = BatchPayload::new(PortType::Links, vec!["a".to_string(), "b".to_string()]);
+        let payload = BatchPayload::new(PortType::Relations, vec!["a".to_string(), "b".to_string()]);
         // Wrong type — returns None but data preserved
         assert!(payload.take::<i32>().is_none());
         assert!(!payload.is_taken());
@@ -366,21 +362,21 @@ mod tests {
 
     #[test]
     fn batch_port_value_type_and_serialize() {
-        let payload = BatchPayload::new(PortType::Chunks, vec![42u64, 43, 44]);
+        let payload = BatchPayload::new(PortType::Aggregates, vec![42u64, 43, 44]);
         let pv = PortValue::Batch(payload);
 
-        assert_eq!(pv.port_type(), PortType::Chunks);
+        assert_eq!(pv.port_type(), PortType::Aggregates);
 
         let json = serde_json::to_string(&pv).unwrap();
         assert!(json.contains("Batch"));
-        assert!(json.contains("Chunks"));
+        assert!(json.contains("Aggregates"));
         assert!(json.contains("\"count\":3"));
     }
 
     #[test]
     fn merge_batch_not_supported() {
-        let a = PortValue::Batch(BatchPayload::new(PortType::Inserts, vec![1i32]));
-        let b = PortValue::Batch(BatchPayload::new(PortType::Inserts, vec![2i32]));
+        let a = PortValue::Batch(BatchPayload::new(PortType::Entities, vec![1i32]));
+        let b = PortValue::Batch(BatchPayload::new(PortType::Entities, vec![2i32]));
         assert!(merge_port_values(a, b).is_err());
     }
 }

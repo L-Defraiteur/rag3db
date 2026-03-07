@@ -153,7 +153,7 @@ async fn e2e_create_drain_count() {
         .unwrap();
 
     // No KBs → only insert ops (no embed ops)
-    let stats = catalog.queue_stats();
+    let stats = catalog.drain_stats();
     assert_eq!(stats.pending, 3);
 
     let result = catalog.drain().await;
@@ -279,7 +279,7 @@ async fn e2e_create_link_drain() {
         .unwrap();
 
     // Queue: 2 inserts + 1 link = 3
-    assert_eq!(catalog.queue_stats().pending, 3);
+    assert_eq!(catalog.drain_stats().pending, 3);
 
     let result = catalog.drain().await;
     assert_eq!(result.processed, 3);
@@ -437,7 +437,7 @@ async fn e2e_full_pipeline() {
         .unwrap();
 
     // Queue: 5 inserts + 4 links = 9
-    assert_eq!(catalog.queue_stats().pending, 9);
+    assert_eq!(catalog.drain_stats().pending, 9);
 
     // Drain all
     let result = catalog.drain().await;

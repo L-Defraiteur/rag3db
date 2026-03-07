@@ -9,8 +9,9 @@
 //! - [`report`] — Serializable [`ExecutionReport`] built from events
 //! - [`record`] — Persist reports to rag3db or JSONL
 
+pub mod checkpoint;
+pub mod checkpoint_store;
 pub mod graph;
-pub mod ingestion_nodes;
 pub mod node;
 pub mod observe;
 pub mod port;
@@ -32,10 +33,13 @@ pub use search_nodes::{
     ComposeNode, ExpansionNode, FetchRelatedNode, PrimarySearchNode, QuerySourceNode,
 };
 pub use services::ServiceRegistry;
-pub use ingestion_nodes::{
-    AggregateBatchNode, ChunkBatchNode, DualEmbedBatchNode, EmbedBatchNode,
-    InsertBatchNode, LinkBatchNode, SparseEmbedBatchNode, SplitOpsNode,
+pub use checkpoint::{
+    CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,
+    GraphDefinition, NodeDef, EdgeDef, create_node_from_checkpoint,
+    CheckpointStore, ExecutionCheckpoint, CheckpointExecutionStatus,
+    NodeCheckpoint, NodeCheckpointStatus, timestamp_ms,
 };
+pub use checkpoint_store::CypherCheckpointStore;
 pub use record_nodes::{
     InsertRecordNode, LinkRecordNode, EmbedRecordNode,
     ChunkRecordNode, GatherKBNode, UpdateKBNode, ChunkKBNode, FlushFTSNode,

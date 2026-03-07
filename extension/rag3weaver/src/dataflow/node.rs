@@ -28,6 +28,18 @@ pub trait Node: Send + Sync {
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
+
+    /// Type identifier for checkpoint serialization (e.g., "InsertRecordNode").
+    /// Must be unique per node implementation and stable across versions.
+    fn node_type(&self) -> &'static str {
+        "Unknown"
+    }
+
+    /// Configuration snapshot for checkpoint (e.g., `{"gpu_batch_size": 32}`).
+    /// Used to compute the graph hash for checkpoint identity.
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::Value::Object(serde_json::Map::new())
+    }
 }
 
 // ─── DynamicNode trait ───────────────────────────────────────────────────────

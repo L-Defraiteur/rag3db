@@ -25,7 +25,7 @@ use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
-use crate::ops::RefOrUuid;
+use crate::records::RefOrUuid;
 use crate::records::{AggregateRecord, EntityRecord, KBContentRecord, RecordSourceContent, RelationRecord};
 use crate::refs::{EntityRef, RelationRef};
 use crate::search;
@@ -58,6 +58,9 @@ impl InsertRecordNode {
 impl Node for InsertRecordNode {
     fn name(&self) -> &str {
         &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "InsertRecordNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -221,6 +224,9 @@ impl LinkRecordNode {
 impl Node for LinkRecordNode {
     fn name(&self) -> &str {
         &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "LinkRecordNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -393,6 +399,12 @@ struct EmbedWork {
 impl Node for EmbedRecordNode {
     fn name(&self) -> &str {
         &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "EmbedRecordNode"
+    }
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -945,6 +957,9 @@ impl Node for ChunkRecordNode {
     fn name(&self) -> &str {
         &self.name
     }
+    fn node_type(&self) -> &'static str {
+        "ChunkRecordNode"
+    }
     fn inputs(&self) -> &[PortDef] {
         &[
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
@@ -1413,6 +1428,9 @@ impl Node for GatherKBNode {
     fn name(&self) -> &str {
         &self.name
     }
+    fn node_type(&self) -> &'static str {
+        "GatherKBNode"
+    }
     fn inputs(&self) -> &[PortDef] {
         &[
             PortDef { name: "aggregates", port_type: PortType::Aggregates, required: true },
@@ -1518,6 +1536,9 @@ impl UpdateKBNode {
 impl Node for UpdateKBNode {
     fn name(&self) -> &str {
         &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "UpdateKBNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -1640,6 +1661,9 @@ impl Node for ChunkKBNode {
     fn name(&self) -> &str {
         &self.name
     }
+    fn node_type(&self) -> &'static str {
+        "ChunkKBNode"
+    }
     fn inputs(&self) -> &[PortDef] {
         &[
             PortDef { name: "kb_content", port_type: PortType::KBContent, required: true },
@@ -1731,6 +1755,9 @@ impl FlushFTSNode {
 impl Node for FlushFTSNode {
     fn name(&self) -> &str {
         &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "FlushFTSNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[

@@ -16,7 +16,7 @@ use rag3weaver::config::{
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
-use rag3weaver::{Catalog, Hashsafe, Rag3dbConnection};
+use rag3weaver::{Catalog, Rag3dbConnection, hashsafe_uuid};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -325,7 +325,7 @@ async fn phase0b_bm25_search_multi_entity() {
     ).unwrap();
     catalog.create("Directory", make_directory("lib", "/repo/lib/")).unwrap();
 
-    catalog.link("HAS_FILE", Hashsafe::new("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
+    catalog.link("HAS_FILE", hashsafe_uuid("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
 
     let result = catalog.drain().await;
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
@@ -1104,7 +1104,7 @@ async fn phase0b_lucivy_contains_vs_parse() {
         "File",
         make_file("auth.ts", "/repo/src/auth.ts", "export function authenticate(req: Request) { return true; }"),
     ).unwrap();
-    catalog.link("HAS_FILE", Hashsafe::new("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
+    catalog.link("HAS_FILE", hashsafe_uuid("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
 
     let result = catalog.drain().await;
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);

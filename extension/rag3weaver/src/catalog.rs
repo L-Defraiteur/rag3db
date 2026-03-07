@@ -17,14 +17,16 @@ use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
-use crate::ops::{CatalogOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
-use crate::records::{AggregateRecord, EntityRecord, PendingWork, RelationRecord};
-use crate::queue::{FlushResult, QueueStats};
+use crate::records::{AggregateRecord, DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
 use crate::refs::{EntityRef, RelationRef};
-use crate::schema::{entity_has_chunks, generate_full_schema, resolve_entity_kbs};
+use crate::schema::{generate_full_schema, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
-use crate::uuid::{chunk_uuid, hashsafe_uuid};
+use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
+use crate::dataflow::checkpoint::{
+    create_node_from_checkpoint, CheckpointStore,
+};
+use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
@@ -104,9 +106,9 @@ pub struct DeleteResult {
 
 // ─── Catalog ───────────────────────────────────────────────────────────────
 
-/// Cumulative drain statistics (not reset on clear).
+/// Internal cumulative drain counters (not reset on clear).
 #[derive(Debug, Default)]
-struct DrainStats {
+struct DrainCounters {
     total_queued: usize,
     total_processed: usize,
     total_failed: usize,
@@ -122,16 +124,20 @@ pub struct Catalog {
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
     pending: PendingWork,
-    drain_stats: DrainStats,
+    drain_counters: DrainCounters,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
-    /// Populated by InsertBatchNode on each INSERT via RETURN ID(n).
+    /// Populated by InsertRecordNode on each INSERT via RETURN ID(n).
     node_id_cache: Arc<RwLock<NodeIdCache>>,
     /// Cached chunkers keyed by config to avoid re-instantiation.
     chunker_cache: HashMap<ChunkerConfig, Chunker>,
+    /// Checkpoint store for crash-recovery of drain executions.
+    checkpoint_store: Option<Arc<dyn CheckpointStore>>,
+    /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
+    fail_node: Option<String>,
 }
 
 impl Catalog {
@@ -149,13 +155,15 @@ impl Catalog {
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
-            drain_stats: DrainStats::default(),
+            drain_counters: DrainCounters::default(),
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
             chunker_cache: HashMap::new(),
+            checkpoint_store: None,
+            fail_node: None,
         }
     }
 
@@ -176,6 +184,18 @@ impl Catalog {
     /// Must be called before `initialize()`.
     pub fn set_dual_embedder(&mut self, embedder: Arc<dyn DualEmbedder>) {
         self.dual_embedder = Some(embedder);
+    }
+
+    /// Set a custom checkpoint store. Must be called before `initialize()`.
+    /// If set, `initialize()` will skip creating the default `CypherCheckpointStore`.
+    pub fn set_checkpoint_store(&mut self, store: Arc<dyn CheckpointStore>) {
+        self.checkpoint_store = Some(store);
+    }
+
+    /// Set a node name that should fail during checkpoint execution (testing only).
+    /// The named node will return an injected error instead of executing.
+    pub fn set_fail_node(&mut self, node_name: Option<&str>) {
+        self.fail_node = node_name.map(|s| s.to_string());
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
@@ -269,6 +289,17 @@ impl Catalog {
             }
         }
 
+        // 7. Initialize checkpoint store for crash-recovery (unless already set by tests)
+        if self.checkpoint_store.is_none() {
+            let cp_store: Arc<dyn CheckpointStore> =
+                Arc::new(CypherCheckpointStore::new(self.conn.clone()));
+            cp_store
+                .initialize()
+                .await
+                .map_err(|e| CatalogError::DbError(e))?;
+            self.checkpoint_store = Some(cp_store);
+        }
+
         self.initialized = true;
         Ok(())
     }
@@ -316,7 +347,7 @@ impl Catalog {
             resolver,
             entity_ref.clone(),
         ));
-        self.drain_stats.total_queued += 1;
+        self.drain_counters.total_queued += 1;
 
         // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
         let entity_kbs = resolve_entity_kbs(&entity_def);
@@ -394,7 +425,7 @@ impl Catalog {
                 source_uuid: uuid.clone(),
             });
 
-            self.drain_stats.total_queued += 3; // index entity + link + aggregate
+            self.drain_counters.total_queued += 3; // index entity + link + aggregate
         }
 
         Ok(entity_ref)
@@ -428,7 +459,7 @@ impl Catalog {
             resolver,
             relation_ref.clone(),
         ));
-        self.drain_stats.total_queued += 1;
+        self.drain_counters.total_queued += 1;
 
         // Incremental: if this relation connects a content entity to a title entity
         // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
@@ -454,7 +485,7 @@ impl Catalog {
                     title_entity: title_entity.clone(),
                     source_uuid: t_uuid,
                 });
-                self.drain_stats.total_queued += 1;
+                self.drain_counters.total_queued += 1;
             }
         }
 
@@ -636,8 +667,8 @@ impl Catalog {
             .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-        // If content changed, enqueue AggregateOps for all KBs this entity contributes to.
-        // The AggregateProcessor will handle deleting old chunks, re-chunking, and re-embedding.
+        // If content changed, enqueue AggregateRecords for all KBs this entity contributes to.
+        // GatherKBNode will handle deleting old chunks, re-chunking, and re-embedding.
         let mut reembedded = false;
         let chunks_deleted = 0usize;
         let chunks_created = 0usize;
@@ -658,7 +689,7 @@ impl Catalog {
                         title_entity: entity_name.to_string(),
                         source_uuid: uuid.to_string(),
                     });
-                    self.drain_stats.total_queued += 1;
+                    self.drain_counters.total_queued += 1;
                     reembedded = true;
                 } else {
                     // contentFor-only: find linked title entities and re-aggregate them.
@@ -691,7 +722,7 @@ impl Catalog {
                                     title_entity: title_entity.clone(),
                                     source_uuid: title_uuid.to_string(),
                                 });
-                                self.drain_stats.total_queued += 1;
+                                self.drain_counters.total_queued += 1;
                                 reembedded = true;
                             }
                         }
@@ -797,7 +828,7 @@ impl Catalog {
                     .and_then(|v| v.as_i64())
                     .unwrap_or(0) as usize;
 
-                // Find linked title entities → enqueue AggregateOps to rebuild their content
+                // Find linked title entities → enqueue AggregateRecords to rebuild their content
                 if let Some((rel_name, title_is_from)) = self.find_relation_to_entity(title_entity, entity_name) {
                     let (match_pattern, return_field) = if title_is_from {
                         // title -[rel]-> content_entity
@@ -824,7 +855,7 @@ impl Catalog {
                                 title_entity: title_entity.clone(),
                                 source_uuid: title_uuid.to_string(),
                             });
-                            self.drain_stats.total_queued += 1;
+                            self.drain_counters.total_queued += 1;
                         }
                     }
                 }
@@ -982,11 +1013,14 @@ impl Catalog {
         if let Some(ref dual_emb) = self.dual_embedder {
             services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
         }
+        if let Some(ref fail_node) = self.fail_node {
+            services.register::<String>("fail_node", Arc::new(fail_node.clone()));
+        }
 
         (graph, services, op_count)
     }
 
-    /// Drain all pending operations via the dataflow runtime.
+    /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
     pub async fn drain(&mut self) -> FlushResult {
         let (mut graph, services, op_count) = self.build_ingestion_graph();
         if graph.nodes.is_empty() {
@@ -994,22 +1028,38 @@ impl Catalog {
         }
 
         let node_count = graph.nodes.len();
-        // max_iterations: generous bound — DynamicNodes may expand the graph
         let runtime = DataflowRuntime::with_services(node_count + 20, services);
-        match runtime.execute(&mut graph).await {
+
+        // Generate deterministic execution_id from graph hash + timestamp
+        let graph_def = graph.to_definition();
+        let execution_id = format!(
+            "drain-{}-{}",
+            &graph_def.hash()[..12],
+            crate::dataflow::checkpoint::timestamp_ms(),
+        );
+
+        let result = if let Some(ref store) = self.checkpoint_store {
+            runtime
+                .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
+                .await
+        } else {
+            runtime.execute(&mut graph).await
+        };
+
+        match result {
             Ok(_output) => {
-                self.drain_stats.total_processed += op_count;
-                self.drain_stats.flush_count += 1;
-                FlushResult { processed: op_count, failed: 0, persisted: 0 }
+                self.drain_counters.total_processed += op_count;
+                self.drain_counters.flush_count += 1;
+                FlushResult { processed: op_count, failed: 0 }
             }
             Err(e) => {
                 self.event_bus.emit(CatalogEvent::Error {
                     context: "drain".to_string(),
                     message: format!("ingestion dataflow failed: {e}"),
                 });
-                self.drain_stats.total_failed += op_count;
-                self.drain_stats.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count, persisted: 0 }
+                self.drain_counters.total_failed += op_count;
+                self.drain_counters.flush_count += 1;
+                FlushResult { processed: 0, failed: op_count }
             }
         }
     }
@@ -1042,18 +1092,18 @@ impl Catalog {
         let runtime = DataflowRuntime::with_services(5, services);
         match runtime.execute(&mut graph).await {
             Ok(_) => {
-                self.drain_stats.total_processed += op_count;
-                self.drain_stats.flush_count += 1;
-                FlushResult { processed: op_count, failed: 0, persisted: 0 }
+                self.drain_counters.total_processed += op_count;
+                self.drain_counters.flush_count += 1;
+                FlushResult { processed: op_count, failed: 0 }
             }
             Err(e) => {
                 self.event_bus.emit(CatalogEvent::Error {
                     context: "flush_insertions".to_string(),
                     message: format!("insert-only dataflow failed: {e}"),
                 });
-                self.drain_stats.total_failed += op_count;
-                self.drain_stats.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count, persisted: 0 }
+                self.drain_counters.total_failed += op_count;
+                self.drain_counters.flush_count += 1;
+                FlushResult { processed: 0, failed: op_count }
             }
         }
     }
@@ -1067,15 +1117,141 @@ impl Catalog {
         &self.pending
     }
 
-    pub fn queue_stats(&self) -> QueueStats {
-        QueueStats {
+    pub fn drain_stats(&self) -> DrainStats {
+        DrainStats {
             pending: self.pending.total_count(),
-            total_queued: self.drain_stats.total_queued,
-            total_processed: self.drain_stats.total_processed,
-            total_failed: self.drain_stats.total_failed,
-            flush_count: self.drain_stats.flush_count,
-            ..Default::default()
+            failed: self.drain_counters.total_failed,
+            total_queued: self.drain_counters.total_queued,
+            total_processed: self.drain_counters.total_processed,
+            total_failed: self.drain_counters.total_failed,
+            flush_count: self.drain_counters.flush_count,
         }
+    }
+
+    /// Resume a previously failed drain execution from its checkpoint.
+    ///
+    /// Reconstructs the graph from the checkpointed `GraphDefinition`
+    /// (nodes + edges), then calls `execute_with_checkpoint()` which skips
+    /// already-completed nodes and resumes from the failure point.
+    pub async fn drain_resume(&mut self, execution_id: &str) -> Result<FlushResult, CatalogError> {
+        let store = self
+            .checkpoint_store
+            .clone()
+            .ok_or(CatalogError::NotInitialized)?;
+
+        // Load the checkpoint to get the graph definition
+        let checkpoint = store
+            .load_execution(execution_id)
+            .await
+            .map_err(|e| CatalogError::DbError(e))?
+            .ok_or_else(|| {
+                CatalogError::DbError(format!("checkpoint not found: {execution_id}"))
+            })?;
+
+        // Reconstruct the graph from the checkpointed definition
+        let mut graph = DataflowGraph::new();
+        for node_def in &checkpoint.graph_def.nodes {
+            let node = create_node_from_checkpoint(
+                &node_def.name,
+                &node_def.node_type,
+                &node_def.config,
+            )
+            .map_err(|e| CatalogError::DbError(e))?;
+            graph.add_node(node).map_err(|e| CatalogError::DbError(e))?;
+        }
+        for edge_def in &checkpoint.graph_def.edges {
+            graph
+                .connect(
+                    &edge_def.from_node,
+                    &edge_def.from_port,
+                    &edge_def.to_node,
+                    &edge_def.to_port,
+                )
+                .map_err(|e| CatalogError::DbError(e))?;
+        }
+
+        // Rebuild the ServiceRegistry (same as build_ingestion_graph)
+        let mut services = ServiceRegistry::new();
+        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
+        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
+        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
+        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
+        services.register::<HashMap<String, KBMetadata>>(
+            "kb_metadata",
+            Arc::new(self.kb_metadata.clone()),
+        );
+        services.register::<bool>(
+            "has_sparse",
+            Arc::new(self.sparse_embedder.is_some() || self.dual_embedder.is_some()),
+        );
+        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+
+        // Chunker cache: rebuild for KB nodes
+        self.warm_chunker_cache();
+        services.register::<HashMap<ChunkerConfig, Chunker>>(
+            "chunker_cache",
+            Arc::new(std::mem::take(&mut self.chunker_cache)),
+        );
+
+        // flush_kb_names: extract from graph node names (GatherKBNode uses kb_metadata)
+        let flush_kb_names: Vec<String> = self.kb_metadata.keys().cloned().collect();
+        services.register::<Vec<String>>("flush_kb_names", Arc::new(flush_kb_names));
+
+        if let Some(ref sparse_emb) = self.sparse_embedder {
+            services.register::<Arc<dyn SparseEmbedder>>(
+                "sparse_embedder",
+                Arc::new(sparse_emb.clone()),
+            );
+        }
+        if let Some(ref dual_emb) = self.dual_embedder {
+            services
+                .register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
+        }
+        if let Some(ref fail_node) = self.fail_node {
+            services.register::<String>("fail_node", Arc::new(fail_node.clone()));
+        }
+
+        let node_count = graph.nodes.len();
+        let runtime = DataflowRuntime::with_services(node_count + 20, services);
+
+        match runtime
+            .execute_with_checkpoint(&mut graph, store.as_ref(), execution_id)
+            .await
+        {
+            Ok(_) => {
+                self.drain_counters.flush_count += 1;
+                Ok(FlushResult {
+                    processed: node_count,
+                    failed: 0,
+                })
+            }
+            Err(e) => {
+                self.event_bus.emit(CatalogEvent::Error {
+                    context: "drain_resume".to_string(),
+                    message: format!("resume failed: {e}"),
+                });
+                self.drain_counters.flush_count += 1;
+                Ok(FlushResult {
+                    processed: 0,
+                    failed: node_count,
+                })
+            }
+        }
+    }
+
+    /// Check for incomplete checkpoint executions (status=Running).
+    ///
+    /// Returns execution IDs that can be passed to `drain_resume()`.
+    pub async fn check_pending_checkpoints(&self) -> Result<Vec<String>, CatalogError> {
+        let store = self
+            .checkpoint_store
+            .as_ref()
+            .ok_or(CatalogError::NotInitialized)?;
+        store
+            .find_incomplete()
+            .await
+            .map_err(|e| CatalogError::DbError(e))
     }
 
     /// Direct access to the underlying connection (useful for debugging/tests).
@@ -1102,7 +1278,7 @@ impl Catalog {
     // ── Node ID cache ─────────────────────────────────────────────────
 
     /// Access the shared node ID cache (uuid → internal rag3db node ID).
-    /// Populated automatically by InsertBatchNode on each INSERT.
+    /// Populated automatically by InsertRecordNode on each INSERT.
     pub fn node_id_cache(&self) -> &Arc<RwLock<NodeIdCache>> {
         &self.node_id_cache
     }
@@ -1798,170 +1974,6 @@ impl Catalog {
     }
 }
 
-// ─── compute_chunk_ops (standalone) ────────────────────────────────────────
-
-/// Build InsertOps, LinkOps, EmbedOps, SparseEmbedOps for all chunks of an entity.
-/// Standalone function (no &self) for use by ChunkProcessor in parallel via rayon.
-pub fn compute_chunk_ops(
-    entity_name: &str,
-    parent_uuid: &str,
-    entity_ref: &EntityRef,
-    data: &BTreeMap<String, CypherValue>,
-    config: &CatalogConfig,
-    kb_metadata: &HashMap<String, KBMetadata>,
-    chunker_cache: &HashMap<ChunkerConfig, Chunker>,
-    has_sparse: bool,
-    has_dual: bool,
-) -> Vec<CatalogOp> {
-    let entity_def = match config.entities.get(entity_name) {
-        Some(def) => def,
-        None => return vec![],
-    };
-    if !entity_has_chunks(entity_def) {
-        return vec![];
-    }
-
-    let kb_names: Vec<&String> = kb_metadata
-        .iter()
-        .filter(|(_, kb)| kb.entities.contains(entity_name))
-        .map(|(name, _)| name)
-        .collect();
-    if kb_names.is_empty() {
-        return vec![];
-    }
-
-    let mut ops = Vec::new();
-
-    for kb_name in &kb_names {
-        let kb_meta = match kb_metadata.get(*kb_name) {
-            Some(kb) => kb,
-            None => continue,
-        };
-        let kb_config = config.knowledge_bases.get(*kb_name);
-
-        let title_text: Option<String> = if kb_meta.title.entity == entity_name {
-            data.get(&kb_meta.title.field)
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-        } else {
-            None
-        };
-
-        let kb_signals = kb_config.map(|c| c.signals).unwrap_or(search::SearchSignals::HYBRID);
-        let kb_sparse = kb_signals.sparse() && has_sparse;
-        let chunking = &kb_meta.chunking;
-
-        let chunker_key = ChunkerConfig {
-            max_size: chunking.max_size,
-            overlap: chunking.overlap,
-            strategy: chunking.strategy.clone(),
-        };
-        let chunker = chunker_cache
-            .get(&chunker_key)
-            .expect("chunker must be pre-warmed in cache");
-
-        for content_ref in &kb_meta.content {
-            if content_ref.entity != entity_name {
-                continue;
-            }
-            let field_name = &content_ref.field;
-            let field_def = match entity_def.fields.get(field_name) {
-                Some(fd) => fd,
-                None => continue,
-            };
-            if !field_def.is_chunked() {
-                continue;
-            }
-
-            let field_text = match data.get(field_name).and_then(|v| v.as_str()) {
-                Some(s) if !s.is_empty() => s,
-                _ => continue,
-            };
-
-            let chunks = chunker.chunk(field_text);
-            if chunks.is_empty() {
-                continue;
-            }
-
-            let chunk_table = format!("{entity_name}_Chunk");
-            let rel_name = format!("{entity_name}_HAS_CHUNK");
-
-            for chunk in &chunks {
-                let c_uuid = chunk_uuid(parent_uuid, field_name, chunk.index);
-
-                let embed_text = match &title_text {
-                    Some(title) => format!("{title}\n---\n{}", chunk.text),
-                    None => chunk.text.clone(),
-                };
-
-                let mut chunk_data = BTreeMap::new();
-                chunk_data.insert("_uuid".to_string(), CypherValue::String(c_uuid.clone()));
-                chunk_data.insert("_parent_uuid".to_string(), CypherValue::String(parent_uuid.to_string()));
-                chunk_data.insert("_parent_field".to_string(), CypherValue::String(field_name.clone()));
-                chunk_data.insert("_kb_name".to_string(), CypherValue::String(kb_name.to_string()));
-                chunk_data.insert("_text".to_string(), CypherValue::String(chunk.text.clone()));
-                chunk_data.insert("_text_hash".to_string(), CypherValue::String(content_hash(&chunk.text)));
-                chunk_data.insert("_index".to_string(), CypherValue::Int(chunk.index as i64));
-                chunk_data.insert("_start_char".to_string(), CypherValue::Int(chunk.start_byte as i64));
-                chunk_data.insert("_end_char".to_string(), CypherValue::Int(chunk.end_byte as i64));
-                chunk_data.insert("_start_line".to_string(), CypherValue::Int(chunk.start_line as i64));
-                chunk_data.insert("_end_line".to_string(), CypherValue::Int(chunk.end_line as i64));
-                chunk_data.insert("_core_start_char".to_string(), CypherValue::Int(chunk.core_start_byte as i64));
-                chunk_data.insert("_core_end_char".to_string(), CypherValue::Int(chunk.core_end_byte as i64));
-                chunk_data.insert("_core_start_line".to_string(), CypherValue::Int(chunk.core_start_line as i64));
-                chunk_data.insert("_core_end_line".to_string(), CypherValue::Int(chunk.core_end_line as i64));
-
-                let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
-
-                ops.push(CatalogOp::Insert(InsertOp::new(
-                    chunk_table.clone(),
-                    chunk_data,
-                    chunk_resolver,
-                    chunk_ref.clone(),
-                )));
-
-                let (link_ref, link_resolver) = RelationRef::new(&rel_name);
-                ops.push(CatalogOp::Link(LinkOp::new(
-                    rel_name.clone(),
-                    RefOrUuid::Ref(entity_ref.clone()),
-                    RefOrUuid::Uuid(c_uuid.clone()),
-                    BTreeMap::new(),
-                    link_resolver,
-                    link_ref,
-                )));
-
-                if has_dual && kb_signals.vector() && kb_sparse {
-                    // Single forward pass for both dense + sparse
-                    ops.push(CatalogOp::DualEmbed(DualEmbedOp {
-                        entity_ref: chunk_ref,
-                        kb_name: kb_name.to_string(),
-                        texts: vec![embed_text],
-                    }));
-                } else {
-                    if kb_signals.vector() {
-                        ops.push(CatalogOp::Embed(EmbedOp {
-                            entity_ref: chunk_ref.clone(),
-                            kb_name: kb_name.to_string(),
-                            texts: vec![embed_text.clone()],
-                        }));
-                    }
-
-                    if kb_sparse {
-                        ops.push(CatalogOp::SparseEmbed(SparseEmbedOp {
-                            entity_ref: chunk_ref,
-                            kb_name: kb_name.to_string(),
-                            texts: vec![embed_text],
-                        }));
-                    }
-                }
-            }
-        }
-    }
-
-    ops
-}
-
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2063,14 +2075,14 @@ mod tests {
         chunker.chunk(body).len()
     }
 
-    /// Ops enqueued at create() time: 1 entity insert + 1 ChunkOp.
+    /// Records enqueued at create() time:
+    /// 1 EntityRecord(entity) + 1 EntityRecord({KB}_Index) + 1 RelationRecord(_IN_) + 1 AggregateRecord.
     fn ops_enqueued_per_create(_body: &str) -> usize {
-        // 1 InsertOp(entity) + 1 InsertOp({KB}_Index) + 1 LinkOp(_IN_) + 1 AggregateOp
         4
     }
 
-    /// Total ops processed after drain():
-    /// 2 inserts (entity + index) + 1 link (_IN_) + 1 aggregate (no-op stub).
+    /// Total records processed after drain():
+    /// 2 inserts (entity + index) + 1 link (_IN_) + 1 aggregate.
     fn ops_per_create(_body: &str) -> usize {
         4
     }
@@ -2189,7 +2201,7 @@ mod tests {
         let data = make_doc_data("Title", body);
         catalog.create("Document", data).unwrap();
 
-        let stats = catalog.queue_stats();
+        let stats = catalog.drain_stats();
         let expected = ops_enqueued_per_create(body);
         assert_eq!(stats.total_queued, expected);
         assert_eq!(stats.pending, expected);
@@ -2415,7 +2427,7 @@ mod tests {
         assert!(catalog.get_relation_def("GHOST").is_none());
     }
 
-    // ── queue stats ────────────────────────────────────────────────────
+    // ── drain stats ────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn has_pending_and_stats() {
@@ -2423,7 +2435,7 @@ mod tests {
         catalog.initialize().await.unwrap();
 
         assert!(!catalog.has_pending());
-        assert_eq!(catalog.queue_stats().total_queued, 0);
+        assert_eq!(catalog.drain_stats().total_queued, 0);
 
         let body = "B";
         catalog
@@ -2432,14 +2444,14 @@ mod tests {
 
         let enqueued = ops_enqueued_per_create(body);
         assert!(catalog.has_pending());
-        let stats = catalog.queue_stats();
+        let stats = catalog.drain_stats();
         assert_eq!(stats.total_queued, enqueued);
         assert_eq!(stats.pending, enqueued);
 
         catalog.drain().await;
 
         assert!(!catalog.has_pending());
-        let stats = catalog.queue_stats();
+        let stats = catalog.drain_stats();
         assert_eq!(stats.total_processed, ops_per_create(body));
     }
 
@@ -2548,5 +2560,83 @@ mod tests {
         // drain() clears pending work
         let _ = catalog.drain().await;
         assert!(catalog.pending_work().is_empty(), "pending should be cleared after drain");
+    }
+
+    // ── checkpoint E2E ────────────────────────────────────────────────
+
+    use crate::dataflow::checkpoint_store::MockCheckpointStore;
+    use crate::dataflow::checkpoint::CheckpointExecutionStatus;
+
+    fn make_catalog_with_mock_checkpoint() -> (Catalog, Arc<MockCheckpointStore>) {
+        let mock_store = Arc::new(MockCheckpointStore::new());
+        let mut catalog = make_catalog();
+        catalog.set_checkpoint_store(mock_store.clone());
+        (catalog, mock_store)
+    }
+
+    #[tokio::test]
+    async fn checkpoint_drain_marks_completed() {
+        let (mut catalog, store) = make_catalog_with_mock_checkpoint();
+        catalog.initialize().await.unwrap();
+
+        catalog.create("Document", make_doc_data("Test", "Body")).unwrap();
+        let result = catalog.drain().await;
+        assert_eq!(result.failed, 0);
+        assert!(result.processed > 0);
+
+        // Checkpoint should be marked completed (no pending checkpoints)
+        let pending = catalog.check_pending_checkpoints().await.unwrap();
+        assert!(pending.is_empty(), "checkpoint should be cleaned up after successful drain");
+    }
+
+    #[tokio::test]
+    async fn checkpoint_resume_nonexistent_returns_error() {
+        let (mut catalog, _store) = make_catalog_with_mock_checkpoint();
+        catalog.initialize().await.unwrap();
+
+        let err = catalog.drain_resume("nonexistent-exec-id").await;
+        assert!(err.is_err());
+        let msg = format!("{}", err.unwrap_err());
+        assert!(msg.contains("not found"), "expected 'not found' error, got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn checkpoint_resume_already_completed_is_noop() {
+        let (mut catalog, store) = make_catalog_with_mock_checkpoint();
+        catalog.initialize().await.unwrap();
+
+        // Do a normal drain to create a completed checkpoint
+        catalog.create("Document", make_doc_data("Test", "Body")).unwrap();
+        let result = catalog.drain().await;
+        assert_eq!(result.failed, 0);
+
+        // Find the completed execution_id
+        // MockCheckpointStore keeps all executions; find the one with status Completed
+        let exec_id = {
+            let mut found = None;
+            store.mutate_all(|execs| {
+                for (id, cp) in execs.iter() {
+                    if cp.status == CheckpointExecutionStatus::Completed {
+                        found = Some(id.clone());
+                    }
+                }
+            });
+            found.expect("should have a completed execution")
+        };
+
+        // Resume on completed execution → should succeed as no-op
+        let resume_result = catalog.drain_resume(&exec_id).await.unwrap();
+        // execute_with_checkpoint returns Ok(DataflowOutput::empty()) for completed,
+        // so drain_resume sees Ok → reports processed
+        assert_eq!(resume_result.failed, 0);
+    }
+
+    #[tokio::test]
+    async fn checkpoint_check_pending_empty_initially() {
+        let (mut catalog, _store) = make_catalog_with_mock_checkpoint();
+        catalog.initialize().await.unwrap();
+
+        let pending = catalog.check_pending_checkpoints().await.unwrap();
+        assert!(pending.is_empty());
     }
 }

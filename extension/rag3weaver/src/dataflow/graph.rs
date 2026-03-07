@@ -67,7 +67,7 @@ impl DataflowGraph {
     }
 
     /// Pre-load an input port on a node with initial data.
-    /// Used to feed data into entry nodes (e.g., SplitOpsNode).
+    /// Used to feed data into entry nodes.
     pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
         self.initial_inputs
             .entry(node_name.to_string())

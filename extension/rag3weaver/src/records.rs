@@ -8,9 +8,79 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::connection::CypherValue;
-use crate::ops::RefOrUuid;
-use crate::refs::{EntityRef, EntityRefResolver, RelationRef, RelationRefResolver};
+use crate::refs::{EntityRef, EntityRefResolver, RefError, RelationRef, RelationRefResolver};
+
+// ─── RefOrUuid ──────────────────────────────────────────────────────────────
+
+/// Reference to an entity: either an unresolved `EntityRef` or a known UUID.
+///
+/// Used by `Catalog::link()` for `from`/`to` endpoints: the caller can pass
+/// either an `EntityRef` (whose UUID will be resolved at drain time) or a
+/// direct UUID string (for entities already in the DB).
+#[derive(Debug, Clone)]
+pub enum RefOrUuid {
+    Ref(EntityRef),
+    Uuid(String),
+}
+
+impl RefOrUuid {
+    pub fn try_resolve(&self) -> Result<String, RefError> {
+        match self {
+            Self::Uuid(s) => Ok(s.clone()),
+            Self::Ref(r) => r.uuid(),
+        }
+    }
+
+    pub async fn resolve(&mut self) -> Result<String, RefError> {
+        match self {
+            Self::Uuid(s) => Ok(s.clone()),
+            Self::Ref(r) => r.ready().await,
+        }
+    }
+}
+
+impl From<EntityRef> for RefOrUuid {
+    fn from(r: EntityRef) -> Self {
+        Self::Ref(r)
+    }
+}
+
+impl From<String> for RefOrUuid {
+    fn from(s: String) -> Self {
+        Self::Uuid(s)
+    }
+}
+
+impl From<&str> for RefOrUuid {
+    fn from(s: &str) -> Self {
+        Self::Uuid(s.to_string())
+    }
+}
+
+// ─── FlushResult ────────────────────────────────────────────────────────────
+
+/// Result of a drain/flush cycle.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FlushResult {
+    pub processed: usize,
+    pub failed: usize,
+}
+
+// ─── DrainStats ─────────────────────────────────────────────────────────────
+
+/// Snapshot of drain statistics.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DrainStats {
+    pub pending: usize,
+    pub failed: usize,
+    pub total_queued: usize,
+    pub total_processed: usize,
+    pub total_failed: usize,
+    pub flush_count: usize,
+}
 
 // ─── EntityRecord ────────────────────────────────────────────────────────────
 
@@ -92,6 +162,7 @@ impl RelationRecord {
 ///
 /// Quasi-identical to AggregateOp — the "instruction" was already implicit
 /// in the old AggregateOp (rebuild = query graph + re-chunk + re-embed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateRecord {
     pub index_entry_uuid: String,
     pub kb_name: String,
@@ -105,6 +176,7 @@ pub struct AggregateRecord {
 ///
 /// Used by GatherKBNode to collect content from DB, and by ChunkKBNode
 /// to produce chunk entities with correct _source_entity / _source_uuid.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordSourceContent {
     pub entity_name: String,
     pub entity_uuid: String,
@@ -117,6 +189,7 @@ pub struct RecordSourceContent {
 /// Produced by GatherKBNode (Steps 1-4: read DB, detect changes),
 /// consumed by UpdateKBNode (Steps 5-6: update index, delete old chunks)
 /// and ChunkKBNode (Step 7: generate chunk records).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KBContentRecord {
     /// UUID of the {KB}_Index entity
     pub index_entry_uuid: String,
@@ -130,6 +203,172 @@ pub struct KBContentRecord {
     pub new_hash: String,
     /// Source fields with text — needed for per-source chunking + SOURCED relations
     pub sources: Vec<RecordSourceContent>,
+}
+
+// ─── Checkpoint types ────────────────────────────────────────────────────────
+
+/// Serializable snapshot of an EntityRef or RelationRef state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointRefState {
+    pub type_name: String,
+    pub temp_uuid: String,
+    pub status: CheckpointRefStatus,
+}
+
+/// Resolution status of a ref at checkpoint time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CheckpointRefStatus {
+    Pending,
+    Ready { uuid: String },
+    Failed { error: String },
+    ReadyRel { from_uuid: String, to_uuid: String },
+}
+
+/// Serializable form of EntityRecord (no channels, no resolver).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointEntityRecord {
+    pub entity_name: String,
+    pub data: BTreeMap<String, CypherValue>,
+    pub ref_state: CheckpointRefState,
+}
+
+/// Serializable form of RelationRecord (no channels, no resolver).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointRelationRecord {
+    pub rel_name: String,
+    pub from_uuid: Option<String>,
+    pub to_uuid: Option<String>,
+    pub from_temp_uuid: Option<String>,
+    pub to_temp_uuid: Option<String>,
+    pub properties: BTreeMap<String, CypherValue>,
+    pub ref_state: CheckpointRefState,
+}
+
+impl EntityRecord {
+    /// Convert to a serializable checkpoint form.
+    pub fn to_checkpoint(&self) -> CheckpointEntityRecord {
+        let status = match self.entity_ref.uuid() {
+            Ok(uuid) => CheckpointRefStatus::Ready { uuid },
+            Err(RefError::Pending) => CheckpointRefStatus::Pending,
+            Err(RefError::Failed(e)) => CheckpointRefStatus::Failed { error: e },
+        };
+        CheckpointEntityRecord {
+            entity_name: self.entity_name.clone(),
+            data: self.data.clone(),
+            ref_state: CheckpointRefState {
+                type_name: self.entity_ref.entity().to_string(),
+                temp_uuid: self.entity_ref.temp_uuid().to_string(),
+                status,
+            },
+        }
+    }
+}
+
+impl CheckpointEntityRecord {
+    /// Reconstruct an EntityRecord from checkpoint data.
+    ///
+    /// The EntityRef is pre-resolved (channel initialized to Ready).
+    /// The resolver is None (already consumed in the original execution).
+    pub fn into_entity_record(self) -> EntityRecord {
+        let entity_ref = match &self.ref_state.status {
+            CheckpointRefStatus::Ready { uuid } => {
+                EntityRef::pre_resolved(
+                    &self.ref_state.type_name,
+                    &self.ref_state.temp_uuid,
+                    uuid,
+                )
+            }
+            _ => {
+                // Pending or Failed: create a new unresolved ref with the same temp_uuid.
+                // This shouldn't happen in practice (checkpoint saves after node completes),
+                // but we handle it for robustness.
+                EntityRef::pre_resolved(
+                    &self.ref_state.type_name,
+                    &self.ref_state.temp_uuid,
+                    "",
+                )
+            }
+        };
+        EntityRecord {
+            entity_name: self.entity_name,
+            data: self.data,
+            entity_ref,
+            resolver: None,
+        }
+    }
+}
+
+impl RelationRecord {
+    /// Convert to a serializable checkpoint form.
+    pub fn to_checkpoint(&self) -> CheckpointRelationRecord {
+        let (from_uuid, from_temp_uuid) = match &self.from {
+            RefOrUuid::Uuid(s) => (Some(s.clone()), None),
+            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.temp_uuid().to_string())),
+        };
+        let (to_uuid, to_temp_uuid) = match &self.to {
+            RefOrUuid::Uuid(s) => (Some(s.clone()), None),
+            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.temp_uuid().to_string())),
+        };
+        let status = match self.relation_ref.resolved() {
+            Ok(r) => CheckpointRefStatus::ReadyRel {
+                from_uuid: r.from_uuid,
+                to_uuid: r.to_uuid,
+            },
+            Err(RefError::Pending) => CheckpointRefStatus::Pending,
+            Err(RefError::Failed(e)) => CheckpointRefStatus::Failed { error: e },
+        };
+        CheckpointRelationRecord {
+            rel_name: self.rel_name.clone(),
+            from_uuid,
+            to_uuid,
+            from_temp_uuid,
+            to_temp_uuid,
+            properties: self.properties.clone(),
+            ref_state: CheckpointRefState {
+                type_name: self.relation_ref.relation().to_string(),
+                temp_uuid: self.relation_ref.temp_uuid().to_string(),
+                status,
+            },
+        }
+    }
+}
+
+impl CheckpointRelationRecord {
+    /// Reconstruct a RelationRecord from checkpoint data.
+    pub fn into_relation_record(self) -> RelationRecord {
+        let from = match self.from_uuid {
+            Some(uuid) => RefOrUuid::Uuid(uuid),
+            None => RefOrUuid::Uuid(String::new()),
+        };
+        let to = match self.to_uuid {
+            Some(uuid) => RefOrUuid::Uuid(uuid),
+            None => RefOrUuid::Uuid(String::new()),
+        };
+        let relation_ref = match &self.ref_state.status {
+            CheckpointRefStatus::ReadyRel { from_uuid, to_uuid } => {
+                RelationRef::pre_resolved(
+                    &self.ref_state.type_name,
+                    &self.ref_state.temp_uuid,
+                    from_uuid,
+                    to_uuid,
+                )
+            }
+            _ => RelationRef::pre_resolved(
+                &self.ref_state.type_name,
+                &self.ref_state.temp_uuid,
+                "",
+                "",
+            ),
+        };
+        RelationRecord {
+            rel_name: self.rel_name,
+            from,
+            to,
+            properties: self.properties,
+            relation_ref,
+            resolver: None,
+        }
+    }
 }
 
 // ─── PendingWork ─────────────────────────────────────────────────────────────

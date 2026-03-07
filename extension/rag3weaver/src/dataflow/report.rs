@@ -21,6 +21,7 @@ pub enum ExecutionStatus {
 pub enum NodeStatus {
     Completed,
     Failed { error: String },
+    Resumed,
 }
 
 // ─── NodeReport ─────────────────────────────────────────────────────────────
@@ -109,6 +110,18 @@ impl ExecutionReport {
                         },
                         duration_ms: 0,
                         output_ports: vec![],
+                        metrics: std::collections::HashMap::new(),
+                    });
+                }
+                DataflowEvent::CheckpointResumed {
+                    node,
+                    output_ports,
+                } => {
+                    nodes.push(NodeReport {
+                        name: node.clone(),
+                        status: NodeStatus::Resumed,
+                        duration_ms: 0,
+                        output_ports: output_ports.clone(),
                         metrics: std::collections::HashMap::new(),
                     });
                 }
@@ -254,6 +267,41 @@ mod tests {
             report.status,
             ExecutionStatus::Failed { .. }
         ));
+    }
+
+    #[test]
+    fn report_includes_resumed_nodes() {
+        let events = vec![
+            DataflowEvent::CheckpointResumed {
+                node: "inserts".into(),
+                output_ports: vec!["done".into(), "inserted".into()],
+            },
+            DataflowEvent::NodeStarted {
+                node: "links".into(),
+            },
+            DataflowEvent::NodeCompleted {
+                node: "links".into(),
+                duration_ms: 15,
+                output_ports: vec!["done".into()],
+                metrics: std::collections::HashMap::new(),
+            },
+            DataflowEvent::Completed {
+                total_nodes: 2,
+                duration_ms: 20,
+            },
+        ];
+
+        let graph = DataflowGraph::new();
+        let output = DataflowOutput::empty();
+        let report = ExecutionReport::build(&events, &graph, &output);
+
+        assert_eq!(report.nodes.len(), 2);
+        assert_eq!(report.nodes[0].name, "inserts");
+        assert!(matches!(report.nodes[0].status, NodeStatus::Resumed));
+        assert_eq!(report.nodes[0].duration_ms, 0);
+        assert_eq!(report.nodes[0].output_ports, vec!["done", "inserted"]);
+        assert_eq!(report.nodes[1].name, "links");
+        assert!(matches!(report.nodes[1].status, NodeStatus::Completed));
     }
 
     #[test]
