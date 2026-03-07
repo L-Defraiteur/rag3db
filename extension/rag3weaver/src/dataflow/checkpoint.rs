@@ -13,12 +13,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use super::graph::DataflowGraph;
-use super::node::Node;
 use super::port::{BatchPayload, PortType, PortValue};
-use super::record_nodes::{
-    ChunkKBNode, ChunkRecordNode, EmbedRecordNode, FlushFTSNode, GatherKBNode,
-    InsertRecordNode, LinkRecordNode, UpdateKBNode,
-};
 use crate::records::{
     AggregateRecord, CheckpointEntityRecord, CheckpointRelationRecord, EntityRecord,
     KBContentRecord, RelationRecord,
@@ -272,27 +267,14 @@ impl DataflowGraph {
     /// Extract a serializable definition of the graph structure.
     ///
     /// Captures each node's `node_type()` and `node_config()`, plus all edges.
-    /// DynamicNodes are included with type "Dynamic" (not checkpointable).
     pub fn to_definition(&self) -> GraphDefinition {
-        let mut nodes = Vec::new();
-        for slot in &self.nodes {
-            match slot {
-                super::graph::NodeSlot::Static(node) => {
-                    nodes.push(NodeDef {
-                        name: node.name().to_string(),
-                        node_type: node.node_type().to_string(),
-                        config: node.node_config(),
-                    });
-                }
-                super::graph::NodeSlot::Dynamic(node) => {
-                    nodes.push(NodeDef {
-                        name: node.name().to_string(),
-                        node_type: "Dynamic".to_string(),
-                        config: serde_json::Value::Object(serde_json::Map::new()),
-                    });
-                }
+        let nodes = self.nodes.iter().map(|node| {
+            NodeDef {
+                name: node.name().to_string(),
+                node_type: node.node_type().to_string(),
+                config: node.node_config(),
             }
-        }
+        }).collect();
 
         let edges = self.edges.iter().map(|e| EdgeDef {
             from_node: e.from_node.clone(),
@@ -305,36 +287,6 @@ impl DataflowGraph {
     }
 }
 
-/// Recreate a node from its checkpoint type string and config.
-///
-/// This is a temporary factory that matches on known node_type strings.
-/// Will be replaced by a `NodeRegistry` in Phase 3 (Mermaid templates).
-pub fn create_node_from_checkpoint(
-    name: &str,
-    node_type: &str,
-    config: &serde_json::Value,
-) -> Result<Box<dyn Node>, String> {
-    match node_type {
-        "InsertRecordNode" => Ok(Box::new(InsertRecordNode::new(name))),
-        "LinkRecordNode" => Ok(Box::new(LinkRecordNode::new(name))),
-        "EmbedRecordNode" => {
-            let gpu_batch_size = config
-                .get("gpu_batch_size")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(32) as usize;
-            Ok(Box::new(EmbedRecordNode::new(name, gpu_batch_size)))
-        }
-        "ChunkRecordNode" => Ok(Box::new(ChunkRecordNode::new(name))),
-        "GatherKBNode" => Ok(Box::new(GatherKBNode::new(name))),
-        "UpdateKBNode" => Ok(Box::new(UpdateKBNode::new(name))),
-        "ChunkKBNode" => Ok(Box::new(ChunkKBNode::new(name))),
-        "FlushFTSNode" => Ok(Box::new(FlushFTSNode::new(name))),
-        other => Err(format!(
-            "unknown node_type for checkpoint: {other} — \
-             register it in create_node_from_checkpoint()"
-        )),
-    }
-}
 
 // ─── Execution Checkpoint Types ──────────────────────────────────────────────
 
@@ -442,8 +394,19 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::connection::CypherValue;
+    use crate::dataflow::node_factories::register_builtins;
+    use crate::dataflow::node_registry::NodeRegistry;
+    use crate::dataflow::record_nodes::{
+        EmbedRecordNode, InsertRecordNode, LinkRecordNode,
+    };
     use crate::records::{CheckpointRefStatus, EntityRecord};
     use crate::refs::EntityRef;
+
+    fn builtin_registry() -> NodeRegistry {
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        registry
+    }
 
     #[test]
     fn checkpoint_empty_roundtrip() {
@@ -649,7 +612,8 @@ mod tests {
     }
 
     #[test]
-    fn create_node_from_checkpoint_all_types() {
+    fn registry_creates_all_checkpoint_types() {
+        let registry = builtin_registry();
         let cases = vec![
             ("InsertRecordNode", serde_json::json!({})),
             ("LinkRecordNode", serde_json::json!({})),
@@ -662,7 +626,7 @@ mod tests {
         ];
 
         for (node_type, config) in &cases {
-            let node = create_node_from_checkpoint("test", node_type, config);
+            let node = registry.create(node_type, "test", config);
             assert!(node.is_ok(), "failed to create {node_type}");
             let node = node.unwrap();
             assert_eq!(node.name(), "test");
@@ -670,14 +634,15 @@ mod tests {
         }
 
         // Unknown type fails
-        let err = create_node_from_checkpoint("x", "Bogus", &serde_json::json!({}));
+        let err = registry.create("Bogus", "x", &serde_json::json!({}));
         assert!(err.is_err());
     }
 
     #[test]
-    fn create_embed_node_preserves_config() {
+    fn registry_embed_node_preserves_config() {
+        let registry = builtin_registry();
         let config = serde_json::json!({"gpu_batch_size": 64});
-        let node = create_node_from_checkpoint("embeds", "EmbedRecordNode", &config).unwrap();
+        let node = registry.create("EmbedRecordNode", "embeds", &config).unwrap();
         let restored_config = node.node_config();
         assert_eq!(restored_config.get("gpu_batch_size").unwrap().as_u64(), Some(64));
     }

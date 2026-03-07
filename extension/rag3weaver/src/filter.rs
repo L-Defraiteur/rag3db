@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::config::RelationDef;
@@ -29,7 +30,9 @@ pub enum FilterError {
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 /// A single filter operator.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", content = "value")]
+#[serde(rename_all = "snake_case")]
 pub enum FilterOp {
     Eq(CypherValue),
     Neq(CypherValue),
@@ -56,7 +59,8 @@ pub enum FilterOp {
 }
 
 /// A filter value: direct value, list (IN shorthand), or operator list.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum FilterValue {
     /// Direct value: equality check, or IS NULL if `CypherValue::Null`.
     Direct(CypherValue),
@@ -67,7 +71,8 @@ pub enum FilterValue {
 }
 
 /// Composable filter condition (Qdrant-like Must/Should/MustNot).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FilterCondition {
     /// Single field filter.
     Field { key: String, value: FilterValue },

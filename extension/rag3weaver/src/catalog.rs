@@ -23,9 +23,9 @@ use crate::schema::{generate_full_schema, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
-use crate::dataflow::checkpoint::{
-    create_node_from_checkpoint, CheckpointStore,
-};
+use crate::dataflow::checkpoint::CheckpointStore;
+use crate::dataflow::node_factories::register_builtins;
+use crate::dataflow::node_registry::NodeRegistry;
 use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
@@ -1149,14 +1149,14 @@ impl Catalog {
             })?;
 
         // Reconstruct the graph from the checkpointed definition
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+
         let mut graph = DataflowGraph::new();
         for node_def in &checkpoint.graph_def.nodes {
-            let node = create_node_from_checkpoint(
-                &node_def.name,
-                &node_def.node_type,
-                &node_def.config,
-            )
-            .map_err(|e| CatalogError::DbError(e))?;
+            let node = registry
+                .create(&node_def.node_type, &node_def.name, &node_def.config)
+                .map_err(|e| CatalogError::DbError(e))?;
             graph.add_node(node).map_err(|e| CatalogError::DbError(e))?;
         }
         for edge_def in &checkpoint.graph_def.edges {
@@ -1865,12 +1865,12 @@ impl Catalog {
 
     // ── Strategy Search ──────────────────────────────────────────────
 
-    /// Build a configured [`DataflowGraph`] for search with strategy.
+    /// Build a configured [`DataflowGraph`] + [`ServiceRegistry`] for search with strategy.
     ///
     /// Use with [`DataflowRuntime`] for event observation:
     /// ```ignore
-    /// let mut graph = Catalog::build_dataflow_graph(catalog, kb, q, strategy).await;
-    /// let runtime = DataflowRuntime::new(10);
+    /// let (mut graph, services) = Catalog::build_dataflow_graph(catalog, kb, q, strategy).await;
+    /// let runtime = DataflowRuntime::with_services(10, services);
     /// let mut rx = runtime.subscribe();
     /// let output = runtime.execute(&mut graph).await?;
     /// ```
@@ -1879,11 +1879,17 @@ impl Catalog {
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
-    ) -> crate::dataflow::DataflowGraph {
+    ) -> (crate::dataflow::DataflowGraph, crate::dataflow::ServiceRegistry) {
         use crate::dataflow::*;
+        use crate::dataflow::services::ConnService;
 
-        let conn = { catalog.lock().await.conn.clone() };
         let mut graph = DataflowGraph::new();
+
+        // Services
+        let mut services = ServiceRegistry::new();
+        let conn = catalog.lock().await.conn_arc();
+        services.register::<tokio::sync::Mutex<Catalog>>("catalog", catalog.clone());
+        services.register("conn", std::sync::Arc::new(ConnService(conn)));
 
         // Source node
         graph
@@ -1894,28 +1900,44 @@ impl Catalog {
             )))
             .unwrap();
 
-        // Primary search
+        // Primary search (catalog resolved via service)
         graph
-            .add_node(Box::new(PrimarySearchNode::new(catalog.clone())))
+            .add_node(Box::new(PrimarySearchNode::new()))
             .unwrap();
         graph
             .connect("query_source", "query", "primary_search", "query")
             .unwrap();
 
+        // Expansion: one FetchRelatedNode per rule + ComposeNode
         if !strategy.expansions.is_empty() {
-            // Expansion (dynamic — emits FetchRelated + Compose at runtime)
+            for (i, rule) in strategy.expansions.iter().enumerate() {
+                let fetch_name = format!("fetch_related_{i}");
+                graph
+                    .add_node(Box::new(FetchRelatedNode::new(
+                        &fetch_name,
+                        rule.relation.clone(),
+                        rule.direction.clone(),
+                        rule.limit,
+                        rule.source_entity.clone(),
+                    )))
+                    .unwrap();
+                graph
+                    .connect("primary_search", "results", &fetch_name, "results")
+                    .unwrap();
+            }
+
+            graph.add_node(Box::new(ComposeNode)).unwrap();
             graph
-                .add_dynamic_node(Box::new(ExpansionNode::new(
-                    conn,
-                    strategy.expansions,
-                )))
+                .connect("primary_search", "results", "compose", "results")
                 .unwrap();
-            graph
-                .connect("primary_search", "results", "expansion", "results")
-                .unwrap();
+            for i in 0..strategy.expansions.len() {
+                graph
+                    .connect(&format!("fetch_related_{i}"), "children", "compose", "children")
+                    .unwrap();
+            }
         }
 
-        graph
+        (graph, services)
     }
 
     /// Run a search with reactive expansion (graph traversal after search).
@@ -1935,10 +1957,10 @@ impl Catalog {
 
         let max_rounds = strategy.max_rounds;
         let has_expansions = !strategy.expansions.is_empty();
-        let mut graph =
+        let (mut graph, services) =
             Self::build_dataflow_graph(catalog, kb_name, query, strategy).await;
 
-        let runtime = crate::dataflow::DataflowRuntime::new(max_rounds);
+        let runtime = crate::dataflow::DataflowRuntime::with_services(max_rounds, services);
         let output = runtime
             .execute(&mut graph)
             .await

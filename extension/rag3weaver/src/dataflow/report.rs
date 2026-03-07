@@ -82,7 +82,7 @@ impl ExecutionReport {
         output: &DataflowOutput,
     ) -> Self {
         let mut nodes = Vec::new();
-        let mut expanded_nodes = Vec::new();
+        let expanded_nodes = Vec::new();
         let mut total_duration_ms = 0u64;
         let mut status = ExecutionStatus::Completed;
 
@@ -124,9 +124,6 @@ impl ExecutionReport {
                         output_ports: output_ports.clone(),
                         metrics: std::collections::HashMap::new(),
                     });
-                }
-                DataflowEvent::GraphExpanded { added_nodes, .. } => {
-                    expanded_nodes.extend(added_nodes.clone());
                 }
                 DataflowEvent::Completed { duration_ms, .. } => {
                     total_duration_ms = *duration_ms;

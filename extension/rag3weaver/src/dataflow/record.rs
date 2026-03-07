@@ -101,8 +101,11 @@ impl DataflowRecorder {
         let stmts = [
             "CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(\
                 _uuid STRING, pipeline_name STRING, status STRING, \
-                duration_ms INT64, node_count INT64, edge_count INT64, \
-                expanded_count INT64, created_at INT64, PRIMARY KEY(_uuid))",
+                graph_json STRING, graph_hash STRING, \
+                node_count INT64, edge_count INT64, expanded_count INT64, \
+                inputs_json STRING, error STRING, \
+                duration_ms INT64, created_at INT64, updated_at INT64, \
+                PRIMARY KEY(_uuid))",
             "CREATE NODE TABLE IF NOT EXISTS _DataflowNodeRun(\
                 _uuid STRING, node_name STRING, status STRING, \
                 duration_ms INT64, output_ports STRING, PRIMARY KEY(_uuid))",

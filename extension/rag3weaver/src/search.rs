@@ -18,7 +18,7 @@ use crate::sparse_index::SparseVector;
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 /// Consistency level for search operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Consistency {
     /// No waiting — search immediately, even if embeddings are pending.
@@ -123,7 +123,7 @@ impl Default for SignalConfig {
 }
 
 /// Resolved fusion configuration passed to `fuse_results`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FusionConfig {
     pub strategy: FusionStrategy,
     pub rrf_k: f64,
@@ -226,7 +226,8 @@ impl<'de> Deserialize<'de> for SearchSignals {
 }
 
 /// BM25 query mode for keyword search via QUERY_LUCIVY_INDEX.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BM25Mode {
     /// NgramContainsQuery fuzzy — substring match + trigram + Levenshtein + BM25.
     /// The entire query is matched as a contiguous substring.
@@ -251,7 +252,8 @@ impl Default for BM25Mode {
 // ─── SearchOptions ───────────────────────────────────────────────────────────
 
 /// Options for search queries.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SearchOptions {
     pub limit: usize,
     pub offset: usize,

@@ -238,7 +238,7 @@ async fn observe_execute_with_report_simple() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -246,7 +246,7 @@ async fn observe_execute_with_report_simple() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let (output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
 
     eprintln!("report: {}", serde_json::to_string_pretty(&report).unwrap());
@@ -278,7 +278,7 @@ async fn observe_execute_with_report_expansion() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -286,21 +286,20 @@ async fn observe_execute_with_report_expansion() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
 
     eprintln!("report: {}", serde_json::to_string_pretty(&report).unwrap());
 
     assert!(matches!(report.status, ExecutionStatus::Completed));
 
-    // Should have expanded nodes (fetch + compose added dynamically)
+    // expanded_nodes is always empty now (DynamicNode removed, expansion is static)
     assert!(
-        !report.expanded_nodes.is_empty(),
-        "Expansion should add dynamic nodes"
+        report.expanded_nodes.is_empty(),
+        "expanded_nodes should be empty (static expansion)"
     );
-    eprintln!("expanded: {:?}", report.expanded_nodes);
 
-    // Should have > 2 nodes (query_source, primary_search, expansion, fetch_0, compose)
+    // Should have >= 4 nodes (query_source, primary_search, fetch_related_0, compose)
     assert!(
         report.nodes.len() >= 4,
         "Expected at least 4 nodes, got {}: {:?}",
@@ -331,7 +330,7 @@ async fn observe_tap_all() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -339,7 +338,7 @@ async fn observe_tap_all() {
     )
     .await;
 
-    let mut runtime = DataflowRuntime::new(10);
+    let mut runtime = DataflowRuntime::with_services(10, services);
     let mut tap_rx = runtime.tap_all();
     runtime.execute(&mut graph).await.unwrap();
 
@@ -405,7 +404,7 @@ async fn observe_tap_specific_edge() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -413,7 +412,7 @@ async fn observe_tap_specific_edge() {
     )
     .await;
 
-    let mut runtime = DataflowRuntime::new(10);
+    let mut runtime = DataflowRuntime::with_services(10, services);
     // Only tap the query edge
     let mut tap_rx = runtime.tap("query_source", "query", "primary_search", "query");
     runtime.execute(&mut graph).await.unwrap();
@@ -443,7 +442,7 @@ async fn observe_record_jsonl() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -451,7 +450,7 @@ async fn observe_record_jsonl() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
 
     // Record to JSONL
@@ -488,7 +487,7 @@ async fn observe_record_database() {
     let conn = catalog.conn_arc();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -496,7 +495,7 @@ async fn observe_record_database() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
 
     // Record to database
@@ -505,7 +504,7 @@ async fn observe_record_database() {
 
     // Query back: _DataflowExecution
     let exec_result = conn
-        .execute("MATCH (e:_DataflowExecution) RETURN e.pipeline_name, e.status, e.duration_ms, e.node_count")
+        .execute("MATCH (e:_DataflowExecution) WHERE e.pipeline_name = 'search_pipeline' RETURN e.pipeline_name, e.status, e.duration_ms, e.node_count")
         .await
         .unwrap();
     eprintln!("executions: {:?}", exec_result.rows);
@@ -553,7 +552,7 @@ async fn observe_report_json_structure() {
     let catalog = setup_catalog().await;
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -561,7 +560,7 @@ async fn observe_report_json_structure() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
 
     // Serialize to JSON

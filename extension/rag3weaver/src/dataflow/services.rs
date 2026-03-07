@@ -7,6 +7,14 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::connection::DbConnection;
+
+/// Wrapper around `Arc<dyn DbConnection>` for service registry storage.
+///
+/// Needed because `ServiceRegistry::register<T>` requires `T: Sized`,
+/// and `dyn DbConnection` is unsized.
+pub struct ConnService(pub Arc<dyn DbConnection>);
+
 /// String-keyed service registry.
 ///
 /// Services are stored as `Arc<dyn Any + Send + Sync>` and downcast on retrieval.

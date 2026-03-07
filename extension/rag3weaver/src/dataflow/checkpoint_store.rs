@@ -37,12 +37,16 @@ impl CheckpointStore for CypherCheckpointStore {
             .execute(
                 "CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(\
                      _uuid STRING, \
+                     pipeline_name STRING, \
                      status STRING, \
                      graph_json STRING, \
                      graph_hash STRING, \
                      node_count INT64, \
+                     edge_count INT64, \
+                     expanded_count INT64, \
                      inputs_json STRING, \
                      error STRING, \
+                     duration_ms INT64, \
                      created_at INT64, \
                      updated_at INT64, \
                      PRIMARY KEY(_uuid))",

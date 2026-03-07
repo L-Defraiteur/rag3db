@@ -2,7 +2,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::node::{DynamicNode, Node};
+use super::node::Node;
+use super::node_registry::NodeRegistry;
 use super::port::{PortType, PortValue};
 
 // ─── Edge ────────────────────────────────────────────────────────────────────
@@ -16,42 +17,11 @@ pub struct Edge {
     pub to_port: String,
 }
 
-// ─── NodeSlot ────────────────────────────────────────────────────────────────
-
-/// Internal: a node is either static or dynamic.
-pub(crate) enum NodeSlot {
-    Static(Box<dyn Node>),
-    Dynamic(Box<dyn DynamicNode>),
-}
-
-impl NodeSlot {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Static(n) => n.name(),
-            Self::Dynamic(n) => n.name(),
-        }
-    }
-
-    pub fn inputs(&self) -> &[super::port::PortDef] {
-        match self {
-            Self::Static(n) => n.inputs(),
-            Self::Dynamic(n) => n.inputs(),
-        }
-    }
-
-    pub fn outputs(&self) -> &[super::port::PortDef] {
-        match self {
-            Self::Static(n) => n.outputs(),
-            Self::Dynamic(n) => n.outputs(),
-        }
-    }
-}
-
 // ─── DataflowGraph ───────────────────────────────────────────────────────────
 
 /// A directed acyclic graph of nodes connected by typed edges.
 pub struct DataflowGraph {
-    pub(crate) nodes: Vec<NodeSlot>,
+    pub(crate) nodes: Vec<Box<dyn Node>>,
     pub(crate) edges: Vec<Edge>,
     /// Pre-loaded inputs for nodes (consumed by runtime at execution start).
     pub(crate) initial_inputs: HashMap<String, HashMap<String, PortValue>>,
@@ -75,28 +45,32 @@ impl DataflowGraph {
             .insert(port.to_string(), value);
     }
 
-    /// Add a static node. Returns error if name already taken.
+    /// Create a node via the registry and add it to the graph.
+    ///
+    /// Shorthand for `registry.create()` + `graph.add_node()`.
+    pub fn add_from_registry(
+        &mut self,
+        registry: &NodeRegistry,
+        node_type: &str,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<(), String> {
+        let node = registry.create(node_type, name, config)?;
+        self.add_node(node)
+    }
+
+    /// Add a node. Returns error if name already taken.
     pub fn add_node(&mut self, node: Box<dyn Node>) -> Result<(), String> {
         let name = node.name().to_string();
         if self.nodes.iter().any(|n| n.name() == name) {
             return Err(format!("duplicate node name: {name}"));
         }
-        self.nodes.push(NodeSlot::Static(node));
+        self.nodes.push(node);
         Ok(())
     }
 
-    /// Add a dynamic node. Returns error if name already taken.
-    pub fn add_dynamic_node(&mut self, node: Box<dyn DynamicNode>) -> Result<(), String> {
-        let name = node.name().to_string();
-        if self.nodes.iter().any(|n| n.name() == name) {
-            return Err(format!("duplicate node name: {name}"));
-        }
-        self.nodes.push(NodeSlot::Dynamic(node));
-        Ok(())
-    }
-
-    fn find_node(&self, name: &str) -> Option<&NodeSlot> {
-        self.nodes.iter().find(|n| n.name() == name)
+    fn find_node(&self, name: &str) -> Option<&dyn Node> {
+        self.nodes.iter().find(|n| n.name() == name).map(|n| n.as_ref())
     }
 
     fn find_output_port_type(&self, node_name: &str, port_name: &str) -> Option<PortType> {
@@ -235,25 +209,6 @@ impl DataflowGraph {
         } else {
             Ok(order)
         }
-    }
-
-    /// Merge dynamically emitted nodes and edges into the graph.
-    pub(crate) fn merge_dynamic(
-        &mut self,
-        nodes: Vec<Box<dyn Node>>,
-        dynamic_nodes: Vec<Box<dyn DynamicNode>>,
-        edges: Vec<Edge>,
-    ) -> Result<(), String> {
-        for node in nodes {
-            self.add_node(node)?;
-        }
-        for node in dynamic_nodes {
-            self.add_dynamic_node(node)?;
-        }
-        // For dynamically added edges, skip port validation (the nodes
-        // were just created and the types should match by construction).
-        self.edges.extend(edges);
-        Ok(())
     }
 
     /// List all node names.
@@ -441,5 +396,51 @@ mod tests {
         let err = g.validate().unwrap_err();
         assert!(err.contains("required input"));
         assert!(err.contains("not connected"));
+    }
+
+    #[test]
+    fn add_from_registry_creates_and_connects() {
+        use crate::dataflow::node_factories::register_builtins;
+
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+
+        let mut g = DataflowGraph::new();
+        g.add_from_registry(&registry, "InsertRecordNode", "inserts", &serde_json::json!({}))
+            .unwrap();
+        g.add_from_registry(&registry, "LinkRecordNode", "links", &serde_json::json!({}))
+            .unwrap();
+        g.connect("inserts", "done", "links", "trigger").unwrap();
+
+        assert_eq!(g.node_names().len(), 2);
+        assert_eq!(g.edges.len(), 1);
+
+        let order = g.topological_sort().unwrap();
+        assert_eq!(order, vec!["inserts", "links"]);
+    }
+
+    #[test]
+    fn add_from_registry_unknown_type_errors() {
+        let registry = NodeRegistry::new();
+        let mut g = DataflowGraph::new();
+        let err = g.add_from_registry(&registry, "Bogus", "x", &serde_json::json!({}));
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("unknown node type"));
+    }
+
+    #[test]
+    fn add_from_registry_duplicate_name_errors() {
+        use crate::dataflow::node_factories::register_builtins;
+
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+
+        let mut g = DataflowGraph::new();
+        g.add_from_registry(&registry, "InsertRecordNode", "inserts", &serde_json::json!({}))
+            .unwrap();
+        let err = g
+            .add_from_registry(&registry, "InsertRecordNode", "inserts", &serde_json::json!({}))
+            .unwrap_err();
+        assert!(err.contains("duplicate"));
     }
 }

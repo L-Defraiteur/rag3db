@@ -1,7 +1,6 @@
 //! Node traits and execution context for the dataflow graph.
 //!
 //! - [`Node`] — static node with fixed inputs/outputs
-//! - [`DynamicNode`] — can emit new nodes/edges at runtime via [`GraphEmitter`]
 //! - [`NodeContext`] — reads inputs, writes outputs during execution
 
 use std::collections::HashMap;
@@ -40,31 +39,6 @@ pub trait Node: Send + Sync {
     fn node_config(&self) -> serde_json::Value {
         serde_json::Value::Object(serde_json::Map::new())
     }
-}
-
-// ─── DynamicNode trait ───────────────────────────────────────────────────────
-
-/// A node that can emit new nodes and edges at runtime.
-///
-/// Used by `ExpansionNode` which creates `FetchRelatedNode` + `ComposeNode`
-/// dynamically based on search results.
-#[async_trait]
-pub trait DynamicNode: Send + Sync {
-    /// Unique name of this node instance.
-    fn name(&self) -> &str;
-
-    /// Input port definitions.
-    fn inputs(&self) -> &[PortDef];
-
-    /// Output port definitions.
-    fn outputs(&self) -> &[PortDef];
-
-    /// Execute and optionally emit new nodes/edges via the emitter.
-    async fn execute_dynamic(
-        &mut self,
-        ctx: &mut NodeContext,
-        emitter: &mut GraphEmitter,
-    ) -> Result<(), String>;
 }
 
 // ─── NodeContext ─────────────────────────────────────────────────────────────
@@ -139,86 +113,6 @@ impl NodeContext {
     }
 }
 
-// ─── GraphEmitter ────────────────────────────────────────────────────────────
-
-/// Accumulates graph mutations emitted by a [`DynamicNode`].
-pub struct GraphEmitter {
-    pub(crate) added_nodes: Vec<Box<dyn Node>>,
-    pub(crate) added_dynamic_nodes: Vec<Box<dyn DynamicNode>>,
-    pub(crate) added_edges: Vec<super::graph::Edge>,
-    pub(crate) initial_inputs: HashMap<String, HashMap<String, PortValue>>,
-}
-
-impl GraphEmitter {
-    pub fn new() -> Self {
-        Self {
-            added_nodes: Vec::new(),
-            added_dynamic_nodes: Vec::new(),
-            added_edges: Vec::new(),
-            initial_inputs: HashMap::new(),
-        }
-    }
-
-    /// Add a static node to the graph.
-    pub fn add_node(&mut self, node: Box<dyn Node>) {
-        self.added_nodes.push(node);
-    }
-
-    /// Add a dynamic node to the graph.
-    pub fn add_dynamic_node(&mut self, node: Box<dyn DynamicNode>) {
-        self.added_dynamic_nodes.push(node);
-    }
-
-    /// Connect two ports.
-    pub fn connect(
-        &mut self,
-        from_node: &str,
-        from_port: &str,
-        to_node: &str,
-        to_port: &str,
-    ) {
-        self.added_edges.push(super::graph::Edge {
-            from_node: from_node.to_string(),
-            from_port: from_port.to_string(),
-            to_node: to_node.to_string(),
-            to_port: to_port.to_string(),
-        });
-    }
-
-    /// Pre-load an input port on an emitted node with initial data.
-    /// Used by DynamicNodes to pass data to newly created nodes.
-    pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
-        self.initial_inputs
-            .entry(node_name.to_string())
-            .or_default()
-            .insert(port.to_string(), value);
-    }
-
-    /// Check if no mutations were emitted.
-    pub fn is_empty(&self) -> bool {
-        self.added_nodes.is_empty()
-            && self.added_dynamic_nodes.is_empty()
-            && self.added_edges.is_empty()
-    }
-
-    /// Drain all accumulated mutations.
-    pub(crate) fn drain(
-        &mut self,
-    ) -> (
-        Vec<Box<dyn Node>>,
-        Vec<Box<dyn DynamicNode>>,
-        Vec<super::graph::Edge>,
-        HashMap<String, HashMap<String, PortValue>>,
-    ) {
-        (
-            std::mem::take(&mut self.added_nodes),
-            std::mem::take(&mut self.added_dynamic_nodes),
-            std::mem::take(&mut self.added_edges),
-            std::mem::take(&mut self.initial_inputs),
-        )
-    }
-}
-
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -269,24 +163,5 @@ mod tests {
 
         // Gone after take
         assert!(ctx.input("query").is_none());
-    }
-
-    #[test]
-    fn graph_emitter_drain() {
-        let mut emitter = GraphEmitter::new();
-        assert!(emitter.is_empty());
-
-        emitter.connect("a", "out", "b", "in");
-        assert!(!emitter.is_empty());
-
-        let (nodes, dyn_nodes, edges, _initials) = emitter.drain();
-        assert!(nodes.is_empty());
-        assert!(dyn_nodes.is_empty());
-        assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].from_node, "a");
-        assert_eq!(edges[0].to_node, "b");
-
-        // After drain, empty again
-        assert!(emitter.is_empty());
     }
 }

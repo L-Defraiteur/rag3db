@@ -1,7 +1,6 @@
 //! Dataflow runtime: executes a DataflowGraph.
 //!
-//! Processes nodes in topological order. When a DynamicNode emits new nodes,
-//! re-sorts and continues. Emits [`DataflowEvent`]s via async_broadcast.
+//! Processes nodes in topological order. Emits [`DataflowEvent`]s via async_broadcast.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -13,11 +12,11 @@ use serde::Serialize;
 
 use super::checkpoint::{
     CheckpointStore, ExecutionCheckpoint, CheckpointExecutionStatus,
-    NodeCheckpoint, NodeCheckpointStatus, GraphDefinition,
+    NodeCheckpoint, NodeCheckpointStatus,
     port_value_to_checkpoint, port_value_from_checkpoint, timestamp_ms,
 };
-use super::graph::{DataflowGraph, NodeSlot};
-use super::node::{GraphEmitter, NodeContext};
+use super::graph::DataflowGraph;
+use super::node::NodeContext;
 use super::observe::{TapRegistry, TapSpec, TapEvent};
 use super::port::{merge_port_values, PortValue};
 use super::report::ExecutionReport;
@@ -39,12 +38,6 @@ pub enum DataflowEvent {
     },
     /// A node failed.
     NodeFailed { node: String, error: String },
-    /// A dynamic node expanded the graph.
-    GraphExpanded {
-        by_node: String,
-        added_nodes: Vec<String>,
-        added_edges: usize,
-    },
     /// Checkpoint resume: a node was skipped (already completed in a prior run).
     CheckpointResumed {
         node: String,
@@ -419,13 +412,7 @@ impl DataflowRuntime {
                 let exec_result = if should_fail {
                     Err(format!("injected failure for node '{}'", node_name))
                 } else {
-                    // No DynamicNode support in checkpoint mode (ingestion graph is static)
-                    match &mut graph.nodes[node_idx] {
-                        NodeSlot::Static(node) => node.execute(&mut ctx).await,
-                        NodeSlot::Dynamic(_) => {
-                            Err("DynamicNodes are not supported in checkpoint mode".to_string())
-                        }
-                    }
+                    graph.nodes[node_idx].execute(&mut ctx).await
                 };
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
@@ -523,14 +510,12 @@ impl DataflowRuntime {
 
         // Port data store: (node_name, port_name) → PortValue
         let mut port_data: HashMap<(String, String), PortValue> = HashMap::new();
-        // Initial inputs pre-loaded by DynamicNodes for emitted nodes,
-        // or set on the graph itself via graph.set_initial_input()
         let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
-        let mut order = graph.topological_sort()?;
+        let order = graph.topological_sort()?;
 
-        for iteration in 0..self.max_iterations {
+        for _iteration in 0..self.max_iterations {
             // Find ready nodes: not completed, all required inputs available
             let ready: Vec<String> = order
                 .iter()
@@ -613,7 +598,6 @@ impl DataflowRuntime {
                     }
                 }
 
-                // Inject initial inputs pre-loaded by DynamicNodes
                 if let Some(node_initials) = initial_inputs.remove(node_name) {
                     for (port, value) in node_initials {
                         ctx.set_input(&port, value);
@@ -625,48 +609,13 @@ impl DataflowRuntime {
                 });
                 let node_start = Instant::now();
 
-                // Execute: find the node slot
                 let node_idx = graph
                     .nodes
                     .iter()
                     .position(|n| n.name() == *node_name)
                     .unwrap();
 
-                let exec_result = match &mut graph.nodes[node_idx] {
-                    NodeSlot::Static(node) => node.execute(&mut ctx).await,
-                    NodeSlot::Dynamic(node) => {
-                        let mut emitter = GraphEmitter::new();
-                        let result =
-                            node.execute_dynamic(&mut ctx, &mut emitter).await;
-
-                        if result.is_ok() && !emitter.is_empty() {
-                            let (new_nodes, new_dyn_nodes, new_edges, new_initials) =
-                                emitter.drain();
-                            let added_names: Vec<String> = new_nodes
-                                .iter()
-                                .map(|n| n.name().to_string())
-                                .chain(new_dyn_nodes.iter().map(|n| n.name().to_string()))
-                                .collect();
-                            let added_edge_count = new_edges.len();
-
-                            graph.merge_dynamic(new_nodes, new_dyn_nodes, new_edges)?;
-                            order = graph.topological_sort()?;
-
-                            // Store initial inputs for emitted nodes
-                            for (node, ports) in new_initials {
-                                initial_inputs.entry(node).or_default().extend(ports);
-                            }
-
-                            self.emit(DataflowEvent::GraphExpanded {
-                                by_node: node_name.clone(),
-                                added_nodes: added_names,
-                                added_edges: added_edge_count,
-                            });
-                        }
-
-                        result
-                    }
-                };
+                let exec_result = graph.nodes[node_idx].execute(&mut ctx).await;
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
 
@@ -762,7 +711,6 @@ impl NodeEventFilter {
             DataflowEvent::NodeCompleted { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
             DataflowEvent::CheckpointResumed { node, .. } => self.nodes.contains(node),
-            DataflowEvent::GraphExpanded { by_node, .. } => self.nodes.contains(by_node),
             DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,
         }
     }
@@ -774,7 +722,7 @@ impl NodeEventFilter {
 mod tests {
     use super::*;
     use crate::dataflow::graph::DataflowGraph;
-    use crate::dataflow::node::{DynamicNode, Node};
+    use crate::dataflow::node::Node;
     use crate::dataflow::port::{PortDef, PortType, PortValue};
     use crate::search_strategy::UnifiedResult;
 
@@ -1001,82 +949,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_dynamic_node() {
-        /// DynamicNode that emits a new PassthroughNode.
-        struct Expander;
-
-        #[async_trait::async_trait]
-        impl DynamicNode for Expander {
-            fn name(&self) -> &str {
-                "expander"
-            }
-            fn inputs(&self) -> &[PortDef] {
-                &[PortDef {
-                    name: "in",
-                    port_type: PortType::Results,
-                    required: true,
-                }]
-            }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
-                    name: "out",
-                    port_type: PortType::Results,
-                    required: false,
-                }]
-            }
-            async fn execute_dynamic(
-                &mut self,
-                ctx: &mut NodeContext,
-                emitter: &mut GraphEmitter,
-            ) -> Result<(), String> {
-                // Pass results through
-                if let Some(v) = ctx.take_input("in") {
-                    ctx.set_output("out", v);
-                }
-                // Emit a new passthrough node connected after us
-                emitter.add_node(Box::new(PassthroughNode {
-                    name: "dynamic_pass".into(),
-                }));
-                emitter.connect("expander", "out", "dynamic_pass", "in");
-                Ok(())
-            }
-        }
-
-        let mut graph = DataflowGraph::new();
-        graph
-            .add_node(Box::new(SourceNode {
-                name: "source".into(),
-                results: vec![test_result("u1")],
-            }))
-            .unwrap();
-        graph.add_dynamic_node(Box::new(Expander)).unwrap();
-        graph.connect("source", "out", "expander", "in").unwrap();
-
-        let runtime = DataflowRuntime::new(10);
-        let mut rx = runtime.subscribe();
-        let output = runtime.execute(&mut graph).await.unwrap();
-
-        // Dynamic node created "dynamic_pass", which should have received results
-        let val = output.get("dynamic_pass", "out").unwrap();
-        if let PortValue::Results(r) = val {
-            assert_eq!(r.len(), 1);
-            assert_eq!(r[0].uuid, "u1");
-        } else {
-            panic!("expected Results");
-        }
-
-        // Check for GraphExpanded event
-        let mut events = Vec::new();
-        while let Ok(ev) = rx.try_recv() {
-            events.push(ev);
-        }
-        let expanded = events
-            .iter()
-            .any(|e| matches!(e, DataflowEvent::GraphExpanded { .. }));
-        assert!(expanded, "should emit GraphExpanded event");
-    }
-
-    #[tokio::test]
     async fn runtime_tap_specific_edge() {
         let mut graph = DataflowGraph::new();
         graph
@@ -1166,55 +1038,6 @@ mod tests {
         assert!(report.total_duration_ms < 1000); // sanity check
         assert_eq!(report.edges.len(), 1);
         assert_eq!(report.edges[0].from_node, "source");
-    }
-
-    #[tokio::test]
-    async fn runtime_max_iterations() {
-        /// Infinite expander: keeps emitting new nodes.
-        struct InfiniteExpander {
-            name: String,
-        }
-
-        #[async_trait::async_trait]
-        impl DynamicNode for InfiniteExpander {
-            fn name(&self) -> &str {
-                &self.name
-            }
-            fn inputs(&self) -> &[PortDef] {
-                &[]
-            }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
-                    name: "out",
-                    port_type: PortType::Results,
-                    required: false,
-                }]
-            }
-            async fn execute_dynamic(
-                &mut self,
-                ctx: &mut NodeContext,
-                emitter: &mut GraphEmitter,
-            ) -> Result<(), String> {
-                ctx.set_output("out", PortValue::Empty);
-                // Keep spawning new expanders
-                let next_name = format!("{}_child", self.name);
-                emitter.add_dynamic_node(Box::new(InfiniteExpander {
-                    name: next_name,
-                }));
-                Ok(())
-            }
-        }
-
-        let mut graph = DataflowGraph::new();
-        graph
-            .add_dynamic_node(Box::new(InfiniteExpander {
-                name: "root".into(),
-            }))
-            .unwrap();
-
-        let runtime = DataflowRuntime::new(5);
-        let err = runtime.execute(&mut graph).await.unwrap_err();
-        assert!(err.contains("max iterations"));
     }
 
     // ── Checkpoint tests ────────────────────────────────────────────────

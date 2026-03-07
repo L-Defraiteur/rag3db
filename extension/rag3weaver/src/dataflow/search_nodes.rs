@@ -1,10 +1,8 @@
 //! Built-in search nodes for the dataflow graph.
 //!
-//! Replaces `processors.rs` with typed dataflow nodes:
 //! - [`QuerySourceNode`] — emits query + options
-//! - [`PrimarySearchNode`] — runs Catalog::search()
-//! - [`ExpansionNode`] — DynamicNode, emits FetchRelated + Compose
-//! - [`FetchRelatedNode`] — Cypher graph traversal
+//! - [`PrimarySearchNode`] — runs Catalog::search() (catalog via service)
+//! - [`FetchRelatedNode`] — Cypher graph traversal (conn via service, results as input)
 //! - [`ComposeNode`] — attaches children to results
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -14,15 +12,14 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::catalog::Catalog;
-use crate::connection::{CypherValue, DbConnection, QueryParam};
-use crate::search::{SearchMeta, SearchOptions};
+use crate::connection::{CypherValue, QueryParam};
 use crate::search_strategy::{
-    source_info, ChildSummary, ExpansionDirection, ExpansionRule, UnifiedResult,
+    source_info, ChildSummary, ExpansionDirection, UnifiedResult,
 };
 
-use super::graph::Edge;
-use super::node::{DynamicNode, GraphEmitter, Node, NodeContext};
+use super::node::{Node, NodeContext};
 use super::port::{PortDef, PortType, PortValue};
+use super::services::ConnService;
 
 // ─── QuerySourceNode ─────────────────────────────────────────────────────────
 
@@ -30,11 +27,11 @@ use super::port::{PortDef, PortType, PortValue};
 pub struct QuerySourceNode {
     kb_name: String,
     query: String,
-    options: SearchOptions,
+    options: crate::search::SearchOptions,
 }
 
 impl QuerySourceNode {
-    pub fn new(kb_name: &str, query: &str, options: &SearchOptions) -> Self {
+    pub fn new(kb_name: &str, query: &str, options: &crate::search::SearchOptions) -> Self {
         Self {
             kb_name: kb_name.to_string(),
             query: query.to_string(),
@@ -47,6 +44,9 @@ impl QuerySourceNode {
 impl Node for QuerySourceNode {
     fn name(&self) -> &str {
         "query_source"
+    }
+    fn node_type(&self) -> &'static str {
+        "QuerySourceNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[]
@@ -74,13 +74,13 @@ impl Node for QuerySourceNode {
 // ─── PrimarySearchNode ───────────────────────────────────────────────────────
 
 /// Runs `Catalog::search()` and outputs results + meta.
-pub struct PrimarySearchNode {
-    catalog: Arc<Mutex<Catalog>>,
-}
+///
+/// Retrieves `catalog` from the service registry (`Arc<Mutex<Catalog>>`).
+pub struct PrimarySearchNode;
 
 impl PrimarySearchNode {
-    pub fn new(catalog: Arc<Mutex<Catalog>>) -> Self {
-        Self { catalog }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -88,6 +88,9 @@ impl PrimarySearchNode {
 impl Node for PrimarySearchNode {
     fn name(&self) -> &str {
         "primary_search"
+    }
+    fn node_type(&self) -> &'static str {
+        "PrimarySearchNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[PortDef {
@@ -120,8 +123,12 @@ impl Node for PrimarySearchNode {
             _ => return Err("PrimarySearchNode: missing 'query' input".into()),
         };
 
+        let catalog: Arc<Mutex<Catalog>> = ctx
+            .service::<Mutex<Catalog>>("catalog")
+            .ok_or("PrimarySearchNode: 'catalog' service not found")?;
+
         let response = {
-            let mut catalog = self.catalog.lock().await;
+            let mut catalog = catalog.lock().await;
             catalog
                 .search(&kb_name, &query, options)
                 .await
@@ -140,24 +147,53 @@ impl Node for PrimarySearchNode {
     }
 }
 
-// ─── ExpansionNode (DynamicNode) ─────────────────────────────────────────────
+// ─── FetchRelatedNode ────────────────────────────────────────────────────────
 
-/// Evaluates expansion rules and dynamically emits FetchRelated + Compose nodes.
-pub struct ExpansionNode {
-    conn: Arc<dyn DbConnection>,
-    rules: Vec<ExpansionRule>,
+/// Fetches related entities via Cypher UNWIND traversal.
+///
+/// Takes `results` as input, extracts parents (filtered by `source_entity`),
+/// and retrieves `conn` from the service registry.
+pub struct FetchRelatedNode {
+    node_name: String,
+    relation: String,
+    direction: ExpansionDirection,
+    limit: usize,
+    source_entity: Option<String>,
 }
 
-impl ExpansionNode {
-    pub fn new(conn: Arc<dyn DbConnection>, rules: Vec<ExpansionRule>) -> Self {
-        Self { conn, rules }
+impl FetchRelatedNode {
+    pub fn new(
+        name: &str,
+        relation: String,
+        direction: ExpansionDirection,
+        limit: usize,
+        source_entity: Option<String>,
+    ) -> Self {
+        Self {
+            node_name: name.to_string(),
+            relation,
+            direction,
+            limit,
+            source_entity,
+        }
     }
 }
 
 #[async_trait]
-impl DynamicNode for ExpansionNode {
+impl Node for FetchRelatedNode {
     fn name(&self) -> &str {
-        "expansion"
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "FetchRelatedNode"
+    }
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::json!({
+            "relation": self.relation,
+            "direction": format!("{:?}", self.direction),
+            "limit": self.limit,
+            "source_entity": self.source_entity,
+        })
     }
     fn inputs(&self) -> &[PortDef] {
         &[PortDef {
@@ -168,121 +204,6 @@ impl DynamicNode for ExpansionNode {
     }
     fn outputs(&self) -> &[PortDef] {
         &[PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
-    }
-
-    async fn execute_dynamic(
-        &mut self,
-        ctx: &mut NodeContext,
-        emitter: &mut GraphEmitter,
-    ) -> Result<(), String> {
-        let results = match ctx.take_input("results") {
-            Some(PortValue::Results(r)) => r,
-            _ => return Err("ExpansionNode: missing 'results' input".into()),
-        };
-
-        let mut fetch_count = 0usize;
-
-        for (rule_idx, rule) in self.rules.iter().enumerate() {
-            // Collect parents matching this rule's source_entity filter,
-            // deduplicated by source_uuid.
-            let mut seen_sources = HashSet::new();
-            let mut parents: Vec<(String, String)> = Vec::new();
-
-            for result in &results {
-                if let Some((entity, source_uuid)) = source_info(result) {
-                    if let Some(ref filter_entity) = rule.source_entity {
-                        if &entity != filter_entity {
-                            continue;
-                        }
-                    }
-                    if seen_sources.insert(source_uuid.clone()) {
-                        parents.push((source_uuid, result.uuid.clone()));
-                    }
-                }
-            }
-
-            if !parents.is_empty() {
-                let fetch_name = format!("fetch_related_{rule_idx}");
-                emitter.add_node(Box::new(FetchRelatedNode::new(
-                    &fetch_name,
-                    self.conn.clone(),
-                    parents,
-                    rule.relation.clone(),
-                    rule.direction,
-                    rule.limit,
-                )));
-                fetch_count += 1;
-            }
-        }
-
-        if fetch_count > 0 {
-            // Create ComposeNode
-            emitter.add_node(Box::new(ComposeNode));
-
-            // Connect expansion.results → compose.results
-            emitter.connect("expansion", "results", "compose", "results");
-
-            // Connect each fetch → compose.children (fan-in)
-            for i in 0..fetch_count {
-                let fetch_name = format!("fetch_related_{i}");
-                emitter.connect(&fetch_name, "children", "compose", "children");
-            }
-        }
-
-        // Pass results through (for compose to pick up, or direct output if no expansion)
-        ctx.set_output("results", PortValue::Results(results));
-        Ok(())
-    }
-}
-
-// ─── FetchRelatedNode ────────────────────────────────────────────────────────
-
-/// Fetches related entities via Cypher UNWIND traversal.
-/// Parents are baked in at construction time (by ExpansionNode).
-pub struct FetchRelatedNode {
-    node_name: String,
-    conn: Arc<dyn DbConnection>,
-    parents: Vec<(String, String)>,
-    relation: String,
-    direction: ExpansionDirection,
-    limit: usize,
-}
-
-impl FetchRelatedNode {
-    pub fn new(
-        name: &str,
-        conn: Arc<dyn DbConnection>,
-        parents: Vec<(String, String)>,
-        relation: String,
-        direction: ExpansionDirection,
-        limit: usize,
-    ) -> Self {
-        Self {
-            node_name: name.to_string(),
-            conn,
-            parents,
-            relation,
-            direction,
-            limit,
-        }
-    }
-}
-
-#[async_trait]
-impl Node for FetchRelatedNode {
-    fn name(&self) -> &str {
-        &self.node_name
-    }
-    fn inputs(&self) -> &[PortDef] {
-        // No input ports — parents are baked in
-        &[]
-    }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
             name: "children",
             port_type: PortType::Children,
             required: false,
@@ -290,24 +211,38 @@ impl Node for FetchRelatedNode {
     }
 
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        if self.parents.is_empty() {
-            ctx.set_output("children", PortValue::Children(HashMap::new()));
-            return Ok(());
-        }
+        let conn = ctx
+            .service::<ConnService>("conn")
+            .ok_or("FetchRelatedNode: 'conn' service not found")?;
 
-        // Collect unique source UUIDs
+        let results = match ctx.take_input("results") {
+            Some(PortValue::Results(r)) => r,
+            _ => return Err("FetchRelatedNode: missing 'results' input".into()),
+        };
+
+        // Extract parents from results, filtered by source_entity
         let mut seen = HashSet::new();
-        let source_uuids: Vec<String> = self
-            .parents
+        let source_uuids: Vec<String> = results
             .iter()
-            .filter_map(|(src, _)| {
-                if seen.insert(src.clone()) {
-                    Some(src.clone())
+            .filter_map(|r| source_info(r))
+            .filter(|(entity, _)| {
+                self.source_entity
+                    .as_ref()
+                    .map_or(true, |e| e == entity)
+            })
+            .filter_map(|(_, uuid)| {
+                if seen.insert(uuid.clone()) {
+                    Some(uuid)
                 } else {
                     None
                 }
             })
             .collect();
+
+        if source_uuids.is_empty() {
+            ctx.set_output("children", PortValue::Children(HashMap::new()));
+            return Ok(());
+        }
 
         let uuids_param = CypherValue::List(
             source_uuids
@@ -331,8 +266,8 @@ impl Node for FetchRelatedNode {
             ),
         };
 
-        let result = self
-            .conn
+        let result = conn
+            .0
             .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
             .await
             .map_err(|e| e.to_string())?;
@@ -388,10 +323,19 @@ impl Node for FetchRelatedNode {
 /// Attaches fetched children to root results.
 pub struct ComposeNode;
 
+impl ComposeNode {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 #[async_trait]
 impl Node for ComposeNode {
     fn name(&self) -> &str {
         "compose"
+    }
+    fn node_type(&self) -> &'static str {
+        "ComposeNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -444,7 +388,7 @@ impl Node for ComposeNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dataflow::node::GraphEmitter;
+    use crate::search::SearchOptions;
 
     fn make_result(uuid: &str, entity: &str) -> UnifiedResult {
         UnifiedResult {
@@ -498,173 +442,28 @@ mod tests {
         assert_eq!(node.outputs()[0].port_type, PortType::Query);
     }
 
-    #[tokio::test]
-    async fn expansion_emits_fetch_and_compose() {
-        // We need a mock DbConnection — but for this test we only test
-        // the emitter output, not actual execution.
-        // So we create an ExpansionNode and call execute_dynamic with mock data.
-
-        struct MockConn;
-        #[async_trait]
-        impl DbConnection for MockConn {
-            async fn execute(
-                &self,
-                _q: &str,
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-            async fn execute_with_params(
-                &self,
-                _q: &str,
-                _p: &[QueryParam],
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-        }
-
-        let mut node = ExpansionNode::new(
-            Arc::new(MockConn),
-            vec![ExpansionRule {
-                relation: "HAS_FILE".into(),
-                direction: ExpansionDirection::Outgoing,
-                source_entity: Some("Directory".into()),
-                limit: 50,
-            }],
-        );
-
-        let mut ctx = NodeContext::new();
-        ctx.set_input(
-            "results",
-            PortValue::Results(vec![
-                make_result("dir-1", "Directory"),
-                make_result("file-1", "File"),
-            ]),
-        );
-
-        let mut emitter = GraphEmitter::new();
-        node.execute_dynamic(&mut ctx, &mut emitter).await.unwrap();
-
-        // Should have emitted: 1 FetchRelatedNode + 1 ComposeNode + edges
-        let (nodes, _, edges, _) = emitter.drain();
-        assert_eq!(nodes.len(), 2); // fetch_related_0 + compose
-        assert_eq!(nodes[0].name(), "fetch_related_0");
-        assert_eq!(nodes[1].name(), "compose");
-
-        // Edges: expansion→compose (results) + fetch_related_0→compose (children)
-        assert_eq!(edges.len(), 2);
+    #[test]
+    fn primary_search_node_ports() {
+        let node = PrimarySearchNode::new();
+        assert_eq!(node.inputs().len(), 1);
+        assert_eq!(node.inputs()[0].name, "query");
+        assert_eq!(node.outputs().len(), 2);
     }
 
-    #[tokio::test]
-    async fn expansion_no_match_passthrough() {
-        struct MockConn;
-        #[async_trait]
-        impl DbConnection for MockConn {
-            async fn execute(
-                &self,
-                _q: &str,
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-            async fn execute_with_params(
-                &self,
-                _q: &str,
-                _p: &[QueryParam],
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-        }
-
-        let mut node = ExpansionNode::new(
-            Arc::new(MockConn),
-            vec![ExpansionRule {
-                relation: "HAS_FILE".into(),
-                direction: ExpansionDirection::Outgoing,
-                source_entity: Some("Directory".into()),
-                limit: 50,
-            }],
+    #[test]
+    fn fetch_related_node_ports() {
+        let node = FetchRelatedNode::new(
+            "fetch_0",
+            "HAS_FILE".into(),
+            ExpansionDirection::Outgoing,
+            10,
+            Some("Directory".into()),
         );
-
-        let mut ctx = NodeContext::new();
-        ctx.set_input(
-            "results",
-            PortValue::Results(vec![make_result("file-1", "File")]),
-        );
-
-        let mut emitter = GraphEmitter::new();
-        node.execute_dynamic(&mut ctx, &mut emitter).await.unwrap();
-
-        assert!(emitter.is_empty());
-
-        // Results should be passed through
-        let outputs = ctx.drain_outputs();
-        assert!(outputs.contains_key("results"));
-    }
-
-    #[tokio::test]
-    async fn expansion_dedup_sources() {
-        struct MockConn;
-        #[async_trait]
-        impl DbConnection for MockConn {
-            async fn execute(
-                &self,
-                _q: &str,
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-            async fn execute_with_params(
-                &self,
-                _q: &str,
-                _p: &[QueryParam],
-            ) -> Result<crate::connection::QueryResult, crate::connection::DbError> {
-                Ok(crate::connection::QueryResult {
-                    columns: vec![],
-                    rows: vec![],
-                })
-            }
-        }
-
-        let mut node = ExpansionNode::new(
-            Arc::new(MockConn),
-            vec![ExpansionRule {
-                relation: "HAS_FILE".into(),
-                direction: ExpansionDirection::Outgoing,
-                source_entity: Some("Directory".into()),
-                limit: 50,
-            }],
-        );
-
-        // 3 index entries pointing to the same Directory source
-        let mut ctx = NodeContext::new();
-        ctx.set_input(
-            "results",
-            PortValue::Results(vec![
-                make_aggregated_result("idx-1", "Directory", "same-dir"),
-                make_aggregated_result("idx-2", "Directory", "same-dir"),
-                make_aggregated_result("idx-3", "Directory", "same-dir"),
-            ]),
-        );
-
-        let mut emitter = GraphEmitter::new();
-        node.execute_dynamic(&mut ctx, &mut emitter).await.unwrap();
-
-        // Should emit only 1 FetchRelated (dedup by source_uuid)
-        let (nodes, _, _, _) = emitter.drain();
-        assert_eq!(nodes.len(), 2); // 1 fetch + 1 compose
+        assert_eq!(node.inputs().len(), 1);
+        assert_eq!(node.inputs()[0].name, "results");
+        assert_eq!(node.inputs()[0].port_type, PortType::Results);
+        assert_eq!(node.outputs().len(), 1);
+        assert_eq!(node.outputs()[0].name, "children");
     }
 
     #[tokio::test]

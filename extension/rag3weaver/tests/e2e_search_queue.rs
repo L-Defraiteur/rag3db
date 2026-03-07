@@ -297,7 +297,7 @@ async fn strategy_expand_has_file() {
     };
 
     // Use build_dataflow_graph + runtime.subscribe for event tracing
-    let mut graph = Catalog::build_dataflow_graph(
+    let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -305,7 +305,7 @@ async fn strategy_expand_has_file() {
     )
     .await;
 
-    let runtime = DataflowRuntime::new(10);
+    let runtime = DataflowRuntime::with_services(10, services);
     let mut rx = runtime.subscribe();
     let output = runtime.execute(&mut graph).await.unwrap();
 
