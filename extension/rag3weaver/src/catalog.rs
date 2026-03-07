@@ -17,7 +17,8 @@ use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
-use crate::ops::{AggregateOp, CatalogOp, ChunkOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::ops::{CatalogOp, DualEmbedOp, EmbedOp, InsertOp, LinkOp, SparseEmbedOp, RefOrUuid};
+use crate::records::{AggregateRecord, EntityRecord, PendingWork, RelationRecord};
 use crate::queue::{FlushResult, QueueStats};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{entity_has_chunks, generate_full_schema, resolve_entity_kbs};
@@ -25,11 +26,13 @@ use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::{chunk_uuid, hashsafe_uuid};
 use crate::validator::{validate_schema, KBFieldRef};
 use crate::dataflow::graph::DataflowGraph;
-use crate::dataflow::ingestion_nodes::{
-    AggregateBatchNode, ChunkBatchNode, DualEmbedBatchNode, EmbedBatchNode,
-    InsertBatchNode, LinkBatchNode, SparseEmbedBatchNode,
+use crate::dataflow::port::{BatchPayload, PortType, PortValue};
+use crate::dataflow::record_nodes::{
+    ChunkKBNode, EmbedRecordNode, FlushFTSNode, GatherKBNode, InsertRecordNode, LinkRecordNode,
+    UpdateKBNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
+use crate::dataflow::services::ServiceRegistry;
 
 // ─── KBMetadata ────────────────────────────────────────────────────────────
 
@@ -116,7 +119,9 @@ pub struct Catalog {
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
-    pending_ops: Vec<CatalogOp>,
+    /// Typed pending work queue. Populated by create()/link()/update()/delete(),
+    /// consumed by build_ingestion_graph() → drain().
+    pending: PendingWork,
     drain_stats: DrainStats,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
@@ -143,7 +148,7 @@ impl Catalog {
             sparse_embedder: None,
             dual_embedder: None,
             config,
-            pending_ops: Vec::new(),
+            pending: PendingWork::new(),
             drain_stats: DrainStats::default(),
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
@@ -276,7 +281,7 @@ impl Catalog {
         data: BTreeMap<String, CypherValue>,
     ) -> Result<EntityRef, CatalogError> {
         self.check_initialized()?;
-        let entity_def = self.check_entity(entity_name)?;
+        let entity_def = self.check_entity(entity_name)?.clone();
 
         // Generate UUID (hashsafe if configured, otherwise random)
         let uuid = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
@@ -304,19 +309,17 @@ impl Catalog {
         // Create entity ref pair
         let (entity_ref, resolver) = EntityRef::new(entity_name);
 
-        // Create InsertOp
-        let insert_op = CatalogOp::Insert(InsertOp::new(
+        // Push entity record with resolver into PendingWork
+        self.pending.entities.push(EntityRecord::new(
             entity_name.to_string(),
             full_data,
             resolver,
             entity_ref.clone(),
         ));
+        self.drain_stats.total_queued += 1;
 
-        // Enqueue InsertOp for the entity + KB Index ops (if titleFor any KB).
-        let mut ops: Vec<CatalogOp> = vec![insert_op];
-
-        // For each KB where this entity has titleFor, create Index entry + AggregateOp.
-        let entity_kbs = resolve_entity_kbs(entity_def);
+        // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
+        let entity_kbs = resolve_entity_kbs(&entity_def);
         for (kb_name, mapping) in &entity_kbs {
             if mapping.title_field.is_none() {
                 continue; // This entity only has contentFor for this KB, not titleFor
@@ -357,43 +360,43 @@ impl Catalog {
             index_data.insert("_uuid".to_string(), CypherValue::String(index_uuid.clone()));
             index_data.insert("_source_entity".to_string(), CypherValue::String(entity_name.to_string()));
             index_data.insert("_source_uuid".to_string(), CypherValue::String(uuid.clone()));
-            // Sentinel hash: empty string forces AggregateProcessor to always run on first drain.
-            // The real hash is computed by AggregateProcessor after aggregating all content.
+            // Sentinel hash: empty string forces GatherKBNode to always run on first drain.
             index_data.insert("_content_hash".to_string(), CypherValue::String(String::new()));
             index_data.insert("_title".to_string(), CypherValue::String(title_text));
             index_data.insert("_content".to_string(), CypherValue::String(content_text));
 
+            // Index entity with resolver
             let (index_ref, index_resolver) = EntityRef::new(&index_table);
-            ops.push(CatalogOp::Insert(InsertOp::new(
-                index_table.clone(),
+            self.pending.entities.push(EntityRecord::new(
+                index_table,
                 index_data,
                 index_resolver,
                 index_ref.clone(),
-            )));
+            ));
 
-            // LinkOp: {Entity}_IN_{KB}
+            // Link: {Entity}_IN_{KB}
             let in_rel_name = format!("{entity_name}_IN_{kb_name}");
             let (in_rel_ref, in_rel_resolver) = RelationRef::new(&in_rel_name);
-            ops.push(CatalogOp::Link(LinkOp::new(
+            self.pending.relations.push(RelationRecord::new(
                 in_rel_name,
                 RefOrUuid::Ref(entity_ref.clone()),
                 RefOrUuid::Ref(index_ref),
                 BTreeMap::new(),
                 in_rel_resolver,
                 in_rel_ref,
-            )));
+            ));
 
-            // AggregateOp (deferred: will rebuild _content + chunks at drain time)
-            ops.push(CatalogOp::Aggregate(AggregateOp {
+            // Aggregate (deferred: will rebuild _content + chunks at drain time)
+            self.pending.aggregates.push(AggregateRecord {
                 index_entry_uuid: index_uuid,
                 kb_name: kb_name.clone(),
                 title_entity: entity_name.to_string(),
                 source_uuid: uuid.clone(),
-            }));
+            });
+
+            self.drain_stats.total_queued += 3; // index entity + link + aggregate
         }
 
-        self.drain_stats.total_queued += ops.len();
-        self.pending_ops.extend(ops);
         Ok(entity_ref)
     }
 
@@ -416,7 +419,8 @@ impl Catalog {
 
         let (relation_ref, resolver) = RelationRef::new(rel_name);
 
-        let op = CatalogOp::Link(LinkOp::new(
+        // Push relation record with resolver into PendingWork
+        self.pending.relations.push(RelationRecord::new(
             rel_name.to_string(),
             from_ref.clone(),
             to_ref.clone(),
@@ -424,16 +428,14 @@ impl Catalog {
             resolver,
             relation_ref.clone(),
         ));
-
-        let mut ops: Vec<CatalogOp> = vec![op];
+        self.drain_stats.total_queued += 1;
 
         // Incremental: if this relation connects a content entity to a title entity
-        // for a KB, enqueue an AggregateOp so the title entity's index is rebuilt.
+        // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
         // Only when UUIDs are already resolved (incremental case). In batch mode,
-        // UUIDs are pending EntityRefs and create() already enqueued AggregateOps.
+        // UUIDs are pending EntityRefs and create() already enqueued AggregateRecords.
         for (kb_name, kb_meta) in &self.kb_metadata {
             let title_entity = &kb_meta.title.entity;
-            // Check if one side is the title entity and the other contributes content
             let title_uuid = if from_entity == *title_entity && kb_meta.entities.contains(&to_entity) {
                 from_ref.try_resolve().ok()
             } else if to_entity == *title_entity && kb_meta.entities.contains(&from_entity) {
@@ -446,17 +448,16 @@ impl Catalog {
                     &format!("{kb_name}_Index"),
                     &[title_entity, &t_uuid],
                 );
-                ops.push(CatalogOp::Aggregate(AggregateOp {
+                self.pending.aggregates.push(AggregateRecord {
                     index_entry_uuid: index_uuid,
                     kb_name: kb_name.clone(),
                     title_entity: title_entity.clone(),
                     source_uuid: t_uuid,
-                }));
+                });
+                self.drain_stats.total_queued += 1;
             }
         }
 
-        self.drain_stats.total_queued += ops.len();
-        self.pending_ops.extend(ops);
         Ok(relation_ref)
     }
 
@@ -644,7 +645,6 @@ impl Catalog {
             let entity_def = &self.config.entities[entity_name];
             let entity_kbs = resolve_entity_kbs(entity_def);
 
-            let mut ops = Vec::new();
             for (kb_name, mapping) in &entity_kbs {
                 if mapping.title_field.is_some() {
                     // This entity is the title entity for this KB → aggregate its index entry
@@ -652,12 +652,13 @@ impl Catalog {
                         &format!("{kb_name}_Index"),
                         &[entity_name, uuid],
                     );
-                    ops.push(CatalogOp::Aggregate(AggregateOp {
+                    self.pending.aggregates.push(AggregateRecord {
                         index_entry_uuid: index_uuid,
                         kb_name: kb_name.clone(),
                         title_entity: entity_name.to_string(),
                         source_uuid: uuid.to_string(),
-                    }));
+                    });
+                    self.drain_stats.total_queued += 1;
                     reembedded = true;
                 } else {
                     // contentFor-only: find linked title entities and re-aggregate them.
@@ -684,21 +685,18 @@ impl Catalog {
                                     &format!("{kb_name}_Index"),
                                     &[title_entity, title_uuid],
                                 );
-                                ops.push(CatalogOp::Aggregate(AggregateOp {
+                                self.pending.aggregates.push(AggregateRecord {
                                     index_entry_uuid: index_uuid,
                                     kb_name: kb_name.clone(),
                                     title_entity: title_entity.clone(),
                                     source_uuid: title_uuid.to_string(),
-                                }));
+                                });
+                                self.drain_stats.total_queued += 1;
                                 reembedded = true;
                             }
                         }
                     }
                 }
-            }
-            if !ops.is_empty() {
-                self.drain_stats.total_queued += ops.len();
-        self.pending_ops.extend(ops);
             }
         }
 
@@ -735,7 +733,6 @@ impl Catalog {
         // Delete KB Index entries and their chunks for KBs where this entity has titleFor.
         // For contentFor-only KBs, delete SOURCED chunks and re-aggregate the title entities.
         let mut chunks_deleted = 0usize;
-        let mut aggregate_ops: Vec<CatalogOp> = Vec::new();
         let entity_def = &self.config.entities[entity_name];
         let entity_kbs = resolve_entity_kbs(entity_def);
         for (kb_name, mapping) in &entity_kbs {
@@ -821,21 +818,17 @@ impl Catalog {
                                 &format!("{kb_name}_Index"),
                                 &[title_entity, title_uuid],
                             );
-                            aggregate_ops.push(CatalogOp::Aggregate(AggregateOp {
+                            self.pending.aggregates.push(AggregateRecord {
                                 index_entry_uuid: index_uuid,
                                 kb_name: kb_name.clone(),
                                 title_entity: title_entity.clone(),
                                 source_uuid: title_uuid.to_string(),
-                            }));
+                            });
+                            self.drain_stats.total_queued += 1;
                         }
                     }
                 }
             }
-        }
-
-        if !aggregate_ops.is_empty() {
-            self.drain_stats.total_queued += aggregate_ops.len();
-            self.pending_ops.extend(aggregate_ops);
         }
 
         // DETACH DELETE the entity
@@ -870,187 +863,139 @@ impl Catalog {
 
     // ── Queue control ──────────────────────────────────────────────────
 
-    /// Build a dataflow graph from all pending operations in the queue.
+    /// Build a dataflow graph from all pending records.
     ///
-    /// Partitions ops by type, creates batch nodes, and wires them with
-    /// edges that encode the dependency ordering (insert → link → aggregate → embed).
-    /// Returns `(graph, op_count)` where `op_count` is the total number of ops taken.
-    fn build_ingestion_graph(&mut self) -> (DataflowGraph, usize) {
-        let ops = std::mem::take(&mut self.pending_ops);
-        if ops.is_empty() {
-            return (DataflowGraph::new(), 0);
+    /// Consumes `self.pending` (PendingWork) and builds a record-based graph:
+    ///
+    /// ```text
+    /// entities → InsertRecordNode("inserts")
+    ///                 └── done → LinkRecordNode("links") ← relations
+    ///                               └── done → GatherKBNode("gather_kb") ← aggregates
+    ///                                             └── kb_content → UpdateKBNode("update_kb")
+    ///                                                                  └── kb_content → ChunkKBNode("chunk_kb")
+    ///                                                                                      ├── entities → InsertRecordNode("agg_inserts")
+    ///                                                                                      ├── relations → LinkRecordNode("agg_links")
+    ///                                                                                      └── agg_inserts ── done → EmbedRecordNode("agg_embeds")
+    /// ```
+    ///
+    /// No ChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
+    /// No EmbedRecordNode on raw entities (only KB_Index_Chunk are searched).
+    fn build_ingestion_graph(&mut self) -> (DataflowGraph, ServiceRegistry, usize) {
+        let pending = std::mem::take(&mut self.pending);
+        if pending.is_empty() {
+            return (DataflowGraph::new(), ServiceRegistry::new(), 0);
         }
 
-        let op_count = ops.len();
-        let mut graph = DataflowGraph::new();
+        let op_count = pending.total_count();
+        let has_entities = !pending.entities.is_empty();
+        let has_relations = !pending.relations.is_empty();
+        let has_aggregates = !pending.aggregates.is_empty();
 
-        // Partition ops by type
-        let mut chunks: Vec<crate::ops::ChunkOp> = Vec::new();
-        let mut inserts: Vec<InsertOp> = Vec::new();
-        let mut links: Vec<LinkOp> = Vec::new();
-        let mut aggregates: Vec<AggregateOp> = Vec::new();
-        let mut embeds: Vec<EmbedOp> = Vec::new();
-        let mut sparse_embeds: Vec<SparseEmbedOp> = Vec::new();
-        let mut dual_embeds: Vec<DualEmbedOp> = Vec::new();
-
-        for op in ops {
-            match op {
-                CatalogOp::Chunk(o) => chunks.push(o),
-                CatalogOp::Insert(o) => inserts.push(o),
-                CatalogOp::Link(o) => links.push(o),
-                CatalogOp::Aggregate(o) => aggregates.push(o),
-                CatalogOp::Embed(o) => embeds.push(o),
-                CatalogOp::SparseEmbed(o) => sparse_embeds.push(o),
-                CatalogOp::DualEmbed(o) => dual_embeds.push(o),
-            }
-        }
-
-        let has_chunks = !chunks.is_empty();
-        let has_inserts = !inserts.is_empty();
-        let has_links = !links.is_empty();
-        let has_aggregates = !aggregates.is_empty();
-
-        // 1. ChunkBatchNode (DynamicNode, priority 0)
-        if has_chunks {
-            self.warm_chunker_cache();
-            graph.add_dynamic_node(Box::new(ChunkBatchNode::new(
-                self.config.clone(),
-                self.kb_metadata.clone(),
-                std::mem::take(&mut self.chunker_cache),
-                self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
-                self.dual_embedder.is_some(),
-                chunks,
-                self.conn.clone(),
-                self.node_id_cache.clone(),
-                self.embedder.clone(),
-                self.sparse_embedder.clone(),
-                self.dual_embedder.clone(),
-                self.config.embedding_dim,
-            ))).unwrap();
-        }
-
-        // 2. InsertBatchNode (priority 1)
-        if has_inserts {
-            graph.add_node(Box::new(InsertBatchNode::new(
-                "inserts".to_string(),
-                inserts,
-                self.conn.clone(),
-                self.node_id_cache.clone(),
-            ))).unwrap();
-            if has_chunks {
-                graph.connect("chunk_batch", "done", "inserts", "trigger").unwrap();
-            }
-        }
-
-        // 3. LinkBatchNode (priority 2)
-        if has_links {
-            graph.add_node(Box::new(LinkBatchNode::new(
-                "links".to_string(),
-                links,
-                self.conn.clone(),
-            ))).unwrap();
-            if has_inserts {
-                graph.connect("inserts", "done", "links", "trigger").unwrap();
-            } else if has_chunks {
-                graph.connect("chunk_batch", "done", "links", "trigger").unwrap();
-            }
-        }
-
-        // 4. AggregateBatchNode (DynamicNode, priority 2.5)
-        if has_aggregates {
-            self.warm_chunker_cache();
-            graph.add_dynamic_node(Box::new(AggregateBatchNode::new(
-                aggregates,
-                self.conn.clone(),
-                self.config.clone(),
-                self.kb_metadata.clone(),
-                std::mem::take(&mut self.chunker_cache),
-                self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
-                self.dual_embedder.is_some(),
-                self.node_id_cache.clone(),
-                self.embedder.clone(),
-                self.sparse_embedder.clone(),
-                self.dual_embedder.clone(),
-                self.config.embedding_dim,
-            ))).unwrap();
-            if has_links {
-                graph.connect("links", "done", "aggregate_batch", "trigger").unwrap();
-            } else if has_inserts {
-                graph.connect("inserts", "done", "aggregate_batch", "trigger").unwrap();
-            } else if has_chunks {
-                graph.connect("chunk_batch", "done", "aggregate_batch", "trigger").unwrap();
-            }
-        }
-
-        // 5. Embed nodes (priority 3) — depend on the last non-embed node
-        let embed_trigger = if has_aggregates {
-            Some("aggregate_batch")
-        } else if has_links {
-            Some("links")
-        } else if has_inserts {
-            Some("inserts")
-        } else if has_chunks {
-            Some("chunk_batch")
+        // Capture unique KB names before aggregates are consumed by the graph
+        let flush_kb_names: Vec<String> = if has_aggregates {
+            let mut seen = HashSet::new();
+            pending.aggregates.iter()
+                .filter_map(|a| if seen.insert(a.kb_name.clone()) { Some(a.kb_name.clone()) } else { None })
+                .collect()
         } else {
-            None
+            vec![]
         };
 
-        if !embeds.is_empty() {
-            graph.add_node(Box::new(EmbedBatchNode::new(
-                "embeds".to_string(),
-                embeds,
-                self.conn.clone(),
-                self.embedder.clone(),
-                self.config.embedding_dim,
-            ))).unwrap();
-            if let Some(trigger) = embed_trigger {
-                graph.connect(trigger, "done", "embeds", "trigger").unwrap();
+        let mut graph = DataflowGraph::new();
+
+        // 1. InsertRecordNode("inserts") — raw entities
+        if has_entities {
+            graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
+            graph.set_initial_input("inserts", "entities",
+                PortValue::Batch(BatchPayload::new(PortType::Entities, pending.entities)));
+        }
+
+        // 2. LinkRecordNode("links") — raw relations, triggered after inserts
+        if has_relations {
+            graph.add_node(Box::new(LinkRecordNode::new("links"))).unwrap();
+            graph.set_initial_input("links", "relations",
+                PortValue::Batch(BatchPayload::new(PortType::Relations, pending.relations)));
+            if has_entities {
+                graph.connect("inserts", "done", "links", "trigger").unwrap();
             }
         }
 
-        if !sparse_embeds.is_empty() {
-            if let Some(ref sparse_emb) = self.sparse_embedder {
-                graph.add_node(Box::new(SparseEmbedBatchNode::new(
-                    "sparse_embeds".to_string(),
-                    sparse_embeds,
-                    self.conn.clone(),
-                    sparse_emb.clone(),
-                ))).unwrap();
-                if let Some(trigger) = embed_trigger {
-                    graph.connect(trigger, "done", "sparse_embeds", "trigger").unwrap();
-                }
+        // 3. KB pipeline: gather → update → chunk, triggered after links
+        if has_aggregates {
+            self.warm_chunker_cache();
+
+            graph.add_node(Box::new(GatherKBNode::new("gather_kb"))).unwrap();
+            graph.set_initial_input("gather_kb", "aggregates",
+                PortValue::Batch(BatchPayload::new(PortType::Aggregates, pending.aggregates)));
+            if has_relations {
+                graph.connect("links", "done", "gather_kb", "trigger").unwrap();
+            } else if has_entities {
+                graph.connect("inserts", "done", "gather_kb", "trigger").unwrap();
             }
+
+            graph.add_node(Box::new(UpdateKBNode::new("update_kb"))).unwrap();
+            graph.connect("gather_kb", "kb_content", "update_kb", "kb_content").unwrap();
+
+            graph.add_node(Box::new(ChunkKBNode::new("chunk_kb"))).unwrap();
+            graph.connect("update_kb", "kb_content", "chunk_kb", "kb_content").unwrap();
+
+            // Downstream standard: insert chunks → link chunks → embed chunks
+            graph.add_node(Box::new(InsertRecordNode::new("agg_inserts"))).unwrap();
+            graph.connect("chunk_kb", "entities", "agg_inserts", "entities").unwrap();
+
+            graph.add_node(Box::new(LinkRecordNode::new("agg_links"))).unwrap();
+            graph.connect("chunk_kb", "relations", "agg_links", "relations").unwrap();
+            graph.connect("agg_inserts", "done", "agg_links", "trigger").unwrap();
+
+            graph.add_node(Box::new(EmbedRecordNode::new("agg_embeds", 32))).unwrap();
+            graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
+            graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
+
+            // Flush FTS indexes in parallel with chunk/insert/embed pipeline
+            graph.add_node(Box::new(FlushFTSNode::new("flush_fts"))).unwrap();
+            graph.connect("update_kb", "done", "flush_fts", "trigger").unwrap();
         }
 
-        if !dual_embeds.is_empty() {
-            if let Some(ref dual_emb) = self.dual_embedder {
-                graph.add_node(Box::new(DualEmbedBatchNode::new(
-                    "dual_embeds".to_string(),
-                    dual_embeds,
-                    self.conn.clone(),
-                    dual_emb.clone(),
-                    self.config.embedding_dim,
-                    32,
-                ))).unwrap();
-                if let Some(trigger) = embed_trigger {
-                    graph.connect(trigger, "done", "dual_embeds", "trigger").unwrap();
-                }
-            }
+        // Build ServiceRegistry with all shared services
+        let mut services = ServiceRegistry::new();
+        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
+        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
+        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
+        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
+        services.register::<HashMap<String, KBMetadata>>("kb_metadata", Arc::new(self.kb_metadata.clone()));
+        services.register::<bool>("has_sparse", Arc::new(
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
+        ));
+        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+
+        if has_aggregates {
+            services.register::<HashMap<ChunkerConfig, Chunker>>(
+                "chunker_cache",
+                Arc::new(std::mem::take(&mut self.chunker_cache)),
+            );
+            services.register::<Vec<String>>("flush_kb_names", Arc::new(flush_kb_names));
+        }
+        if let Some(ref sparse_emb) = self.sparse_embedder {
+            services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
+        }
+        if let Some(ref dual_emb) = self.dual_embedder {
+            services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
         }
 
-        (graph, op_count)
+        (graph, services, op_count)
     }
 
     /// Drain all pending operations via the dataflow runtime.
     pub async fn drain(&mut self) -> FlushResult {
-        let (mut graph, op_count) = self.build_ingestion_graph();
+        let (mut graph, services, op_count) = self.build_ingestion_graph();
         if graph.nodes.is_empty() {
             return FlushResult::default();
         }
 
         let node_count = graph.nodes.len();
         // max_iterations: generous bound — DynamicNodes may expand the graph
-        let runtime = DataflowRuntime::new(node_count + 20);
+        let runtime = DataflowRuntime::with_services(node_count + 20, services);
         match runtime.execute(&mut graph).await {
             Ok(_output) => {
                 self.drain_stats.total_processed += op_count;
@@ -1076,39 +1021,25 @@ impl Catalog {
         futures::executor::block_on(self.drain())
     }
 
-    /// Flush only InsertOps via a minimal dataflow graph.
-    /// Leaves all other ops (Link, Aggregate, Embed, etc.) in `pending_ops`.
+    /// Flush only entity inserts via a minimal dataflow graph.
+    /// Leaves relations and aggregates in `pending` for a later `drain()`.
     pub async fn flush_insertions(&mut self) -> FlushResult {
-        let all_ops = std::mem::take(&mut self.pending_ops);
-        let (insert_ops, rest): (Vec<_>, Vec<_>) = all_ops
-            .into_iter()
-            .partition(|op| matches!(op, CatalogOp::Insert(_)));
-        self.pending_ops = rest;
-
-        if insert_ops.is_empty() {
+        let entities = std::mem::take(&mut self.pending.entities);
+        if entities.is_empty() {
             return FlushResult::default();
         }
 
-        let op_count = insert_ops.len();
-        let inserts: Vec<InsertOp> = insert_ops
-            .into_iter()
-            .filter_map(|op| match op {
-                CatalogOp::Insert(i) => Some(i),
-                _ => None,
-            })
-            .collect();
-
+        let op_count = entities.len();
         let mut graph = DataflowGraph::new();
-        graph
-            .add_node(Box::new(InsertBatchNode::new(
-                "inserts".to_string(),
-                inserts,
-                self.conn.clone(),
-                self.node_id_cache.clone(),
-            )))
-            .unwrap();
+        graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
+        graph.set_initial_input("inserts", "entities",
+            PortValue::Batch(BatchPayload::new(PortType::Entities, entities)));
 
-        let runtime = DataflowRuntime::new(5);
+        let mut services = ServiceRegistry::new();
+        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
+
+        let runtime = DataflowRuntime::with_services(5, services);
         match runtime.execute(&mut graph).await {
             Ok(_) => {
                 self.drain_stats.total_processed += op_count;
@@ -1128,12 +1059,17 @@ impl Catalog {
     }
 
     pub fn has_pending(&self) -> bool {
-        !self.pending_ops.is_empty()
+        !self.pending.is_empty()
+    }
+
+    /// Access the PendingWork queue.
+    pub fn pending_work(&self) -> &PendingWork {
+        &self.pending
     }
 
     pub fn queue_stats(&self) -> QueueStats {
         QueueStats {
-            pending: self.pending_ops.len(),
+            pending: self.pending.total_count(),
             total_queued: self.drain_stats.total_queued,
             total_processed: self.drain_stats.total_processed,
             total_failed: self.drain_stats.total_failed,
@@ -1209,7 +1145,7 @@ impl Catalog {
             .ok_or_else(|| CatalogError::UnknownKB(kb_name.to_string()))?
             .clone();
 
-        let pending_count = self.pending_ops.len();
+        let pending_count = self.pending.total_count();
 
         // Consistency
         match options.consistency {
@@ -2556,5 +2492,61 @@ mod tests {
         // With MockConnection, search returns empty but should not error
         let response = catalog.search("main", "test", opts).await.unwrap();
         assert!(response.results.is_empty());
+    }
+
+    // ── Phase A: Shadow records tests ─────────────────────────────────
+
+    #[tokio::test]
+    async fn create_populates_pending_work() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let _ref = catalog.create("Document", make_doc_data("Hello", "World")).unwrap();
+
+        let pw = catalog.pending_work();
+        // 1 Document entity + 1 main_Index entity
+        assert_eq!(pw.entities.len(), 2, "should have 2 entity records (Document + main_Index)");
+        assert_eq!(pw.entities[0].entity_name, "Document");
+        assert_eq!(pw.entities[1].entity_name, "main_Index");
+
+        // 1 Document_IN_main relation
+        assert_eq!(pw.relations.len(), 1, "should have 1 relation record (Document_IN_main)");
+        assert_eq!(pw.relations[0].rel_name, "Document_IN_main");
+
+        // 1 AggregateRecord
+        assert_eq!(pw.aggregates.len(), 1, "should have 1 aggregate record");
+        assert_eq!(pw.aggregates[0].kb_name, "main");
+        assert_eq!(pw.aggregates[0].title_entity, "Document");
+    }
+
+    #[tokio::test]
+    async fn link_populates_pending_work() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let from_ref = catalog.create("Document", make_doc_data("A", "aaa")).unwrap();
+        let to_ref = catalog.create("Document", make_doc_data("B", "bbb")).unwrap();
+
+        let _rel = catalog.link("REFERENCES", from_ref, to_ref, BTreeMap::new()).unwrap();
+
+        let pw = catalog.pending_work();
+        // 2 creates × (1 Document + 1 main_Index) = 4 entities
+        assert_eq!(pw.entities.len(), 4);
+        // 2 creates × 1 Document_IN_main + 1 REFERENCES = 3 relations
+        assert_eq!(pw.relations.len(), 3);
+        assert_eq!(pw.relations[2].rel_name, "REFERENCES");
+    }
+
+    #[tokio::test]
+    async fn drain_clears_pending_work() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        catalog.create("Document", make_doc_data("Test", "body")).unwrap();
+        assert!(!catalog.pending_work().is_empty());
+
+        // drain() clears pending work
+        let _ = catalog.drain().await;
+        assert!(catalog.pending_work().is_empty(), "pending should be cleared after drain");
     }
 }

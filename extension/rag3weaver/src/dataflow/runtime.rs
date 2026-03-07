@@ -4,16 +4,19 @@
 //! re-sorts and continues. Emits [`DataflowEvent`]s via async_broadcast.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Instant;
 
 use async_broadcast::{InactiveReceiver, Sender};
 use serde::Serialize;
+
 
 use super::graph::{DataflowGraph, NodeSlot};
 use super::node::{GraphEmitter, NodeContext};
 use super::observe::{TapRegistry, TapSpec, TapEvent};
 use super::port::{merge_port_values, PortValue};
 use super::report::ExecutionReport;
+use super::services::ServiceRegistry;
 
 // ─── DataflowEvent ───────────────────────────────────────────────────────────
 
@@ -27,6 +30,7 @@ pub enum DataflowEvent {
         node: String,
         duration_ms: u64,
         output_ports: Vec<String>,
+        metrics: HashMap<String, serde_json::Value>,
     },
     /// A node failed.
     NodeFailed { node: String, error: String },
@@ -75,6 +79,7 @@ pub struct DataflowRuntime {
     event_tx: Sender<DataflowEvent>,
     _inactive_rx: InactiveReceiver<DataflowEvent>,
     taps: TapRegistry,
+    services: Arc<ServiceRegistry>,
 }
 
 impl DataflowRuntime {
@@ -86,12 +91,35 @@ impl DataflowRuntime {
             event_tx: tx,
             _inactive_rx: rx.deactivate(),
             taps: TapRegistry::new(),
+            services: Arc::new(ServiceRegistry::new()),
+        }
+    }
+
+    /// Create a runtime with a service registry.
+    pub fn with_services(max_iterations: usize, services: ServiceRegistry) -> Self {
+        let (mut tx, rx) = async_broadcast::broadcast(128);
+        tx.set_overflow(true);
+        Self {
+            max_iterations,
+            event_tx: tx,
+            _inactive_rx: rx.deactivate(),
+            taps: TapRegistry::new(),
+            services: Arc::new(services),
         }
     }
 
     /// Subscribe to execution events.
     pub fn subscribe(&self) -> async_broadcast::Receiver<DataflowEvent> {
         self._inactive_rx.activate_cloned()
+    }
+
+    /// Subscribe to events from a specific set of nodes only.
+    /// Global events (Completed, Failed) are always included.
+    pub fn subscribe_nodes(&self, nodes: &[&str]) -> NodeEventFilter {
+        NodeEventFilter {
+            rx: self._inactive_rx.activate_cloned(),
+            nodes: nodes.iter().map(|s| s.to_string()).collect(),
+        }
     }
 
     /// Tap a specific edge — receive cloned values flowing through it.
@@ -145,6 +173,10 @@ impl DataflowRuntime {
 
         // Port data store: (node_name, port_name) → PortValue
         let mut port_data: HashMap<(String, String), PortValue> = HashMap::new();
+        // Initial inputs pre-loaded by DynamicNodes for emitted nodes,
+        // or set on the graph itself via graph.set_initial_input()
+        let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
+            std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
         let mut order = graph.topological_sort()?;
 
@@ -160,14 +192,19 @@ impl DataflowRuntime {
                             return true;
                         }
                         // Check if any edge delivers to this port
-                        graph.edges.iter().any(|e| {
+                        let has_edge_data = graph.edges.iter().any(|e| {
                             e.to_node == **name
                                 && e.to_port == input.name
                                 && port_data.contains_key(&(
                                     e.from_node.clone(),
                                     e.from_port.clone(),
                                 ))
-                        })
+                        });
+                        // Or initial_inputs provides it
+                        let has_initial = initial_inputs
+                            .get(*name)
+                            .map_or(false, |ports| ports.contains_key(input.name));
+                        has_edge_data || has_initial
                     })
                 })
                 .cloned()
@@ -192,7 +229,7 @@ impl DataflowRuntime {
 
             for node_name in &ready {
                 // Collect inputs from edges
-                let mut ctx = NodeContext::new();
+                let mut ctx = NodeContext::with_services(self.services.clone());
                 let edges_for_node: Vec<_> = graph
                     .edges
                     .iter()
@@ -226,6 +263,13 @@ impl DataflowRuntime {
                     }
                 }
 
+                // Inject initial inputs pre-loaded by DynamicNodes
+                if let Some(node_initials) = initial_inputs.remove(node_name) {
+                    for (port, value) in node_initials {
+                        ctx.set_input(&port, value);
+                    }
+                }
+
                 self.emit(DataflowEvent::NodeStarted {
                     node: node_name.clone(),
                 });
@@ -238,7 +282,7 @@ impl DataflowRuntime {
                     .position(|n| n.name() == *node_name)
                     .unwrap();
 
-                let exec_result = match &graph.nodes[node_idx] {
+                let exec_result = match &mut graph.nodes[node_idx] {
                     NodeSlot::Static(node) => node.execute(&mut ctx).await,
                     NodeSlot::Dynamic(node) => {
                         let mut emitter = GraphEmitter::new();
@@ -246,7 +290,7 @@ impl DataflowRuntime {
                             node.execute_dynamic(&mut ctx, &mut emitter).await;
 
                         if result.is_ok() && !emitter.is_empty() {
-                            let (new_nodes, new_dyn_nodes, new_edges) =
+                            let (new_nodes, new_dyn_nodes, new_edges, new_initials) =
                                 emitter.drain();
                             let added_names: Vec<String> = new_nodes
                                 .iter()
@@ -257,6 +301,11 @@ impl DataflowRuntime {
 
                             graph.merge_dynamic(new_nodes, new_dyn_nodes, new_edges)?;
                             order = graph.topological_sort()?;
+
+                            // Store initial inputs for emitted nodes
+                            for (node, ports) in new_initials {
+                                initial_inputs.entry(node).or_default().extend(ports);
+                            }
 
                             self.emit(DataflowEvent::GraphExpanded {
                                 by_node: node_name.clone(),
@@ -274,6 +323,7 @@ impl DataflowRuntime {
                 match exec_result {
                     Ok(()) => {
                         let outputs = ctx.drain_outputs();
+                        let metrics = ctx.drain_metrics();
                         let output_ports: Vec<String> = outputs.keys().cloned().collect();
 
                         for (port, value) in outputs {
@@ -285,6 +335,7 @@ impl DataflowRuntime {
                             node: node_name.clone(),
                             duration_ms,
                             output_ports,
+                            metrics,
                         });
                     }
                     Err(error) => {
@@ -335,6 +386,37 @@ impl DataflowRuntime {
     }
 }
 
+// ─── NodeEventFilter ────────────────────────────────────────────────────────
+
+/// Filtered event receiver that only yields events for a given set of nodes.
+/// Global events (Completed, Failed) always pass through.
+pub struct NodeEventFilter {
+    rx: async_broadcast::Receiver<DataflowEvent>,
+    nodes: HashSet<String>,
+}
+
+impl NodeEventFilter {
+    /// Try to receive the next matching event (non-blocking).
+    pub fn try_recv(&mut self) -> Result<DataflowEvent, async_broadcast::TryRecvError> {
+        loop {
+            let ev = self.rx.try_recv()?;
+            if self.matches(&ev) {
+                return Ok(ev);
+            }
+        }
+    }
+
+    fn matches(&self, ev: &DataflowEvent) -> bool {
+        match ev {
+            DataflowEvent::NodeStarted { node } => self.nodes.contains(node),
+            DataflowEvent::NodeCompleted { node, .. } => self.nodes.contains(node),
+            DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
+            DataflowEvent::GraphExpanded { by_node, .. } => self.nodes.contains(by_node),
+            DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,
+        }
+    }
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -369,7 +451,7 @@ mod tests {
                 required: false,
             }]
         }
-        async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             if let Some(v) = ctx.take_input("in") {
                 ctx.set_output("out", v);
             }
@@ -398,7 +480,7 @@ mod tests {
                 required: false,
             }]
         }
-        async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Results(self.results.clone()));
             Ok(())
         }
@@ -424,7 +506,7 @@ mod tests {
         fn outputs(&self) -> &[PortDef] {
             &[]
         }
-        async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             let _ = ctx.take_input("in");
             Ok(())
         }
@@ -531,7 +613,7 @@ mod tests {
                     required: false,
                 }]
             }
-            async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if let Some(v) = ctx.take_input("in") {
                     ctx.set_output("out", v);
                 }
@@ -592,7 +674,7 @@ mod tests {
                 }]
             }
             async fn execute_dynamic(
-                &self,
+                &mut self,
                 ctx: &mut NodeContext,
                 emitter: &mut GraphEmitter,
             ) -> Result<(), String> {
@@ -758,7 +840,7 @@ mod tests {
                 }]
             }
             async fn execute_dynamic(
-                &self,
+                &mut self,
                 ctx: &mut NodeContext,
                 emitter: &mut GraphEmitter,
             ) -> Result<(), String> {

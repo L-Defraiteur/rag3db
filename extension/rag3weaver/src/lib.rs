@@ -27,6 +27,7 @@ pub mod fusion;
 pub mod hash;
 pub mod node_id_cache;
 pub mod ops;
+pub mod records;
 pub mod persistence;
 pub mod dataflow;
 pub mod query;
@@ -48,6 +49,7 @@ pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterV
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use ops::{CatalogOp, DualEmbedOp, EmbedOp, Hashsafe, InsertOp, LinkOp, OpSummary, SparseEmbedOp, OperationConfig, RefOrUuid, OP_DUAL_EMBED, OP_EMBED, OP_INSERT, OP_LINK, OP_SPARSE_EMBED};
+pub use records::{EntityRecord, RelationRecord, AggregateRecord, PendingWork};
 pub use persistence::{OperationPersistence, PersistedOp};
 pub use query::{PreparedQuery, QueryBuilder};
 pub use queue::{FlushResult, QueueStats};

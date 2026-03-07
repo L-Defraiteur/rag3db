@@ -22,6 +22,27 @@ use crate::bm42_model::{Bm42Model, Config as Bm42Config};
 use crate::embedder::{DualEmbedder, EmbedError, Embedder};
 use crate::sparse_index::SparseVector;
 
+/// Select the best available device: CUDA GPU if available, otherwise CPU.
+fn best_device() -> Device {
+    #[cfg(feature = "cuda")]
+    {
+        match Device::new_cuda(0) {
+            Ok(device) => {
+                eprintln!("[candle] using CUDA device 0");
+                return device;
+            }
+            Err(e) => {
+                eprintln!("[candle] CUDA unavailable ({e}), falling back to CPU");
+            }
+        }
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        eprintln!("[candle] using CPU (cuda feature disabled)");
+    }
+    Device::Cpu
+}
+
 /// Pre-configured sentence-transformer models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultModel {
@@ -118,7 +139,7 @@ impl CandleEmbedder {
     /// `model.safetensors` in the repository.
     #[cfg(feature = "candle-embedder")]
     pub fn from_repo(model_id: &str, revision: Option<&str>) -> Result<Self, EmbedError> {
-        let device = Device::Cpu;
+        let device = best_device();
 
         let api =
             Api::new().map_err(|e| EmbedError::ProviderError(format!("hf-hub init: {e}")))?;
@@ -321,7 +342,7 @@ impl CandleDualEmbedder {
     pub fn from_repo(model_id: &str, revision: Option<&str>) -> Result<Self, EmbedError> {
         use hf_hub::api::sync::Api;
 
-        let device = Device::Cpu;
+        let device = best_device();
         let api = Api::new()
             .map_err(|e| EmbedError::ProviderError(format!("hf-hub init: {e}")))?;
         let repo = if let Some(rev) = revision {

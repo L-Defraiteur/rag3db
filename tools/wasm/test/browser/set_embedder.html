@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><title>setEmbedder WASM Test</title></head>
+<body>
+<h2>setEmbedder Test</h2>
+<pre id="log">Loading...</pre>
+<script>
+const logEl = document.getElementById("log");
+const log = (msg) => {
+  logEl.textContent += msg + "\n";
+  console.log(msg);
+};
+
+window.testResults = {};
+
+// Read model from URL param: ?model=minilm or ?model=multilingual
+const params = new URLSearchParams(location.search);
+const model = params.get("model") || "minilm";
+log("Model: " + model);
+
+const worker = new Worker("/set_embedder_worker.js");
+
+worker.onmessage = (e) => {
+  if (e.data.type === "log") {
+    log(e.data.msg);
+  } else if (e.data.type === "ready") {
+    log("Worker ready, starting test with model=" + model);
+    worker.postMessage({ model });
+  } else if (e.data.type === "results") {
+    window.testResults = e.data.results;
+    log("Results: " + JSON.stringify(e.data.results, null, 2));
+  }
+};
+
+worker.onerror = (err) => {
+  log("Worker error: " + err.message);
+  window.testResults = { error: err.message };
+};
+</script>
+</body>
+</html>

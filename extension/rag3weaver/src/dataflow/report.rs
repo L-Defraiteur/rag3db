@@ -31,6 +31,7 @@ pub struct NodeReport {
     pub status: NodeStatus,
     pub duration_ms: u64,
     pub output_ports: Vec<String>,
+    pub metrics: std::collections::HashMap<String, serde_json::Value>,
 }
 
 // ─── EdgeReport ─────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ pub fn summarize_port_value(value: &PortValue) -> String {
         PortValue::Map(_) => "Map".into(),
         PortValue::Any(_) => "Any".into(),
         PortValue::Empty => "Empty".into(),
+        PortValue::Batch(p) => format!("{:?}({})", p.batch_type, p.count()),
     }
 }
 
@@ -89,12 +91,14 @@ impl ExecutionReport {
                     node,
                     duration_ms,
                     output_ports,
+                    metrics,
                 } => {
                     nodes.push(NodeReport {
                         name: node.clone(),
                         status: NodeStatus::Completed,
                         duration_ms: *duration_ms,
                         output_ports: output_ports.clone(),
+                        metrics: metrics.clone(),
                     });
                 }
                 DataflowEvent::NodeFailed { node, error } => {
@@ -105,6 +109,7 @@ impl ExecutionReport {
                         },
                         duration_ms: 0,
                         output_ports: vec![],
+                        metrics: std::collections::HashMap::new(),
                     });
                 }
                 DataflowEvent::GraphExpanded { added_nodes, .. } => {
@@ -204,6 +209,7 @@ mod tests {
                 node: "a".into(),
                 duration_ms: 42,
                 output_ports: vec!["out".into()],
+                metrics: std::collections::HashMap::new(),
             },
             DataflowEvent::Completed {
                 total_nodes: 1,
@@ -258,6 +264,7 @@ mod tests {
                 status: NodeStatus::Completed,
                 duration_ms: 10,
                 output_ports: vec!["out".into()],
+                metrics: std::collections::HashMap::new(),
             }],
             edges: vec![],
             expanded_nodes: vec![],

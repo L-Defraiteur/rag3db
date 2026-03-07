@@ -58,7 +58,7 @@ impl Node for QuerySourceNode {
             required: false,
         }]
     }
-    async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         ctx.set_output(
             "query",
             PortValue::Query {
@@ -110,7 +110,7 @@ impl Node for PrimarySearchNode {
             },
         ]
     }
-    async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (kb_name, query, options) = match ctx.take_input("query") {
             Some(PortValue::Query {
                 kb_name,
@@ -175,7 +175,7 @@ impl DynamicNode for ExpansionNode {
     }
 
     async fn execute_dynamic(
-        &self,
+        &mut self,
         ctx: &mut NodeContext,
         emitter: &mut GraphEmitter,
     ) -> Result<(), String> {
@@ -289,7 +289,7 @@ impl Node for FetchRelatedNode {
         }]
     }
 
-    async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         if self.parents.is_empty() {
             ctx.set_output("children", PortValue::Children(HashMap::new()));
             return Ok(());
@@ -415,7 +415,7 @@ impl Node for ComposeNode {
         }]
     }
 
-    async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String> {
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut results = match ctx.take_input("results") {
             Some(PortValue::Results(r)) => r,
             _ => return Err("ComposeNode: missing 'results' input".into()),
@@ -528,7 +528,7 @@ mod tests {
             }
         }
 
-        let node = ExpansionNode::new(
+        let mut node = ExpansionNode::new(
             Arc::new(MockConn),
             vec![ExpansionRule {
                 relation: "HAS_FILE".into(),
@@ -551,7 +551,7 @@ mod tests {
         node.execute_dynamic(&mut ctx, &mut emitter).await.unwrap();
 
         // Should have emitted: 1 FetchRelatedNode + 1 ComposeNode + edges
-        let (nodes, _, edges) = emitter.drain();
+        let (nodes, _, edges, _) = emitter.drain();
         assert_eq!(nodes.len(), 2); // fetch_related_0 + compose
         assert_eq!(nodes[0].name(), "fetch_related_0");
         assert_eq!(nodes[1].name(), "compose");
@@ -586,7 +586,7 @@ mod tests {
             }
         }
 
-        let node = ExpansionNode::new(
+        let mut node = ExpansionNode::new(
             Arc::new(MockConn),
             vec![ExpansionRule {
                 relation: "HAS_FILE".into(),
@@ -638,7 +638,7 @@ mod tests {
             }
         }
 
-        let node = ExpansionNode::new(
+        let mut node = ExpansionNode::new(
             Arc::new(MockConn),
             vec![ExpansionRule {
                 relation: "HAS_FILE".into(),
@@ -663,13 +663,13 @@ mod tests {
         node.execute_dynamic(&mut ctx, &mut emitter).await.unwrap();
 
         // Should emit only 1 FetchRelated (dedup by source_uuid)
-        let (nodes, _, _) = emitter.drain();
+        let (nodes, _, _, _) = emitter.drain();
         assert_eq!(nodes.len(), 2); // 1 fetch + 1 compose
     }
 
     #[tokio::test]
     async fn compose_attaches_children() {
-        let node = ComposeNode;
+        let mut node = ComposeNode;
         let mut ctx = NodeContext::new();
 
         ctx.set_input(
@@ -704,7 +704,7 @@ mod tests {
 
     #[tokio::test]
     async fn compose_no_children_passthrough() {
-        let node = ComposeNode;
+        let mut node = ComposeNode;
         let mut ctx = NodeContext::new();
 
         ctx.set_input(

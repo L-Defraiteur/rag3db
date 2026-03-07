@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::node::{DynamicNode, Node};
-use super::port::PortType;
+use super::port::{PortType, PortValue};
 
 // ─── Edge ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,8 @@ impl NodeSlot {
 pub struct DataflowGraph {
     pub(crate) nodes: Vec<NodeSlot>,
     pub(crate) edges: Vec<Edge>,
+    /// Pre-loaded inputs for nodes (consumed by runtime at execution start).
+    pub(crate) initial_inputs: HashMap<String, HashMap<String, PortValue>>,
 }
 
 impl DataflowGraph {
@@ -60,7 +62,17 @@ impl DataflowGraph {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
+            initial_inputs: HashMap::new(),
         }
+    }
+
+    /// Pre-load an input port on a node with initial data.
+    /// Used to feed data into entry nodes (e.g., SplitOpsNode).
+    pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
+        self.initial_inputs
+            .entry(node_name.to_string())
+            .or_default()
+            .insert(port.to_string(), value);
     }
 
     /// Add a static node. Returns error if name already taken.
@@ -143,15 +155,18 @@ impl DataflowGraph {
         // Check DAG
         self.topological_sort()?;
 
-        // Check required inputs
+        // Check required inputs (edges OR initial_inputs count as connected)
         let mut warnings = Vec::new();
         for node in &self.nodes {
             for input in node.inputs() {
                 if input.required {
-                    let connected = self.edges.iter().any(|e| {
+                    let connected_by_edge = self.edges.iter().any(|e| {
                         e.to_node == node.name() && e.to_port == input.name
                     });
-                    if !connected {
+                    let connected_by_initial = self.initial_inputs
+                        .get(node.name())
+                        .map_or(false, |ports| ports.contains_key(input.name));
+                    if !connected_by_edge && !connected_by_initial {
                         warnings.push(format!(
                             "required input '{}' on node '{}' is not connected",
                             input.name,
@@ -283,7 +298,7 @@ mod tests {
         fn outputs(&self) -> &[PortDef] {
             &self.outputs
         }
-        async fn execute(&self, _ctx: &mut NodeContext) -> Result<(), String> {
+        async fn execute(&mut self, _ctx: &mut NodeContext) -> Result<(), String> {
             Ok(())
         }
     }

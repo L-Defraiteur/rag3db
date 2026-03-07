@@ -1281,5 +1281,35 @@ TEST_F(ApiTest, SearchInWhere_OrderByLimit) {
     ASSERT_EQ(countResults(*result), 1u);
 }
 
+// ── Accent normalization: tronçonneuse vs tronconneuse ──────────────────────
+
+TEST_F(ApiTest, AccentNormalization_ContainsFuzzy) {
+#ifndef __STATIC_LINK_EXTENSION_TEST__
+    ASSERT_TRUE(conn->query(stringFormat("LOAD EXTENSION '{}'",
+                                TestHelper::appendRag3dbRootPath(
+                                    "extension/lucivy_fts/build/liblucivy_fts.rag3db_extension")))
+                    ->isSuccess());
+#endif
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE tool (ID UINT64, name STRING, PRIMARY KEY (ID))")
+                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:tool {ID: 0, name: 'tronçonneuse électrique'})")
+            ->isSuccess());
+
+    auto result = conn->query("CALL CREATE_LUCIVY_INDEX('tool', ['name'])");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+
+    // Search without accent (tronconneuse) — should find tronçonneuse via fuzzy dist 1
+    result = conn->query(
+        "CALL QUERY_LUCIVY_INDEX('tool', "
+        "'{\"type\":\"contains\",\"field\":\"name\",\"value\":\"tronconneuse\",\"fuzzy\":true,\"distance\":1}', 10) "
+        "RETURN node_id, score, highlights");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    auto count = countResults(*result);
+    // Print for visibility
+    std::cout << "[AccentTest] tronconneuse (no accent) fuzzy d=1 → " << count << " result(s)" << std::endl;
+    ASSERT_GE(count, 1u) << "Expected tronçonneuse to match tronconneuse with fuzzy distance 1";
+}
+
 } // namespace testing
 } // namespace rag3db

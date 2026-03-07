@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><title>Candle WASM Embed Test</title></head>
+<body>
+<h2>Candle Embedding in WASM</h2>
+<pre id="log">Loading...</pre>
+<script>
+const log = document.getElementById("log");
+const worker = new Worker("candle_embed_worker.js");
+worker.onmessage = (e) => {
+    if (e.data.type === "status") {
+        log.textContent += "\n" + e.data.msg;
+        console.log(e.data.msg);
+    }
+    if (e.data.type === "result") {
+        window.testResult = e.data;
+        log.textContent += "\n\nResult: " + JSON.stringify(e.data, null, 2);
+        console.log("Test result:", e.data);
+    }
+};
+worker.onerror = (e) => {
+    window.testResult = { ok: false, error: e.message };
+    log.textContent += "\nError: " + e.message;
+    console.error("Worker error:", e.message);
+};
+</script>
+</body>
+</html>

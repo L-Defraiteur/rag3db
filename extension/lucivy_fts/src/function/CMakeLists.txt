@@ -3,6 +3,7 @@ add_library(lucivy_fts_extension_function
     create_lucivy_index.cpp
     query_lucivy_index.cpp
     drop_lucivy_index.cpp
+    flush_lucivy_index.cpp
     search_function.cpp)
 
 set(LUCIVY_FTS_EXTENSION_OBJECT_FILES

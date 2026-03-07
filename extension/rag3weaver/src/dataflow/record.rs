@@ -346,12 +346,14 @@ mod tests {
                     status: NodeStatus::Completed,
                     duration_ms: 42,
                     output_ports: vec!["results".into(), "meta".into()],
+                    metrics: std::collections::HashMap::new(),
                 },
                 NodeReport {
                     name: "compose".into(),
                     status: NodeStatus::Completed,
                     duration_ms: 5,
                     output_ports: vec!["results".into()],
+                    metrics: std::collections::HashMap::new(),
                 },
             ],
             edges: vec![EdgeReport {

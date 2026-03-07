@@ -5,10 +5,12 @@
 //! - [`NodeContext`] — reads inputs, writes outputs during execution
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
 use super::port::{PortDef, PortValue};
+use super::services::ServiceRegistry;
 
 // ─── Node trait ──────────────────────────────────────────────────────────────
 
@@ -25,7 +27,7 @@ pub trait Node: Send + Sync {
     fn outputs(&self) -> &[PortDef];
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
-    async fn execute(&self, ctx: &mut NodeContext) -> Result<(), String>;
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
 }
 
 // ─── DynamicNode trait ───────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ pub trait DynamicNode: Send + Sync {
 
     /// Execute and optionally emit new nodes/edges via the emitter.
     async fn execute_dynamic(
-        &self,
+        &mut self,
         ctx: &mut NodeContext,
         emitter: &mut GraphEmitter,
     ) -> Result<(), String>;
@@ -55,10 +57,12 @@ pub trait DynamicNode: Send + Sync {
 
 // ─── NodeContext ─────────────────────────────────────────────────────────────
 
-/// Execution context: typed input/output access for a node.
+/// Execution context: typed input/output access + services + metrics for a node.
 pub struct NodeContext {
     inputs: HashMap<String, PortValue>,
     outputs: HashMap<String, PortValue>,
+    services: Arc<ServiceRegistry>,
+    metrics: HashMap<String, serde_json::Value>,
 }
 
 impl NodeContext {
@@ -66,7 +70,23 @@ impl NodeContext {
         Self {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
+            services: Arc::new(ServiceRegistry::new()),
+            metrics: HashMap::new(),
         }
+    }
+
+    pub fn with_services(services: Arc<ServiceRegistry>) -> Self {
+        Self {
+            inputs: HashMap::new(),
+            outputs: HashMap::new(),
+            services,
+            metrics: HashMap::new(),
+        }
+    }
+
+    /// Get a service by key, downcast to `T`.
+    pub fn service<T: Send + Sync + 'static>(&self, key: &str) -> Option<Arc<T>> {
+        self.services.get::<T>(key)
     }
 
     /// Read an input port value (borrow).
@@ -89,9 +109,21 @@ impl NodeContext {
         self.inputs.insert(port.to_string(), value);
     }
 
+    /// Log a structured metric (available in NodeCompleted event).
+    pub fn log_metric(&mut self, key: &str, value: impl serde::Serialize) {
+        if let Ok(v) = serde_json::to_value(value) {
+            self.metrics.insert(key.to_string(), v);
+        }
+    }
+
     /// Drain all output values (used by the runtime after execution).
     pub(crate) fn drain_outputs(&mut self) -> HashMap<String, PortValue> {
         std::mem::take(&mut self.outputs)
+    }
+
+    /// Drain all metrics (used by the runtime after execution).
+    pub(crate) fn drain_metrics(&mut self) -> HashMap<String, serde_json::Value> {
+        std::mem::take(&mut self.metrics)
     }
 }
 
@@ -102,6 +134,7 @@ pub struct GraphEmitter {
     pub(crate) added_nodes: Vec<Box<dyn Node>>,
     pub(crate) added_dynamic_nodes: Vec<Box<dyn DynamicNode>>,
     pub(crate) added_edges: Vec<super::graph::Edge>,
+    pub(crate) initial_inputs: HashMap<String, HashMap<String, PortValue>>,
 }
 
 impl GraphEmitter {
@@ -110,6 +143,7 @@ impl GraphEmitter {
             added_nodes: Vec::new(),
             added_dynamic_nodes: Vec::new(),
             added_edges: Vec::new(),
+            initial_inputs: HashMap::new(),
         }
     }
 
@@ -139,6 +173,15 @@ impl GraphEmitter {
         });
     }
 
+    /// Pre-load an input port on an emitted node with initial data.
+    /// Used by DynamicNodes to pass data to newly created nodes.
+    pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
+        self.initial_inputs
+            .entry(node_name.to_string())
+            .or_default()
+            .insert(port.to_string(), value);
+    }
+
     /// Check if no mutations were emitted.
     pub fn is_empty(&self) -> bool {
         self.added_nodes.is_empty()
@@ -153,11 +196,13 @@ impl GraphEmitter {
         Vec<Box<dyn Node>>,
         Vec<Box<dyn DynamicNode>>,
         Vec<super::graph::Edge>,
+        HashMap<String, HashMap<String, PortValue>>,
     ) {
         (
             std::mem::take(&mut self.added_nodes),
             std::mem::take(&mut self.added_dynamic_nodes),
             std::mem::take(&mut self.added_edges),
+            std::mem::take(&mut self.initial_inputs),
         )
     }
 }
@@ -222,7 +267,7 @@ mod tests {
         emitter.connect("a", "out", "b", "in");
         assert!(!emitter.is_empty());
 
-        let (nodes, dyn_nodes, edges) = emitter.drain();
+        let (nodes, dyn_nodes, edges, _initials) = emitter.drain();
         assert!(nodes.is_empty());
         assert!(dyn_nodes.is_empty());
         assert_eq!(edges.len(), 1);

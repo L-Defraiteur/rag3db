@@ -4,6 +4,7 @@
 #include "catalog/lucivy_index_catalog_entry.h"
 #include "function/create_lucivy_index.h"
 #include "function/drop_lucivy_index.h"
+#include "function/flush_lucivy_index.h"
 #include "function/query_lucivy_index.h"
 #include "function/search_function.h"
 #include "index/lucivy_index.h"
@@ -41,6 +42,8 @@ void LucivyFtsExtension::load(main::ClientContext* context) {
     ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateLucivyFunction>(db);
     ExtensionUtils::addStandaloneTableFunc<DropLucivyFunction>(db);
     ExtensionUtils::addInternalStandaloneTableFunc<InternalDropLucivyFunction>(db);
+    ExtensionUtils::addStandaloneTableFunc<FlushLucivyFunction>(db);
+    ExtensionUtils::addInternalStandaloneTableFunc<InternalFlushLucivyFunction>(db);
     ExtensionUtils::addScalarFunc<SearchFunction>(db);
     ExtensionUtils::addScalarFunc<SearchScoreFunction>(db);
     ExtensionUtils::addScalarFunc<SearchHighlightsFunction>(db);

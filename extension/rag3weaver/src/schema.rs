@@ -227,6 +227,7 @@ pub fn generate_index_chunk_table_ddl(
         "_source_uuid STRING".to_string(),
         "_text STRING".to_string(),
         "_text_hash STRING".to_string(),
+        "_embed_hash STRING".to_string(),
         "_index INT64".to_string(),
         "_start_char INT64".to_string(),
         "_end_char INT64".to_string(),

@@ -22,7 +22,7 @@ WEAVER="$ROOT/extension/rag3weaver"
 BUILD_ONLY=false
 FORCE_BUILD=false
 NO_CUDA=false
-TEST_FILE="e2e_search"
+TEST_FILE=""
 TEST_FILTER=""
 EXTRA_ARGS=()
 
@@ -87,11 +87,19 @@ fi
 
 CARGO_ARGS=(
   --features "$FEATURES"
-  --test "$TEST_FILE"
-  --
-  --ignored
-  --nocapture
 )
+
+if [ -n "$TEST_FILE" ]; then
+  # Single test file specified via --test
+  CARGO_ARGS+=(--test "$TEST_FILE")
+else
+  # Run ALL e2e test files
+  for f in "$WEAVER"/tests/e2e_*.rs; do
+    CARGO_ARGS+=(--test "$(basename "${f%.rs}")")
+  done
+fi
+
+CARGO_ARGS+=(-- --ignored --nocapture)
 
 if [ -n "$TEST_FILTER" ]; then
   CARGO_ARGS+=("$TEST_FILTER")
