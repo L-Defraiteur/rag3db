@@ -37,7 +37,7 @@ pub mod uuid;
 pub mod validator;
 
 pub use chunker::{Chunk, Chunker, ChunkerConfig};
-pub use config::CatalogConfig;
+pub use config::{CatalogConfig, EntityConfig, SimpleFieldDef};
 pub use connection::{CallbackConnection, DbConnection};
 pub use embedder::{CallbackDualEmbedder, CallbackEmbedder, CallbackSparseEmbedder, DualEmbedFn, DualEmbedder, EmbedError, EmbedFn, Embedder, SparseEmbedder};
 pub use events::{CatalogEvent, EventBus};

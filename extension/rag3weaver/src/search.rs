@@ -394,12 +394,97 @@ pub struct SearchDiagnostics {
     pub total_ms: u64,
 }
 
+// ─── SearchTarget ─────────────────────────────────────────────────────────────
+
+/// Resolved search target — encapsulates table names, relationship patterns,
+/// and default configs for either a KB or a simple entity.
+///
+/// Built by `Catalog::resolve_search_target()` which dispatches between
+/// `kb_metadata` and `entity_configs`.
+#[derive(Debug, Clone)]
+pub struct SearchTarget {
+    /// Name used to identify this target (KB name or entity name).
+    pub name: String,
+    /// Parent/index table — BM25 search target.
+    pub parent_table: String,
+    /// Chunk table — vector/sparse search target.
+    pub chunk_table: String,
+    /// Relationship name connecting parent ↔ chunk.
+    pub chunk_rel: String,
+    /// `true` = parent→chunk (KB: `{KB}_Index_HAS_CHUNK`),
+    /// `false` = chunk→parent (simple: `{Entity}_CHUNKED_FROM`).
+    pub chunk_rel_fwd: bool,
+    /// BM25 search fields on the parent table.
+    pub bm25_fields: Vec<String>,
+    /// Fields to return when enriching results.
+    pub enrich_fields: Vec<String>,
+    /// Default search signals (can be overridden by `SearchOptions.signals`).
+    pub default_signals: SearchSignals,
+    /// Default fusion config (can be overridden by `SearchOptions.fusion`).
+    pub default_fusion: FusionConfig,
+    /// Whether chunks have `_source_entity` / `_source_uuid` (KB only).
+    pub has_source_refs: bool,
+    /// For BM25 filter resolution via a title entity (KB only).
+    /// `Some((title_entity, in_rel))` for KBs, `None` for simple entities
+    /// where filters apply directly on the parent table.
+    pub filter_indirection: Option<(String, String)>,
+}
+
+impl SearchTarget {
+    /// Cypher pattern to match parent → chunk (for BM25 chunk resolution).
+    ///
+    /// KB: `MATCH (n:{parent})-[:{rel}]->(c:{chunk})`
+    /// Simple: `MATCH (n:{parent})<-[:{rel}]-(c:{chunk})`
+    pub fn parent_to_chunk_match(&self, parent_alias: &str, chunk_alias: &str) -> String {
+        if self.chunk_rel_fwd {
+            format!(
+                "MATCH ({pa}:{pt})-[:{rel}]->({ca}:{ct})",
+                pa = parent_alias, pt = self.parent_table,
+                rel = self.chunk_rel,
+                ca = chunk_alias, ct = self.chunk_table,
+            )
+        } else {
+            format!(
+                "MATCH ({pa}:{pt})<-[:{rel}]-({ca}:{ct})",
+                pa = parent_alias, pt = self.parent_table,
+                rel = self.chunk_rel,
+                ca = chunk_alias, ct = self.chunk_table,
+            )
+        }
+    }
+
+    /// Cypher pattern to match chunk → parent (for vector chunk resolution).
+    ///
+    /// KB: `MATCH (p:{parent})-[:{rel}]->(c)`
+    /// Simple: `MATCH (c)-[:{rel}]->(p:{parent})`
+    pub fn chunk_to_parent_match(&self, parent_alias: &str, chunk_alias: &str) -> String {
+        if self.chunk_rel_fwd {
+            format!(
+                "MATCH ({pa}:{pt})-[:{rel}]->({ca})",
+                pa = parent_alias, pt = self.parent_table,
+                rel = self.chunk_rel,
+                ca = chunk_alias,
+            )
+        } else {
+            format!(
+                "MATCH ({ca})-[:{rel}]->({pa}:{pt})",
+                ca = chunk_alias, pt = self.parent_table,
+                rel = self.chunk_rel,
+                pa = parent_alias,
+            )
+        }
+    }
+}
+
+// ─── SearchMeta ───────────────────────────────────────────────────────────────
+
 /// Metadata about a search operation.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMeta {
     pub query: String,
-    pub kb: String,
+    /// Name of the search target (KB name or entity name).
+    pub target: String,
     pub signals: SearchSignals,
     pub consistency: Consistency,
     pub partial: bool,
@@ -1014,8 +1099,7 @@ pub struct ChunkRecord {
 /// Prefer `resolve_and_enrich_chunked()` for BM25 chunked searches (Level 1+).
 pub async fn resolve_and_enrich_chunked(
     conn: &dyn DbConnection,
-    entity: &str,
-    chunk_entity: &str,
+    target: &SearchTarget,
     offsets: &[u64],
     return_fields: &[String],
 ) -> Result<HashMap<u64, ResolvedParent>, CatalogError> {
@@ -1047,13 +1131,24 @@ pub async fn resolve_and_enrich_chunked(
     return_cols.push("c._start_line AS c_sline".to_string());
     return_cols.push("c._end_line AS c_eline".to_string());
     return_cols.push("c._content_offset AS c_content_offset".to_string());
-    return_cols.push("c._source_entity AS c_source_entity".to_string());
-    return_cols.push("c._source_uuid AS c_source_uuid".to_string());
+    if target.has_source_refs {
+        return_cols.push("c._source_entity AS c_source_entity".to_string());
+        return_cols.push("c._source_uuid AS c_source_uuid".to_string());
+    }
     let return_clause = return_cols.join(", ");
+
+    // Build OPTIONAL MATCH for the chunk join using target's relationship info
+    let entity = &target.parent_table;
+    let chunk_entity = &target.chunk_table;
+    let optional_match = if target.chunk_rel_fwd {
+        format!("OPTIONAL MATCH (n)-[:{}]->(c:{})", target.chunk_rel, chunk_entity)
+    } else {
+        format!("OPTIONAL MATCH (n)<-[:{}]-(c:{})", target.chunk_rel, chunk_entity)
+    };
 
     let cypher = format!(
         "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
-         OPTIONAL MATCH (n)-[:{entity}_HAS_CHUNK]->(c:{chunk_entity}) \
+         {optional_match} \
          RETURN {return_clause}"
     );
     let result = conn
@@ -1085,6 +1180,14 @@ pub async fn resolve_and_enrich_chunked(
         // Parse chunk columns (may be NULL from OPTIONAL MATCH)
         let c_uuid = row.get(chunk_col_start).and_then(|v| v.as_str());
         if let Some(c_uuid) = c_uuid {
+            let (source_entity, source_uuid) = if target.has_source_refs {
+                (
+                    row.get(chunk_col_start + 9).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    row.get(chunk_col_start + 10).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                )
+            } else {
+                (String::new(), String::new())
+            };
             entry.chunks.push(ChunkRecord {
                 uuid: c_uuid.to_string(),
                 text: row.get(chunk_col_start + 1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
@@ -1095,8 +1198,8 @@ pub async fn resolve_and_enrich_chunked(
                 start_line: row.get(chunk_col_start + 6).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 end_line: row.get(chunk_col_start + 7).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
                 content_offset: row.get(chunk_col_start + 8).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
-                source_entity: row.get(chunk_col_start + 9).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                source_uuid: row.get(chunk_col_start + 10).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                source_entity,
+                source_uuid,
             });
         }
     }
@@ -1109,11 +1212,10 @@ pub async fn resolve_and_enrich_chunked(
 /// Merges `resolve_chunk_results()` + `enrich_results_with_data()` into a single
 /// Cypher query that fetches chunk metadata, parent UUID, and parent fields.
 ///
-/// Prefer `resolve_vector_chunks()` for vector/sparse chunked searches (Level 1+).
+/// Uses `SearchTarget` to determine relationship pattern and whether source refs exist.
 pub async fn resolve_vector_chunks(
     conn: &dyn DbConnection,
-    chunk_entity: &str,
-    parent_entity: &str,
+    target: &SearchTarget,
     results: Vec<SearchResult>,
     return_fields: &[String],
     result_mode: ResultMode,
@@ -1140,18 +1242,24 @@ pub async fn resolve_vector_chunks(
         "c._end_line AS c_eline".to_string(),
         "c._start_char AS c_start".to_string(),
         "c._end_char AS c_end".to_string(),
-        "c._source_entity AS c_source_entity".to_string(),
-        "c._source_uuid AS c_source_uuid".to_string(),
-        "c._source_field AS c_source_field".to_string(),
     ];
+    if target.has_source_refs {
+        return_cols.push("c._source_entity AS c_source_entity".to_string());
+        return_cols.push("c._source_uuid AS c_source_uuid".to_string());
+        return_cols.push("c._source_field AS c_source_field".to_string());
+    }
     for f in return_fields {
         return_cols.push(format!("p.{f} AS {f}"));
     }
     let return_clause = return_cols.join(", ");
 
+    // Build relationship match pattern from target
+    let chunk_entity = &target.chunk_table;
+    let rel_match = target.chunk_to_parent_match("p", "c");
+
     let cypher = format!(
         "MATCH (c:{chunk_entity}) WHERE c._uuid IN [{uuid_list}] \
-         MATCH (p:{parent_entity})-[:{parent_entity}_HAS_CHUNK]->(c) \
+         {rel_match} \
          RETURN {return_clause}"
     );
     let result = conn
@@ -1174,7 +1282,10 @@ pub async fn resolve_vector_chunks(
         parent_data: Option<BTreeMap<String, CypherValue>>,
     }
 
-    let parent_field_offset = 11; // columns after source_field
+    // Column offsets depend on whether source refs are included
+    let base_chunk_cols = 8; // chunk_uuid..c_end
+    let source_cols = if target.has_source_refs { 3 } else { 0 };
+    let parent_field_offset = base_chunk_cols + source_cols;
     let mut chunk_info_map: HashMap<String, ResolvedChunk> = HashMap::new();
     for row in &result.rows {
         let chunk_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1185,9 +1296,15 @@ pub async fn resolve_vector_chunks(
         let end_line = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let start_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let source_entity = row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let source_uuid = row.get(9).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let source_field = row.get(10).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let (source_entity, source_uuid, source_field) = if target.has_source_refs {
+            (
+                row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                row.get(9).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                row.get(10).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            )
+        } else {
+            (String::new(), String::new(), String::new())
+        };
         let parent_data = if !return_fields.is_empty() {
             let mut data = BTreeMap::new();
             for (i, field) in return_fields.iter().enumerate() {
@@ -1204,6 +1321,8 @@ pub async fn resolve_vector_chunks(
             source_entity, source_uuid, source_field, parent_data,
         });
     }
+
+    let parent_entity = &target.parent_table;
 
     if result_mode == ResultMode::Detailed {
         // Detailed mode: group ALL chunks per parent
@@ -1786,8 +1905,7 @@ pub async fn resolve_bm25_to_chunks(
 /// Prefer `search_bm25_chunked()` for chunked BM25 searches (Level 1+).
 pub async fn search_bm25_chunked(
     conn: &dyn DbConnection,
-    entity: &str,
-    chunk_entity: &str,
+    target: &SearchTarget,
     query: &str,
     fields: &[String],
     mode: BM25Mode,
@@ -1798,6 +1916,7 @@ pub async fn search_bm25_chunked(
     result_mode: ResultMode,
     mut diagnostics: Option<&mut SearchDiagnostics>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
+    let entity = &target.parent_table;
     if fields.is_empty() {
         return Ok(vec![]);
     }
@@ -1851,7 +1970,7 @@ pub async fn search_bm25_chunked(
 
     // Query 2: resolve offsets + fetch chunks + enrich in one query
     let offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
-    let parents = resolve_and_enrich_chunked(conn, entity, chunk_entity, &offsets, return_fields).await?;
+    let parents = resolve_and_enrich_chunked(conn, target, &offsets, return_fields).await?;
 
     // Match highlights to chunks for each hit
     let mut results: Vec<SearchResult> = Vec::new();
@@ -1866,20 +1985,33 @@ pub async fn search_bm25_chunked(
         let data = if parent.data.is_empty() { None } else { Some(parent.data.clone()) };
 
         // Find chunks that overlap with highlights.
-        // Highlights from Lucivy use field names "_content" / "_title" with offsets
-        // relative to the concatenated _content. Chunks have offsets relative to their
-        // individual source field. We translate via chunk.content_offset.
+        //
+        // Two modes:
+        // - KB: highlights on "_content" use global offsets within the concatenated
+        //   _content field. Chunks translate via content_offset + start_char.
+        // - Simple entity: highlights on actual field names ("description", "details").
+        //   Match by chunk.parent_field, compare field-local offsets directly.
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
         let mut diag_overlaps: Vec<ChunkOverlapDiag> = Vec::new();
         for chunk in &parent.chunks {
             let mut overlap = 0usize;
-            // Translate chunk's source-local offsets to _content-global offsets
             let chunk_start_global = chunk.content_offset + chunk.start_char;
             let chunk_end_global = chunk.content_offset + chunk.end_char;
+
+            // KB mode: "_content" highlights use global offsets
             if let Some(hl_offsets) = highlights.get("_content") {
                 for &(h_start, h_end) in hl_offsets {
                     let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
                     overlap += ov;
+                }
+            }
+            // Simple entity mode: per-field highlights matched by parent_field
+            if !chunk.parent_field.is_empty() {
+                if let Some(hl_offsets) = highlights.get(&chunk.parent_field) {
+                    for &(h_start, h_end) in hl_offsets {
+                        let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
+                        overlap += ov;
+                    }
                 }
             }
             if diagnostics.is_some() {
@@ -2908,7 +3040,7 @@ mod tests {
 
         assert!(response.results.is_empty()); // MockConnection → empty
         assert_eq!(response.meta.query, "hello world");
-        assert_eq!(response.meta.kb, "main");
+        assert_eq!(response.meta.target, "main");
         assert_eq!(response.meta.signals, SearchSignals::HYBRID);
         assert_eq!(response.meta.vector_count, 0);
         assert_eq!(response.meta.bm25_count, 0);
@@ -2928,7 +3060,7 @@ mod tests {
         assert!(result.results.is_empty());
         assert!(result.graph.nodes.is_empty());
         assert!(result.graph.edges.is_empty());
-        assert_eq!(result.meta.kb, "main");
+        assert_eq!(result.meta.target, "main");
     }
 
     // ── explore_bfs ──────────────────────────────────────────────────────
@@ -3041,5 +3173,83 @@ mod tests {
         let b = results.iter().find(|r| r.uuid == "b").unwrap();
         // "a" has higher bm25 normalized → gets more additive boost
         assert!(a.score > b.score);
+    }
+
+    // ── search() with simple entity (smoke test) ────────────────────────
+
+    #[tokio::test]
+    async fn catalog_search_simple_entity_smoke() {
+        use crate::config::SimpleFieldDef;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        // Register a simple entity
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("name".into(), SimpleFieldDef {
+            field_type: FieldType::String,
+            is_title: true,
+            is_content: false,
+        });
+        fields.insert("description".into(), SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        let ec = crate::config::EntityConfig {
+            fields,
+            ..Default::default()
+        };
+        catalog.register_entity("Product", ec).await.unwrap();
+
+        // Search should succeed (MockConnection → empty results, no errors)
+        let response = catalog
+            .search("Product", "shoes", SearchOptions::default())
+            .await
+            .unwrap();
+
+        assert!(response.results.is_empty()); // MockConnection → empty
+        assert_eq!(response.meta.target, "Product");
+        assert_eq!(response.meta.query, "shoes");
+        assert_eq!(response.meta.signals, SearchSignals::HYBRID);
+    }
+
+    #[tokio::test]
+    async fn catalog_search_simple_entity_with_ingest_smoke() {
+        use crate::config::SimpleFieldDef;
+        use std::collections::BTreeMap;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        // Register + ingest
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("name".into(), SimpleFieldDef {
+            field_type: FieldType::String,
+            is_title: true,
+            is_content: false,
+        });
+        fields.insert("description".into(), SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        let ec = crate::config::EntityConfig {
+            fields,
+            ..Default::default()
+        };
+        catalog.register_entity("Product", ec).await.unwrap();
+
+        let mut data = BTreeMap::new();
+        data.insert("name".into(), CypherValue::String("Red Shoes".into()));
+        data.insert("description".into(), CypherValue::String("A nice pair of shoes.".into()));
+        catalog.ingest_entities("Product", vec![data]).await.unwrap();
+
+        // Search after ingest — should not error
+        let response = catalog
+            .search("Product", "shoes", SearchOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(response.meta.target, "Product");
     }
 }

@@ -9,9 +9,9 @@
 %% Free outputs: agg_embeds.done, flush_fts.done
 
 graph LR
-    gather_kb["GatherKBNode"]
-    update_kb["UpdateKBNode"]
-    chunk_kb["ChunkKBNode"]
+    gather_kb["KBGatherNode"]
+    update_kb["KBUpdateNode"]
+    chunk_kb["KBChunkNode"]
 
     gather_kb -->|kb_content| update_kb
     update_kb -->|kb_content| chunk_kb
@@ -23,9 +23,9 @@ graph LR
     chunk_kb -->|relations| agg_links
     agg_inserts -->|done:trigger| agg_links
 
-    agg_embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    agg_embeds["KBEmbedNode(gpu_batch_size=$gpu_batch_size)"]
     agg_inserts -->|inserted:entities| agg_embeds
     agg_links -->|done:trigger| agg_embeds
 
-    flush_fts["FlushFTSNode"]
+    flush_fts["FlushNode(table='$flush_table')"]
     update_kb -->|done:trigger| flush_fts

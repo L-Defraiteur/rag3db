@@ -333,18 +333,18 @@ mod tests {
         }
     }
 
-    /// Build a simple search subgraph: QuerySourceNode → PrimarySearchNode
+    /// Build a simple search subgraph: KBQuerySourceNode → KBSearchNode
     fn search_subgraph_def() -> GraphDefinition {
         GraphDefinition {
             nodes: vec![
                 NodeDef {
                     name: "qs".into(),
-                    node_type: "QuerySourceNode".into(),
+                    node_type: "KBQuerySourceNode".into(),
                     config: serde_json::json!({"kb_name": "TestKB", "query": "hello"}),
                 },
                 NodeDef {
                     name: "ps".into(),
-                    node_type: "PrimarySearchNode".into(),
+                    node_type: "KBSearchNode".into(),
                     config: serde_json::json!({}),
                 },
             ],
@@ -392,16 +392,16 @@ mod tests {
         let def = search_subgraph_def();
         let gn = GraphNode::from_definition("search", def, registry).unwrap();
 
-        // QuerySourceNode has no inputs → no free inputs from it
-        // PrimarySearchNode has query (connected) → no free input from it
+        // KBQuerySourceNode has no inputs → no free inputs from it
+        // KBSearchNode has query (connected) → no free input from it
         // So the only free inputs could be optional ones
         let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
-        // QuerySourceNode has no inputs at all
-        // PrimarySearchNode's query input is connected via edge
+        // KBQuerySourceNode has no inputs at all
+        // KBSearchNode's query input is connected via edge
         assert!(!input_names.contains(&"ps.query"), "inputs: {:?}", input_names);
 
-        // Free outputs: QuerySourceNode's query output is connected → not free
-        // PrimarySearchNode's results and meta are free
+        // Free outputs: KBQuerySourceNode's query output is connected → not free
+        // KBSearchNode's results and meta are free
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
         assert!(output_names.contains(&"ps.results"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"ps.meta"), "outputs: {:?}", output_names);
@@ -550,8 +550,8 @@ mod tests {
         use crate::dataflow::mermaid::parse_mermaid;
 
         let mermaid = r#"graph LR
-    qs["QuerySourceNode(kb_name='TestKB', query='hello')"]
-    ps["PrimarySearchNode"]
+    qs["KBQuerySourceNode(kb_name='TestKB', query='hello')"]
+    ps["KBSearchNode"]
     qs -->|query| ps
 "#;
         let def = parse_mermaid(mermaid).unwrap();

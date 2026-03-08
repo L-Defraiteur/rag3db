@@ -401,7 +401,7 @@ mod tests {
     use crate::dataflow::node_factories::register_builtins;
     use crate::dataflow::node_registry::NodeRegistry;
     use crate::dataflow::record_nodes::{
-        EmbedRecordNode, InsertRecordNode, LinkRecordNode,
+        KBEmbedNode, InsertRecordNode, LinkRecordNode,
     };
     use crate::records::{CheckpointRefStatus, EntityRecord};
     use crate::refs::EntityRef;
@@ -589,10 +589,10 @@ mod tests {
     #[test]
     fn graph_definition_hash_changes_with_config() {
         let mut g1 = DataflowGraph::new();
-        g1.add_node(Box::new(EmbedRecordNode::new("embeds", 32))).unwrap();
+        g1.add_node(Box::new(KBEmbedNode::new("embeds", 32))).unwrap();
 
         let mut g2 = DataflowGraph::new();
-        g2.add_node(Box::new(EmbedRecordNode::new("embeds", 64))).unwrap();
+        g2.add_node(Box::new(KBEmbedNode::new("embeds", 64))).unwrap();
 
         assert_ne!(g1.to_definition().hash(), g2.to_definition().hash());
     }
@@ -600,14 +600,14 @@ mod tests {
     #[test]
     fn graph_definition_serializable() {
         let mut graph = DataflowGraph::new();
-        graph.add_node(Box::new(EmbedRecordNode::new("embeds", 32))).unwrap();
+        graph.add_node(Box::new(KBEmbedNode::new("embeds", 32))).unwrap();
 
         let def = graph.to_definition();
         let json = serde_json::to_string(&def).unwrap();
         let restored: GraphDefinition = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored.nodes.len(), 1);
-        assert_eq!(restored.nodes[0].node_type, "EmbedRecordNode");
+        assert_eq!(restored.nodes[0].node_type, "KBEmbedNode");
         assert_eq!(
             restored.nodes[0].config.get("gpu_batch_size").unwrap().as_u64(),
             Some(32)
@@ -621,12 +621,14 @@ mod tests {
         let cases = vec![
             ("InsertRecordNode", serde_json::json!({})),
             ("LinkRecordNode", serde_json::json!({})),
-            ("EmbedRecordNode", serde_json::json!({"gpu_batch_size": 16})),
+            ("KBEmbedNode", serde_json::json!({"gpu_batch_size": 16})),
             ("ChunkRecordNode", serde_json::json!({})),
-            ("GatherKBNode", serde_json::json!({})),
-            ("UpdateKBNode", serde_json::json!({})),
-            ("ChunkKBNode", serde_json::json!({})),
-            ("FlushFTSNode", serde_json::json!({})),
+            ("EmbedNode", serde_json::json!({})),
+            ("KBChunkRecordNode", serde_json::json!({})),
+            ("KBGatherNode", serde_json::json!({})),
+            ("KBUpdateNode", serde_json::json!({})),
+            ("KBChunkNode", serde_json::json!({})),
+            ("FlushNode", serde_json::json!({"table": "Test_Index"})),
         ];
 
         for (node_type, config) in &cases {
@@ -646,7 +648,7 @@ mod tests {
     fn registry_embed_node_preserves_config() {
         let registry = builtin_registry();
         let config = serde_json::json!({"gpu_batch_size": 64});
-        let node = registry.create("EmbedRecordNode", "embeds", &config).unwrap();
+        let node = registry.create("KBEmbedNode", "embeds", &config).unwrap();
         let restored_config = node.node_config();
         assert_eq!(restored_config.get("gpu_batch_size").unwrap().as_u64(), Some(64));
     }

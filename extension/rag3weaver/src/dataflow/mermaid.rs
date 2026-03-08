@@ -425,7 +425,7 @@ mod tests {
         let input = r#"
 graph LR
     a["ComposeNode"]
-    b["PrimarySearchNode"]
+    b["KBSearchNode"]
 
     a -->|results| b
 "#;
@@ -486,7 +486,7 @@ graph LR
     a["ComposeNode"]
 
     %% Another comment
-    b["PrimarySearchNode"]
+    b["KBSearchNode"]
 "#;
         let def = parse_mermaid(input).unwrap();
         assert_eq!(def.nodes.len(), 2);
@@ -507,7 +507,7 @@ graph LR
 
         let input = r#"
 graph LR
-    qs["QuerySourceNode(kb_name='$kb', query='$q')"]
+    qs["KBQuerySourceNode(kb_name='$kb', query='$q')"]
 "#;
         let def = parse_mermaid_template(input, &vars).unwrap();
         assert_eq!(def.nodes[0].config["kb_name"], "TreeKB");
@@ -516,7 +516,7 @@ graph LR
 
     #[test]
     fn parse_template_unknown_var_errors() {
-        let input = "graph LR\n    qs[\"QuerySourceNode(kb_name='$missing')\"]";
+        let input = "graph LR\n    qs[\"KBQuerySourceNode(kb_name='$missing')\"]";
         let err = parse_mermaid_template(input, &HashMap::new()).unwrap_err();
         assert!(matches!(err, MermaidError::UnknownVariable { var, .. } if var == "missing"));
     }
@@ -542,7 +542,7 @@ graph LR
 
     #[test]
     fn parse_bool_and_float_config() {
-        let input = "graph LR\n    n[\"EmbedRecordNode(gpu_batch_size=64, enabled=true)\"]";
+        let input = "graph LR\n    n[\"KBEmbedNode(gpu_batch_size=64, enabled=true)\"]";
         let def = parse_mermaid(input).unwrap();
         assert_eq!(def.nodes[0].config["gpu_batch_size"], 64);
         assert_eq!(def.nodes[0].config["enabled"], true);
@@ -551,8 +551,8 @@ graph LR
     #[test]
     fn to_mermaid_roundtrip() {
         let input = r#"graph LR
-    query_source["QuerySourceNode(kb_name='TreeKB', query='test')"]
-    primary_search["PrimarySearchNode"]
+    query_source["KBQuerySourceNode(kb_name='TreeKB', query='test')"]
+    primary_search["KBSearchNode"]
     fetch_0["FetchRelatedNode(direction='Outgoing', limit=10, relation='HAS_FILE')"]
     compose["ComposeNode"]
 
@@ -682,6 +682,7 @@ graph LR
         let mmd = include_str!("../../templates/ingestion.mmd");
         let mut vars = HashMap::new();
         vars.insert("gpu_batch_size".into(), "32".into());
+        vars.insert("flush_table".into(), "Test_Index".into());
 
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         assert_eq!(def.nodes.len(), 10);
@@ -702,6 +703,7 @@ graph LR
         let mmd = include_str!("../../templates/kb_pipeline.mmd");
         let mut vars = HashMap::new();
         vars.insert("gpu_batch_size".into(), "32".into());
+        vars.insert("flush_table".into(), "Test_Index".into());
 
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         assert_eq!(def.nodes.len(), 7);
@@ -717,6 +719,7 @@ graph LR
         let mmd = include_str!("../../templates/kb_pipeline.mmd");
         let mut vars = HashMap::new();
         vars.insert("gpu_batch_size".into(), "32".into());
+        vars.insert("flush_table".into(), "Test_Index".into());
 
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         let registry = std::sync::Arc::new(builtin_registry());

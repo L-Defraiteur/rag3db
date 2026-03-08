@@ -6,8 +6,8 @@
 %% Add more fetch_N nodes for multiple expansion rules.
 
 graph LR
-    qs["QuerySourceNode(kb_name='$kb_name', query='$query')"]
-    ps["PrimarySearchNode"]
+    qs["KBQuerySourceNode(kb_name='$kb_name', query='$query')"]
+    ps["KBSearchNode"]
     fetch_0["FetchRelatedNode(relation='$relation', direction='$direction', limit=$limit)"]
     compose["ComposeNode"]
 

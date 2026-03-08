@@ -174,7 +174,7 @@ pub struct AggregateRecord {
 
 /// Content collected from a single source field of a contributing entity.
 ///
-/// Used by GatherKBNode to collect content from DB, and by ChunkKBNode
+/// Used by KBGatherNode to collect content from DB, and by KBChunkNode
 /// to produce chunk entities with correct _source_entity / _source_uuid.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordSourceContent {
@@ -186,9 +186,9 @@ pub struct RecordSourceContent {
 
 /// A KB Index entry whose content has changed and needs re-chunking.
 ///
-/// Produced by GatherKBNode (Steps 1-4: read DB, detect changes),
-/// consumed by UpdateKBNode (Steps 5-6: update index, delete old chunks)
-/// and ChunkKBNode (Step 7: generate chunk records).
+/// Produced by KBGatherNode (Steps 1-4: read DB, detect changes),
+/// consumed by KBUpdateNode (Steps 5-6: update index, delete old chunks)
+/// and KBChunkNode (Step 7: generate chunk records).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KBContentRecord {
     /// UUID of the {KB}_Index entity

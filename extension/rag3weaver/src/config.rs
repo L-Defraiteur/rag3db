@@ -309,6 +309,69 @@ pub struct EmbeddingConfig {
     pub max_input_tokens: Option<usize>,
 }
 
+// ─── Simple Entity Config (registerEntity) ──────────────────────────────────
+
+/// Field definition for a simple entity (registerEntity API).
+/// Unlike `FieldDef`, uses `is_title`/`is_content` instead of KB references.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimpleFieldDef {
+    /// Type of the field (String, Text, Int64, Double, Boolean, Timestamp, etc.)
+    #[serde(default, rename = "type", alias = "field_type", alias = "fieldType")]
+    pub field_type: FieldType,
+
+    /// Title field — provides context for chunks. At most one per entity.
+    #[serde(default, alias = "is_title")]
+    pub is_title: bool,
+
+    /// Content field — concatenated for chunking/embedding. Multiple allowed.
+    #[serde(default, alias = "is_content")]
+    pub is_content: bool,
+}
+
+/// Configuration for a simple entity (registerEntity API).
+/// Self-contained: declares fields, types, and search signals in one call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EntityConfig {
+    pub fields: HashMap<String, SimpleFieldDef>,
+
+    /// Search signals (default: Hybrid = BM25 + Vector).
+    pub signals: crate::search::SearchSignals,
+
+    /// Chunking configuration (default: Semantic, 1500 chars, 200 overlap).
+    pub chunking: ChunkingConfig,
+}
+
+impl Default for EntityConfig {
+    fn default() -> Self {
+        Self {
+            fields: HashMap::new(),
+            signals: crate::search::SearchSignals::HYBRID,
+            chunking: ChunkingConfig::default(),
+        }
+    }
+}
+
+impl EntityConfig {
+    /// Get the title field name (first field with is_title=true).
+    pub fn title_field(&self) -> Option<&str> {
+        self.fields.iter()
+            .find(|(_, f)| f.is_title)
+            .map(|(name, _)| name.as_str())
+    }
+
+    /// Get content field names (fields with is_content=true), sorted.
+    pub fn content_fields(&self) -> Vec<&str> {
+        let mut fields: Vec<&str> = self.fields.iter()
+            .filter(|(_, f)| f.is_content)
+            .map(|(name, _)| name.as_str())
+            .collect();
+        fields.sort();
+        fields
+    }
+}
+
 // ─── Flush Config ───────────────────────────────────────────────────────────
 
 /// Configuration for the auto-flush pipeline.

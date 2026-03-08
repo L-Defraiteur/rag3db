@@ -255,6 +255,64 @@ pub fn generate_index_chunk_table_ddl(
     ))
 }
 
+/// Generate CREATE NODE TABLE for a simple entity's chunk table.
+///
+/// Simpler than KB chunks: no `_kb_name`, `_source_field`, `_source_entity`, `_source_uuid`.
+/// Embedding columns use generic names (`embedding`) instead of `{kb}_embedding`.
+pub fn generate_simple_chunk_table_ddl(
+    entity_name: &str,
+    entity_config: &crate::config::EntityConfig,
+    embedding_dim: usize,
+) -> Result<String, SchemaError> {
+    validate_identifier(entity_name, "entity")?;
+    let table_name = format!("{entity_name}_Chunk");
+
+    let mut columns = vec![
+        "_uuid STRING".to_string(),
+        "_parent_uuid STRING".to_string(),
+        "_parent_field STRING".to_string(),
+        "_text STRING".to_string(),
+        "_title STRING".to_string(),
+        "_text_hash STRING".to_string(),
+        "_embed_hash STRING".to_string(),
+        "_index INT64".to_string(),
+        "_start_char INT64".to_string(),
+        "_end_char INT64".to_string(),
+        "_start_line INT64".to_string(),
+        "_end_line INT64".to_string(),
+        "_core_start_char INT64".to_string(),
+        "_core_end_char INT64".to_string(),
+        "_core_start_line INT64".to_string(),
+        "_core_end_line INT64".to_string(),
+        "_content_offset INT64".to_string(),
+    ];
+
+    if entity_config.signals.vector() {
+        columns.push(format!("embedding FLOAT[{embedding_dim}]"));
+    }
+    if entity_config.signals.sparse() {
+        columns.push("sparse_indices INT64[]".to_string());
+        columns.push("sparse_weights DOUBLE[]".to_string());
+    }
+
+    let col_defs = columns.join(",\n    ");
+    Ok(format!(
+        "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
+         {col_defs},\n    \
+         PRIMARY KEY(_uuid)\n)"
+    ))
+}
+
+/// Generate CREATE REL TABLE for entity → chunk (CHUNKED_FROM).
+pub fn generate_simple_chunk_rel_ddl(entity_name: &str) -> Result<String, SchemaError> {
+    validate_identifier(entity_name, "entity")?;
+    let chunk_table = format!("{entity_name}_Chunk");
+    let rel_name = format!("{entity_name}_CHUNKED_FROM");
+    Ok(format!(
+        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {chunk_table} TO {entity_name})"
+    ))
+}
+
 /// Generate CREATE REL TABLE for KB Index → Chunk relationship.
 pub fn generate_index_chunk_rel_ddl(kb_name: &str) -> Result<String, SchemaError> {
     validate_identifier(kb_name, "knowledge_base")?;

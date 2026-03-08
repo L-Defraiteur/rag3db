@@ -1,7 +1,7 @@
 //! Built-in search nodes for the dataflow graph.
 //!
-//! - [`QuerySourceNode`] — emits query + options
-//! - [`PrimarySearchNode`] — runs Catalog::search() (catalog via service)
+//! - [`KBQuerySourceNode`] — emits query + options
+//! - [`KBSearchNode`] — runs Catalog::search() (catalog via service)
 //! - [`FetchRelatedNode`] — Cypher graph traversal (conn via service, results as input)
 //! - [`ComposeNode`] — attaches children to results
 
@@ -21,17 +21,17 @@ use super::node::{Node, NodeContext};
 use super::port::{PortDef, PortType, PortValue};
 use super::services::ConnService;
 
-// ─── QuerySourceNode ─────────────────────────────────────────────────────────
+// ─── KBQuerySourceNode ─────────────────────────────────────────────────────────
 
 /// Emits the search query and options as a PortValue.
-pub struct QuerySourceNode {
+pub struct KBQuerySourceNode {
     node_name: String,
     kb_name: String,
     query: String,
     options: crate::search::SearchOptions,
 }
 
-impl QuerySourceNode {
+impl KBQuerySourceNode {
     pub fn new(kb_name: &str, query: &str, options: &crate::search::SearchOptions) -> Self {
         Self {
             node_name: "query_source".to_string(),
@@ -52,12 +52,12 @@ impl QuerySourceNode {
 }
 
 #[async_trait]
-impl Node for QuerySourceNode {
+impl Node for KBQuerySourceNode {
     fn name(&self) -> &str {
         &self.node_name
     }
     fn node_type(&self) -> &'static str {
-        "QuerySourceNode"
+        "KBQuerySourceNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[]
@@ -82,28 +82,28 @@ impl Node for QuerySourceNode {
     }
 }
 
-// ─── PrimarySearchNode ───────────────────────────────────────────────────────
+// ─── KBSearchNode ───────────────────────────────────────────────────────
 
 /// Runs `Catalog::search()` and outputs results + meta.
 ///
 /// Retrieves `catalog` from the service registry (`Arc<Mutex<Catalog>>`).
-pub struct PrimarySearchNode {
+pub struct KBSearchNode {
     node_name: String,
 }
 
-impl PrimarySearchNode {
+impl KBSearchNode {
     pub fn new(name: &str) -> Self {
         Self { node_name: name.to_string() }
     }
 }
 
 #[async_trait]
-impl Node for PrimarySearchNode {
+impl Node for KBSearchNode {
     fn name(&self) -> &str {
         &self.node_name
     }
     fn node_type(&self) -> &'static str {
-        "PrimarySearchNode"
+        "KBSearchNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[PortDef {
@@ -133,12 +133,12 @@ impl Node for PrimarySearchNode {
                 query,
                 options,
             }) => (kb_name, query, options),
-            _ => return Err("PrimarySearchNode: missing 'query' input".into()),
+            _ => return Err("KBSearchNode: missing 'query' input".into()),
         };
 
         let catalog: Arc<Mutex<Catalog>> = ctx
             .service::<Mutex<Catalog>>("catalog")
-            .ok_or("PrimarySearchNode: 'catalog' service not found")?;
+            .ok_or("KBSearchNode: 'catalog' service not found")?;
 
         let response = {
             let mut catalog = catalog.lock().await;
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn query_source_node_ports() {
-        let node = QuerySourceNode::new("kb", "q", &SearchOptions::default());
+        let node = KBQuerySourceNode::new("kb", "q", &SearchOptions::default());
         assert_eq!(node.inputs().len(), 0);
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0].name, "query");
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn primary_search_node_ports() {
-        let node = PrimarySearchNode::new("primary_search");
+        let node = KBSearchNode::new("primary_search");
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
         assert_eq!(node.outputs().len(), 2);

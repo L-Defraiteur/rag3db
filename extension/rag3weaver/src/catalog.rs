@@ -30,8 +30,8 @@ use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
-    ChunkKBNode, EmbedRecordNode, FlushFTSNode, GatherKBNode, InsertRecordNode, LinkRecordNode,
-    UpdateKBNode,
+    ChunkRecordNode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode, KBGatherNode,
+    InsertRecordNode, LinkRecordNode, KBUpdateNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
 use crate::dataflow::services::ServiceRegistry;
@@ -127,6 +127,8 @@ pub struct Catalog {
     drain_counters: DrainCounters,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
+    /// Simple entity configs (registerEntity API). Separate from KB metadata.
+    entity_configs: HashMap<String, crate::config::EntityConfig>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -158,6 +160,7 @@ impl Catalog {
             drain_counters: DrainCounters::default(),
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
+            entity_configs: HashMap::new(),
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
@@ -304,6 +307,360 @@ impl Catalog {
         Ok(())
     }
 
+    // ── Simple Entity Registration ──────────────────────────────────────
+
+    /// Register a simple entity for the direct pipeline (no KB).
+    ///
+    /// Creates:
+    /// 1. Entity node table (with user fields)
+    /// 2. `{Entity}_Chunk` node table (with offsets + embedding columns)
+    /// 3. `{Entity}_CHUNKED_FROM` rel table
+    /// 4. FTS index on entity (content fields)
+    /// 5. Vector index on chunk table
+    ///
+    /// The entity can then be ingested via `ingest_entities()` and searched
+    /// via `search()` (same API as KB search).
+    pub async fn register_entity(
+        &mut self,
+        entity_name: &str,
+        config: crate::config::EntityConfig,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+
+        if self.entity_configs.contains_key(entity_name) {
+            return Err(CatalogError::SchemaError(
+                format!("Entity '{}' is already registered", entity_name),
+            ));
+        }
+        if self.kb_metadata.contains_key(entity_name) {
+            return Err(CatalogError::SchemaError(
+                format!("Name '{}' conflicts with an existing knowledge base", entity_name),
+            ));
+        }
+
+        let content_fields = config.content_fields();
+        if content_fields.is_empty() {
+            return Err(CatalogError::SchemaError(
+                format!("Entity '{}' has no content fields (is_content=true)", entity_name),
+            ));
+        }
+
+        // 1. Entity node table — build EntityDef from SimpleFieldDefs
+        let mut entity_fields = HashMap::new();
+        for (name, sfd) in &config.fields {
+            entity_fields.insert(name.clone(), crate::config::FieldDef {
+                field_type: sfd.field_type.clone(),
+                title_for: None,
+                content_for: None,
+                boost: None,
+                default_value: None,
+            });
+        }
+        let entity_def = crate::config::EntityDef {
+            fields: entity_fields,
+            hashsafe: None,
+        };
+        let entity_ddl = crate::schema::generate_node_table_ddl(entity_name, &entity_def)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&entity_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 2. Chunk table
+        let chunk_ddl = crate::schema::generate_simple_chunk_table_ddl(
+            entity_name, &config, self.config.embedding_dim,
+        ).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&chunk_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 3. CHUNKED_FROM relation
+        let rel_ddl = crate::schema::generate_simple_chunk_rel_ddl(entity_name)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&rel_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 4. FTS index on entity content fields
+        let fts_fields: Vec<&str> = content_fields.clone();
+        let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
+        let _ = self.conn.execute(&fts_ddl).await; // ignore if already exists
+
+        // 5. Vector index on chunk table
+        if config.signals.vector() {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let idx_name = format!("{entity_name}_Chunk_vec");
+            let vec_ddl = crate::schema::generate_vector_index_ddl(
+                &chunk_table, "embedding", &idx_name,
+            );
+            let _ = self.conn.execute(&vec_ddl).await;
+        }
+
+        // 6. Sparse vector index on chunk table
+        if config.signals.sparse() {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let sparse_ddl = format!(
+                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', 'sparse_indices', 'sparse_weights')"
+            );
+            let _ = self.conn.execute(&sparse_ddl).await;
+        }
+
+        // 7. Store config + add entity to catalog config (for KBChunkRecordNode compatibility)
+        self.config.entities.insert(entity_name.to_string(), entity_def);
+        self.entity_configs.insert(entity_name.to_string(), config);
+
+        Ok(())
+    }
+
+    /// Check if a name is a registered simple entity.
+    pub fn is_simple_entity(&self, name: &str) -> bool {
+        self.entity_configs.contains_key(name)
+    }
+
+    /// Get a simple entity config, if registered.
+    pub fn entity_config(&self, name: &str) -> Option<&crate::config::EntityConfig> {
+        self.entity_configs.get(name)
+    }
+
+    // ── SearchTarget resolution ─────────────────────────────────────────
+
+    /// Resolve a name (KB or simple entity) into a [`SearchTarget`](search::SearchTarget).
+    ///
+    /// Checks `kb_metadata` first (for KBs), then `entity_configs` (for simple entities).
+    pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
+        // Try KB first
+        if let Some(kb) = self.kb_metadata.get(name) {
+            let kb_config = self
+                .config
+                .knowledge_bases
+                .get(name)
+                .cloned()
+                .unwrap_or_default();
+            let entity = format!("{name}_Index");
+            let chunk_entity = format!("{name}_Index_Chunk");
+            let title_entity = kb.title.entity.clone();
+            let in_rel = format!("{title_entity}_IN_{name}");
+            return Ok(search::SearchTarget {
+                name: name.to_string(),
+                parent_table: entity.clone(),
+                chunk_table: chunk_entity,
+                chunk_rel: format!("{entity}_HAS_CHUNK"),
+                chunk_rel_fwd: true,
+                bm25_fields: vec!["_title".to_string(), "_content".to_string()],
+                enrich_fields: vec![
+                    "_title".to_string(),
+                    "_content".to_string(),
+                    "_source_entity".to_string(),
+                    "_source_uuid".to_string(),
+                    "_content_hash".to_string(),
+                ],
+                default_signals: kb_config.signals,
+                default_fusion: kb_config.fusion_config(),
+                has_source_refs: true,
+                filter_indirection: Some((title_entity, in_rel)),
+            });
+        }
+
+        // Try simple entity
+        if let Some(ec) = self.entity_configs.get(name) {
+            let chunk_table = format!("{name}_Chunk");
+            let mut enrich_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
+            if let Some(title) = ec.title_field() {
+                let title_owned = title.to_string();
+                if !enrich_fields.contains(&title_owned) {
+                    enrich_fields.push(title_owned);
+                }
+            }
+            enrich_fields.push("_content_hash".to_string());
+            let bm25_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
+            return Ok(search::SearchTarget {
+                name: name.to_string(),
+                parent_table: name.to_string(),
+                chunk_table,
+                chunk_rel: format!("{name}_CHUNKED_FROM"),
+                chunk_rel_fwd: false,
+                bm25_fields,
+                enrich_fields,
+                default_signals: ec.signals,
+                default_fusion: search::FusionConfig::default(),
+                has_source_refs: false,
+                filter_indirection: None,
+            });
+        }
+
+        Err(CatalogError::UnknownKB(name.to_string()))
+    }
+
+    // ── Simple Entity Ingestion ────────────────────────────────────────
+
+    /// Ingest records into a simple entity (registered via `register_entity`).
+    ///
+    /// Builds and executes a dataflow graph:
+    /// ```text
+    /// InsertRecordNode("insert")
+    ///     →|inserted:entities| ChunkRecordNode("chunk")
+    ///         →|chunks| InsertRecordNode("chunk_insert")
+    ///             →|inserted:entities| EmbedNode("embed")
+    ///         →|chunk_links| LinkRecordNode("chunk_link")
+    ///             ←|trigger| chunk_insert.done
+    ///     →|done:trigger| FlushNode("flush_fts", tables=["{Entity}"])
+    /// ```
+    pub async fn ingest_entities(
+        &mut self,
+        entity_name: &str,
+        records: Vec<BTreeMap<String, CypherValue>>,
+    ) -> Result<FlushResult, CatalogError> {
+        self.check_initialized()?;
+
+        let entity_config = self.entity_configs.get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?
+            .clone();
+
+        if records.is_empty() {
+            return Ok(FlushResult::default());
+        }
+
+        // Ensure chunker is cached for this entity's config
+        let chunker_key = ChunkerConfig {
+            max_size: entity_config.chunking.max_size,
+            overlap: entity_config.chunking.overlap,
+            strategy: entity_config.chunking.strategy.clone(),
+        };
+        self.chunker_cache
+            .entry(chunker_key)
+            .or_insert_with(|| {
+                let key = ChunkerConfig {
+                    max_size: entity_config.chunking.max_size,
+                    overlap: entity_config.chunking.overlap,
+                    strategy: entity_config.chunking.strategy.clone(),
+                };
+                Chunker::new(key)
+            });
+
+        // Build entity records with UUIDs and content hashes
+        let entity_def = self.config.entities.get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?
+            .clone();
+
+        let mut entity_records: Vec<EntityRecord> = Vec::with_capacity(records.len());
+        for mut data in records {
+            // Generate deterministic UUID from hashsafe fields or all content fields
+            let uuid = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
+                let field_values: Vec<&str> = hashsafe_fields
+                    .iter()
+                    .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
+                    .collect();
+                hashsafe_uuid(entity_name, &field_values)
+            } else {
+                // Use all data fields as hashsafe input for deterministic UUIDs
+                let mut field_values: Vec<String> = data.iter()
+                    .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+                    .collect();
+                field_values.sort();
+                let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
+                hashsafe_uuid(entity_name, &refs)
+            };
+            data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
+
+            // Content hash from content fields
+            let content_fields = entity_config.content_fields();
+            let content_text: String = content_fields.iter()
+                .filter_map(|f| data.get(*f).and_then(|v| v.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            data.insert("_content_hash".into(), CypherValue::String(content_hash(&content_text)));
+
+            let (entity_ref, resolver) = EntityRef::new(entity_name);
+            entity_records.push(EntityRecord {
+                entity_name: entity_name.to_string(),
+                data,
+                entity_ref,
+                resolver: Some(resolver),
+            });
+        }
+
+        let record_count = entity_records.len();
+
+        // Build dataflow graph
+        let mut graph = DataflowGraph::new();
+
+        // 1. Insert entities
+        graph.add_node(Box::new(InsertRecordNode::new("insert"))).unwrap();
+        graph.set_initial_input("insert", "entities",
+            PortValue::Batch(BatchPayload::new(PortType::Entities, entity_records)));
+
+        // 2. Chunk entities (uses entity_configs service)
+        graph.add_node(Box::new(ChunkRecordNode::new("chunk"))).unwrap();
+        graph.connect("insert", "inserted", "chunk", "entities").unwrap();
+
+        // 3. Insert chunks
+        graph.add_node(Box::new(InsertRecordNode::new("chunk_insert"))).unwrap();
+        graph.connect("chunk", "chunks", "chunk_insert", "entities").unwrap();
+
+        // 4. Link chunks → parent (CHUNKED_FROM)
+        graph.add_node(Box::new(LinkRecordNode::new("chunk_link"))).unwrap();
+        graph.connect("chunk", "chunk_links", "chunk_link", "relations").unwrap();
+        graph.connect("chunk_insert", "done", "chunk_link", "trigger").unwrap();
+
+        // 5. Embed chunks
+        let signals = entity_config.signals;
+        graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
+        graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
+        graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
+
+        // 6. Flush FTS on entity table
+        graph.add_node(Box::new(FlushNode::new("flush_fts", vec![entity_name.to_string()]))).unwrap();
+        graph.connect("insert", "done", "flush_fts", "trigger").unwrap();
+
+        // Build services
+        let mut services = ServiceRegistry::new();
+        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
+        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
+        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
+        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
+        services.register::<HashMap<String, crate::config::EntityConfig>>(
+            "entity_configs", Arc::new(self.entity_configs.clone()));
+        services.register::<HashMap<ChunkerConfig, Chunker>>(
+            "chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
+        services.register::<bool>("has_sparse", Arc::new(
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some()));
+        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+
+        if let Some(ref sparse_emb) = self.sparse_embedder {
+            services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
+        }
+        if let Some(ref dual_emb) = self.dual_embedder {
+            services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
+        }
+
+        // Execute
+        let node_count = graph.nodes.len();
+        let runtime = DataflowRuntime::with_services(node_count + 20, services);
+
+        let graph_def = graph.to_definition();
+        let execution_id = format!(
+            "ingest-{}-{}",
+            &graph_def.hash()[..12],
+            crate::dataflow::checkpoint::timestamp_ms(),
+        );
+
+        let result = if let Some(ref store) = self.checkpoint_store {
+            runtime
+                .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
+                .await
+        } else {
+            runtime.execute(&mut graph).await
+        };
+
+        match result {
+            Ok(_output) => {
+                Ok(FlushResult {
+                    processed: record_count,
+                    failed: 0,
+                })
+            }
+            Err(e) => Err(CatalogError::DbError(format!("ingest_entities failed: {e}"))),
+        }
+    }
+
     // ── CRUD (synchronous, enqueue operations) ─────────────────────────
 
     pub fn create(
@@ -391,7 +748,7 @@ impl Catalog {
             index_data.insert("_uuid".to_string(), CypherValue::String(index_uuid.clone()));
             index_data.insert("_source_entity".to_string(), CypherValue::String(entity_name.to_string()));
             index_data.insert("_source_uuid".to_string(), CypherValue::String(uuid.clone()));
-            // Sentinel hash: empty string forces GatherKBNode to always run on first drain.
+            // Sentinel hash: empty string forces KBGatherNode to always run on first drain.
             index_data.insert("_content_hash".to_string(), CypherValue::String(String::new()));
             index_data.insert("_title".to_string(), CypherValue::String(title_text));
             index_data.insert("_content".to_string(), CypherValue::String(content_text));
@@ -668,7 +1025,7 @@ impl Catalog {
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // If content changed, enqueue AggregateRecords for all KBs this entity contributes to.
-        // GatherKBNode will handle deleting old chunks, re-chunking, and re-embedding.
+        // KBGatherNode will handle deleting old chunks, re-chunking, and re-embedding.
         let mut reembedded = false;
         let chunks_deleted = 0usize;
         let chunks_created = 0usize;
@@ -901,16 +1258,16 @@ impl Catalog {
     /// ```text
     /// entities → InsertRecordNode("inserts")
     ///                 └── done → LinkRecordNode("links") ← relations
-    ///                               └── done → GatherKBNode("gather_kb") ← aggregates
-    ///                                             └── kb_content → UpdateKBNode("update_kb")
-    ///                                                                  └── kb_content → ChunkKBNode("chunk_kb")
+    ///                               └── done → KBGatherNode("gather_kb") ← aggregates
+    ///                                             └── kb_content → KBUpdateNode("update_kb")
+    ///                                                                  └── kb_content → KBChunkNode("chunk_kb")
     ///                                                                                      ├── entities → InsertRecordNode("agg_inserts")
     ///                                                                                      ├── relations → LinkRecordNode("agg_links")
-    ///                                                                                      └── agg_inserts ── done → EmbedRecordNode("agg_embeds")
+    ///                                                                                      └── agg_inserts ── done → KBEmbedNode("agg_embeds")
     /// ```
     ///
-    /// No ChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
-    /// No EmbedRecordNode on raw entities (only KB_Index_Chunk are searched).
+    /// No KBChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
+    /// No KBEmbedNode on raw entities (only KB_Index_Chunk are searched).
     fn build_ingestion_graph(&mut self) -> (DataflowGraph, ServiceRegistry, usize) {
         let pending = std::mem::take(&mut self.pending);
         if pending.is_empty() {
@@ -922,11 +1279,11 @@ impl Catalog {
         let has_relations = !pending.relations.is_empty();
         let has_aggregates = !pending.aggregates.is_empty();
 
-        // Capture unique KB names before aggregates are consumed by the graph
-        let flush_kb_names: Vec<String> = if has_aggregates {
+        // Capture unique KB index table names before aggregates are consumed by the graph
+        let flush_tables: Vec<String> = if has_aggregates {
             let mut seen = HashSet::new();
             pending.aggregates.iter()
-                .filter_map(|a| if seen.insert(a.kb_name.clone()) { Some(a.kb_name.clone()) } else { None })
+                .filter_map(|a| if seen.insert(a.kb_name.clone()) { Some(format!("{}_Index", a.kb_name)) } else { None })
                 .collect()
         } else {
             vec![]
@@ -955,7 +1312,7 @@ impl Catalog {
         if has_aggregates {
             self.warm_chunker_cache();
 
-            graph.add_node(Box::new(GatherKBNode::new("gather_kb"))).unwrap();
+            graph.add_node(Box::new(KBGatherNode::new("gather_kb"))).unwrap();
             graph.set_initial_input("gather_kb", "aggregates",
                 PortValue::Batch(BatchPayload::new(PortType::Aggregates, pending.aggregates)));
             if has_relations {
@@ -964,10 +1321,10 @@ impl Catalog {
                 graph.connect("inserts", "done", "gather_kb", "trigger").unwrap();
             }
 
-            graph.add_node(Box::new(UpdateKBNode::new("update_kb"))).unwrap();
+            graph.add_node(Box::new(KBUpdateNode::new("update_kb"))).unwrap();
             graph.connect("gather_kb", "kb_content", "update_kb", "kb_content").unwrap();
 
-            graph.add_node(Box::new(ChunkKBNode::new("chunk_kb"))).unwrap();
+            graph.add_node(Box::new(KBChunkNode::new("chunk_kb"))).unwrap();
             graph.connect("update_kb", "kb_content", "chunk_kb", "kb_content").unwrap();
 
             // Downstream standard: insert chunks → link chunks → embed chunks
@@ -978,12 +1335,12 @@ impl Catalog {
             graph.connect("chunk_kb", "relations", "agg_links", "relations").unwrap();
             graph.connect("agg_inserts", "done", "agg_links", "trigger").unwrap();
 
-            graph.add_node(Box::new(EmbedRecordNode::new("agg_embeds", 32))).unwrap();
+            graph.add_node(Box::new(KBEmbedNode::new("agg_embeds", 32))).unwrap();
             graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
             graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
 
             // Flush FTS indexes in parallel with chunk/insert/embed pipeline
-            graph.add_node(Box::new(FlushFTSNode::new("flush_fts"))).unwrap();
+            graph.add_node(Box::new(FlushNode::new("flush_fts", flush_tables.clone()))).unwrap();
             graph.connect("update_kb", "done", "flush_fts", "trigger").unwrap();
         }
 
@@ -1005,7 +1362,6 @@ impl Catalog {
                 "chunker_cache",
                 Arc::new(std::mem::take(&mut self.chunker_cache)),
             );
-            services.register::<Vec<String>>("flush_kb_names", Arc::new(flush_kb_names));
         }
         if let Some(ref sparse_emb) = self.sparse_embedder {
             services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
@@ -1194,10 +1550,6 @@ impl Catalog {
             Arc::new(std::mem::take(&mut self.chunker_cache)),
         );
 
-        // flush_kb_names: extract from graph node names (GatherKBNode uses kb_metadata)
-        let flush_kb_names: Vec<String> = self.kb_metadata.keys().cloned().collect();
-        services.register::<Vec<String>>("flush_kb_names", Arc::new(flush_kb_names));
-
         if let Some(ref sparse_emb) = self.sparse_embedder {
             services.register::<Arc<dyn SparseEmbedder>>(
                 "sparse_embedder",
@@ -1309,17 +1661,13 @@ impl Catalog {
 
     pub async fn search(
         &mut self,
-        kb_name: &str,
+        name: &str,
         query: &str,
         options: search::SearchOptions,
     ) -> Result<search::SearchResponse, CatalogError> {
         self.check_initialized()?;
 
-        let kb = self
-            .kb_metadata
-            .get(kb_name)
-            .ok_or_else(|| CatalogError::UnknownKB(kb_name.to_string()))?
-            .clone();
+        let target = self.resolve_search_target(name)?;
 
         let pending_count = self.pending.total_count();
 
@@ -1336,21 +1684,14 @@ impl Catalog {
             search::Consistency::Immediate => {}
         }
 
-        // Resolve signals: per-query override > KB default
-        let kb_config = self
-            .config
-            .knowledge_bases
-            .get(kb_name)
-            .cloned()
-            .unwrap_or_default();
-        let signals = options.signals.unwrap_or(kb_config.signals);
+        // Resolve signals: per-query override > target default
+        let signals = options.signals.unwrap_or(target.default_signals);
 
         let search_limit = (options.limit + options.offset) * 2;
-        // All searches target {KB}_Index / {KB}_Index_Chunk (not entity tables)
-        let entity = format!("{kb_name}_Index");
-        let vector_entity = format!("{kb_name}_Index_Chunk");
-        // BM25 fields are fixed on the index table
-        let bm25_fields: Vec<String> = vec!["_title".to_string(), "_content".to_string()];
+        let entity = &target.parent_table;
+        let vector_entity = &target.chunk_table;
+        let bm25_fields = &target.bm25_fields;
+        let enrich_fields = &target.enrich_fields;
 
         // Parse filters: filter_condition takes priority over legacy filters HashMap
         let condition: Option<FilterCondition> = if options.filter_condition.is_some() {
@@ -1382,65 +1723,93 @@ impl Catalog {
             (None, vec![], None)
         };
 
-        // For BM25 search: resolve ALL filters to allowed_ids via title entity.
-        // Filters are resolved against the KB's title entity (e.g. Directory for TreeKB),
-        // then JOINed to {KB}_Index to get the matching index entry offsets.
-        // Cross-entity filters (e.g. "File.extension") are handled by FilterParser's "." notation.
+        // For BM25 search: resolve ALL filters to allowed_ids.
+        // KB: filters resolved via title entity (e.g. Directory) JOINed to {KB}_Index.
+        // Simple: filters resolved directly on the entity table.
         let allowed_ids = if let Some(ref cond) = condition {
-            let title_entity = &kb.title.entity;
-            let in_rel = format!("{title_entity}_IN_{kb_name}");
+            if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
+                // KB path: filter via title entity → JOIN to index
+                let mut parser = FilterParser::new(&self.config.relations);
+                let parsed = parser
+                    .parse_condition(cond, title_entity, "t")
+                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
 
-            let mut parser = FilterParser::new(&self.config.relations);
-            let parsed = parser
-                .parse_condition(cond, title_entity, "t")
-                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-
-            if !parsed.where_clauses.is_empty() {
-                let match_extra = if parsed.match_clauses.is_empty() {
-                    String::new()
+                if !parsed.where_clauses.is_empty() {
+                    let match_extra = if parsed.match_clauses.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", parsed.match_clauses.join(" "))
+                    };
+                    let cypher = format!(
+                        "MATCH (t:{title_entity})-[:{in_rel}]->(idx:{entity}){match_extra} \
+                         WHERE {} RETURN OFFSET(id(idx))",
+                        parsed.combine_where()
+                    );
+                    let result = if parsed.params.is_empty() {
+                        self.conn
+                            .execute(&cypher)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    } else {
+                        self.conn
+                            .execute_with_params(&cypher, &parsed.params)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    };
+                    let ids: Vec<u64> = result
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                        .collect();
+                    Some(ids)
                 } else {
-                    format!(" {}", parsed.match_clauses.join(" "))
-                };
-                let cypher = format!(
-                    "MATCH (t:{title_entity})-[:{in_rel}]->(idx:{entity}){match_extra} \
-                     WHERE {} RETURN OFFSET(id(idx))",
-                    parsed.combine_where()
-                );
-                let result = if parsed.params.is_empty() {
-                    self.conn
-                        .execute(&cypher)
-                        .await
-                        .map_err(|e| CatalogError::DbError(e.to_string()))?
-                } else {
-                    self.conn
-                        .execute_with_params(&cypher, &parsed.params)
-                        .await
-                        .map_err(|e| CatalogError::DbError(e.to_string()))?
-                };
-                let ids: Vec<u64> = result
-                    .rows
-                    .iter()
-                    .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                    .collect();
-                Some(ids)
+                    None
+                }
             } else {
-                None
+                // Simple entity path: filter directly on entity table
+                let mut parser = FilterParser::new(&self.config.relations);
+                let parsed = parser
+                    .parse_condition(cond, entity, "n")
+                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+
+                if !parsed.where_clauses.is_empty() {
+                    let match_extra = if parsed.match_clauses.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", parsed.match_clauses.join(" "))
+                    };
+                    let cypher = format!(
+                        "MATCH (n:{entity}){match_extra} \
+                         WHERE {} RETURN OFFSET(id(n))",
+                        parsed.combine_where()
+                    );
+                    let result = if parsed.params.is_empty() {
+                        self.conn
+                            .execute(&cypher)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    } else {
+                        self.conn
+                            .execute_with_params(&cypher, &parsed.params)
+                            .await
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    };
+                    let ids: Vec<u64> = result
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                        .collect();
+                    Some(ids)
+                } else {
+                    None
+                }
             }
         } else {
             None
         };
 
-        // KB Index always has chunks ({KB}_Index_Chunk)
+        // Both KB and simple entities always have chunks
         let is_chunked = true;
-
-        // Enrichment fields: return index entry data (_title, _content, _source_entity, _source_uuid)
-        let enrich_fields: Vec<String> = vec![
-            "_title".to_string(),
-            "_content".to_string(),
-            "_source_entity".to_string(),
-            "_source_uuid".to_string(),
-            "_content_hash".to_string(),
-        ];
 
         // ── Timing + diagnostics ───────────────────────────────────────
         let search_start = Instant::now();
@@ -1507,8 +1876,8 @@ impl Catalog {
         let vector_results = if need_dense {
             search::search_vector(
                 self.conn.as_ref(),
-                &vector_entity,
-                kb_name,
+                vector_entity,
+                name,
                 &embedding,
                 search_limit,
                 filter_where.as_deref(),
@@ -1526,16 +1895,16 @@ impl Catalog {
         let bm25_results = if signals.bm25() {
             if is_chunked {
                 search::search_bm25_chunked(
-                    self.conn.as_ref(), &entity, &vector_entity, query, &bm25_fields,
+                    self.conn.as_ref(), &target, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
-                    allowed_ids.as_deref(), &enrich_fields, options.result_mode,
+                    allowed_ids.as_deref(), enrich_fields, options.result_mode,
                     diag.as_mut(),
                 ).await?
             } else {
                 search::search_bm25(
-                    self.conn.as_ref(), &entity, query, &bm25_fields,
+                    self.conn.as_ref(), entity, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
-                    allowed_ids.as_deref(), &enrich_fields,
+                    allowed_ids.as_deref(), enrich_fields,
                 ).await?
             }
         } else {
@@ -1549,10 +1918,10 @@ impl Catalog {
 
         let t_sparse = Instant::now();
         let sparse_results = if let Some(qv) = query_sparse {
-            let sparse_fields = if is_chunked { &[][..] } else { &enrich_fields };
+            let sparse_fields = if is_chunked { &[][..] } else { enrich_fields.as_slice() };
             search::search_sparse_cypher(
                 self.conn.as_ref(),
-                &vector_entity,
+                vector_entity,
                 &qv,
                 search_limit,
                 sparse_fields,
@@ -1568,13 +1937,13 @@ impl Catalog {
         let t_resolve = Instant::now();
         let vector_results = if is_chunked && !vector_results.is_empty() {
             search::resolve_vector_chunks(
-                self.conn.as_ref(), &vector_entity, &entity, vector_results, &enrich_fields,
+                self.conn.as_ref(), &target, vector_results, enrich_fields,
                 options.result_mode,
             ).await?
         } else { vector_results };
         let sparse_results = if is_chunked && !sparse_results.is_empty() {
             search::resolve_vector_chunks(
-                self.conn.as_ref(), &vector_entity, &entity, sparse_results, &enrich_fields,
+                self.conn.as_ref(), &target, sparse_results, enrich_fields,
                 options.result_mode,
             ).await?
         } else { sparse_results };
@@ -1584,7 +1953,7 @@ impl Catalog {
         let t_fuse = Instant::now();
         let fusion_config = options.fusion.as_ref()
             .cloned()
-            .unwrap_or_else(|| kb_config.fusion_config());
+            .unwrap_or(target.default_fusion.clone());
         let mut fused = search::fuse_results(
             &vector_results,
             &bm25_results,
@@ -1610,12 +1979,12 @@ impl Catalog {
         let needs_enrich: bool = fused.iter().any(|r| r.data.is_none());
         if needs_enrich && !enrich_fields.is_empty() {
             search::enrich_results_with_data(
-                self.conn.as_ref(), &entity, &enrich_fields, &mut fused,
+                self.conn.as_ref(), entity, enrich_fields, &mut fused,
             ).await?;
         }
 
-        // SourceResolved: resolve index entries → source entities
-        if options.result_mode == search::ResultMode::SourceResolved {
+        // SourceResolved: resolve index entries → source entities (KB only)
+        if target.has_source_refs && options.result_mode == search::ResultMode::SourceResolved {
             self.resolve_to_source_entities(&mut fused).await?;
         }
 
@@ -1625,7 +1994,7 @@ impl Catalog {
         if let Some(ref mut d) = diag { d.total_ms = total_ms; }
 
         self.event_bus.emit(CatalogEvent::SearchCompleted {
-            kb: kb_name.to_string(),
+            kb: name.to_string(),
             results: fused.len(),
             duration_ms: total_ms,
         });
@@ -1634,7 +2003,7 @@ impl Catalog {
             results: fused,
             meta: search::SearchMeta {
                 query: query.to_string(),
-                kb: kb_name.to_string(),
+                target: name.to_string(),
                 signals,
                 consistency: options.consistency,
                 partial: pending_count > 0
@@ -1893,7 +2262,7 @@ impl Catalog {
 
         // Source node
         graph
-            .add_node(Box::new(QuerySourceNode::new(
+            .add_node(Box::new(KBQuerySourceNode::new(
                 kb_name,
                 query,
                 &strategy.search,
@@ -1902,7 +2271,7 @@ impl Catalog {
 
         // Primary search (catalog resolved via service)
         graph
-            .add_node(Box::new(PrimarySearchNode::new("primary_search")))
+            .add_node(Box::new(KBSearchNode::new("primary_search")))
             .unwrap();
         graph
             .connect("query_source", "query", "primary_search", "query")
@@ -2660,5 +3029,260 @@ mod tests {
 
         let pending = catalog.check_pending_checkpoints().await.unwrap();
         assert!(pending.is_empty());
+    }
+
+    // ── register_entity ─────────────────────────────────────────────
+
+    fn make_product_entity_config() -> crate::config::EntityConfig {
+        let mut fields = HashMap::new();
+        fields.insert("name".into(), crate::config::SimpleFieldDef {
+            field_type: FieldType::String,
+            is_title: true,
+            is_content: false,
+        });
+        fields.insert("description".into(), crate::config::SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        fields.insert("details".into(), crate::config::SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        fields.insert("price".into(), crate::config::SimpleFieldDef {
+            field_type: FieldType::Double,
+            is_title: false,
+            is_content: false,
+        });
+        crate::config::EntityConfig {
+            fields,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn register_entity_stores_config() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        assert!(catalog.is_simple_entity("Product"));
+        assert!(!catalog.is_simple_entity("Unknown"));
+    }
+
+    #[tokio::test]
+    async fn register_entity_adds_to_catalog_entities() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        // Should be in config.entities too (for ChunkRecordNode compatibility)
+        assert!(catalog.config.entities.contains_key("Product"));
+        let entity_def = &catalog.config.entities["Product"];
+        assert!(entity_def.fields.contains_key("name"));
+        assert!(entity_def.fields.contains_key("description"));
+        assert!(entity_def.fields.contains_key("price"));
+    }
+
+    #[tokio::test]
+    async fn register_entity_content_fields() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let ec = catalog.entity_config("Product").unwrap();
+        let content = ec.content_fields();
+        assert_eq!(content, vec!["description", "details"]);
+        assert_eq!(ec.title_field(), Some("name"));
+    }
+
+    #[tokio::test]
+    async fn register_entity_before_init_fails() {
+        let mut catalog = make_catalog();
+        let config = make_product_entity_config();
+        let err = catalog.register_entity("Product", config).await.unwrap_err();
+        assert!(matches!(err, CatalogError::NotInitialized));
+    }
+
+    #[tokio::test]
+    async fn ingest_entities_before_init_fails() {
+        let mut catalog = make_catalog();
+        let err = catalog.ingest_entities("Product", vec![]).await.unwrap_err();
+        assert!(matches!(err, CatalogError::NotInitialized));
+    }
+
+    #[tokio::test]
+    async fn ingest_entities_unknown_entity_fails() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+        let err = catalog.ingest_entities("Unknown", vec![BTreeMap::new()]).await.unwrap_err();
+        assert!(matches!(err, CatalogError::UnknownEntity(_)));
+    }
+
+    #[tokio::test]
+    async fn ingest_entities_empty_records_ok() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let result = catalog.ingest_entities("Product", vec![]).await.unwrap();
+        assert_eq!(result.processed, 0);
+    }
+
+    #[tokio::test]
+    async fn ingest_entities_returns_processed_count() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let mut data = BTreeMap::new();
+        data.insert("name".into(), CypherValue::String("Red Shoes".into()));
+        data.insert("description".into(), CypherValue::String("A nice pair of shoes.".into()));
+        data.insert("details".into(), CypherValue::String("Made in Italy.".into()));
+        data.insert("price".into(), CypherValue::Float(59.99));
+
+        let result = catalog.ingest_entities("Product", vec![data]).await.unwrap();
+        assert_eq!(result.processed, 1);
+        assert_eq!(result.failed, 0);
+    }
+
+    // ── resolve_search_target ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn resolve_search_target_kb() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let t = catalog.resolve_search_target("main").unwrap();
+        assert_eq!(t.name, "main");
+        assert_eq!(t.parent_table, "main_Index");
+        assert_eq!(t.chunk_table, "main_Index_Chunk");
+        assert_eq!(t.chunk_rel, "main_Index_HAS_CHUNK");
+        assert!(t.chunk_rel_fwd);
+        assert_eq!(t.bm25_fields, vec!["_title", "_content"]);
+        assert!(t.has_source_refs);
+        assert!(t.filter_indirection.is_some());
+        let (title_ent, in_rel) = t.filter_indirection.unwrap();
+        assert_eq!(title_ent, "Document");
+        assert_eq!(in_rel, "Document_IN_main");
+    }
+
+    #[tokio::test]
+    async fn resolve_search_target_simple_entity() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let t = catalog.resolve_search_target("Product").unwrap();
+        assert_eq!(t.name, "Product");
+        assert_eq!(t.parent_table, "Product");
+        assert_eq!(t.chunk_table, "Product_Chunk");
+        assert_eq!(t.chunk_rel, "Product_CHUNKED_FROM");
+        assert!(!t.chunk_rel_fwd);
+        // BM25 fields = content fields sorted
+        assert_eq!(t.bm25_fields, vec!["description", "details"]);
+        assert!(!t.has_source_refs);
+        assert!(t.filter_indirection.is_none());
+        // Enrich fields contain content + title + _content_hash
+        assert!(t.enrich_fields.contains(&"description".to_string()));
+        assert!(t.enrich_fields.contains(&"details".to_string()));
+        assert!(t.enrich_fields.contains(&"name".to_string()));
+        assert!(t.enrich_fields.contains(&"_content_hash".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resolve_search_target_unknown_fails() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let err = catalog.resolve_search_target("Unknown").unwrap_err();
+        assert!(matches!(err, CatalogError::UnknownKB(_)));
+    }
+
+    #[tokio::test]
+    async fn search_target_parent_to_chunk_match_kb() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let t = catalog.resolve_search_target("main").unwrap();
+        let pattern = t.parent_to_chunk_match("n", "c");
+        assert_eq!(
+            pattern,
+            "MATCH (n:main_Index)-[:main_Index_HAS_CHUNK]->(c:main_Index_Chunk)"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_target_parent_to_chunk_match_simple() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let t = catalog.resolve_search_target("Product").unwrap();
+        let pattern = t.parent_to_chunk_match("n", "c");
+        // Simple: reversed direction
+        assert_eq!(
+            pattern,
+            "MATCH (n:Product)<-[:Product_CHUNKED_FROM]-(c:Product_Chunk)"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_target_chunk_to_parent_match_kb() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let t = catalog.resolve_search_target("main").unwrap();
+        let pattern = t.chunk_to_parent_match("p", "c");
+        assert_eq!(
+            pattern,
+            "MATCH (p:main_Index)-[:main_Index_HAS_CHUNK]->(c)"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_target_chunk_to_parent_match_simple() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let t = catalog.resolve_search_target("Product").unwrap();
+        let pattern = t.chunk_to_parent_match("p", "c");
+        // Simple: chunk→parent direction
+        assert_eq!(
+            pattern,
+            "MATCH (c)-[:Product_CHUNKED_FROM]->(p:Product)"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_target_signals_default() {
+        let mut catalog = make_catalog();
+        catalog.initialize().await.unwrap();
+
+        let config = make_product_entity_config();
+        catalog.register_entity("Product", config).await.unwrap();
+
+        let t = catalog.resolve_search_target("Product").unwrap();
+        // Default = HYBRID (BM25 + Vector)
+        assert!(t.default_signals.bm25());
+        assert!(t.default_signals.vector());
     }
 }

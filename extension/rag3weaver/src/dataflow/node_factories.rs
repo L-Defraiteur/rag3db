@@ -11,11 +11,11 @@ use super::node_registry::{
 };
 use super::port::{PortDef, PortType};
 use super::search_nodes::{
-    ComposeNode, FetchRelatedNode, PrimarySearchNode, QuerySourceNode,
+    ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
 };
 use super::record_nodes::{
-    ChunkKBNode, ChunkRecordNode, EmbedRecordNode, FlushFTSNode, GatherKBNode,
-    InsertRecordNode, LinkRecordNode, UpdateKBNode,
+    ChunkRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode, FlushNode, KBGatherNode,
+    InsertRecordNode, LinkRecordNode, KBUpdateNode,
 };
 use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
 
@@ -36,9 +36,9 @@ named_factory!(
 );
 
 named_factory!(
-    PrimarySearchNodeFactory,
-    PrimarySearchNode,
-    "PrimarySearchNode",
+    KBSearchNodeFactory,
+    KBSearchNode,
+    "KBSearchNode",
     "Runs Catalog::search() via service registry",
     &[PortDef { name: "query", port_type: PortType::Query, required: true }],
     &[
@@ -77,10 +77,10 @@ named_factory!(
 );
 
 named_factory!(
-    ChunkRecordNodeFactory,
-    ChunkRecordNode,
-    "ChunkRecordNode",
-    "Parallel chunking, outputs chunk entities + links",
+    KBChunkRecordNodeFactory,
+    KBChunkRecordNode,
+    "KBChunkRecordNode",
+    "Parallel chunking for KB entities, outputs chunk entities + links",
     &[
         PortDef { name: "entities", port_type: PortType::Entities, required: true },
         PortDef { name: "trigger", port_type: PortType::Empty, required: false },
@@ -93,9 +93,25 @@ named_factory!(
 );
 
 named_factory!(
-    GatherKBNodeFactory,
-    GatherKBNode,
-    "GatherKBNode",
+    ChunkRecordNodeFactory,
+    ChunkRecordNode,
+    "ChunkRecordNode",
+    "Parallel chunking for simple entities, outputs chunk entities + links",
+    &[
+        PortDef { name: "entities", port_type: PortType::Entities, required: true },
+        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+    ],
+    &[
+        PortDef { name: "done", port_type: PortType::Empty, required: false },
+        PortDef { name: "chunks", port_type: PortType::Entities, required: false },
+        PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
+    ],
+);
+
+named_factory!(
+    KBGatherNodeFactory,
+    KBGatherNode,
+    "KBGatherNode",
     "Read DB, detect content changes, output changed KBContentRecords",
     &[
         PortDef { name: "aggregates", port_type: PortType::Aggregates, required: true },
@@ -108,9 +124,9 @@ named_factory!(
 );
 
 named_factory!(
-    UpdateKBNodeFactory,
-    UpdateKBNode,
-    "UpdateKBNode",
+    KBUpdateNodeFactory,
+    KBUpdateNode,
+    "KBUpdateNode",
     "Update KB_Index entries + delete stale chunks",
     &[PortDef { name: "kb_content", port_type: PortType::KBContent, required: true }],
     &[
@@ -120,9 +136,9 @@ named_factory!(
 );
 
 named_factory!(
-    ChunkKBNodeFactory,
-    ChunkKBNode,
-    "ChunkKBNode",
+    KBChunkNodeFactory,
+    KBChunkNode,
+    "KBChunkNode",
     "Generate chunk entities + relations from aggregated content",
     &[PortDef { name: "kb_content", port_type: PortType::KBContent, required: true }],
     &[
@@ -132,24 +148,59 @@ named_factory!(
     ],
 );
 
-named_factory!(
-    FlushFTSNodeFactory,
-    FlushFTSNode,
-    "FlushFTSNode",
-    "Flush full-text search indexes for KB names",
-    &[PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
-    &[PortDef { name: "done", port_type: PortType::Empty, required: false }],
-);
+/// Factory for FlushNode (config: table or tables).
+pub struct FlushNodeFactory;
+
+impl NodeFactory for FlushNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let tables = if let Some(arr) = config.get("tables").and_then(|v| v.as_array()) {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        } else if let Some(t) = config.get("table").and_then(|v| v.as_str()) {
+            vec![t.to_string()]
+        } else {
+            return Err("FlushNode: missing 'table' or 'tables' config".to_string());
+        };
+        Ok(Box::new(FlushNode::new(name, tables)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "FlushNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "FlushNode",
+            description: "Flush Lucivy FTS indexes for configured tables",
+            config_params: vec![
+                ConfigParam {
+                    name: "table",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Single table name to flush",
+                },
+            ],
+            inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
+            outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
+        }
+    }
+}
 
 // ─── Manual factories ───────────────────────────────────────────────────────
 
-/// Factory for QuerySourceNode (config: kb_name, query, options).
+/// Factory for KBQuerySourceNode (config: kb_name, query, options).
 ///
-/// Note: QuerySourceNode is typically created directly by catalog code,
+/// Note: KBQuerySourceNode is typically created directly by catalog code,
 /// not from registry config. This factory exists for completeness/introspection.
-pub struct QuerySourceNodeFactory;
+pub struct KBQuerySourceNodeFactory;
 
-impl NodeFactory for QuerySourceNodeFactory {
+impl NodeFactory for KBQuerySourceNodeFactory {
     fn create(
         &self,
         name: &str,
@@ -158,27 +209,27 @@ impl NodeFactory for QuerySourceNodeFactory {
         let kb_name = config
             .get("kb_name")
             .and_then(|v| v.as_str())
-            .ok_or("QuerySourceNode: missing 'kb_name' config")?;
+            .ok_or("KBQuerySourceNode: missing 'kb_name' config")?;
         let query = config
             .get("query")
             .and_then(|v| v.as_str())
-            .ok_or("QuerySourceNode: missing 'query' config")?;
+            .ok_or("KBQuerySourceNode: missing 'query' config")?;
         let options: crate::search::SearchOptions = if let Some(opts) = config.get("options") {
             serde_json::from_value(opts.clone())
-                .map_err(|e| format!("QuerySourceNode: invalid 'options': {e}"))?
+                .map_err(|e| format!("KBQuerySourceNode: invalid 'options': {e}"))?
         } else {
             crate::search::SearchOptions::default()
         };
-        Ok(Box::new(QuerySourceNode::named(name, kb_name, query, &options)))
+        Ok(Box::new(KBQuerySourceNode::named(name, kb_name, query, &options)))
     }
 
     fn node_type(&self) -> &'static str {
-        "QuerySourceNode"
+        "KBQuerySourceNode"
     }
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "QuerySourceNode",
+            node_type: "KBQuerySourceNode",
             description: "Emits search query + options",
             inputs: vec![],
             outputs: vec![PortDef {
@@ -305,10 +356,10 @@ impl NodeFactory for FetchRelatedNodeFactory {
     }
 }
 
-/// Factory for EmbedRecordNode (config: gpu_batch_size).
-pub struct EmbedRecordNodeFactory;
+/// Factory for KBEmbedNode (config: gpu_batch_size).
+pub struct KBEmbedNodeFactory;
 
-impl NodeFactory for EmbedRecordNodeFactory {
+impl NodeFactory for KBEmbedNodeFactory {
     fn create(
         &self,
         name: &str,
@@ -318,16 +369,16 @@ impl NodeFactory for EmbedRecordNodeFactory {
             .get("gpu_batch_size")
             .and_then(|v| v.as_u64())
             .unwrap_or(64) as usize;
-        Ok(Box::new(EmbedRecordNode::new(name, gpu_batch_size)))
+        Ok(Box::new(KBEmbedNode::new(name, gpu_batch_size)))
     }
 
     fn node_type(&self) -> &'static str {
-        "EmbedRecordNode"
+        "KBEmbedNode"
     }
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "EmbedRecordNode",
+            node_type: "KBEmbedNode",
             description: "Unified embedding with _embed_hash skip",
             inputs: vec![
                 PortDef {
@@ -357,24 +408,121 @@ impl NodeFactory for EmbedRecordNodeFactory {
     }
 }
 
+/// Factory for EmbedNode (config: gpu_batch_size, text_field, embedding_col, sparse_col).
+pub struct EmbedNodeFactory;
+
+impl NodeFactory for EmbedNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let gpu_batch_size = config
+            .get("gpu_batch_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(64) as usize;
+
+        let signals: crate::search::SearchSignals = config
+            .get("signals")
+            .map(|v| serde_json::from_value(v.clone()).unwrap_or(crate::search::SearchSignals::HYBRID))
+            .unwrap_or(crate::search::SearchSignals::HYBRID);
+
+        let mut node = EmbedNode::new(name, signals, gpu_batch_size);
+
+        let text_field = config.get("text_field").and_then(|v| v.as_str()).unwrap_or("_text");
+        let embedding_col = config.get("embedding_col").and_then(|v| v.as_str()).unwrap_or("embedding");
+        let sparse_col = config.get("sparse_col").and_then(|v| v.as_str()).unwrap_or("sparse");
+        node = node.with_columns(text_field, embedding_col, sparse_col);
+
+        Ok(Box::new(node))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "EmbedNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "EmbedNode",
+            description: "Embedding for simple entities (configurable columns)",
+            inputs: vec![
+                PortDef {
+                    name: "entities",
+                    port_type: PortType::Entities,
+                    required: true,
+                },
+                PortDef {
+                    name: "trigger",
+                    port_type: PortType::Empty,
+                    required: false,
+                },
+            ],
+            outputs: vec![PortDef {
+                name: "done",
+                port_type: PortType::Empty,
+                required: false,
+            }],
+            config_params: vec![
+                ConfigParam {
+                    name: "gpu_batch_size",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(serde_json::json!(64)),
+                    description: "GPU batch size for embedding calls",
+                },
+                ConfigParam {
+                    name: "signals",
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: Some(serde_json::json!(["bm25", "vector"])),
+                    description: "Search signals array (bm25, vector, sparse)",
+                },
+                ConfigParam {
+                    name: "text_field",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("_text")),
+                    description: "Field name containing text to embed",
+                },
+                ConfigParam {
+                    name: "embedding_col",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("embedding")),
+                    description: "Column name for dense embeddings",
+                },
+                ConfigParam {
+                    name: "sparse_col",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("sparse")),
+                    description: "Prefix for sparse columns ({prefix}_indices, {prefix}_weights)",
+                },
+            ],
+        }
+    }
+}
+
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 14 built-in node types.
+/// Populate a NodeRegistry with all 16 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes
     registry.register(Box::new(ComposeNodeFactory));
-    registry.register(Box::new(PrimarySearchNodeFactory));
-    registry.register(Box::new(QuerySourceNodeFactory));
+    registry.register(Box::new(KBSearchNodeFactory));
+    registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
-    registry.register(Box::new(EmbedRecordNodeFactory));
+    registry.register(Box::new(KBEmbedNodeFactory));
+    registry.register(Box::new(EmbedNodeFactory));
     registry.register(Box::new(ChunkRecordNodeFactory));
-    registry.register(Box::new(GatherKBNodeFactory));
-    registry.register(Box::new(UpdateKBNodeFactory));
-    registry.register(Box::new(ChunkKBNodeFactory));
-    registry.register(Box::new(FlushFTSNodeFactory));
+    registry.register(Box::new(KBChunkRecordNodeFactory));
+    registry.register(Box::new(KBGatherNodeFactory));
+    registry.register(Box::new(KBUpdateNodeFactory));
+    registry.register(Box::new(KBChunkNodeFactory));
+    registry.register(Box::new(FlushNodeFactory));
     // Migration nodes
     registry.register(Box::new(CypherNodeFactory));
     registry.register(Box::new(ValidateNodeFactory));
@@ -393,9 +541,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_14_types() {
+    fn register_builtins_has_all_16_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 14);
+        assert_eq!(registry.types().len(), 16);
     }
 
     #[test]
@@ -471,9 +619,9 @@ mod tests {
         let registry = builtin_registry();
         let config = serde_json::json!({ "gpu_batch_size": 128 });
         let node = registry
-            .create("EmbedRecordNode", "embed_0", &config)
+            .create("KBEmbedNode", "embed_0", &config)
             .unwrap();
-        assert_eq!(node.node_type(), "EmbedRecordNode");
+        assert_eq!(node.node_type(), "KBEmbedNode");
         assert_eq!(node.name(), "embed_0");
     }
 
@@ -481,9 +629,9 @@ mod tests {
     fn embed_record_factory_default_batch_size() {
         let registry = builtin_registry();
         let node = registry
-            .create("EmbedRecordNode", "embed_1", &serde_json::json!({}))
+            .create("KBEmbedNode", "embed_1", &serde_json::json!({}))
             .unwrap();
-        assert_eq!(node.node_type(), "EmbedRecordNode");
+        assert_eq!(node.node_type(), "KBEmbedNode");
     }
 
     #[test]
@@ -494,16 +642,16 @@ mod tests {
             "query": "hello world",
         });
         let node = registry
-            .create("QuerySourceNode", "qs", &config)
+            .create("KBQuerySourceNode", "qs", &config)
             .unwrap();
-        assert_eq!(node.node_type(), "QuerySourceNode");
+        assert_eq!(node.node_type(), "KBQuerySourceNode");
     }
 
     #[test]
     fn query_source_factory_missing_kb_name_errors() {
         let registry = builtin_registry();
         let result = registry.create(
-            "QuerySourceNode",
+            "KBQuerySourceNode",
             "qs",
             &serde_json::json!({ "query": "hello" }),
         );

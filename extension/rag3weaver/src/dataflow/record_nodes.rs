@@ -6,12 +6,13 @@
 //!
 //! - [`InsertRecordNode`] — UNWIND MERGE on `_uuid` from `Vec<EntityRecord>`
 //! - [`LinkRecordNode`] — UNWIND MATCH+MERGE from `Vec<RelationRecord>`
-//! - [`EmbedRecordNode`] — unified embedding with `_embed_hash` skip (saves GPU)
-//! - [`ChunkRecordNode`] — parallel chunking, outputs chunk entities + links
-//!   (entity-level chunks — future use with Mermaid templates: simple vs metaKB)
-//! - [`GatherKBNode`] — read DB, detect content changes, output changed KBContentRecords
-//! - [`UpdateKBNode`] — update KB_Index entries + delete stale chunks
-//! - [`ChunkKBNode`] — generate chunk entities + relations from aggregated content
+//! - [`KBEmbedNode`] — unified embedding with `_embed_hash` skip (saves GPU)
+//! - [`ChunkRecordNode`] — parallel chunking for simple entities (entity_configs)
+//! - [`EmbedNode`] — embedding for simple entities (configurable columns)
+//! - [`KBChunkRecordNode`] — parallel chunking for KB entities (kb_metadata)
+//! - [`KBGatherNode`] — read DB, detect content changes, output changed KBContentRecords
+//! - [`KBUpdateNode`] — update KB_Index entries + delete stale chunks
+//! - [`KBChunkNode`] — generate chunk entities + relations from aggregated content
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -458,7 +459,7 @@ impl Node for LinkRecordNode {
     }
 }
 
-// ─── EmbedRecordNode ────────────────────────────────────────────────────────
+// ─── KBEmbedNode ────────────────────────────────────────────────────────
 
 /// Unified embedding node: takes `Vec<EntityRecord>`, determines which
 /// embeddings to compute (dense/sparse/dual) based on KB config, calls
@@ -470,13 +471,13 @@ impl Node for LinkRecordNode {
 /// **Output**: `done` — Empty signal
 /// **Services**: `conn`, `embedder`, `embedding_dim`, `config`, `kb_metadata`,
 ///               optionally `sparse_embedder`, `dual_embedder`
-pub struct EmbedRecordNode {
+pub struct KBEmbedNode {
     name: String,
     gpu_batch_size: usize,
     undo_data: Option<serde_json::Value>,
 }
 
-impl EmbedRecordNode {
+impl KBEmbedNode {
     pub fn new(name: impl Into<String>, gpu_batch_size: usize) -> Self {
         Self {
             name: name.into(),
@@ -496,12 +497,12 @@ struct EmbedWork {
 }
 
 #[async_trait]
-impl Node for EmbedRecordNode {
+impl Node for KBEmbedNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "EmbedRecordNode"
+        "KBEmbedNode"
     }
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })
@@ -523,18 +524,18 @@ impl Node for EmbedRecordNode {
         let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
-                .ok_or("EmbedRecordNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("EmbedRecordNode: missing 'entities' input".to_string()),
+                .ok_or("KBEmbedNode: failed to extract Vec<EntityRecord>")?,
+            _ => return Err("KBEmbedNode: missing 'entities' input".to_string()),
         };
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("EmbedRecordNode: 'conn' service not registered")?;
+            .ok_or("KBEmbedNode: 'conn' service not registered")?;
         let config = ctx.service::<CatalogConfig>("config")
-            .ok_or("EmbedRecordNode: 'config' service not registered")?;
+            .ok_or("KBEmbedNode: 'config' service not registered")?;
         let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
-            .ok_or("EmbedRecordNode: 'embedder' service not registered")?;
+            .ok_or("KBEmbedNode: 'embedder' service not registered")?;
         let embedding_dim = *ctx.service::<usize>("embedding_dim")
-            .ok_or("EmbedRecordNode: 'embedding_dim' service not registered")?;
+            .ok_or("KBEmbedNode: 'embedding_dim' service not registered")?;
         let has_sparse_svc = ctx.service::<bool>("has_sparse").map(|v| *v).unwrap_or(false);
         let has_dual_svc = ctx.service::<bool>("has_dual").map(|v| *v).unwrap_or(false);
         let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder");
@@ -543,7 +544,7 @@ impl Node for EmbedRecordNode {
         // For each chunk, extract the text to embed and determine signals.
         //
         // Chunks carry `_text`, `_kb_name`, and `_text_hash` in their data
-        // (set by ChunkKBNode / generate_chunk_records). The KB name determines
+        // (set by KBChunkNode / generate_chunk_records). The KB name determines
         // the embedding column name (`{kb}_embedding`) and the search signals
         // (vector / sparse / dual).
         let mut dense_works: Vec<EmbedWork> = Vec::new();
@@ -931,14 +932,14 @@ impl Node for EmbedRecordNode {
 
     async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("EmbedRecordNode undo: 'conn' service not registered")?;
+            .ok_or("KBEmbedNode undo: 'conn' service not registered")?;
 
         let groups = undo_ctx.as_object()
-            .ok_or("EmbedRecordNode undo: expected object")?;
+            .ok_or("KBEmbedNode undo: expected object")?;
 
         for (entity_name, uuids) in groups {
             let uuid_list: Vec<&str> = uuids.as_array()
-                .ok_or("EmbedRecordNode undo: expected array of uuids")?
+                .ok_or("KBEmbedNode undo: expected array of uuids")?
                 .iter()
                 .filter_map(|v| v.as_str())
                 .collect();
@@ -957,13 +958,13 @@ impl Node for EmbedRecordNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).await.map_err(|e| format!("EmbedRecordNode undo failed: {e}"))?;
+            ).await.map_err(|e| format!("KBEmbedNode undo failed: {e}"))?;
         }
         Ok(())
     }
 }
 
-// ─── ChunkRecordNode ────────────────────────────────────────────────────────
+// ─── KBChunkRecordNode ────────────────────────────────────────────────────────
 
 /// Parallel chunking: takes `Vec<EntityRecord>` (inserted entities), chunks
 /// their content fields via rayon, outputs chunk entities + links.
@@ -971,11 +972,11 @@ impl Node for EmbedRecordNode {
 /// **Input**: `entities` — `BatchPayload<EntityRecord>` (PortType::Entities)
 /// **Output**: `done` — Empty, `chunks` — chunk entities, `chunk_links` — HAS_CHUNK relations
 /// **Services**: `config`, `kb_metadata`, `chunker_cache`
-pub struct ChunkRecordNode {
+pub struct KBChunkRecordNode {
     name: String,
 }
 
-impl ChunkRecordNode {
+impl KBChunkRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into() }
     }
@@ -1104,12 +1105,12 @@ impl ChunkRecordNode {
 }
 
 #[async_trait]
-impl Node for ChunkRecordNode {
+impl Node for KBChunkRecordNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "ChunkRecordNode"
+        "KBChunkRecordNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -1130,16 +1131,16 @@ impl Node for ChunkRecordNode {
         let items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
-                .ok_or("ChunkRecordNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("ChunkRecordNode: missing 'entities' input".to_string()),
+                .ok_or("KBChunkRecordNode: failed to extract Vec<EntityRecord>")?,
+            _ => return Err("KBChunkRecordNode: missing 'entities' input".to_string()),
         };
 
         let config = ctx.service::<CatalogConfig>("config")
-            .ok_or("ChunkRecordNode: 'config' service not registered")?;
+            .ok_or("KBChunkRecordNode: 'config' service not registered")?;
         let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
-            .ok_or("ChunkRecordNode: 'kb_metadata' service not registered")?;
+            .ok_or("KBChunkRecordNode: 'kb_metadata' service not registered")?;
         let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
-            .ok_or("ChunkRecordNode: 'chunker_cache' service not registered")?;
+            .ok_or("KBChunkRecordNode: 'chunker_cache' service not registered")?;
 
         // Parallel chunking via rayon
         let all_results: Vec<(Vec<EntityRecord>, Vec<RelationRecord>)> = items
@@ -1187,16 +1188,732 @@ impl Node for ChunkRecordNode {
     }
 }
 
+// ─── ChunkRecordNode (simple entities) ──────────────────────────────────────
+
+/// Parallel chunking for simple entities (registerEntity API).
+/// Uses `entity_configs` (not `kb_metadata`) to find content fields.
+///
+/// **Input**: `entities` — `BatchPayload<EntityRecord>` (PortType::Entities)
+/// **Output**: `done` — Empty, `chunks` — chunk entities, `chunk_links` — CHUNKED_FROM relations
+/// **Services**: `config`, `entity_configs`, `chunker_cache`
+pub struct ChunkRecordNode {
+    name: String,
+}
+
+impl ChunkRecordNode {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+
+    /// Compute chunks for one simple entity, producing EntityRecords (chunks) and
+    /// RelationRecords (CHUNKED_FROM links). Pure CPU work — no DB queries.
+    fn compute_chunks(
+        entity_name: &str,
+        parent_uuid: &str,
+        entity_ref: &EntityRef,
+        data: &BTreeMap<String, CypherValue>,
+        entity_configs: &HashMap<String, crate::config::EntityConfig>,
+        chunker_cache: &HashMap<ChunkerConfig, Chunker>,
+    ) -> (Vec<EntityRecord>, Vec<RelationRecord>) {
+        let entity_config = match entity_configs.get(entity_name) {
+            Some(cfg) => cfg,
+            None => return (vec![], vec![]),
+        };
+
+        let content_fields = entity_config.content_fields();
+        if content_fields.is_empty() {
+            return (vec![], vec![]);
+        }
+
+        // Get chunker from cache
+        let chunker_key = ChunkerConfig {
+            max_size: entity_config.chunking.max_size,
+            overlap: entity_config.chunking.overlap,
+            strategy: entity_config.chunking.strategy.clone(),
+        };
+        let chunker = match chunker_cache.get(&chunker_key) {
+            Some(c) => c,
+            None => return (vec![], vec![]),
+        };
+
+        // Get title from parent entity
+        let title = entity_config.title_field()
+            .and_then(|f| data.get(f))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let chunk_table = format!("{entity_name}_Chunk");
+        let rel_name = format!("{entity_name}_CHUNKED_FROM");
+
+        let mut chunk_entities: Vec<EntityRecord> = Vec::new();
+        let mut chunk_relations: Vec<RelationRecord> = Vec::new();
+
+        // Track _content_offset: offset of each field in the concatenation of all content fields
+        // Concatenation order = content_fields (sorted alphabetically)
+        // Separator = "\n\n" (2 chars) between fields
+        let mut content_offset: i64 = 0;
+
+        for (field_idx, field_name) in content_fields.iter().enumerate() {
+            let field_text = match data.get(*field_name).and_then(|v| v.as_str()) {
+                Some(s) if !s.is_empty() => s,
+                _ => {
+                    // Empty field still advances offset (0 chars + separator)
+                    if field_idx > 0 {
+                        content_offset += 2; // "\n\n" separator
+                    }
+                    continue;
+                },
+            };
+
+            // Add separator offset for fields after the first
+            if field_idx > 0 {
+                content_offset += 2; // "\n\n" separator
+            }
+
+            let chunks = chunker.chunk(field_text);
+            if chunks.is_empty() {
+                content_offset += field_text.len() as i64;
+                continue;
+            }
+
+            for chunk in &chunks {
+                let c_uuid = chunk_uuid(parent_uuid, field_name, chunk.index);
+
+                let mut chunk_data = BTreeMap::new();
+                chunk_data.insert("_uuid".into(), CypherValue::String(c_uuid.clone()));
+                chunk_data.insert("_parent_uuid".into(), CypherValue::String(parent_uuid.to_string()));
+                chunk_data.insert("_parent_field".into(), CypherValue::String(field_name.to_string()));
+                chunk_data.insert("_text".into(), CypherValue::String(chunk.text.clone()));
+                chunk_data.insert("_title".into(), CypherValue::String(title.clone()));
+                chunk_data.insert("_text_hash".into(), CypherValue::String(content_hash(&chunk.text)));
+                chunk_data.insert("_embed_hash".into(), CypherValue::String(String::new()));
+                chunk_data.insert("_index".into(), CypherValue::Int(chunk.index as i64));
+                chunk_data.insert("_start_char".into(), CypherValue::Int(chunk.start_byte as i64));
+                chunk_data.insert("_end_char".into(), CypherValue::Int(chunk.end_byte as i64));
+                chunk_data.insert("_start_line".into(), CypherValue::Int(chunk.start_line as i64));
+                chunk_data.insert("_end_line".into(), CypherValue::Int(chunk.end_line as i64));
+                chunk_data.insert("_core_start_char".into(), CypherValue::Int(chunk.core_start_byte as i64));
+                chunk_data.insert("_core_end_char".into(), CypherValue::Int(chunk.core_end_byte as i64));
+                chunk_data.insert("_core_start_line".into(), CypherValue::Int(chunk.core_start_line as i64));
+                chunk_data.insert("_core_end_line".into(), CypherValue::Int(chunk.core_end_line as i64));
+                chunk_data.insert("_content_offset".into(), CypherValue::Int(content_offset));
+
+                let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
+                chunk_resolver.resolve(c_uuid.clone());
+
+                chunk_entities.push(EntityRecord {
+                    entity_name: chunk_table.clone(),
+                    data: chunk_data,
+                    entity_ref: chunk_ref,
+                    resolver: None,
+                });
+
+                let (link_ref, link_resolver) = RelationRef::new(&rel_name);
+                chunk_relations.push(RelationRecord {
+                    rel_name: rel_name.clone(),
+                    from: RefOrUuid::Uuid(c_uuid),
+                    to: RefOrUuid::Ref(entity_ref.clone()),
+                    properties: BTreeMap::new(),
+                    relation_ref: link_ref,
+                    resolver: Some(link_resolver),
+                });
+            }
+
+            content_offset += field_text.len() as i64;
+        }
+
+        (chunk_entities, chunk_relations)
+    }
+}
+
+#[async_trait]
+impl Node for ChunkRecordNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "ChunkRecordNode"
+    }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "entities", port_type: PortType::Entities, required: true },
+            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "done", port_type: PortType::Empty, required: false },
+            PortDef { name: "chunks", port_type: PortType::Entities, required: false },
+            PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
+        ]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        use rayon::prelude::*;
+
+        let items: Vec<EntityRecord> = match ctx.take_input("entities") {
+            Some(PortValue::Batch(payload)) => payload
+                .take::<EntityRecord>()
+                .ok_or("ChunkRecordNode: failed to extract Vec<EntityRecord>")?,
+            _ => return Err("ChunkRecordNode: missing 'entities' input".to_string()),
+        };
+
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+            .ok_or("ChunkRecordNode: 'entity_configs' service not registered")?;
+        let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
+            .ok_or("ChunkRecordNode: 'chunker_cache' service not registered")?;
+
+        // Parallel chunking via rayon
+        let all_results: Vec<(Vec<EntityRecord>, Vec<RelationRecord>)> = items
+            .par_iter()
+            .map(|rec| {
+                let parent_uuid = rec.data
+                    .get("_uuid")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                Self::compute_chunks(
+                    &rec.entity_name,
+                    parent_uuid,
+                    &rec.entity_ref,
+                    &rec.data,
+                    &entity_configs,
+                    &chunker_cache,
+                )
+            })
+            .collect();
+
+        let mut all_chunk_entities: Vec<EntityRecord> = Vec::new();
+        let mut all_chunk_relations: Vec<RelationRecord> = Vec::new();
+        for (entities, relations) in all_results {
+            all_chunk_entities.extend(entities);
+            all_chunk_relations.extend(relations);
+        }
+
+        ctx.log_metric("entities", items.len());
+        ctx.log_metric("chunks", all_chunk_entities.len());
+        ctx.log_metric("chunk_links", all_chunk_relations.len());
+
+        ctx.set_output("done", PortValue::Empty);
+        if !all_chunk_entities.is_empty() {
+            ctx.set_output("chunks", PortValue::Batch(
+                BatchPayload::new(PortType::Entities, all_chunk_entities),
+            ));
+        }
+        if !all_chunk_relations.is_empty() {
+            ctx.set_output("chunk_links", PortValue::Batch(
+                BatchPayload::new(PortType::Relations, all_chunk_relations),
+            ));
+        }
+        Ok(())
+    }
+}
+
+// ─── EmbedNode (simple entities) ────────────────────────────────────────────
+
+/// Embedding node for simple entities (registerEntity API).
+/// Configurable column names, signals on the node. No KB dependency.
+///
+/// **Input**: `entities` — `BatchPayload<EntityRecord>` (PortType::Entities)
+/// **Output**: `done` — Empty
+/// **Services**: `conn`, `embedder`, `embedding_dim`, optionally `sparse_embedder`, `dual_embedder`
+pub struct EmbedNode {
+    name: String,
+    text_field: String,
+    embedding_col: String,
+    sparse_col: String,
+    signals: search::SearchSignals,
+    gpu_batch_size: usize,
+    undo_data: Option<serde_json::Value>,
+}
+
+impl EmbedNode {
+    pub fn new(
+        name: impl Into<String>,
+        signals: search::SearchSignals,
+        gpu_batch_size: usize,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            text_field: "_text".into(),
+            embedding_col: "embedding".into(),
+            sparse_col: "sparse".into(),
+            signals,
+            gpu_batch_size,
+            undo_data: None,
+        }
+    }
+
+    pub fn with_columns(
+        mut self,
+        text_field: impl Into<String>,
+        embedding_col: impl Into<String>,
+        sparse_col: impl Into<String>,
+    ) -> Self {
+        self.text_field = text_field.into();
+        self.embedding_col = embedding_col.into();
+        self.sparse_col = sparse_col.into();
+        self
+    }
+}
+
+/// Internal work item for simple embedding.
+struct SimpleEmbedWork {
+    uuid: String,
+    text: String,
+    text_hash: String,
+    entity_name: String,
+}
+
+#[async_trait]
+impl Node for EmbedNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "EmbedNode"
+    }
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::json!({
+            "gpu_batch_size": self.gpu_batch_size,
+            "text_field": self.text_field,
+            "embedding_col": self.embedding_col,
+            "sparse_col": self.sparse_col,
+        })
+    }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "entities", port_type: PortType::Entities, required: true },
+            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[PortDef {
+            name: "done",
+            port_type: PortType::Empty,
+            required: false,
+        }]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
+            Some(PortValue::Batch(payload)) => payload
+                .take::<EntityRecord>()
+                .ok_or("EmbedNode: failed to extract Vec<EntityRecord>")?,
+            _ => return Err("EmbedNode: missing 'entities' input".to_string()),
+        };
+
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("EmbedNode: 'conn' service not registered")?;
+        let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
+            .ok_or("EmbedNode: 'embedder' service not registered")?;
+        let embedding_dim = *ctx.service::<usize>("embedding_dim")
+            .ok_or("EmbedNode: 'embedding_dim' service not registered")?;
+        let has_sparse_svc = ctx.service::<bool>("has_sparse").map(|v| *v).unwrap_or(false);
+        let has_dual_svc = ctx.service::<bool>("has_dual").map(|v| *v).unwrap_or(false);
+        let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder");
+        let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder");
+
+        let want_vector = self.signals.vector();
+        let want_sparse = self.signals.sparse() && has_sparse_svc;
+
+        // Build work items from chunk entities
+        let mut dense_works: Vec<SimpleEmbedWork> = Vec::new();
+        let mut sparse_works: Vec<SimpleEmbedWork> = Vec::new();
+        let mut dual_works: Vec<SimpleEmbedWork> = Vec::new();
+
+        for rec in &mut items {
+            let uuid = rec
+                .entity_ref
+                .ready()
+                .await
+                .map_err(|e| format!("embed ref resolution failed: {e}"))?;
+
+            let embed_text = match rec.data.get(&self.text_field).and_then(|v| v.as_str()) {
+                Some(t) if !t.is_empty() => t.to_string(),
+                _ => continue,
+            };
+            let text_hash = rec.data.get("_text_hash")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| content_hash(&embed_text));
+
+            if has_dual_svc && want_vector && want_sparse && dual_embedder.is_some() {
+                dual_works.push(SimpleEmbedWork {
+                    uuid: uuid.clone(),
+                    text: embed_text,
+                    text_hash,
+                    entity_name: rec.entity_name.clone(),
+                });
+            } else {
+                if want_vector {
+                    dense_works.push(SimpleEmbedWork {
+                        uuid: uuid.clone(),
+                        text: embed_text.clone(),
+                        text_hash: text_hash.clone(),
+                        entity_name: rec.entity_name.clone(),
+                    });
+                }
+                if want_sparse && sparse_embedder.is_some() {
+                    sparse_works.push(SimpleEmbedWork {
+                        uuid: uuid.clone(),
+                        text: embed_text,
+                        text_hash,
+                        entity_name: rec.entity_name.clone(),
+                    });
+                }
+            }
+        }
+
+        // ── Idempotence: skip chunks whose text hasn't changed ──
+        let all_uuids: HashSet<&str> = dense_works.iter()
+            .chain(sparse_works.iter())
+            .chain(dual_works.iter())
+            .map(|w| w.uuid.as_str())
+            .collect();
+
+        let mut existing_hashes: HashMap<String, String> = HashMap::new();
+        if !all_uuids.is_empty() {
+            let mut by_entity: HashMap<&str, Vec<&str>> = HashMap::new();
+            for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
+                by_entity.entry(&w.entity_name).or_default().push(&w.uuid);
+            }
+            for (entity_name, uuids) in &by_entity {
+                let unique: HashSet<&&str> = uuids.iter().collect();
+                let items_param = CypherValue::List(
+                    unique.iter().map(|&&u| {
+                        let mut m = BTreeMap::new();
+                        m.insert("uuid".into(), CypherValue::String(u.to_string()));
+                        CypherValue::Map(m)
+                    }).collect()
+                );
+                let cypher = format!(
+                    "UNWIND $items AS item \
+                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                     WHERE n._embed_hash IS NOT NULL AND n._embed_hash <> '' \
+                     RETURN n._uuid, n._embed_hash"
+                );
+                if let Ok(result) = conn.execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "items".into(), value: items_param }],
+                ).await {
+                    for row in &result.rows {
+                        if let (Some(uuid), Some(hash)) = (
+                            row.first().and_then(|v| v.as_str()),
+                            row.get(1).and_then(|v| v.as_str()),
+                        ) {
+                            existing_hashes.insert(uuid.to_string(), hash.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let is_changed = |w: &SimpleEmbedWork| -> bool {
+            match existing_hashes.get(&w.uuid) {
+                Some(existing) => existing != &w.text_hash,
+                None => true,
+            }
+        };
+
+        let pre_filter = dense_works.len() + sparse_works.len() + dual_works.len();
+        dense_works.retain(is_changed);
+        sparse_works.retain(is_changed);
+        dual_works.retain(is_changed);
+        let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
+
+        ctx.log_metric("entities", items.len());
+        ctx.log_metric("dense", dense_works.len());
+        ctx.log_metric("sparse", sparse_works.len());
+        ctx.log_metric("dual", dual_works.len());
+        ctx.log_metric("skipped_unchanged", skipped);
+
+        let embedding_col = &self.embedding_col;
+        let sparse_indices_col = format!("{}_indices", self.sparse_col);
+        let sparse_weights_col = format!("{}_weights", self.sparse_col);
+
+        // ── Dense embedding (GPU mini-batches) ──
+        if !dense_works.is_empty() {
+            for chunk in dense_works.chunks(self.gpu_batch_size) {
+                let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                let vectors = embedder
+                    .embed(&texts)
+                    .await
+                    .map_err(|e| format!("dense embedding failed: {e}"))?;
+
+                if vectors.len() != chunk.len() {
+                    return Err(format!(
+                        "embedder returned {} vectors for {} texts",
+                        vectors.len(), chunk.len()
+                    ));
+                }
+
+                // Group by entity_name for batch UNWIND
+                let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &Vec<f32>)>> = HashMap::new();
+                for (work, vector) in chunk.iter().zip(vectors.iter()) {
+                    if vector.len() != embedding_dim {
+                        return Err(format!(
+                            "embedding dimension mismatch: expected {}, got {}",
+                            embedding_dim, vector.len()
+                        ));
+                    }
+                    groups.entry(&work.entity_name).or_default().push((work, vector));
+                }
+
+                for (entity_name, group) in &groups {
+                    let items_param = CypherValue::List(
+                        group.iter().map(|(work, vec)| {
+                            let mut map = BTreeMap::new();
+                            map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
+                            map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
+                            map.insert("emb".into(), CypherValue::List(
+                                vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                            ));
+                            CypherValue::Map(map)
+                        }).collect(),
+                    );
+
+                    let cypher = format!(
+                        "UNWIND $items AS item \
+                         MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                         SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
+                    );
+
+                    conn.execute_with_params(
+                        &cypher,
+                        &[QueryParam { name: "items".into(), value: items_param }],
+                    ).await.map_err(|e| e.to_string())?;
+                }
+            }
+        }
+
+        // ── Sparse embedding (GPU mini-batches) ──
+        if !sparse_works.is_empty() {
+            if let Some(ref sparse_emb) = sparse_embedder {
+                for chunk in sparse_works.chunks(self.gpu_batch_size) {
+                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let sparse_vecs = sparse_emb
+                        .embed_sparse(&texts)
+                        .await
+                        .map_err(|e| format!("sparse embedding failed: {e}"))?;
+
+                    if sparse_vecs.len() != chunk.len() {
+                        return Err(format!(
+                            "sparse embedder returned {} vectors for {} texts",
+                            sparse_vecs.len(), chunk.len()
+                        ));
+                    }
+
+                    let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &SparseVector)>> =
+                        HashMap::new();
+                    for (work, sv) in chunk.iter().zip(sparse_vecs.iter()) {
+                        groups.entry(&work.entity_name).or_default().push((work, sv));
+                    }
+
+                    for (entity_name, group) in &groups {
+                        let items_param = CypherValue::List(
+                            group.iter().map(|(work, sv)| {
+                                let mut map = BTreeMap::new();
+                                map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
+                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
+                                map.insert("indices".into(), CypherValue::List(
+                                    sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
+                                ));
+                                map.insert("weights".into(), CypherValue::List(
+                                    sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                                ));
+                                CypherValue::Map(map)
+                            }).collect(),
+                        );
+
+                        let cypher = format!(
+                            "UNWIND $items AS item \
+                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                             SET n.{sparse_indices_col} = item.indices, \
+                             n.{sparse_weights_col} = item.weights, \
+                             n._embed_hash = item.hash"
+                        );
+
+                        conn.execute_with_params(
+                            &cypher,
+                            &[QueryParam { name: "items".into(), value: items_param }],
+                        ).await.map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
+
+        // ── Dual embedding (GPU mini-batches) ──
+        if !dual_works.is_empty() {
+            if let Some(ref dual_emb) = dual_embedder {
+                let mut dense_results: Vec<(&SimpleEmbedWork, Vec<f32>)> = Vec::with_capacity(dual_works.len());
+                let mut sparse_results: Vec<(&SimpleEmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
+
+                for chunk in dual_works.chunks(self.gpu_batch_size) {
+                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let (dense_vecs, sparse_vecs) = dual_emb
+                        .embed_dual(&texts)
+                        .await
+                        .map_err(|e| format!("dual embed failed: {e}"))?;
+
+                    if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
+                        return Err(format!(
+                            "dual embedder returned {}/{} vectors for {} texts",
+                            dense_vecs.len(), sparse_vecs.len(), chunk.len()
+                        ));
+                    }
+
+                    let base_idx = dense_results.len();
+                    for (i, (dense, sparse)) in
+                        dense_vecs.into_iter().zip(sparse_vecs.into_iter()).enumerate()
+                    {
+                        dense_results.push((&dual_works[base_idx + i], dense));
+                        sparse_results.push((&dual_works[base_idx + i], sparse));
+                    }
+                }
+
+                // UNWIND dense
+                {
+                    let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &Vec<f32>)>> = HashMap::new();
+                    for (work, vec) in &dense_results {
+                        if vec.len() != embedding_dim {
+                            return Err(format!(
+                                "embedding dimension mismatch: expected {}, got {}",
+                                embedding_dim, vec.len()
+                            ));
+                        }
+                        groups.entry(&work.entity_name).or_default().push((work, vec));
+                    }
+
+                    for (entity_name, group) in &groups {
+                        let items_param = CypherValue::List(
+                            group.iter().map(|(work, vec)| {
+                                let mut map = BTreeMap::new();
+                                map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
+                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
+                                map.insert("emb".into(), CypherValue::List(
+                                    vec.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                                ));
+                                CypherValue::Map(map)
+                            }).collect(),
+                        );
+
+                        let cypher = format!(
+                            "UNWIND $items AS item \
+                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                             SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
+                        );
+
+                        conn.execute_with_params(
+                            &cypher,
+                            &[QueryParam { name: "items".into(), value: items_param }],
+                        ).await.map_err(|e| e.to_string())?;
+                    }
+                }
+
+                // UNWIND sparse
+                {
+                    let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &SparseVector)>> =
+                        HashMap::new();
+                    for (work, sv) in &sparse_results {
+                        groups.entry(&work.entity_name).or_default().push((work, sv));
+                    }
+
+                    for (entity_name, group) in &groups {
+                        let items_param = CypherValue::List(
+                            group.iter().map(|(work, sv)| {
+                                let mut map = BTreeMap::new();
+                                map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
+                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
+                                map.insert("indices".into(), CypherValue::List(
+                                    sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
+                                ));
+                                map.insert("weights".into(), CypherValue::List(
+                                    sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
+                                ));
+                                CypherValue::Map(map)
+                            }).collect(),
+                        );
+
+                        let cypher = format!(
+                            "UNWIND $items AS item \
+                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
+                             SET n.{sparse_indices_col} = item.indices, \
+                             n.{sparse_weights_col} = item.weights, \
+                             n._embed_hash = item.hash"
+                        );
+
+                        conn.execute_with_params(
+                            &cypher,
+                            &[QueryParam { name: "items".into(), value: items_param }],
+                        ).await.map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
+
+        // Capture undo data
+        let mut undo_groups: HashMap<&str, Vec<&str>> = HashMap::new();
+        for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
+            undo_groups.entry(&w.entity_name).or_default().push(&w.uuid);
+        }
+        let undo_map: HashMap<String, Vec<String>> = undo_groups.into_iter()
+            .map(|(k, v)| (k.to_string(), v.into_iter().map(|u| u.to_string()).collect()))
+            .collect();
+        if !undo_map.is_empty() {
+            self.undo_data = Some(serde_json::json!(undo_map));
+        }
+
+        ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("EmbedNode undo: 'conn' service not registered")?;
+
+        let groups = undo_ctx.as_object()
+            .ok_or("EmbedNode undo: expected object")?;
+
+        for (entity_name, uuids) in groups {
+            let uuid_list: Vec<&str> = uuids.as_array()
+                .ok_or("EmbedNode undo: expected array of uuids")?
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+
+            if uuid_list.is_empty() { continue; }
+
+            let uuid_params = CypherValue::List(
+                uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
+            );
+            let cypher = format!(
+                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) \
+                 SET n._embed_hash = ''"
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "uuids".into(), value: uuid_params }],
+            ).await.map_err(|e| format!("EmbedNode undo failed: {e}"))?;
+        }
+        Ok(())
+    }
+}
+
 // ─── KB Pipeline Nodes ──────────────────────────────────────────────────────
 //
 // These 3 nodes replace the monolithic AggregateRecordNode.
-// Pipeline: GatherKBNode → UpdateKBNode → ChunkKBNode
+// Pipeline: KBGatherNode → KBUpdateNode → KBChunkNode
 //
-// - GatherKBNode: read titles + linked content + hashes, detect changes
-// - UpdateKBNode: SET on KB_Index + DETACH DELETE stale chunks (pass-through)
-// - ChunkKBNode: generate chunk EntityRecords + RelationRecords (pure CPU)
+// - KBGatherNode: read titles + linked content + hashes, detect changes
+// - KBUpdateNode: SET on KB_Index + DETACH DELETE stale chunks (pass-through)
+// - KBChunkNode: generate chunk EntityRecords + RelationRecords (pure CPU)
 
-/// Batch-collected state for one aggregate operation (internal to GatherKBNode).
+/// Batch-collected state for one aggregate operation (internal to KBGatherNode).
 struct RecordAggState {
     source_uuid: String,
     index_entry_uuid: String,
@@ -1303,7 +2020,7 @@ fn generate_chunk_records(
     (chunk_entities, chunk_relations)
 }
 
-// ─── GatherKBNode ───────────────────────────────────────────────────────────
+// ─── KBGatherNode ───────────────────────────────────────────────────────────
 
 /// Reads title entities + linked content from DB, compares content hashes,
 /// outputs only changed `KBContentRecord`s.
@@ -1311,11 +2028,11 @@ fn generate_chunk_records(
 /// **Input**: `aggregates` — `BatchPayload<AggregateRecord>` (PortType::Aggregates)
 /// **Output**: `kb_content` — changed records, `done` — Empty signal
 /// **Services**: `conn`, `config`, `kb_metadata`
-pub struct GatherKBNode {
+pub struct KBGatherNode {
     name: String,
 }
 
-impl GatherKBNode {
+impl KBGatherNode {
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into() }
     }
@@ -1575,12 +2292,12 @@ impl GatherKBNode {
 }
 
 #[async_trait]
-impl Node for GatherKBNode {
+impl Node for KBGatherNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "GatherKBNode"
+        "KBGatherNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -1598,16 +2315,16 @@ impl Node for GatherKBNode {
         let items: Vec<AggregateRecord> = match ctx.take_input("aggregates") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<AggregateRecord>()
-                .ok_or("GatherKBNode: failed to extract Vec<AggregateRecord>")?,
-            _ => return Err("GatherKBNode: missing 'aggregates' input".to_string()),
+                .ok_or("KBGatherNode: failed to extract Vec<AggregateRecord>")?,
+            _ => return Err("KBGatherNode: missing 'aggregates' input".to_string()),
         };
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("GatherKBNode: 'conn' service not registered")?;
+            .ok_or("KBGatherNode: 'conn' service not registered")?;
         let config = ctx.service::<CatalogConfig>("config")
-            .ok_or("GatherKBNode: 'config' service not registered")?;
+            .ok_or("KBGatherNode: 'config' service not registered")?;
         let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
-            .ok_or("GatherKBNode: 'kb_metadata' service not registered")?;
+            .ok_or("KBGatherNode: 'kb_metadata' service not registered")?;
 
         // Deduplicate by index_entry_uuid
         let mut seen = HashSet::new();
@@ -1664,7 +2381,7 @@ impl Node for GatherKBNode {
     }
 }
 
-// ─── UpdateKBNode ───────────────────────────────────────────────────────────
+// ─── KBUpdateNode ───────────────────────────────────────────────────────────
 
 /// Updates `{KB}_Index` entries (SET _title, _content, _content_hash)
 /// and deletes stale `{KB}_Index_Chunk` entities. Passes through
@@ -1673,24 +2390,24 @@ impl Node for GatherKBNode {
 /// **Input**: `kb_content` — `BatchPayload<KBContentRecord>` (PortType::KBContent)
 /// **Output**: `kb_content` — same records (pass-through), `done` — Empty signal
 /// **Services**: `conn`
-pub struct UpdateKBNode {
+pub struct KBUpdateNode {
     name: String,
     undo_data: Option<serde_json::Value>,
 }
 
-impl UpdateKBNode {
+impl KBUpdateNode {
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into(), undo_data: None }
     }
 }
 
 #[async_trait]
-impl Node for UpdateKBNode {
+impl Node for KBUpdateNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "UpdateKBNode"
+        "KBUpdateNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -1707,12 +2424,12 @@ impl Node for UpdateKBNode {
         let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<KBContentRecord>()
-                .ok_or("UpdateKBNode: failed to extract Vec<KBContentRecord>")?,
-            _ => return Err("UpdateKBNode: missing 'kb_content' input".to_string()),
+                .ok_or("KBUpdateNode: failed to extract Vec<KBContentRecord>")?,
+            _ => return Err("KBUpdateNode: missing 'kb_content' input".to_string()),
         };
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("UpdateKBNode: 'conn' service not registered")?;
+            .ok_or("KBUpdateNode: 'conn' service not registered")?;
 
         // Group by kb_name for UNWIND batching
         let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -1838,10 +2555,10 @@ impl Node for UpdateKBNode {
 
     async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("UpdateKBNode undo: 'conn' service not registered")?;
+            .ok_or("KBUpdateNode undo: 'conn' service not registered")?;
 
         let entries = undo_ctx.as_array()
-            .ok_or("UpdateKBNode undo: expected array of entries")?;
+            .ok_or("KBUpdateNode undo: expected array of entries")?;
 
         // Group by kb_name for UNWIND
         let mut groups: HashMap<String, Vec<&serde_json::Value>> = HashMap::new();
@@ -1872,13 +2589,13 @@ impl Node for UpdateKBNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
-            ).await.map_err(|e| format!("UpdateKBNode undo failed: {e}"))?;
+            ).await.map_err(|e| format!("KBUpdateNode undo failed: {e}"))?;
         }
         Ok(())
     }
 }
 
-// ─── ChunkKBNode ────────────────────────────────────────────────────────────
+// ─── KBChunkNode ────────────────────────────────────────────────────────────
 
 /// Generates chunk EntityRecords + RelationRecords (HAS_CHUNK, SOURCED)
 /// from changed KB content. Pure CPU work — no DB queries.
@@ -1886,23 +2603,23 @@ impl Node for UpdateKBNode {
 /// **Input**: `kb_content` — `BatchPayload<KBContentRecord>` (PortType::KBContent)
 /// **Output**: `entities` — chunk records, `relations` — links, `done` — Empty
 /// **Services**: `chunker_cache`
-pub struct ChunkKBNode {
+pub struct KBChunkNode {
     name: String,
 }
 
-impl ChunkKBNode {
+impl KBChunkNode {
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into() }
     }
 }
 
 #[async_trait]
-impl Node for ChunkKBNode {
+impl Node for KBChunkNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "ChunkKBNode"
+        "KBChunkNode"
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -1920,14 +2637,14 @@ impl Node for ChunkKBNode {
         let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<KBContentRecord>()
-                .ok_or("ChunkKBNode: failed to extract Vec<KBContentRecord>")?,
-            _ => return Err("ChunkKBNode: missing 'kb_content' input".to_string()),
+                .ok_or("KBChunkNode: failed to extract Vec<KBContentRecord>")?,
+            _ => return Err("KBChunkNode: missing 'kb_content' input".to_string()),
         };
 
         let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
-            .ok_or("ChunkKBNode: 'chunker_cache' service not registered")?;
+            .ok_or("KBChunkNode: 'chunker_cache' service not registered")?;
         let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
-            .ok_or("ChunkKBNode: 'kb_metadata' service not registered")?;
+            .ok_or("KBChunkNode: 'kb_metadata' service not registered")?;
 
         let mut all_entities: Vec<EntityRecord> = Vec::new();
         let mut all_relations: Vec<RelationRecord> = Vec::new();
@@ -1970,35 +2687,40 @@ impl Node for ChunkKBNode {
     }
 }
 
-// ─── FlushFTSNode ───────────────────────────────────────────────────────────
+// ─── KBFlushNode ───────────────────────────────────────────────────────────
 
-/// Flushes Lucivy FTS indexes for all KBs touched during ingestion.
+/// Flushes Lucivy FTS indexes for configured tables.
 ///
-/// Called after `UpdateKBNode` (which triggers Lucivy update hooks via SET).
-/// Runs `CALL FLUSH_LUCIVY_INDEX('{kb}_Index')` to commit + reload the reader
+/// Generic node — works with any table that has a Lucivy index.
+/// Runs `CALL FLUSH_LUCIVY_INDEX('{table}')` to commit + reload the reader
 /// so subsequent searches don't pay the lazy-flush cost.
 ///
-/// **Input**: `trigger` — Empty signal (optional, from update_kb.done)
+/// **Config**: `tables` — list of table names to flush
+/// **Input**: `trigger` — Empty signal (optional)
 /// **Output**: `done` — Empty signal
-/// **Services**: `conn` (DbConnection), `flush_kb_names` (Vec<String>)
-pub struct FlushFTSNode {
+/// **Services**: `conn` (DbConnection)
+pub struct FlushNode {
     name: String,
+    tables: Vec<String>,
     undo_data: Option<serde_json::Value>,
 }
 
-impl FlushFTSNode {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+impl FlushNode {
+    pub fn new(name: impl Into<String>, tables: Vec<String>) -> Self {
+        Self { name: name.into(), tables, undo_data: None }
     }
 }
 
 #[async_trait]
-impl Node for FlushFTSNode {
+impl Node for FlushNode {
     fn name(&self) -> &str {
         &self.name
     }
     fn node_type(&self) -> &'static str {
-        "FlushFTSNode"
+        "FlushNode"
+    }
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::json!({ "tables": self.tables })
     }
     fn inputs(&self) -> &[PortDef] {
         &[
@@ -2012,22 +2734,19 @@ impl Node for FlushFTSNode {
     }
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("FlushFTSNode: 'conn' service not registered")?;
-        let kb_names = ctx.service::<Vec<String>>("flush_kb_names")
-            .ok_or("FlushFTSNode: 'flush_kb_names' service not registered")?;
+            .ok_or("FlushNode: 'conn' service not registered")?;
 
         let mut flushed: usize = 0;
-        for kb_name in kb_names.iter() {
-            let table = format!("{kb_name}_Index");
+        for table in &self.tables {
             if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).await.is_ok() {
                 flushed += 1;
             }
         }
 
-        // Capture kb_names for undo (re-flush)
-        self.undo_data = Some(serde_json::json!(kb_names.as_ref()));
+        // Capture tables for undo (re-flush)
+        self.undo_data = Some(serde_json::json!(self.tables));
 
-        ctx.log_metric("kb_count", kb_names.len());
+        ctx.log_metric("table_count", self.tables.len());
         ctx.log_metric("flushed", flushed);
         ctx.set_output("done", PortValue::Empty);
         Ok(())
@@ -2041,19 +2760,349 @@ impl Node for FlushFTSNode {
 
     async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("FlushFTSNode undo: 'conn' service not registered")?;
+            .ok_or("FlushNode undo: 'conn' service not registered")?;
 
-        let kb_names = undo_ctx.as_array()
-            .ok_or("FlushFTSNode undo: expected array of kb_names")?;
+        let tables = undo_ctx.as_array()
+            .ok_or("FlushNode undo: expected array of table names")?;
 
-        for kb in kb_names {
-            if let Some(kb_name) = kb.as_str() {
-                let table = format!("{kb_name}_Index");
+        for t in tables {
+            if let Some(table) = t.as_str() {
                 conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')"))
                     .await
                     .ok(); // Best-effort
             }
         }
         Ok(())
+    }
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{EntityConfig, SimpleFieldDef, FieldType};
+    use crate::chunker::{Chunker, ChunkerConfig};
+
+    fn make_entity_config() -> EntityConfig {
+        let mut fields = HashMap::new();
+        fields.insert("name".into(), SimpleFieldDef {
+            field_type: FieldType::String,
+            is_title: true,
+            is_content: false,
+        });
+        fields.insert("description".into(), SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        fields.insert("details".into(), SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_title: false,
+            is_content: true,
+        });
+        fields.insert("price".into(), SimpleFieldDef {
+            field_type: FieldType::Double,
+            is_title: false,
+            is_content: false,
+        });
+        EntityConfig {
+            fields,
+            ..Default::default()
+        }
+    }
+
+    fn make_entity_configs() -> HashMap<String, EntityConfig> {
+        let mut map = HashMap::new();
+        map.insert("Product".into(), make_entity_config());
+        map
+    }
+
+    fn make_chunker_cache(config: &EntityConfig) -> HashMap<ChunkerConfig, Chunker> {
+        let key = ChunkerConfig {
+            max_size: config.chunking.max_size,
+            overlap: config.chunking.overlap,
+            strategy: config.chunking.strategy.clone(),
+        };
+        let mut cache = HashMap::new();
+        cache.insert(key.clone(), Chunker::new(key));
+        cache
+    }
+
+    fn make_product_data(name: &str, description: &str, details: &str) -> BTreeMap<String, CypherValue> {
+        let mut data = BTreeMap::new();
+        data.insert("_uuid".into(), CypherValue::String("test-uuid-123".into()));
+        data.insert("name".into(), CypherValue::String(name.into()));
+        data.insert("description".into(), CypherValue::String(description.into()));
+        data.insert("details".into(), CypherValue::String(details.into()));
+        data.insert("price".into(), CypherValue::Float(29.99));
+        data
+    }
+
+    // ── ChunkRecordNode::compute_chunks tests ──
+
+    #[test]
+    fn chunk_simple_entity_produces_chunks() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Red Shoes", "A nice pair of red shoes.", "Made in Italy.");
+        let (chunks, links) = ChunkRecordNode::compute_chunks(
+            "Product", "test-uuid-123", &entity_ref, &data, &configs, &cache,
+        );
+
+        // Should produce chunks for both content fields (description + details)
+        assert!(!chunks.is_empty(), "should produce at least one chunk");
+        assert_eq!(chunks.len(), links.len(), "each chunk should have a link");
+    }
+
+    #[test]
+    fn chunk_entity_names_correct() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "Description text.", "Details text.");
+        let (chunks, links) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        for chunk in &chunks {
+            assert_eq!(chunk.entity_name, "Product_Chunk");
+        }
+        for link in &links {
+            assert_eq!(link.rel_name, "Product_CHUNKED_FROM");
+        }
+    }
+
+    #[test]
+    fn chunk_has_title_from_parent() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Red Shoes", "A product description.", "Some details.");
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        for chunk in &chunks {
+            let title = chunk.data.get("_title").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(title, "Red Shoes");
+        }
+    }
+
+    #[test]
+    fn chunk_has_embed_hash_empty() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "Description.", "Details.");
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        for chunk in &chunks {
+            let embed_hash = chunk.data.get("_embed_hash").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(embed_hash, "", "_embed_hash should be empty initially");
+        }
+    }
+
+    #[test]
+    fn chunk_has_text_hash() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "Some description text.", "");
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        for chunk in &chunks {
+            let hash = chunk.data.get("_text_hash").and_then(|v| v.as_str()).unwrap();
+            assert!(!hash.is_empty(), "_text_hash should not be empty");
+        }
+    }
+
+    #[test]
+    fn chunk_parent_field_set_correctly() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "Description text.", "Details text.");
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        let fields: HashSet<String> = chunks.iter()
+            .filter_map(|c| c.data.get("_parent_field").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .collect();
+
+        // content_fields are sorted: ["description", "details"]
+        assert!(fields.contains("description"), "should have description chunks");
+        assert!(fields.contains("details"), "should have details chunks");
+    }
+
+    #[test]
+    fn chunk_content_offset_multi_fields() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        // content_fields sorted = ["description", "details"]
+        let desc = "A short description.";
+        let details = "Some details here.";
+        let data = make_product_data("Shoes", desc, details);
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        // description chunks should have _content_offset = 0
+        let desc_chunks: Vec<_> = chunks.iter()
+            .filter(|c| c.data.get("_parent_field").and_then(|v| v.as_str()) == Some("description"))
+            .collect();
+        for c in &desc_chunks {
+            let offset = c.data.get("_content_offset").and_then(|v| v.as_i64()).unwrap();
+            assert_eq!(offset, 0, "description chunks should have offset 0");
+        }
+
+        // details chunks should have _content_offset = len(description) + 2 ("\n\n")
+        let expected_details_offset = desc.len() as i64 + 2;
+        let details_chunks: Vec<_> = chunks.iter()
+            .filter(|c| c.data.get("_parent_field").and_then(|v| v.as_str()) == Some("details"))
+            .collect();
+        for c in &details_chunks {
+            let offset = c.data.get("_content_offset").and_then(|v| v.as_i64()).unwrap();
+            assert_eq!(offset, expected_details_offset,
+                "details chunks should have offset = {} + 2 = {}", desc.len(), expected_details_offset);
+        }
+    }
+
+    #[test]
+    fn chunk_unknown_entity_returns_empty() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Unknown");
+
+        let data = make_product_data("X", "text", "text");
+        let (chunks, links) = ChunkRecordNode::compute_chunks(
+            "Unknown", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        assert!(chunks.is_empty());
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn chunk_empty_content_returns_empty() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "", "");
+        let (chunks, links) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        assert!(chunks.is_empty(), "empty content should produce no chunks");
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn chunk_uuid_deterministic() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+
+        let data = make_product_data("Shoes", "Description.", "Details.");
+
+        let (entity_ref1, _) = EntityRef::new("Product");
+        let (chunks1, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref1, &data, &configs, &cache,
+        );
+
+        let (entity_ref2, _) = EntityRef::new("Product");
+        let (chunks2, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref2, &data, &configs, &cache,
+        );
+
+        assert_eq!(chunks1.len(), chunks2.len());
+        for (c1, c2) in chunks1.iter().zip(chunks2.iter()) {
+            let uuid1 = c1.data.get("_uuid").and_then(|v| v.as_str()).unwrap();
+            let uuid2 = c2.data.get("_uuid").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(uuid1, uuid2, "chunk UUIDs should be deterministic");
+        }
+    }
+
+    #[test]
+    fn chunk_has_all_required_fields() {
+        let configs = make_entity_configs();
+        let config = configs.get("Product").unwrap();
+        let cache = make_chunker_cache(config);
+        let (entity_ref, _resolver) = EntityRef::new("Product");
+
+        let data = make_product_data("Shoes", "A product description.", "");
+        let (chunks, _) = ChunkRecordNode::compute_chunks(
+            "Product", "uuid-1", &entity_ref, &data, &configs, &cache,
+        );
+
+        assert!(!chunks.is_empty());
+        let chunk = &chunks[0];
+        let required = [
+            "_uuid", "_parent_uuid", "_parent_field", "_text", "_title",
+            "_text_hash", "_embed_hash", "_index", "_start_char", "_end_char",
+            "_start_line", "_end_line", "_core_start_char", "_core_end_char",
+            "_core_start_line", "_core_end_line", "_content_offset",
+        ];
+        for field in &required {
+            assert!(chunk.data.contains_key(*field), "missing field: {field}");
+        }
+    }
+
+    // ── EmbedNode construction tests ──
+
+    #[test]
+    fn embed_node_default_columns() {
+        let node = EmbedNode::new("test", search::SearchSignals::HYBRID, 64);
+        assert_eq!(node.node_type(), "EmbedNode");
+        assert_eq!(node.name(), "test");
+
+        let config = node.node_config();
+        assert_eq!(config["text_field"], "_text");
+        assert_eq!(config["embedding_col"], "embedding");
+        assert_eq!(config["sparse_col"], "sparse");
+        assert_eq!(config["gpu_batch_size"], 64);
+    }
+
+    #[test]
+    fn embed_node_custom_columns() {
+        let node = EmbedNode::new("e", search::SearchSignals::VECTOR, 128)
+            .with_columns("content", "my_emb", "my_sparse");
+        let config = node.node_config();
+        assert_eq!(config["text_field"], "content");
+        assert_eq!(config["embedding_col"], "my_emb");
+        assert_eq!(config["sparse_col"], "my_sparse");
+    }
+
+    #[test]
+    fn embed_node_ports() {
+        let node = EmbedNode::new("e", search::SearchSignals::HYBRID, 64);
+        assert_eq!(node.inputs().len(), 2); // entities + trigger
+        assert_eq!(node.outputs().len(), 1); // done
+        assert_eq!(node.inputs()[0].name, "entities");
+        assert_eq!(node.outputs()[0].name, "done");
     }
 }

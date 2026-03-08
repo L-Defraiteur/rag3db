@@ -9,7 +9,7 @@
 graph LR
     %% Stage 1: Raw entities
     inserts["InsertRecordNode"]
-    embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    embeds["KBEmbedNode(gpu_batch_size=$gpu_batch_size)"]
     inserts -->|inserted:entities| embeds
 
     %% Stage 2: Raw relations (after inserts)
@@ -17,13 +17,13 @@ graph LR
     inserts -->|done:trigger| links
 
     %% Stage 3: KB pipeline (after links)
-    gather_kb["GatherKBNode"]
+    gather_kb["KBGatherNode"]
     links -->|done:trigger| gather_kb
 
-    update_kb["UpdateKBNode"]
+    update_kb["KBUpdateNode"]
     gather_kb -->|kb_content| update_kb
 
-    chunk_kb["ChunkKBNode"]
+    chunk_kb["KBChunkNode"]
     update_kb -->|kb_content| chunk_kb
 
     %% Stage 4: KB chunks → insert, link, embed
@@ -34,10 +34,10 @@ graph LR
     chunk_kb -->|relations| agg_links
     agg_inserts -->|done:trigger| agg_links
 
-    agg_embeds["EmbedRecordNode(gpu_batch_size=$gpu_batch_size)"]
+    agg_embeds["KBEmbedNode(gpu_batch_size=$gpu_batch_size)"]
     agg_inserts -->|inserted:entities| agg_embeds
     agg_links -->|done:trigger| agg_embeds
 
     %% Stage 5: Flush FTS (parallel with chunk pipeline)
-    flush_fts["FlushFTSNode"]
+    flush_fts["FlushNode(table='$flush_table')"]
     update_kb -->|done:trigger| flush_fts

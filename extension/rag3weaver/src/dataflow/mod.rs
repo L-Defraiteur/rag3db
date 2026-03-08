@@ -36,7 +36,7 @@ pub use record::{DataflowRecorder, RecordRetention, RecordSink};
 pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeStatus};
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};
 pub use search_nodes::{
-    ComposeNode, FetchRelatedNode, PrimarySearchNode, QuerySourceNode,
+    ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
 };
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
@@ -53,6 +53,6 @@ pub use checkpoint::{
 };
 pub use checkpoint_store::CypherCheckpointStore;
 pub use record_nodes::{
-    InsertRecordNode, LinkRecordNode, EmbedRecordNode,
-    ChunkRecordNode, GatherKBNode, UpdateKBNode, ChunkKBNode, FlushFTSNode,
+    InsertRecordNode, LinkRecordNode, KBEmbedNode,
+    ChunkRecordNode, EmbedNode, KBChunkRecordNode, KBGatherNode, KBUpdateNode, KBChunkNode, FlushNode,
 };
