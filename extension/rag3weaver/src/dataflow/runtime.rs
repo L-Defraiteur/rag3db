@@ -332,9 +332,15 @@ impl DataflowRuntime {
                 .filter(|name| {
                     let node = graph.nodes.iter().find(|n| n.name() == *name).unwrap();
                     node.inputs().iter().all(|input| {
-                        if !input.required {
+                        let has_incoming_edge = graph.edges.iter().any(|e| {
+                            e.to_node == **name && e.to_port == input.name
+                        });
+                        // Optional inputs with no connected edge are always satisfied
+                        if !input.required && !has_incoming_edge {
                             return true;
                         }
+                        // For required inputs, OR optional inputs with connected edges:
+                        // wait for upstream data to be available
                         let has_edge_data = graph.edges.iter().any(|e| {
                             e.to_node == **name
                                 && e.to_port == input.name
@@ -541,10 +547,15 @@ impl DataflowRuntime {
                 .filter(|name| {
                     let node = graph.nodes.iter().find(|n| n.name() == *name).unwrap();
                     node.inputs().iter().all(|input| {
-                        if !input.required {
+                        let has_incoming_edge = graph.edges.iter().any(|e| {
+                            e.to_node == **name && e.to_port == input.name
+                        });
+                        // Optional inputs with no connected edge are always satisfied
+                        if !input.required && !has_incoming_edge {
                             return true;
                         }
-                        // Check if any edge delivers to this port
+                        // For required inputs, OR optional inputs with connected edges:
+                        // wait for upstream data to be available
                         let has_edge_data = graph.edges.iter().any(|e| {
                             e.to_node == **name
                                 && e.to_port == input.name

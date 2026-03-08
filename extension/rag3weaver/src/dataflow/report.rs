@@ -65,7 +65,7 @@ pub fn summarize_port_value(value: &PortValue) -> String {
         PortValue::Children(c) => format!("Children({} parents)", c.len()),
         PortValue::Uuids(u) => format!("Uuids({})", u.len()),
         PortValue::Meta(_) => "Meta".into(),
-        PortValue::Query { kb_name, .. } => format!("Query({})", kb_name),
+        PortValue::Query { target_name, .. } => format!("Query({})", target_name),
         PortValue::Rules(r) => format!("Rules({})", r.len()),
         PortValue::Map(_) => "Map".into(),
         PortValue::Any(_) => "Any".into(),

@@ -1,0 +1,21 @@
+%% Template: Simple hybrid search pipeline (BM25 + Vector)
+%% Variables: $target, $query, $limit
+%%
+%% SearchSourceNode resolves the target and emits a Query with SearchTarget.
+%% VectorSearchNode and BM25SearchNode run in parallel.
+%% FuseResultsNode merges results via RRF (Reciprocal Rank Fusion).
+%% ResolveParentNode resolves chunks back to parent entities.
+
+graph LR
+    source["SearchSourceNode(target_name='$target', query='$query')"]
+    vector["VectorSearchNode(limit='$limit')"]
+    bm25["BM25SearchNode(limit='$limit')"]
+    fuse["FuseResultsNode"]
+    resolve["ResolveParentNode"]
+
+    source -->|query| vector
+    source -->|query| bm25
+    source -->|query:query| resolve
+    vector -->|results:vector| fuse
+    bm25 -->|results:bm25| fuse
+    fuse -->|results| resolve

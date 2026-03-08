@@ -1,0 +1,15 @@
+%% Template: Simple vector search pipeline
+%% Variables: $target, $query, $limit
+%%
+%% SearchSourceNode resolves the target and emits a Query with SearchTarget.
+%% VectorSearchNode embeds the query and searches chunk embeddings.
+%% ResolveParentNode resolves chunks back to parent entities.
+
+graph LR
+    source["SearchSourceNode(target_name='$target', query='$query')"]
+    vector["VectorSearchNode(limit='$limit')"]
+    resolve["ResolveParentNode"]
+
+    source -->|query| vector
+    source -->|query:query| resolve
+    vector -->|results| resolve

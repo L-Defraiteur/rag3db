@@ -1,0 +1,15 @@
+%% Template: Simple BM25 search pipeline
+%% Variables: $target, $query, $limit
+%%
+%% SearchSourceNode resolves the target and emits a Query with SearchTarget.
+%% BM25SearchNode runs full-text BM25 search with highlight→chunk resolution.
+%% ResolveParentNode resolves chunks back to parent entities.
+
+graph LR
+    source["SearchSourceNode(target_name='$target', query='$query')"]
+    bm25["BM25SearchNode(limit='$limit')"]
+    resolve["ResolveParentNode"]
+
+    source -->|query| bm25
+    source -->|query:query| resolve
+    bm25 -->|results| resolve

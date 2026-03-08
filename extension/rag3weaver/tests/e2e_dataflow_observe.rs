@@ -354,7 +354,7 @@ async fn observe_tap_all() {
             PortValue::Results(r) => format!("Results({})", r.len()),
             PortValue::Children(c) => format!("Children({} parents)", c.len()),
             PortValue::Meta(_) => "Meta".into(),
-            PortValue::Query { kb_name, .. } => format!("Query({})", kb_name),
+            PortValue::Query { target_name, .. } => format!("Query({})", target_name),
             _ => format!("{:?}", ev.value),
         };
         eprintln!(

@@ -73,9 +73,10 @@ impl Node for KBQuerySourceNode {
         ctx.set_output(
             "query",
             PortValue::Query {
-                kb_name: self.kb_name.clone(),
+                target_name: self.kb_name.clone(),
                 query: self.query.clone(),
                 options: self.options.clone(),
+                target: None,
             },
         );
         Ok(())
@@ -127,12 +128,13 @@ impl Node for KBSearchNode {
         ]
     }
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let (kb_name, query, options) = match ctx.take_input("query") {
+        let (target_name, query, options) = match ctx.take_input("query") {
             Some(PortValue::Query {
-                kb_name,
+                target_name,
                 query,
                 options,
-            }) => (kb_name, query, options),
+                ..
+            }) => (target_name, query, options),
             _ => return Err("KBSearchNode: missing 'query' input".into()),
         };
 
@@ -143,7 +145,7 @@ impl Node for KBSearchNode {
         let response = {
             let mut catalog = catalog.lock().await;
             catalog
-                .search(&kb_name, &query, options)
+                .search(&target_name, &query, options)
                 .await
                 .map_err(|e| e.to_string())?
         };

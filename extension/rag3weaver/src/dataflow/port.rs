@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::search::{SearchMeta, SearchOptions};
+use crate::search::{SearchMeta, SearchOptions, SearchTarget};
 use crate::search_strategy::{ChildSummary, ExpansionRule, UnifiedResult};
 
 // ─── PortType ────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ pub enum PortType {
     Uuids,
     /// `SearchMeta`
     Meta,
-    /// `(kb_name, query, SearchOptions)`
+    /// `(target_name, query, SearchOptions, Option<SearchTarget>)`
     Query,
     /// `Vec<ExpansionRule>`
     Rules,
@@ -158,10 +158,12 @@ pub enum PortValue {
     Uuids(Vec<(String, String)>),
     Meta(SearchMeta),
     Query {
-        kb_name: String,
+        target_name: String,
         query: String,
         #[serde(skip)]
         options: SearchOptions,
+        #[serde(skip)]
+        target: Option<SearchTarget>,
     },
     Rules(Vec<ExpansionRule>),
     Map(serde_json::Value),

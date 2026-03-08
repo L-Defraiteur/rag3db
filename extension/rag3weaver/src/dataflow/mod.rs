@@ -24,6 +24,7 @@ pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;
 pub mod search_nodes;
+pub mod generic_search_nodes;
 pub mod migration_nodes;
 pub mod migrations;
 pub mod services;
@@ -37,6 +38,10 @@ pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeS
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};
 pub use search_nodes::{
     ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
+};
+pub use generic_search_nodes::{
+    SearchSourceNode, VectorSearchNode, BM25SearchNode,
+    SparseSearchNode, FuseResultsNode, ResolveParentNode,
 };
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};

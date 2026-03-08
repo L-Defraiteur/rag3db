@@ -2,7 +2,7 @@
 //!
 //! - Macro-generated factories for simple/named nodes
 //! - Manual factories for nodes with config params
-//! - `register_builtins()` populates a registry with all 13 node types
+//! - `register_builtins()` populates a registry with all 22 node types
 
 use crate::named_factory;
 
@@ -12,6 +12,10 @@ use super::node_registry::{
 use super::port::{PortDef, PortType};
 use super::search_nodes::{
     ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
+};
+use super::generic_search_nodes::{
+    SearchSourceNode, VectorSearchNode, BM25SearchNode,
+    SparseSearchNode, FuseResultsNode, ResolveParentNode,
 };
 use super::record_nodes::{
     ChunkRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode, FlushNode, KBGatherNode,
@@ -503,15 +507,340 @@ impl NodeFactory for EmbedNodeFactory {
     }
 }
 
+// ─── Generic search node factories ──────────────────────────────────────────
+
+/// Factory for SearchSourceNode (config: target_name, query, options).
+pub struct SearchSourceNodeFactory;
+
+impl NodeFactory for SearchSourceNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let target_name = config
+            .get("target_name")
+            .and_then(|v| v.as_str())
+            .ok_or("SearchSourceNode: missing 'target_name' config")?;
+        let query = config
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or("SearchSourceNode: missing 'query' config")?;
+        let options: crate::search::SearchOptions = if let Some(opts) = config.get("options") {
+            serde_json::from_value(opts.clone())
+                .map_err(|e| format!("SearchSourceNode: invalid 'options': {e}"))?
+        } else {
+            crate::search::SearchOptions::default()
+        };
+        Ok(Box::new(SearchSourceNode::new(name, target_name, query, options)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "SearchSourceNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "SearchSourceNode",
+            description: "Resolves SearchTarget and emits query",
+            inputs: vec![],
+            outputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: false,
+            }],
+            config_params: vec![
+                ConfigParam {
+                    name: "target_name",
+                    param_type: ConfigParamType::String,
+                    required: true,
+                    default: None,
+                    description: "Target name (KB or entity)",
+                },
+                ConfigParam {
+                    name: "query",
+                    param_type: ConfigParamType::String,
+                    required: true,
+                    default: None,
+                    description: "Search query text",
+                },
+                ConfigParam {
+                    name: "options",
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: None,
+                    description: "SearchOptions as JSON",
+                },
+            ],
+        }
+    }
+}
+
+/// Factory for VectorSearchNode (config: limit).
+pub struct VectorSearchNodeFactory;
+
+impl NodeFactory for VectorSearchNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let limit = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10) as usize;
+        Ok(Box::new(VectorSearchNode::new(name, limit)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "VectorSearchNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "VectorSearchNode",
+            description: "Vector similarity search on chunk embeddings",
+            inputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: true,
+            }],
+            outputs: vec![PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            }],
+            config_params: vec![ConfigParam {
+                name: "limit",
+                param_type: ConfigParamType::Int,
+                required: false,
+                default: Some(serde_json::json!(10)),
+                description: "Max results to return",
+            }],
+        }
+    }
+}
+
+/// Factory for BM25SearchNode (config: limit, fuzzy_distance, result_mode).
+pub struct BM25SearchNodeFactory;
+
+impl NodeFactory for BM25SearchNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let limit = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10) as usize;
+        let fuzzy_distance = config
+            .get("fuzzy_distance")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u8;
+        let result_mode = match config
+            .get("result_mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Aggregated")
+        {
+            "Detailed" => crate::search::ResultMode::Detailed,
+            "SourceResolved" => crate::search::ResultMode::SourceResolved,
+            _ => crate::search::ResultMode::Aggregated,
+        };
+        let mut node = BM25SearchNode::new(name, limit);
+        node = node.with_fuzzy(fuzzy_distance).with_result_mode(result_mode);
+        Ok(Box::new(node))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "BM25SearchNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "BM25SearchNode",
+            description: "BM25 full-text search with highlight→chunk resolution",
+            inputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: true,
+            }],
+            outputs: vec![PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            }],
+            config_params: vec![
+                ConfigParam {
+                    name: "limit",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(serde_json::json!(10)),
+                    description: "Max results to return",
+                },
+                ConfigParam {
+                    name: "fuzzy_distance",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(serde_json::json!(0)),
+                    description: "Levenshtein distance for fuzzy matching",
+                },
+                ConfigParam {
+                    name: "result_mode",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("Aggregated")),
+                    description: "Result mode: Aggregated, Detailed, or SourceResolved",
+                },
+            ],
+        }
+    }
+}
+
+/// Factory for SparseSearchNode (config: limit).
+pub struct SparseSearchNodeFactory;
+
+impl NodeFactory for SparseSearchNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let limit = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10) as usize;
+        Ok(Box::new(SparseSearchNode::new(name, limit)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "SparseSearchNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "SparseSearchNode",
+            description: "Sparse vector search (SPLADE/BGE-M3)",
+            inputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: true,
+            }],
+            outputs: vec![PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            }],
+            config_params: vec![ConfigParam {
+                name: "limit",
+                param_type: ConfigParamType::Int,
+                required: false,
+                default: Some(serde_json::json!(10)),
+                description: "Max results to return",
+            }],
+        }
+    }
+}
+
+/// Factory for FuseResultsNode (no config).
+pub struct FuseResultsNodeFactory;
+
+impl NodeFactory for FuseResultsNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        _config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        Ok(Box::new(FuseResultsNode::new(name)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "FuseResultsNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "FuseResultsNode",
+            description: "RRF fusion of multi-signal search results",
+            inputs: vec![
+                PortDef { name: "vector", port_type: PortType::Results, required: false },
+                PortDef { name: "bm25", port_type: PortType::Results, required: false },
+                PortDef { name: "sparse", port_type: PortType::Results, required: false },
+            ],
+            outputs: vec![PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            }],
+            config_params: vec![],
+        }
+    }
+}
+
+/// Factory for ResolveParentNode (config: return_fields).
+pub struct ResolveParentNodeFactory;
+
+impl NodeFactory for ResolveParentNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let mut node = ResolveParentNode::new(name);
+        if let Some(fields) = config.get("return_fields").and_then(|v| v.as_array()) {
+            let field_strs: Vec<String> = fields
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+            node = node.with_return_fields(field_strs);
+        }
+        Ok(Box::new(node))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "ResolveParentNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "ResolveParentNode",
+            description: "Resolve chunks to parent entities with data enrichment",
+            inputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: true },
+                PortDef { name: "query", port_type: PortType::Query, required: false },
+            ],
+            outputs: vec![PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            }],
+            config_params: vec![ConfigParam {
+                name: "return_fields",
+                param_type: ConfigParamType::Json,
+                required: false,
+                default: None,
+                description: "Fields to return from parent entity (JSON array of strings)",
+            }],
+        }
+    }
+}
+
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 16 built-in node types.
+/// Populate a NodeRegistry with all 22 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
-    // Search nodes
+    // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
     registry.register(Box::new(KBSearchNodeFactory));
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
+    // Search nodes (generic)
+    registry.register(Box::new(SearchSourceNodeFactory));
+    registry.register(Box::new(VectorSearchNodeFactory));
+    registry.register(Box::new(BM25SearchNodeFactory));
+    registry.register(Box::new(SparseSearchNodeFactory));
+    registry.register(Box::new(FuseResultsNodeFactory));
+    registry.register(Box::new(ResolveParentNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
@@ -541,9 +870,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_16_types() {
+    fn register_builtins_has_all_22_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 16);
+        assert_eq!(registry.types().len(), 22);
     }
 
     #[test]
