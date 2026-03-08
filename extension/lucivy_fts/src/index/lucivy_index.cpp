@@ -160,20 +160,85 @@ void LucivyIndex::update(transaction::Transaction* transaction,
     nodeTable.initScanState(transaction, scanState, nid.tableID, nid.offset);
     nodeTable.lookup(transaction, scanState);
 
-    // 3. Replace the updated column with the new property vector value.
-    //    The propertyVector comes from the SET statement and has the new value.
-    std::vector<ValueVector*> insertPtrs;
-    for (size_t c = 0; c < indexInfo.columnIDs.size(); c++) {
-        if (c == state.updatedColumnIdx) {
-            insertPtrs.push_back(&propertyVector);
-        } else {
-            insertPtrs.push_back(scanPtrs[c]);
+    // 3. Build the document directly from scanned values (at pos 0) and the new
+    //    property value (at the caller's pos). This avoids the state mismatch that
+    //    occurs when calling insert() with vectors that have different DataChunkStates.
+    if (!hasMixedFields_) {
+        std::vector<DocFieldText> fields;
+        for (size_t c = 0; c < indexInfo.columnIDs.size(); c++) {
+            ValueVector* vec;
+            idx_t readPos;
+            if (c == state.updatedColumnIdx) {
+                vec = &propertyVector;
+                readPos = pos;
+            } else {
+                vec = scanPtrs[c];
+                readPos = 0;
+            }
+            if (vec->isNull(readPos)) {
+                continue;
+            }
+            auto text = vec->getValue<ku_string_t>(readPos).getAsString();
+            DocFieldText field;
+            field.field_id = fieldIds_[c];
+            field.value = rust::String(text);
+            fields.push_back(std::move(field));
         }
+        add_document_texts(*handle_, static_cast<uint64_t>(nodeOffset),
+            rust::Slice<const DocFieldText>(fields.data(), fields.size()));
+    } else {
+        std::vector<DocFieldText> textFields;
+        std::vector<DocFieldU64> u64Fields;
+        std::vector<DocFieldI64> i64Fields;
+        std::vector<DocFieldF64> f64Fields;
+        for (size_t c = 0; c < indexInfo.columnIDs.size(); c++) {
+            ValueVector* vec;
+            idx_t readPos;
+            if (c == state.updatedColumnIdx) {
+                vec = &propertyVector;
+                readPos = pos;
+            } else {
+                vec = scanPtrs[c];
+                readPos = 0;
+            }
+            if (vec->isNull(readPos)) {
+                continue;
+            }
+            auto& ft = fieldTypes_[c];
+            if (ft == "text") {
+                auto text = vec->getValue<ku_string_t>(readPos).getAsString();
+                DocFieldText field;
+                field.field_id = fieldIds_[c];
+                field.value = rust::String(text);
+                textFields.push_back(std::move(field));
+            } else if (ft == "u64") {
+                DocFieldU64 field;
+                field.field_id = fieldIds_[c];
+                field.value = vec->getValue<uint64_t>(readPos);
+                u64Fields.push_back(field);
+            } else if (ft == "i64") {
+                DocFieldI64 field;
+                field.field_id = fieldIds_[c];
+                if (indexInfo.keyDataTypes[c] == PhysicalTypeID::BOOL) {
+                    field.value = vec->getValue<bool>(readPos) ? 1 : 0;
+                } else {
+                    field.value = vec->getValue<int64_t>(readPos);
+                }
+                i64Fields.push_back(field);
+            } else if (ft == "f64") {
+                DocFieldF64 field;
+                field.field_id = fieldIds_[c];
+                field.value = vec->getValue<double>(readPos);
+                f64Fields.push_back(field);
+            }
+        }
+        add_document_mixed(*handle_, static_cast<uint64_t>(nodeOffset),
+            rust::Slice<const DocFieldText>(textFields.data(), textFields.size()),
+            rust::Slice<const DocFieldU64>(u64Fields.data(), u64Fields.size()),
+            rust::Slice<const DocFieldI64>(i64Fields.data(), i64Fields.size()),
+            rust::Slice<const DocFieldF64>(f64Fields.data(), f64Fields.size()));
     }
-
-    // 4. Re-insert using the existing insert() method.
-    LucivyInsertState insertState;
-    insert(transaction, nodeIDVector, insertPtrs, insertState);
+    dirty_ = true;
 }
 
 // ── insert ──────────────────────────────────────────────────────────────────

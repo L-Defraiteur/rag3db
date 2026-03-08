@@ -14,7 +14,7 @@ use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::{Embedder, MockEmbedder, SparseEmbedder};
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
-use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef};
+use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
 
 #[cfg(feature = "candle-embedder")]
 use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
@@ -855,4 +855,382 @@ async fn simple_multiple_ingestions() {
         "should find items from both batches: got {}",
         response.results.len()
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 7 — CRUD: delete, update, batch operations
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Helper: execute a Cypher count query and return the single i64 result.
+async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
+    let result = catalog.execute_raw(cypher).await.unwrap();
+    result
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+}
+
+/// Helper: get all UUIDs of Product entities.
+async fn get_product_uuids(catalog: &Catalog) -> Vec<String> {
+    let result = catalog
+        .execute_raw("MATCH (p:Product) RETURN p._uuid ORDER BY p.name")
+        .await
+        .unwrap();
+    result
+        .rows
+        .iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .collect()
+}
+
+#[tokio::test]
+#[ignore]
+async fn simple_delete_removes_chunks() {
+    let mut catalog = setup_simple_catalog(4).await;
+
+    let products = vec![
+        make_product("Alpha Widget", "Advanced alpha technology for computing", "Alpha details here", 10.0),
+        make_product("Beta Gadget", "Beta engineering and manufacturing process", "Beta details here", 20.0),
+        make_product("Gamma Tool", "Gamma precision instruments for research", "Gamma details here", 30.0),
+    ];
+    catalog.ingest_entities("Product", products).await.unwrap();
+
+    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    assert_eq!(product_count, 3);
+    let total_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    assert!(total_chunks >= 3, "should have chunks: {total_chunks}");
+    eprintln!("Before delete: {product_count} products, {total_chunks} chunks");
+
+    // Get UUID of the first product
+    let uuids = get_product_uuids(&catalog).await;
+    let delete_uuid = &uuids[0];
+    eprintln!("Deleting product: {delete_uuid}");
+
+    // Count chunks for this product before delete
+    let chunks_before = query_count(
+        &catalog,
+        &format!("MATCH (c:Product_Chunk {{_parent_uuid: '{delete_uuid}'}}) RETURN count(c)"),
+    )
+    .await;
+    assert!(chunks_before >= 1, "product should have chunks: {chunks_before}");
+
+    // Delete via catalog API
+    let del_result = catalog.delete("Product", delete_uuid).await.unwrap();
+    eprintln!("delete result: chunks_deleted={}", del_result.chunks_deleted);
+    assert!(del_result.chunks_deleted >= 1, "should report deleted chunks");
+
+    // Verify entity gone
+    let product_count_after = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    assert_eq!(product_count_after, 2);
+
+    // Verify chunks gone for deleted product
+    let chunks_after = query_count(
+        &catalog,
+        &format!("MATCH (c:Product_Chunk {{_parent_uuid: '{delete_uuid}'}}) RETURN count(c)"),
+    )
+    .await;
+    assert_eq!(chunks_after, 0, "deleted product's chunks should be gone");
+
+    // Remaining products still have chunks
+    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    assert!(remaining_chunks > 0, "other products should still have chunks");
+    eprintln!("After delete: {product_count_after} products, {remaining_chunks} chunks");
+
+    // BM25: deleted product not findable
+    let response = catalog
+        .search("Product", "alpha technology", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 0, "deleted product should not be searchable");
+
+    // BM25: remaining products still findable
+    let response2 = catalog
+        .search("Product", "beta engineering", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!response2.results.is_empty(), "remaining product should still be searchable");
+}
+
+#[tokio::test]
+#[ignore]
+async fn simple_update_refreshes_chunks() {
+    let mut catalog = setup_simple_catalog(4).await;
+
+    let products = vec![make_product(
+        "Rust Book",
+        "A comprehensive guide to Rust programming language",
+        "Covers ownership, lifetimes, and concurrency patterns",
+        49.99,
+    )];
+    catalog.ingest_entities("Product", products).await.unwrap();
+
+    let uuids = get_product_uuids(&catalog).await;
+    let uuid = &uuids[0];
+
+    // Verify initial search
+    let response = catalog
+        .search("Product", "programming", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!response.results.is_empty(), "should find 'programming' before update");
+
+    // Update to completely different content
+    let new_data = make_product(
+        "Python Cookbook",
+        "Recipes for mastering Python data science and web development",
+        "Includes pandas, numpy, flask and asyncio examples",
+        39.99,
+    );
+    let result = catalog.update("Product", uuid, new_data).await.unwrap();
+    eprintln!(
+        "update: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
+        result.status, result.reembedded, result.chunks_deleted, result.chunks_created
+    );
+    assert!(matches!(result.status, UpdateStatus::Updated));
+    assert!(result.reembedded, "should have re-embedded");
+
+    // Old content should not be findable
+    let response_old = catalog
+        .search("Product", "programming", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        response_old.results.len(),
+        0,
+        "old content 'programming' should not be findable after update"
+    );
+
+    // New content should be findable
+    let response_new = catalog
+        .search("Product", "data science", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(
+        !response_new.results.is_empty(),
+        "new content 'data science' should be findable after update"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn simple_update_unchanged_no_rechunk() {
+    let mut catalog = setup_simple_catalog(4).await;
+
+    let products = vec![make_product(
+        "Widget",
+        "A useful widget for everyday tasks",
+        "Details about the widget",
+        10.0,
+    )];
+    catalog.ingest_entities("Product", products).await.unwrap();
+
+    let uuids = get_product_uuids(&catalog).await;
+    let uuid = &uuids[0];
+    let chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+
+    // Update only price (non-content field) — content fields unchanged
+    let same_content_data = make_product(
+        "Widget",
+        "A useful widget for everyday tasks",
+        "Details about the widget",
+        99.99, // only price changed
+    );
+    let result = catalog.update("Product", uuid, same_content_data).await.unwrap();
+    eprintln!(
+        "update unchanged: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
+        result.status, result.reembedded, result.chunks_deleted, result.chunks_created
+    );
+    assert!(
+        matches!(result.status, UpdateStatus::Unchanged),
+        "should be Unchanged when only non-content field changes"
+    );
+    assert!(!result.reembedded, "should not re-embed");
+    assert_eq!(result.chunks_deleted, 0);
+    assert_eq!(result.chunks_created, 0);
+
+    // Chunk count unchanged
+    let chunks_after = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    assert_eq!(chunks_before, chunks_after, "chunk count should be unchanged");
+}
+
+#[tokio::test]
+#[ignore]
+async fn simple_batch_delete_multiple() {
+    let mut catalog = setup_simple_catalog(4).await;
+
+    let products = vec![
+        make_product("Alpha", "Alpha description content here", "Alpha details", 10.0),
+        make_product("Beta", "Beta description content here", "Beta details", 20.0),
+        make_product("Gamma", "Gamma description content here", "Gamma details", 30.0),
+    ];
+    catalog.ingest_entities("Product", products).await.unwrap();
+
+    let uuids = get_product_uuids(&catalog).await;
+    assert_eq!(uuids.len(), 3);
+    let total_chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    eprintln!("Before batch_delete: 3 products, {total_chunks_before} chunks");
+
+    // Delete first and third
+    let to_delete = vec![uuids[0].clone(), uuids[2].clone()];
+    let results = catalog.batch_delete("Product", to_delete).await.unwrap();
+    assert_eq!(results.len(), 2);
+    for r in &results {
+        eprintln!("  deleted {}: chunks_deleted={}", &r.uuid[..8], r.chunks_deleted);
+        assert!(r.chunks_deleted >= 1, "each deleted product should have had chunks");
+    }
+
+    // Only Beta remains
+    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    assert_eq!(product_count, 1);
+
+    let remaining_uuids = get_product_uuids(&catalog).await;
+    assert_eq!(remaining_uuids.len(), 1);
+    assert_eq!(remaining_uuids[0], uuids[1], "Beta should remain");
+
+    // Chunks only for Beta
+    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let beta_chunks = query_count(
+        &catalog,
+        &format!(
+            "MATCH (c:Product_Chunk {{_parent_uuid: '{}'}}) RETURN count(c)",
+            uuids[1]
+        ),
+    )
+    .await;
+    assert_eq!(remaining_chunks, beta_chunks, "all remaining chunks should belong to Beta");
+
+    // BM25: Beta still searchable
+    let response = catalog
+        .search("Product", "beta description", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!response.results.is_empty(), "Beta should still be searchable");
+
+    // BM25: Alpha not searchable
+    let response2 = catalog
+        .search("Product", "alpha description", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(response2.results.len(), 0, "Alpha should not be searchable after batch delete");
+}
+
+#[tokio::test]
+#[ignore]
+async fn simple_batch_update_multiple() {
+    let mut catalog = setup_simple_catalog(4).await;
+
+    let products = vec![
+        make_product("Alpha", "Alpha original description", "Alpha original details", 10.0),
+        make_product("Beta", "Beta original description", "Beta original details", 20.0),
+        make_product("Gamma", "Gamma original description", "Gamma original details", 30.0),
+    ];
+    catalog.ingest_entities("Product", products).await.unwrap();
+
+    let uuids = get_product_uuids(&catalog).await;
+    assert_eq!(uuids.len(), 3);
+
+    // batch_update: change Alpha + Gamma content, Beta only price
+    let updates = vec![
+        (
+            uuids[0].clone(),
+            make_product("Alpha", "Alpha NEW completely different content", "Alpha NEW details", 10.0),
+        ),
+        (
+            uuids[1].clone(),
+            make_product("Beta", "Beta original description", "Beta original details", 99.99), // only price
+        ),
+        (
+            uuids[2].clone(),
+            make_product("Gamma", "Gamma NEW entirely rewritten text", "Gamma NEW details", 30.0),
+        ),
+    ];
+    let results = catalog.batch_update("Product", updates).await.unwrap();
+    assert_eq!(results.len(), 3);
+
+    eprintln!("batch_update results:");
+    for r in &results {
+        eprintln!(
+            "  {}: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
+            &r.uuid[..8],
+            r.status,
+            r.reembedded,
+            r.chunks_deleted,
+            r.chunks_created
+        );
+    }
+
+    // Alpha: Updated + reembedded
+    assert!(matches!(results[0].status, UpdateStatus::Updated));
+    assert!(results[0].reembedded);
+
+    // Beta: Unchanged (only price changed, not content)
+    assert!(matches!(results[1].status, UpdateStatus::Unchanged));
+    assert!(!results[1].reembedded);
+
+    // Gamma: Updated + reembedded
+    assert!(matches!(results[2].status, UpdateStatus::Updated));
+    assert!(results[2].reembedded);
+
+    // BM25: old Alpha content not findable
+    let response = catalog
+        .search("Product", "Alpha original", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 0, "old Alpha content should be gone");
+
+    // BM25: new Alpha content findable
+    let response2 = catalog
+        .search("Product", "completely different", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!response2.results.is_empty(), "new Alpha content should be findable");
+
+    // BM25: Beta still findable with original content
+    let response3 = catalog
+        .search("Product", "Beta original", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!response3.results.is_empty(), "Beta original content should still be findable");
 }

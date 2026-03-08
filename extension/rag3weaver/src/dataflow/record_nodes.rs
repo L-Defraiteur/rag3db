@@ -1174,16 +1174,12 @@ impl Node for KBChunkRecordNode {
         ctx.log_metric("chunk_links", all_chunk_relations.len());
 
         ctx.set_output("done", PortValue::Empty);
-        if !all_chunk_entities.is_empty() {
-            ctx.set_output("chunks", PortValue::Batch(
-                BatchPayload::new(PortType::Entities, all_chunk_entities),
-            ));
-        }
-        if !all_chunk_relations.is_empty() {
-            ctx.set_output("chunk_links", PortValue::Batch(
-                BatchPayload::new(PortType::Relations, all_chunk_relations),
-            ));
-        }
+        ctx.set_output("chunks", PortValue::Batch(
+            BatchPayload::new(PortType::Entities, all_chunk_entities),
+        ));
+        ctx.set_output("chunk_links", PortValue::Batch(
+            BatchPayload::new(PortType::Relations, all_chunk_relations),
+        ));
         Ok(())
     }
 }
@@ -1394,16 +1390,12 @@ impl Node for ChunkRecordNode {
         ctx.log_metric("chunk_links", all_chunk_relations.len());
 
         ctx.set_output("done", PortValue::Empty);
-        if !all_chunk_entities.is_empty() {
-            ctx.set_output("chunks", PortValue::Batch(
-                BatchPayload::new(PortType::Entities, all_chunk_entities),
-            ));
-        }
-        if !all_chunk_relations.is_empty() {
-            ctx.set_output("chunk_links", PortValue::Batch(
-                BatchPayload::new(PortType::Relations, all_chunk_relations),
-            ));
-        }
+        ctx.set_output("chunks", PortValue::Batch(
+            BatchPayload::new(PortType::Entities, all_chunk_entities),
+        ));
+        ctx.set_output("chunk_links", PortValue::Batch(
+            BatchPayload::new(PortType::Relations, all_chunk_relations),
+        ));
         Ok(())
     }
 }
