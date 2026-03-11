@@ -6,7 +6,7 @@
 //! `drain()` to process them.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
 use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef};
@@ -30,8 +30,9 @@ use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
-    ChunkRecordNode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode, KBGatherNode,
-    InsertRecordNode, LinkRecordNode, KBUpdateNode,
+    ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode,
+    KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode, RechunkDeleteNode,
+    UpdateRecordNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
 use crate::dataflow::services::ServiceRegistry;
@@ -78,31 +79,8 @@ pub enum CatalogError {
     FilterError(String),
 }
 
-// ─── UpdateResult / DeleteResult ───────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UpdateStatus {
-    Updated,
-    Unchanged,
-}
-
-#[derive(Debug)]
-pub struct UpdateResult {
-    pub uuid: String,
-    pub entity: String,
-    pub status: UpdateStatus,
-    pub reembedded: bool,
-    pub chunks_created: usize,
-    pub chunks_deleted: usize,
-}
-
-#[derive(Debug)]
-pub struct DeleteResult {
-    pub uuid: String,
-    pub entity: String,
-    pub chunks_deleted: usize,
-    pub relations_deleted: usize,
-}
+// Re-export result types (defined in records.rs, used widely)
+pub use crate::records::{DeleteResult, UpdateResult, UpdateStatus};
 
 // ─── Catalog ───────────────────────────────────────────────────────────────
 
@@ -655,6 +633,7 @@ impl Catalog {
                 Ok(FlushResult {
                     processed: record_count,
                     failed: 0,
+                    ..Default::default()
                 })
             }
             Err(e) => Err(CatalogError::DbError(format!("ingest_entities failed: {e}"))),
@@ -960,7 +939,44 @@ impl Catalog {
         Ok(count as usize)
     }
 
-    // ── Update / Delete ────────────────────────────────────────────────
+    // ── Enqueue Update / Delete (sync, for drain) ─────────────────────
+
+    /// Enqueue an update for the next drain() call.
+    pub fn enqueue_update(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+        data: BTreeMap<String, CypherValue>,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.check_entity(entity_name)?;
+        let new_content = self.build_content_text(entity_name, &data);
+        let new_content_hash = content_hash(&new_content);
+        self.pending.updates.push(crate::records::UpdateRecord {
+            entity_name: entity_name.to_string(),
+            uuid: uuid.to_string(),
+            data,
+            new_content_hash,
+        });
+        Ok(())
+    }
+
+    /// Enqueue a delete for the next drain() call.
+    pub fn enqueue_delete(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.check_entity(entity_name)?;
+        self.pending.deletes.push(crate::records::DeleteRecord {
+            entity_name: entity_name.to_string(),
+            uuid: uuid.to_string(),
+        });
+        Ok(())
+    }
+
+    // ── Update / Delete (legacy async, inline execution) ────────────
 
     pub async fn update(
         &mut self,
@@ -2034,37 +2050,95 @@ impl Catalog {
     ///
     /// No KBChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
     /// No KBEmbedNode on raw entities (only KB_Index_Chunk are searched).
-    fn build_ingestion_graph(&mut self) -> (DataflowGraph, ServiceRegistry, usize) {
+    fn build_ingestion_graph(&mut self) -> (
+        DataflowGraph, ServiceRegistry, usize,
+        Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
+    ) {
         let pending = std::mem::take(&mut self.pending);
+        let empty_results = || (
+            DataflowGraph::new(), ServiceRegistry::new(), 0,
+            Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())),
+        );
         if pending.is_empty() {
-            return (DataflowGraph::new(), ServiceRegistry::new(), 0);
+            return empty_results();
         }
 
         let op_count = pending.total_count();
         let has_entities = !pending.entities.is_empty();
         let has_relations = !pending.relations.is_empty();
         let has_aggregates = !pending.aggregates.is_empty();
+        let has_deletes = !pending.deletes.is_empty();
+        let has_updates = !pending.updates.is_empty();
 
-        // Capture unique KB index table names before aggregates are consumed by the graph
-        let flush_tables: Vec<String> = if has_aggregates {
-            let mut seen = HashSet::new();
-            pending.aggregates.iter()
-                .filter_map(|a| if seen.insert(a.kb_name.clone()) { Some(format!("{}_Index", a.kb_name)) } else { None })
+        // Shared result containers — cloned Arcs returned to drain() for extraction
+        let update_results: Arc<Mutex<Vec<UpdateResult>>> = Arc::new(Mutex::new(Vec::new()));
+        let delete_results: Arc<Mutex<Vec<DeleteResult>>> = Arc::new(Mutex::new(Vec::new()));
+
+        // Seed pending_aggregates with initial aggregates; DeleteRecordNode and
+        // UpdateRecordNode will push additional ones during execution.
+        let pending_aggregates: Arc<Mutex<Vec<AggregateRecord>>> =
+            Arc::new(Mutex::new(pending.aggregates));
+
+        // KB pipeline needed if initial aggregates or delete/update might produce more
+        let needs_kb = has_aggregates
+            || (!self.kb_metadata.is_empty() && (has_deletes || has_updates));
+
+        // Capture KB index table names for FTS flush
+        let flush_tables: Vec<String> = if needs_kb {
+            self.kb_metadata.keys().map(|k| format!("{k}_Index")).collect()
+        } else {
+            vec![]
+        };
+
+        // Collect updated entity names before pending.updates is moved
+        let update_entity_tables: Vec<String> = if has_updates {
+            pending.updates.iter()
+                .map(|u| u.entity_name.clone())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
                 .collect()
         } else {
             vec![]
         };
 
+        // Warm chunker cache if needed by KB pipeline or rechunk pipeline
+        if needs_kb || has_updates {
+            self.warm_chunker_cache();
+        }
+
         let mut graph = DataflowGraph::new();
 
-        // 1. InsertRecordNode("inserts") — raw entities
+        // ─── 0. DeleteRecordNode ────────────────────────────────────
+        if has_deletes {
+            graph.add_node(Box::new(DeleteRecordNode::new("deletes"))).unwrap();
+            graph.set_initial_input("deletes", "deletes",
+                PortValue::Batch(BatchPayload::new(PortType::Deletes, pending.deletes)));
+        }
+
+        // ─── 1. UpdateRecordNode ────────────────────────────────────
+        if has_updates {
+            graph.add_node(Box::new(UpdateRecordNode::new("updates"))).unwrap();
+            graph.set_initial_input("updates", "updates",
+                PortValue::Batch(BatchPayload::new(PortType::Updates, pending.updates)));
+            if has_deletes {
+                graph.connect("deletes", "done", "updates", "trigger").unwrap();
+            }
+        }
+
+        // ─── 2. InsertRecordNode("inserts") — raw entities ─────────
         if has_entities {
             graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
             graph.set_initial_input("inserts", "entities",
                 PortValue::Batch(BatchPayload::new(PortType::Entities, pending.entities)));
+            // Ordering: deletes → updates → inserts
+            if has_updates {
+                graph.connect("updates", "done", "inserts", "trigger").unwrap();
+            } else if has_deletes {
+                graph.connect("deletes", "done", "inserts", "trigger").unwrap();
+            }
         }
 
-        // 2. LinkRecordNode("links") — raw relations, triggered after inserts
+        // ─── 3. LinkRecordNode("links") — raw relations ────────────
         if has_relations {
             graph.add_node(Box::new(LinkRecordNode::new("links"))).unwrap();
             graph.set_initial_input("links", "relations",
@@ -2074,17 +2148,45 @@ impl Catalog {
             }
         }
 
-        // 3. KB pipeline: gather → update → chunk, triggered after links
-        if has_aggregates {
-            self.warm_chunker_cache();
+        // ─── 4. Rechunk pipeline (updated simple entities) ─────────
+        if has_updates {
+            graph.add_node(Box::new(RechunkDeleteNode::new("rechunk_delete"))).unwrap();
+            graph.connect("updates", "rechunk_entities", "rechunk_delete", "entities").unwrap();
 
+            graph.add_node(Box::new(ChunkRecordNode::new("rechunk_chunk"))).unwrap();
+            graph.connect("rechunk_delete", "entities", "rechunk_chunk", "entities").unwrap();
+
+            graph.add_node(Box::new(InsertRecordNode::new("rechunk_insert"))).unwrap();
+            graph.connect("rechunk_chunk", "chunks", "rechunk_insert", "entities").unwrap();
+
+            graph.add_node(Box::new(LinkRecordNode::new("rechunk_link"))).unwrap();
+            graph.connect("rechunk_chunk", "chunk_links", "rechunk_link", "relations").unwrap();
+            graph.connect("rechunk_insert", "done", "rechunk_link", "trigger").unwrap();
+
+            // Signals resolved per-entity inside EmbedNode via entity_configs service.
+            // The fallback signal here is unused when entity_configs is registered.
+            graph.add_node(Box::new(EmbedNode::new("rechunk_embed", search::SearchSignals::BM25, 32))).unwrap();
+            graph.connect("rechunk_insert", "inserted", "rechunk_embed", "entities").unwrap();
+            graph.connect("rechunk_link", "done", "rechunk_embed", "trigger").unwrap();
+
+            // Flush FTS for updated entity tables
+            graph.add_node(Box::new(FlushNode::new("rechunk_flush", update_entity_tables))).unwrap();
+            graph.connect("rechunk_embed", "done", "rechunk_flush", "trigger").unwrap();
+        }
+
+        // ─── 5. KB pipeline: gather → update → chunk ───────────────
+        if needs_kb {
+            // KBGatherNode reads from pending_aggregates service (not port input).
+            // It must wait until all aggregate producers (delete, update) are done.
             graph.add_node(Box::new(KBGatherNode::new("gather_kb"))).unwrap();
-            graph.set_initial_input("gather_kb", "aggregates",
-                PortValue::Batch(BatchPayload::new(PortType::Aggregates, pending.aggregates)));
             if has_relations {
                 graph.connect("links", "done", "gather_kb", "trigger").unwrap();
             } else if has_entities {
                 graph.connect("inserts", "done", "gather_kb", "trigger").unwrap();
+            } else if has_updates {
+                graph.connect("updates", "done", "gather_kb", "trigger").unwrap();
+            } else if has_deletes {
+                graph.connect("deletes", "done", "gather_kb", "trigger").unwrap();
             }
 
             graph.add_node(Box::new(KBUpdateNode::new("update_kb"))).unwrap();
@@ -2093,7 +2195,6 @@ impl Catalog {
             graph.add_node(Box::new(KBChunkNode::new("chunk_kb"))).unwrap();
             graph.connect("update_kb", "kb_content", "chunk_kb", "kb_content").unwrap();
 
-            // Downstream standard: insert chunks → link chunks → embed chunks
             graph.add_node(Box::new(InsertRecordNode::new("agg_inserts"))).unwrap();
             graph.connect("chunk_kb", "entities", "agg_inserts", "entities").unwrap();
 
@@ -2105,12 +2206,11 @@ impl Catalog {
             graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
             graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
 
-            // Flush FTS indexes in parallel with chunk/insert/embed pipeline
             graph.add_node(Box::new(FlushNode::new("flush_fts", flush_tables.clone()))).unwrap();
             graph.connect("update_kb", "done", "flush_fts", "trigger").unwrap();
         }
 
-        // Build ServiceRegistry with all shared services
+        // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
         services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
@@ -2123,7 +2223,19 @@ impl Catalog {
         ));
         services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
 
-        if has_aggregates {
+        // Shared services for delete/update nodes
+        services.register::<Mutex<Vec<AggregateRecord>>>("pending_aggregates", pending_aggregates);
+        services.register::<Mutex<Vec<UpdateResult>>>("update_results", update_results.clone());
+        services.register::<Mutex<Vec<DeleteResult>>>("delete_results", delete_results.clone());
+
+        // entity_configs needed by DeleteRecordNode, UpdateRecordNode, ChunkRecordNode
+        if has_deletes || has_updates || needs_kb {
+            services.register::<HashMap<String, crate::config::EntityConfig>>(
+                "entity_configs", Arc::new(self.entity_configs.clone()));
+        }
+
+        // chunker_cache needed by KBChunkNode and ChunkRecordNode (rechunk)
+        if needs_kb || has_updates {
             services.register::<HashMap<ChunkerConfig, Chunker>>(
                 "chunker_cache",
                 Arc::new(std::mem::take(&mut self.chunker_cache)),
@@ -2139,12 +2251,13 @@ impl Catalog {
             services.register::<String>("fail_node", Arc::new(fail_node.clone()));
         }
 
-        (graph, services, op_count)
+        (graph, services, op_count, update_results, delete_results)
     }
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
     pub async fn drain(&mut self) -> FlushResult {
-        let (mut graph, services, op_count) = self.build_ingestion_graph();
+        let (mut graph, services, op_count, update_results, delete_results) =
+            self.build_ingestion_graph();
         if graph.nodes.is_empty() {
             return FlushResult::default();
         }
@@ -2172,7 +2285,19 @@ impl Catalog {
             Ok(_output) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: op_count, failed: 0 }
+                // Extract results from shared services
+                let updates = std::mem::take(
+                    &mut *update_results.lock().unwrap_or_else(|e| e.into_inner()),
+                );
+                let deletes = std::mem::take(
+                    &mut *delete_results.lock().unwrap_or_else(|e| e.into_inner()),
+                );
+                FlushResult {
+                    processed: op_count,
+                    failed: 0,
+                    update_results: updates,
+                    delete_results: deletes,
+                }
             }
             Err(e) => {
                 self.event_bus.emit(CatalogEvent::Error {
@@ -2181,7 +2306,7 @@ impl Catalog {
                 });
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count }
+                FlushResult { processed: 0, failed: op_count, ..Default::default() }
             }
         }
     }
@@ -2216,7 +2341,7 @@ impl Catalog {
             Ok(_) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: op_count, failed: 0 }
+                FlushResult { processed: op_count, failed: 0, ..Default::default() }
             }
             Err(e) => {
                 self.event_bus.emit(CatalogEvent::Error {
@@ -2225,7 +2350,7 @@ impl Catalog {
                 });
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count }
+                FlushResult { processed: 0, failed: op_count, ..Default::default() }
             }
         }
     }
@@ -2342,6 +2467,7 @@ impl Catalog {
                 Ok(FlushResult {
                     processed: node_count,
                     failed: 0,
+                    ..Default::default()
                 })
             }
             Err(e) => {
@@ -2353,6 +2479,7 @@ impl Catalog {
                 Ok(FlushResult {
                     processed: 0,
                     failed: node_count,
+                    ..Default::default()
                 })
             }
         }
@@ -2980,13 +3107,23 @@ impl Catalog {
         parts.join("|")
     }
 
-    /// Pre-warm the chunker cache for all KB chunking configs.
+    /// Pre-warm the chunker cache for all KB and simple entity chunking configs.
     fn warm_chunker_cache(&mut self) {
         for kb in self.kb_metadata.values() {
             let key = ChunkerConfig {
                 max_size: kb.chunking.max_size,
                 overlap: kb.chunking.overlap,
                 strategy: kb.chunking.strategy.clone(),
+            };
+            self.chunker_cache
+                .entry(key.clone())
+                .or_insert_with(|| Chunker::new(key));
+        }
+        for ec in self.entity_configs.values() {
+            let key = ChunkerConfig {
+                max_size: ec.chunking.max_size,
+                overlap: ec.chunking.overlap,
+                strategy: ec.chunking.strategy.clone(),
             };
             self.chunker_cache
                 .entry(key.clone())

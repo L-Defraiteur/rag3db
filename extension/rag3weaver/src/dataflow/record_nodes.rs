@@ -13,9 +13,12 @@
 //! - [`KBGatherNode`] — read DB, detect content changes, output changed KBContentRecords
 //! - [`KBUpdateNode`] — update KB_Index entries + delete stale chunks
 //! - [`KBChunkNode`] — generate chunk entities + relations from aggregated content
+//! - [`DeleteRecordNode`] — batch cascade-delete entities + chunks from Vec<DeleteRecord>
+//! - [`UpdateRecordNode`] — batch field update + change detection from Vec<UpdateRecord>
+//! - [`RechunkDeleteNode`] — delete old chunks before re-chunking (pass-through)
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
 
@@ -26,12 +29,15 @@ use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
-use crate::records::RefOrUuid;
-use crate::records::{AggregateRecord, EntityRecord, KBContentRecord, RecordSourceContent, RelationRecord};
+use crate::records::{
+    AggregateRecord, DeleteRecord, DeleteResult, EntityRecord, KBContentRecord,
+    RecordSourceContent, RefOrUuid, RelationRecord, UpdateRecord, UpdateResult, UpdateStatus,
+};
 use crate::refs::{EntityRef, RelationRef};
 use crate::search;
 use crate::sparse_index::SparseVector;
-use crate::uuid::chunk_uuid;
+use crate::schema::resolve_entity_kbs;
+use crate::uuid::{chunk_uuid, hashsafe_uuid};
 
 use super::node::{Node, NodeContext};
 use super::port::{BatchPayload, PortDef, PortType, PortValue};
@@ -1504,10 +1510,16 @@ impl Node for EmbedNode {
         let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder");
         let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder");
 
-        let want_vector = self.signals.vector();
-        let want_sparse = self.signals.sparse() && has_sparse_svc;
+        // Per-entity signals: read from entity_configs if available, fallback to self.signals.
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs");
+        let resolve_signals = |entity_name: &str| -> search::SearchSignals {
+            entity_configs.as_ref()
+                .and_then(|cfgs| cfgs.get(entity_name))
+                .map(|ec| ec.signals)
+                .unwrap_or(self.signals)
+        };
 
-        // Build work items from chunk entities
+        // Build work items from chunk entities, grouped by per-entity signals
         let mut dense_works: Vec<SimpleEmbedWork> = Vec::new();
         let mut sparse_works: Vec<SimpleEmbedWork> = Vec::new();
         let mut dual_works: Vec<SimpleEmbedWork> = Vec::new();
@@ -1527,6 +1539,12 @@ impl Node for EmbedNode {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| content_hash(&embed_text));
+
+            // Resolve signals for the parent entity (chunk entity_name is "{Parent}_Chunk")
+            let parent_entity = rec.entity_name.strip_suffix("_Chunk").unwrap_or(&rec.entity_name);
+            let signals = resolve_signals(parent_entity);
+            let want_vector = signals.vector();
+            let want_sparse = signals.sparse() && has_sparse_svc;
 
             if has_dual_svc && want_vector && want_sparse && dual_embedder.is_some() {
                 dual_works.push(SimpleEmbedWork {
@@ -2293,7 +2311,7 @@ impl Node for KBGatherNode {
     }
     fn inputs(&self) -> &[PortDef] {
         &[
-            PortDef { name: "aggregates", port_type: PortType::Aggregates, required: true },
+            PortDef { name: "aggregates", port_type: PortType::Aggregates, required: false },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
@@ -2304,12 +2322,24 @@ impl Node for KBGatherNode {
         ]
     }
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<AggregateRecord> = match ctx.take_input("aggregates") {
+        // Read from port (optional — might be connected to initial input)
+        let mut items: Vec<AggregateRecord> = match ctx.take_input("aggregates") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<AggregateRecord>()
-                .ok_or("KBGatherNode: failed to extract Vec<AggregateRecord>")?,
-            _ => return Err("KBGatherNode: missing 'aggregates' input".to_string()),
+                .unwrap_or_default(),
+            _ => vec![],
         };
+
+        // Also read from shared service (populated by DeleteRecordNode + UpdateRecordNode)
+        if let Some(pending_agg) = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates") {
+            let mut service_items = pending_agg.lock().map_err(|e| format!("lock: {e}"))?;
+            items.append(&mut *service_items);
+        }
+
+        if items.is_empty() {
+            ctx.set_output("done", PortValue::Empty);
+            return Ok(());
+        }
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBGatherNode: 'conn' service not registered")?;
@@ -2764,6 +2794,707 @@ impl Node for FlushNode {
                     .ok(); // Best-effort
             }
         }
+        Ok(())
+    }
+}
+
+// ─── RechunkDeleteNode ─────────────────────────────────────────────────────
+
+/// Delete old chunks for entities about to be re-chunked.
+///
+/// Batch-deletes `{Entity}_Chunk` nodes by `_parent_uuid`, then passes the
+/// same `Vec<EntityRecord>` through to output for downstream ChunkRecordNode.
+///
+/// **Input**: `entities` — `BatchPayload<EntityRecord>` (PortType::Entities)
+/// **Output**: `entities` — same records (pass-through)
+/// **Services**: `conn` (DbConnection)
+pub struct RechunkDeleteNode {
+    name: String,
+}
+
+impl RechunkDeleteNode {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+#[async_trait]
+impl Node for RechunkDeleteNode {
+    fn name(&self) -> &str { &self.name }
+    fn node_type(&self) -> &'static str { "RechunkDeleteNode" }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "entities", port_type: PortType::Entities, required: true },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "entities", port_type: PortType::Entities, required: false },
+        ]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let items: Vec<EntityRecord> = match ctx.take_input("entities") {
+            Some(PortValue::Batch(payload)) => payload
+                .take::<EntityRecord>()
+                .ok_or("RechunkDeleteNode: failed to extract Vec<EntityRecord>")?,
+            _ => return Err("RechunkDeleteNode: missing 'entities' input".to_string()),
+        };
+
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("RechunkDeleteNode: 'conn' service not registered")?;
+
+        // Group by entity_name
+        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+        for rec in &items {
+            let uuid = rec.data.get("_uuid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            groups.entry(rec.entity_name.clone()).or_default().push(uuid);
+        }
+
+        let mut total_deleted: usize = 0;
+        for (entity_name, uuids) in &groups {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let uuid_list = CypherValue::List(
+                uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
+            );
+            let cypher = format!(
+                "UNWIND $uuids AS uuid \
+                 MATCH (c:{chunk_table} {{_parent_uuid: uuid}}) \
+                 DETACH DELETE c RETURN uuid, count(c) AS cnt"
+            );
+            let result = conn
+                .execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "uuids".into(), value: uuid_list }],
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            for row in &result.rows {
+                if let Some(cnt) = row.get(1).and_then(|v| v.as_i64()) {
+                    total_deleted += cnt as usize;
+                }
+            }
+        }
+
+        ctx.log_metric("entities", items.len());
+        ctx.log_metric("groups", groups.len());
+        ctx.log_metric("chunks_deleted", total_deleted);
+
+        ctx.set_output("entities", PortValue::Batch(
+            BatchPayload::new(PortType::Entities, items),
+        ));
+        Ok(())
+    }
+}
+
+// ─── DeleteRecordNode ──────────────────────────────────────────────────────
+
+/// Batch cascade-delete entities + their chunks from `Vec<DeleteRecord>`.
+///
+/// For each entity group, handles KB titleFor (index chunks + entries),
+/// KB contentFor (SOURCED chunks + re-aggregation), simple entity chunks,
+/// then deletes the entities themselves and removes from node_id_cache.
+///
+/// **Input**: `deletes` — `BatchPayload<DeleteRecord>` (PortType::Deletes)
+/// **Output**: `done` — Empty signal
+/// **Services**: `conn`, `node_id_cache`, `config`, `entity_configs`, `kb_metadata`,
+///              `pending_aggregates`, `delete_results`
+pub struct DeleteRecordNode {
+    name: String,
+}
+
+impl DeleteRecordNode {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+#[async_trait]
+impl Node for DeleteRecordNode {
+    fn name(&self) -> &str { &self.name }
+    fn node_type(&self) -> &'static str { "DeleteRecordNode" }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "deletes", port_type: PortType::Deletes, required: true },
+            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "done", port_type: PortType::Empty, required: false },
+        ]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let items: Vec<DeleteRecord> = match ctx.take_input("deletes") {
+            Some(PortValue::Batch(payload)) => payload
+                .take::<DeleteRecord>()
+                .ok_or("DeleteRecordNode: failed to extract Vec<DeleteRecord>")?,
+            _ => return Err("DeleteRecordNode: missing 'deletes' input".to_string()),
+        };
+
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("DeleteRecordNode: 'conn' service not registered")?;
+        let node_id_cache = ctx.service::<RwLock<NodeIdCache>>("node_id_cache")
+            .ok_or("DeleteRecordNode: 'node_id_cache' service not registered")?;
+        let config = ctx.service::<CatalogConfig>("config")
+            .ok_or("DeleteRecordNode: 'config' service not registered")?;
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+            .ok_or("DeleteRecordNode: 'entity_configs' service not registered")?;
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+            .ok_or("DeleteRecordNode: 'kb_metadata' service not registered")?;
+        let pending_agg = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates")
+            .ok_or("DeleteRecordNode: 'pending_aggregates' service not registered")?;
+        let results_svc = ctx.service::<Mutex<Vec<DeleteResult>>>("delete_results")
+            .ok_or("DeleteRecordNode: 'delete_results' service not registered")?;
+
+        // Group by entity_name
+        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+        for rec in &items {
+            groups.entry(rec.entity_name.clone()).or_default().push(rec.uuid.clone());
+        }
+
+        ctx.log_metric("items", items.len());
+        ctx.log_metric("groups", groups.len());
+
+        let mut all_results: Vec<DeleteResult> = Vec::new();
+
+        for (entity_name, uuids) in &groups {
+            let entity_def = match config.entities.get(entity_name) {
+                Some(def) => def,
+                None => continue,
+            };
+            let entity_kbs = resolve_entity_kbs(entity_def);
+            let mut per_uuid_chunks: HashMap<String, usize> = HashMap::new();
+
+            // --- KB handling ---
+            for (kb_name, mapping) in &entity_kbs {
+                if mapping.title_field.is_some() {
+                    // titleFor: delete index chunks + index entries
+                    let index_uuids: Vec<String> = uuids.iter()
+                        .map(|u| hashsafe_uuid(
+                            &format!("{kb_name}_Index"),
+                            &[entity_name.as_str(), u.as_str()],
+                        ))
+                        .collect();
+
+                    let chunk_table = format!("{kb_name}_Index_Chunk");
+                    let idx_list = CypherValue::List(
+                        index_uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
+                    );
+
+                    // Delete index chunks
+                    let del_chunks = format!(
+                        "UNWIND $idx_uuids AS idx_uuid \
+                         MATCH (c:{chunk_table} {{_parent_uuid: idx_uuid}}) \
+                         DETACH DELETE c RETURN idx_uuid, count(c) AS cnt"
+                    );
+                    let result = conn
+                        .execute_with_params(
+                            &del_chunks,
+                            &[QueryParam { name: "idx_uuids".into(), value: idx_list.clone() }],
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+
+                    let idx_to_entity: HashMap<&str, &str> = index_uuids.iter()
+                        .zip(uuids.iter())
+                        .map(|(i, u)| (i.as_str(), u.as_str()))
+                        .collect();
+                    for row in &result.rows {
+                        if let (Some(idx_uuid), Some(cnt)) = (
+                            row.get(0).and_then(|v| v.as_str()),
+                            row.get(1).and_then(|v| v.as_i64()),
+                        ) {
+                            if let Some(&entity_uuid) = idx_to_entity.get(idx_uuid) {
+                                *per_uuid_chunks.entry(entity_uuid.to_string()).or_default() += cnt as usize;
+                            }
+                        }
+                    }
+
+                    // Delete index entries
+                    let index_table = format!("{kb_name}_Index");
+                    let del_idx = format!(
+                        "UNWIND $idx_uuids AS idx_uuid \
+                         MATCH (idx:{index_table} {{_uuid: idx_uuid}}) DETACH DELETE idx"
+                    );
+                    let _ = conn
+                        .execute_with_params(
+                            &del_idx,
+                            &[QueryParam { name: "idx_uuids".into(), value: idx_list }],
+                        )
+                        .await;
+                } else {
+                    // contentFor: delete SOURCED chunks, enqueue re-aggregation
+                    let kb_meta = match kb_metadata.get(kb_name.as_str()) {
+                        Some(m) => m,
+                        None => continue,
+                    };
+                    let title_entity = kb_meta.title.entity.clone();
+
+                    let sourced_rel = format!("{entity_name}_SOURCED_{kb_name}");
+                    let chunk_table = format!("{kb_name}_Index_Chunk");
+                    let uuid_list = CypherValue::List(
+                        uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
+                    );
+
+                    // Delete SOURCED chunks
+                    let del_sourced = format!(
+                        "UNWIND $uuids AS uuid \
+                         MATCH (e:{entity_name} {{_uuid: uuid}})-[:{sourced_rel}]->(c:{chunk_table}) \
+                         DETACH DELETE c RETURN uuid, count(c) AS cnt"
+                    );
+                    let result = conn
+                        .execute_with_params(
+                            &del_sourced,
+                            &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    for row in &result.rows {
+                        if let (Some(uuid), Some(cnt)) = (
+                            row.get(0).and_then(|v| v.as_str()),
+                            row.get(1).and_then(|v| v.as_i64()),
+                        ) {
+                            *per_uuid_chunks.entry(uuid.to_string()).or_default() += cnt as usize;
+                        }
+                    }
+
+                    // Find linked title entities → push AggregateRecords
+                    if let Some((rel_name, title_is_from)) =
+                        find_relation_to_entity(&config, &title_entity, entity_name)
+                    {
+                        let match_pattern = if title_is_from {
+                            format!(
+                                "UNWIND $uuids AS uuid \
+                                 MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: uuid}}) \
+                                 RETURN t._uuid"
+                            )
+                        } else {
+                            format!(
+                                "UNWIND $uuids AS uuid \
+                                 MATCH (e:{entity_name} {{_uuid: uuid}})-[:{rel_name}]->(t:{title_entity}) \
+                                 RETURN t._uuid"
+                            )
+                        };
+                        let title_results = conn
+                            .execute_with_params(
+                                &match_pattern,
+                                &[QueryParam { name: "uuids".into(), value: uuid_list }],
+                            )
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                        let mut new_aggregates: Vec<AggregateRecord> = Vec::new();
+                        let mut seen = HashSet::new();
+                        for row in &title_results.rows {
+                            if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
+                                let index_uuid = hashsafe_uuid(
+                                    &format!("{kb_name}_Index"),
+                                    &[&title_entity, title_uuid],
+                                );
+                                if seen.insert(index_uuid.clone()) {
+                                    new_aggregates.push(AggregateRecord {
+                                        index_entry_uuid: index_uuid,
+                                        kb_name: kb_name.clone(),
+                                        title_entity: title_entity.clone(),
+                                        source_uuid: title_uuid.to_string(),
+                                    });
+                                }
+                            }
+                        }
+                        if !new_aggregates.is_empty() {
+                            pending_agg.lock().map_err(|e| format!("pending_aggregates lock: {e}"))?
+                                .extend(new_aggregates);
+                        }
+                    }
+                }
+            }
+
+            // Simple entity: cascade-delete chunks
+            if entity_configs.contains_key(entity_name) && entity_kbs.is_empty() {
+                let chunk_table = format!("{entity_name}_Chunk");
+                let uuid_list = CypherValue::List(
+                    uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
+                );
+                let del_chunks = format!(
+                    "UNWIND $uuids AS uuid \
+                     MATCH (c:{chunk_table} {{_parent_uuid: uuid}}) \
+                     DETACH DELETE c RETURN uuid, count(c) AS cnt"
+                );
+                let result = conn
+                    .execute_with_params(
+                        &del_chunks,
+                        &[QueryParam { name: "uuids".into(), value: uuid_list }],
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                for row in &result.rows {
+                    if let (Some(uuid), Some(cnt)) = (
+                        row.get(0).and_then(|v| v.as_str()),
+                        row.get(1).and_then(|v| v.as_i64()),
+                    ) {
+                        *per_uuid_chunks.entry(uuid.to_string()).or_default() += cnt as usize;
+                    }
+                }
+            }
+
+            // Delete entities themselves
+            let uuid_list = CypherValue::List(
+                uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
+            );
+            let del_entities = format!(
+                "UNWIND $uuids AS uuid \
+                 MATCH (n:{entity_name} {{_uuid: uuid}}) DETACH DELETE n"
+            );
+            conn.execute_with_params(
+                &del_entities,
+                &[QueryParam { name: "uuids".into(), value: uuid_list }],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+            // Remove from node_id_cache
+            if let Ok(mut cache) = node_id_cache.write() {
+                for uuid in uuids {
+                    cache.remove(uuid.as_str());
+                }
+            }
+
+            // Build DeleteResults
+            for uuid in uuids {
+                let chunks_deleted = per_uuid_chunks.get(uuid).copied().unwrap_or(0);
+                all_results.push(DeleteResult {
+                    uuid: uuid.clone(),
+                    entity: entity_name.clone(),
+                    chunks_deleted,
+                    relations_deleted: 0,
+                });
+            }
+        }
+
+        // Push results to shared service
+        results_svc.lock().map_err(|e| format!("delete_results lock: {e}"))?
+            .extend(all_results);
+
+        ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+}
+
+// ─── UpdateRecordNode ──────────────────────────────────────────────────────
+
+/// Batch field update + change detection from `Vec<UpdateRecord>`.
+///
+/// Groups by (entity_name, sorted_field_keys), batch-reads old hashes,
+/// detects content changes, batch SETs all fields. For changed items:
+/// - KB entities: pushes AggregateRecords to `pending_aggregates`
+/// - Simple entities: reads full data, builds EntityRecords → `rechunk_entities`
+///
+/// **Input**: `updates` — `BatchPayload<UpdateRecord>` (PortType::Updates)
+/// **Output**: `done` — Empty signal, `rechunk_entities` — EntityRecords for simple entities
+/// **Services**: `conn`, `config`, `entity_configs`, `kb_metadata`,
+///              `pending_aggregates`, `update_results`
+pub struct UpdateRecordNode {
+    name: String,
+}
+
+impl UpdateRecordNode {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+#[async_trait]
+impl Node for UpdateRecordNode {
+    fn name(&self) -> &str { &self.name }
+    fn node_type(&self) -> &'static str { "UpdateRecordNode" }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "updates", port_type: PortType::Updates, required: true },
+            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "done", port_type: PortType::Empty, required: false },
+            PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
+        ]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let items: Vec<UpdateRecord> = match ctx.take_input("updates") {
+            Some(PortValue::Batch(payload)) => payload
+                .take::<UpdateRecord>()
+                .ok_or("UpdateRecordNode: failed to extract Vec<UpdateRecord>")?,
+            _ => return Err("UpdateRecordNode: missing 'updates' input".to_string()),
+        };
+
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("UpdateRecordNode: 'conn' service not registered")?;
+        let config = ctx.service::<CatalogConfig>("config")
+            .ok_or("UpdateRecordNode: 'config' service not registered")?;
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+            .ok_or("UpdateRecordNode: 'entity_configs' service not registered")?;
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+            .ok_or("UpdateRecordNode: 'kb_metadata' service not registered")?;
+        let pending_agg = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates")
+            .ok_or("UpdateRecordNode: 'pending_aggregates' service not registered")?;
+        let results_svc = ctx.service::<Mutex<Vec<UpdateResult>>>("update_results")
+            .ok_or("UpdateRecordNode: 'update_results' service not registered")?;
+
+        // Group by entity_name
+        let mut entity_groups: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, rec) in items.iter().enumerate() {
+            entity_groups.entry(rec.entity_name.clone()).or_default().push(i);
+        }
+
+        ctx.log_metric("items", items.len());
+        ctx.log_metric("entity_groups", entity_groups.len());
+
+        let mut all_results: Vec<UpdateResult> = Vec::new();
+        let mut all_rechunk_entities: Vec<EntityRecord> = Vec::new();
+
+        for (entity_name, entity_indices) in &entity_groups {
+            let entity_def = match config.entities.get(entity_name) {
+                Some(def) => def,
+                None => continue,
+            };
+            let entity_kbs = resolve_entity_kbs(entity_def);
+
+            // 1. Batch-read old hashes
+            let uuid_list = CypherValue::List(
+                entity_indices.iter()
+                    .map(|&i| CypherValue::String(items[i].uuid.clone()))
+                    .collect(),
+            );
+            let old_hash_query = format!(
+                "UNWIND $uuids AS uuid \
+                 MATCH (n:{entity_name} {{_uuid: uuid}}) \
+                 RETURN n._uuid, n._content_hash"
+            );
+            let old_result = conn
+                .execute_with_params(
+                    &old_hash_query,
+                    &[QueryParam { name: "uuids".into(), value: uuid_list }],
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let mut old_hashes: HashMap<String, String> = HashMap::new();
+            for row in &old_result.rows {
+                if let (Some(uuid), Some(hash)) = (
+                    row.get(0).and_then(|v| v.as_str()),
+                    row.get(1).and_then(|v| v.as_str()),
+                ) {
+                    old_hashes.insert(uuid.to_string(), hash.to_string());
+                }
+            }
+
+            // 2. Detect content changes
+            let changed: Vec<bool> = entity_indices.iter()
+                .map(|&i| {
+                    let rec = &items[i];
+                    old_hashes.get(&rec.uuid)
+                        .map_or(true, |old| old != &rec.new_content_hash)
+                })
+                .collect();
+
+            // 3. Batch SET via UNWIND — group by sorted field keys
+            let mut set_groups: HashMap<Vec<String>, Vec<usize>> = HashMap::new();
+            for &i in entity_indices {
+                let mut keys: Vec<String> = items[i].data.keys().cloned().collect();
+                keys.sort();
+                set_groups.entry(keys).or_default().push(i);
+            }
+
+            for (field_keys, indices) in &set_groups {
+                let items_param = CypherValue::List(
+                    indices.iter().map(|&i| {
+                        let rec = &items[i];
+                        let mut m = BTreeMap::new();
+                        m.insert("_uuid".to_string(), CypherValue::String(rec.uuid.clone()));
+                        m.insert("_content_hash".to_string(), CypherValue::String(rec.new_content_hash.clone()));
+                        for (k, v) in &rec.data {
+                            m.insert(k.clone(), v.clone());
+                        }
+                        CypherValue::Map(m)
+                    }).collect(),
+                );
+
+                let set_parts: Vec<String> = field_keys.iter()
+                    .map(|k| format!("n.{k} = item.{k}"))
+                    .chain(std::iter::once("n._content_hash = item._content_hash".to_string()))
+                    .collect();
+
+                let set_cypher = format!(
+                    "UNWIND $items AS item \
+                     MATCH (n:{entity_name} {{_uuid: item._uuid}}) \
+                     SET {}",
+                    set_parts.join(", ")
+                );
+                conn.execute_with_params(
+                    &set_cypher,
+                    &[QueryParam { name: "items".into(), value: items_param }],
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+
+            // 4. Handle content changes
+            let changed_uuids: Vec<&str> = entity_indices.iter()
+                .zip(changed.iter())
+                .filter_map(|(&i, &c)| if c { Some(items[i].uuid.as_str()) } else { None })
+                .collect();
+
+            if !changed_uuids.is_empty() {
+                // KB entities: enqueue AggregateRecords
+                for (kb_name, mapping) in &entity_kbs {
+                    if mapping.title_field.is_some() {
+                        // titleFor: each changed entity needs re-aggregation
+                        let mut new_aggregates: Vec<AggregateRecord> = Vec::new();
+                        for uuid in &changed_uuids {
+                            let index_uuid = hashsafe_uuid(
+                                &format!("{kb_name}_Index"),
+                                &[entity_name.as_str(), *uuid],
+                            );
+                            new_aggregates.push(AggregateRecord {
+                                index_entry_uuid: index_uuid,
+                                kb_name: kb_name.clone(),
+                                title_entity: entity_name.clone(),
+                                source_uuid: uuid.to_string(),
+                            });
+                        }
+                        pending_agg.lock().map_err(|e| format!("pending_aggregates lock: {e}"))?
+                            .extend(new_aggregates);
+                    } else {
+                        // contentFor: find linked title entities
+                        let kb_meta = match kb_metadata.get(kb_name.as_str()) {
+                            Some(m) => m,
+                            None => continue,
+                        };
+                        let title_entity = kb_meta.title.entity.clone();
+                        if let Some((rel_name, title_is_from)) =
+                            find_relation_to_entity(&config, &title_entity, entity_name)
+                        {
+                            let uuid_param = CypherValue::List(
+                                changed_uuids.iter().map(|u| CypherValue::String(u.to_string())).collect(),
+                            );
+                            let match_pattern = if title_is_from {
+                                format!(
+                                    "UNWIND $uuids AS uuid \
+                                     MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: uuid}}) \
+                                     RETURN t._uuid"
+                                )
+                            } else {
+                                format!(
+                                    "UNWIND $uuids AS uuid \
+                                     MATCH (e:{entity_name} {{_uuid: uuid}})-[:{rel_name}]->(t:{title_entity}) \
+                                     RETURN t._uuid"
+                                )
+                            };
+                            let title_results = conn
+                                .execute_with_params(
+                                    &match_pattern,
+                                    &[QueryParam { name: "uuids".into(), value: uuid_param }],
+                                )
+                                .await
+                                .map_err(|e| e.to_string())?;
+
+                            let mut new_aggregates: Vec<AggregateRecord> = Vec::new();
+                            let mut seen = HashSet::new();
+                            for row in &title_results.rows {
+                                if let Some(title_uuid) = row.first().and_then(|v| v.as_str()) {
+                                    let index_uuid = hashsafe_uuid(
+                                        &format!("{kb_name}_Index"),
+                                        &[&title_entity, title_uuid],
+                                    );
+                                    if seen.insert(index_uuid.clone()) {
+                                        new_aggregates.push(AggregateRecord {
+                                            index_entry_uuid: index_uuid,
+                                            kb_name: kb_name.clone(),
+                                            title_entity: title_entity.clone(),
+                                            source_uuid: title_uuid.to_string(),
+                                        });
+                                    }
+                                }
+                            }
+                            if !new_aggregates.is_empty() {
+                                pending_agg.lock().map_err(|e| format!("pending_aggregates lock: {e}"))?
+                                    .extend(new_aggregates);
+                            }
+                        }
+                    }
+                }
+
+                // Simple entities: read full data → build EntityRecords for rechunking
+                if entity_configs.contains_key(entity_name) && entity_kbs.is_empty() {
+                    let uuid_param = CypherValue::List(
+                        changed_uuids.iter().map(|u| CypherValue::String(u.to_string())).collect(),
+                    );
+                    let read_cypher = format!(
+                        "UNWIND $uuids AS uuid \
+                         MATCH (n:{entity_name} {{_uuid: uuid}}) \
+                         RETURN n"
+                    );
+                    let read_result = conn
+                        .execute_with_params(
+                            &read_cypher,
+                            &[QueryParam { name: "uuids".into(), value: uuid_param }],
+                        )
+                        .await
+                        .map_err(|e| e.to_string())?;
+
+                    for row in &read_result.rows {
+                        if let Some(first) = row.first() {
+                            let props = match first {
+                                CypherValue::Map(m) => m.clone(),
+                                _ => continue,
+                            };
+                            let uuid = match props.get("_uuid").and_then(|v| v.as_str()) {
+                                Some(u) => u.to_string(),
+                                None => continue,
+                            };
+                            all_rechunk_entities.push(EntityRecord {
+                                entity_name: entity_name.clone(),
+                                data: props,
+                                entity_ref: EntityRef::pre_resolved(entity_name, &uuid, &uuid),
+                                resolver: None,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 5. Build UpdateResults
+            for (idx_in_group, &i) in entity_indices.iter().enumerate() {
+                let content_changed = changed[idx_in_group];
+                let reembedded = content_changed && (
+                    !entity_kbs.is_empty() || entity_configs.contains_key(entity_name)
+                );
+                all_results.push(UpdateResult {
+                    uuid: items[i].uuid.clone(),
+                    entity: entity_name.clone(),
+                    status: if content_changed { UpdateStatus::Updated } else { UpdateStatus::Unchanged },
+                    reembedded,
+                    chunks_created: 0,
+                    chunks_deleted: 0,
+                });
+            }
+        }
+
+        // Push results to shared service
+        results_svc.lock().map_err(|e| format!("update_results lock: {e}"))?
+            .extend(all_results);
+
+        ctx.log_metric("rechunk_entities", all_rechunk_entities.len());
+
+        // Always emit rechunk_entities (even empty) so downstream rechunk pipeline
+        // receives its input and doesn't deadlock.
+        ctx.set_output("rechunk_entities", PortValue::Batch(
+            BatchPayload::new(PortType::Entities, all_rechunk_entities),
+        ));
+        ctx.set_output("done", PortValue::Empty);
         Ok(())
     }
 }

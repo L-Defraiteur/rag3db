@@ -47,6 +47,10 @@ pub enum PortType {
     Aggregates,
     /// `Vec<KBContentRecord>` — changed KB Index entries with aggregated content
     KBContent,
+    /// `Vec<UpdateRecord>` — entity updates queued for drain processing
+    Updates,
+    /// `Vec<DeleteRecord>` — entity deletions queued for drain processing
+    Deletes,
 }
 
 impl PortType {
@@ -380,5 +384,29 @@ mod tests {
         let a = PortValue::Batch(BatchPayload::new(PortType::Entities, vec![1i32]));
         let b = PortValue::Batch(BatchPayload::new(PortType::Entities, vec![2i32]));
         assert!(merge_port_values(a, b).is_err());
+    }
+
+    #[test]
+    fn updates_deletes_port_types() {
+        assert!(PortType::Updates.compatible_with(&PortType::Updates));
+        assert!(PortType::Deletes.compatible_with(&PortType::Deletes));
+        assert!(!PortType::Updates.compatible_with(&PortType::Deletes));
+        assert!(!PortType::Updates.compatible_with(&PortType::Entities));
+        // Any is compatible
+        assert!(PortType::Any.compatible_with(&PortType::Updates));
+        assert!(PortType::Deletes.compatible_with(&PortType::Any));
+    }
+
+    #[test]
+    fn batch_payload_updates_deletes() {
+        let payload = BatchPayload::new(PortType::Updates, vec!["u1".to_string(), "u2".to_string()]);
+        assert_eq!(payload.count(), 2);
+        assert_eq!(payload.batch_type, PortType::Updates);
+
+        let pv = PortValue::Batch(payload);
+        assert_eq!(pv.port_type(), PortType::Updates);
+
+        let payload2 = BatchPayload::new(PortType::Deletes, vec![42u64]);
+        assert_eq!(payload2.batch_type, PortType::Deletes);
     }
 }

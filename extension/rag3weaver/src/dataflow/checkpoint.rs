@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use super::graph::DataflowGraph;
 use super::port::{BatchPayload, PortType, PortValue};
 use crate::records::{
-    AggregateRecord, CheckpointEntityRecord, CheckpointRelationRecord, EntityRecord,
-    KBContentRecord, RelationRecord,
+    AggregateRecord, CheckpointEntityRecord, CheckpointRelationRecord, DeleteRecord,
+    EntityRecord, KBContentRecord, RelationRecord, UpdateRecord,
 };
 
 // ─── CheckpointPortValue ────────────────────────────────────────────────────
@@ -138,6 +138,18 @@ fn checkpoint_serialize_batch(payload: &BatchPayload) -> Result<String, String> 
                 .ok_or("type mismatch: expected Vec<KBContentRecord>")?;
             serde_json::to_string(records).map_err(|e| e.to_string())
         }
+        PortType::Updates => {
+            let records = boxed
+                .downcast_ref::<Vec<UpdateRecord>>()
+                .ok_or("type mismatch: expected Vec<UpdateRecord>")?;
+            serde_json::to_string(records).map_err(|e| e.to_string())
+        }
+        PortType::Deletes => {
+            let records = boxed
+                .downcast_ref::<Vec<DeleteRecord>>()
+                .ok_or("type mismatch: expected Vec<DeleteRecord>")?;
+            serde_json::to_string(records).map_err(|e| e.to_string())
+        }
         other => Err(format!(
             "unsupported batch_type for checkpoint: {other:?}"
         )),
@@ -174,6 +186,16 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
             let records: Vec<KBContentRecord> =
                 serde_json::from_str(json).map_err(|e| e.to_string())?;
             Ok(BatchPayload::new(PortType::KBContent, records))
+        }
+        PortType::Updates => {
+            let records: Vec<UpdateRecord> =
+                serde_json::from_str(json).map_err(|e| e.to_string())?;
+            Ok(BatchPayload::new(PortType::Updates, records))
+        }
+        PortType::Deletes => {
+            let records: Vec<DeleteRecord> =
+                serde_json::from_str(json).map_err(|e| e.to_string())?;
+            Ok(BatchPayload::new(PortType::Deletes, records))
         }
         other => Err(format!(
             "unsupported port_type for checkpoint deserialization: {other:?}"

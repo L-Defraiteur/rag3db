@@ -2,7 +2,7 @@
 //!
 //! - Macro-generated factories for simple/named nodes
 //! - Manual factories for nodes with config params
-//! - `register_builtins()` populates a registry with all 22 node types
+//! - `register_builtins()` populates a registry with all 25 node types
 
 use crate::named_factory;
 
@@ -18,8 +18,9 @@ use super::generic_search_nodes::{
     SparseSearchNode, FuseResultsNode, ResolveParentNode,
 };
 use super::record_nodes::{
-    ChunkRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode, FlushNode, KBGatherNode,
-    InsertRecordNode, LinkRecordNode, KBUpdateNode,
+    ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
+    FlushNode, KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode,
+    RechunkDeleteNode, UpdateRecordNode,
 };
 use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
 
@@ -149,6 +150,48 @@ named_factory!(
         PortDef { name: "entities", port_type: PortType::Entities, required: false },
         PortDef { name: "relations", port_type: PortType::Relations, required: false },
         PortDef { name: "done", port_type: PortType::Empty, required: false },
+    ],
+);
+
+named_factory!(
+    DeleteRecordNodeFactory,
+    DeleteRecordNode,
+    "DeleteRecordNode",
+    "Batch cascade-delete entities + chunks from Vec<DeleteRecord>",
+    &[
+        PortDef { name: "deletes", port_type: PortType::Deletes, required: true },
+        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+    ],
+    &[
+        PortDef { name: "done", port_type: PortType::Empty, required: false },
+    ],
+);
+
+named_factory!(
+    UpdateRecordNodeFactory,
+    UpdateRecordNode,
+    "UpdateRecordNode",
+    "Batch field update + change detection from Vec<UpdateRecord>",
+    &[
+        PortDef { name: "updates", port_type: PortType::Updates, required: true },
+        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+    ],
+    &[
+        PortDef { name: "done", port_type: PortType::Empty, required: false },
+        PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
+    ],
+);
+
+named_factory!(
+    RechunkDeleteNodeFactory,
+    RechunkDeleteNode,
+    "RechunkDeleteNode",
+    "Delete old chunks before re-chunking",
+    &[
+        PortDef { name: "entities", port_type: PortType::Entities, required: true },
+    ],
+    &[
+        PortDef { name: "entities", port_type: PortType::Entities, required: false },
     ],
 );
 
@@ -827,7 +870,7 @@ impl NodeFactory for ResolveParentNodeFactory {
 
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 22 built-in node types.
+/// Populate a NodeRegistry with all 25 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
@@ -851,6 +894,9 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(KBGatherNodeFactory));
     registry.register(Box::new(KBUpdateNodeFactory));
     registry.register(Box::new(KBChunkNodeFactory));
+    registry.register(Box::new(DeleteRecordNodeFactory));
+    registry.register(Box::new(UpdateRecordNodeFactory));
+    registry.register(Box::new(RechunkDeleteNodeFactory));
     registry.register(Box::new(FlushNodeFactory));
     // Migration nodes
     registry.register(Box::new(CypherNodeFactory));
@@ -870,9 +916,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_22_types() {
+    fn register_builtins_has_all_25_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 22);
+        assert_eq!(registry.types().len(), 25);
     }
 
     #[test]

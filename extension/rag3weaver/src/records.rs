@@ -60,13 +60,41 @@ impl From<&str> for RefOrUuid {
     }
 }
 
+// ─── UpdateResult / DeleteResult ───────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateStatus {
+    Updated,
+    Unchanged,
+}
+
+#[derive(Debug)]
+pub struct UpdateResult {
+    pub uuid: String,
+    pub entity: String,
+    pub status: UpdateStatus,
+    pub reembedded: bool,
+    pub chunks_created: usize,
+    pub chunks_deleted: usize,
+}
+
+#[derive(Debug)]
+pub struct DeleteResult {
+    pub uuid: String,
+    pub entity: String,
+    pub chunks_deleted: usize,
+    pub relations_deleted: usize,
+}
+
 // ─── FlushResult ────────────────────────────────────────────────────────────
 
 /// Result of a drain/flush cycle.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default)]
 pub struct FlushResult {
     pub processed: usize,
     pub failed: usize,
+    pub update_results: Vec<UpdateResult>,
+    pub delete_results: Vec<DeleteResult>,
 }
 
 // ─── DrainStats ─────────────────────────────────────────────────────────────
@@ -371,17 +399,51 @@ impl CheckpointRelationRecord {
     }
 }
 
+// ─── UpdateRecord ───────────────────────────────────────────────────────────
+
+/// An entity update queued for drain processing.
+///
+/// `enqueue_update()` pushes these into `PendingWork`. At drain time,
+/// `UpdateRecordNode` reads old hashes, detects content changes, applies
+/// field updates, and emits re-chunk requests for changed simple entities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRecord {
+    pub entity_name: String,
+    pub uuid: String,
+    pub data: BTreeMap<String, CypherValue>,
+    /// Pre-computed content hash (from `build_content_text()` at enqueue time).
+    pub new_content_hash: String,
+}
+
+// ─── DeleteRecord ───────────────────────────────────────────────────────────
+
+/// An entity deletion queued for drain processing.
+///
+/// `enqueue_delete()` pushes these into `PendingWork`. At drain time,
+/// `DeleteRecordNode` cascades chunk/index deletion, removes entities,
+/// and emits `AggregateRecord`s for affected KB indexes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteRecord {
+    pub entity_name: String,
+    pub uuid: String,
+}
+
 // ─── PendingWork ─────────────────────────────────────────────────────────────
 
 /// Typed pending work queue (replaces `Vec<CatalogOp>`).
 ///
-/// `create()` and `link()` push records here. `build_ingestion_graph()`
+/// `create()` and `link()` push records here. `enqueue_update()` and
+/// `enqueue_delete()` push update/delete records. `build_ingestion_graph()`
 /// drains them into the dataflow graph as typed inputs.
+///
+/// Processing order at drain: deletes → updates → inserts → links → KB aggregation.
 #[derive(Default)]
 pub struct PendingWork {
     pub entities: Vec<EntityRecord>,
     pub relations: Vec<RelationRecord>,
     pub aggregates: Vec<AggregateRecord>,
+    pub updates: Vec<UpdateRecord>,
+    pub deletes: Vec<DeleteRecord>,
 }
 
 impl PendingWork {
@@ -390,11 +452,19 @@ impl PendingWork {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.entities.is_empty() && self.relations.is_empty() && self.aggregates.is_empty()
+        self.entities.is_empty()
+            && self.relations.is_empty()
+            && self.aggregates.is_empty()
+            && self.updates.is_empty()
+            && self.deletes.is_empty()
     }
 
     pub fn total_count(&self) -> usize {
-        self.entities.len() + self.relations.len() + self.aggregates.len()
+        self.entities.len()
+            + self.relations.len()
+            + self.aggregates.len()
+            + self.updates.len()
+            + self.deletes.len()
     }
 }
 
@@ -473,5 +543,72 @@ mod tests {
 
         assert!(!pw.is_empty());
         assert_eq!(pw.total_count(), 2);
+    }
+
+    #[test]
+    fn update_record_basics() {
+        let rec = UpdateRecord {
+            entity_name: "Product".to_string(),
+            uuid: "prod-1".to_string(),
+            data: BTreeMap::from([
+                ("description".to_string(), CypherValue::String("new desc".to_string())),
+            ]),
+            new_content_hash: "abc123".to_string(),
+        };
+        assert_eq!(rec.entity_name, "Product");
+        assert_eq!(rec.uuid, "prod-1");
+        assert_eq!(rec.new_content_hash, "abc123");
+
+        // Serialization roundtrip
+        let json = serde_json::to_string(&rec).unwrap();
+        let rec2: UpdateRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(rec2.uuid, "prod-1");
+    }
+
+    #[test]
+    fn delete_record_basics() {
+        let rec = DeleteRecord {
+            entity_name: "Product".to_string(),
+            uuid: "prod-2".to_string(),
+        };
+        assert_eq!(rec.entity_name, "Product");
+        assert_eq!(rec.uuid, "prod-2");
+
+        // Serialization roundtrip
+        let json = serde_json::to_string(&rec).unwrap();
+        let rec2: DeleteRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(rec2.uuid, "prod-2");
+    }
+
+    #[test]
+    fn pending_work_with_updates_and_deletes() {
+        let mut pw = PendingWork::new();
+        assert!(pw.is_empty());
+        assert_eq!(pw.total_count(), 0);
+
+        pw.updates.push(UpdateRecord {
+            entity_name: "Product".to_string(),
+            uuid: "p1".to_string(),
+            data: BTreeMap::new(),
+            new_content_hash: "h1".to_string(),
+        });
+        assert!(!pw.is_empty());
+        assert_eq!(pw.total_count(), 1);
+
+        pw.deletes.push(DeleteRecord {
+            entity_name: "Product".to_string(),
+            uuid: "p2".to_string(),
+        });
+        assert_eq!(pw.total_count(), 2);
+
+        // Mixed with entities
+        let (entity_ref, resolver) = EntityRef::new("Product");
+        pw.entities.push(EntityRecord::new(
+            "Product".to_string(),
+            BTreeMap::new(),
+            resolver,
+            entity_ref,
+        ));
+        assert_eq!(pw.total_count(), 3);
     }
 }
