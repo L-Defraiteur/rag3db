@@ -320,9 +320,10 @@ async fn e2e_update_document() {
     );
     new_data.insert("page_count".to_string(), CypherValue::Int(99));
 
-    let update_result = catalog.update("Document", &uuid, new_data).await.unwrap();
-    assert_eq!(update_result.uuid, uuid);
-    assert_eq!(update_result.entity, "Document");
+    catalog.update("Document", &uuid, new_data).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.update_results[0].uuid, uuid);
+    assert_eq!(flush.update_results[0].entity, "Document");
 
     // Verify changes
     let data = catalog
@@ -360,9 +361,10 @@ async fn e2e_delete_document() {
     let uuid = entity_ref.uuid().unwrap();
     assert!(catalog.exists("Document", &uuid).await.unwrap());
 
-    let delete_result = catalog.delete("Document", &uuid).await.unwrap();
-    assert_eq!(delete_result.uuid, uuid);
-    assert_eq!(delete_result.entity, "Document");
+    catalog.delete("Document", &uuid).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.delete_results[0].uuid, uuid);
+    assert_eq!(flush.delete_results[0].entity, "Document");
 
     // Verify deletion
     assert!(!catalog.exists("Document", &uuid).await.unwrap());
@@ -471,8 +473,8 @@ async fn e2e_full_pipeline() {
     update.insert("page_count".to_string(), CypherValue::Int(55));
     catalog
         .update("Document", &doc1.uuid().unwrap(), update)
-        .await
         .unwrap();
+    catalog.drain().await;
 
     let d = catalog
         .get("Document", &doc1.uuid().unwrap())
@@ -487,8 +489,8 @@ async fn e2e_full_pipeline() {
     // Delete a document
     catalog
         .delete("Document", &doc2.uuid().unwrap())
-        .await
         .unwrap();
+    catalog.drain().await;
     assert_eq!(catalog.count("Document").await.unwrap(), 2);
     assert!(!catalog
         .exists("Document", &doc2.uuid().unwrap())
@@ -505,12 +507,20 @@ async fn e2e_update_not_found() {
     let mut data = BTreeMap::new();
     data.insert("title".to_string(), CypherValue::String("x".to_string()));
 
-    let err = catalog
+    // update() is now sync — it enqueues without error even for nonexistent UUIDs.
+    // The drain() will process it silently (MATCH finds 0 nodes, no-op).
+    catalog
         .update("Document", "nonexistent-uuid", data)
-        .await
-        .unwrap_err();
+        .unwrap();
+    let flush = catalog.drain().await;
+
+    // Drain succeeds (no hard error), but the entity was never in the DB.
+    assert_eq!(flush.failed, 0);
     assert!(
-        format!("{err:?}").contains("NotFound"),
-        "expected NotFound, got {err:?}"
+        !catalog
+            .exists("Document", "nonexistent-uuid")
+            .await
+            .unwrap(),
+        "nonexistent entity should not appear after a no-op update"
     );
 }

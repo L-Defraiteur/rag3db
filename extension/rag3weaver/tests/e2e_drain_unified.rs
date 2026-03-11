@@ -153,8 +153,8 @@ async fn drain_delete_simple_entity() {
     assert!(chunks_before > 0);
 
     // Enqueue delete of Alpha + Beta
-    catalog.enqueue_delete("Product", &uuids[0]).unwrap();
-    catalog.enqueue_delete("Product", &uuids[1]).unwrap();
+    catalog.delete("Product", &uuids[0]).unwrap();
+    catalog.delete("Product", &uuids[1]).unwrap();
     let result = catalog.drain().await;
     eprintln!("drain delete: processed={}, failed={}", result.processed, result.failed);
     for dr in &result.delete_results {
@@ -185,7 +185,7 @@ async fn drain_update_simple_entity() {
     assert!(chunks_before > 0);
 
     // Enqueue update with changed content
-    catalog.enqueue_update("Product", uuid,
+    catalog.update("Product", uuid,
         make_product("Alpha", "Completely new description replacing original text", 15.0),
     ).unwrap();
     let result = catalog.drain().await;
@@ -220,7 +220,7 @@ async fn drain_update_unchanged() {
     ]).await;
 
     // Enqueue update with identical content
-    catalog.enqueue_update("Product", &uuids[0],
+    catalog.update("Product", &uuids[0],
         make_product("Alpha", "Same content stays same", 10.0),
     ).unwrap();
     let result = catalog.drain().await;
@@ -245,8 +245,8 @@ async fn drain_mixed_create_update_delete() {
     assert_eq!(count_entities(&catalog, "Product").await, 3);
 
     // Phase 2: mixed operations → single drain
-    catalog.enqueue_delete("Product", &uuids[0]).unwrap();  // delete Alpha
-    catalog.enqueue_update("Product", &uuids[1],            // update Beta
+    catalog.delete("Product", &uuids[0]).unwrap();  // delete Alpha
+    catalog.update("Product", &uuids[1],            // update Beta
         make_product("Beta", "Beta completely rewritten", 25.0),
     ).unwrap();
     let r4 = catalog.create("Product", make_product("Delta", "New Delta product added", 40.0)).unwrap();
@@ -292,8 +292,8 @@ async fn drain_batch_delete() {
     assert_eq!(count_entities(&catalog, "Product").await, 3);
 
     // Delete A and C
-    catalog.enqueue_delete("Product", &uuids[0]).unwrap();
-    catalog.enqueue_delete("Product", &uuids[2]).unwrap();
+    catalog.delete("Product", &uuids[0]).unwrap();
+    catalog.delete("Product", &uuids[2]).unwrap();
     let result = catalog.drain().await;
 
     assert_eq!(result.delete_results.len(), 2);
@@ -314,11 +314,11 @@ async fn drain_batch_update() {
     ]).await;
 
     // A changed, B unchanged, C changed
-    catalog.enqueue_update("Product", &uuids[0],
+    catalog.update("Product", &uuids[0],
         make_product("A", "Updated A with new content here", 11.0)).unwrap();
-    catalog.enqueue_update("Product", &uuids[1],
+    catalog.update("Product", &uuids[1],
         make_product("B", "Original B description text", 2.0)).unwrap();
-    catalog.enqueue_update("Product", &uuids[2],
+    catalog.update("Product", &uuids[2],
         make_product("C", "Updated C with different text now", 33.0)).unwrap();
     let result = catalog.drain().await;
 

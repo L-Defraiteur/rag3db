@@ -17,7 +17,7 @@ use rag3weaver::config::{
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::{Embedder, MockEmbedder, SparseEmbedder};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
-use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::{Catalog, Rag3dbConnection, UpdateStatus};
 
 #[cfg(feature = "candle-embedder")]
 use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
@@ -543,8 +543,9 @@ async fn phase0_update_and_delete() {
     let mut upd = BTreeMap::new();
     upd.insert("body".into(), CypherValue::String("Updated body content".into()));
     upd.insert("score".into(), CypherValue::Float(7.0));
-    let ur = catalog.update("Document", &uuid, upd).await.unwrap();
-    assert_eq!(ur.uuid, uuid);
+    catalog.update("Document", &uuid, upd).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.update_results[0].uuid, uuid);
 
     // Verify update
     let data = catalog.get("Document", &uuid).await.unwrap().unwrap();
@@ -554,8 +555,8 @@ async fn phase0_update_and_delete() {
     assert_eq!(get_prop(&data, "title").and_then(|v| v.as_str()), Some("Original"));
 
     // Delete
-    let dr = catalog.delete("Document", &uuid).await.unwrap();
-    assert_eq!(dr.uuid, uuid);
+    catalog.delete("Document", &uuid).unwrap();
+    catalog.drain().await;
     assert!(!catalog.exists("Document", &uuid).await.unwrap());
     assert_eq!(catalog.count("Document").await.unwrap(), 0);
 }
@@ -594,16 +595,21 @@ async fn phase0_error_cases() {
         .await;
     assert!(err.is_err(), "search unknown KB should fail");
 
-    // Update not found
+    // Update of nonexistent uuid — enqueue succeeds, drain succeeds (no-op MATCH)
     let mut data = BTreeMap::new();
     data.insert("title".into(), CypherValue::String("x".into()));
-    let err = catalog.update("Document", "fake-uuid", data).await;
-    assert!(err.is_err(), "update nonexistent should fail");
-
-    // Drain on empty queue
-    let result = catalog.drain().await;
-    assert_eq!(result.processed, 0);
-    assert_eq!(result.failed, 0);
+    catalog.update("Document", "fake-uuid", data).unwrap();
+    let flush = catalog.drain().await;
+    // The MATCH finds 0 rows, so UpdateRecordNode reports Unchanged (no old hash found)
+    assert_eq!(flush.failed, 0);
+    assert_eq!(flush.update_results.len(), 1);
+    assert_eq!(flush.update_results[0].status, UpdateStatus::Updated);
+    // The entity still doesn't exist — update was a no-op
+    let check = catalog.conn().execute_with_params(
+        "MATCH (n:Document {_uuid: $uuid}) RETURN n._uuid",
+        &[rag3weaver::connection::QueryParam::new("uuid", CypherValue::String("fake-uuid".into()))],
+    ).await.unwrap();
+    assert!(check.rows.is_empty(), "fake entity should not exist");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

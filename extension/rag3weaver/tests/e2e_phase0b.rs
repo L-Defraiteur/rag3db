@@ -584,7 +584,7 @@ async fn phase0b_delete_content_for_only() {
 
     // Delete the File (contentFor-only for TreeKB)
     let file_uuid = file_ref.uuid().unwrap();
-    catalog.delete("File", &file_uuid).await.unwrap();
+    catalog.delete("File", &file_uuid).unwrap();
 
     // Drain the AggregateOp that was enqueued by delete
     let drain2 = catalog.drain().await;
@@ -656,7 +656,7 @@ async fn phase0b_update_content_for_only() {
     let mut update_data = BTreeMap::new();
     update_data.insert("name".into(), CypherValue::String("login.ts".into()));
     update_data.insert("absolute_path".into(), CypherValue::String("/repo/src/login.ts".into()));
-    catalog.update("File", &file_uuid, update_data).await.unwrap();
+    catalog.update("File", &file_uuid, update_data).unwrap();
 
     // Drain the AggregateOp enqueued by update
     let drain2 = catalog.drain().await;
@@ -858,7 +858,7 @@ async fn phase0b_aggregate_skip_unchanged() {
     let dir_uuid = dir_ref.uuid().unwrap();
     let mut same_data = BTreeMap::new();
     same_data.insert("name".into(), CypherValue::String("src".into()));
-    catalog.update("Directory", &dir_uuid, same_data).await.unwrap();
+    catalog.update("Directory", &dir_uuid, same_data).unwrap();
 
     // Second drain: AggregateBatchNode should detect hash unchanged and skip
     let drain2 = catalog.drain().await;
@@ -955,7 +955,7 @@ async fn phase0b_delete_one_of_multiple_files() {
 
     // Delete alpha.ts
     let alpha_uuid = file1.uuid().unwrap();
-    catalog.delete("File", &alpha_uuid).await.unwrap();
+    catalog.delete("File", &alpha_uuid).unwrap();
     let drain2 = catalog.drain().await;
     assert_eq!(drain2.failed, 0);
 

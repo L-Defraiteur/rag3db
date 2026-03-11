@@ -917,7 +917,10 @@ async fn simple_delete_removes_chunks() {
     assert!(chunks_before >= 1, "product should have chunks: {chunks_before}");
 
     // Delete via catalog API
-    let del_result = catalog.delete("Product", delete_uuid).await.unwrap();
+    catalog.delete("Product", delete_uuid).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.delete_results.len(), 1, "drain should have one delete result");
+    let del_result = &flush.delete_results[0];
     eprintln!("delete result: chunks_deleted={}", del_result.chunks_deleted);
     assert!(del_result.chunks_deleted >= 1, "should report deleted chunks");
 
@@ -995,7 +998,10 @@ async fn simple_update_refreshes_chunks() {
         "Includes pandas, numpy, flask and asyncio examples",
         39.99,
     );
-    let result = catalog.update("Product", uuid, new_data).await.unwrap();
+    catalog.update("Product", uuid, new_data).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.update_results.len(), 1, "drain should have one update result");
+    let result = &flush.update_results[0];
     eprintln!(
         "update: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
         result.status, result.reembedded, result.chunks_deleted, result.chunks_created
@@ -1057,7 +1063,10 @@ async fn simple_update_unchanged_no_rechunk() {
         "Details about the widget",
         99.99, // only price changed
     );
-    let result = catalog.update("Product", uuid, same_content_data).await.unwrap();
+    catalog.update("Product", uuid, same_content_data).unwrap();
+    let flush = catalog.drain().await;
+    assert_eq!(flush.update_results.len(), 1, "drain should have one update result");
+    let result = &flush.update_results[0];
     eprintln!(
         "update unchanged: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
         result.status, result.reembedded, result.chunks_deleted, result.chunks_created
@@ -1094,9 +1103,12 @@ async fn simple_batch_delete_multiple() {
 
     // Delete first and third
     let to_delete = vec![uuids[0].clone(), uuids[2].clone()];
-    let results = catalog.batch_delete("Product", to_delete).await.unwrap();
-    assert_eq!(results.len(), 2);
-    for r in &results {
+    for uuid in &to_delete {
+        catalog.delete("Product", uuid).unwrap();
+    }
+    let flush = catalog.drain().await;
+    assert_eq!(flush.delete_results.len(), 2);
+    for r in &flush.delete_results {
         eprintln!("  deleted {}: chunks_deleted={}", &r.uuid[..8], r.chunks_deleted);
         assert!(r.chunks_deleted >= 1, "each deleted product should have had chunks");
     }
@@ -1174,11 +1186,15 @@ async fn simple_batch_update_multiple() {
             make_product("Gamma", "Gamma NEW entirely rewritten text", "Gamma NEW details", 30.0),
         ),
     ];
-    let results = catalog.batch_update("Product", updates).await.unwrap();
+    for (uuid, data) in updates {
+        catalog.update("Product", &uuid, data).unwrap();
+    }
+    let flush = catalog.drain().await;
+    let results = &flush.update_results;
     assert_eq!(results.len(), 3);
 
     eprintln!("batch_update results:");
-    for r in &results {
+    for r in results {
         eprintln!(
             "  {}: status={:?}, reembedded={}, chunks_deleted={}, chunks_created={}",
             &r.uuid[..8],

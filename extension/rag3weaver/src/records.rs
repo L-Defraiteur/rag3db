@@ -403,7 +403,7 @@ impl CheckpointRelationRecord {
 
 /// An entity update queued for drain processing.
 ///
-/// `enqueue_update()` pushes these into `PendingWork`. At drain time,
+/// `update()` pushes these into `PendingWork`. At drain time,
 /// `UpdateRecordNode` reads old hashes, detects content changes, applies
 /// field updates, and emits re-chunk requests for changed simple entities.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -419,7 +419,7 @@ pub struct UpdateRecord {
 
 /// An entity deletion queued for drain processing.
 ///
-/// `enqueue_delete()` pushes these into `PendingWork`. At drain time,
+/// `delete()` pushes these into `PendingWork`. At drain time,
 /// `DeleteRecordNode` cascades chunk/index deletion, removes entities,
 /// and emits `AggregateRecord`s for affected KB indexes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -432,8 +432,8 @@ pub struct DeleteRecord {
 
 /// Typed pending work queue (replaces `Vec<CatalogOp>`).
 ///
-/// `create()` and `link()` push records here. `enqueue_update()` and
-/// `enqueue_delete()` push update/delete records. `build_ingestion_graph()`
+/// `create()` and `link()` push records here. `update()` and
+/// `delete()` push update/delete records. `build_ingestion_graph()`
 /// drains them into the dataflow graph as typed inputs.
 ///
 /// Processing order at drain: deletes → updates → inserts → links → KB aggregation.
