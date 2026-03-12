@@ -156,6 +156,11 @@ Quand un UNWIND produit plusieurs rows qui MATCH+SET le **même nœud** (même U
 
 Check content fields au merge : ne forcer le re-chunk que si un champ de contenu a été touché par le merge. Nécessite accès à la config entity (différente KB vs simple). Pas prioritaire — le sentinel couvre tout correctement, le surcoût est négligeable (cas rare).
 
+## Idées futures (pas prio)
+
+- **`deleteKBEntry(title_uuid, cascade_content?)`** : helper qui cascade delete title → KB_Index → chunks, et optionnellement les content entities liées. Les content entities orphelines ne posent pas de problème (pas searchables, peuvent être re-liées à un autre title).
+- **Content-field-aware merge** : ne forcer le re-chunk que si un champ de contenu a été touché par le merge (nécessite accès entity config, différent KB vs simple).
+
 ## État actuel
 
-Aucune implémentation faite. Ce doc capture l'exploration, les options envisagées, et les décisions pour implémentation.
+Implémenté et commité (`39269e380`). Ce doc capture l'exploration, les options envisagées, et les décisions.

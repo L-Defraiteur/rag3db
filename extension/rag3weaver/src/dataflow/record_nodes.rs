@@ -1405,6 +1405,9 @@ impl Node for ChunkRecordNode {
         ));
         Ok(())
     }
+
+    // Read-only: nothing to undo, but must return true so rollback doesn't fail
+    fn can_undo(&self) -> bool { true }
 }
 
 // ─── EmbedNode (simple entities) ────────────────────────────────────────────
@@ -2402,6 +2405,9 @@ impl Node for KBGatherNode {
         ));
         Ok(())
     }
+
+    // Read-only: nothing to undo, but must return true so rollback doesn't fail
+    fn can_undo(&self) -> bool { true }
 }
 
 // ─── KBUpdateNode ───────────────────────────────────────────────────────────
@@ -2708,6 +2714,9 @@ impl Node for KBChunkNode {
         ));
         Ok(())
     }
+
+    // Read-only: nothing to undo, but must return true so rollback doesn't fail
+    fn can_undo(&self) -> bool { true }
 }
 
 // ─── KBFlushNode ───────────────────────────────────────────────────────────
@@ -2888,6 +2897,10 @@ impl Node for RechunkDeleteNode {
         ));
         Ok(())
     }
+
+    // Deletes old chunks before re-chunking; undo is a no-op because
+    // re-ingestion will recreate chunks from the restored entity data.
+    fn can_undo(&self) -> bool { true }
 }
 
 // ─── DeleteRecordNode ──────────────────────────────────────────────────────
@@ -2904,11 +2917,12 @@ impl Node for RechunkDeleteNode {
 ///              `pending_aggregates`, `delete_results`
 pub struct DeleteRecordNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl DeleteRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -2961,6 +2975,7 @@ impl Node for DeleteRecordNode {
         ctx.log_metric("groups", groups.len());
 
         let mut all_results: Vec<DeleteResult> = Vec::new();
+        let mut undo_groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> = HashMap::new();
 
         for (entity_name, uuids) in &groups {
             let entity_def = match config.entities.get(entity_name) {
@@ -3142,21 +3157,30 @@ impl Node for DeleteRecordNode {
                 }
             }
 
-            // Check which UUIDs actually exist (for warnings on not-found)
+            // Read full entity data before delete (for undo + existence check)
             let uuid_list = CypherValue::List(
                 uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
             );
             let existing: HashSet<String> = {
-                let check = conn.execute_with_params(
+                let read = conn.execute_with_params(
                     &format!(
                         "UNWIND $uuids AS uuid \
-                         MATCH (n:{entity_name} {{_uuid: uuid}}) RETURN n._uuid"
+                         MATCH (n:{entity_name} {{_uuid: uuid}}) RETURN n"
                     ),
                     &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
                 ).await.map_err(|e| e.to_string())?;
-                check.rows.iter()
-                    .filter_map(|r| r[0].as_str().map(String::from))
-                    .collect()
+                let mut found = HashSet::new();
+                for row in &read.rows {
+                    if let Some(CypherValue::Map(props)) = row.first() {
+                        if let Some(uuid) = props.get("_uuid").and_then(|v| v.as_str()) {
+                            found.insert(uuid.to_string());
+                            undo_groups.entry(entity_name.clone())
+                                .or_default()
+                                .push(props.clone());
+                        }
+                    }
+                }
+                found
             };
 
             // Warn for nonexistent UUIDs
@@ -3208,7 +3232,68 @@ impl Node for DeleteRecordNode {
         results_svc.lock().map_err(|e| format!("delete_results lock: {e}"))?
             .extend(all_results);
 
+        // Capture undo data
+        if !undo_groups.is_empty() {
+            self.undo_data = Some(
+                serde_json::to_value(&undo_groups)
+                    .map_err(|e| format!("DeleteRecordNode: failed to serialize undo data: {e}"))?
+            );
+        }
+
         ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("DeleteRecordNode undo: 'conn' service not registered")?;
+
+        let groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> =
+            serde_json::from_value(undo_ctx)
+                .map_err(|e| format!("DeleteRecordNode undo: failed to deserialize: {e}"))?;
+
+        for (entity_name, items) in &groups {
+            if items.is_empty() { continue; }
+
+            // Build column list from first item's keys
+            let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
+            let other_cols: Vec<&str> = columns.iter()
+                .filter(|c| **c != "_uuid")
+                .copied()
+                .collect();
+            let set_clause = if other_cols.is_empty() {
+                String::new()
+            } else {
+                let assigns: String = other_cols.iter()
+                    .map(|c| format!("n.{c} = item.{c}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(" SET {assigns}")
+            };
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MERGE (n:{entity_name} {{_uuid: item._uuid}}){set_clause}"
+            );
+
+            let items_param = CypherValue::List(
+                items.iter().map(|m| CypherValue::Map(m.clone())).collect()
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".into(), value: items_param }],
+            ).await.map_err(|e| format!("DeleteRecordNode undo failed: {e}"))?;
+
+            ctx.info(format!(
+                "restored {} {entity_name}(s), re-ingestion needed for chunks/embeddings",
+                items.len()
+            ));
+        }
         Ok(())
     }
 }
@@ -3228,11 +3313,12 @@ impl Node for DeleteRecordNode {
 ///              `pending_aggregates`, `update_results`
 pub struct UpdateRecordNode {
     name: String,
+    undo_data: Option<serde_json::Value>,
 }
 
 impl UpdateRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self { name: name.into(), undo_data: None }
     }
 }
 
@@ -3307,6 +3393,7 @@ impl Node for UpdateRecordNode {
 
         let mut all_results: Vec<UpdateResult> = Vec::new();
         let mut all_rechunk_entities: Vec<EntityRecord> = Vec::new();
+        let mut undo_snapshots: HashMap<String, Vec<BTreeMap<String, CypherValue>>> = HashMap::new();
 
         for (entity_name, entity_indices) in &entity_groups {
             let entity_def = match config.entities.get(entity_name) {
@@ -3315,20 +3402,20 @@ impl Node for UpdateRecordNode {
             };
             let entity_kbs = resolve_entity_kbs(entity_def);
 
-            // 1. Batch-read old hashes
+            // 1. Batch-read old entity data (for hashes + undo)
             let uuid_list = CypherValue::List(
                 entity_indices.iter()
                     .map(|&i| CypherValue::String(items[i].uuid.clone()))
                     .collect(),
             );
-            let old_hash_query = format!(
+            let old_read_query = format!(
                 "UNWIND $uuids AS uuid \
                  MATCH (n:{entity_name} {{_uuid: uuid}}) \
-                 RETURN n._uuid, n._content_hash"
+                 RETURN n"
             );
             let old_result = conn
                 .execute_with_params(
-                    &old_hash_query,
+                    &old_read_query,
                     &[QueryParam { name: "uuids".into(), value: uuid_list }],
                 )
                 .await
@@ -3336,11 +3423,16 @@ impl Node for UpdateRecordNode {
 
             let mut old_hashes: HashMap<String, String> = HashMap::new();
             for row in &old_result.rows {
-                if let (Some(uuid), Some(hash)) = (
-                    row.get(0).and_then(|v| v.as_str()),
-                    row.get(1).and_then(|v| v.as_str()),
-                ) {
-                    old_hashes.insert(uuid.to_string(), hash.to_string());
+                if let Some(CypherValue::Map(props)) = row.first() {
+                    if let (Some(uuid), Some(hash)) = (
+                        props.get("_uuid").and_then(|v| v.as_str()),
+                        props.get("_content_hash").and_then(|v| v.as_str()),
+                    ) {
+                        old_hashes.insert(uuid.to_string(), hash.to_string());
+                        undo_snapshots.entry(entity_name.clone())
+                            .or_default()
+                            .push(props.clone());
+                    }
                 }
             }
 
@@ -3570,6 +3662,14 @@ impl Node for UpdateRecordNode {
         results_svc.lock().map_err(|e| format!("update_results lock: {e}"))?
             .extend(all_results);
 
+        // Capture undo data (old entity snapshots)
+        if !undo_snapshots.is_empty() {
+            self.undo_data = Some(
+                serde_json::to_value(&undo_snapshots)
+                    .map_err(|e| format!("UpdateRecordNode: failed to serialize undo data: {e}"))?
+            );
+        }
+
         ctx.log_metric("rechunk_entities", all_rechunk_entities.len());
 
         // Always emit rechunk_entities (even empty) so downstream rechunk pipeline
@@ -3578,6 +3678,56 @@ impl Node for UpdateRecordNode {
             BatchPayload::new(PortType::Entities, all_rechunk_entities),
         ));
         ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+            .ok_or("UpdateRecordNode undo: 'conn' service not registered")?;
+
+        let groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> =
+            serde_json::from_value(undo_ctx)
+                .map_err(|e| format!("UpdateRecordNode undo: failed to deserialize: {e}"))?;
+
+        for (entity_name, items) in &groups {
+            if items.is_empty() { continue; }
+
+            // Build SET clause from columns (restore all old values)
+            let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
+            let other_cols: Vec<&str> = columns.iter()
+                .filter(|c| **c != "_uuid")
+                .copied()
+                .collect();
+            if other_cols.is_empty() { continue; }
+
+            let assigns: String = other_cols.iter()
+                .map(|c| format!("n.{c} = item.{c}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let cypher = format!(
+                "UNWIND $items AS item \
+                 MATCH (n:{entity_name} {{_uuid: item._uuid}}) SET {assigns}"
+            );
+
+            let items_param = CypherValue::List(
+                items.iter().map(|m| CypherValue::Map(m.clone())).collect()
+            );
+            conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".into(), value: items_param }],
+            ).await.map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
+
+            ctx.info(format!(
+                "restored {} {entity_name}(s) to pre-update state",
+                items.len()
+            ));
+        }
         Ok(())
     }
 }
