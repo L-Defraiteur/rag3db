@@ -192,7 +192,7 @@ impl DataflowRecorder {
                     QueryParam::new("name", node.name.as_str()),
                     QueryParam::new("status", node_status.as_str()),
                     QueryParam::new("duration", node.duration_ms as i64),
-                    QueryParam::new("ports", node.output_ports.join(",")),
+                    QueryParam::new("ports", node.outputs.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(",")),
                 ],
             )
             .await
@@ -338,25 +338,42 @@ impl std::error::Error for RecordError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dataflow::port::PortType;
     use crate::dataflow::report::{
         EdgeReport, ExecutionReport, ExecutionStatus, NodeReport, NodeStatus,
     };
+    use crate::dataflow::runtime::PortSnapshot;
+
+    fn make_output_snapshots(names: &[&str]) -> Vec<PortSnapshot> {
+        names.iter().map(|n| PortSnapshot {
+            name: n.to_string(),
+            port_type: PortType::Empty,
+            count: None,
+            data_json: None,
+        }).collect()
+    }
 
     fn sample_report() -> ExecutionReport {
         ExecutionReport {
             nodes: vec![
                 NodeReport {
                     name: "primary_search".into(),
+                    node_type: "SearchNode".into(),
                     status: NodeStatus::Completed,
                     duration_ms: 42,
-                    output_ports: vec!["results".into(), "meta".into()],
+                    inputs: vec![],
+                    outputs: make_output_snapshots(&["results", "meta"]),
+                    logs: vec![],
                     metrics: std::collections::HashMap::new(),
                 },
                 NodeReport {
                     name: "compose".into(),
+                    node_type: "ComposeNode".into(),
                     status: NodeStatus::Completed,
                     duration_ms: 5,
-                    output_ports: vec!["results".into()],
+                    inputs: vec![],
+                    outputs: make_output_snapshots(&["results"]),
+                    logs: vec![],
                     metrics: std::collections::HashMap::new(),
                 },
             ],

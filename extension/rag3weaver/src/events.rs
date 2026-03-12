@@ -68,6 +68,12 @@ pub enum CatalogEvent {
         duration_ms: u64,
     },
 
+    // ── Warning ──────────────────────────────────────────────────────────
+    Warning {
+        context: String,
+        message: String,
+    },
+
     // ── Error ────────────────────────────────────────────────────────────
     Error {
         context: String,
@@ -116,6 +122,14 @@ impl EventBus {
         Self {
             sender,
             _inactive: inactive,
+        }
+    }
+
+    /// Create a lightweight clone sharing the same underlying channel.
+    pub fn shared(&self) -> Self {
+        EventBus {
+            sender: self.sender.clone(),
+            _inactive: self._inactive.clone(),
         }
     }
 

@@ -6,8 +6,9 @@
 use serde::Serialize;
 
 use super::graph::DataflowGraph;
+use super::node::NodeLogEntry;
 use super::port::PortValue;
-use super::runtime::{DataflowEvent, DataflowOutput};
+use super::runtime::{DataflowEvent, DataflowOutput, PortSnapshot};
 
 // ─── Status enums ───────────────────────────────────────────────────────────
 
@@ -29,9 +30,12 @@ pub enum NodeStatus {
 #[derive(Debug, Clone, Serialize)]
 pub struct NodeReport {
     pub name: String,
+    pub node_type: String,
     pub status: NodeStatus,
     pub duration_ms: u64,
-    pub output_ports: Vec<String>,
+    pub inputs: Vec<PortSnapshot>,
+    pub outputs: Vec<PortSnapshot>,
+    pub logs: Vec<NodeLogEntry>,
     pub metrics: std::collections::HashMap<String, serde_json::Value>,
 }
 
@@ -86,30 +90,58 @@ impl ExecutionReport {
         let mut total_duration_ms = 0u64;
         let mut status = ExecutionStatus::Completed;
 
+        // Collect per-node data from Start/Log events before building reports
+        let mut node_inputs: std::collections::HashMap<String, Vec<PortSnapshot>> =
+            std::collections::HashMap::new();
+        let mut node_types: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut node_logs: std::collections::HashMap<String, Vec<NodeLogEntry>> =
+            std::collections::HashMap::new();
+
         for event in events {
             match event {
+                DataflowEvent::NodeStarted {
+                    node, node_type, inputs,
+                } => {
+                    node_inputs.insert(node.clone(), inputs.clone());
+                    node_types.insert(node.clone(), node_type.clone());
+                }
+                DataflowEvent::NodeLog {
+                    node, level, text, ..
+                } => {
+                    node_logs.entry(node.clone()).or_default().push(NodeLogEntry {
+                        level: level.clone(),
+                        text: text.clone(),
+                    });
+                }
                 DataflowEvent::NodeCompleted {
                     node,
                     duration_ms,
-                    output_ports,
+                    outputs,
                     metrics,
                 } => {
                     nodes.push(NodeReport {
                         name: node.clone(),
+                        node_type: node_types.remove(node).unwrap_or_default(),
                         status: NodeStatus::Completed,
                         duration_ms: *duration_ms,
-                        output_ports: output_ports.clone(),
+                        inputs: node_inputs.remove(node).unwrap_or_default(),
+                        outputs: outputs.clone(),
+                        logs: node_logs.remove(node).unwrap_or_default(),
                         metrics: metrics.clone(),
                     });
                 }
                 DataflowEvent::NodeFailed { node, error } => {
                     nodes.push(NodeReport {
                         name: node.clone(),
+                        node_type: node_types.remove(node).unwrap_or_default(),
                         status: NodeStatus::Failed {
                             error: error.clone(),
                         },
                         duration_ms: 0,
-                        output_ports: vec![],
+                        inputs: node_inputs.remove(node).unwrap_or_default(),
+                        outputs: vec![],
+                        logs: node_logs.remove(node).unwrap_or_default(),
                         metrics: std::collections::HashMap::new(),
                     });
                 }
@@ -117,11 +149,23 @@ impl ExecutionReport {
                     node,
                     output_ports,
                 } => {
+                    // Resumed nodes only have port names, not full snapshots
+                    let output_snapshots: Vec<PortSnapshot> = output_ports.iter()
+                        .map(|name| PortSnapshot {
+                            name: name.clone(),
+                            port_type: super::port::PortType::Empty,
+                            count: None,
+                            data_json: None,
+                        })
+                        .collect();
                     nodes.push(NodeReport {
                         name: node.clone(),
+                        node_type: String::new(),
                         status: NodeStatus::Resumed,
                         duration_ms: 0,
-                        output_ports: output_ports.clone(),
+                        inputs: vec![],
+                        outputs: output_snapshots,
+                        logs: vec![],
                         metrics: std::collections::HashMap::new(),
                     });
                 }
@@ -133,7 +177,6 @@ impl ExecutionReport {
                         error: error.clone(),
                     };
                 }
-                _ => {}
             }
         }
 
@@ -211,14 +254,22 @@ mod tests {
 
     #[test]
     fn report_from_events_completed() {
+        use crate::dataflow::port::PortType;
         let events = vec![
             DataflowEvent::NodeStarted {
                 node: "a".into(),
+                node_type: "TestNode".into(),
+                inputs: vec![],
             },
             DataflowEvent::NodeCompleted {
                 node: "a".into(),
                 duration_ms: 42,
-                output_ports: vec!["out".into()],
+                outputs: vec![PortSnapshot {
+                    name: "out".into(),
+                    port_type: PortType::Empty,
+                    count: None,
+                    data_json: None,
+                }],
                 metrics: std::collections::HashMap::new(),
             },
             DataflowEvent::Completed {
@@ -227,14 +278,16 @@ mod tests {
             },
         ];
 
-        // Minimal graph and output for the test
         let graph = DataflowGraph::new();
         let output = DataflowOutput::empty();
 
         let report = ExecutionReport::build(&events, &graph, &output);
         assert_eq!(report.nodes.len(), 1);
         assert_eq!(report.nodes[0].name, "a");
+        assert_eq!(report.nodes[0].node_type, "TestNode");
         assert_eq!(report.nodes[0].duration_ms, 42);
+        assert_eq!(report.nodes[0].outputs.len(), 1);
+        assert_eq!(report.nodes[0].outputs[0].name, "out");
         assert_eq!(report.total_duration_ms, 50);
         assert!(matches!(report.status, ExecutionStatus::Completed));
     }
@@ -242,6 +295,11 @@ mod tests {
     #[test]
     fn report_from_events_failed() {
         let events = vec![
+            DataflowEvent::NodeStarted {
+                node: "bad".into(),
+                node_type: "BadNode".into(),
+                inputs: vec![],
+            },
             DataflowEvent::NodeFailed {
                 node: "bad".into(),
                 error: "boom".into(),
@@ -268,6 +326,7 @@ mod tests {
 
     #[test]
     fn report_includes_resumed_nodes() {
+        use crate::dataflow::port::PortType;
         let events = vec![
             DataflowEvent::CheckpointResumed {
                 node: "inserts".into(),
@@ -275,11 +334,18 @@ mod tests {
             },
             DataflowEvent::NodeStarted {
                 node: "links".into(),
+                node_type: "LinkRecordNode".into(),
+                inputs: vec![],
             },
             DataflowEvent::NodeCompleted {
                 node: "links".into(),
                 duration_ms: 15,
-                output_ports: vec!["done".into()],
+                outputs: vec![PortSnapshot {
+                    name: "done".into(),
+                    port_type: PortType::Empty,
+                    count: None,
+                    data_json: None,
+                }],
                 metrics: std::collections::HashMap::new(),
             },
             DataflowEvent::Completed {
@@ -296,19 +362,28 @@ mod tests {
         assert_eq!(report.nodes[0].name, "inserts");
         assert!(matches!(report.nodes[0].status, NodeStatus::Resumed));
         assert_eq!(report.nodes[0].duration_ms, 0);
-        assert_eq!(report.nodes[0].output_ports, vec!["done", "inserted"]);
+        assert_eq!(report.nodes[0].outputs.len(), 2);
         assert_eq!(report.nodes[1].name, "links");
         assert!(matches!(report.nodes[1].status, NodeStatus::Completed));
     }
 
     #[test]
     fn report_serializes() {
+        use crate::dataflow::port::PortType;
         let report = ExecutionReport {
             nodes: vec![NodeReport {
                 name: "test".into(),
+                node_type: "TestNode".into(),
                 status: NodeStatus::Completed,
                 duration_ms: 10,
-                output_ports: vec!["out".into()],
+                inputs: vec![],
+                outputs: vec![PortSnapshot {
+                    name: "out".into(),
+                    port_type: PortType::Empty,
+                    count: None,
+                    data_json: None,
+                }],
+                logs: vec![],
                 metrics: std::collections::HashMap::new(),
             }],
             edges: vec![],

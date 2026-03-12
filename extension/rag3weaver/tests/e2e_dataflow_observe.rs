@@ -577,7 +577,7 @@ async fn observe_report_json_structure() {
     for node in json["nodes"].as_array().unwrap() {
         assert!(node["name"].is_string(), "node missing name: {node}");
         assert!(node["duration_ms"].is_number(), "node missing duration_ms: {node}");
-        assert!(node["output_ports"].is_array(), "node missing output_ports: {node}");
+        assert!(node["outputs"].is_array(), "node missing outputs: {node}");
     }
 
     // Each edge has required fields

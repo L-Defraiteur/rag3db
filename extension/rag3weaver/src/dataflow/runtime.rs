@@ -16,11 +16,45 @@ use super::checkpoint::{
     port_value_to_checkpoint, port_value_from_checkpoint, timestamp_ms,
 };
 use super::graph::DataflowGraph;
-use super::node::NodeContext;
+use super::node::{NodeContext, NodeLogLevel};
 use super::observe::{TapRegistry, TapSpec, TapEvent};
-use super::port::{merge_port_values, PortValue};
+use super::port::{merge_port_values, PortType, PortValue};
 use super::report::ExecutionReport;
 use super::services::ServiceRegistry;
+
+// ─── PortSnapshot ────────────────────────────────────────────────────────────
+
+/// Snapshot of a port's data at a point in time.
+///
+/// Captures the port type, item count, and optional JSON serialization
+/// (reusing the checkpoint serialization infrastructure).
+#[derive(Debug, Clone, Serialize)]
+pub struct PortSnapshot {
+    pub name: String,
+    pub port_type: PortType,
+    pub count: Option<usize>,
+    pub data_json: Option<String>,
+}
+
+impl PortSnapshot {
+    /// Build a snapshot from a port name and value, using checkpoint serialization.
+    pub(crate) fn from_port(name: &str, value: &PortValue) -> Self {
+        match port_value_to_checkpoint(value) {
+            Ok(cpv) => PortSnapshot {
+                name: name.to_string(),
+                port_type: cpv.port_type,
+                count: cpv.record_count,
+                data_json: cpv.data_json,
+            },
+            Err(_) => PortSnapshot {
+                name: name.to_string(),
+                port_type: value.port_type(),
+                count: None,
+                data_json: None,
+            },
+        }
+    }
+}
 
 // ─── DataflowEvent ───────────────────────────────────────────────────────────
 
@@ -28,13 +62,24 @@ use super::services::ServiceRegistry;
 #[derive(Debug, Clone, Serialize)]
 pub enum DataflowEvent {
     /// A node is about to execute.
-    NodeStarted { node: String },
+    NodeStarted {
+        node: String,
+        node_type: String,
+        inputs: Vec<PortSnapshot>,
+    },
     /// A node completed successfully.
     NodeCompleted {
         node: String,
         duration_ms: u64,
-        output_ports: Vec<String>,
+        outputs: Vec<PortSnapshot>,
         metrics: HashMap<String, serde_json::Value>,
+    },
+    /// A structured log message emitted by a node during execution.
+    NodeLog {
+        node: String,
+        node_type: String,
+        level: NodeLogLevel,
+        text: String,
     },
     /// A node failed.
     NodeFailed { node: String, error: String },
@@ -411,16 +456,24 @@ impl DataflowRuntime {
                     }
                 }
 
-                self.emit(DataflowEvent::NodeStarted {
-                    node: node_name.clone(),
-                });
-                let node_start = Instant::now();
-
                 let node_idx = graph
                     .nodes
                     .iter()
                     .position(|n| n.name() == *node_name)
                     .unwrap();
+                let node_type = graph.nodes[node_idx].node_type().to_string();
+
+                // Snapshot inputs BEFORE execute
+                let input_snapshots: Vec<PortSnapshot> = ctx.inputs().iter()
+                    .map(|(name, value)| PortSnapshot::from_port(name, value))
+                    .collect();
+
+                self.emit(DataflowEvent::NodeStarted {
+                    node: node_name.clone(),
+                    node_type: node_type.clone(),
+                    inputs: input_snapshots,
+                });
+                let node_start = Instant::now();
 
                 // Fail injection for testing: register a String service "fail_node"
                 // in the ServiceRegistry to make a named node fail on execution.
@@ -441,15 +494,32 @@ impl DataflowRuntime {
                     Ok(()) => {
                         let outputs = ctx.drain_outputs();
                         let metrics = ctx.drain_metrics();
-                        let output_ports: Vec<String> = outputs.keys().cloned().collect();
+                        let logs = ctx.drain_logs();
+
+                        // Emit NodeLog events
+                        for log_entry in &logs {
+                            self.emit(DataflowEvent::NodeLog {
+                                node: node_name.clone(),
+                                node_type: node_type.clone(),
+                                level: log_entry.level.clone(),
+                                text: log_entry.text.clone(),
+                            });
+                        }
 
                         // Capture undo context if the node supports it
                         let undo_ctx = graph.nodes[node_idx].undo_context();
 
-                        // Serialize outputs for checkpoint persistence
+                        // Serialize outputs for checkpoint persistence + snapshots
                         let mut checkpoint_outputs = HashMap::new();
+                        let mut output_snapshots: Vec<PortSnapshot> = Vec::new();
                         for (port, value) in &outputs {
                             let cpv = port_value_to_checkpoint(value)?;
+                            output_snapshots.push(PortSnapshot {
+                                name: port.clone(),
+                                port_type: cpv.port_type,
+                                count: cpv.record_count,
+                                data_json: cpv.data_json.clone(),
+                            });
                             checkpoint_outputs.insert(port.clone(), cpv);
                         }
 
@@ -472,7 +542,7 @@ impl DataflowRuntime {
                         self.emit(DataflowEvent::NodeCompleted {
                             node: node_name.clone(),
                             duration_ms,
-                            output_ports,
+                            outputs: output_snapshots,
                             metrics,
                         });
                     }
@@ -633,16 +703,24 @@ impl DataflowRuntime {
                     }
                 }
 
-                self.emit(DataflowEvent::NodeStarted {
-                    node: node_name.clone(),
-                });
-                let node_start = Instant::now();
-
                 let node_idx = graph
                     .nodes
                     .iter()
                     .position(|n| n.name() == *node_name)
                     .unwrap();
+                let node_type = graph.nodes[node_idx].node_type().to_string();
+
+                // Snapshot inputs BEFORE execute (they will be consumed by take_input)
+                let input_snapshots: Vec<PortSnapshot> = ctx.inputs().iter()
+                    .map(|(name, value)| PortSnapshot::from_port(name, value))
+                    .collect();
+
+                self.emit(DataflowEvent::NodeStarted {
+                    node: node_name.clone(),
+                    node_type: node_type.clone(),
+                    inputs: input_snapshots,
+                });
+                let node_start = Instant::now();
 
                 let exec_result = graph.nodes[node_idx].execute(&mut ctx).await;
 
@@ -652,7 +730,22 @@ impl DataflowRuntime {
                     Ok(()) => {
                         let outputs = ctx.drain_outputs();
                         let metrics = ctx.drain_metrics();
-                        let output_ports: Vec<String> = outputs.keys().cloned().collect();
+                        let logs = ctx.drain_logs();
+
+                        // Emit NodeLog events
+                        for log_entry in &logs {
+                            self.emit(DataflowEvent::NodeLog {
+                                node: node_name.clone(),
+                                node_type: node_type.clone(),
+                                level: log_entry.level.clone(),
+                                text: log_entry.text.clone(),
+                            });
+                        }
+
+                        // Snapshot outputs AFTER execute
+                        let output_snapshots: Vec<PortSnapshot> = outputs.iter()
+                            .map(|(name, value)| PortSnapshot::from_port(name, value))
+                            .collect();
 
                         for (port, value) in outputs {
                             port_data.insert((node_name.clone(), port), value);
@@ -662,7 +755,7 @@ impl DataflowRuntime {
                         self.emit(DataflowEvent::NodeCompleted {
                             node: node_name.clone(),
                             duration_ms,
-                            output_ports,
+                            outputs: output_snapshots,
                             metrics,
                         });
                     }
@@ -736,8 +829,9 @@ impl NodeEventFilter {
 
     fn matches(&self, ev: &DataflowEvent) -> bool {
         match ev {
-            DataflowEvent::NodeStarted { node } => self.nodes.contains(node),
+            DataflowEvent::NodeStarted { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeCompleted { node, .. } => self.nodes.contains(node),
+            DataflowEvent::NodeLog { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
             DataflowEvent::CheckpointResumed { node, .. } => self.nodes.contains(node),
             DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,

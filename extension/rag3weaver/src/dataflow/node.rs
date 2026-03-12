@@ -8,8 +8,28 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use serde::Serialize;
+
 use super::port::{PortDef, PortValue};
 use super::services::ServiceRegistry;
+
+// ─── NodeLog ─────────────────────────────────────────────────────────────────
+
+/// Log level for structured messages emitted by dataflow nodes.
+#[derive(Debug, Clone, Serialize)]
+pub enum NodeLogLevel {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+/// A log entry emitted by a node during execution.
+#[derive(Debug, Clone, Serialize)]
+pub struct NodeLogEntry {
+    pub level: NodeLogLevel,
+    pub text: String,
+}
 
 // ─── Node trait ──────────────────────────────────────────────────────────────
 
@@ -70,12 +90,13 @@ pub trait Node: Send + Sync {
 
 // ─── NodeContext ─────────────────────────────────────────────────────────────
 
-/// Execution context: typed input/output access + services + metrics for a node.
+/// Execution context: typed input/output access + services + metrics + logs for a node.
 pub struct NodeContext {
     inputs: HashMap<String, PortValue>,
     outputs: HashMap<String, PortValue>,
     services: Arc<ServiceRegistry>,
     metrics: HashMap<String, serde_json::Value>,
+    logs: Vec<NodeLogEntry>,
 }
 
 impl NodeContext {
@@ -85,6 +106,7 @@ impl NodeContext {
             outputs: HashMap::new(),
             services: Arc::new(ServiceRegistry::new()),
             metrics: HashMap::new(),
+            logs: Vec::new(),
         }
     }
 
@@ -94,6 +116,7 @@ impl NodeContext {
             outputs: HashMap::new(),
             services,
             metrics: HashMap::new(),
+            logs: Vec::new(),
         }
     }
 
@@ -142,6 +165,38 @@ impl NodeContext {
     /// Drain all metrics (used by the runtime after execution).
     pub(crate) fn drain_metrics(&mut self) -> HashMap<String, serde_json::Value> {
         std::mem::take(&mut self.metrics)
+    }
+
+    // ── Structured logging ──────────────────────────────────────────────
+
+    /// Log a debug message (visible in DataflowEvent::NodeLog).
+    pub fn debug(&mut self, text: impl Into<String>) {
+        self.logs.push(NodeLogEntry { level: NodeLogLevel::Debug, text: text.into() });
+    }
+
+    /// Log an info message.
+    pub fn info(&mut self, text: impl Into<String>) {
+        self.logs.push(NodeLogEntry { level: NodeLogLevel::Info, text: text.into() });
+    }
+
+    /// Log a warning message.
+    pub fn warn(&mut self, text: impl Into<String>) {
+        self.logs.push(NodeLogEntry { level: NodeLogLevel::Warn, text: text.into() });
+    }
+
+    /// Log an error message.
+    pub fn error(&mut self, text: impl Into<String>) {
+        self.logs.push(NodeLogEntry { level: NodeLogLevel::Error, text: text.into() });
+    }
+
+    /// Drain all log entries (used by the runtime after execution).
+    pub(crate) fn drain_logs(&mut self) -> Vec<NodeLogEntry> {
+        std::mem::take(&mut self.logs)
+    }
+
+    /// Borrow inputs (used by the runtime for snapshotting before execute).
+    pub(crate) fn inputs(&self) -> &HashMap<String, PortValue> {
+        &self.inputs
     }
 }
 
