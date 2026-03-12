@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use async_trait::async_trait;
 
 use crate::catalog::KBMetadata;
+use crate::events::{CatalogEvent, EventBus};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::config::CatalogConfig;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
@@ -2948,6 +2949,7 @@ impl Node for DeleteRecordNode {
             .ok_or("DeleteRecordNode: 'pending_aggregates' service not registered")?;
         let results_svc = ctx.service::<Mutex<Vec<DeleteResult>>>("delete_results")
             .ok_or("DeleteRecordNode: 'delete_results' service not registered")?;
+        let event_bus = ctx.service::<EventBus>("event_bus");
 
         // Group by entity_name
         let mut groups: HashMap<String, Vec<String>> = HashMap::new();
@@ -3140,10 +3142,29 @@ impl Node for DeleteRecordNode {
                 }
             }
 
-            // Delete entities themselves
+            // Check which UUIDs actually exist (for warnings on not-found)
             let uuid_list = CypherValue::List(
                 uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
             );
+            let existing: HashSet<String> = {
+                let check = conn.execute_with_params(
+                    &format!(
+                        "UNWIND $uuids AS uuid \
+                         MATCH (n:{entity_name} {{_uuid: uuid}}) RETURN n._uuid"
+                    ),
+                    &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
+                ).await.map_err(|e| e.to_string())?;
+                check.rows.iter()
+                    .filter_map(|r| r[0].as_str().map(String::from))
+                    .collect()
+            };
+
+            // Warn for nonexistent UUIDs
+            for uuid in uuids.iter().filter(|u| !existing.contains(u.as_str())) {
+                ctx.warn(format!("{entity_name} with uuid '{uuid}' not found, skipping"));
+            }
+
+            // Delete entities themselves
             let del_entities = format!(
                 "UNWIND $uuids AS uuid \
                  MATCH (n:{entity_name} {{_uuid: uuid}}) DETACH DELETE n"
@@ -3162,7 +3183,7 @@ impl Node for DeleteRecordNode {
                 }
             }
 
-            // Build DeleteResults
+            // Build DeleteResults + emit EntityDeleted events
             for uuid in uuids {
                 let chunks_deleted = per_uuid_chunks.get(uuid).copied().unwrap_or(0);
                 all_results.push(DeleteResult {
@@ -3171,6 +3192,15 @@ impl Node for DeleteRecordNode {
                     chunks_deleted,
                     relations_deleted: 0,
                 });
+                if existing.contains(uuid.as_str()) {
+                    if let Some(ref bus) = event_bus {
+                        bus.emit(CatalogEvent::EntityDeleted {
+                            entity: entity_name.clone(),
+                            uuid: uuid.clone(),
+                            chunks_deleted,
+                        });
+                    }
+                }
             }
         }
 
@@ -3223,11 +3253,33 @@ impl Node for UpdateRecordNode {
         ]
     }
     async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<UpdateRecord> = match ctx.take_input("updates") {
+        let raw_items: Vec<UpdateRecord> = match ctx.take_input("updates") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<UpdateRecord>()
                 .ok_or("UpdateRecordNode: failed to extract Vec<UpdateRecord>")?,
             _ => return Err("UpdateRecordNode: missing 'updates' input".to_string()),
+        };
+
+        // ─── Merge duplicate updates for same (entity_name, uuid) ───
+        let items: Vec<UpdateRecord> = {
+            let mut seen: HashMap<(String, String), usize> = HashMap::new();
+            let mut merged: Vec<UpdateRecord> = Vec::new();
+            let mut merge_count = 0usize;
+            for update in raw_items {
+                let key = (update.entity_name.clone(), update.uuid.clone());
+                if let Some(&idx) = seen.get(&key) {
+                    merged[idx].data.extend(update.data);
+                    merged[idx].new_content_hash = String::new(); // sentinel: force re-chunk
+                    merge_count += 1;
+                } else {
+                    seen.insert(key, merged.len());
+                    merged.push(update);
+                }
+            }
+            if merge_count > 0 {
+                ctx.info(format!("merged {merge_count} duplicate update(s) into existing records"));
+            }
+            merged
         };
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
@@ -3242,6 +3294,7 @@ impl Node for UpdateRecordNode {
             .ok_or("UpdateRecordNode: 'pending_aggregates' service not registered")?;
         let results_svc = ctx.service::<Mutex<Vec<UpdateResult>>>("update_results")
             .ok_or("UpdateRecordNode: 'update_results' service not registered")?;
+        let event_bus = ctx.service::<EventBus>("event_bus");
 
         // Group by entity_name
         let mut entity_groups: HashMap<String, Vec<usize>> = HashMap::new();
@@ -3288,6 +3341,16 @@ impl Node for UpdateRecordNode {
                     row.get(1).and_then(|v| v.as_str()),
                 ) {
                     old_hashes.insert(uuid.to_string(), hash.to_string());
+                }
+            }
+
+            // Warn for UUIDs not found in DB
+            for &i in entity_indices {
+                if !old_hashes.contains_key(&items[i].uuid) {
+                    ctx.warn(format!(
+                        "{entity_name} with uuid '{}' not found, update is a no-op",
+                        items[i].uuid
+                    ));
                 }
             }
 
@@ -3342,7 +3405,7 @@ impl Node for UpdateRecordNode {
             }
 
             // 4. Handle content changes
-            let changed_uuids: Vec<&str> = entity_indices.iter()
+            let changed_uuids: HashSet<&str> = entity_indices.iter()
                 .zip(changed.iter())
                 .filter_map(|(&i, &c)| if c { Some(items[i].uuid.as_str()) } else { None })
                 .collect();
@@ -3466,20 +3529,40 @@ impl Node for UpdateRecordNode {
                 }
             }
 
-            // 5. Build UpdateResults
+            // 5. Build UpdateResults + emit EntityUpdated events
             for (idx_in_group, &i) in entity_indices.iter().enumerate() {
                 let content_changed = changed[idx_in_group];
-                let reembedded = content_changed && (
+                let uuid = &items[i].uuid;
+                let found = old_hashes.contains_key(uuid);
+                let reembedded = found && content_changed && (
                     !entity_kbs.is_empty() || entity_configs.contains_key(entity_name)
                 );
+                let status = if !found {
+                    UpdateStatus::Updated // no old hash → considered "changed" (no-op in DB)
+                } else if content_changed {
+                    UpdateStatus::Updated
+                } else {
+                    UpdateStatus::Unchanged
+                };
                 all_results.push(UpdateResult {
-                    uuid: items[i].uuid.clone(),
+                    uuid: uuid.clone(),
                     entity: entity_name.clone(),
-                    status: if content_changed { UpdateStatus::Updated } else { UpdateStatus::Unchanged },
+                    status,
                     reembedded,
                     chunks_created: 0,
                     chunks_deleted: 0,
                 });
+                if found {
+                    if let Some(ref bus) = event_bus {
+                        bus.emit(CatalogEvent::EntityUpdated {
+                            entity: entity_name.clone(),
+                            uuid: uuid.clone(),
+                            reembedded,
+                            chunks_created: 0,
+                            chunks_deleted: 0,
+                        });
+                    }
+                }
             }
         }
 

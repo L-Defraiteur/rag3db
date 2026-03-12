@@ -1006,13 +1006,26 @@ impl Catalog {
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
     ) {
-        let pending = std::mem::take(&mut self.pending);
+        let mut pending = std::mem::take(&mut self.pending);
         let empty_results = || (
             DataflowGraph::new(), ServiceRegistry::new(), 0,
             Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())),
         );
         if pending.is_empty() {
             return empty_results();
+        }
+
+        // ─── Conflict resolution: delete wins over update for same UUID ───
+        if !pending.deletes.is_empty() && !pending.updates.is_empty() {
+            let delete_set: std::collections::HashSet<(&str, &str)> = pending.deletes.iter()
+                .map(|d| (d.entity_name.as_str(), d.uuid.as_str()))
+                .collect();
+            let before = pending.updates.len();
+            pending.updates.retain(|u| !delete_set.contains(&(u.entity_name.as_str(), u.uuid.as_str())));
+            let dropped = before - pending.updates.len();
+            if dropped > 0 {
+                eprintln!("[conflict-resolution] dropped {dropped} update(s) superseded by delete");
+            }
         }
 
         let op_count = pending.total_count();
@@ -1179,6 +1192,9 @@ impl Catalog {
         services.register::<Mutex<Vec<AggregateRecord>>>("pending_aggregates", pending_aggregates);
         services.register::<Mutex<Vec<UpdateResult>>>("update_results", update_results.clone());
         services.register::<Mutex<Vec<DeleteResult>>>("delete_results", delete_results.clone());
+
+        // Event bus for node-emitted lifecycle events + warnings
+        services.register::<EventBus>("event_bus", Arc::new(self.event_bus.shared()));
 
         // entity_configs needed by DeleteRecordNode, UpdateRecordNode, ChunkRecordNode
         if has_deletes || has_updates || needs_kb {
