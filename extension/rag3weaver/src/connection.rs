@@ -174,6 +174,22 @@ pub trait DbConnection: Send + Sync {
     ) -> Result<QueryResult, DbError>;
 }
 
+/// Synchronous database connection trait.
+///
+/// Used by components that need sync DB access (e.g. `CypherBlobStore` for the
+/// `BlobStore` trait which is sync). Avoids the async→sync `block_on` bridge.
+pub trait SyncDbConnection: Send + Sync {
+    /// Execute a Cypher query synchronously.
+    fn execute_sync(&self, cypher: &str) -> Result<QueryResult, DbError>;
+
+    /// Execute a parameterized Cypher query synchronously.
+    fn execute_with_params_sync(
+        &self,
+        cypher: &str,
+        params: &[QueryParam],
+    ) -> Result<QueryResult, DbError>;
+}
+
 // ─── CallbackConnection ──────────────────────────────────────────────────────
 
 /// Type alias for the async database execute callback.

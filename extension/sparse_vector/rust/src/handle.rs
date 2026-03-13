@@ -29,6 +29,9 @@ const LEGACY_FILE: &str = "sparse.bin";
 /// Files that make up a sparse index (new format).
 const INDEX_FILES: &[&str] = &[MMAP_FILE, VECTORS_FILE, DIMS_FILE];
 
+/// BlobStore key prefix — ensures no collision with other index types (FTS, etc.)
+const BLOB_PREFIX: &str = "Sparse_";
+
 /// Monotonic counter for unique tmpdir names.
 static CACHE_SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -105,12 +108,16 @@ impl SparseHandle {
 
     /// Create a new empty sparse index backed by a BlobStore.
     ///
-    /// A local tmpdir is created for mmap cache. Source of truth is the store.
+    /// `cache_base` is the root directory for mmap caches. Inside it, a unique
+    /// subdirectory `{pid}/{index_name}_{seq}` is created automatically.
+    /// Source of truth is the store.
     pub fn create_with_store(
         store: Arc<dyn BlobStore>,
         index_name: &str,
+        cache_base: &Path,
     ) -> Result<Self, String> {
-        let cache_dir = Self::make_cache_dir(index_name)?;
+        let blob_name = format!("{BLOB_PREFIX}{index_name}");
+        let cache_dir = Self::make_cache_dir(cache_base, &blob_name)?;
 
         let handle = Self {
             inner: Mutex::new(Inner {
@@ -124,7 +131,7 @@ impl SparseHandle {
             path: cache_dir,
             backend: StorageBackend::Store {
                 store,
-                index_name: index_name.to_string(),
+                index_name: blob_name,
             },
         };
         handle.commit_inner()?;
@@ -133,29 +140,32 @@ impl SparseHandle {
 
     /// Open an existing sparse index from a BlobStore.
     ///
-    /// Materializes blobs from the store into a local tmpdir, then mmap's.
+    /// `cache_base` is the root directory for mmap caches. Blobs are materialized
+    /// from the store into `{cache_base}/{pid}/{index_name}_{seq}/`, then mmap'd.
     pub fn open_with_store(
         store: Arc<dyn BlobStore>,
         index_name: &str,
+        cache_base: &Path,
     ) -> Result<Self, String> {
-        let cache_dir = Self::make_cache_dir(index_name)?;
+        let blob_name = format!("{BLOB_PREFIX}{index_name}");
+        let cache_dir = Self::make_cache_dir(cache_base, &blob_name)?;
 
         // Materialize all blobs from store to cache_dir
         let files = store
-            .list(index_name)
-            .map_err(|e| format!("cannot list blobs for {index_name}: {e}"))?;
+            .list(&blob_name)
+            .map_err(|e| format!("cannot list blobs for {blob_name}: {e}"))?;
 
         for file_name in &files {
             let data = store
-                .load(index_name, file_name)
-                .map_err(|e| format!("cannot load {index_name}/{file_name}: {e}"))?;
+                .load(&blob_name, file_name)
+                .map_err(|e| format!("cannot load {blob_name}/{file_name}: {e}"))?;
             std::fs::write(cache_dir.join(file_name), data)
                 .map_err(|e| format!("cannot write cache {file_name}: {e}"))?;
         }
 
         let backend = StorageBackend::Store {
             store,
-            index_name: index_name.to_string(),
+            index_name: blob_name,
         };
 
         // Open from cache_dir (same logic as filesystem open)
@@ -180,11 +190,16 @@ impl SparseHandle {
         }
     }
 
-    /// Create a unique tmpdir for BlobStore cache.
-    fn make_cache_dir(index_name: &str) -> Result<PathBuf, String> {
+    /// Create a unique cache directory for BlobStore mmap files.
+    ///
+    /// Layout: `{base}/{pid}/{index_name}_{seq}/`
+    /// - PID isolates between processes
+    /// - Atomic seq isolates between threads / multiple opens
+    fn make_cache_dir(base: &Path, index_name: &str) -> Result<PathBuf, String> {
         let seq = CACHE_SEQ.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir()
-            .join("sparse_blob_cache")
+        let pid = std::process::id();
+        let dir = base
+            .join(format!("{pid}"))
             .join(format!("{index_name}_{seq}"));
         std::fs::create_dir_all(&dir)
             .map_err(|e| format!("cannot create cache dir {}: {e}", dir.display()))?;
@@ -624,10 +639,15 @@ mod tests {
     // BlobStore tests
     // -----------------------------------------------------------------------
 
+    fn test_cache_base() -> PathBuf {
+        std::env::temp_dir().join("sparse_test_cache")
+    }
+
     #[test]
     fn blob_store_create_and_search() {
         let store = Arc::new(MemBlobStore::new());
-        let handle = SparseHandle::create_with_store(store.clone(), "test_idx").unwrap();
+        let cb = test_cache_base();
+        let handle = SparseHandle::create_with_store(store.clone(), "test_idx", &cb).unwrap();
 
         handle
             .insert(42, &SparseVector::new(vec![1, 2], vec![0.5, 0.3]))
@@ -638,10 +658,10 @@ mod tests {
         handle.commit_inner().unwrap();
 
         // Data should be in store
-        assert!(store.exists("test_idx", MMAP_FILE).unwrap());
-        assert!(store.exists("test_idx", VECTORS_FILE).unwrap());
-        assert!(store.exists("test_idx", DIMS_FILE).unwrap());
-        assert_eq!(store.list("test_idx").unwrap().len(), 3);
+        assert!(store.exists("Sparse_test_idx", MMAP_FILE).unwrap());
+        assert!(store.exists("Sparse_test_idx", VECTORS_FILE).unwrap());
+        assert!(store.exists("Sparse_test_idx", DIMS_FILE).unwrap());
+        assert_eq!(store.list("Sparse_test_idx").unwrap().len(), 3);
 
         // Search should work (mmap from cache)
         let results = handle.search(&SparseVector::new(vec![2], vec![1.0]), 10);
@@ -652,10 +672,11 @@ mod tests {
     #[test]
     fn blob_store_close_reopen() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
         // Create, insert, commit, drop
         {
-            let handle = SparseHandle::create_with_store(store.clone(), "reopen_idx").unwrap();
+            let handle = SparseHandle::create_with_store(store.clone(), "reopen_idx", &cb).unwrap();
             handle
                 .insert(1, &SparseVector::new(vec![10], vec![1.0]))
                 .unwrap();
@@ -667,7 +688,7 @@ mod tests {
         // Handle dropped → cache_dir cleaned up
 
         // Reopen from store
-        let handle2 = SparseHandle::open_with_store(store.clone(), "reopen_idx").unwrap();
+        let handle2 = SparseHandle::open_with_store(store.clone(), "reopen_idx", &cb).unwrap();
         assert_eq!(handle2.len(), 2);
 
         let results = handle2.search(&SparseVector::new(vec![10], vec![1.0]), 10);
@@ -679,16 +700,17 @@ mod tests {
     #[test]
     fn blob_store_mutation_after_reopen() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
         {
-            let handle = SparseHandle::create_with_store(store.clone(), "mut_idx").unwrap();
+            let handle = SparseHandle::create_with_store(store.clone(), "mut_idx", &cb).unwrap();
             handle
                 .insert(1, &SparseVector::new(vec![5], vec![1.0]))
                 .unwrap();
             handle.commit_inner().unwrap();
         }
 
-        let handle2 = SparseHandle::open_with_store(store.clone(), "mut_idx").unwrap();
+        let handle2 = SparseHandle::open_with_store(store.clone(), "mut_idx", &cb).unwrap();
         handle2
             .insert(2, &SparseVector::new(vec![5], vec![2.0]))
             .unwrap();
@@ -696,7 +718,7 @@ mod tests {
 
         // Reopen again — should have both docs
         drop(handle2);
-        let handle3 = SparseHandle::open_with_store(store.clone(), "mut_idx").unwrap();
+        let handle3 = SparseHandle::open_with_store(store.clone(), "mut_idx", &cb).unwrap();
         assert_eq!(handle3.len(), 2);
 
         let results = handle3.search(&SparseVector::new(vec![5], vec![1.0]), 10);
@@ -708,9 +730,10 @@ mod tests {
     #[test]
     fn blob_store_delete_and_reopen() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
         {
-            let handle = SparseHandle::create_with_store(store.clone(), "del_idx").unwrap();
+            let handle = SparseHandle::create_with_store(store.clone(), "del_idx", &cb).unwrap();
             handle
                 .insert(1, &SparseVector::new(vec![1], vec![1.0]))
                 .unwrap();
@@ -721,7 +744,7 @@ mod tests {
         }
 
         // Reopen, delete, commit
-        let handle2 = SparseHandle::open_with_store(store.clone(), "del_idx").unwrap();
+        let handle2 = SparseHandle::open_with_store(store.clone(), "del_idx", &cb).unwrap();
         assert_eq!(handle2.len(), 2);
         handle2.remove(1).unwrap();
         assert_eq!(handle2.len(), 1);
@@ -729,7 +752,7 @@ mod tests {
         drop(handle2);
 
         // Reopen — should have 1 doc
-        let handle3 = SparseHandle::open_with_store(store.clone(), "del_idx").unwrap();
+        let handle3 = SparseHandle::open_with_store(store.clone(), "del_idx", &cb).unwrap();
         assert_eq!(handle3.len(), 1);
 
         let results = handle3.search(&SparseVector::new(vec![1], vec![1.0]), 10);
@@ -740,9 +763,10 @@ mod tests {
     #[test]
     fn blob_store_multiple_indexes_isolated() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
-        let h1 = SparseHandle::create_with_store(store.clone(), "idx_a").unwrap();
-        let h2 = SparseHandle::create_with_store(store.clone(), "idx_b").unwrap();
+        let h1 = SparseHandle::create_with_store(store.clone(), "idx_a", &cb).unwrap();
+        let h2 = SparseHandle::create_with_store(store.clone(), "idx_b", &cb).unwrap();
 
         h1.insert(1, &SparseVector::new(vec![1], vec![1.0]))
             .unwrap();
@@ -758,16 +782,17 @@ mod tests {
         assert_eq!(h2.len(), 1);
 
         // Store has separate blobs
-        assert_eq!(store.list("idx_a").unwrap().len(), 3);
-        assert_eq!(store.list("idx_b").unwrap().len(), 3);
+        assert_eq!(store.list("Sparse_idx_a").unwrap().len(), 3);
+        assert_eq!(store.list("Sparse_idx_b").unwrap().len(), 3);
     }
 
     #[test]
     fn blob_store_survives_cache_cleanup() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
         {
-            let handle = SparseHandle::create_with_store(store.clone(), "surv_idx").unwrap();
+            let handle = SparseHandle::create_with_store(store.clone(), "surv_idx", &cb).unwrap();
             for i in 0..50u64 {
                 handle
                     .insert(i, &SparseVector::new(vec![(i % 10) as u32], vec![i as f32]))
@@ -778,7 +803,7 @@ mod tests {
         // Cache cleaned up on drop
 
         // Reopen from store
-        let handle2 = SparseHandle::open_with_store(store.clone(), "surv_idx").unwrap();
+        let handle2 = SparseHandle::open_with_store(store.clone(), "surv_idx", &cb).unwrap();
         assert_eq!(handle2.len(), 50);
 
         let results = handle2.search(&SparseVector::new(vec![0], vec![1.0]), 5);
@@ -790,9 +815,10 @@ mod tests {
     #[test]
     fn blob_store_search_filtered_after_reopen() {
         let store = Arc::new(MemBlobStore::new());
+        let cb = test_cache_base();
 
         {
-            let handle = SparseHandle::create_with_store(store.clone(), "filt_idx").unwrap();
+            let handle = SparseHandle::create_with_store(store.clone(), "filt_idx", &cb).unwrap();
             handle
                 .insert(1, &SparseVector::new(vec![1, 2], vec![0.5, 0.3]))
                 .unwrap();
@@ -805,7 +831,7 @@ mod tests {
             handle.commit_inner().unwrap();
         }
 
-        let handle2 = SparseHandle::open_with_store(store.clone(), "filt_idx").unwrap();
+        let handle2 = SparseHandle::open_with_store(store.clone(), "filt_idx", &cb).unwrap();
         let results =
             handle2.search_filtered(&SparseVector::new(vec![1], vec![1.0]), 10, &[1, 3]);
         assert_eq!(results.len(), 2);

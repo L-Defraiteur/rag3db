@@ -7,7 +7,7 @@
 
 pub mod blob_store;
 mod bridge;
-mod handle;
+pub mod handle;
 pub mod index;
 pub mod mmap_index;
 pub mod posting_list;

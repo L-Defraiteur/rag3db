@@ -133,6 +133,20 @@ impl DbConnection for Rag3dbConnection {
     }
 }
 
+impl crate::connection::SyncDbConnection for Rag3dbConnection {
+    fn execute_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
+        self.query_sync(cypher)
+    }
+
+    fn execute_with_params_sync(
+        &self,
+        cypher: &str,
+        params: &[QueryParam],
+    ) -> Result<QueryResult, DbError> {
+        self.query_with_params_sync(cypher, params)
+    }
+}
+
 // ── Value conversions ──────────────────────────────────────────────────
 
 /// Convert a rag3db `Value` to our `CypherValue`.

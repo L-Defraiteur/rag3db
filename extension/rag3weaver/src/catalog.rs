@@ -6,11 +6,12 @@
 //! `drain()` to process them.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
 use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef};
-use crate::connection::{CypherValue, DbConnection, QueryParam};
+use crate::connection::{CypherValue, DbConnection, QueryParam, SyncDbConnection};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
 use crate::filter::{FilterCondition, FilterParser};
@@ -23,6 +24,7 @@ use crate::schema::{generate_full_schema, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
+use crate::cypher_blob_store::CypherBlobStore;
 use crate::dataflow::checkpoint::CheckpointStore;
 use crate::dataflow::node_factories::register_builtins;
 use crate::dataflow::node_registry::NodeRegistry;
@@ -123,6 +125,14 @@ pub struct Catalog {
     chunker_cache: HashMap<ChunkerConfig, Chunker>,
     /// Checkpoint store for crash-recovery of drain executions.
     checkpoint_store: Option<Arc<dyn CheckpointStore>>,
+    /// BlobStore backed by rag3db for lucivy/sparse index persistence.
+    blob_store: Option<Arc<CypherBlobStore>>,
+    /// Sparse vector index handles, keyed by table name (e.g. "Product_Chunk").
+    sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
+    /// Base directory for sparse/FTS mmap caches.
+    cache_base: PathBuf,
+    /// Sync connection for BlobStore (avoids async→sync bridge).
+    sync_conn: Option<Arc<dyn SyncDbConnection>>,
     /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
     fail_node: Option<String>,
 }
@@ -151,6 +161,10 @@ impl Catalog {
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
             chunker_cache: HashMap::new(),
             checkpoint_store: None,
+            blob_store: None,
+            sparse_handles: HashMap::new(),
+            cache_base: std::env::temp_dir().join("rag3weaver_cache"),
+            sync_conn: None,
             fail_node: None,
         }
     }
@@ -180,10 +194,57 @@ impl Catalog {
         self.checkpoint_store = Some(store);
     }
 
+    /// Set the sync database connection for BlobStore operations.
+    /// Must be called before `initialize()` for BlobStore to work.
+    pub fn set_sync_connection(&mut self, conn: Arc<dyn SyncDbConnection>) {
+        self.sync_conn = Some(conn);
+    }
+
+    /// Set the base directory for sparse/FTS mmap caches.
+    /// Defaults to `$TMPDIR/rag3weaver_cache`.
+    pub fn set_cache_base(&mut self, path: PathBuf) {
+        self.cache_base = path;
+    }
+
     /// Set a node name that should fail during checkpoint execution (testing only).
     /// The named node will return an injected error instead of executing.
     pub fn set_fail_node(&mut self, node_name: Option<&str>) {
         self.fail_node = node_name.map(|s| s.to_string());
+    }
+
+    /// Get the blob store for index persistence. Available after `initialize()`.
+    pub fn blob_store(&self) -> Option<Arc<CypherBlobStore>> {
+        self.blob_store.clone()
+    }
+
+    /// Get a sparse vector index handle by table name.
+    pub fn sparse_handle(&self, table: &str) -> Option<Arc<sparse_vector::handle::SparseHandle>> {
+        self.sparse_handles.get(table).cloned()
+    }
+
+    /// Create or open a sparse handle for a table, storing it in sparse_handles.
+    /// No-op if blob_store is not configured or handle already exists.
+    fn ensure_sparse_handle(&mut self, table: &str) {
+        if self.sparse_handles.contains_key(table) {
+            return;
+        }
+        let Some(ref blob_store) = self.blob_store else { return };
+        // Try open first (index may already exist in BlobStore), fall back to create.
+        let handle = match sparse_vector::handle::SparseHandle::open_with_store(
+            blob_store.clone(), table, &self.cache_base,
+        ) {
+            Ok(h) => h,
+            Err(_) => match sparse_vector::handle::SparseHandle::create_with_store(
+                blob_store.clone(), table, &self.cache_base,
+            ) {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("[rag3weaver] failed to create sparse handle for {table}: {e}");
+                    return;
+                }
+            },
+        };
+        self.sparse_handles.insert(table.to_string(), Arc::new(handle));
     }
 
     /// Gracefully close all lucivy FTS indexes to release file locks.
@@ -288,20 +349,14 @@ impl Catalog {
         // 6. Pre-warm chunker cache for ingestion nodes
         self.warm_chunker_cache();
 
-        // Create sparse vector indexes via extension for KBs that have sparse=true.
-        // Sparse embeddings live on {KB}_Index_Chunk (one index per KB).
+        // Create sparse vector handles for KBs that have sparse=true.
         if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
-            for (kb_name, kb_config) in &self.config.knowledge_bases {
-                if kb_config.signals.sparse() {
-                    let target = format!("{kb_name}_Index_Chunk");
-                    let indices_col = format!("{kb_name}_sparse_indices");
-                    let weights_col = format!("{kb_name}_sparse_weights");
-                    let cypher = format!(
-                        "CALL CREATE_SPARSE_VECTOR_INDEX('{target}', '{indices_col}', '{weights_col}')"
-                    );
-                    // Ignore errors (index may already exist)
-                    let _ = self.conn.execute(&cypher).await;
-                }
+            let kb_sparse_tables: Vec<String> = self.config.knowledge_bases.iter()
+                .filter(|(_, kbc)| kbc.signals.sparse())
+                .map(|(kb_name, _)| format!("{kb_name}_Index_Chunk"))
+                .collect();
+            for table in kb_sparse_tables {
+                self.ensure_sparse_handle(&table);
             }
         }
 
@@ -316,7 +371,15 @@ impl Catalog {
             self.checkpoint_store = Some(cp_store);
         }
 
-        // 8. Load persisted entity configs, relations, and KB configs from _catalog_meta
+        // 8. Initialize blob store for lucivy/sparse index persistence
+        if let Some(ref sync_conn) = self.sync_conn {
+            self.conn.execute(
+                "CREATE NODE TABLE IF NOT EXISTS _index_blobs (_key STRING, _data BLOB, PRIMARY KEY(_key))"
+            ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+            self.blob_store = Some(Arc::new(CypherBlobStore::from_sync_connection(sync_conn.clone())));
+        }
+
+        // 9. Load persisted entity configs, relations, and KB configs from _catalog_meta
         self.load_entity_configs().await?;
         self.load_relations().await?;
         self.load_kb_configs().await?;
@@ -367,6 +430,12 @@ impl Catalog {
         } else {
             // ── Fresh registration: create tables + indexes ──
             self.create_entity_tables(entity_name, &config, &entity_def).await?;
+        }
+
+        // Create sparse handle if needed (simple pipeline with sparse signal)
+        if config.has_simple_pipeline() && config.signals.sparse() {
+            let chunk_table = format!("{entity_name}_Chunk");
+            self.ensure_sparse_handle(&chunk_table);
         }
 
         // Persist + update in-memory
@@ -468,14 +537,7 @@ impl Catalog {
             let _ = self.conn.execute(&vec_ddl).await;
         }
 
-        // 6. Sparse vector index on chunk table
-        if config.signals.sparse() {
-            let chunk_table = format!("{entity_name}_Chunk");
-            let sparse_ddl = format!(
-                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', 'sparse_indices', 'sparse_weights')"
-            );
-            let _ = self.conn.execute(&sparse_ddl).await;
-        }
+        // 6. Sparse vector index — handled by ensure_sparse_handle() in register_entity()
 
         Ok(())
     }
@@ -573,13 +635,7 @@ impl Catalog {
             );
             let _ = self.conn.execute(&vec_ddl).await;
         }
-        if new_config.has_simple_pipeline() && new_config.signals.sparse() && !old_config.signals.sparse() {
-            let chunk_table = format!("{entity_name}_Chunk");
-            let sparse_ddl = format!(
-                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', 'sparse_indices', 'sparse_weights')"
-            );
-            let _ = self.conn.execute(&sparse_ddl).await;
-        }
+        // Sparse handle creation is handled by register_entity() after migrate_entity().
 
         Ok(())
     }
@@ -721,6 +777,12 @@ impl Catalog {
                 self.create_kb_tables(kb_name, &kb_config, info, &kb_entities).await?;
             }
 
+            // Create sparse handle if needed
+            if kb_config.signals.sparse() {
+                let chunk_table = format!("{kb_name}_Index_Chunk");
+                self.ensure_sparse_handle(&chunk_table);
+            }
+
             // Build + store KBMetadata
             let title_ref = KBFieldRef {
                 entity: info.title_entity.clone(),
@@ -811,16 +873,7 @@ impl Catalog {
             let _ = self.conn.execute(&vec_ddl).await;
         }
 
-        // 8. Sparse vector index on {KB}_Index_Chunk
-        if kb_config.signals.sparse() {
-            let chunk_table = format!("{kb_name}_Index_Chunk");
-            let indices_col = format!("{kb_name}_sparse_indices");
-            let weights_col = format!("{kb_name}_sparse_weights");
-            let sparse_ddl = format!(
-                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', '{indices_col}', '{weights_col}')"
-            );
-            let _ = self.conn.execute(&sparse_ddl).await;
-        }
+        // 8. Sparse handle — created by register_kb() after create_kb_tables().
 
         Ok(())
     }

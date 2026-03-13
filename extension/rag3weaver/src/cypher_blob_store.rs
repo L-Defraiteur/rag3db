@@ -38,17 +38,12 @@ impl CypherBlobStore {
         Self { query_fn }
     }
 
-    /// Create a CypherBlobStore from a DbConnection.
+    /// Create a CypherBlobStore from a sync database connection.
     ///
-    /// Uses `tokio::runtime::Handle::current().block_on()` to bridge async → sync.
-    /// Safe when the underlying connection is sync (e.g. `Rag3dbConnection`).
-    pub fn from_connection(conn: Arc<dyn crate::connection::DbConnection>) -> Self {
+    /// No async runtime needed — calls the connection's sync methods directly.
+    pub fn from_sync_connection(conn: Arc<dyn crate::connection::SyncDbConnection>) -> Self {
         let query_fn: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
-            let conn = conn.clone();
-            let cypher = cypher.to_string();
-            let params = params.to_vec();
-            tokio::runtime::Handle::current()
-                .block_on(async { conn.execute_with_params(&cypher, &params).await })
+            conn.execute_with_params_sync(cypher, params)
                 .map_err(|e| e.to_string())
         });
         Self { query_fn }

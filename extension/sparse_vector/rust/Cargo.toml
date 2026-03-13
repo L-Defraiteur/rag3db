@@ -6,7 +6,7 @@ license = "MIT"
 description = "Sparse vector inverted index with WAND pruning, inspired by Qdrant (Apache 2.0)"
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["lib", "staticlib"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -15,6 +15,7 @@ cxx = "1.0"
 ordered-float = "4"
 parking_lot = "0.12"
 memmap2 = "0.9"
+lucivy-core = { path = "../../lucivy/ld-lucivy/lucivy_core" }
 
 [build-dependencies]
 cxx-build = "1.0"
