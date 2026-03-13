@@ -2562,15 +2562,20 @@ impl Catalog {
 
         let t_sparse = Instant::now();
         let sparse_results = if let Some(qv) = query_sparse {
-            let sparse_fields = if is_chunked { &[][..] } else { enrich_fields.as_slice() };
-            search::search_sparse_cypher(
-                self.conn.as_ref(),
-                vector_entity,
-                &qv,
-                search_limit,
-                sparse_fields,
-            )
-            .await?
+            if let Some(handle) = self.sparse_handle(vector_entity) {
+                let sparse_fields = if is_chunked { &[][..] } else { enrich_fields.as_slice() };
+                search::search_sparse(
+                    &handle,
+                    self.conn.as_ref(),
+                    vector_entity,
+                    &qv,
+                    search_limit,
+                    sparse_fields,
+                )
+                .await?
+            } else {
+                vec![]
+            }
         } else {
             vec![]
         };

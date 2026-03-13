@@ -21,7 +21,7 @@ use crate::catalog::Catalog;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::search::{
     embed_query, enrich_results_with_data, fuse_results, resolve_vector_chunks,
-    search_bm25_chunked, search_sparse_cypher, search_vector, BM25Mode, FusionConfig,
+    search_bm25_chunked, search_sparse, search_vector, BM25Mode, FusionConfig,
     ResultMode, SearchOptions, SearchResult, SearchTarget,
 };
 use crate::search_strategy::UnifiedResult;
@@ -348,7 +348,15 @@ impl Node for SparseSearchNode {
             return Err("SparseSearchNode: no 'dual_embedder' or 'sparse_embedder' service".into());
         };
 
-        let chunk_results = search_sparse_cypher(
+        let handles = ctx
+            .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+            .ok_or("SparseSearchNode: 'sparse_handles' service not found")?;
+
+        let handle = handles.get(&target.chunk_table)
+            .ok_or_else(|| format!("SparseSearchNode: no sparse handle for '{}'", target.chunk_table))?;
+
+        let chunk_results = search_sparse(
+            handle,
             &*conn.0,
             &target.chunk_table,
             &sparse_vec,

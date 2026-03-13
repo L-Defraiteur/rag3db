@@ -677,6 +677,7 @@ mod tests {
             ("KBUpdateNode", serde_json::json!({})),
             ("KBChunkNode", serde_json::json!({})),
             ("FlushNode", serde_json::json!({"table": "Test_Index"})),
+            ("SparseCommitNode", serde_json::json!({"table": "Test_Chunk"})),
         ];
 
         for (node_type, config) in &cases {

@@ -19,7 +19,7 @@ use super::generic_search_nodes::{
 };
 use super::record_nodes::{
     ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
-    FlushNode, KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode,
+    FlushNode, SparseCommitNode, KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode,
     RechunkDeleteNode, UpdateRecordNode,
 };
 use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
@@ -231,6 +231,50 @@ impl NodeFactory for FlushNodeFactory {
                     required: false,
                     default: None,
                     description: "Single table name to flush",
+                },
+            ],
+            inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
+            outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
+        }
+    }
+}
+
+/// Factory for SparseCommitNode (config: table or tables).
+pub struct SparseCommitNodeFactory;
+
+impl NodeFactory for SparseCommitNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let tables = if let Some(arr) = config.get("tables").and_then(|v| v.as_array()) {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        } else if let Some(t) = config.get("table").and_then(|v| v.as_str()) {
+            vec![t.to_string()]
+        } else {
+            return Err("SparseCommitNode: missing 'table' or 'tables' config".to_string());
+        };
+        Ok(Box::new(SparseCommitNode::new(name, tables)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "SparseCommitNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "SparseCommitNode",
+            description: "Commit dirty sparse vector indexes for configured tables",
+            config_params: vec![
+                ConfigParam {
+                    name: "table",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Single table name to commit",
                 },
             ],
             inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
@@ -898,6 +942,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(UpdateRecordNodeFactory));
     registry.register(Box::new(RechunkDeleteNodeFactory));
     registry.register(Box::new(FlushNodeFactory));
+    registry.register(Box::new(SparseCommitNodeFactory));
     // Migration nodes
     registry.register(Box::new(CypherNodeFactory));
     registry.register(Box::new(ValidateNodeFactory));
@@ -916,9 +961,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_25_types() {
+    fn register_builtins_has_all_26_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 25);
+        assert_eq!(registry.types().len(), 26);
     }
 
     #[test]

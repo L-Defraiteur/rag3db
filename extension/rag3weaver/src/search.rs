@@ -2111,12 +2111,13 @@ pub async fn search_bm25_chunked(
     Ok(results)
 }
 
-/// Sparse vector search via the sparse_vector Cypher extension.
+/// Sparse vector search via direct SparseHandle.
 ///
-/// 1. Calls `QUERY_SPARSE_VECTOR_INDEX` → (node_id offset, score) pairs
+/// 1. Calls `handle.search()` → (node_id offset, score) pairs
 /// 2. Resolves offsets → UUIDs via `MATCH ... WHERE OFFSET(id(n)) IN [...]`
 /// 3. Returns `SearchResult` with real UUIDs, sorted by descending score.
-pub async fn search_sparse_cypher(
+pub async fn search_sparse(
+    handle: &sparse_vector::handle::SparseHandle,
     conn: &dyn DbConnection,
     entity: &str,
     query_vector: &SparseVector,
@@ -2127,48 +2128,22 @@ pub async fn search_sparse_cypher(
         return Ok(vec![]);
     }
 
-    // 1. Build Cypher for sparse search
-    let indices_str = query_vector
-        .indices
-        .iter()
-        .map(|i| i.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let weights_str = query_vector
-        .values
-        .iter()
-        .map(|w| format!("{:.6}", *w as f64))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let cypher = format!(
-        "CALL QUERY_SPARSE_VECTOR_INDEX('{entity}', [{indices_str}], [{weights_str}], {limit}) \
-         RETURN node_id, score"
+    // 1. Search via SparseHandle directly
+    let sv = sparse_vector::index::SparseVector::new(
+        query_vector.indices.clone(),
+        query_vector.values.clone(),
     );
+    let raw_results = handle.search(&sv, limit);
 
-    let sparse_result = conn
-        .execute(&cypher)
-        .await
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    if sparse_result.rows.is_empty() {
+    if raw_results.is_empty() {
         return Ok(vec![]);
     }
 
-    // 2. Extract (offset, score) pairs
-    let offsets_scores: Vec<(u64, f64)> = sparse_result
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
-            let score = row.get(1).and_then(|v| v.as_f64())?;
-            Some((offset, score))
-        })
+    // 2. Convert (u64, f32) → (u64, f64) for resolve_and_enrich
+    let offsets_scores: Vec<(u64, f64)> = raw_results
+        .into_iter()
+        .map(|(offset, score)| (offset, score as f64))
         .collect();
-
-    if offsets_scores.is_empty() {
-        return Ok(vec![]);
-    }
 
     // 3. Resolve offsets → UUIDs + fetch entity data in one query
     resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await

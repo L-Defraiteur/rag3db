@@ -2850,6 +2850,94 @@ impl Node for FlushNode {
     }
 }
 
+// ─── SparseCommitNode ─────────────────────────────────────────────────────
+
+/// Commits dirty sparse vector indexes for configured tables.
+///
+/// Same pattern as [`FlushNode`] for FTS — explicit commit via dataflow node.
+/// Calls `handle.commit_inner()` on each configured table's `SparseHandle`.
+///
+/// **Config**: `tables` — list of table names to commit
+/// **Input**: `trigger` — Empty signal (optional)
+/// **Output**: `done` — Empty signal
+/// **Services**: `sparse_handles` (HashMap<String, Arc<SparseHandle>>)
+pub struct SparseCommitNode {
+    name: String,
+    tables: Vec<String>,
+    undo_data: Option<serde_json::Value>,
+}
+
+impl SparseCommitNode {
+    pub fn new(name: impl Into<String>, tables: Vec<String>) -> Self {
+        Self { name: name.into(), tables, undo_data: None }
+    }
+}
+
+#[async_trait]
+impl Node for SparseCommitNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "SparseCommitNode"
+    }
+    fn node_config(&self) -> serde_json::Value {
+        serde_json::json!({ "tables": self.tables })
+    }
+    fn inputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        ]
+    }
+    fn outputs(&self) -> &[PortDef] {
+        &[
+            PortDef { name: "done", port_type: PortType::Empty, required: false },
+        ]
+    }
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+            .ok_or("SparseCommitNode: 'sparse_handles' service not registered")?;
+
+        let mut committed: usize = 0;
+        for table in &self.tables {
+            if let Some(handle) = handles.get(table) {
+                handle.commit_inner()
+                    .map_err(|e| format!("SparseCommitNode: commit '{table}' failed: {e}"))?;
+                committed += 1;
+            }
+        }
+
+        self.undo_data = Some(serde_json::json!(self.tables));
+        ctx.log_metric("table_count", self.tables.len());
+        ctx.log_metric("committed", committed);
+        ctx.set_output("done", PortValue::Empty);
+        Ok(())
+    }
+
+    fn can_undo(&self) -> bool { true }
+
+    fn undo_context(&self) -> Option<serde_json::Value> {
+        self.undo_data.clone()
+    }
+
+    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+        let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+            .ok_or("SparseCommitNode undo: 'sparse_handles' service not registered")?;
+
+        let tables = undo_ctx.as_array()
+            .ok_or("SparseCommitNode undo: expected array of table names")?;
+
+        for t in tables {
+            if let Some(table) = t.as_str() {
+                if let Some(handle) = handles.get(table) {
+                    handle.commit_inner().ok(); // Best-effort
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 // ─── RechunkDeleteNode ─────────────────────────────────────────────────────
 
 /// Delete old chunks for entities about to be re-chunked.
