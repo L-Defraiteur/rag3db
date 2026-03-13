@@ -210,11 +210,6 @@ pub fn generate_index_table_ddl(
 
     columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
 
-    if kb_config.signals.sparse() {
-        columns.push(format!("{kb_name}_sparse_indices INT64[]"));
-        columns.push(format!("{kb_name}_sparse_weights DOUBLE[]"));
-    }
-
     let col_defs = columns.join(",\n    ");
     Ok(format!(
         "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
@@ -259,11 +254,6 @@ pub fn generate_index_chunk_table_ddl(
 
     columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
 
-    if kb_config.signals.sparse() {
-        columns.push(format!("{kb_name}_sparse_indices INT64[]"));
-        columns.push(format!("{kb_name}_sparse_weights DOUBLE[]"));
-    }
-
     let col_defs = columns.join(",\n    ");
     Ok(format!(
         "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
@@ -306,10 +296,6 @@ pub fn generate_simple_chunk_table_ddl(
 
     if entity_config.signals.vector() {
         columns.push(format!("embedding FLOAT[{embedding_dim}]"));
-    }
-    if entity_config.signals.sparse() {
-        columns.push("sparse_indices INT64[]".to_string());
-        columns.push("sparse_weights DOUBLE[]".to_string());
     }
 
     let col_defs = columns.join(",\n    ");
@@ -807,8 +793,9 @@ mod tests {
         kb_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
         let ddl = generate_index_table_ddl("ScopeKB", &kb_config, 384).unwrap();
         assert!(ddl.contains("ScopeKB_embedding FLOAT[384]"));
-        assert!(ddl.contains("ScopeKB_sparse_indices INT64[]"));
-        assert!(ddl.contains("ScopeKB_sparse_weights DOUBLE[]"));
+        // Sparse columns removed — sparse vectors stored in BlobStore via SparseHandle
+        assert!(!ddl.contains("sparse_indices"));
+        assert!(!ddl.contains("sparse_weights"));
     }
 
     // ── generate_index_chunk_table_ddl ──────────────────────────────────
@@ -844,8 +831,9 @@ mod tests {
         kb_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
         let ddl = generate_index_chunk_table_ddl("ScopeKB", &kb_config, 384).unwrap();
         assert!(ddl.contains("ScopeKB_embedding FLOAT[384]"));
-        assert!(ddl.contains("ScopeKB_sparse_indices INT64[]"));
-        assert!(ddl.contains("ScopeKB_sparse_weights DOUBLE[]"));
+        // Sparse columns removed — sparse vectors stored in BlobStore via SparseHandle
+        assert!(!ddl.contains("sparse_indices"));
+        assert!(!ddl.contains("sparse_weights"));
     }
 
     // ── generate_index_chunk_rel_ddl ────────────────────────────────────

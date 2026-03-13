@@ -741,7 +741,8 @@ impl Node for KBEmbedNode {
             }
         }
 
-        // ── Sparse embedding ──
+        // ── Sparse embedding → insert into SparseHandle ──
+        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles");
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
                 let texts: Vec<String> = sparse_works.iter().map(|w| w.text.clone()).collect();
@@ -766,21 +767,13 @@ impl Node for KBEmbedNode {
                         .push((work, sv));
                 }
 
-                for ((entity_name, kb_name), group) in &groups {
-                    let indices_col = format!("{kb_name}_sparse_indices");
-                    let weights_col = format!("{kb_name}_sparse_weights");
-
+                for ((entity_name, _kb_name), group) in &groups {
+                    // Set _embed_hash + get offsets for handle.insert
                     let items_param = CypherValue::List(
-                        group.iter().map(|(work, sv)| {
+                        group.iter().map(|(work, _)| {
                             let mut map = BTreeMap::new();
                             map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
                             map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
-                            map.insert("indices".into(), CypherValue::List(
-                                sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
-                            ));
-                            map.insert("weights".into(), CypherValue::List(
-                                sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                            ));
                             CypherValue::Map(map)
                         }).collect(),
                     );
@@ -788,14 +781,37 @@ impl Node for KBEmbedNode {
                     let cypher = format!(
                         "UNWIND $items AS item \
                          MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                         SET n.{indices_col} = item.indices, n.{weights_col} = item.weights, \
-                         n._embed_hash = item.hash"
+                         SET n._embed_hash = item.hash \
+                         RETURN item.uuid, OFFSET(id(n)) AS offset"
                     );
 
-                    conn.execute_with_params(
+                    let result = conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
                     ).await.map_err(|e| e.to_string())?;
+
+                    // Insert into SparseHandle using offsets
+                    if let Some(ref handles) = sparse_handles {
+                        if let Some(handle) = handles.get(*entity_name) {
+                            let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
+                                .map(|(w, sv)| (w.uuid.as_str(), *sv))
+                                .collect();
+                            for row in &result.rows {
+                                if let (Some(uuid), Some(offset)) = (
+                                    row.first().and_then(|v| v.as_str()),
+                                    row.get(1).and_then(|v| v.as_i64()),
+                                ) {
+                                    if let Some(sv) = uuid_to_sv.get(uuid) {
+                                        let sv_idx = sparse_vector::index::SparseVector::new(
+                                            sv.indices.clone(), sv.values.clone(),
+                                        );
+                                        handle.insert(offset as u64, &sv_idx)
+                                            .map_err(|e| format!("sparse insert failed: {e}"))?;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -869,7 +885,7 @@ impl Node for KBEmbedNode {
                     }
                 }
 
-                // UNWIND sparse
+                // Insert sparse into SparseHandle (offsets resolved via MATCH)
                 {
                     let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &SparseVector)>> =
                         HashMap::new();
@@ -880,21 +896,11 @@ impl Node for KBEmbedNode {
                             .push((work, sv));
                     }
 
-                    for ((entity_name, kb_name), group) in &groups {
-                        let indices_col = format!("{kb_name}_sparse_indices");
-                        let weights_col = format!("{kb_name}_sparse_weights");
-
+                    for ((entity_name, _kb_name), group) in &groups {
                         let items_param = CypherValue::List(
-                            group.iter().map(|(work, sv)| {
+                            group.iter().map(|(work, _)| {
                                 let mut map = BTreeMap::new();
                                 map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
-                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
-                                map.insert("indices".into(), CypherValue::List(
-                                    sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
-                                ));
-                                map.insert("weights".into(), CypherValue::List(
-                                    sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                                ));
                                 CypherValue::Map(map)
                             }).collect(),
                         );
@@ -902,14 +908,35 @@ impl Node for KBEmbedNode {
                         let cypher = format!(
                             "UNWIND $items AS item \
                              MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n.{indices_col} = item.indices, n.{weights_col} = item.weights, \
-                             n._embed_hash = item.hash"
+                             RETURN item.uuid, OFFSET(id(n)) AS offset"
                         );
 
-                        conn.execute_with_params(
+                        let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
                         ).await.map_err(|e| e.to_string())?;
+
+                        if let Some(ref handles) = sparse_handles {
+                            if let Some(handle) = handles.get(*entity_name) {
+                                let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
+                                    .map(|(w, sv)| (w.uuid.as_str(), *sv))
+                                    .collect();
+                                for row in &result.rows {
+                                    if let (Some(uuid), Some(offset)) = (
+                                        row.first().and_then(|v| v.as_str()),
+                                        row.get(1).and_then(|v| v.as_i64()),
+                                    ) {
+                                        if let Some(sv) = uuid_to_sv.get(uuid) {
+                                            let sv_idx = sparse_vector::index::SparseVector::new(
+                                                sv.indices.clone(), sv.values.clone(),
+                                            );
+                                            handle.insert(offset as u64, &sv_idx)
+                                                .map_err(|e| format!("sparse insert failed: {e}"))?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1641,8 +1668,6 @@ impl Node for EmbedNode {
         ctx.log_metric("skipped_unchanged", skipped);
 
         let embedding_col = &self.embedding_col;
-        let sparse_indices_col = format!("{}_indices", self.sparse_col);
-        let sparse_weights_col = format!("{}_weights", self.sparse_col);
 
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {
@@ -1699,7 +1724,8 @@ impl Node for EmbedNode {
             }
         }
 
-        // ── Sparse embedding (GPU mini-batches) ──
+        // ── Sparse embedding (GPU mini-batches) → insert into SparseHandle ──
+        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles");
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
                 for chunk in sparse_works.chunks(self.gpu_batch_size) {
@@ -1723,17 +1749,12 @@ impl Node for EmbedNode {
                     }
 
                     for (entity_name, group) in &groups {
+                        // Set _embed_hash + get offsets for handle.insert
                         let items_param = CypherValue::List(
-                            group.iter().map(|(work, sv)| {
+                            group.iter().map(|(work, _)| {
                                 let mut map = BTreeMap::new();
                                 map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
                                 map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
-                                map.insert("indices".into(), CypherValue::List(
-                                    sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
-                                ));
-                                map.insert("weights".into(), CypherValue::List(
-                                    sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                                ));
                                 CypherValue::Map(map)
                             }).collect(),
                         );
@@ -1741,15 +1762,37 @@ impl Node for EmbedNode {
                         let cypher = format!(
                             "UNWIND $items AS item \
                              MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n.{sparse_indices_col} = item.indices, \
-                             n.{sparse_weights_col} = item.weights, \
-                             n._embed_hash = item.hash"
+                             SET n._embed_hash = item.hash \
+                             RETURN item.uuid, OFFSET(id(n)) AS offset"
                         );
 
-                        conn.execute_with_params(
+                        let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
                         ).await.map_err(|e| e.to_string())?;
+
+                        // Insert into SparseHandle using offsets
+                        if let Some(ref handles) = sparse_handles {
+                            if let Some(handle) = handles.get(*entity_name) {
+                                let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
+                                    .map(|(w, sv)| (w.uuid.as_str(), *sv))
+                                    .collect();
+                                for row in &result.rows {
+                                    if let (Some(uuid), Some(offset)) = (
+                                        row.first().and_then(|v| v.as_str()),
+                                        row.get(1).and_then(|v| v.as_i64()),
+                                    ) {
+                                        if let Some(sv) = uuid_to_sv.get(uuid) {
+                                            let sv_idx = sparse_vector::index::SparseVector::new(
+                                                sv.indices.clone(), sv.values.clone(),
+                                            );
+                                            handle.insert(offset as u64, &sv_idx)
+                                                .map_err(|e| format!("sparse insert failed: {e}"))?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1784,7 +1827,7 @@ impl Node for EmbedNode {
                     }
                 }
 
-                // UNWIND dense
+                // UNWIND dense (sets embedding + _embed_hash)
                 {
                     let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &Vec<f32>)>> = HashMap::new();
                     for (work, vec) in &dense_results {
@@ -1823,7 +1866,7 @@ impl Node for EmbedNode {
                     }
                 }
 
-                // UNWIND sparse
+                // Insert sparse into SparseHandle (offsets resolved via MATCH)
                 {
                     let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &SparseVector)>> =
                         HashMap::new();
@@ -1832,17 +1875,11 @@ impl Node for EmbedNode {
                     }
 
                     for (entity_name, group) in &groups {
+                        // Get offsets for each uuid
                         let items_param = CypherValue::List(
-                            group.iter().map(|(work, sv)| {
+                            group.iter().map(|(work, _)| {
                                 let mut map = BTreeMap::new();
                                 map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
-                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
-                                map.insert("indices".into(), CypherValue::List(
-                                    sv.indices.iter().map(|&i| CypherValue::Int(i as i64)).collect(),
-                                ));
-                                map.insert("weights".into(), CypherValue::List(
-                                    sv.values.iter().map(|&f| CypherValue::Float(f as f64)).collect(),
-                                ));
                                 CypherValue::Map(map)
                             }).collect(),
                         );
@@ -1850,15 +1887,35 @@ impl Node for EmbedNode {
                         let cypher = format!(
                             "UNWIND $items AS item \
                              MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n.{sparse_indices_col} = item.indices, \
-                             n.{sparse_weights_col} = item.weights, \
-                             n._embed_hash = item.hash"
+                             RETURN item.uuid, OFFSET(id(n)) AS offset"
                         );
 
-                        conn.execute_with_params(
+                        let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
                         ).await.map_err(|e| e.to_string())?;
+
+                        if let Some(ref handles) = sparse_handles {
+                            if let Some(handle) = handles.get(*entity_name) {
+                                let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
+                                    .map(|(w, sv)| (w.uuid.as_str(), *sv))
+                                    .collect();
+                                for row in &result.rows {
+                                    if let (Some(uuid), Some(offset)) = (
+                                        row.first().and_then(|v| v.as_str()),
+                                        row.get(1).and_then(|v| v.as_i64()),
+                                    ) {
+                                        if let Some(sv) = uuid_to_sv.get(uuid) {
+                                            let sv_idx = sparse_vector::index::SparseVector::new(
+                                                sv.indices.clone(), sv.values.clone(),
+                                            );
+                                            handle.insert(offset as u64, &sv_idx)
+                                                .map_err(|e| format!("sparse insert failed: {e}"))?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
