@@ -1,9 +1,16 @@
 //! sparse-vector: typed Rust ↔ C++ bridge for sparse vector indexing.
 //!
-//! This crate provides a cxx bridge for creating, managing, and querying
-//! in-memory sparse vector indexes with bincode persistence.
+//! V2: posting lists with WAND pruning, batch scoring, dimension remapping.
+//! Inspired by Qdrant sparse index (Apache 2.0).
+//!
 //! Compiled as a static library and linked into the rag3db C++ extension.
 
 mod bridge;
 mod handle;
-mod index;
+pub mod index;
+pub mod mmap_index;
+pub mod posting_list;
+pub mod posting_list_common;
+pub mod scores_memory_pool;
+pub mod search_context;
+pub mod top_k;

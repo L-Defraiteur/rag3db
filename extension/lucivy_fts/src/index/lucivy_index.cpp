@@ -334,6 +334,11 @@ void LucivyIndex::flushIfDirty() {
     dirty_ = false;
 }
 
+void LucivyIndex::close() {
+    flushIfDirty();
+    close_index(*handle_);
+}
+
 void LucivyIndex::checkpointInMemory() {
     if (dirty_) {
         commit(*handle_);

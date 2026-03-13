@@ -370,7 +370,7 @@ mod tests {
     #[ignore]
     async fn bge_m3_dense_basic() {
         let embedder = shared_embedder();
-        assert_eq!(embedder.dim(), 1024);
+        assert_eq!(Embedder::dim(&*embedder), 1024);
 
         let start = std::time::Instant::now();
         let results = embedder.embed(&["hello world".into()]).await.unwrap();
@@ -533,7 +533,7 @@ mod tests {
     #[ignore]
     async fn bge_m3_as_embedder_trait() {
         let embedder: &dyn Embedder = shared_embedder();
-        assert_eq!(embedder.dim(), 1024);
+        assert_eq!(Embedder::dim(&*embedder), 1024);
         let result = embedder.embed(&["test".into()]).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 1024);

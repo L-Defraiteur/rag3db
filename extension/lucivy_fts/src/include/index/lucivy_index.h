@@ -69,6 +69,10 @@ public:
     // Called lazily before queries, or manually if needed.
     void flushIfDirty();
 
+    // Close the index: flush dirty writes and release the IndexWriter lock.
+    // Index files remain on disk. After close, writes will fail with "index is closed".
+    void close();
+
 private:
     rust::Box<::LucivyHandle> handle_;
     // Cached field_ids from get_field_ids() for the indexed columns.

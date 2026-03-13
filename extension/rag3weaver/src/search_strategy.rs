@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::connection::CypherValue;
 use crate::search::{
@@ -18,7 +18,7 @@ use crate::search::{
 ///
 /// Combines the fields of `SearchResult` with expansion fields (children, graph).
 /// All fields at the same level — no wrapper/composition drilling.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedResult {
     pub uuid: String,
@@ -78,7 +78,7 @@ impl From<UnifiedResult> for SearchResult {
 // ─── ChildSummary ───────────────────────────────────────────────────────────
 
 /// Lightweight child fetched by FetchRelated (no search score).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChildSummary {
     pub uuid: String,
@@ -111,7 +111,7 @@ impl Default for SearchStrategy {
 }
 
 /// A rule that triggers graph expansion for matching search results.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpansionRule {
     /// The relation to traverse (e.g. "HAS_FILE", "PARENT_OF").
     pub relation: String,
@@ -136,7 +136,7 @@ impl Default for ExpansionRule {
 }
 
 /// Direction of relation traversal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExpansionDirection {
     Outgoing,
     Incoming,
@@ -145,7 +145,7 @@ pub enum ExpansionDirection {
 // ─── SearchStrategyResponse ─────────────────────────────────────────────────
 
 /// Complete response from `search_with_strategy()`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchStrategyResponse {
     pub results: Vec<UnifiedResult>,

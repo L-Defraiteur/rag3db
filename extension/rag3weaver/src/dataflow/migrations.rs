@@ -26,9 +26,7 @@ use super::checkpoint_store::CypherCheckpointStore;
 use super::graph::DataflowGraph;
 use super::mermaid::parse_mermaid_template;
 use super::node_registry::NodeRegistry;
-use super::runtime::DataflowRuntime;
-use super::services::ServiceRegistry;
-use crate::connection::{CypherValue, DbConnection, QueryParam};
+use crate::catalog::Catalog;
 use crate::hash::content_hash;
 
 // ─── MigrationFile ──────────────────────────────────────────────────────────
@@ -261,22 +259,20 @@ impl std::error::Error for MigrationError {}
 
 // ─── MigrationRunner ────────────────────────────────────────────────────────
 
-const LOCK_TTL_MS: u64 = 10 * 60 * 1000; // 10 minutes
-const LOCK_UUID: &str = "_migration_lock";
-
 /// Runs schema migrations defined as Mermaid dataflow graphs.
+///
+/// Pure orchestrator: scans files, decides ordering, delegates all DB work
+/// to the [`Catalog`] via its `migration_*` methods.
 pub struct MigrationRunner {
-    conn: Arc<dyn DbConnection>,
     registry: Arc<NodeRegistry>,
     migration_dirs: Vec<PathBuf>,
     lock_id: String,
 }
 
 impl MigrationRunner {
-    pub fn new(conn: Arc<dyn DbConnection>, registry: Arc<NodeRegistry>) -> Self {
+    pub fn new(registry: Arc<NodeRegistry>) -> Self {
         let lock_id = format!("runner-{}", timestamp_ms());
         Self {
-            conn,
             registry,
             migration_dirs: Vec::new(),
             lock_id,
@@ -291,38 +287,8 @@ impl MigrationRunner {
     // ─── Schema initialization ──────────────────────────────────────────
 
     /// Ensure migration tables exist.
-    pub async fn initialize(&self) -> Result<(), MigrationError> {
-        self.conn
-            .execute(
-                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigration(\
-                     _uuid STRING, \
-                     version INT64, \
-                     name STRING, \
-                     status STRING, \
-                     direction STRING, \
-                     checksum STRING, \
-                     execution_id STRING, \
-                     applied_at INT64, \
-                     duration_ms INT64, \
-                     error STRING, \
-                     PRIMARY KEY(_uuid))",
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        self.conn
-            .execute(
-                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigrationLock(\
-                     _uuid STRING, \
-                     locked_by STRING, \
-                     locked_at INT64, \
-                     expires_at INT64, \
-                     PRIMARY KEY(_uuid))",
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        Ok(())
+    pub async fn initialize(&self, catalog: &Catalog) -> Result<(), MigrationError> {
+        catalog.migration_initialize().await
     }
 
     // ─── Scanning ───────────────────────────────────────────────────────
@@ -350,50 +316,12 @@ impl MigrationRunner {
         Ok(all_files)
     }
 
-    /// Load applied migrations from the database.
-    async fn load_applied(&self) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
-        let result = self
-            .conn
-            .execute(
-                "MATCH (m:_DataflowMigration) \
-                 RETURN m.version, m.name, m.status, m.checksum, \
-                        m.execution_id, m.applied_at, m.duration_ms, m.error \
-                 ORDER BY m.version",
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        let mut applied = HashMap::new();
-        for row in &result.rows {
-            let version = row[0].as_i64().unwrap_or(0) as u64;
-            let name = row[1].as_str().unwrap_or("").to_string();
-            let status = row[2].as_str().unwrap_or("applied").to_string();
-            let checksum = row[3].as_str().unwrap_or("").to_string();
-            let execution_id = row[4].as_str().unwrap_or("").to_string();
-            let applied_at = row[5].as_i64().unwrap_or(0) as u64;
-            let duration_ms = row[6].as_i64().unwrap_or(0) as u64;
-            let error = row[7].as_str().unwrap_or("").to_string();
-
-            applied.insert(version, AppliedMigration {
-                name,
-                status,
-                checksum,
-                execution_id,
-                applied_at,
-                duration_ms,
-                error,
-            });
-        }
-
-        Ok(applied)
-    }
-
     // ─── Status ─────────────────────────────────────────────────────────
 
     /// List all migrations with their current status.
-    pub async fn status(&self) -> Result<Vec<MigrationStatus>, MigrationError> {
+    pub async fn status(&self, catalog: &Catalog) -> Result<Vec<MigrationStatus>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = self.load_applied().await?;
+        let applied = catalog.migration_load_applied().await?;
 
         let mut statuses = Vec::new();
         for file in &files {
@@ -432,9 +360,9 @@ impl MigrationRunner {
     }
 
     /// List pending migrations (not yet applied), sorted by version.
-    pub async fn pending(&self) -> Result<Vec<MigrationFile>, MigrationError> {
+    pub async fn pending(&self, catalog: &Catalog) -> Result<Vec<MigrationFile>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = self.load_applied().await?;
+        let applied = catalog.migration_load_applied().await?;
 
         Ok(files
             .into_iter()
@@ -453,11 +381,12 @@ impl MigrationRunner {
     /// If `dry_run` is true, parse and validate each migration but do not execute.
     pub async fn apply(
         &self,
+        catalog: &mut Catalog,
         target_version: Option<u64>,
         dry_run: bool,
         vars: &HashMap<String, String>,
     ) -> Result<Vec<MigrationResult>, MigrationError> {
-        let mut pending = self.pending().await?;
+        let mut pending = self.pending(catalog).await?;
         if let Some(target) = target_version {
             pending.retain(|f| f.version <= target);
         }
@@ -467,7 +396,7 @@ impl MigrationRunner {
         }
 
         if !dry_run {
-            self.acquire_lock().await?;
+            catalog.migration_acquire_lock(&self.lock_id).await?;
         }
 
         let mut results = Vec::new();
@@ -475,7 +404,7 @@ impl MigrationRunner {
             let result = if dry_run {
                 self.dry_run_migration(file, vars)?
             } else {
-                self.apply_migration(file, vars).await
+                self.apply_migration(catalog, file, vars).await
                     .unwrap_or_else(|e| MigrationResult {
                         version: file.version,
                         name: file.name.clone(),
@@ -495,13 +424,13 @@ impl MigrationRunner {
         }
 
         if !dry_run {
-            self.release_lock().await.ok(); // Best-effort release
+            catalog.migration_release_lock().await.ok(); // Best-effort release
         }
 
         Ok(results)
     }
 
-    /// Dry-run: parse + validate + check reversibility.
+    /// Dry-run: parse + validate + check reversibility. No DB needed.
     fn dry_run_migration(
         &self,
         file: &MigrationFile,
@@ -550,9 +479,10 @@ impl MigrationRunner {
         })
     }
 
-    /// Apply a single migration.
+    /// Apply a single migration via Catalog.
     async fn apply_migration(
         &self,
+        catalog: &mut Catalog,
         file: &MigrationFile,
         vars: &HashMap<String, String>,
     ) -> Result<MigrationResult, MigrationError> {
@@ -574,30 +504,17 @@ impl MigrationRunner {
                 detail: e,
             })?;
 
-        // Set up services (conn for CypherNode/ValidateNode)
-        let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-
-        // Set up checkpoint store
-        let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
-        checkpoint_store.initialize().await
-            .map_err(|e| MigrationError::DbError(e))?;
-
-        // Execution ID for this migration
         let execution_id = format!("migration-{:03}_{}", file.version, file.name);
 
-        // Execute via DataflowRuntime
-        let runtime = DataflowRuntime::with_services(100, services);
-        let exec_result = runtime
-            .execute_with_checkpoint(&mut graph, &checkpoint_store, &execution_id)
+        let exec_result = catalog
+            .migration_execute_graph(&mut graph, &execution_id)
             .await;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match exec_result {
             Ok(_) => {
-                // Record success
-                self.record_migration(
+                catalog.migration_record(
                     file, "applied", "up", &execution_id, duration_ms, "",
                 )
                 .await?;
@@ -613,9 +530,8 @@ impl MigrationRunner {
                 })
             }
             Err(e) => {
-                // Record failure
-                self.record_migration(
-                    file, "failed", "up", &execution_id, duration_ms, &e,
+                catalog.migration_record(
+                    file, "failed", "up", &execution_id, duration_ms, &e.to_string(),
                 )
                 .await
                 .ok(); // Best-effort
@@ -623,7 +539,7 @@ impl MigrationRunner {
                 Err(MigrationError::ExecutionError {
                     version: file.version,
                     name: file.name.clone(),
-                    detail: e,
+                    detail: e.to_string(),
                 })
             }
         }
@@ -634,24 +550,26 @@ impl MigrationRunner {
     /// Rollback a previously applied migration.
     ///
     /// Loads the undo contexts from the checkpoint, reconstructs the nodes,
-    /// and calls undo() in reverse topological order.
+    /// calls undo() in reverse topological order, then auto-drains to rebuild
+    /// chunks/embeddings/FTS for any restored entities.
     pub async fn rollback(
         &self,
+        catalog: &mut Catalog,
         version: u64,
     ) -> Result<MigrationResult, MigrationError> {
         let start = std::time::Instant::now();
 
         // Check it was applied
-        let applied = self.load_applied().await?;
+        let applied = catalog.migration_load_applied().await?;
         let am = applied.get(&version).ok_or(MigrationError::NotApplied { version })?;
         if am.status != "applied" {
             return Err(MigrationError::NotApplied { version });
         }
 
-        self.acquire_lock().await?;
+        catalog.migration_acquire_lock(&self.lock_id).await?;
 
         // Load the checkpoint for this execution
-        let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
+        let checkpoint_store = CypherCheckpointStore::new(catalog.conn_arc());
         let checkpoint = checkpoint_store
             .load_execution(&am.execution_id)
             .await
@@ -676,7 +594,7 @@ impl MigrationRunner {
             .map(|n| n.name().to_string())
             .collect();
         if !non_reversible.is_empty() {
-            self.release_lock().await.ok();
+            catalog.migration_release_lock().await.ok();
             return Err(MigrationError::NotReversible {
                 version,
                 name: am.name.clone(),
@@ -684,73 +602,38 @@ impl MigrationRunner {
             });
         }
 
-        // Get topological order and reverse it
-        let order = graph
-            .topological_sort()
-            .map_err(|e| MigrationError::GraphError {
+        // Rollback via Catalog (undo + auto-drain)
+        let am_name = am.name.clone();
+        let am_execution_id = am.execution_id.clone();
+
+        catalog.migration_rollback_graph(&mut graph, &checkpoint)
+            .await
+            .map_err(|e| MigrationError::ExecutionError {
                 version,
-                name: am.name.clone(),
-                detail: e,
+                name: am_name.clone(),
+                detail: e.to_string(),
             })?;
-        let reversed: Vec<String> = order.into_iter().rev().collect();
-
-        // Set up services
-        let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-        let services = Arc::new(services);
-
-        // Execute undo in reverse order
-        for node_name in &reversed {
-            let node_idx = graph.nodes.iter().position(|n| n.name() == node_name)
-                .ok_or_else(|| MigrationError::GraphError {
-                    version,
-                    name: am.name.clone(),
-                    detail: format!("node '{}' not found in graph", node_name),
-                })?;
-            let node = &mut graph.nodes[node_idx];
-
-            // Load undo context from checkpoint
-            let undo_ctx = checkpoint
-                .nodes
-                .get(node_name.as_str())
-                .and_then(|nc| nc.undo_context.clone());
-
-            if let Some(undo_ctx) = undo_ctx {
-                let mut ctx = super::node::NodeContext::with_services(
-                    services.clone(),
-                );
-                node.undo(&mut ctx, undo_ctx)
-                    .await
-                    .map_err(|e| MigrationError::ExecutionError {
-                        version,
-                        name: am.name.clone(),
-                        detail: format!("undo of node '{}' failed: {e}", node_name),
-                    })?;
-            }
-        }
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        // Find the file to get checksum
+        // Record the rollback
         let files = self.scan_all()?;
         let file = files.iter().find(|f| f.version == version);
 
-        // Record the rollback
         if let Some(file) = file {
-            self.record_migration(
-                file, "rolled_back", "down", &am.execution_id, duration_ms, "",
+            catalog.migration_record(
+                file, "rolled_back", "down", &am_execution_id, duration_ms, "",
             )
             .await?;
         } else {
-            // File may have been deleted — update the existing record
-            self.update_migration_status(version, "rolled_back").await?;
+            catalog.migration_update_status(version, "rolled_back").await?;
         }
 
-        self.release_lock().await.ok();
+        catalog.migration_release_lock().await.ok();
 
         Ok(MigrationResult {
             version,
-            name: am.name.clone(),
+            name: am_name,
             direction: MigrationDirection::Down,
             state: MigrationState::RolledBack,
             duration_ms,
@@ -764,9 +647,10 @@ impl MigrationRunner {
     /// Check which pending migrations are fully reversible.
     pub async fn check_reversible(
         &self,
+        catalog: &Catalog,
         vars: &HashMap<String, String>,
     ) -> Result<Vec<(MigrationFile, bool)>, MigrationError> {
-        let pending = self.pending().await?;
+        let pending = self.pending(catalog).await?;
         let mut results = Vec::new();
 
         for file in pending {
@@ -790,153 +674,19 @@ impl MigrationRunner {
 
         Ok(results)
     }
-
-    // ─── Locking ────────────────────────────────────────────────────────
-
-    async fn acquire_lock(&self) -> Result<(), MigrationError> {
-        let now = timestamp_ms();
-
-        // Check for existing lock
-        let result = self
-            .conn
-            .execute_with_params(
-                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) \
-                 RETURN l.locked_by, l.locked_at, l.expires_at",
-                &[QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string()))],
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        if let Some(row) = result.rows.first() {
-            let locked_by = row[0].as_str().unwrap_or("unknown").to_string();
-            let locked_at = row[1].as_i64().unwrap_or(0) as u64;
-            let expires_at = row[2].as_i64().unwrap_or(0) as u64;
-
-            if now < expires_at {
-                // Lock is still valid
-                return Err(MigrationError::Locked {
-                    by: locked_by,
-                    since: locked_at,
-                });
-            }
-            // Lock expired — delete it
-            self.conn
-                .execute_with_params(
-                    "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
-                    &[QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string()))],
-                )
-                .await
-                .map_err(|e| MigrationError::DbError(e.to_string()))?;
-        }
-
-        // Create lock
-        self.conn
-            .execute_with_params(
-                "CREATE (l:_DataflowMigrationLock {\
-                     _uuid: $uuid, \
-                     locked_by: $locked_by, \
-                     locked_at: $locked_at, \
-                     expires_at: $expires_at})",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string())),
-                    QueryParam::new("locked_by", CypherValue::String(self.lock_id.clone())),
-                    QueryParam::new("locked_at", CypherValue::Int(now as i64)),
-                    QueryParam::new("expires_at", CypherValue::Int((now + LOCK_TTL_MS) as i64)),
-                ],
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn release_lock(&self) -> Result<(), MigrationError> {
-        self.conn
-            .execute_with_params(
-                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
-                &[QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string()))],
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-        Ok(())
-    }
-
-    // ─── DB helpers ─────────────────────────────────────────────────────
-
-    async fn record_migration(
-        &self,
-        file: &MigrationFile,
-        status: &str,
-        direction: &str,
-        execution_id: &str,
-        duration_ms: u64,
-        error: &str,
-    ) -> Result<(), MigrationError> {
-        let uuid = format!("migration-{:03}", file.version);
-        let now = timestamp_ms();
-
-        self.conn
-            .execute_with_params(
-                "MERGE (m:_DataflowMigration {_uuid: $uuid}) \
-                 SET m.version = $version, \
-                     m.name = $name, \
-                     m.status = $status, \
-                     m.direction = $direction, \
-                     m.checksum = $checksum, \
-                     m.execution_id = $execution_id, \
-                     m.applied_at = $applied_at, \
-                     m.duration_ms = $duration_ms, \
-                     m.error = $error",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(uuid)),
-                    QueryParam::new("version", CypherValue::Int(file.version as i64)),
-                    QueryParam::new("name", CypherValue::String(file.name.clone())),
-                    QueryParam::new("status", CypherValue::String(status.to_string())),
-                    QueryParam::new("direction", CypherValue::String(direction.to_string())),
-                    QueryParam::new("checksum", CypherValue::String(file.checksum.clone())),
-                    QueryParam::new("execution_id", CypherValue::String(execution_id.to_string())),
-                    QueryParam::new("applied_at", CypherValue::Int(now as i64)),
-                    QueryParam::new("duration_ms", CypherValue::Int(duration_ms as i64)),
-                    QueryParam::new("error", CypherValue::String(error.to_string())),
-                ],
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn update_migration_status(
-        &self,
-        version: u64,
-        status: &str,
-    ) -> Result<(), MigrationError> {
-        let uuid = format!("migration-{:03}", version);
-        self.conn
-            .execute_with_params(
-                "MATCH (m:_DataflowMigration {_uuid: $uuid}) SET m.status = $status",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(uuid)),
-                    QueryParam::new("status", CypherValue::String(status.to_string())),
-                ],
-            )
-            .await
-            .map_err(|e| MigrationError::DbError(e.to_string()))?;
-        Ok(())
-    }
 }
 
 // ─── Internal types ─────────────────────────────────────────────────────────
 
-struct AppliedMigration {
-    name: String,
-    status: String,
-    checksum: String,
-    execution_id: String,
-    applied_at: u64,
-    duration_ms: u64,
+pub(crate) struct AppliedMigration {
+    pub(crate) name: String,
+    pub(crate) status: String,
+    pub(crate) checksum: String,
+    pub(crate) execution_id: String,
+    pub(crate) applied_at: u64,
+    pub(crate) duration_ms: u64,
     #[allow(dead_code)]
-    error: String,
+    pub(crate) error: String,
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

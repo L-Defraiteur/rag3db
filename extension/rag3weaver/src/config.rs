@@ -313,20 +313,32 @@ pub struct EmbeddingConfig {
 
 /// Field definition for a simple entity (registerEntity API).
 /// Unlike `FieldDef`, uses `is_title`/`is_content` instead of KB references.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct SimpleFieldDef {
     /// Type of the field (String, Text, Int64, Double, Boolean, Timestamp, etc.)
     #[serde(default, rename = "type", alias = "field_type", alias = "fieldType")]
     pub field_type: FieldType,
 
     /// Title field — provides context for chunks. At most one per entity.
+    /// Shortcut for `title_for: "self"` (simple pipeline, no KB).
     #[serde(default, alias = "is_title")]
     pub is_title: bool,
 
     /// Content field — concatenated for chunking/embedding. Multiple allowed.
+    /// Shortcut for `content_for: ["self"]` (simple pipeline, no KB).
     #[serde(default, alias = "is_content")]
     pub is_content: bool,
+
+    /// Explicit KB title assignment. This field provides the title for the named KB.
+    /// Mutually exclusive with `is_title`.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "title_for")]
+    pub title_for: Option<String>,
+
+    /// Explicit KB content assignment. This field provides content for the named KBs.
+    /// Mutually exclusive with `is_content`.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "content_for")]
+    pub content_for: Option<Vec<String>>,
 }
 
 /// Configuration for a simple entity (registerEntity API).
@@ -354,21 +366,47 @@ impl Default for EntityConfig {
 }
 
 impl EntityConfig {
-    /// Get the title field name (first field with is_title=true).
+    /// Get the title field name (first field with is_title=true or title_for="self").
     pub fn title_field(&self) -> Option<&str> {
         self.fields.iter()
-            .find(|(_, f)| f.is_title)
+            .find(|(_, f)| f.is_title || f.title_for.as_deref() == Some("self"))
             .map(|(name, _)| name.as_str())
     }
 
-    /// Get content field names (fields with is_content=true), sorted.
+    /// Get content field names (fields with is_content=true or content_for containing "self"), sorted.
     pub fn content_fields(&self) -> Vec<&str> {
         let mut fields: Vec<&str> = self.fields.iter()
-            .filter(|(_, f)| f.is_content)
+            .filter(|(_, f)| f.is_content || f.content_for.as_ref().map_or(false, |v| v.iter().any(|s| s == "self")))
             .map(|(name, _)| name.as_str())
             .collect();
         fields.sort();
         fields
+    }
+
+    /// Returns true if this entity has simple pipeline content fields (is_content or content_for="self").
+    pub fn has_simple_pipeline(&self) -> bool {
+        !self.content_fields().is_empty()
+    }
+
+    /// Returns true if any field participates in a KB (title_for or content_for pointing to a KB name, not "self").
+    pub fn has_kb_participation(&self) -> bool {
+        self.fields.values().any(|f| {
+            f.title_for.as_ref().map_or(false, |v| v != "self")
+                || f.content_for.as_ref().map_or(false, |v| v.iter().any(|s| s != "self"))
+        })
+    }
+
+    /// Validate field definitions (mutual exclusivity of is_title/title_for, is_content/content_for).
+    pub fn validate(&self) -> Result<(), String> {
+        for (name, f) in &self.fields {
+            if f.is_title && f.title_for.is_some() {
+                return Err(format!("Field '{name}': is_title and title_for are mutually exclusive"));
+            }
+            if f.is_content && f.content_for.is_some() {
+                return Err(format!("Field '{name}': is_content and content_for are mutually exclusive"));
+            }
+        }
+        Ok(())
     }
 }
 

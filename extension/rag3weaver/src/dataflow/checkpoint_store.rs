@@ -363,10 +363,24 @@ impl CheckpointStore for CypherCheckpointStore {
             .await
             .map_err(|e| e.to_string())?;
 
-        // Delete node state rows (successful run = clean up)
+        // Clean up node state rows:
+        // - Delete rows without undo context (no longer needed)
+        // - Keep rows with undo context but clear output_ports (for rollback)
         self.conn
             .execute_with_params(
-                "MATCH (n:_DataflowNodeState {execution_id: $exec_id}) DELETE n",
+                "MATCH (n:_DataflowNodeState {execution_id: $exec_id}) \
+                 WHERE n.undo_json = '' OR n.undo_json IS NULL \
+                 DELETE n",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Clear bulky output_ports from surviving undo nodes
+        self.conn
+            .execute_with_params(
+                "MATCH (n:_DataflowNodeState {execution_id: $exec_id}) \
+                 SET n.output_ports = ''",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
             .await

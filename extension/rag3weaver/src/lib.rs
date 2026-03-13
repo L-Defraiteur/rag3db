@@ -50,7 +50,7 @@ pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef,
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;
 pub use uuid::{chunk_uuid, hashsafe_uuid};
-pub use catalog::{Catalog, CatalogError, KBMetadata};
+pub use catalog::{Catalog, CatalogError, KBMetadata, ReindexStats};
 pub use records::{DeleteResult, UpdateResult, UpdateStatus};
 pub use search::{
     AttributedChunk, BM25HitDiagnostic, BM25Mode, BoostType, ChunkInfo, ChunkOverlapDiag,

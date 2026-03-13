@@ -2057,3 +2057,143 @@ async fn debug_unwind_match_set() {
 
     assert_eq!(nulls, 0, "All 3 nodes should have non-null val after UNWIND SET (3 items)");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 6 — Sparse mmap persistence: create → drain → close → reopen → search
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Config for persistence test: sparse-only (no BM25/lucivy to avoid lock issues).
+#[cfg(feature = "bge-m3")]
+fn make_sparse_only_config() -> CatalogConfig {
+    let mut fields = HashMap::new();
+    fields.insert("title".into(), text_title_for("kb"));
+    fields.insert("body".into(), text_content_for("kb"));
+
+    let mut entities = HashMap::new();
+    entities.insert(
+        "Document".into(),
+        EntityDef {
+            fields,
+            hashsafe: None,
+        },
+    );
+
+    let mut kbs = HashMap::new();
+    kbs.insert(
+        "kb".into(),
+        KBConfig {
+            signals: SearchSignals::VECTOR | SearchSignals::SPARSE,
+            ..Default::default()
+        },
+    );
+
+    CatalogConfig {
+        name: Some("sparse-persist-test".into()),
+        entities,
+        relations: HashMap::new(),
+        knowledge_bases: kbs,
+        embedding_dim: 1024,
+        ..Default::default()
+    }
+}
+
+/// Sparse search survives close + reopen (mmap persistence roundtrip).
+#[cfg(feature = "bge-m3")]
+#[tokio::test]
+async fn phase6_sparse_mmap_persistence() {
+    use std::time::Instant;
+
+    let tmpdir = tempfile::tempdir().unwrap();
+    let db_path = tmpdir.path().join("sparse_mmap_test.db");
+    let db_str = db_path.to_string_lossy().to_string();
+
+    // ── Session 1: create catalog, ingest docs, drain (builds sparse index) ──
+    {
+        let t0 = Instant::now();
+        let conn = Rag3dbConnection::new(&db_str).expect("create DB");
+        let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+        load_extensions(boxed.as_ref()).await;
+
+        let config = make_sparse_only_config();
+        let embedder: Arc<dyn Embedder> = BGE_M3.clone();
+        let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
+        let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+        catalog.set_embedder(embedder);
+        catalog.set_sparse_embedder(sparse);
+        catalog.initialize().await.unwrap();
+
+        let docs = [
+            ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
+            ("French Cuisine", "La cuisine française est mondialement reconnue. Les sauces, les pâtisseries et les techniques de cuisson sont au cœur de la gastronomie."),
+            ("Machine Learning", "Deep learning uses neural networks with many layers. Transformers and attention mechanisms have revolutionized natural language processing."),
+        ];
+        for (title, body) in &docs {
+            let mut data = BTreeMap::new();
+            data.insert("title".into(), CypherValue::String(title.to_string()));
+            data.insert("body".into(), CypherValue::String(body.to_string()));
+            catalog.create("Document", data).unwrap();
+        }
+
+        let result = catalog.drain().await;
+        assert_eq!(result.failed, 0);
+        eprintln!("  [mmap-persist] session 1: drain {:?} (processed={})", t0.elapsed(), result.processed);
+        // Gracefully close lucivy indexes to release file locks before reopen.
+        catalog.shutdown().await.unwrap();
+        drop(catalog);
+    }
+
+    // ── Session 2: reopen, search should work from mmap'd sparse index ──
+    {
+        let t0 = Instant::now();
+        let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
+        let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+        load_extensions(boxed.as_ref()).await;
+
+        let config = make_sparse_only_config();
+        let embedder: Arc<dyn Embedder> = BGE_M3.clone();
+        let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
+        let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+        catalog.set_embedder(embedder);
+        catalog.set_sparse_embedder(sparse);
+        catalog.initialize().await.unwrap();
+        eprintln!("  [mmap-persist] session 2: reopen {:?}", t0.elapsed());
+
+        // Sparse search should find results from persisted mmap index
+        let response = catalog
+            .search(
+                "kb",
+                "programming",
+                SearchOptions {
+                    consistency: Consistency::Immediate,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        eprintln!(
+            "[mmap-persist] results={}, vector={}, bm25={}, sparse={}",
+            response.results.len(),
+            response.meta.vector_count,
+            response.meta.bm25_count,
+            response.meta.sparse_count,
+        );
+        assert!(!response.results.is_empty(), "Should find results after reopen");
+        assert!(
+            response.meta.sparse_count > 0,
+            "sparse_count should be > 0 after mmap reopen"
+        );
+
+        // Top result should still be Rust doc
+        let top = &response.results[0];
+        let title = top
+            .data
+            .as_ref()
+            .and_then(|d| d.get("_title"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        eprintln!("[mmap-persist] Top: '{}' (score={})", title, top.score);
+
+        eprintln!("✓ sparse mmap persistence roundtrip: search works after close + reopen");
+    }
+}

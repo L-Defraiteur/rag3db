@@ -1,9 +1,9 @@
 [package]
 name = "sparse-vector"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
-description = "C FFI bindings for sparse vector indexing, used as a rag3db extension"
+description = "Sparse vector inverted index with WAND pruning, inspired by Qdrant (Apache 2.0)"
 
 [lib]
 crate-type = ["staticlib"]
@@ -12,6 +12,9 @@ crate-type = ["staticlib"]
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 cxx = "1.0"
+ordered-float = "4"
+parking_lot = "0.12"
+memmap2 = "0.9"
 
 [build-dependencies]
 cxx-build = "1.0"

@@ -95,6 +95,7 @@ fn make_product_config() -> EntityConfig {
             field_type: FieldType::String,
             is_title: true,
             is_content: false,
+            ..Default::default()
         },
     );
     fields.insert(
@@ -103,6 +104,7 @@ fn make_product_config() -> EntityConfig {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         },
     );
     fields.insert(
@@ -111,6 +113,7 @@ fn make_product_config() -> EntityConfig {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         },
     );
     fields.insert(
@@ -119,6 +122,7 @@ fn make_product_config() -> EntityConfig {
             field_type: FieldType::Double,
             is_title: false,
             is_content: false,
+            ..Default::default()
         },
     );
 

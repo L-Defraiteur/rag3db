@@ -1,5 +1,6 @@
 add_library(lucivy_fts_extension_function
     OBJECT
+    close_lucivy_index.cpp
     create_lucivy_index.cpp
     query_lucivy_index.cpp
     drop_lucivy_index.cpp

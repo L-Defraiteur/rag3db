@@ -1,4 +1,4 @@
-//! cxx bridge: typed Rust ↔ C++ interface for sparse_vector.
+//! cxx bridge: typed Rust <-> C++ interface for sparse_vector.
 
 use crate::handle::SparseHandle;
 use crate::index::SparseVector;
@@ -72,14 +72,12 @@ fn add_sparse_document(
     weights: &[f32],
 ) -> Result<i64, String> {
     let vector = SparseVector::new(indices.to_vec(), weights.to_vec());
-    let mut idx = handle.index.lock().map_err(|_| "lock poisoned".to_string())?;
-    idx.insert(node_id, &vector);
+    handle.insert(node_id, &vector)?;
     Ok(0)
 }
 
 fn delete_sparse_document(handle: &SparseHandle, node_id: u64) -> Result<i64, String> {
-    let mut idx = handle.index.lock().map_err(|_| "lock poisoned".to_string())?;
-    idx.remove(node_id);
+    handle.remove(node_id)?;
     Ok(0)
 }
 
@@ -92,8 +90,8 @@ fn sparse_search(
     limit: u32,
 ) -> Vec<ffi::SparseSearchResult> {
     let query = SparseVector::new(query_indices.to_vec(), query_weights.to_vec());
-    let idx = handle.index.lock().unwrap();
-    idx.search(&query, limit as usize)
+    handle
+        .search(&query, limit as usize)
         .into_iter()
         .map(|(node_id, score)| ffi::SparseSearchResult { node_id, score })
         .collect()
@@ -107,8 +105,8 @@ fn sparse_search_filtered(
     allowed_ids: &[u64],
 ) -> Vec<ffi::SparseSearchResult> {
     let query = SparseVector::new(query_indices.to_vec(), query_weights.to_vec());
-    let idx = handle.index.lock().unwrap();
-    idx.search_filtered(&query, limit as usize, allowed_ids)
+    handle
+        .search_filtered(&query, limit as usize, allowed_ids)
         .into_iter()
         .map(|(node_id, score)| ffi::SparseSearchResult { node_id, score })
         .collect()
@@ -124,5 +122,5 @@ fn sparse_commit(handle: &SparseHandle) -> Result<i64, String> {
 // -- Info --
 
 fn sparse_num_docs(handle: &SparseHandle) -> u64 {
-    handle.index.lock().unwrap().len() as u64
+    handle.len() as u64
 }

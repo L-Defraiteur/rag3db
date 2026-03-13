@@ -204,15 +204,41 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
 }
 
 /// Deserialize a non-batch, non-empty PortValue from checkpoint.
-///
-/// Currently only ingestion port types (Batch, Empty) are supported.
-/// Search port types (Results, Children, etc.) will be supported when
-/// their types implement Deserialize (Phase 3 — Mermaid/NodeRegistry).
-fn deserialize_non_batch_port_value(port_type: PortType, _json: &str) -> Result<PortValue, String> {
-    Err(format!(
-        "checkpoint deserialization not yet supported for {port_type:?} — \
-         only Batch and Empty are currently checkpointable"
-    ))
+fn deserialize_non_batch_port_value(port_type: PortType, json: &str) -> Result<PortValue, String> {
+    match port_type {
+        PortType::Results => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Results deser: {e}"))?;
+            Ok(PortValue::Results(v))
+        }
+        PortType::Children => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Children deser: {e}"))?;
+            Ok(PortValue::Children(v))
+        }
+        PortType::Uuids => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Uuids deser: {e}"))?;
+            Ok(PortValue::Uuids(v))
+        }
+        PortType::Meta => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Meta deser: {e}"))?;
+            Ok(PortValue::Meta(v))
+        }
+        PortType::Rules => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Rules deser: {e}"))?;
+            Ok(PortValue::Rules(v))
+        }
+        PortType::Map => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Map deser: {e}"))?;
+            Ok(PortValue::Map(v))
+        }
+        PortType::Any => {
+            let v = serde_json::from_str(json).map_err(|e| format!("Any deser: {e}"))?;
+            Ok(PortValue::Any(v))
+        }
+        PortType::Empty => Ok(PortValue::Empty),
+        other => Err(format!(
+            "checkpoint deserialization not supported for {other:?}"
+        )),
+    }
 }
 
 // ─── Graph Definition ────────────────────────────────────────────────────────

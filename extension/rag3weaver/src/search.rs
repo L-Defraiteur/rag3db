@@ -299,7 +299,7 @@ impl Default for SearchOptions {
 // ─── SearchResult / SearchResponse / SearchMeta ──────────────────────────────
 
 /// A single search result.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub uuid: String,
@@ -312,7 +312,7 @@ pub struct SearchResult {
 }
 
 /// Chunk information attached to a search result.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChunkInfo {
     pub uuid: String,
@@ -326,7 +326,7 @@ pub struct ChunkInfo {
 }
 
 /// Chunk with source entity attribution (used in Detailed mode).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttributedChunk {
     pub uuid: String,
@@ -346,7 +346,7 @@ pub struct AttributedChunk {
 }
 
 /// Per-result BM25 diagnostic: what happened when matching highlights to chunks.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BM25HitDiagnostic {
     pub parent_uuid: String,
@@ -364,7 +364,7 @@ pub struct BM25HitDiagnostic {
 }
 
 /// Diagnostic for a single chunk's overlap with highlights.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChunkOverlapDiag {
     pub chunk_uuid: String,
@@ -378,7 +378,7 @@ pub struct ChunkOverlapDiag {
 
 /// Search diagnostics: detailed info about what happened internally.
 /// Only populated when `SearchOptions.diagnostics == true`.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchDiagnostics {
     /// BM25 hit-level diagnostics (highlights vs chunks).
@@ -401,7 +401,8 @@ pub struct SearchDiagnostics {
 ///
 /// Built by `Catalog::resolve_search_target()` which dispatches between
 /// `kb_metadata` and `entity_configs`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchTarget {
     /// Name used to identify this target (KB name or entity name).
     pub name: String,
@@ -479,7 +480,7 @@ impl SearchTarget {
 // ─── SearchMeta ───────────────────────────────────────────────────────────────
 
 /// Metadata about a search operation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMeta {
     pub query: String,
@@ -500,7 +501,7 @@ pub struct SearchMeta {
 }
 
 /// Complete search response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
     pub results: Vec<SearchResult>,
@@ -532,7 +533,7 @@ impl Default for ExploreOptions {
 }
 
 /// A node in the explore graph.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphNode {
     pub uuid: String,
@@ -544,7 +545,7 @@ pub struct GraphNode {
 }
 
 /// An edge in the explore graph.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphEdge {
     pub from_uuid: String,
@@ -555,7 +556,7 @@ pub struct GraphEdge {
 }
 
 /// The graph part of an explore result.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExploreGraph {
     pub nodes: Vec<GraphNode>,
@@ -3190,11 +3191,13 @@ mod tests {
             field_type: FieldType::String,
             is_title: true,
             is_content: false,
+            ..Default::default()
         });
         fields.insert("description".into(), SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         let ec = crate::config::EntityConfig {
             fields,
@@ -3228,11 +3231,13 @@ mod tests {
             field_type: FieldType::String,
             is_title: true,
             is_content: false,
+            ..Default::default()
         });
         fields.insert("description".into(), SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         let ec = crate::config::EntityConfig {
             fields,

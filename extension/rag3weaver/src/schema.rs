@@ -65,6 +65,23 @@ pub fn field_type_to_kuzu(ft: &FieldType) -> &'static str {
     }
 }
 
+/// Default value for ALTER TABLE ADD, by field type.
+///
+/// Used when adding a new column to an existing entity table.
+pub fn kuzu_default_value(ft: &FieldType) -> &'static str {
+    match ft {
+        FieldType::String
+        | FieldType::Text
+        | FieldType::Json
+        | FieldType::Tags
+        | FieldType::Choice => "''",
+        FieldType::Int64 | FieldType::Integer => "0",
+        FieldType::Double | FieldType::Number => "0.0",
+        FieldType::Boolean => "false",
+        FieldType::Timestamp => "'1970-01-01 00:00:00'",
+    }
+}
+
 // ─── KB resolution ──────────────────────────────────────────────────────────
 
 /// Which fields of an entity are linked to a given knowledge base.

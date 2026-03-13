@@ -223,6 +223,10 @@ pub struct KBContentRecord {
     pub index_entry_uuid: String,
     /// Knowledge base name
     pub kb_name: String,
+    /// Title entity name (needed for MERGE on {KB}_Index + IN_{KB} rel)
+    pub source_entity: String,
+    /// Source entity UUID (the title entity's _uuid)
+    pub source_uuid: String,
     /// Title text (truncated)
     pub title_text: String,
     /// Aggregated content text (for SET on index)

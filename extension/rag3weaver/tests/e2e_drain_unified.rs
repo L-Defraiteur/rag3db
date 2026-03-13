@@ -45,12 +45,15 @@ fn make_product_config() -> EntityConfig {
     let mut fields = HashMap::new();
     fields.insert("name".into(), SimpleFieldDef {
         field_type: FieldType::String, is_title: true, is_content: false,
+        ..Default::default()
     });
     fields.insert("description".into(), SimpleFieldDef {
         field_type: FieldType::Text, is_title: false, is_content: true,
+        ..Default::default()
     });
     fields.insert("price".into(), SimpleFieldDef {
         field_type: FieldType::Double, is_title: false, is_content: false,
+        ..Default::default()
     });
     EntityConfig { fields, signals: SearchSignals::BM25, ..Default::default() }
 }

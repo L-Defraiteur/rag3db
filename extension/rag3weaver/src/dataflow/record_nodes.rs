@@ -2294,6 +2294,8 @@ impl KBGatherNode {
             changed.push(KBContentRecord {
                 index_entry_uuid: state.index_entry_uuid.clone(),
                 kb_name: kb_name.to_string(),
+                source_entity: title_entity.to_string(),
+                source_uuid: state.source_uuid.clone(),
                 title_text: state.title_text.clone(),
                 content_text,
                 new_hash,
@@ -2342,6 +2344,9 @@ impl Node for KBGatherNode {
 
         if items.is_empty() {
             ctx.set_output("done", PortValue::Empty);
+            ctx.set_output("kb_content", PortValue::Batch(
+                BatchPayload::new(PortType::KBContent, Vec::<KBContentRecord>::new()),
+            ));
             return Ok(());
         }
 
@@ -2510,7 +2515,7 @@ impl Node for KBUpdateNode {
                 }
             }
 
-            // Step 5: UNWIND UPDATE changed indexes
+            // Step 5: UNWIND MERGE changed indexes (creates if new, updates if existing)
             {
                 let items_param = CypherValue::List(
                     indices.iter().map(|&i| {
@@ -2520,14 +2525,20 @@ impl Node for KBUpdateNode {
                         m.insert("title".into(), CypherValue::String(rec.title_text.clone()));
                         m.insert("content".into(), CypherValue::String(rec.content_text.clone()));
                         m.insert("hash".into(), CypherValue::String(rec.new_hash.clone()));
+                        m.insert("source_entity".into(), CypherValue::String(rec.source_entity.clone()));
+                        m.insert("source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
                         CypherValue::Map(m)
                     }).collect()
                 );
 
                 let cypher = format!(
                     "UNWIND $items AS item \
-                     MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
-                     SET idx._title = item.title, idx._content = item.content, idx._content_hash = item.hash"
+                     MERGE (idx:{index_table} {{_uuid: item.uuid}}) \
+                     ON CREATE SET idx._title = item.title, idx._content = item.content, \
+                     idx._content_hash = item.hash, idx._source_entity = item.source_entity, \
+                     idx._source_uuid = item.source_uuid \
+                     ON MATCH SET idx._title = item.title, idx._content = item.content, \
+                     idx._content_hash = item.hash"
                 );
 
                 conn.execute_with_params(
@@ -2535,6 +2546,37 @@ impl Node for KBUpdateNode {
                     &[QueryParam { name: "items".into(), value: items_param }],
                 ).await.map_err(|e| e.to_string())?;
                 total_updated += indices.len();
+            }
+
+            // Step 5b: MERGE {Entity}_IN_{KB} relations for newly created indexes
+            {
+                // Group by source_entity for the IN relation
+                let mut entity_groups: HashMap<&str, Vec<usize>> = HashMap::new();
+                for &i in indices {
+                    entity_groups.entry(&items[i].source_entity).or_default().push(i);
+                }
+                for (source_entity, eidx) in &entity_groups {
+                    let in_rel = format!("{source_entity}_IN_{kb_name}");
+                    let items_param = CypherValue::List(
+                        eidx.iter().map(|&i| {
+                            let rec = &items[i];
+                            let mut m = BTreeMap::new();
+                            m.insert("source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
+                            m.insert("index_uuid".into(), CypherValue::String(rec.index_entry_uuid.clone()));
+                            CypherValue::Map(m)
+                        }).collect()
+                    );
+                    let cypher = format!(
+                        "UNWIND $items AS item \
+                         MATCH (e:{source_entity} {{_uuid: item.source_uuid}}) \
+                         MATCH (idx:{index_table} {{_uuid: item.index_uuid}}) \
+                         MERGE (e)-[:{in_rel}]->(idx)"
+                    );
+                    let _ = conn.execute_with_params(
+                        &cypher,
+                        &[QueryParam { name: "items".into(), value: items_param }],
+                    ).await;
+                }
             }
 
             // Step 6: UNWIND DELETE old chunks
@@ -3174,9 +3216,14 @@ impl Node for DeleteRecordNode {
                     if let Some(CypherValue::Map(props)) = row.first() {
                         if let Some(uuid) = props.get("_uuid").and_then(|v| v.as_str()) {
                             found.insert(uuid.to_string());
+                            // Strip internal rag3db properties (_id, _label)
+                            let clean: BTreeMap<String, CypherValue> = props.iter()
+                                .filter(|(k, _)| k.as_str() != "_id" && k.as_str() != "_label")
+                                .map(|(k, v)| (k.clone(), v.clone()))
+                                .collect();
                             undo_groups.entry(entity_name.clone())
                                 .or_default()
-                                .push(props.clone());
+                                .push(clean);
                         }
                     }
                 }
@@ -3429,9 +3476,14 @@ impl Node for UpdateRecordNode {
                         props.get("_content_hash").and_then(|v| v.as_str()),
                     ) {
                         old_hashes.insert(uuid.to_string(), hash.to_string());
+                        // Strip internal rag3db properties (_id, _label)
+                        let clean: BTreeMap<String, CypherValue> = props.iter()
+                            .filter(|(k, _)| k.as_str() != "_id" && k.as_str() != "_label")
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         undo_snapshots.entry(entity_name.clone())
                             .or_default()
-                            .push(props.clone());
+                            .push(clean);
                     }
                 }
             }
@@ -3746,21 +3798,25 @@ mod tests {
             field_type: FieldType::String,
             is_title: true,
             is_content: false,
+            ..Default::default()
         });
         fields.insert("description".into(), SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         fields.insert("details".into(), SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         fields.insert("price".into(), SimpleFieldDef {
             field_type: FieldType::Double,
             is_title: false,
             is_content: false,
+            ..Default::default()
         });
         EntityConfig {
             fields,

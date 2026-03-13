@@ -11,6 +11,7 @@
 #   ./run_e2e.sh --build                  # force rebuild rag3db before tests
 #   ./run_e2e.sh --build-only             # just build, don't run tests
 #   ./run_e2e.sh --no-cuda phase0         # skip CUDA features (faster compile)
+#   ./run_e2e.sh --summary                # show only the per-suite summary at the end
 
 set -euo pipefail
 
@@ -22,6 +23,7 @@ WEAVER="$ROOT/extension/rag3weaver"
 BUILD_ONLY=false
 FORCE_BUILD=false
 NO_CUDA=false
+SUMMARY=false
 TEST_FILE=""
 TEST_FILTER=""
 EXTRA_ARGS=()
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --build)      FORCE_BUILD=true; shift ;;
     --no-build)   shift ;;  # kept for compat, now the default
     --no-cuda)    NO_CUDA=true; shift ;;
+    --summary)    SUMMARY=true; shift ;;
     --test)       shift; TEST_FILE="$1"; shift ;;
     -*)           EXTRA_ARGS+=("$1"); shift ;;
     *)            TEST_FILTER="$1"; shift ;;
@@ -113,8 +116,57 @@ export PATH="/usr/local/cuda/bin:$PATH"
 export LD_LIBRARY_PATH="$BUILD/src:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export CUDA_ROOT="/usr/local/cuda"
 
-RAG3DB_SHARED=1 \
-RAG3DB_LIBRARY_DIR="$BUILD/src" \
-RAG3DB_INCLUDE_DIR="$BUILD/src" \
-RAG3DB_ROOT="$ROOT" \
-exec cargo test "${CARGO_ARGS[@]}"
+export RAG3DB_SHARED=1
+export RAG3DB_LIBRARY_DIR="$BUILD/src"
+export RAG3DB_INCLUDE_DIR="$BUILD/src"
+export RAG3DB_ROOT="$ROOT"
+
+if [ "$SUMMARY" = true ]; then
+  # Capture output, show summary at the end
+  TMPLOG=$(mktemp)
+  trap 'rm -f "$TMPLOG"' EXIT
+  set +e
+  cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
+  EXIT_CODE=${PIPESTATUS[0]}
+  set -e
+
+  echo ""
+  echo "═══════════════════════════════════════════════"
+  echo "  SUMMARY"
+  echo "═══════════════════════════════════════════════"
+
+  TOTAL_PASSED=0
+  TOTAL_FAILED=0
+
+  # Collect Running/result lines in order
+  mapfile -t SUITE_NAMES < <(grep -oP '(?<=Running tests/)\w+' "$TMPLOG")
+  mapfile -t RESULTS < <(grep '^test result:' "$TMPLOG")
+
+  for i in "${!RESULTS[@]}"; do
+    line="${RESULTS[$i]}"
+    suite="${SUITE_NAMES[$i]:-?}"
+    passed=$(echo "$line" | grep -oP '\d+ passed' | grep -oP '\d+')
+    failed=$(echo "$line" | grep -oP '\d+ failed' | grep -oP '\d+')
+    TOTAL_PASSED=$((TOTAL_PASSED + ${passed:-0}))
+    TOTAL_FAILED=$((TOTAL_FAILED + ${failed:-0}))
+
+    if [ "${failed:-0}" -eq 0 ]; then
+      printf "  %-30s %3d passed\n" "$suite" "$passed"
+    else
+      printf "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
+    fi
+  done
+
+  echo "───────────────────────────────────────────────"
+  if [ "$TOTAL_FAILED" -eq 0 ]; then
+    printf "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
+  else
+    printf "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
+  fi
+  echo "═══════════════════════════════════════════════"
+  exit "$EXIT_CODE"
+else
+  cargo test "${CARGO_ARGS[@]}"
+  echo ""
+  echo "Tip: run with --summary for a per-suite results table."
+fi

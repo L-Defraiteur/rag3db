@@ -82,6 +82,13 @@ pub enum CatalogError {
 // Re-export result types (defined in records.rs, used widely)
 pub use crate::records::{DeleteResult, UpdateResult, UpdateStatus};
 
+/// Stats returned by [`Catalog::reindex()`].
+#[derive(Debug, Clone)]
+pub struct ReindexStats {
+    pub entity: String,
+    pub records_processed: usize,
+}
+
 // ─── Catalog ───────────────────────────────────────────────────────────────
 
 /// Internal cumulative drain counters (not reset on clear).
@@ -177,6 +184,34 @@ impl Catalog {
     /// The named node will return an injected error instead of executing.
     pub fn set_fail_node(&mut self, node_name: Option<&str>) {
         self.fail_node = node_name.map(|s| s.to_string());
+    }
+
+    /// Gracefully close all lucivy FTS indexes to release file locks.
+    /// Must be called before dropping the Catalog when the DB will be reopened
+    /// in the same process (e.g. tests, hot reload).
+    pub async fn shutdown(&self) -> Result<(), CatalogError> {
+        // Collect all table names that may have a lucivy FTS index.
+        let mut tables: Vec<String> = Vec::new();
+
+        // Simple entities: FTS index is on the entity table itself.
+        for name in self.entity_configs.keys() {
+            tables.push(name.clone());
+        }
+
+        // KBs: FTS index is on {kb_name}_Index.
+        for kb_name in self.kb_metadata.keys() {
+            tables.push(format!("{kb_name}_Index"));
+        }
+
+        for table in &tables {
+            // CLOSE_LUCIVY_INDEX is a no-op if no index exists on the table.
+            let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
+            if let Err(e) = self.conn.execute(&query).await {
+                eprintln!("[rag3weaver] shutdown: failed to close lucivy index on {table}: {e}");
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
@@ -281,23 +316,27 @@ impl Catalog {
             self.checkpoint_store = Some(cp_store);
         }
 
+        // 8. Load persisted entity configs, relations, and KB configs from _catalog_meta
+        self.load_entity_configs().await?;
+        self.load_relations().await?;
+        self.load_kb_configs().await?;
+
         self.initialized = true;
         Ok(())
     }
 
-    // ── Simple Entity Registration ──────────────────────────────────────
+    // ── Entity Registration ──────────────────────────────────────────────
 
-    /// Register a simple entity for the direct pipeline (no KB).
+    /// Register an entity. Supports simple pipeline, KB participation, or both.
     ///
-    /// Creates:
-    /// 1. Entity node table (with user fields)
-    /// 2. `{Entity}_Chunk` node table (with offsets + embedding columns)
-    /// 3. `{Entity}_CHUNKED_FROM` rel table
-    /// 4. FTS index on entity (content fields)
-    /// 5. Vector index on chunk table
+    /// For entities with simple pipeline fields (`is_content`/`is_title`):
+    /// creates entity table, chunk table, FTS/vector/sparse indexes.
     ///
-    /// The entity can then be ingested via `ingest_entities()` and searched
-    /// via `search()` (same API as KB search).
+    /// For KB-only entities (`content_for`/`title_for`): creates only the
+    /// entity table. Indexes are created by `register_kb()`.
+    ///
+    /// Order-independent: if a KB mentioned by this entity is already registered,
+    /// it will be re-triggered to pick up the new fields.
     pub async fn register_entity(
         &mut self,
         entity_name: &str,
@@ -305,47 +344,105 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
 
-        if self.entity_configs.contains_key(entity_name) {
-            return Err(CatalogError::SchemaError(
-                format!("Entity '{}' is already registered", entity_name),
-            ));
-        }
+        // Validate field definitions
+        config.validate().map_err(|e| CatalogError::SchemaError(e))?;
+
         if self.kb_metadata.contains_key(entity_name) {
             return Err(CatalogError::SchemaError(
                 format!("Name '{}' conflicts with an existing knowledge base", entity_name),
             ));
         }
 
-        let content_fields = config.content_fields();
-        if content_fields.is_empty() {
+        if !config.has_simple_pipeline() && !config.has_kb_participation() {
             return Err(CatalogError::SchemaError(
-                format!("Entity '{}' has no content fields (is_content=true)", entity_name),
+                format!("Entity '{}' has no content fields — need at least is_content=true (simple pipeline) or content_for/title_for (KB participation)", entity_name),
             ));
         }
 
-        // 1. Entity node table — build EntityDef from SimpleFieldDefs
+        let entity_def = Self::entity_config_to_entity_def(&config);
+
+        if let Some(old_config) = self.entity_configs.get(entity_name) {
+            // ── Idempotent path: entity already registered ──
+            self.migrate_entity(entity_name, old_config.clone(), &config).await?;
+        } else {
+            // ── Fresh registration: create tables + indexes ──
+            self.create_entity_tables(entity_name, &config, &entity_def).await?;
+        }
+
+        // Persist + update in-memory
+        self.persist_entity_config(entity_name, &config).await?;
+        self.config.entities.insert(entity_name.to_string(), entity_def);
+        self.entity_configs.insert(entity_name.to_string(), config.clone());
+
+        // Re-trigger KBs that this entity mentions (existing in kb_metadata OR
+        // pre-registered in knowledge_bases but not yet materialized)
+        let mut kb_names_to_retrigger = HashSet::new();
+        for f in config.fields.values() {
+            if let Some(ref kb) = f.title_for {
+                if kb != "self" && (self.kb_metadata.contains_key(kb) || self.config.knowledge_bases.contains_key(kb)) {
+                    kb_names_to_retrigger.insert(kb.clone());
+                }
+            }
+            if let Some(ref kbs) = f.content_for {
+                for kb in kbs {
+                    if kb != "self" && (self.kb_metadata.contains_key(kb) || self.config.knowledge_bases.contains_key(kb)) {
+                        kb_names_to_retrigger.insert(kb.clone());
+                    }
+                }
+            }
+        }
+        for kb_name in kb_names_to_retrigger {
+            let kb_config = self.config.knowledge_bases.get(&kb_name).cloned().unwrap_or_default();
+            self.register_kb(&kb_name, kb_config).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Convert an EntityConfig (simple fields) to an EntityDef (catalog-level definition).
+    fn entity_config_to_entity_def(config: &crate::config::EntityConfig) -> crate::config::EntityDef {
         let mut entity_fields = HashMap::new();
         for (name, sfd) in &config.fields {
             entity_fields.insert(name.clone(), crate::config::FieldDef {
                 field_type: sfd.field_type.clone(),
-                title_for: None,
-                content_for: None,
+                title_for: sfd.title_for.clone(),
+                content_for: sfd.content_for.clone(),
                 boost: None,
                 default_value: None,
             });
         }
-        let entity_def = crate::config::EntityDef {
+        crate::config::EntityDef {
             fields: entity_fields,
             hashsafe: None,
-        };
-        let entity_ddl = crate::schema::generate_node_table_ddl(entity_name, &entity_def)
+        }
+    }
+
+    /// Create all tables and indexes for a new entity.
+    ///
+    /// Always creates the entity node table. Only creates chunk table, FTS,
+    /// vector and sparse indexes if the entity has simple pipeline content
+    /// fields (is_content=true). KB-only entities get their indexes through
+    /// `register_kb()` instead.
+    async fn create_entity_tables(
+        &self,
+        entity_name: &str,
+        config: &crate::config::EntityConfig,
+        entity_def: &crate::config::EntityDef,
+    ) -> Result<(), CatalogError> {
+        // 1. Entity node table (always)
+        let entity_ddl = crate::schema::generate_node_table_ddl(entity_name, entity_def)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&entity_ddl).await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
+        // Skip chunk/FTS/vector/sparse for KB-only entities (no simple pipeline)
+        if !config.has_simple_pipeline() {
+            return Ok(());
+        }
+
         // 2. Chunk table
         let chunk_ddl = crate::schema::generate_simple_chunk_table_ddl(
-            entity_name, &config, self.config.embedding_dim,
+            entity_name, config, self.config.embedding_dim,
         ).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&chunk_ddl).await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -357,7 +454,7 @@ impl Catalog {
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 4. FTS index on entity content fields
-        let fts_fields: Vec<&str> = content_fields.clone();
+        let fts_fields: Vec<&str> = config.content_fields();
         let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
         let _ = self.conn.execute(&fts_ddl).await; // ignore if already exists
 
@@ -380,21 +477,600 @@ impl Catalog {
             let _ = self.conn.execute(&sparse_ddl).await;
         }
 
-        // 7. Store config + add entity to catalog config (for KBChunkRecordNode compatibility)
-        self.config.entities.insert(entity_name.to_string(), entity_def);
-        self.entity_configs.insert(entity_name.to_string(), config);
+        Ok(())
+    }
+
+    /// Migrate an existing entity: add new fields, detect removed/changed fields.
+    async fn migrate_entity(
+        &self,
+        entity_name: &str,
+        old_config: crate::config::EntityConfig,
+        new_config: &crate::config::EntityConfig,
+    ) -> Result<(), CatalogError> {
+        let old_fields = &old_config.fields;
+        let new_fields = &new_config.fields;
+
+        // Detect removed fields → error
+        for name in old_fields.keys() {
+            if !new_fields.contains_key(name) {
+                return Err(CatalogError::SchemaError(
+                    format!("Entity '{entity_name}': cannot remove field '{name}' (destructive migration not supported)")
+                ));
+            }
+        }
+
+        // Detect type changes → error
+        for (name, old_f) in old_fields {
+            if let Some(new_f) = new_fields.get(name) {
+                if old_f.field_type != new_f.field_type {
+                    return Err(CatalogError::SchemaError(
+                        format!("Entity '{entity_name}': cannot change type of field '{name}' from {:?} to {:?}", old_f.field_type, new_f.field_type)
+                    ));
+                }
+            }
+        }
+
+        // Add new fields via ALTER TABLE
+        let mut content_changed = false;
+        for (name, new_f) in new_fields {
+            if !old_fields.contains_key(name) {
+                let kuzu_type = crate::schema::field_type_to_kuzu(&new_f.field_type);
+                let default = crate::schema::kuzu_default_value(&new_f.field_type);
+                let alter_ddl = format!(
+                    "ALTER TABLE {entity_name} ADD {name} {kuzu_type} DEFAULT {default}"
+                );
+                self.conn.execute(&alter_ddl).await
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+                if new_f.is_content || new_f.is_title || new_f.content_for.is_some() || new_f.title_for.is_some() {
+                    content_changed = true;
+                }
+            }
+        }
+
+        // Check if content/title annotations changed on existing fields
+        if !content_changed {
+            for (name, new_f) in new_fields {
+                if let Some(old_f) = old_fields.get(name) {
+                    if old_f.is_content != new_f.is_content
+                        || old_f.is_title != new_f.is_title
+                        || old_f.content_for != new_f.content_for
+                        || old_f.title_for != new_f.title_for
+                    {
+                        content_changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Rebuild FTS if content fields changed (only for simple pipeline entities)
+        if content_changed {
+            if new_config.has_simple_pipeline() {
+                // Drop + recreate FTS index on entity table
+                let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{entity_name}')");
+                let _ = self.conn.execute(&drop_fts).await;
+
+                let fts_fields: Vec<&str> = new_config.content_fields();
+                let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
+                let _ = self.conn.execute(&fts_ddl).await;
+            }
+
+            // Flag needs_reindex (for both simple and KB pipelines)
+            self.persist_meta_key(
+                &format!("needs_reindex:{entity_name}"),
+                "true",
+            ).await?;
+            eprintln!("[rag3weaver] warning: Entity '{entity_name}' needs reindex after schema change — run catalog.reindex('{entity_name}')");
+        }
+
+        // Create missing indexes (new signals) — only if simple pipeline
+        if new_config.has_simple_pipeline() && new_config.signals.vector() && !old_config.signals.vector() {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let idx_name = format!("{entity_name}_Chunk_vec");
+            let vec_ddl = crate::schema::generate_vector_index_ddl(
+                &chunk_table, "embedding", &idx_name,
+            );
+            let _ = self.conn.execute(&vec_ddl).await;
+        }
+        if new_config.has_simple_pipeline() && new_config.signals.sparse() && !old_config.signals.sparse() {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let sparse_ddl = format!(
+                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', 'sparse_indices', 'sparse_weights')"
+            );
+            let _ = self.conn.execute(&sparse_ddl).await;
+        }
 
         Ok(())
     }
 
-    /// Check if a name is a registered simple entity.
-    pub fn is_simple_entity(&self, name: &str) -> bool {
+    /// Check if a name is a registered entity (simple or KB-only).
+    pub fn is_registered_entity(&self, name: &str) -> bool {
         self.entity_configs.contains_key(name)
+    }
+
+    /// Check if a name is a registered simple entity (has simple pipeline with chunk table).
+    pub fn is_simple_entity(&self, name: &str) -> bool {
+        self.entity_configs.get(name).map_or(false, |ec| ec.has_simple_pipeline())
     }
 
     /// Get a simple entity config, if registered.
     pub fn entity_config(&self, name: &str) -> Option<&crate::config::EntityConfig> {
         self.entity_configs.get(name)
+    }
+
+    // ── Relation Registration ───────────────────────────────────────────
+
+    /// Register a relation between two entities. Idempotent (IF NOT EXISTS).
+    ///
+    /// Both `from` and `to` must be known entities (registered via `register_entity()`
+    /// or declared in `CatalogConfig`).
+    pub async fn register_relation(
+        &mut self,
+        rel_name: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+
+        // Validate identifiers
+        crate::schema::validate_identifier(rel_name, "relation")
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+
+        // Check that both endpoints exist
+        if !self.config.entities.contains_key(from) {
+            return Err(CatalogError::UnknownEntity(from.to_string()));
+        }
+        if !self.config.entities.contains_key(to) {
+            return Err(CatalogError::UnknownEntity(to.to_string()));
+        }
+
+        // If already registered, check consistency
+        if let Some(existing) = self.config.relations.get(rel_name) {
+            if existing.from != from || existing.to != to {
+                return Err(CatalogError::SchemaError(format!(
+                    "Relation '{rel_name}' already registered as ({} → {}), cannot re-register as ({from} → {to})",
+                    existing.from, existing.to,
+                )));
+            }
+            // Same definition → no-op, but persist anyway for idempotence
+        } else {
+            // Create the rel table
+            let ddl = format!(
+                "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {from} TO {to})"
+            );
+            self.conn.execute(&ddl).await
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+
+        // Persist + update in-memory
+        let rel_def = RelationDef {
+            from: from.to_string(),
+            to: to.to_string(),
+            properties: None,
+        };
+        self.persist_relation(rel_name, &rel_def).await?;
+        self.config.relations.insert(rel_name.to_string(), rel_def);
+
+        Ok(())
+    }
+
+    // ── KB Registration ─────────────────────────────────────────────────
+
+    /// Register a Knowledge Base. Idempotent with additive migration.
+    ///
+    /// Scans registered entities for fields with `title_for`/`content_for` pointing
+    /// to this KB name. Creates `{KB}_Index`, `{KB}_Index_Chunk`, relation tables,
+    /// FTS index, and vector/sparse indexes.
+    ///
+    /// Order-independent with `register_entity()`: if entities are registered
+    /// after the KB, `register_entity()` will re-trigger this method. If
+    /// re-called with new content refs, rebuilds the FTS index on `{KB}_Index`.
+    pub async fn register_kb(
+        &mut self,
+        kb_name: &str,
+        kb_config: crate::config::KBConfig,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+
+        crate::schema::validate_identifier(kb_name, "knowledge_base")
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+
+        // Find the title entity (entity with a field that has title_for = kb_name)
+        let kb_title_entities = crate::schema::resolve_kb_title_entities(&self.config);
+        let kb_info = kb_title_entities.get(kb_name);
+
+        // Collect all entities contributing to this KB
+        let mut kb_entities = HashSet::new();
+        let mut content_refs = Vec::new();
+        for (entity_name, entity_def) in &self.config.entities {
+            let entity_kbs = crate::schema::resolve_entity_kbs(entity_def);
+            if let Some(mapping) = entity_kbs.get(kb_name) {
+                kb_entities.insert(entity_name.clone());
+                for field in &mapping.content_fields {
+                    content_refs.push(KBFieldRef {
+                        entity: entity_name.clone(),
+                        field: field.clone(),
+                    });
+                }
+            }
+        }
+
+        if let Some(info) = kb_info {
+            // Title entity exists — can create/update tables
+            if let Some(old_meta) = self.kb_metadata.get(kb_name) {
+                // ── Idempotent: KB already exists — check if content refs changed ──
+                let old_content: HashSet<_> = old_meta.content.iter()
+                    .map(|r| (r.entity.as_str(), r.field.as_str()))
+                    .collect();
+                let new_content: HashSet<_> = content_refs.iter()
+                    .map(|r| (r.entity.as_str(), r.field.as_str()))
+                    .collect();
+                if old_content != new_content {
+                    // Rebuild FTS on {KB}_Index to include new content fields
+                    let index_table = format!("{kb_name}_Index");
+                    let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{index_table}')");
+                    let _ = self.conn.execute(&drop_fts).await;
+                    let fts_ddl = crate::schema::generate_fts_index_ddl(
+                        &index_table, &["_title", "_content"], &["_source_entity"],
+                    );
+                    let _ = self.conn.execute(&fts_ddl).await;
+                }
+            } else {
+                // ── Fresh KB: create all tables + indexes ──
+                self.create_kb_tables(kb_name, &kb_config, info, &kb_entities).await?;
+            }
+
+            // Build + store KBMetadata
+            let title_ref = KBFieldRef {
+                entity: info.title_entity.clone(),
+                field: info.title_field.clone(),
+            };
+            let kb_meta = KBMetadata {
+                name: kb_name.to_string(),
+                title: title_ref,
+                content: content_refs,
+                entities: kb_entities,
+                signals: kb_config.signals,
+                keyword_weight: kb_config.keyword_weight,
+                title_boost: kb_config.title_boost,
+                content_boost: kb_config.content_boost,
+                chunking: kb_config.chunking.clone(),
+            };
+            self.kb_metadata.insert(kb_name.to_string(), kb_meta);
+        }
+        // else: no entities yet — just persist config. When register_entity()
+        // is called later with title_for/content_for pointing to this KB,
+        // it will re-trigger register_kb() and create the tables then.
+
+        // Persist + update config
+        self.persist_kb_config(kb_name, &kb_config).await?;
+        self.config.knowledge_bases.insert(kb_name.to_string(), kb_config);
+
+        // Warm chunker cache for the new KB
+        self.warm_chunker_cache();
+
+        Ok(())
+    }
+
+    /// Create all tables and indexes for a new Knowledge Base.
+    async fn create_kb_tables(
+        &self,
+        kb_name: &str,
+        kb_config: &crate::config::KBConfig,
+        kb_info: &crate::schema::KBSchemaInfo,
+        kb_entities: &HashSet<String>,
+    ) -> Result<(), CatalogError> {
+        let embedding_dim = self.config.embedding_dim;
+
+        // 1. {KB}_Index table
+        let idx_ddl = crate::schema::generate_index_table_ddl(kb_name, kb_config, embedding_dim)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&idx_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 2. {KB}_Index_Chunk table
+        let chunk_ddl = crate::schema::generate_index_chunk_table_ddl(kb_name, kb_config, embedding_dim)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&chunk_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 3. {KB}_Index_HAS_CHUNK rel
+        let has_chunk_ddl = crate::schema::generate_index_chunk_rel_ddl(kb_name)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&has_chunk_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 4. {TitleEntity}_IN_{KB} rel
+        let in_ddl = crate::schema::generate_index_rel_ddl(&kb_info.title_entity, kb_name)
+            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.conn.execute(&in_ddl).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        // 5. {Entity}_SOURCED_{KB} rels (one per contributing entity)
+        for entity_name in kb_entities {
+            let source_ddl = crate::schema::generate_source_rel_ddl(entity_name, kb_name)
+                .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+            self.conn.execute(&source_ddl).await
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+
+        // 6. FTS index on {KB}_Index
+        let index_table = format!("{kb_name}_Index");
+        let fts_ddl = crate::schema::generate_fts_index_ddl(
+            &index_table, &["_title", "_content"], &["_source_entity"],
+        );
+        let _ = self.conn.execute(&fts_ddl).await;
+
+        // 7. Vector index on {KB}_Index_Chunk
+        if kb_config.signals.vector() {
+            let chunk_table = format!("{kb_name}_Index_Chunk");
+            let emb_col = format!("{kb_name}_embedding");
+            let idx_name = format!("{kb_name}_Index_Chunk_vec");
+            let vec_ddl = crate::schema::generate_vector_index_ddl(&chunk_table, &emb_col, &idx_name);
+            let _ = self.conn.execute(&vec_ddl).await;
+        }
+
+        // 8. Sparse vector index on {KB}_Index_Chunk
+        if kb_config.signals.sparse() {
+            let chunk_table = format!("{kb_name}_Index_Chunk");
+            let indices_col = format!("{kb_name}_sparse_indices");
+            let weights_col = format!("{kb_name}_sparse_weights");
+            let sparse_ddl = format!(
+                "CALL CREATE_SPARSE_VECTOR_INDEX('{chunk_table}', '{indices_col}', '{weights_col}')"
+            );
+            let _ = self.conn.execute(&sparse_ddl).await;
+        }
+
+        Ok(())
+    }
+
+    // ── Reindex ─────────────────────────────────────────────────────────
+
+    /// Re-process all records of an entity after a schema change.
+    ///
+    /// Queries all existing records, enqueues them as updates, and drains.
+    /// UpdateRecordNode handles the rest: rechunk for simple entities,
+    /// re-aggregate for KB entities.
+    ///
+    /// Clears the `needs_reindex:{entity}` flag on success.
+    pub async fn reindex(&mut self, entity_name: &str) -> Result<ReindexStats, CatalogError> {
+        self.check_initialized()?;
+        let entity_def = self.check_entity(entity_name)?.clone();
+
+        // Build field list for the query
+        let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
+        field_names.sort();
+
+        let return_clause = std::iter::once("n._uuid".to_string())
+            .chain(field_names.iter().map(|f| format!("n.{f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let cypher = format!("MATCH (n:{entity_name}) RETURN {return_clause}");
+
+        let result = self.conn.execute(&cypher).await
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        let mut records_enqueued = 0usize;
+
+        for row in &result.rows {
+            // First column is _uuid
+            let uuid = match row.get(0) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+
+            // Build data map from remaining columns
+            let mut data = BTreeMap::new();
+            for (i, field_name) in field_names.iter().enumerate() {
+                if let Some(val) = row.get(i + 1) {
+                    data.insert((*field_name).clone(), val.clone());
+                }
+            }
+
+            // Enqueue as update (same as catalog.update())
+            let new_content = self.build_content_text(entity_name, &data);
+            let new_content_hash = content_hash(&new_content);
+            self.pending.updates.push(crate::records::UpdateRecord {
+                entity_name: entity_name.to_string(),
+                uuid,
+                data,
+                new_content_hash,
+            });
+            records_enqueued += 1;
+        }
+
+        // Drain if there's work to do
+        if records_enqueued > 0 {
+            self.drain().await;
+        }
+
+        // Clear the needs_reindex flag
+        self.persist_meta_key(
+            &format!("needs_reindex:{entity_name}"),
+            "false",
+        ).await?;
+
+        Ok(ReindexStats {
+            entity: entity_name.to_string(),
+            records_processed: records_enqueued,
+        })
+    }
+
+    // ── Persistence (_catalog_meta) ─────────────────────────────────────
+
+    /// Persist a key-value pair to `_catalog_meta`.
+    async fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
+        self.conn.execute_with_params(
+            "MERGE (m:_catalog_meta {_key: $key}) SET m._value = $value",
+            &[
+                QueryParam::new("key", CypherValue::String(key.to_string())),
+                QueryParam::new("value", CypherValue::String(value.to_string())),
+            ],
+        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Persist an entity config to `_catalog_meta`.
+    async fn persist_entity_config(
+        &self,
+        entity_name: &str,
+        config: &crate::config::EntityConfig,
+    ) -> Result<(), CatalogError> {
+        let json = serde_json::to_string(config)
+            .map_err(|e| CatalogError::SchemaError(format!("serialize entity config: {e}")))?;
+        self.persist_meta_key(&format!("entity_config:{entity_name}"), &json).await
+    }
+
+    /// Load all persisted entity configs from `_catalog_meta`.
+    /// Called at the end of `initialize()` to restore simple entities.
+    async fn load_entity_configs(&mut self) -> Result<(), CatalogError> {
+        let result = self.conn.execute(
+            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'entity_config:' RETURN m._key, m._value"
+        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        for row in &result.rows {
+            let key = match row.get(0) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let value = match row.get(1) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let entity_name = key.strip_prefix("entity_config:").unwrap_or(&key);
+            let config: crate::config::EntityConfig = serde_json::from_str(&value)
+                .map_err(|e| CatalogError::SchemaError(
+                    format!("deserialize entity config for '{entity_name}': {e}")
+                ))?;
+
+            // Restore EntityDef in config.entities
+            let entity_def = Self::entity_config_to_entity_def(&config);
+            self.config.entities.insert(entity_name.to_string(), entity_def);
+            self.entity_configs.insert(entity_name.to_string(), config);
+        }
+
+        Ok(())
+    }
+
+    /// Persist a relation definition to `_catalog_meta`.
+    async fn persist_relation(
+        &self,
+        rel_name: &str,
+        rel_def: &RelationDef,
+    ) -> Result<(), CatalogError> {
+        let json = serde_json::to_string(rel_def)
+            .map_err(|e| CatalogError::SchemaError(format!("serialize relation: {e}")))?;
+        self.persist_meta_key(&format!("relation:{rel_name}"), &json).await
+    }
+
+    /// Persist a KB config to `_catalog_meta`.
+    async fn persist_kb_config(
+        &self,
+        kb_name: &str,
+        kb_config: &crate::config::KBConfig,
+    ) -> Result<(), CatalogError> {
+        let json = serde_json::to_string(kb_config)
+            .map_err(|e| CatalogError::SchemaError(format!("serialize kb config: {e}")))?;
+        self.persist_meta_key(&format!("kb_config:{kb_name}"), &json).await
+    }
+
+    /// Load all persisted KB configs from `_catalog_meta` and rebuild KBMetadata.
+    /// Called at the end of `initialize()` to restore dynamically registered KBs.
+    async fn load_kb_configs(&mut self) -> Result<(), CatalogError> {
+        let result = self.conn.execute(
+            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'kb_config:' RETURN m._key, m._value"
+        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        for row in &result.rows {
+            let key = match row.get(0) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let value = match row.get(1) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let kb_name = key.strip_prefix("kb_config:").unwrap_or(&key);
+
+            // Skip if already loaded by initialize() (config-driven KBs)
+            if self.kb_metadata.contains_key(kb_name) {
+                continue;
+            }
+
+            let kb_config: crate::config::KBConfig = serde_json::from_str(&value)
+                .map_err(|e| CatalogError::SchemaError(
+                    format!("deserialize kb config for '{kb_name}': {e}")
+                ))?;
+
+            // Rebuild KBMetadata from entity fields
+            let kb_title_entities = crate::schema::resolve_kb_title_entities(&self.config);
+            let kb_info = match kb_title_entities.get(kb_name) {
+                Some(info) => info,
+                None => continue, // No title entity found, skip
+            };
+
+            let mut kb_entities = HashSet::new();
+            let mut content_refs = Vec::new();
+            for (entity_name, entity_def) in &self.config.entities {
+                let entity_kbs = crate::schema::resolve_entity_kbs(entity_def);
+                if let Some(mapping) = entity_kbs.get(kb_name) {
+                    kb_entities.insert(entity_name.clone());
+                    for field in &mapping.content_fields {
+                        content_refs.push(KBFieldRef {
+                            entity: entity_name.clone(),
+                            field: field.clone(),
+                        });
+                    }
+                }
+            }
+
+            let title_ref = KBFieldRef {
+                entity: kb_info.title_entity.clone(),
+                field: kb_info.title_field.clone(),
+            };
+            self.kb_metadata.insert(kb_name.to_string(), KBMetadata {
+                name: kb_name.to_string(),
+                title: title_ref,
+                content: content_refs,
+                entities: kb_entities,
+                signals: kb_config.signals,
+                keyword_weight: kb_config.keyword_weight,
+                title_boost: kb_config.title_boost,
+                content_boost: kb_config.content_boost,
+                chunking: kb_config.chunking.clone(),
+            });
+            self.config.knowledge_bases.insert(kb_name.to_string(), kb_config);
+        }
+
+        Ok(())
+    }
+
+    /// Load all persisted relations from `_catalog_meta`.
+    /// Called at the end of `initialize()` to restore dynamically registered relations.
+    async fn load_relations(&mut self) -> Result<(), CatalogError> {
+        let result = self.conn.execute(
+            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relation:' RETURN m._key, m._value"
+        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+        for row in &result.rows {
+            let key = match row.get(0) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let value = match row.get(1) {
+                Some(CypherValue::String(s)) => s.clone(),
+                _ => continue,
+            };
+            let rel_name = key.strip_prefix("relation:").unwrap_or(&key);
+            let rel_def: RelationDef = serde_json::from_str(&value)
+                .map_err(|e| CatalogError::SchemaError(
+                    format!("deserialize relation '{rel_name}': {e}")
+                ))?;
+            self.config.relations.insert(rel_name.to_string(), rel_def);
+        }
+
+        Ok(())
     }
 
     // ── SearchTarget resolution ─────────────────────────────────────────
@@ -436,8 +1112,23 @@ impl Catalog {
             });
         }
 
-        // Try simple entity
+        // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
+            if !ec.has_simple_pipeline() {
+                // Find which KBs this entity participates in for a helpful error
+                let kb_names: Vec<&String> = self.kb_metadata.iter()
+                    .filter(|(_, meta)| meta.entities.contains(name))
+                    .map(|(kb_name, _)| kb_name)
+                    .collect();
+                let suggestion = if kb_names.is_empty() {
+                    String::new()
+                } else {
+                    format!(" — search on KB {} instead", kb_names.iter().map(|n| format!("'{n}'")).collect::<Vec<_>>().join(", "))
+                };
+                return Err(CatalogError::SchemaError(
+                    format!("Entity '{name}' has no simple pipeline (KB-only){suggestion}")
+                ));
+            }
             let chunk_table = format!("{name}_Chunk");
             let mut enrich_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
             if let Some(title) = ec.title_field() {
@@ -556,6 +1247,13 @@ impl Catalog {
 
         let record_count = entity_records.len();
 
+        // Keep data copies for KB pipeline triggering (if needed)
+        let kb_data: Vec<BTreeMap<String, CypherValue>> = if entity_config.has_kb_participation() {
+            entity_records.iter().map(|r| r.data.clone()).collect()
+        } else {
+            Vec::new()
+        };
+
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
 
@@ -630,6 +1328,38 @@ impl Catalog {
 
         match result {
             Ok(_output) => {
+                // If this entity participates in KBs, trigger the KB pipeline.
+                // The simple pipeline only inserts entity records + handles
+                // chunking/embedding for the simple pipeline. We need drain()
+                // (via UpdateRecordNode) to detect KB participation and route
+                // records through the KB aggregate pipeline.
+                if entity_config.has_kb_participation() {
+                    for data in &kb_data {
+                        let uuid = data.get("_uuid")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        // Strip internal fields from data — UpdateRecordNode
+                        // does SET n.field = item.field and _uuid is the PK
+                        let clean_data: BTreeMap<String, CypherValue> = data.iter()
+                            .filter(|(k, _)| !k.starts_with('_'))
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        // Use empty sentinel hash to force UpdateRecordNode to
+                        // detect a change and enqueue AggregateRecords. For
+                        // composite entities (has both is_content AND content_for),
+                        // build_content_text would return the same hash as the
+                        // simple pipeline, causing no-op detection.
+                        self.pending.updates.push(crate::records::UpdateRecord {
+                            entity_name: entity_name.to_string(),
+                            uuid,
+                            data: clean_data,
+                            new_content_hash: String::new(),
+                        });
+                    }
+                    self.drain().await;
+                }
+
                 Ok(FlushResult {
                     processed: record_count,
                     failed: 0,
@@ -2032,16 +2762,34 @@ impl Catalog {
         entity_name: &str,
         data: &BTreeMap<String, CypherValue>,
     ) -> String {
-        // Simple entity path: use content_fields() for consistency with ingest_entities()
         if let Some(config) = self.entity_configs.get(entity_name) {
-            let content_fields = config.content_fields();
-            return content_fields
-                .iter()
-                .filter_map(|f| data.get(*f).and_then(|v| v.as_str()))
-                .collect::<Vec<_>>()
-                .join("\n\n");
+            let simple_fields = config.content_fields();
+            if !simple_fields.is_empty() {
+                // Simple pipeline: use is_content fields
+                return simple_fields
+                    .iter()
+                    .filter_map(|f| data.get(*f).and_then(|v| v.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+            }
+            // KB-only entity registered via register_entity:
+            // use all text/string fields with content_for or title_for
+            let mut parts = Vec::new();
+            let mut field_names: Vec<&String> = config.fields.keys().collect();
+            field_names.sort();
+            for fname in field_names {
+                let f = &config.fields[fname];
+                if f.title_for.is_some() || f.content_for.is_some() {
+                    if let Some(val) = data.get(fname.as_str()) {
+                        if let Some(s) = val.as_str() {
+                            parts.push(s.to_string());
+                        }
+                    }
+                }
+            }
+            return parts.join("\n\n");
         }
-        // KB entity path: all Text/String fields, "|" separator
+        // KB entity path (CatalogConfig): all Text/String fields, "|" separator
         let entity_def = match self.config.entities.get(entity_name) {
             Some(def) => def,
             None => return String::new(),
@@ -2230,6 +2978,406 @@ impl Catalog {
             })?;
 
         Ok(crate::search_strategy::SearchStrategyResponse { results, meta })
+    }
+}
+
+// ─── Migration support ──────────────────────────────────────────────────────
+//
+// Internal methods used by MigrationRunner. All DB logic for migrations lives
+// here so the runner remains a pure orchestrator (filesystem + ordering).
+
+use crate::dataflow::migrations::{AppliedMigration, MigrationError, MigrationFile};
+use crate::dataflow::checkpoint::{ExecutionCheckpoint, timestamp_ms};
+
+impl Catalog {
+    /// Ensure migration schema tables exist.
+    pub(crate) async fn migration_initialize(&self) -> Result<(), MigrationError> {
+        self.conn
+            .execute(
+                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigration(\
+                     _uuid STRING, \
+                     version INT64, \
+                     name STRING, \
+                     status STRING, \
+                     direction STRING, \
+                     checksum STRING, \
+                     execution_id STRING, \
+                     applied_at INT64, \
+                     duration_ms INT64, \
+                     error STRING, \
+                     PRIMARY KEY(_uuid))",
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        self.conn
+            .execute(
+                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigrationLock(\
+                     _uuid STRING, \
+                     locked_by STRING, \
+                     locked_at INT64, \
+                     expires_at INT64, \
+                     PRIMARY KEY(_uuid))",
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Load applied migrations from the database.
+    pub(crate) async fn migration_load_applied(
+        &self,
+    ) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
+        let result = self
+            .conn
+            .execute(
+                "MATCH (m:_DataflowMigration) \
+                 RETURN m.version, m.name, m.status, m.checksum, \
+                        m.execution_id, m.applied_at, m.duration_ms, m.error \
+                 ORDER BY m.version",
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        let mut applied = HashMap::new();
+        for row in &result.rows {
+            let version = row[0].as_i64().unwrap_or(0) as u64;
+            let name = row[1].as_str().unwrap_or("").to_string();
+            let status = row[2].as_str().unwrap_or("applied").to_string();
+            let checksum = row[3].as_str().unwrap_or("").to_string();
+            let execution_id = row[4].as_str().unwrap_or("").to_string();
+            let applied_at = row[5].as_i64().unwrap_or(0) as u64;
+            let duration_ms = row[6].as_i64().unwrap_or(0) as u64;
+            let error = row[7].as_str().unwrap_or("").to_string();
+
+            applied.insert(
+                version,
+                AppliedMigration {
+                    name,
+                    status,
+                    checksum,
+                    execution_id,
+                    applied_at,
+                    duration_ms,
+                    error,
+                },
+            );
+        }
+
+        Ok(applied)
+    }
+
+    /// Acquire migration lock (TTL-based).
+    pub(crate) async fn migration_acquire_lock(
+        &self,
+        lock_id: &str,
+    ) -> Result<(), MigrationError> {
+        const LOCK_TTL_MS: u64 = 10 * 60 * 1000;
+        const LOCK_UUID: &str = "_migration_lock";
+        let now = timestamp_ms();
+
+        let result = self
+            .conn
+            .execute_with_params(
+                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) \
+                 RETURN l.locked_by, l.locked_at, l.expires_at",
+                &[QueryParam::new(
+                    "uuid",
+                    CypherValue::String(LOCK_UUID.to_string()),
+                )],
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        if let Some(row) = result.rows.first() {
+            let locked_by = row[0].as_str().unwrap_or("unknown").to_string();
+            let locked_at = row[1].as_i64().unwrap_or(0) as u64;
+            let expires_at = row[2].as_i64().unwrap_or(0) as u64;
+
+            if now < expires_at {
+                return Err(MigrationError::Locked {
+                    by: locked_by,
+                    since: locked_at,
+                });
+            }
+            self.conn
+                .execute_with_params(
+                    "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
+                    &[QueryParam::new(
+                        "uuid",
+                        CypherValue::String(LOCK_UUID.to_string()),
+                    )],
+                )
+                .await
+                .map_err(|e| MigrationError::DbError(e.to_string()))?;
+        }
+
+        self.conn
+            .execute_with_params(
+                "CREATE (l:_DataflowMigrationLock {\
+                     _uuid: $uuid, \
+                     locked_by: $locked_by, \
+                     locked_at: $locked_at, \
+                     expires_at: $expires_at})",
+                &[
+                    QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string())),
+                    QueryParam::new("locked_by", CypherValue::String(lock_id.to_string())),
+                    QueryParam::new("locked_at", CypherValue::Int(now as i64)),
+                    QueryParam::new(
+                        "expires_at",
+                        CypherValue::Int((now + LOCK_TTL_MS) as i64),
+                    ),
+                ],
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Release migration lock.
+    pub(crate) async fn migration_release_lock(&self) -> Result<(), MigrationError> {
+        const LOCK_UUID: &str = "_migration_lock";
+        self.conn
+            .execute_with_params(
+                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
+                &[QueryParam::new(
+                    "uuid",
+                    CypherValue::String(LOCK_UUID.to_string()),
+                )],
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Record a migration apply/rollback result.
+    pub(crate) async fn migration_record(
+        &self,
+        file: &MigrationFile,
+        status: &str,
+        direction: &str,
+        execution_id: &str,
+        duration_ms: u64,
+        error: &str,
+    ) -> Result<(), MigrationError> {
+        let uuid = format!("migration-{:03}", file.version);
+        let now = timestamp_ms();
+
+        self.conn
+            .execute_with_params(
+                "MERGE (m:_DataflowMigration {_uuid: $uuid}) \
+                 SET m.version = $version, \
+                     m.name = $name, \
+                     m.status = $status, \
+                     m.direction = $direction, \
+                     m.checksum = $checksum, \
+                     m.execution_id = $execution_id, \
+                     m.applied_at = $applied_at, \
+                     m.duration_ms = $duration_ms, \
+                     m.error = $error",
+                &[
+                    QueryParam::new("uuid", CypherValue::String(uuid)),
+                    QueryParam::new("version", CypherValue::Int(file.version as i64)),
+                    QueryParam::new("name", CypherValue::String(file.name.clone())),
+                    QueryParam::new("status", CypherValue::String(status.to_string())),
+                    QueryParam::new("direction", CypherValue::String(direction.to_string())),
+                    QueryParam::new("checksum", CypherValue::String(file.checksum.clone())),
+                    QueryParam::new(
+                        "execution_id",
+                        CypherValue::String(execution_id.to_string()),
+                    ),
+                    QueryParam::new("applied_at", CypherValue::Int(now as i64)),
+                    QueryParam::new("duration_ms", CypherValue::Int(duration_ms as i64)),
+                    QueryParam::new("error", CypherValue::String(error.to_string())),
+                ],
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Update migration status only (used when file is missing on rollback).
+    pub(crate) async fn migration_update_status(
+        &self,
+        version: u64,
+        status: &str,
+    ) -> Result<(), MigrationError> {
+        let uuid = format!("migration-{:03}", version);
+        self.conn
+            .execute_with_params(
+                "MATCH (m:_DataflowMigration {_uuid: $uuid}) SET m.status = $status",
+                &[
+                    QueryParam::new("uuid", CypherValue::String(uuid)),
+                    QueryParam::new("status", CypherValue::String(status.to_string())),
+                ],
+            )
+            .await
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Execute a migration graph with checkpoint support.
+    pub(crate) async fn migration_execute_graph(
+        &self,
+        graph: &mut DataflowGraph,
+        execution_id: &str,
+    ) -> Result<(), MigrationError> {
+        let mut services = ServiceRegistry::new();
+        services
+            .register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+
+        let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
+        checkpoint_store
+            .initialize()
+            .await
+            .map_err(|e| MigrationError::DbError(e))?;
+
+        let runtime = DataflowRuntime::with_services(100, services);
+        runtime
+            .execute_with_checkpoint(graph, &checkpoint_store, execution_id)
+            .await
+            .map_err(|e| MigrationError::ExecutionError {
+                version: 0,
+                name: String::new(),
+                detail: e,
+            })?;
+        Ok(())
+    }
+
+    /// Rollback a migration: undo nodes in reverse topological order,
+    /// then re-enqueue restored entities and auto-drain.
+    pub(crate) async fn migration_rollback_graph(
+        &mut self,
+        graph: &mut DataflowGraph,
+        checkpoint: &ExecutionCheckpoint,
+    ) -> Result<(), MigrationError> {
+        let order = graph
+            .topological_sort()
+            .map_err(|e| MigrationError::GraphError {
+                version: 0,
+                name: String::new(),
+                detail: e,
+            })?;
+        let reversed: Vec<String> = order.into_iter().rev().collect();
+
+        let mut services = ServiceRegistry::new();
+        services
+            .register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        let services = Arc::new(services);
+
+        for node_name in &reversed {
+            let node_idx = graph
+                .nodes
+                .iter()
+                .position(|n| n.name() == node_name)
+                .ok_or_else(|| MigrationError::GraphError {
+                    version: 0,
+                    name: String::new(),
+                    detail: format!("node '{}' not found in graph", node_name),
+                })?;
+            let node = &mut graph.nodes[node_idx];
+
+            let undo_ctx = checkpoint
+                .nodes
+                .get(node_name.as_str())
+                .and_then(|nc| nc.undo_context.clone());
+
+            if let Some(ref ctx_val) = undo_ctx {
+                let mut ctx =
+                    crate::dataflow::node::NodeContext::with_services(services.clone());
+                node.undo(&mut ctx, ctx_val.clone())
+                    .await
+                    .map_err(|e| MigrationError::ExecutionError {
+                        version: 0,
+                        name: String::new(),
+                        detail: format!("undo of node '{}' failed: {e}", node_name),
+                    })?;
+
+                // After DeleteRecordNode undo, re-enqueue restored entities for re-ingestion
+                if node.node_type() == "DeleteRecordNode" {
+                    self.enqueue_restored_entities(ctx_val);
+                }
+            }
+        }
+
+        // Auto-drain: rebuild chunks, embeddings, FTS for restored entities
+        if self.has_pending() {
+            let _ = self.drain().await;
+        }
+
+        Ok(())
+    }
+
+    /// Extract restored entities from DeleteRecordNode undo context and enqueue
+    /// them as creates so drain() will rebuild chunks/embeddings/FTS.
+    ///
+    /// The undo context is `{ "EntityName": [{ _uuid, field1, ... }, ...] }`.
+    /// Entities are already restored in DB by undo() — we just need to re-run
+    /// the ingestion pipeline (chunk, embed, FTS index).
+    fn enqueue_restored_entities(&mut self, undo_ctx: &serde_json::Value) {
+        let groups = match undo_ctx.as_object() {
+            Some(g) => g,
+            None => return,
+        };
+        for (entity_name, items) in groups {
+            let arr = match items.as_array() {
+                Some(a) => a,
+                None => continue,
+            };
+            for item in arr {
+                let props = match item.as_object() {
+                    Some(p) => p,
+                    None => continue,
+                };
+                let mut data = BTreeMap::new();
+                for (k, v) in props {
+                    data.insert(k.clone(), json_to_cypher_value(v));
+                }
+                // Build EntityRecord with the existing _uuid (entity already in DB).
+                // Resolve the ref immediately — no downstream node needs to wait.
+                let (entity_ref, resolver) = crate::refs::EntityRef::new(entity_name);
+                if let Some(uuid) = data.get("_uuid").and_then(|v| v.as_str()) {
+                    resolver.resolve(uuid.to_string());
+                }
+                self.pending.entities.push(EntityRecord {
+                    entity_name: entity_name.clone(),
+                    data,
+                    entity_ref,
+                    resolver: None, // already resolved above
+                });
+            }
+        }
+    }
+}
+
+/// Convert serde_json::Value to CypherValue (for re-enqueuing restored entities).
+fn json_to_cypher_value(v: &serde_json::Value) -> CypherValue {
+    match v {
+        serde_json::Value::String(s) => CypherValue::String(s.clone()),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                CypherValue::Int(i)
+            } else if let Some(f) = n.as_f64() {
+                CypherValue::Float(f)
+            } else {
+                CypherValue::Null
+            }
+        }
+        serde_json::Value::Bool(b) => CypherValue::Bool(*b),
+        serde_json::Value::Null => CypherValue::Null,
+        serde_json::Value::Array(arr) => {
+            CypherValue::List(arr.iter().map(json_to_cypher_value).collect())
+        }
+        serde_json::Value::Object(obj) => {
+            let map = obj
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_cypher_value(v)))
+                .collect();
+            CypherValue::Map(map)
+        }
     }
 }
 
@@ -2907,21 +4055,25 @@ mod tests {
             field_type: FieldType::String,
             is_title: true,
             is_content: false,
+            ..Default::default()
         });
         fields.insert("description".into(), crate::config::SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         fields.insert("details".into(), crate::config::SimpleFieldDef {
             field_type: FieldType::Text,
             is_title: false,
             is_content: true,
+            ..Default::default()
         });
         fields.insert("price".into(), crate::config::SimpleFieldDef {
             field_type: FieldType::Double,
             is_title: false,
             is_content: false,
+            ..Default::default()
         });
         crate::config::EntityConfig {
             fields,
