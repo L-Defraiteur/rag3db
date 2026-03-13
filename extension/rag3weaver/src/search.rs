@@ -638,6 +638,7 @@ fn cypher_value_to_literal(value: &CypherValue) -> String {
                 .collect();
             format!("{{{}}}", parts.join(", "))
         }
+        CypherValue::Blob(_) => "\"<blob>\"".to_string(),
     }
 }
 

@@ -5,6 +5,7 @@
 //!
 //! Compiled as a static library and linked into the rag3db C++ extension.
 
+pub mod blob_store;
 mod bridge;
 mod handle;
 pub mod index;

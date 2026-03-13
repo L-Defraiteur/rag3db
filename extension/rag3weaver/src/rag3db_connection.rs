@@ -210,7 +210,8 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
             }
             CypherValue::Map(map)
         }
-        // Fallback: Date, Timestamp, Interval, Blob, UUID, Decimal, etc.
+        rag3db::Value::Blob(b) => CypherValue::Blob(b),
+        // Fallback: Date, Timestamp, Interval, UUID, Decimal, etc.
         other => CypherValue::String(format!("{other}")),
     }
 }
@@ -223,6 +224,7 @@ fn cypher_to_rag3db_value(value: &CypherValue) -> rag3db::Value {
         CypherValue::Int(i) => rag3db::Value::Int64(*i),
         CypherValue::Float(f) => rag3db::Value::Double(*f),
         CypherValue::String(s) => rag3db::Value::String(s.clone()),
+        CypherValue::Blob(b) => rag3db::Value::Blob(b.clone()),
         CypherValue::List(vs) => {
             let converted: Vec<rag3db::Value> = vs.iter().map(cypher_to_rag3db_value).collect();
             let elem_type = converted

@@ -39,6 +39,8 @@ pub enum CypherValue {
     String(String),
     List(Vec<CypherValue>),
     Map(BTreeMap<String, CypherValue>),
+    #[serde(skip)]
+    Blob(Vec<u8>),
 }
 
 impl CypherValue {
@@ -74,6 +76,13 @@ impl CypherValue {
             _ => None,
         }
     }
+
+    pub fn as_blob(&self) -> Option<&[u8]> {
+        match self {
+            Self::Blob(b) => Some(b.as_slice()),
+            _ => None,
+        }
+    }
 }
 
 impl From<String> for CypherValue {
@@ -103,6 +112,12 @@ impl From<f64> for CypherValue {
 impl From<bool> for CypherValue {
     fn from(b: bool) -> Self {
         Self::Bool(b)
+    }
+}
+
+impl From<Vec<u8>> for CypherValue {
+    fn from(v: Vec<u8>) -> Self {
+        Self::Blob(v)
     }
 }
 

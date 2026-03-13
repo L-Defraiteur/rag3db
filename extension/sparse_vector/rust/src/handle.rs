@@ -4,11 +4,18 @@
 //! Open mmap's the posting data (O(1)), vectors + dims loaded lazily.
 //! Search uses mmap iterators when available (no RAM postings or vectors needed).
 //! Mutations load postings + vectors into RAM on first access, set dirty flag.
+//!
+//! Two storage modes:
+//! - **Filesystem** (`create`/`open`): files live directly in the given directory.
+//! - **BlobStore** (`create_with_store`/`open_with_store`): source of truth is the
+//!   BlobStore; a local tmpdir is used as mmap cache. Cleaned up on Drop.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
+use crate::blob_store::BlobStore;
 use crate::index::{SparseIndex, SparseVector};
 use crate::mmap_index::{self, MmapPostingData};
 use crate::posting_list::PostingList;
@@ -18,6 +25,23 @@ const VECTORS_FILE: &str = "sparse_vectors.bin";
 const DIMS_FILE: &str = "sparse_dims.bin";
 /// Legacy bincode file (read-only fallback).
 const LEGACY_FILE: &str = "sparse.bin";
+
+/// Files that make up a sparse index (new format).
+const INDEX_FILES: &[&str] = &[MMAP_FILE, VECTORS_FILE, DIMS_FILE];
+
+/// Monotonic counter for unique tmpdir names.
+static CACHE_SEQ: AtomicUsize = AtomicUsize::new(0);
+
+/// Storage backend for persistence.
+enum StorageBackend {
+    /// Files live directly in `path`. No external store.
+    Filesystem,
+    /// Source of truth is a BlobStore. `path` is a local tmpdir cache for mmap.
+    Store {
+        store: Arc<dyn BlobStore>,
+        index_name: String,
+    },
+}
 
 struct Inner {
     index: SparseIndex,
@@ -34,9 +58,14 @@ struct Inner {
 pub struct SparseHandle {
     inner: Mutex<Inner>,
     path: PathBuf,
+    backend: StorageBackend,
 }
 
 impl SparseHandle {
+    // -----------------------------------------------------------------------
+    // Filesystem lifecycle (existing API, unchanged behavior)
+    // -----------------------------------------------------------------------
+
     /// Create a new empty sparse index at the given path.
     pub fn create(path: &str) -> Result<Self, String> {
         std::fs::create_dir_all(Path::new(path))
@@ -51,6 +80,7 @@ impl SparseHandle {
                 dirty: false,
             }),
             path: PathBuf::from(path),
+            backend: StorageBackend::Filesystem,
         };
         handle.commit_inner()?;
         Ok(handle)
@@ -63,15 +93,111 @@ impl SparseHandle {
         let mmap_path = base.join(MMAP_FILE);
 
         if mmap_path.exists() {
-            Self::open_mmap(base)
+            Self::open_mmap(base, StorageBackend::Filesystem)
         } else {
             Self::open_legacy(base)
         }
     }
 
+    // -----------------------------------------------------------------------
+    // BlobStore lifecycle
+    // -----------------------------------------------------------------------
+
+    /// Create a new empty sparse index backed by a BlobStore.
+    ///
+    /// A local tmpdir is created for mmap cache. Source of truth is the store.
+    pub fn create_with_store(
+        store: Arc<dyn BlobStore>,
+        index_name: &str,
+    ) -> Result<Self, String> {
+        let cache_dir = Self::make_cache_dir(index_name)?;
+
+        let handle = Self {
+            inner: Mutex::new(Inner {
+                index: SparseIndex::new(),
+                mmap: None,
+                postings_loaded: true,
+                vectors_loaded: true,
+                num_vectors: 0,
+                dirty: false,
+            }),
+            path: cache_dir,
+            backend: StorageBackend::Store {
+                store,
+                index_name: index_name.to_string(),
+            },
+        };
+        handle.commit_inner()?;
+        Ok(handle)
+    }
+
+    /// Open an existing sparse index from a BlobStore.
+    ///
+    /// Materializes blobs from the store into a local tmpdir, then mmap's.
+    pub fn open_with_store(
+        store: Arc<dyn BlobStore>,
+        index_name: &str,
+    ) -> Result<Self, String> {
+        let cache_dir = Self::make_cache_dir(index_name)?;
+
+        // Materialize all blobs from store to cache_dir
+        let files = store
+            .list(index_name)
+            .map_err(|e| format!("cannot list blobs for {index_name}: {e}"))?;
+
+        for file_name in &files {
+            let data = store
+                .load(index_name, file_name)
+                .map_err(|e| format!("cannot load {index_name}/{file_name}: {e}"))?;
+            std::fs::write(cache_dir.join(file_name), data)
+                .map_err(|e| format!("cannot write cache {file_name}: {e}"))?;
+        }
+
+        let backend = StorageBackend::Store {
+            store,
+            index_name: index_name.to_string(),
+        };
+
+        // Open from cache_dir (same logic as filesystem open)
+        if cache_dir.join(MMAP_FILE).exists() {
+            Self::open_mmap(&cache_dir, backend)
+        } else {
+            // Empty index (no files in store yet) — create fresh
+            let handle = Self {
+                inner: Mutex::new(Inner {
+                    index: SparseIndex::new(),
+                    mmap: None,
+                    postings_loaded: true,
+                    vectors_loaded: true,
+                    num_vectors: 0,
+                    dirty: false,
+                }),
+                path: cache_dir,
+                backend,
+            };
+            handle.commit_inner()?;
+            Ok(handle)
+        }
+    }
+
+    /// Create a unique tmpdir for BlobStore cache.
+    fn make_cache_dir(index_name: &str) -> Result<PathBuf, String> {
+        let seq = CACHE_SEQ.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir()
+            .join("sparse_blob_cache")
+            .join(format!("{index_name}_{seq}"));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("cannot create cache dir {}: {e}", dir.display()))?;
+        Ok(dir)
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared open helpers
+    // -----------------------------------------------------------------------
+
     /// Open using the new mmap format.
     /// Only mmap + dims are loaded. Postings and vectors are lazy.
-    fn open_mmap(base: &Path) -> Result<Self, String> {
+    fn open_mmap(base: &Path, backend: StorageBackend) -> Result<Self, String> {
         let mmap = MmapPostingData::open(&base.join(MMAP_FILE))?;
 
         // Deserialize dimension mapping (small file, needed for search routing)
@@ -99,6 +225,7 @@ impl SparseHandle {
                 dirty: false,
             }),
             path: base.to_path_buf(),
+            backend,
         })
     }
 
@@ -120,8 +247,13 @@ impl SparseHandle {
                 dirty: false,
             }),
             path: base.to_path_buf(),
+            backend: StorageBackend::Filesystem,
         })
     }
+
+    // -----------------------------------------------------------------------
+    // Lazy loading
+    // -----------------------------------------------------------------------
 
     /// Ensure RAM postings are loaded (materializes from mmap if needed).
     fn ensure_postings_loaded(inner: &mut Inner) {
@@ -152,7 +284,9 @@ impl SparseHandle {
         Ok(())
     }
 
-    // -- Public API (called from bridge) --
+    // -----------------------------------------------------------------------
+    // Public API (called from bridge)
+    // -----------------------------------------------------------------------
 
     pub fn insert(&self, node_id: u64, vector: &SparseVector) -> Result<(), String> {
         let mut inner = self.inner.lock().map_err(|_| "lock poisoned".to_string())?;
@@ -225,6 +359,7 @@ impl SparseHandle {
     }
 
     /// Write index to disk in the new mmap format, then re-mmap.
+    /// If store-backed, also persists to BlobStore.
     pub fn commit_inner(&self) -> Result<(), String> {
         let mut inner = self.inner.lock().map_err(|_| "lock poisoned".to_string())?;
 
@@ -237,25 +372,35 @@ impl SparseHandle {
         Self::ensure_postings_loaded(&mut inner);
         Self::ensure_vectors_loaded(&mut inner, &self.path)?;
 
-        // Write sparse.mmap
+        // Write sparse.mmap to local cache
         mmap_index::write_mmap_file(
             &self.path.join(MMAP_FILE),
             inner.index.postings(),
             inner.num_vectors as u32,
         )?;
 
-        // Write sparse_vectors.bin
+        // Serialize vectors + dims
         let vectors_data = bincode::serialize(inner.index.vectors())
             .map_err(|e| format!("cannot serialize vectors: {e}"))?;
-        std::fs::write(self.path.join(VECTORS_FILE), vectors_data)
+        std::fs::write(self.path.join(VECTORS_FILE), &vectors_data)
             .map_err(|e| format!("cannot write {VECTORS_FILE}: {e}"))?;
 
-        // Write sparse_dims.bin
         let dims_data =
             bincode::serialize(&(inner.index.dim_map(), inner.index.dim_reverse()))
                 .map_err(|e| format!("cannot serialize dims: {e}"))?;
-        std::fs::write(self.path.join(DIMS_FILE), dims_data)
+        std::fs::write(self.path.join(DIMS_FILE), &dims_data)
             .map_err(|e| format!("cannot write {DIMS_FILE}: {e}"))?;
+
+        // Sync to BlobStore if store-backed
+        if let StorageBackend::Store { ref store, ref index_name } = self.backend {
+            for &file in INDEX_FILES {
+                let data = std::fs::read(self.path.join(file))
+                    .map_err(|e| format!("cannot read cache {file}: {e}"))?;
+                store
+                    .save(index_name, file, &data)
+                    .map_err(|e| format!("cannot save {index_name}/{file} to store: {e}"))?;
+            }
+        }
 
         // Re-mmap and reset to lazy state
         let mmap = MmapPostingData::open(&self.path.join(MMAP_FILE))?;
@@ -267,16 +412,31 @@ impl SparseHandle {
         // Remove legacy file if present
         let legacy = self.path.join(LEGACY_FILE);
         if legacy.exists() {
-            let _ = std::fs::remove_file(legacy);
+            let _ = std::fs::remove_file(&legacy);
+            // Also remove from store if store-backed
+            if let StorageBackend::Store { ref store, ref index_name } = self.backend {
+                let _ = store.delete(index_name, LEGACY_FILE);
+            }
         }
 
         Ok(())
     }
 }
 
+impl Drop for SparseHandle {
+    fn drop(&mut self) {
+        // Only clean up cache_dir for store-backed handles (tmpdir we created).
+        // Filesystem handles use the user's data directory — never delete it.
+        if let StorageBackend::Store { .. } = &self.backend {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blob_store::MemBlobStore;
 
     fn tmp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(name)
@@ -285,6 +445,10 @@ mod tests {
     fn cleanup(path: &Path) {
         let _ = std::fs::remove_dir_all(path);
     }
+
+    // -----------------------------------------------------------------------
+    // Filesystem tests (unchanged)
+    // -----------------------------------------------------------------------
 
     #[test]
     fn create_writes_mmap_format() {
@@ -454,5 +618,198 @@ mod tests {
         assert_eq!(results[0].0, 450);
 
         cleanup(&p);
+    }
+
+    // -----------------------------------------------------------------------
+    // BlobStore tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn blob_store_create_and_search() {
+        let store = Arc::new(MemBlobStore::new());
+        let handle = SparseHandle::create_with_store(store.clone(), "test_idx").unwrap();
+
+        handle
+            .insert(42, &SparseVector::new(vec![1, 2], vec![0.5, 0.3]))
+            .unwrap();
+        handle
+            .insert(99, &SparseVector::new(vec![2, 3], vec![0.8, 0.2]))
+            .unwrap();
+        handle.commit_inner().unwrap();
+
+        // Data should be in store
+        assert!(store.exists("test_idx", MMAP_FILE).unwrap());
+        assert!(store.exists("test_idx", VECTORS_FILE).unwrap());
+        assert!(store.exists("test_idx", DIMS_FILE).unwrap());
+        assert_eq!(store.list("test_idx").unwrap().len(), 3);
+
+        // Search should work (mmap from cache)
+        let results = handle.search(&SparseVector::new(vec![2], vec![1.0]), 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 99);
+    }
+
+    #[test]
+    fn blob_store_close_reopen() {
+        let store = Arc::new(MemBlobStore::new());
+
+        // Create, insert, commit, drop
+        {
+            let handle = SparseHandle::create_with_store(store.clone(), "reopen_idx").unwrap();
+            handle
+                .insert(1, &SparseVector::new(vec![10], vec![1.0]))
+                .unwrap();
+            handle
+                .insert(2, &SparseVector::new(vec![10, 20], vec![0.5, 0.8]))
+                .unwrap();
+            handle.commit_inner().unwrap();
+        }
+        // Handle dropped → cache_dir cleaned up
+
+        // Reopen from store
+        let handle2 = SparseHandle::open_with_store(store.clone(), "reopen_idx").unwrap();
+        assert_eq!(handle2.len(), 2);
+
+        let results = handle2.search(&SparseVector::new(vec![10], vec![1.0]), 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 1); // 1.0
+        assert_eq!(results[1].0, 2); // 0.5
+    }
+
+    #[test]
+    fn blob_store_mutation_after_reopen() {
+        let store = Arc::new(MemBlobStore::new());
+
+        {
+            let handle = SparseHandle::create_with_store(store.clone(), "mut_idx").unwrap();
+            handle
+                .insert(1, &SparseVector::new(vec![5], vec![1.0]))
+                .unwrap();
+            handle.commit_inner().unwrap();
+        }
+
+        let handle2 = SparseHandle::open_with_store(store.clone(), "mut_idx").unwrap();
+        handle2
+            .insert(2, &SparseVector::new(vec![5], vec![2.0]))
+            .unwrap();
+        handle2.commit_inner().unwrap();
+
+        // Reopen again — should have both docs
+        drop(handle2);
+        let handle3 = SparseHandle::open_with_store(store.clone(), "mut_idx").unwrap();
+        assert_eq!(handle3.len(), 2);
+
+        let results = handle3.search(&SparseVector::new(vec![5], vec![1.0]), 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 2); // 2.0
+        assert_eq!(results[1].0, 1); // 1.0
+    }
+
+    #[test]
+    fn blob_store_delete_and_reopen() {
+        let store = Arc::new(MemBlobStore::new());
+
+        {
+            let handle = SparseHandle::create_with_store(store.clone(), "del_idx").unwrap();
+            handle
+                .insert(1, &SparseVector::new(vec![1], vec![1.0]))
+                .unwrap();
+            handle
+                .insert(2, &SparseVector::new(vec![1], vec![2.0]))
+                .unwrap();
+            handle.commit_inner().unwrap();
+        }
+
+        // Reopen, delete, commit
+        let handle2 = SparseHandle::open_with_store(store.clone(), "del_idx").unwrap();
+        assert_eq!(handle2.len(), 2);
+        handle2.remove(1).unwrap();
+        assert_eq!(handle2.len(), 1);
+        handle2.commit_inner().unwrap();
+        drop(handle2);
+
+        // Reopen — should have 1 doc
+        let handle3 = SparseHandle::open_with_store(store.clone(), "del_idx").unwrap();
+        assert_eq!(handle3.len(), 1);
+
+        let results = handle3.search(&SparseVector::new(vec![1], vec![1.0]), 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, 2);
+    }
+
+    #[test]
+    fn blob_store_multiple_indexes_isolated() {
+        let store = Arc::new(MemBlobStore::new());
+
+        let h1 = SparseHandle::create_with_store(store.clone(), "idx_a").unwrap();
+        let h2 = SparseHandle::create_with_store(store.clone(), "idx_b").unwrap();
+
+        h1.insert(1, &SparseVector::new(vec![1], vec![1.0]))
+            .unwrap();
+        h1.insert(2, &SparseVector::new(vec![1], vec![0.5]))
+            .unwrap();
+        h2.insert(10, &SparseVector::new(vec![1], vec![3.0]))
+            .unwrap();
+
+        h1.commit_inner().unwrap();
+        h2.commit_inner().unwrap();
+
+        assert_eq!(h1.len(), 2);
+        assert_eq!(h2.len(), 1);
+
+        // Store has separate blobs
+        assert_eq!(store.list("idx_a").unwrap().len(), 3);
+        assert_eq!(store.list("idx_b").unwrap().len(), 3);
+    }
+
+    #[test]
+    fn blob_store_survives_cache_cleanup() {
+        let store = Arc::new(MemBlobStore::new());
+
+        {
+            let handle = SparseHandle::create_with_store(store.clone(), "surv_idx").unwrap();
+            for i in 0..50u64 {
+                handle
+                    .insert(i, &SparseVector::new(vec![(i % 10) as u32], vec![i as f32]))
+                    .unwrap();
+            }
+            handle.commit_inner().unwrap();
+        }
+        // Cache cleaned up on drop
+
+        // Reopen from store
+        let handle2 = SparseHandle::open_with_store(store.clone(), "surv_idx").unwrap();
+        assert_eq!(handle2.len(), 50);
+
+        let results = handle2.search(&SparseVector::new(vec![0], vec![1.0]), 5);
+        // Docs with token 0: 0 (w=0.0), 10, 20, 30, 40. Doc 0 has weight 0 → no score.
+        assert_eq!(results.len(), 4);
+        assert_eq!(results[0].0, 40);
+    }
+
+    #[test]
+    fn blob_store_search_filtered_after_reopen() {
+        let store = Arc::new(MemBlobStore::new());
+
+        {
+            let handle = SparseHandle::create_with_store(store.clone(), "filt_idx").unwrap();
+            handle
+                .insert(1, &SparseVector::new(vec![1, 2], vec![0.5, 0.3]))
+                .unwrap();
+            handle
+                .insert(2, &SparseVector::new(vec![1, 3], vec![0.9, 0.1]))
+                .unwrap();
+            handle
+                .insert(3, &SparseVector::new(vec![1], vec![0.7]))
+                .unwrap();
+            handle.commit_inner().unwrap();
+        }
+
+        let handle2 = SparseHandle::open_with_store(store.clone(), "filt_idx").unwrap();
+        let results =
+            handle2.search_filtered(&SparseVector::new(vec![1], vec![1.0]), 10, &[1, 3]);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 3); // 0.7
+        assert_eq!(results[1].0, 1); // 0.5
     }
 }

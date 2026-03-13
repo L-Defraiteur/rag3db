@@ -630,6 +630,7 @@ fn cypher_value_to_json(val: &CypherValue) -> serde_json::Value {
                 .collect();
             serde_json::Value::Object(obj)
         }
+        CypherValue::Blob(_) => serde_json::Value::String("<blob>".to_string()),
     }
 }
 

@@ -12,6 +12,7 @@ pub mod bm42_embedder;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod candle_embedder;
 pub mod catalog;
+pub mod cypher_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
 #[cfg(feature = "wasm-emscripten")]
