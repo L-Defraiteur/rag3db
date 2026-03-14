@@ -24,6 +24,8 @@ public:
         std::unique_ptr<storage::IndexStorageInfo> storageInfo,
         rust::Box<::LucivyHandle> handle);
 
+    ~LucivyIndex() override;
+
     static storage::IndexType getIndexType();
 
     static std::unique_ptr<storage::Index> load(main::ClientContext* context,

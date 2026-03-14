@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -15,17 +16,19 @@ use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryRes
 /// Owns both the [`Database`](rag3db::Database) and [`Connection`](rag3db::Connection),
 /// embedding the full rag3db engine in the current process.
 ///
+/// The `Database` is stored behind an `Arc` so that additional connections
+/// (e.g. a sync connection for BlobStore) can share the same engine instance.
+///
 /// # Safety
 ///
 /// This struct is self-referential: `conn` borrows from `db`.
 /// Fields are declared so that `conn` is dropped before `db` (Rust drops
-/// fields in declaration order). The `Database` lives on the heap (`Box`)
+/// fields in declaration order). The `Database` lives on the heap (`Arc`)
 /// so its address is stable.
 pub struct Rag3dbConnection {
     // SAFETY: conn borrows from db. Declared first so it drops first.
     conn: rag3db::Connection<'static>,
-    #[allow(dead_code)]
-    db: Box<rag3db::Database>,
+    db: Arc<rag3db::Database>,
 }
 
 // rag3db::Connection is already Send+Sync (unsafe impl in the crate).
@@ -41,7 +44,7 @@ impl Rag3dbConnection {
 
     /// Create an in-memory database.
     pub fn in_memory() -> Result<Self, DbError> {
-        let db = Box::new(
+        let db = Arc::new(
             rag3db::Database::in_memory(rag3db::SystemConfig::default())
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
@@ -50,15 +53,15 @@ impl Rag3dbConnection {
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
     pub fn with_config(path: impl AsRef<Path>, config: rag3db::SystemConfig) -> Result<Self, DbError> {
-        let db = Box::new(
+        let db = Arc::new(
             rag3db::Database::new(path, config)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
         Self::connect(db)
     }
 
-    fn connect(db: Box<rag3db::Database>) -> Result<Self, DbError> {
-        // SAFETY: db is heap-allocated (Box), address is stable.
+    fn connect(db: Arc<rag3db::Database>) -> Result<Self, DbError> {
+        // SAFETY: db is heap-allocated (Arc), address is stable.
         // conn is declared before db in the struct, so it drops first.
         // We never expose the inner Database or Connection separately.
         let db_ptr = &*db as *const rag3db::Database;
@@ -69,6 +72,13 @@ impl Rag3dbConnection {
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
         Ok(Self { conn, db })
+    }
+
+    /// Create a second connection on the same Database, for sync BlobStore operations.
+    /// The returned connection shares the same Database instance (same tables, same catalog).
+    pub fn create_sync_connection(&self) -> Result<Arc<dyn crate::connection::SyncDbConnection>, DbError> {
+        let conn = Self::connect(self.db.clone())?;
+        Ok(Arc::new(conn))
     }
 
     /// Execute a raw Cypher query (sync, used internally).

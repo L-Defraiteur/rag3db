@@ -235,6 +235,12 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto& nodeTable =
         storageManager->getTable(bd.tableID)->cast<storage::NodeTable>();
 
+    // 0. Skip if index already exists (idempotent — e.g. DB reopen with initLucivyEntries).
+    auto existingIndex = nodeTable.getIndex(bd.indexName);
+    if (existingIndex.has_value()) {
+        return 0;
+    }
+
     // 1. Build index path.
     std::string basePath;
     if (context.clientContext->isInMemory()) {

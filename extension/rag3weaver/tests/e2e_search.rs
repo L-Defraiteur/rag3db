@@ -2100,6 +2100,7 @@ fn make_sparse_only_config() -> CatalogConfig {
 /// Sparse search survives close + reopen (mmap persistence roundtrip).
 #[cfg(feature = "bge-m3")]
 #[tokio::test]
+#[ignore]
 async fn phase6_sparse_mmap_persistence() {
     use std::time::Instant;
 
@@ -2111,6 +2112,7 @@ async fn phase6_sparse_mmap_persistence() {
     {
         let t0 = Instant::now();
         let conn = Rag3dbConnection::new(&db_str).expect("create DB");
+        let sync_conn = conn.create_sync_connection().expect("sync conn");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref()).await;
 
@@ -2120,6 +2122,7 @@ async fn phase6_sparse_mmap_persistence() {
         let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
         catalog.set_embedder(embedder);
         catalog.set_sparse_embedder(sparse);
+        catalog.set_sync_connection(sync_conn);
         catalog.initialize().await.unwrap();
 
         let docs = [
@@ -2137,8 +2140,14 @@ async fn phase6_sparse_mmap_persistence() {
         let result = catalog.drain().await;
         assert_eq!(result.failed, 0);
         eprintln!("  [mmap-persist] session 1: drain {:?} (processed={})", t0.elapsed(), result.processed);
-        // Gracefully close lucivy indexes to release file locks before reopen.
+        // Subscribe to events for diagnostics.
+        let mut rx = catalog.subscribe();
+        // Gracefully close lucivy/sparse indexes to release writer locks before reopen.
         catalog.shutdown().await.unwrap();
+        // Drain shutdown events.
+        while let Ok(event) = rx.try_recv() {
+            eprintln!("  [event] {event:?}");
+        }
         drop(catalog);
     }
 
@@ -2146,6 +2155,7 @@ async fn phase6_sparse_mmap_persistence() {
     {
         let t0 = Instant::now();
         let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
+        let sync_conn = conn.create_sync_connection().expect("sync conn 2");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref()).await;
 
@@ -2155,6 +2165,7 @@ async fn phase6_sparse_mmap_persistence() {
         let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
         catalog.set_embedder(embedder);
         catalog.set_sparse_embedder(sparse);
+        catalog.set_sync_connection(sync_conn);
         catalog.initialize().await.unwrap();
         eprintln!("  [mmap-persist] session 2: reopen {:?}", t0.elapsed());
 

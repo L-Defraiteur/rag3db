@@ -51,6 +51,16 @@ LucivyIndex::LucivyIndex(IndexInfo indexInfo,
     }
 }
 
+LucivyIndex::~LucivyIndex() {
+    // Ensure writer lock is released before Rust handle is dropped.
+    // close() is idempotent — no-op if already called via CLOSE_LUCIVY_INDEX.
+    try {
+        close();
+    } catch (...) {
+        // Suppress: destructors must not throw.
+    }
+}
+
 IndexType LucivyIndex::getIndexType() {
     static const IndexType LUCIVY_INDEX_TYPE{"LUCIVY",
         IndexConstraintType::SECONDARY_NON_UNIQUE, IndexDefinitionType::EXTENSION, load};

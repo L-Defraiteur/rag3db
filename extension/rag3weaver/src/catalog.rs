@@ -252,27 +252,55 @@ impl Catalog {
     /// Gracefully close all lucivy FTS indexes to release file locks.
     /// Must be called before dropping the Catalog when the DB will be reopened
     /// in the same process (e.g. tests, hot reload).
-    pub async fn shutdown(&self) -> Result<(), CatalogError> {
-        // Collect all table names that may have a lucivy FTS index.
-        let mut tables: Vec<String> = Vec::new();
-
-        // Simple entities: FTS index is on the entity table itself.
+    pub async fn shutdown(&mut self) -> Result<(), CatalogError> {
+        // Collect table names for FTS and sparse.
+        let mut fts_tables: Vec<String> = Vec::new();
         for name in self.entity_configs.keys() {
-            tables.push(name.clone());
+            fts_tables.push(name.clone());
         }
-
-        // KBs: FTS index is on {kb_name}_Index.
         for kb_name in self.kb_metadata.keys() {
-            tables.push(format!("{kb_name}_Index"));
+            fts_tables.push(format!("{kb_name}_Index"));
         }
+        let sparse_tables: Vec<String> = self.sparse_handles.keys().cloned().collect();
 
-        for table in &tables {
-            // CLOSE_LUCIVY_INDEX is a no-op if no index exists on the table.
+        self.event_bus.emit(CatalogEvent::ShutdownStarted {
+            fts_tables: fts_tables.clone(),
+            sparse_tables: sparse_tables.clone(),
+        });
+
+        // 1. Close lucivy FTS indexes (release writer locks).
+        let mut fts_closed: usize = 0;
+        let mut fts_failed: Vec<String> = Vec::new();
+        for table in &fts_tables {
             let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
-            if let Err(e) = self.conn.execute(&query).await {
-                eprintln!("[rag3weaver] shutdown: failed to close lucivy index on {table}: {e}");
+            match self.conn.execute(&query).await {
+                Ok(_) => fts_closed += 1,
+                Err(e) => {
+                    eprintln!("[rag3weaver] shutdown: failed to close lucivy index on {table}: {e}");
+                    fts_failed.push(format!("{table}: {e}"));
+                }
             }
         }
+
+        // 2. Commit and drop sparse handles (release writer locks).
+        let mut sparse_committed: usize = 0;
+        let mut sparse_failed: Vec<String> = Vec::new();
+        for (table, handle) in self.sparse_handles.drain() {
+            match handle.commit_inner() {
+                Ok(_) => sparse_committed += 1,
+                Err(e) => {
+                    eprintln!("[rag3weaver] shutdown: failed to commit sparse handle {table}: {e}");
+                    sparse_failed.push(format!("{table}: {e}"));
+                }
+            }
+        }
+
+        self.event_bus.emit(CatalogEvent::ShutdownCompleted {
+            fts_closed,
+            fts_failed,
+            sparse_committed,
+            sparse_failed,
+        });
 
         Ok(())
     }

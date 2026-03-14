@@ -80,6 +80,18 @@ pub enum CatalogEvent {
         message: String,
     },
 
+    // ── Shutdown ───────────────────────────────────────────────────────
+    ShutdownStarted {
+        fts_tables: Vec<String>,
+        sparse_tables: Vec<String>,
+    },
+    ShutdownCompleted {
+        fts_closed: usize,
+        fts_failed: Vec<String>,
+        sparse_committed: usize,
+        sparse_failed: Vec<String>,
+    },
+
     // ── Entity lifecycle ─────────────────────────────────────────────────
     EntityCreated {
         entity: String,

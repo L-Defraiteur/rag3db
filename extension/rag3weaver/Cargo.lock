@@ -1928,6 +1928,7 @@ dependencies = [
  "lockfree-object-pool",
  "log",
  "lru",
+ "lucivy-fst",
  "lz4_flex",
  "measure_time",
  "num_cpus",
@@ -2137,6 +2138,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "lucivy-fst"
+version = "0.1.0"
 
 [[package]]
 name = "lz4_flex"
