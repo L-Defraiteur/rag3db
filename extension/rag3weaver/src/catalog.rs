@@ -351,17 +351,6 @@ impl Catalog {
         // 6. Pre-warm chunker cache for ingestion nodes
         self.warm_chunker_cache();
 
-        // Create sparse vector handles for KBs that have sparse=true.
-        if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
-            let kb_sparse_tables: Vec<String> = self.config.knowledge_bases.iter()
-                .filter(|(_, kbc)| kbc.signals.sparse())
-                .map(|(kb_name, _)| format!("{kb_name}_Index_Chunk"))
-                .collect();
-            for table in kb_sparse_tables {
-                self.ensure_sparse_handle(&table);
-            }
-        }
-
         // 7. Initialize checkpoint store for crash-recovery (unless already set by tests)
         if self.checkpoint_store.is_none() {
             let cp_store: Arc<dyn CheckpointStore> =
@@ -374,6 +363,7 @@ impl Catalog {
         }
 
         // 8. Initialize blob store for lucivy/sparse index persistence
+        //    Must be before ensure_sparse_handle() which needs blob_store.
         if let Some(ref sync_conn) = self.sync_conn {
             self.conn.execute(
                 "CREATE NODE TABLE IF NOT EXISTS _index_blobs (_key STRING, _data BLOB, PRIMARY KEY(_key))"
@@ -384,7 +374,18 @@ impl Catalog {
             self.blob_store = Some(Arc::new(sparse_vector::blob_store::MemBlobStore::new()));
         }
 
-        // 9. Load persisted entity configs, relations, and KB configs from _catalog_meta
+        // 9. Create sparse vector handles for KBs that have sparse=true.
+        if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
+            let kb_sparse_tables: Vec<String> = self.config.knowledge_bases.iter()
+                .filter(|(_, kbc)| kbc.signals.sparse())
+                .map(|(kb_name, _)| format!("{kb_name}_Index_Chunk"))
+                .collect();
+            for table in kb_sparse_tables {
+                self.ensure_sparse_handle(&table);
+            }
+        }
+
+        // 10. Load persisted entity configs, relations, and KB configs from _catalog_meta
         self.load_entity_configs().await?;
         self.load_relations().await?;
         self.load_kb_configs().await?;
