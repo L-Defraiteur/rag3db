@@ -25,6 +25,7 @@ use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
 use crate::cypher_blob_store::CypherBlobStore;
+use sparse_vector::blob_store::BlobStore;
 use crate::dataflow::checkpoint::CheckpointStore;
 use crate::dataflow::node_factories::register_builtins;
 use crate::dataflow::node_registry::NodeRegistry;
@@ -126,7 +127,8 @@ pub struct Catalog {
     /// Checkpoint store for crash-recovery of drain executions.
     checkpoint_store: Option<Arc<dyn CheckpointStore>>,
     /// BlobStore backed by rag3db for lucivy/sparse index persistence.
-    blob_store: Option<Arc<CypherBlobStore>>,
+    /// CypherBlobStore when sync_conn is set, MemBlobStore fallback for in-memory DBs.
+    blob_store: Option<Arc<dyn BlobStore>>,
     /// Sparse vector index handles, keyed by table name (e.g. "Product_Chunk").
     sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
     /// Base directory for sparse/FTS mmap caches.
@@ -213,7 +215,7 @@ impl Catalog {
     }
 
     /// Get the blob store for index persistence. Available after `initialize()`.
-    pub fn blob_store(&self) -> Option<Arc<CypherBlobStore>> {
+    pub fn blob_store(&self) -> Option<Arc<dyn BlobStore>> {
         self.blob_store.clone()
     }
 
@@ -377,6 +379,9 @@ impl Catalog {
                 "CREATE NODE TABLE IF NOT EXISTS _index_blobs (_key STRING, _data BLOB, PRIMARY KEY(_key))"
             ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
             self.blob_store = Some(Arc::new(CypherBlobStore::from_sync_connection(sync_conn.clone())));
+        } else if self.blob_store.is_none() {
+            // Fallback: in-memory blob store for tests / in-memory DBs (no persistence needed)
+            self.blob_store = Some(Arc::new(sparse_vector::blob_store::MemBlobStore::new()));
         }
 
         // 9. Load persisted entity configs, relations, and KB configs from _catalog_meta
@@ -1352,6 +1357,8 @@ impl Catalog {
         services.register::<bool>("has_sparse", Arc::new(
             self.sparse_embedder.is_some() || self.dual_embedder.is_some()));
         services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
+            "sparse_handles", Arc::new(self.sparse_handles.clone()));
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
             services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
@@ -1970,6 +1977,8 @@ impl Catalog {
             self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
         ));
         services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
+            "sparse_handles", Arc::new(self.sparse_handles.clone()));
 
         // Shared services for delete/update nodes
         services.register::<Mutex<Vec<AggregateRecord>>>("pending_aggregates", pending_aggregates);
@@ -2184,6 +2193,8 @@ impl Catalog {
             Arc::new(self.sparse_embedder.is_some() || self.dual_embedder.is_some()),
         );
         services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
+        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
+            "sparse_handles", Arc::new(self.sparse_handles.clone()));
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();
