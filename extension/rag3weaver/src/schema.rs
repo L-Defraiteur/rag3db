@@ -479,11 +479,19 @@ pub fn entity_has_chunks(entity_def: &EntityDef) -> bool {
 pub fn generate_full_schema(
     config: &CatalogConfig,
 ) -> Result<FullSchema, SchemaError> {
+    generate_full_schema_with_dialect(config, &crate::dialect::Rag3dbDialect)
+}
+
+/// Generate all DDL statements using a specific schema dialect.
+pub fn generate_full_schema_with_dialect(
+    config: &CatalogConfig,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<FullSchema, SchemaError> {
     let mut ddl = Vec::new();
     let mut indexes = Vec::new();
 
-    // 1. Meta table
-    ddl.push(generate_meta_table_ddl());
+    // 1. Meta table (via dialect for correct schema namespace)
+    ddl.push(dialect.create_meta_table());
 
     // 2. Entity node tables (sorted, no embeddings)
     let mut entity_names: Vec<&String> = config.entities.keys().collect();
@@ -543,11 +551,11 @@ pub fn generate_full_schema(
             &["_source_entity"],
         ));
 
-        // Vector index on {KB}_Index_Chunk
+        // Vector index on {KB}_Index_Chunk (via dialect)
         let chunk_table = format!("{kb_name}_Index_Chunk");
         let emb_col = format!("{kb_name}_embedding");
         let idx_name = format!("{kb_name}_Index_Chunk_vec");
-        indexes.push(generate_vector_index_ddl(&chunk_table, &emb_col, &idx_name));
+        indexes.push(dialect.create_vector_index(&chunk_table, &emb_col, &idx_name));
     }
 
     Ok(FullSchema { ddl, indexes })

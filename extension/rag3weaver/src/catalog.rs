@@ -20,7 +20,7 @@ use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
 use crate::records::{AggregateRecord, DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
 use crate::refs::{EntityRef, RelationRef};
-use crate::schema::{generate_full_schema, resolve_entity_kbs};
+use crate::schema::{generate_full_schema_with_dialect, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
@@ -137,6 +137,8 @@ pub struct Catalog {
     sync_conn: Option<Arc<dyn SyncDbConnection>>,
     /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
     fail_node: Option<String>,
+    /// Schema dialect for multi-backend DDL/DML generation.
+    dialect: Box<dyn crate::dialect::SchemaDialect>,
 }
 
 impl Catalog {
@@ -168,7 +170,14 @@ impl Catalog {
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
             fail_node: None,
+            dialect: Box::new(crate::dialect::Rag3dbDialect),
         }
+    }
+
+    /// Set the schema dialect for multi-backend support.
+    /// Must be called before `initialize()`. Defaults to `Rag3dbDialect`.
+    pub fn set_dialect(&mut self, dialect: Box<dyn crate::dialect::SchemaDialect>) {
+        self.dialect = dialect;
     }
 
     /// Replace the dense embedder with a shared Arc.
@@ -306,6 +315,12 @@ impl Catalog {
     }
 
     pub async fn initialize(&mut self) -> Result<(), CatalogError> {
+        // 0. Backend setup (CREATE EXTENSION, CREATE SCHEMA, etc.)
+        for stmt in self.dialect.setup_statements() {
+            self.conn.execute(&stmt).await
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+
         // 1. Validate schema
         let validation = validate_schema(&self.config);
         if !validation.valid {
@@ -314,8 +329,8 @@ impl Catalog {
             ));
         }
 
-        // 2. Generate DDL
-        let schema = generate_full_schema(&self.config)
+        // 2. Generate DDL (using dialect for backend-specific statements)
+        let schema = generate_full_schema_with_dialect(&self.config, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
 
         // 3. Execute DDL statements (tables first)
