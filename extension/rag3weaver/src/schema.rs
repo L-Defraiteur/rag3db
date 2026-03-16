@@ -161,30 +161,34 @@ pub fn generate_node_table_ddl(
     entity_name: &str,
     entity_def: &EntityDef,
 ) -> Result<String, SchemaError> {
+    generate_node_table_ddl_with_dialect(entity_name, entity_def, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_node_table_ddl_with_dialect(
+    entity_name: &str,
+    entity_def: &EntityDef,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    use crate::dialect::{ColumnDef, ColumnType};
     validate_identifier(entity_name, "entity")?;
 
-    let mut columns = Vec::new();
+    let mut columns = vec![
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
+    ];
 
-    // System columns
-    columns.push("_uuid STRING".to_string());
-    columns.push("_content_hash STRING".to_string());
-
-    // User fields (sorted for deterministic output)
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
     field_names.sort();
     for field_name in &field_names {
         validate_identifier(field_name, "field")?;
         let field_def = &entity_def.fields[*field_name];
-        let kuzu_type = field_type_to_kuzu(&field_def.field_type);
-        columns.push(format!("{field_name} {kuzu_type}"));
+        columns.push(ColumnDef {
+            name: field_name.to_string(),
+            col_type: ColumnType::from_field_type(&field_def.field_type),
+        });
     }
 
-    let col_defs = columns.join(",\n    ");
-    Ok(format!(
-        "CREATE NODE TABLE IF NOT EXISTS {entity_name}(\n    \
-         {col_defs},\n    \
-         PRIMARY KEY(_uuid)\n)"
-    ))
+    Ok(dialect.create_table(entity_name, &columns))
 }
 
 /// Generate CREATE NODE TABLE for a KB Index (document-level, for BM25).
@@ -193,29 +197,33 @@ pub fn generate_node_table_ddl(
 /// and per-KB embedding columns.
 pub fn generate_index_table_ddl(
     kb_name: &str,
-    kb_config: &KBConfig,
+    _kb_config: &KBConfig,
     embedding_dim: usize,
 ) -> Result<String, SchemaError> {
+    generate_index_table_ddl_with_dialect(kb_name, _kb_config, embedding_dim, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_index_table_ddl_with_dialect(
+    kb_name: &str,
+    _kb_config: &KBConfig,
+    embedding_dim: usize,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    use crate::dialect::{ColumnDef, ColumnType};
     validate_identifier(kb_name, "knowledge_base")?;
     let table_name = format!("{kb_name}_Index");
 
-    let mut columns = vec![
-        "_uuid STRING".to_string(),
-        "_source_entity STRING".to_string(),
-        "_source_uuid STRING".to_string(),
-        "_content_hash STRING".to_string(),
-        "_title STRING".to_string(),
-        "_content STRING".to_string(),
+    let columns = vec![
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_source_entity".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_source_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_content".into(), col_type: ColumnType::Text },
+        ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) },
     ];
 
-    columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
-
-    let col_defs = columns.join(",\n    ");
-    Ok(format!(
-        "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
-         {col_defs},\n    \
-         PRIMARY KEY(_uuid)\n)"
-    ))
+    Ok(dialect.create_table(&table_name, &columns))
 }
 
 /// Generate CREATE NODE TABLE for KB Index chunks (for dense/sparse/highlight resolution).
@@ -223,43 +231,47 @@ pub fn generate_index_table_ddl(
 /// Tracks parent index entry, text, offsets, and per-KB embedding columns.
 pub fn generate_index_chunk_table_ddl(
     kb_name: &str,
-    kb_config: &KBConfig,
+    _kb_config: &KBConfig,
     embedding_dim: usize,
 ) -> Result<String, SchemaError> {
+    generate_index_chunk_table_ddl_with_dialect(kb_name, _kb_config, embedding_dim, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_index_chunk_table_ddl_with_dialect(
+    kb_name: &str,
+    _kb_config: &KBConfig,
+    embedding_dim: usize,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    use crate::dialect::{ColumnDef, ColumnType};
     validate_identifier(kb_name, "knowledge_base")?;
     let table_name = format!("{kb_name}_Index_Chunk");
 
-    let mut columns = vec![
-        "_uuid STRING".to_string(),
-        "_parent_uuid STRING".to_string(),
-        "_parent_field STRING".to_string(),
-        "_kb_name STRING".to_string(),
-        "_source_field STRING".to_string(),
-        "_source_entity STRING".to_string(),
-        "_source_uuid STRING".to_string(),
-        "_text STRING".to_string(),
-        "_text_hash STRING".to_string(),
-        "_embed_hash STRING".to_string(),
-        "_index INT64".to_string(),
-        "_start_char INT64".to_string(),
-        "_end_char INT64".to_string(),
-        "_start_line INT64".to_string(),
-        "_end_line INT64".to_string(),
-        "_core_start_char INT64".to_string(),
-        "_core_end_char INT64".to_string(),
-        "_core_start_line INT64".to_string(),
-        "_core_end_line INT64".to_string(),
-        "_content_offset INT64".to_string(),
+    let columns = vec![
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_parent_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_parent_field".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_kb_name".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_source_field".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_source_entity".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_source_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_text".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_embed_hash".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_start_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_end_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_start_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_end_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_start_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_end_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) },
     ];
 
-    columns.push(format!("{kb_name}_embedding FLOAT[{embedding_dim}]"));
-
-    let col_defs = columns.join(",\n    ");
-    Ok(format!(
-        "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
-         {col_defs},\n    \
-         PRIMARY KEY(_uuid)\n)"
-    ))
+    Ok(dialect.create_table(&table_name, &columns))
 }
 
 /// Generate CREATE NODE TABLE for a simple entity's chunk table.
@@ -271,60 +283,75 @@ pub fn generate_simple_chunk_table_ddl(
     entity_config: &crate::config::EntityConfig,
     embedding_dim: usize,
 ) -> Result<String, SchemaError> {
+    generate_simple_chunk_table_ddl_with_dialect(entity_name, entity_config, embedding_dim, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_simple_chunk_table_ddl_with_dialect(
+    entity_name: &str,
+    entity_config: &crate::config::EntityConfig,
+    embedding_dim: usize,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    use crate::dialect::{ColumnDef, ColumnType};
     validate_identifier(entity_name, "entity")?;
     let table_name = format!("{entity_name}_Chunk");
 
     let mut columns = vec![
-        "_uuid STRING".to_string(),
-        "_parent_uuid STRING".to_string(),
-        "_parent_field STRING".to_string(),
-        "_text STRING".to_string(),
-        "_title STRING".to_string(),
-        "_text_hash STRING".to_string(),
-        "_embed_hash STRING".to_string(),
-        "_index INT64".to_string(),
-        "_start_char INT64".to_string(),
-        "_end_char INT64".to_string(),
-        "_start_line INT64".to_string(),
-        "_end_line INT64".to_string(),
-        "_core_start_char INT64".to_string(),
-        "_core_end_char INT64".to_string(),
-        "_core_start_line INT64".to_string(),
-        "_core_end_line INT64".to_string(),
-        "_content_offset INT64".to_string(),
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_parent_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_parent_field".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_text".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_embed_hash".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_start_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_end_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_start_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_end_char".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_start_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_core_end_line".into(), col_type: ColumnType::Int64 },
+        ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
     ];
 
     if entity_config.signals.vector() {
-        columns.push(format!("embedding FLOAT[{embedding_dim}]"));
+        columns.push(ColumnDef { name: "embedding".into(), col_type: ColumnType::Vector(embedding_dim) });
     }
 
-    let col_defs = columns.join(",\n    ");
-    Ok(format!(
-        "CREATE NODE TABLE IF NOT EXISTS {table_name}(\n    \
-         {col_defs},\n    \
-         PRIMARY KEY(_uuid)\n)"
-    ))
+    Ok(dialect.create_table(&table_name, &columns))
 }
 
 /// Generate CREATE REL TABLE for entity → chunk (CHUNKED_FROM).
 pub fn generate_simple_chunk_rel_ddl(entity_name: &str) -> Result<String, SchemaError> {
+    generate_simple_chunk_rel_ddl_with_dialect(entity_name, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_simple_chunk_rel_ddl_with_dialect(
+    entity_name: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
     validate_identifier(entity_name, "entity")?;
     let chunk_table = format!("{entity_name}_Chunk");
     let rel_name = format!("{entity_name}_CHUNKED_FROM");
-    Ok(format!(
-        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {chunk_table} TO {entity_name})"
-    ))
+    Ok(dialect.create_rel_table(&rel_name, &chunk_table, entity_name, &[]))
 }
 
 /// Generate CREATE REL TABLE for KB Index → Chunk relationship.
 pub fn generate_index_chunk_rel_ddl(kb_name: &str) -> Result<String, SchemaError> {
+    generate_index_chunk_rel_ddl_with_dialect(kb_name, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_index_chunk_rel_ddl_with_dialect(
+    kb_name: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
     validate_identifier(kb_name, "knowledge_base")?;
     let index_table = format!("{kb_name}_Index");
     let chunk_table = format!("{kb_name}_Index_Chunk");
     let rel_name = format!("{kb_name}_Index_HAS_CHUNK");
-    Ok(format!(
-        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {index_table} TO {chunk_table})"
-    ))
+    Ok(dialect.create_rel_table(&rel_name, &index_table, &chunk_table, &[]))
 }
 
 /// Generate CREATE REL TABLE for title entity → KB Index relationship.
@@ -332,30 +359,39 @@ pub fn generate_index_rel_ddl(
     title_entity: &str,
     kb_name: &str,
 ) -> Result<String, SchemaError> {
+    generate_index_rel_ddl_with_dialect(title_entity, kb_name, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_index_rel_ddl_with_dialect(
+    title_entity: &str,
+    kb_name: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
     validate_identifier(title_entity, "entity")?;
     validate_identifier(kb_name, "knowledge_base")?;
     let index_table = format!("{kb_name}_Index");
     let rel_name = format!("{title_entity}_IN_{kb_name}");
-    Ok(format!(
-        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {title_entity} TO {index_table})"
-    ))
+    Ok(dialect.create_rel_table(&rel_name, title_entity, &index_table, &[]))
 }
 
 /// Generate CREATE REL TABLE for entity → KB Index Chunk (source tracking).
-///
-/// `{Entity}_SOURCED_{KB}(FROM {Entity} TO {KB}_Index_Chunk)`
-/// One per entity that contributes content (titleFor or contentFor) to the KB.
 pub fn generate_source_rel_ddl(
     entity_name: &str,
     kb_name: &str,
+) -> Result<String, SchemaError> {
+    generate_source_rel_ddl_with_dialect(entity_name, kb_name, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_source_rel_ddl_with_dialect(
+    entity_name: &str,
+    kb_name: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     validate_identifier(entity_name, "entity")?;
     validate_identifier(kb_name, "knowledge_base")?;
     let chunk_table = format!("{kb_name}_Index_Chunk");
     let rel_name = format!("{entity_name}_SOURCED_{kb_name}");
-    Ok(format!(
-        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {entity_name} TO {chunk_table})"
-    ))
+    Ok(dialect.create_rel_table(&rel_name, entity_name, &chunk_table, &[]))
 }
 
 /// Generate CREATE REL TABLE for a user-defined relation.
@@ -364,11 +400,20 @@ pub fn generate_rel_table_ddl(
     rel_def: &RelationDef,
     config: &CatalogConfig,
 ) -> Result<String, SchemaError> {
+    generate_rel_table_ddl_with_dialect(rel_name, rel_def, config, &crate::dialect::Rag3dbDialect)
+}
+
+pub fn generate_rel_table_ddl_with_dialect(
+    rel_name: &str,
+    rel_def: &RelationDef,
+    config: &CatalogConfig,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    use crate::dialect::{ColumnDef, ColumnType};
     validate_identifier(rel_name, "relation")?;
     validate_identifier(&rel_def.from, "entity")?;
     validate_identifier(&rel_def.to, "entity")?;
 
-    // Verify endpoints exist
     if !config.entities.contains_key(&rel_def.from) {
         return Err(SchemaError::UnknownEntity {
             rel: rel_name.to_string(),
@@ -382,31 +427,21 @@ pub fn generate_rel_table_ddl(
         });
     }
 
-    let from = &rel_def.from;
-    let to = &rel_def.to;
-
-    let props = if let Some(ref properties) = rel_def.properties {
+    let props: Vec<ColumnDef> = if let Some(ref properties) = rel_def.properties {
         let mut prop_names: Vec<&String> = properties.keys().collect();
         prop_names.sort();
-        let prop_defs: Vec<String> = prop_names
+        prop_names
             .iter()
-            .map(|name| {
-                let ft = &properties[*name].field_type;
-                format!("{name} {}", field_type_to_kuzu(ft))
+            .map(|name| ColumnDef {
+                name: name.to_string(),
+                col_type: ColumnType::from_field_type(&properties[*name].field_type),
             })
-            .collect();
-        if prop_defs.is_empty() {
-            String::new()
-        } else {
-            format!(", {}", prop_defs.join(", "))
-        }
+            .collect()
     } else {
-        String::new()
+        vec![]
     };
 
-    Ok(format!(
-        "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {from} TO {to}{props})"
-    ))
+    Ok(dialect.create_rel_table(rel_name, &rel_def.from, &rel_def.to, &props))
 }
 
 /// Generate CALL CREATE_VECTOR_INDEX for an embedding column.
@@ -499,7 +534,7 @@ pub fn generate_full_schema_with_dialect(
 
     for entity_name in &entity_names {
         let entity_def = &config.entities[*entity_name];
-        ddl.push(generate_node_table_ddl(entity_name, entity_def)?);
+        ddl.push(generate_node_table_ddl_with_dialect(entity_name, entity_def, dialect)?);
     }
 
     // 3. User-defined relations (sorted)
@@ -507,7 +542,7 @@ pub fn generate_full_schema_with_dialect(
     rel_names.sort();
     for rel_name in rel_names {
         let rel_def = &config.relations[rel_name];
-        ddl.push(generate_rel_table_ddl(rel_name, rel_def, config)?);
+        ddl.push(generate_rel_table_ddl_with_dialect(rel_name, rel_def, config, dialect)?);
     }
 
     // 4. KB Index tables, chunks, rels, and search indexes (sorted by KB name)
@@ -519,27 +554,27 @@ pub fn generate_full_schema_with_dialect(
         let kb_config = &config.knowledge_bases[kb_name];
         let kb_info = match kb_title_entities.get(kb_name.as_str()) {
             Some(info) => info,
-            None => continue, // No titleFor → skip (validator would catch this)
+            None => continue,
         };
 
         // {KB}_Index table
-        ddl.push(generate_index_table_ddl(kb_name, kb_config, config.embedding_dim)?);
+        ddl.push(generate_index_table_ddl_with_dialect(kb_name, kb_config, config.embedding_dim, dialect)?);
 
         // {KB}_Index_Chunk table
-        ddl.push(generate_index_chunk_table_ddl(kb_name, kb_config, config.embedding_dim)?);
+        ddl.push(generate_index_chunk_table_ddl_with_dialect(kb_name, kb_config, config.embedding_dim, dialect)?);
 
         // {KB}_Index_HAS_CHUNK rel
-        ddl.push(generate_index_chunk_rel_ddl(kb_name)?);
+        ddl.push(generate_index_chunk_rel_ddl_with_dialect(kb_name, dialect)?);
 
         // {TitleEntity}_IN_{KB} rel
-        ddl.push(generate_index_rel_ddl(&kb_info.title_entity, kb_name)?);
+        ddl.push(generate_index_rel_ddl_with_dialect(&kb_info.title_entity, kb_name, dialect)?);
 
         // {Entity}_SOURCED_{KB} rels (one per entity contributing to this KB)
         for entity_name in &entity_names {
             let entity_def = &config.entities[*entity_name];
             let entity_kbs = resolve_entity_kbs(entity_def);
             if entity_kbs.contains_key(kb_name.as_str()) {
-                ddl.push(generate_source_rel_ddl(entity_name, kb_name)?);
+                ddl.push(generate_source_rel_ddl_with_dialect(entity_name, kb_name, dialect)?);
             }
         }
 
