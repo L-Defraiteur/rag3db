@@ -20,6 +20,7 @@ pub mod wasm_ffi;
 pub mod chunker;
 pub mod config;
 pub mod connection;
+pub mod dialect;
 pub mod embedder;
 pub mod events;
 pub mod filter;
