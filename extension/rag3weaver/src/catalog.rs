@@ -408,9 +408,9 @@ impl Catalog {
         // 8. Initialize blob store for lucivy/sparse index persistence
         //    Must be before ensure_sparse_handle() which needs blob_store.
         if let Some(ref sync_conn) = self.sync_conn {
-            self.conn.execute(
-                "CREATE NODE TABLE IF NOT EXISTS _index_blobs (_key STRING, _data BLOB, PRIMARY KEY(_key))"
-            ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let blob_ddl = self.dialect.create_blob_table();
+            self.conn.execute(&blob_ddl)
+                .await.map_err(|e| CatalogError::DbError(e.to_string()))?;
             self.blob_store = Some(Arc::new(CypherBlobStore::from_sync_connection(sync_conn.clone())));
         } else if self.blob_store.is_none() {
             // Fallback: in-memory blob store for tests / in-memory DBs (no persistence needed)
@@ -1003,8 +1003,9 @@ impl Catalog {
 
     /// Persist a key-value pair to `_catalog_meta`.
     async fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
+        let stmt = self.dialect.upsert_meta("key", "value");
         self.conn.execute_with_params(
-            "MERGE (m:_catalog_meta {_key: $key}) SET m._value = $value",
+            &stmt,
             &[
                 QueryParam::new("key", CypherValue::String(key.to_string())),
                 QueryParam::new("value", CypherValue::String(value.to_string())),
@@ -1027,8 +1028,10 @@ impl Catalog {
     /// Load all persisted entity configs from `_catalog_meta`.
     /// Called at the end of `initialize()` to restore simple entities.
     async fn load_entity_configs(&mut self) -> Result<(), CatalogError> {
-        let result = self.conn.execute(
-            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'entity_config:' RETURN m._key, m._value"
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self.conn.execute_with_params(
+            &stmt,
+            &[QueryParam::new("prefix", CypherValue::String("entity_config:".into()))],
         ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
@@ -1080,8 +1083,10 @@ impl Catalog {
     /// Load all persisted KB configs from `_catalog_meta` and rebuild KBMetadata.
     /// Called at the end of `initialize()` to restore dynamically registered KBs.
     async fn load_kb_configs(&mut self) -> Result<(), CatalogError> {
-        let result = self.conn.execute(
-            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'kb_config:' RETURN m._key, m._value"
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self.conn.execute_with_params(
+            &stmt,
+            &[QueryParam::new("prefix", CypherValue::String("kb_config:".into()))],
         ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
@@ -1151,8 +1156,10 @@ impl Catalog {
     /// Load all persisted relations from `_catalog_meta`.
     /// Called at the end of `initialize()` to restore dynamically registered relations.
     async fn load_relations(&mut self) -> Result<(), CatalogError> {
-        let result = self.conn.execute(
-            "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relation:' RETURN m._key, m._value"
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self.conn.execute_with_params(
+            &stmt,
+            &[QueryParam::new("prefix", CypherValue::String("relation:".into()))],
         ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
@@ -1757,7 +1764,7 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        let cypher = format!("MATCH (n:{entity_name}) RETURN count(n) AS cnt");
+        let cypher = self.dialect.count_rows(entity_name);
         let result = self
             .conn
             .execute(&cypher)
