@@ -625,11 +625,12 @@ impl Catalog {
         let mut content_changed = false;
         for (name, new_f) in new_fields {
             if !old_fields.contains_key(name) {
-                let kuzu_type = crate::schema::field_type_to_kuzu(&new_f.field_type);
-                let default = crate::schema::kuzu_default_value(&new_f.field_type);
-                let alter_ddl = format!(
-                    "ALTER TABLE {entity_name} ADD {name} {kuzu_type} DEFAULT {default}"
-                );
+                use crate::dialect::{ColumnDef, ColumnType};
+                let col = ColumnDef {
+                    name: name.to_string(),
+                    col_type: ColumnType::from_field_type(&new_f.field_type),
+                };
+                let alter_ddl = self.dialect.alter_add_column(entity_name, &col);
                 self.conn.execute(&alter_ddl).await
                     .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
@@ -659,12 +660,17 @@ impl Catalog {
         if content_changed {
             if new_config.has_simple_pipeline() {
                 // Drop + recreate FTS index on entity table
-                let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{entity_name}')");
-                let _ = self.conn.execute(&drop_fts).await;
+                // TODO: migrate to Rust LucivyHandle when FTS migration is done (doc 02).
+                // For now, FTS rebuild is rag3db-only (lucivy extension C++).
+                // On PostgreSQL, FTS will be managed by lucivy handles directly.
+                if self.dialect.name() == "rag3db" {
+                    let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{entity_name}')");
+                    let _ = self.conn.execute(&drop_fts).await;
 
-                let fts_fields: Vec<&str> = new_config.content_fields();
-                let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
-                let _ = self.conn.execute(&fts_ddl).await;
+                    let fts_fields: Vec<&str> = new_config.content_fields();
+                    let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
+                    let _ = self.conn.execute(&fts_ddl).await;
+                }
             }
 
             // Flag needs_reindex (for both simple and KB pipelines)
@@ -679,9 +685,7 @@ impl Catalog {
         if new_config.has_simple_pipeline() && new_config.signals.vector() && !old_config.signals.vector() {
             let chunk_table = format!("{entity_name}_Chunk");
             let idx_name = format!("{entity_name}_Chunk_vec");
-            let vec_ddl = crate::schema::generate_vector_index_ddl(
-                &chunk_table, "embedding", &idx_name,
-            );
+            let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
             let _ = self.conn.execute(&vec_ddl).await;
         }
         // Sparse handle creation is handled by register_entity() after migrate_entity().

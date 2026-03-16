@@ -62,9 +62,23 @@ Date : 16 mars 2026
 
 Les nodes (`record_nodes.rs`) construisent du Cypher inline. C'est le gros du travail — ~25 statements à abstraire via un trait `BackendOps`. Pas commencé.
 
+## Bypass notés (à régler plus tard)
+
+| Bypass | Raison | Quand régler |
+|--------|--------|--------------|
+| `DROP_LUCIVY_INDEX` / `CREATE_LUCIVY_INDEX` dans `migrate_entity()` | FTS rebuild est rag3db-only (extension C++). Conditionné à `dialect.name() == "rag3db"` | Quand la migration FTS vers Rust LucivyHandle sera faite (doc 02) |
+| `generate_fts_index_ddl()` dans `generate_full_schema` | Lucivy FTS n'a pas d'équivalent SQL natif — géré par handles Rust | Idem |
+| `exists()` par UUID (ligne ~1746) | Cypher inline `MATCH ... count` | Phase 2 (BackendOps) |
+| `get_entity()` | Cypher inline `MATCH ... RETURN` | Phase 2 (BackendOps) |
+| Param syntax `$name` → `$1` pour PostgreSQL | Le dialect génère `$name`, la future `PostgresConnection` traduira | Quand on implémentera PostgresConnection |
+
 ## Prochaines étapes
 
-1. Finir la migration des `generate_*` dans schema.rs → dialect
-2. Migrer `persist_meta_key` / `load_*_configs` dans catalog.rs → dialect
-3. Migrer `_index_blobs` DDL → dialect
-4. Ensuite : trait `BackendOps` pour les nodes (Phase 2 du doc 04)
+1. ~~Finir la migration des `generate_*` dans schema.rs → dialect~~ ✅
+2. ~~Migrer `persist_meta_key` / `load_*_configs` dans catalog.rs → dialect~~ ✅
+3. ~~Migrer `_index_blobs` DDL → dialect~~ ✅
+4. ~~Migrer `migrate_entity()` → dialect (ALTER TABLE, vector index)~~ ✅
+5. Trait `BackendOps` pour les nodes (Phase 2 du doc 04)
+6. `PostgresConnection` (tokio-postgres, param translation)
+7. `PostgresBlobStore` (BYTEA)
+8. Tests d'intégration sur Docker pgvector
