@@ -128,6 +128,20 @@ pub trait SchemaDialect: Send + Sync {
     /// Delete entities by UUID list.
     fn batch_delete(&self, table: &str) -> String;
 
+    /// Cascade delete entities + all relationships by UUID list.
+    fn batch_cascade_delete(&self, table: &str) -> String;
+
+    /// Batch upsert relation rows (from_uuid, to_uuid, optional props).
+    /// Expects `$items` param as List<Map{from_uuid, to_uuid, ...}>.
+    fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String;
+
+    /// Batch update specific fields on entities matched by UUID.
+    /// Expects `$items` param as List<Map{_uuid, field1, field2, ...}>.
+    fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String;
+
+    /// Select entities by UUID list, returning specified fields.
+    fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -246,7 +260,51 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn batch_delete(&self, table: &str) -> String {
+        format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) DELETE n")
+    }
+
+    fn batch_cascade_delete(&self, table: &str) -> String {
         format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) DETACH DELETE n")
+    }
+
+    fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String {
+        let prop_set = if prop_columns.is_empty() {
+            String::new()
+        } else {
+            let assigns: Vec<String> = prop_columns.iter()
+                .map(|c| format!("r.{c} = item.{c}"))
+                .collect();
+            format!(" SET {}", assigns.join(", "))
+        };
+        format!(
+            "UNWIND $items AS item \
+             MATCH (a {{_uuid: item.from_uuid}}), (b {{_uuid: item.to_uuid}}) \
+             MERGE (a)-[r:{rel_table}]->(b){prop_set}"
+        )
+    }
+
+    fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String {
+        let assigns: Vec<String> = field_columns.iter()
+            .map(|c| format!("n.{c} = item.{c}"))
+            .collect();
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item._uuid}}) \
+             SET {}",
+            assigns.join(", ")
+        )
+    }
+
+    fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
+        let return_cols = fields.iter()
+            .map(|f| format!("n.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (n:{table} {{_uuid: uuid}}) \
+             RETURN {return_cols}"
+        )
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -393,6 +451,54 @@ impl SchemaDialect for PostgresDialect {
         format!("DELETE FROM {table} WHERE _uuid = ANY($uuids)")
     }
 
+    fn batch_cascade_delete(&self, table: &str) -> String {
+        // PostgreSQL: delete from all relation tables that reference this entity, then delete entity.
+        // For simplicity, rely on ON DELETE CASCADE if FKs are set up.
+        // Otherwise, the caller must delete relations first.
+        format!("DELETE FROM {table} WHERE _uuid = ANY($uuids)")
+    }
+
+    fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String {
+        let mut cols = vec!["from_uuid", "to_uuid"];
+        cols.extend(prop_columns.iter().copied());
+        let col_list = cols.join(", ");
+        let val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        let conflict_update = if prop_columns.is_empty() {
+            "DO NOTHING".to_string()
+        } else {
+            let assigns: Vec<String> = prop_columns.iter()
+                .map(|c| format!("{c} = EXCLUDED.{c}"))
+                .collect();
+            format!("DO UPDATE SET {}", assigns.join(", "))
+        };
+        format!(
+            "INSERT INTO {rel_table} ({col_list}) \
+             SELECT {val_refs} FROM unnest($items) AS v({col_list}) \
+             ON CONFLICT (from_uuid, to_uuid) {conflict_update}"
+        )
+    }
+
+    fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String {
+        let assigns: Vec<String> = field_columns.iter()
+            .map(|c| format!("{c} = v.{c}"))
+            .collect();
+        let mut cols = vec!["_uuid"];
+        cols.extend(field_columns.iter().copied());
+        let col_list = cols.join(", ");
+        let val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        format!(
+            "UPDATE {table} SET {} \
+             FROM unnest($items) AS v({col_list}) \
+             WHERE {table}._uuid = v._uuid",
+            assigns.join(", ")
+        )
+    }
+
+    fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
+        let col_list = fields.join(", ");
+        format!("SELECT {col_list} FROM {table} WHERE _uuid = ANY($uuids)")
+    }
+
     fn count_rows(&self, table: &str) -> String {
         format!("SELECT count(*) AS cnt FROM {table}")
     }
@@ -523,7 +629,8 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_delete("Document");
         assert!(stmt.contains("UNWIND $uuids"));
-        assert!(stmt.contains("DETACH DELETE"));
+        assert!(stmt.contains("DELETE n"));
+        assert!(!stmt.contains("DETACH"));
     }
 
     #[test]
@@ -557,6 +664,91 @@ mod tests {
         assert_eq!(d.internal_schema(), None);
         assert_eq!(d.internal_table("_catalog_meta"), "_catalog_meta");
         assert!(d.setup_statements().is_empty());
+    }
+
+    #[test]
+    fn rag3db_batch_link() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_link("AUTHORED_BY", &["weight"]);
+        assert!(stmt.contains("UNWIND $items"));
+        assert!(stmt.contains("MERGE (a)-[r:AUTHORED_BY]->(b)"));
+        assert!(stmt.contains("r.weight = item.weight"));
+    }
+
+    #[test]
+    fn rag3db_batch_link_no_props() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_link("CHUNKED_FROM", &[]);
+        assert!(stmt.contains("MERGE (a)-[r:CHUNKED_FROM]->(b)"));
+        assert!(!stmt.contains("SET"));
+    }
+
+    #[test]
+    fn postgres_batch_link() {
+        let d = PostgresDialect;
+        let stmt = d.batch_link("authored_by", &["weight"]);
+        assert!(stmt.contains("INSERT INTO authored_by"));
+        assert!(stmt.contains("from_uuid, to_uuid, weight"));
+        assert!(stmt.contains("ON CONFLICT (from_uuid, to_uuid) DO UPDATE"));
+    }
+
+    #[test]
+    fn postgres_batch_link_no_props() {
+        let d = PostgresDialect;
+        let stmt = d.batch_link("chunked_from", &[]);
+        assert!(stmt.contains("DO NOTHING"));
+    }
+
+    #[test]
+    fn rag3db_batch_update_fields() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_update_fields("Document", &["title", "_embed_hash"]);
+        assert!(stmt.contains("UNWIND $items"));
+        assert!(stmt.contains("MATCH (n:Document"));
+        assert!(stmt.contains("n.title = item.title"));
+        assert!(stmt.contains("n._embed_hash = item._embed_hash"));
+    }
+
+    #[test]
+    fn postgres_batch_update_fields() {
+        let d = PostgresDialect;
+        let stmt = d.batch_update_fields("document", &["title", "_embed_hash"]);
+        assert!(stmt.contains("UPDATE document SET"));
+        assert!(stmt.contains("title = v.title"));
+        assert!(stmt.contains("FROM unnest($items)"));
+        assert!(stmt.contains("WHERE document._uuid = v._uuid"));
+    }
+
+    #[test]
+    fn rag3db_select_by_uuids() {
+        let d = Rag3dbDialect;
+        let stmt = d.select_by_uuids("Document", &["title", "body"]);
+        assert!(stmt.contains("UNWIND $uuids"));
+        assert!(stmt.contains("MATCH (n:Document"));
+        assert!(stmt.contains("n.title, n.body"));
+    }
+
+    #[test]
+    fn postgres_select_by_uuids() {
+        let d = PostgresDialect;
+        let stmt = d.select_by_uuids("document", &["title", "body"]);
+        assert!(stmt.contains("SELECT title, body FROM document"));
+        assert!(stmt.contains("ANY($uuids)"));
+    }
+
+    #[test]
+    fn rag3db_cascade_delete() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_cascade_delete("Document");
+        assert!(stmt.contains("DETACH DELETE"));
+    }
+
+    #[test]
+    fn postgres_cascade_delete() {
+        let d = PostgresDialect;
+        let stmt = d.batch_cascade_delete("document");
+        assert!(stmt.contains("DELETE FROM document"));
+        assert!(!stmt.contains("DETACH"));
     }
 
     #[test]
