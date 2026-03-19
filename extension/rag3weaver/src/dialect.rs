@@ -142,6 +142,27 @@ pub trait SchemaDialect: Send + Sync {
     /// Select entities by UUID list, returning specified fields.
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String;
 
+    /// Batch update fields and return updated UUIDs + extra columns.
+    /// Used by EmbedNode to SET _embed_hash and get back the node offset.
+    /// Expects `$items` param as List<Map{_uuid, ...}>.
+    /// `set_columns`: columns to SET from item
+    /// `return_columns`: columns to RETURN (e.g. ["item.uuid", "OFFSET(id(n))"])
+    fn batch_update_returning(
+        &self,
+        table: &str,
+        set_columns: &[&str],
+        return_exprs: &[(&str, &str)],  // (expression, alias) pairs
+    ) -> String;
+
+    /// Cascade delete related entities by UUID and return count.
+    /// E.g. delete all chunks for a parent UUID, return how many were deleted.
+    /// `match_field`: the field to match on (e.g. "_parent_uuid")
+    fn batch_cascade_delete_returning_count(
+        &self,
+        table: &str,
+        match_field: &str,
+    ) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -304,6 +325,42 @@ impl SchemaDialect for Rag3dbDialect {
             "UNWIND $uuids AS uuid \
              MATCH (n:{table} {{_uuid: uuid}}) \
              RETURN {return_cols}"
+        )
+    }
+
+    fn batch_update_returning(
+        &self,
+        table: &str,
+        set_columns: &[&str],
+        return_exprs: &[(&str, &str)],
+    ) -> String {
+        let assigns: Vec<String> = set_columns.iter()
+            .map(|c| format!("n.{c} = item.{c}"))
+            .collect();
+        let returns: Vec<String> = return_exprs.iter()
+            .map(|(expr, alias)| {
+                if expr == alias { expr.to_string() } else { format!("{expr} AS {alias}") }
+            })
+            .collect();
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item._uuid}}) \
+             SET {} \
+             RETURN {}",
+            assigns.join(", "),
+            returns.join(", "),
+        )
+    }
+
+    fn batch_cascade_delete_returning_count(
+        &self,
+        table: &str,
+        match_field: &str,
+    ) -> String {
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (c:{table} {{{match_field}: uuid}}) \
+             DETACH DELETE c RETURN uuid, count(c) AS cnt"
         )
     }
 
@@ -497,6 +554,50 @@ impl SchemaDialect for PostgresDialect {
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
         let col_list = fields.join(", ");
         format!("SELECT {col_list} FROM {table} WHERE _uuid = ANY($uuids)")
+    }
+
+    fn batch_update_returning(
+        &self,
+        table: &str,
+        set_columns: &[&str],
+        return_exprs: &[(&str, &str)],
+    ) -> String {
+        let assigns: Vec<String> = set_columns.iter()
+            .map(|c| format!("{c} = v.{c}"))
+            .collect();
+        let mut cols = vec!["_uuid"];
+        cols.extend(set_columns.iter().copied());
+        let col_list = cols.join(", ");
+        // Map rag3db expressions to PostgreSQL equivalents
+        let returns: Vec<String> = return_exprs.iter()
+            .map(|(expr, alias)| {
+                // Translate OFFSET(id(n)) → {table}.id (assumes BIGSERIAL id column)
+                let pg_expr = expr
+                    .replace("OFFSET(id(n))", &format!("{table}.id"))
+                    .replace("item.", "v.");
+                if pg_expr == *alias { pg_expr } else { format!("{pg_expr} AS {alias}") }
+            })
+            .collect();
+        format!(
+            "UPDATE {table} SET {} \
+             FROM unnest($items) AS v({col_list}) \
+             WHERE {table}._uuid = v._uuid \
+             RETURNING {}",
+            assigns.join(", "),
+            returns.join(", "),
+        )
+    }
+
+    fn batch_cascade_delete_returning_count(
+        &self,
+        table: &str,
+        match_field: &str,
+    ) -> String {
+        format!(
+            "WITH deleted AS (\
+             DELETE FROM {table} WHERE {match_field} = ANY($uuids) RETURNING {match_field}\
+             ) SELECT {match_field} AS uuid, count(*) AS cnt FROM deleted GROUP BY {match_field}"
+        )
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -749,6 +850,51 @@ mod tests {
         let stmt = d.batch_cascade_delete("document");
         assert!(stmt.contains("DELETE FROM document"));
         assert!(!stmt.contains("DETACH"));
+    }
+
+    #[test]
+    fn rag3db_batch_update_returning() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_update_returning(
+            "Document",
+            &["_embed_hash"],
+            &[("item.uuid", "uuid"), ("OFFSET(id(n))", "offset")],
+        );
+        assert!(stmt.contains("UNWIND $items"));
+        assert!(stmt.contains("SET n._embed_hash = item._embed_hash"));
+        assert!(stmt.contains("RETURN item.uuid AS uuid, OFFSET(id(n)) AS offset"));
+    }
+
+    #[test]
+    fn postgres_batch_update_returning() {
+        let d = PostgresDialect;
+        let stmt = d.batch_update_returning(
+            "document",
+            &["_embed_hash"],
+            &[("item.uuid", "uuid"), ("OFFSET(id(n))", "offset")],
+        );
+        assert!(stmt.contains("UPDATE document SET"));
+        assert!(stmt.contains("_embed_hash = v._embed_hash"));
+        assert!(stmt.contains("RETURNING"));
+        assert!(stmt.contains("document.id AS offset"));
+        assert!(stmt.contains("v.uuid AS uuid"));
+    }
+
+    #[test]
+    fn rag3db_cascade_delete_returning_count() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_cascade_delete_returning_count("Doc_Chunk", "_parent_uuid");
+        assert!(stmt.contains("UNWIND $uuids"));
+        assert!(stmt.contains("MATCH (c:Doc_Chunk {_parent_uuid: uuid})"));
+        assert!(stmt.contains("DETACH DELETE c RETURN uuid, count(c) AS cnt"));
+    }
+
+    #[test]
+    fn postgres_cascade_delete_returning_count() {
+        let d = PostgresDialect;
+        let stmt = d.batch_cascade_delete_returning_count("doc_chunk", "_parent_uuid");
+        assert!(stmt.contains("DELETE FROM doc_chunk WHERE _parent_uuid = ANY($uuids)"));
+        assert!(stmt.contains("count(*) AS cnt"));
     }
 
     #[test]
