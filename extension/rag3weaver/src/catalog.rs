@@ -2655,9 +2655,9 @@ impl Catalog {
         let sparse_results = if let Some(qv) = query_sparse {
             if let Some(handle) = self.sparse_handle(vector_entity) {
                 let sparse_fields = if is_chunked { &[][..] } else { enrich_fields.as_slice() };
-                search::search_sparse(
+                search::search_sparse_via_backend(
                     &handle,
-                    self.conn.as_ref(),
+                    self.search_backend.as_ref().unwrap().as_ref(),
                     vector_entity,
                     &qv,
                     search_limit,
@@ -2718,8 +2718,8 @@ impl Catalog {
         let t_enrich = Instant::now();
         let needs_enrich: bool = fused.iter().any(|r| r.data.is_none());
         if needs_enrich && !enrich_fields.is_empty() {
-            search::enrich_results_with_data(
-                self.conn.as_ref(), entity, enrich_fields, &mut fused,
+            search::enrich_results_with_data_via_backend(
+                self.search_backend.as_ref().unwrap().as_ref(), entity, enrich_fields, &mut fused,
             ).await?;
         }
 

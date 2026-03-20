@@ -981,6 +981,38 @@ pub async fn enrich_results_with_data(
     Ok(())
 }
 
+/// Enrich search results via SearchBackend (multi-backend).
+pub async fn enrich_results_with_data_via_backend(
+    backend: &dyn crate::search_backend::SearchBackend,
+    entity: &str,
+    fields: &[String],
+    results: &mut [SearchResult],
+) -> Result<(), CatalogError> {
+    if results.is_empty() || fields.is_empty() {
+        return Ok(());
+    }
+
+    let uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+    let field_refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
+
+    let rows = backend.fetch_entities(entity, &uuids, &field_refs)
+        .await
+        .map_err(|e| CatalogError::DbError(e))?;
+
+    let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
+    for row in rows {
+        data_map.insert(row.uuid, row.data);
+    }
+
+    for r in results.iter_mut() {
+        if let Some(data) = data_map.remove(&r.uuid) {
+            r.data = Some(data);
+        }
+    }
+
+    Ok(())
+}
+
 /// Resolve offsets to UUIDs + entity data (legacy, rag3db Cypher).
 ///
 /// Prefer the SearchBackend version when available.
@@ -2178,6 +2210,37 @@ pub async fn search_sparse(
 
     // 3. Resolve offsets → UUIDs + fetch entity data in one query
     resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await
+}
+
+/// Sparse search via SearchBackend (multi-backend).
+pub async fn search_sparse_via_backend(
+    handle: &sparse_vector::handle::SparseHandle,
+    backend: &dyn crate::search_backend::SearchBackend,
+    entity: &str,
+    query_vector: &SparseVector,
+    limit: usize,
+    return_fields: &[String],
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if query_vector.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let sv = sparse_vector::index::SparseVector::new(
+        query_vector.indices.clone(),
+        query_vector.values.clone(),
+    );
+    let raw_results = handle.search(&sv, limit);
+
+    if raw_results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let offsets_scores: Vec<(u64, f64)> = raw_results
+        .into_iter()
+        .map(|(offset, score)| (offset, score as f64))
+        .collect();
+
+    resolve_and_enrich_via_backend(backend, entity, &offsets_scores, return_fields).await
 }
 
 /// Fuse vector, BM25, and optional sparse results using per-signal config.
