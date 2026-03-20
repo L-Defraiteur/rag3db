@@ -228,6 +228,24 @@ pub trait SchemaDialect: Send + Sync {
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 
+    // ── Search resolution ────────────────────────────────────────────
+
+    /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
+    /// Used by resolve_vector_chunks for chunk→parent join with optional source_refs.
+    ///
+    /// Returns columns: chunk_uuid, parent_uuid, c_text, c_idx, c_sline, c_eline, c_start, c_end,
+    /// [c_source_entity, c_source_uuid, c_source_field if has_source_refs],
+    /// [parent_field1, parent_field2, ...]
+    fn resolve_chunks_with_parent(
+        &self,
+        chunk_table: &str,
+        parent_table: &str,
+        rel_table: &str,
+        rel_forward: bool,
+        has_source_refs: bool,
+        parent_fields: &[&str],
+    ) -> String;
+
     // ── Embed operations ─────────────────────────────────────────────
 
     /// Check existing embed hashes: match by item.uuid, return _uuid + _embed_hash.
@@ -572,6 +590,48 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("MATCH (n:{table}) RETURN count(n) AS cnt")
+    }
+
+    fn resolve_chunks_with_parent(
+        &self,
+        chunk_table: &str,
+        parent_table: &str,
+        rel_table: &str,
+        rel_forward: bool,
+        has_source_refs: bool,
+        parent_fields: &[&str],
+    ) -> String {
+        let mut return_cols = vec![
+            "c._uuid AS chunk_uuid".to_string(),
+            "p._uuid AS parent_uuid".to_string(),
+            "c._text AS c_text".to_string(),
+            "c._index AS c_idx".to_string(),
+            "c._start_line AS c_sline".to_string(),
+            "c._end_line AS c_eline".to_string(),
+            "c._start_char AS c_start".to_string(),
+            "c._end_char AS c_end".to_string(),
+        ];
+        if has_source_refs {
+            return_cols.push("c._source_entity AS c_source_entity".to_string());
+            return_cols.push("c._source_uuid AS c_source_uuid".to_string());
+            return_cols.push("c._source_field AS c_source_field".to_string());
+        }
+        for f in parent_fields {
+            return_cols.push(format!("p.{f} AS {f}"));
+        }
+
+        let rel_match = if rel_forward {
+            format!("MATCH (c)-[:{rel_table}]->(p:{parent_table})")
+        } else {
+            format!("MATCH (p:{parent_table})-[:{rel_table}]->(c)")
+        };
+
+        format!(
+            "MATCH (c:{chunk_table}) WHERE c._uuid IN [$uuids] \
+             {rel_match} \
+             RETURN {}",
+            return_cols.join(", ")
+        )
     }
 
     fn embed_check_hashes(&self, table: &str) -> String {
@@ -983,6 +1043,43 @@ impl SchemaDialect for PostgresDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("SELECT count(*) AS cnt FROM {table}")
+    }
+
+    fn resolve_chunks_with_parent(
+        &self,
+        chunk_table: &str,
+        parent_table: &str,
+        rel_table: &str,
+        _rel_forward: bool,
+        has_source_refs: bool,
+        parent_fields: &[&str],
+    ) -> String {
+        let mut select_cols = vec![
+            format!("{chunk_table}._uuid AS chunk_uuid"),
+            format!("{parent_table}._uuid AS parent_uuid"),
+            format!("{chunk_table}._text AS c_text"),
+            format!("{chunk_table}._index AS c_idx"),
+            format!("{chunk_table}._start_line AS c_sline"),
+            format!("{chunk_table}._end_line AS c_eline"),
+            format!("{chunk_table}._start_char AS c_start"),
+            format!("{chunk_table}._end_char AS c_end"),
+        ];
+        if has_source_refs {
+            select_cols.push(format!("{chunk_table}._source_entity AS c_source_entity"));
+            select_cols.push(format!("{chunk_table}._source_uuid AS c_source_uuid"));
+            select_cols.push(format!("{chunk_table}._source_field AS c_source_field"));
+        }
+        for f in parent_fields {
+            select_cols.push(format!("{parent_table}.{f}"));
+        }
+
+        format!(
+            "SELECT {} FROM {chunk_table} \
+             INNER JOIN {rel_table} ON {rel_table}.from_uuid = {chunk_table}._uuid \
+             INNER JOIN {parent_table} ON {rel_table}.to_uuid = {parent_table}._uuid \
+             WHERE {chunk_table}._uuid = ANY($uuids)",
+            select_cols.join(", ")
+        )
     }
 
     fn embed_check_hashes(&self, table: &str) -> String {

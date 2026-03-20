@@ -2675,15 +2675,15 @@ impl Catalog {
         // Resolve chunk-level results to parent-level with ChunkInfo + enrichment
         let t_resolve = Instant::now();
         let vector_results = if is_chunked && !vector_results.is_empty() {
-            search::resolve_vector_chunks(
+            search::resolve_vector_chunks_with_dialect(
                 self.conn.as_ref(), &target, vector_results, enrich_fields,
-                options.result_mode,
+                options.result_mode, self.dialect.as_ref(),
             ).await?
         } else { vector_results };
         let sparse_results = if is_chunked && !sparse_results.is_empty() {
-            search::resolve_vector_chunks(
+            search::resolve_vector_chunks_with_dialect(
                 self.conn.as_ref(), &target, sparse_results, enrich_fields,
-                options.result_mode,
+                options.result_mode, self.dialect.as_ref(),
             ).await?
         } else { sparse_results };
 

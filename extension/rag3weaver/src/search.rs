@@ -1381,50 +1381,48 @@ pub async fn resolve_vector_chunks(
     return_fields: &[String],
     result_mode: ResultMode,
 ) -> Result<Vec<SearchResult>, CatalogError> {
+    resolve_vector_chunks_with_dialect(
+        conn, target, results, return_fields, result_mode,
+        &crate::dialect::Rag3dbDialect,
+    ).await
+}
+
+/// Resolve vector chunk results to parent-level with dialect support.
+pub async fn resolve_vector_chunks_with_dialect(
+    conn: &dyn DbConnection,
+    target: &SearchTarget,
+    results: Vec<SearchResult>,
+    return_fields: &[String],
+    result_mode: ResultMode,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<Vec<SearchResult>, CatalogError> {
     if results.is_empty() {
         return Ok(vec![]);
     }
 
     // 1. Collect chunk UUIDs
     let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-    let uuid_list = chunk_uuids
-        .iter()
-        .map(|u| format!("'{}'", u.replace('\'', "''")))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let field_refs: Vec<&str> = return_fields.iter().map(|s| s.as_str()).collect();
 
-    // 2. Build query: chunk metadata + parent fields in one shot
-    let mut return_cols: Vec<String> = vec![
-        "c._uuid AS chunk_uuid".to_string(),
-        "p._uuid AS parent_uuid".to_string(),
-        "c._text AS c_text".to_string(),
-        "c._index AS c_idx".to_string(),
-        "c._start_line AS c_sline".to_string(),
-        "c._end_line AS c_eline".to_string(),
-        "c._start_char AS c_start".to_string(),
-        "c._end_char AS c_end".to_string(),
-    ];
-    if target.has_source_refs {
-        return_cols.push("c._source_entity AS c_source_entity".to_string());
-        return_cols.push("c._source_uuid AS c_source_uuid".to_string());
-        return_cols.push("c._source_field AS c_source_field".to_string());
-    }
-    for f in return_fields {
-        return_cols.push(format!("p.{f} AS {f}"));
-    }
-    let return_clause = return_cols.join(", ");
+    // 2. Build query via dialect
+    let cypher = dialect.resolve_chunks_with_parent(
+        &target.chunk_table,
+        &target.parent_table,
+        &target.chunk_rel,
+        target.chunk_rel_fwd,
+        target.has_source_refs,
+        &field_refs,
+    );
 
-    // Build relationship match pattern from target
-    let chunk_entity = &target.chunk_table;
-    let rel_match = target.chunk_to_parent_match("p", "c");
-
-    let cypher = format!(
-        "MATCH (c:{chunk_entity}) WHERE c._uuid IN [{uuid_list}] \
-         {rel_match} \
-         RETURN {return_clause}"
+    // Pass UUIDs as param
+    let uuid_param = CypherValue::List(
+        chunk_uuids.iter().map(|u| CypherValue::String(u.to_string())).collect(),
     );
     let result = conn
-        .execute(&cypher)
+        .execute_with_params(
+            &cypher,
+            &[QueryParam { name: "uuids".into(), value: uuid_param }],
+        )
         .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
