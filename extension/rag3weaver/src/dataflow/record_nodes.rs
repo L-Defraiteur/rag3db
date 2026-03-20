@@ -2527,17 +2527,12 @@ impl Node for KBUpdateNode {
                         eidx.iter().map(|&i| {
                             let rec = &items[i];
                             let mut m = BTreeMap::new();
-                            m.insert("source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
-                            m.insert("index_uuid".into(), CypherValue::String(rec.index_entry_uuid.clone()));
+                            m.insert("from_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
+                            m.insert("to_uuid".into(), CypherValue::String(rec.index_entry_uuid.clone()));
                             CypherValue::Map(m)
                         }).collect()
                     );
-                    let cypher = format!(
-                        "UNWIND $items AS item \
-                         MATCH (e:{source_entity} {{_uuid: item.source_uuid}}) \
-                         MATCH (idx:{index_table} {{_uuid: item.index_uuid}}) \
-                         MERGE (e)-[:{in_rel}]->(idx)"
-                    );
+                    let cypher = dialect.batch_link(&in_rel, &[]);
                     let _ = conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
@@ -2545,25 +2540,17 @@ impl Node for KBUpdateNode {
                 }
             }
 
-            // Step 6: UNWIND DELETE old chunks
+            // Step 6: Delete old chunks by parent UUID
             {
-                let items_param = CypherValue::List(
+                let uuids_param = CypherValue::List(
                     indices.iter().map(|&i| {
-                        let mut m = BTreeMap::new();
-                        m.insert("uuid".into(), CypherValue::String(items[i].index_entry_uuid.clone()));
-                        CypherValue::Map(m)
+                        CypherValue::String(items[i].index_entry_uuid.clone())
                     }).collect()
                 );
-
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (c:{chunk_table} {{_parent_uuid: item.uuid}}) \
-                     DETACH DELETE c"
-                );
-
+                let cypher = dialect.batch_delete_by_field(&chunk_table, "_parent_uuid");
                 let _ = conn.execute_with_params(
                     &cypher,
-                    &[QueryParam { name: "items".into(), value: items_param }],
+                    &[QueryParam { name: "uuids".into(), value: uuids_param }],
                 ).await;
                 total_deleted += indices.len();
             }
@@ -2610,19 +2597,17 @@ impl Node for KBUpdateNode {
             let items_param = CypherValue::List(
                 entries.iter().map(|e| {
                     let mut m = BTreeMap::new();
-                    m.insert("uuid".into(), CypherValue::String(e["uuid"].as_str().unwrap_or("").to_string()));
-                    m.insert("title".into(), CypherValue::String(e["title"].as_str().unwrap_or("").to_string()));
-                    m.insert("content".into(), CypherValue::String(e["content"].as_str().unwrap_or("").to_string()));
-                    m.insert("hash".into(), CypherValue::String(e["hash"].as_str().unwrap_or("").to_string()));
+                    m.insert("_uuid".into(), CypherValue::String(e["uuid"].as_str().unwrap_or("").to_string()));
+                    m.insert("_title".into(), CypherValue::String(e["title"].as_str().unwrap_or("").to_string()));
+                    m.insert("_content".into(), CypherValue::String(e["content"].as_str().unwrap_or("").to_string()));
+                    m.insert("_content_hash".into(), CypherValue::String(e["hash"].as_str().unwrap_or("").to_string()));
                     CypherValue::Map(m)
                 }).collect()
             );
 
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
-                 SET idx._title = item.title, idx._content = item.content, idx._content_hash = item.hash"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("KBUpdateNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_update_fields(&index_table, &["_title", "_content", "_content_hash"]);
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
