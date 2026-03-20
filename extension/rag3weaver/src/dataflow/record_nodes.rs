@@ -116,25 +116,10 @@ impl Node for InsertRecordNode {
         for ((entity_name, columns), indices) in &groups {
             let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
 
-            // Build UNWIND MERGE on _uuid + SET remaining columns (idempotent)
-            let other_cols: Vec<&str> = col_refs.iter()
-                .filter(|c| **c != "_uuid")
-                .copied()
-                .collect();
-            let set_clause = if other_cols.is_empty() {
-                String::new()
-            } else {
-                let assigns: String = other_cols.iter()
-                    .map(|c| format!("n.{c} = item.{c}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(" SET {assigns}")
-            };
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MERGE (n:{entity_name} {{_uuid: item._uuid}}){set_clause} \
-                 RETURN ID(n), item._uuid"
-            );
+            // Build batch upsert via dialect (idempotent MERGE/INSERT ON CONFLICT)
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("InsertRecordNode: 'dialect' service not registered")?;
+            let cypher = dialect.batch_upsert(entity_name, &col_refs);
 
             // Build items list param
             let items_param = CypherValue::List(

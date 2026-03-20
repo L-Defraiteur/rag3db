@@ -299,8 +299,9 @@ impl SchemaDialect for Rag3dbDialect {
             .iter()
             .map(|c| format!("n.{c} = item.{c}"))
             .collect();
+        let id_expr = self.node_id_expr("n");
         format!(
-            "UNWIND $items AS item MERGE (n:{table} {{_uuid: item._uuid}}) SET {} RETURN ID(n), item._uuid",
+            "UNWIND $items AS item MERGE (n:{table} {{_uuid: item._uuid}}) SET {} RETURN {id_expr}, item._uuid",
             set_clause.join(", ")
         )
     }
@@ -537,10 +538,12 @@ impl SchemaDialect for PostgresDialect {
             .filter(|c| **c != "_uuid")
             .map(|c| format!("{c} = EXCLUDED.{c}"))
             .collect();
+        let id_expr = self.node_id_expr(table);
         format!(
             "INSERT INTO {table} ({col_list}) \
              SELECT {val_refs} FROM unnest($items) AS v({col_list}) \
-             ON CONFLICT (_uuid) DO UPDATE SET {}",
+             ON CONFLICT (_uuid) DO UPDATE SET {} \
+             RETURNING {id_expr}, _uuid",
             update_set.join(", ")
         )
     }
