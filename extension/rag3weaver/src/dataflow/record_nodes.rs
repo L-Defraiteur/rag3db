@@ -427,11 +427,9 @@ impl Node for LinkRecordNode {
                 }).collect()
             );
 
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (a {{_uuid: item.from}})-[r:{rel_name}]->(b {{_uuid: item.to}}) \
-                 DELETE r"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("LinkRecordNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_delete_relation(rel_name);
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
@@ -958,12 +956,10 @@ impl Node for KBEmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            // Reset embedding columns + hash — can't know which KB columns, so NULL the hash
-            // to trigger re-embedding on next ingestion
-            let cypher = format!(
-                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) \
-                 SET n._embed_hash = NULL"
-            );
+            // Reset _embed_hash to trigger re-embedding on next ingestion
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("KBEmbedNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
@@ -1937,10 +1933,9 @@ impl Node for EmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let cypher = format!(
-                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) \
-                 SET n._embed_hash = ''"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("EmbedNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
@@ -3031,11 +3026,9 @@ impl Node for RechunkDeleteNode {
             let uuid_list = CypherValue::List(
                 uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
             );
-            let cypher = format!(
-                "UNWIND $uuids AS uuid \
-                 MATCH (c:{chunk_table} {{_parent_uuid: uuid}}) \
-                 DETACH DELETE c RETURN uuid, count(c) AS cnt"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("RechunkDeleteNode: 'dialect' service not registered")?;
+            let cypher = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
             let result = conn
                 .execute_with_params(
                     &cypher,
@@ -3164,15 +3157,13 @@ impl Node for DeleteRecordNode {
                     );
 
                     // Delete index chunks
-                    let del_chunks = format!(
-                        "UNWIND $idx_uuids AS idx_uuid \
-                         MATCH (c:{chunk_table} {{_parent_uuid: idx_uuid}}) \
-                         DETACH DELETE c RETURN idx_uuid, count(c) AS cnt"
-                    );
+                    let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                        .ok_or("DeleteRecordNode: 'dialect' service not registered")?;
+                    let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
                     let result = conn
                         .execute_with_params(
                             &del_chunks,
-                            &[QueryParam { name: "idx_uuids".into(), value: idx_list.clone() }],
+                            &[QueryParam { name: "uuids".into(), value: idx_list.clone() }],
                         )
                         .await
                         .map_err(|e| e.to_string())?;
@@ -3194,14 +3185,11 @@ impl Node for DeleteRecordNode {
 
                     // Delete index entries
                     let index_table = format!("{kb_name}_Index");
-                    let del_idx = format!(
-                        "UNWIND $idx_uuids AS idx_uuid \
-                         MATCH (idx:{index_table} {{_uuid: idx_uuid}}) DETACH DELETE idx"
-                    );
+                    let del_idx = dialect.batch_cascade_delete(&index_table);
                     let _ = conn
                         .execute_with_params(
                             &del_idx,
-                            &[QueryParam { name: "idx_uuids".into(), value: idx_list }],
+                            &[QueryParam { name: "uuids".into(), value: idx_list }],
                         )
                         .await;
                 } else {
