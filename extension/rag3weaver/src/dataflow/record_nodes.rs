@@ -510,6 +510,8 @@ impl Node for KBEmbedNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBEmbedNode: 'conn' service not registered")?;
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("KBEmbedNode: 'dialect' service not registered")?;
         let config = ctx.service::<CatalogConfig>("config")
             .ok_or("KBEmbedNode: 'config' service not registered")?;
         let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
@@ -616,12 +618,7 @@ impl Node for KBEmbedNode {
                         CypherValue::Map(m)
                     }).collect()
                 );
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                     WHERE n._embed_hash IS NOT NULL \
-                     RETURN n._uuid, n._embed_hash"
-                );
+                let cypher = dialect.embed_check_hashes(entity_name);
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -701,11 +698,7 @@ impl Node for KBEmbedNode {
                     }).collect(),
                 );
 
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                     SET n.{col} = item.emb, n._embed_hash = item.hash"
-                );
+                let cypher = dialect.embed_set(entity_name, &col);
 
                 conn.execute_with_params(
                     &cypher,
@@ -751,12 +744,7 @@ impl Node for KBEmbedNode {
                         }).collect(),
                     );
 
-                    let cypher = format!(
-                        "UNWIND $items AS item \
-                         MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                         SET n._embed_hash = item.hash \
-                         RETURN item.uuid, OFFSET(id(n)) AS offset"
-                    );
+                    let cypher = dialect.embed_set_hash_returning_offset(entity_name);
 
                     let result = conn.execute_with_params(
                         &cypher,
@@ -845,11 +833,7 @@ impl Node for KBEmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = format!(
-                            "UNWIND $items AS item \
-                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n.{col} = item.emb, n._embed_hash = item.hash"
-                        );
+                        let cypher = dialect.embed_set(entity_name, &col);
 
                         conn.execute_with_params(
                             &cypher,
@@ -878,11 +862,7 @@ impl Node for KBEmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = format!(
-                            "UNWIND $items AS item \
-                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             RETURN item.uuid, OFFSET(id(n)) AS offset"
-                        );
+                        let cypher = dialect.embed_get_offset(entity_name);
 
                         let result = conn.execute_with_params(
                             &cypher,
@@ -1503,6 +1483,8 @@ impl Node for EmbedNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("EmbedNode: 'conn' service not registered")?;
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("EmbedNode: 'dialect' service not registered")?;
         let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
             .ok_or("EmbedNode: 'embedder' service not registered")?;
         let embedding_dim = *ctx.service::<usize>("embedding_dim")
@@ -1597,12 +1579,9 @@ impl Node for EmbedNode {
                         CypherValue::Map(m)
                     }).collect()
                 );
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                     WHERE n._embed_hash IS NOT NULL AND n._embed_hash <> '' \
-                     RETURN n._uuid, n._embed_hash"
-                );
+                let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                    .ok_or("EmbedNode: 'dialect' service not registered")?;
+                let cypher = dialect.embed_check_hashes(entity_name);
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -1681,11 +1660,7 @@ impl Node for EmbedNode {
                         }).collect(),
                     );
 
-                    let cypher = format!(
-                        "UNWIND $items AS item \
-                         MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                         SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
-                    );
+                    let cypher = dialect.embed_set(entity_name, &embedding_col);
 
                     conn.execute_with_params(
                         &cypher,
@@ -1730,12 +1705,7 @@ impl Node for EmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = format!(
-                            "UNWIND $items AS item \
-                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n._embed_hash = item.hash \
-                             RETURN item.uuid, OFFSET(id(n)) AS offset"
-                        );
+                        let cypher = dialect.embed_set_hash_returning_offset(entity_name);
 
                         let result = conn.execute_with_params(
                             &cypher,
@@ -1824,11 +1794,7 @@ impl Node for EmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = format!(
-                            "UNWIND $items AS item \
-                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
-                        );
+                        let cypher = dialect.embed_set(entity_name, &embedding_col);
 
                         conn.execute_with_params(
                             &cypher,
@@ -1855,11 +1821,7 @@ impl Node for EmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = format!(
-                            "UNWIND $items AS item \
-                             MATCH (n:{entity_name} {{_uuid: item.uuid}}) \
-                             RETURN item.uuid, OFFSET(id(n)) AS offset"
-                        );
+                        let cypher = dialect.embed_get_offset(entity_name);
 
                         let result = conn.execute_with_params(
                             &cypher,
