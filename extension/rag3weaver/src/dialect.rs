@@ -163,6 +163,10 @@ pub trait SchemaDialect: Send + Sync {
         match_field: &str,
     ) -> String;
 
+    /// Delete rows matching a field value from a UUID list.
+    /// E.g. delete chunks where _parent_uuid IN $uuids.
+    fn batch_delete_by_field(&self, table: &str, field: &str) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -361,6 +365,14 @@ impl SchemaDialect for Rag3dbDialect {
             "UNWIND $uuids AS uuid \
              MATCH (c:{table} {{{match_field}: uuid}}) \
              DETACH DELETE c RETURN uuid, count(c) AS cnt"
+        )
+    }
+
+    fn batch_delete_by_field(&self, table: &str, field: &str) -> String {
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (n:{table} {{{field}: uuid}}) \
+             DETACH DELETE n"
         )
     }
 
@@ -598,6 +610,10 @@ impl SchemaDialect for PostgresDialect {
              DELETE FROM {table} WHERE {match_field} = ANY($uuids) RETURNING {match_field}\
              ) SELECT {match_field} AS uuid, count(*) AS cnt FROM deleted GROUP BY {match_field}"
         )
+    }
+
+    fn batch_delete_by_field(&self, table: &str, field: &str) -> String {
+        format!("DELETE FROM {table} WHERE {field} = ANY($uuids)")
     }
 
     fn count_rows(&self, table: &str) -> String {
