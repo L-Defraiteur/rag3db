@@ -138,7 +138,7 @@ pub struct Catalog {
     /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
     fail_node: Option<String>,
     /// Schema dialect for multi-backend DDL/DML generation.
-    dialect: Box<dyn crate::dialect::SchemaDialect>,
+    dialect: Arc<dyn crate::dialect::SchemaDialect>,
 }
 
 impl Catalog {
@@ -170,13 +170,13 @@ impl Catalog {
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
             fail_node: None,
-            dialect: Box::new(crate::dialect::Rag3dbDialect),
+            dialect: Arc::new(crate::dialect::Rag3dbDialect),
         }
     }
 
     /// Set the schema dialect for multi-backend support.
     /// Must be called before `initialize()`. Defaults to `Rag3dbDialect`.
-    pub fn set_dialect(&mut self, dialect: Box<dyn crate::dialect::SchemaDialect>) {
+    pub fn set_dialect(&mut self, dialect: Arc<dyn crate::dialect::SchemaDialect>) {
         self.dialect = dialect;
     }
 
@@ -1401,6 +1401,7 @@ impl Catalog {
         // Build services
         let mut services = ServiceRegistry::new();
         services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
         services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
         services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
@@ -2023,6 +2024,7 @@ impl Catalog {
         // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
         services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
         services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
         services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
@@ -2149,6 +2151,7 @@ impl Catalog {
 
         let mut services = ServiceRegistry::new();
         services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
 
         let runtime = DataflowRuntime::with_services(5, services);
@@ -2235,6 +2238,7 @@ impl Catalog {
         // Rebuild the ServiceRegistry (same as build_ingestion_graph)
         let mut services = ServiceRegistry::new();
         services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
         services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
         services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
