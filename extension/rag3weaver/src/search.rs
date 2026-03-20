@@ -689,6 +689,38 @@ pub async fn search_vector(
     }
 }
 
+/// Vector search via SearchBackend (multi-backend).
+pub async fn search_vector_via_backend(
+    backend: &dyn crate::search_backend::SearchBackend,
+    entity: &str,
+    embedding: &[f32],
+    limit: usize,
+    extra_where: Option<&str>,
+    extra_params: &[QueryParam],
+    extra_match: Option<&str>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    let index_name = format!("{entity}_vec");
+    let has_filters = extra_where.is_some() || extra_match.is_some();
+
+    let hits = if has_filters {
+        backend.vector_search_filtered(
+            entity, &index_name, embedding, limit,
+            extra_match, extra_where, extra_params,
+        ).await
+    } else {
+        backend.vector_search(entity, &index_name, embedding, limit).await
+    }.map_err(|e| CatalogError::DbError(e))?;
+
+    Ok(hits.into_iter().map(|h| SearchResult {
+        uuid: h.uuid,
+        score: h.score,
+        entity: h.entity.or_else(|| Some(entity.to_string())),
+        data: None,
+        chunk: None,
+        chunks: None,
+    }).collect())
+}
+
 /// HNSW index search via QUERY_VECTOR_INDEX. O(log N), no filters.
 ///
 /// Index name convention: `{entity}_vec` (matches schema.rs `{kb}_Index_Chunk_vec`).

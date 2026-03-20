@@ -2609,10 +2609,9 @@ impl Catalog {
         // ── Run searches based on signals ─────────────────────────────────
         let t_vector = Instant::now();
         let vector_results = if need_dense {
-            search::search_vector(
-                self.conn.as_ref(),
+            search::search_vector_via_backend(
+                self.search_backend.as_ref().unwrap().as_ref(),
                 vector_entity,
-                name,
                 &embedding,
                 search_limit,
                 filter_where.as_deref(),
