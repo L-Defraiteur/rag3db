@@ -227,6 +227,48 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
+
+    // ── Embed operations ─────────────────────────────────────────────
+
+    /// Check existing embed hashes: match by item.uuid, return _uuid + _embed_hash.
+    /// Only returns rows where _embed_hash IS NOT NULL.
+    fn embed_check_hashes(&self, table: &str) -> String;
+
+    /// SET embedding column + _embed_hash on matched entities.
+    /// `embedding_col`: the column name for the embedding (e.g. "embedding", "{kb}_embedding")
+    fn embed_set(&self, table: &str, embedding_col: &str) -> String;
+
+    /// SET _embed_hash and return item.uuid + node offset (for sparse handle).
+    fn embed_set_hash_returning_offset(&self, table: &str) -> String;
+
+    /// Get node offset for entities (no SET, just return item.uuid + offset).
+    fn embed_get_offset(&self, table: &str) -> String;
+
+    // ── KB operations ────────────────────────────────────────────────
+
+    /// Gather fields from entities by item.uuid, returning item.uuid + entity fields.
+    /// `return_entity_fields`: entity column names to return
+    fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String;
+
+    /// Gather content from related entities via traversal.
+    /// Returns entity fields from the related side.
+    fn kb_gather_content(
+        &self,
+        title_entity: &str,
+        rel: &str,
+        content_entity: &str,
+        direction_forward: bool,
+        return_fields: &[&str],
+    ) -> String;
+
+    /// MERGE ON CREATE SET all fields / ON MATCH SET update fields.
+    /// `all_fields`: fields to SET on create, `update_fields`: fields to SET on match
+    fn kb_upsert_index(
+        &self,
+        index_table: &str,
+        all_fields: &[&str],
+        update_fields: &[&str],
+    ) -> String;
 }
 
 // ─── Rag3db Dialect ──────────────────────────────────────────────────────────
@@ -530,6 +572,100 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("MATCH (n:{table}) RETURN count(n) AS cnt")
+    }
+
+    fn embed_check_hashes(&self, table: &str) -> String {
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item.uuid}}) \
+             WHERE n._embed_hash IS NOT NULL \
+             RETURN n._uuid, n._embed_hash"
+        )
+    }
+
+    fn embed_set(&self, table: &str, embedding_col: &str) -> String {
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item.uuid}}) \
+             SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
+        )
+    }
+
+    fn embed_set_hash_returning_offset(&self, table: &str) -> String {
+        let offset = self.node_offset_expr("n");
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item.uuid}}) \
+             SET n._embed_hash = item.hash \
+             RETURN item.uuid, {offset} AS offset"
+        )
+    }
+
+    fn embed_get_offset(&self, table: &str) -> String {
+        let offset = self.node_offset_expr("n");
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{_uuid: item.uuid}}) \
+             RETURN item.uuid, {offset} AS offset"
+        )
+    }
+
+    fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String {
+        let returns = std::iter::once("item.uuid AS _source_uuid".to_string())
+            .chain(return_entity_fields.iter().map(|f| format!("e.{f} AS {f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "UNWIND $items AS item \
+             MATCH (e:{table} {{_uuid: item.uuid}}) \
+             RETURN {returns}"
+        )
+    }
+
+    fn kb_gather_content(
+        &self,
+        title_entity: &str,
+        rel: &str,
+        content_entity: &str,
+        direction_forward: bool,
+        return_fields: &[&str],
+    ) -> String {
+        let returns = return_fields.join(", ");
+        if direction_forward {
+            format!(
+                "UNWIND $items AS item \
+                 MATCH (t:{title_entity} {{_uuid: item.uuid}})-[:{rel}]->(c:{content_entity}) \
+                 RETURN {returns}"
+            )
+        } else {
+            format!(
+                "UNWIND $items AS item \
+                 MATCH (t:{title_entity} {{_uuid: item.uuid}})<-[:{rel}]-(c:{content_entity}) \
+                 RETURN {returns}"
+            )
+        }
+    }
+
+    fn kb_upsert_index(
+        &self,
+        index_table: &str,
+        all_fields: &[&str],
+        update_fields: &[&str],
+    ) -> String {
+        let create_set = all_fields.iter()
+            .map(|f| format!("idx.{f} = item.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let match_set = update_fields.iter()
+            .map(|f| format!("idx.{f} = item.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "UNWIND $items AS item \
+             MERGE (idx:{index_table} {{_uuid: item.uuid}}) \
+             ON CREATE SET {create_set} \
+             ON MATCH SET {match_set}"
+        )
     }
 }
 
@@ -844,6 +980,93 @@ impl SchemaDialect for PostgresDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("SELECT count(*) AS cnt FROM {table}")
+    }
+
+    fn embed_check_hashes(&self, table: &str) -> String {
+        format!(
+            "SELECT _uuid, _embed_hash FROM {table} \
+             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid \
+             WHERE _embed_hash IS NOT NULL"
+        )
+    }
+
+    fn embed_set(&self, table: &str, embedding_col: &str) -> String {
+        format!(
+            "UPDATE {table} SET {embedding_col} = v.emb, _embed_hash = v.hash \
+             FROM unnest($items) AS v(uuid TEXT, emb vector, hash TEXT) \
+             WHERE {table}._uuid = v.uuid"
+        )
+    }
+
+    fn embed_set_hash_returning_offset(&self, table: &str) -> String {
+        let offset = self.node_offset_expr(table);
+        format!(
+            "UPDATE {table} SET _embed_hash = v.hash \
+             FROM unnest($items) AS v(uuid TEXT, hash TEXT) \
+             WHERE {table}._uuid = v.uuid \
+             RETURNING v.uuid, {offset} AS offset"
+        )
+    }
+
+    fn embed_get_offset(&self, table: &str) -> String {
+        let offset = self.node_offset_expr(table);
+        format!(
+            "SELECT v.uuid, {offset} AS offset FROM {table} \
+             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
+        )
+    }
+
+    fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String {
+        let returns = std::iter::once("v.uuid AS _source_uuid".to_string())
+            .chain(return_entity_fields.iter().map(|f| format!("{table}.{f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "SELECT {returns} FROM {table} \
+             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
+        )
+    }
+
+    fn kb_gather_content(
+        &self,
+        _title_entity: &str,
+        rel: &str,
+        content_entity: &str,
+        _direction_forward: bool,
+        return_fields: &[&str],
+    ) -> String {
+        let returns = return_fields.join(", ");
+        // PostgreSQL: join via relation table regardless of direction
+        format!(
+            "SELECT {returns} FROM {content_entity} \
+             INNER JOIN {rel} ON {rel}.to_uuid = {content_entity}._uuid \
+             INNER JOIN unnest($items) AS v(uuid TEXT) ON {rel}.from_uuid = v.uuid"
+        )
+    }
+
+    fn kb_upsert_index(
+        &self,
+        index_table: &str,
+        all_fields: &[&str],
+        update_fields: &[&str],
+    ) -> String {
+        let col_list = std::iter::once("_uuid")
+            .chain(all_fields.iter().copied())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let val_refs = std::iter::once("v.uuid".to_string())
+            .chain(all_fields.iter().map(|f| format!("v.{f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let update_set = update_fields.iter()
+            .map(|f| format!("{f} = EXCLUDED.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "INSERT INTO {index_table} ({col_list}) \
+             SELECT {val_refs} FROM unnest($items) AS v(uuid TEXT, {col_list}) \
+             ON CONFLICT (_uuid) DO UPDATE SET {update_set}"
+        )
     }
 }
 
