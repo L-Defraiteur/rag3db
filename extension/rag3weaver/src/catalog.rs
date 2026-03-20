@@ -139,6 +139,8 @@ pub struct Catalog {
     fail_node: Option<String>,
     /// Schema dialect for multi-backend DDL/DML generation.
     dialect: Arc<dyn crate::dialect::SchemaDialect>,
+    /// Search backend for multi-backend search operations.
+    search_backend: Option<Arc<dyn crate::search_backend::SearchBackend>>,
 }
 
 impl Catalog {
@@ -171,6 +173,7 @@ impl Catalog {
             sync_conn: None,
             fail_node: None,
             dialect: Arc::new(crate::dialect::Rag3dbDialect),
+            search_backend: None,
         }
     }
 
@@ -178,6 +181,12 @@ impl Catalog {
     /// Must be called before `initialize()`. Defaults to `Rag3dbDialect`.
     pub fn set_dialect(&mut self, dialect: Arc<dyn crate::dialect::SchemaDialect>) {
         self.dialect = dialect;
+    }
+
+    /// Set the search backend for multi-backend search operations.
+    /// If not set, a `Rag3dbSearchBackend` is created automatically in `initialize()`.
+    pub fn set_search_backend(&mut self, backend: Arc<dyn crate::search_backend::SearchBackend>) {
+        self.search_backend = Some(backend);
     }
 
     /// Replace the dense embedder with a shared Arc.
@@ -433,8 +442,20 @@ impl Catalog {
         self.load_relations().await?;
         self.load_kb_configs().await?;
 
+        // 11. Initialize search backend (default: Rag3dbSearchBackend)
+        if self.search_backend.is_none() {
+            self.search_backend = Some(Arc::new(
+                crate::rag3db_search_backend::Rag3dbSearchBackend::new(self.conn.clone()),
+            ));
+        }
+
         self.initialized = true;
         Ok(())
+    }
+
+    /// Get the search backend.
+    pub fn search_backend(&self) -> Option<Arc<dyn crate::search_backend::SearchBackend>> {
+        self.search_backend.clone()
     }
 
     // ── Entity Registration ──────────────────────────────────────────────
