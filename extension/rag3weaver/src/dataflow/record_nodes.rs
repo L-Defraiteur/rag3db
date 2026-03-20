@@ -2044,6 +2044,7 @@ impl KBGatherNode {
     /// Steps 1-4: read titles, linked content, hashes, detect changes.
     async fn gather_batch(
         conn: &dyn DbConnection,
+        dialect: &dyn crate::dialect::SchemaDialect,
         config: &CatalogConfig,
         kb_meta: &KBMetadata,
         kb_name: &str,
@@ -2089,19 +2090,11 @@ impl KBGatherNode {
                 }).collect()
             );
 
-            let mut return_fields = vec![
-                "item.uuid AS _source_uuid".to_string(),
-                format!("e.{title_field_name} AS _title_val"),
-            ];
+            let mut entity_fields = vec![title_field_name.as_str()];
             for f in &title_content_fields {
-                return_fields.push(format!("e.{f} AS {f}"));
+                entity_fields.push(f.as_str());
             }
-
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (e:{title_entity} {{_uuid: item.uuid}}) \
-                 RETURN {}", return_fields.join(", ")
-            );
+            let cypher = dialect.kb_gather_fields(title_entity, &entity_fields);
 
             let result = conn
                 .execute_with_params(
@@ -2167,27 +2160,14 @@ impl KBGatherNode {
                     }).collect()
                 );
 
-                let mut fields_return = vec![
-                    "item.uuid AS _source_uuid".to_string(),
-                    "c._uuid AS _content_uuid".to_string(),
-                ];
+                let mut content_return_fields = vec!["_uuid"];
                 for f in &entity_fields {
-                    fields_return.push(format!("c.{f} AS {f}"));
+                    content_return_fields.push(f.as_str());
                 }
-
-                let cypher = if is_forward {
-                    format!(
-                        "UNWIND $items AS item \
-                         MATCH (t:{title_entity} {{_uuid: item.uuid}})-[:{rel_name}]->(c:{content_entity_name}) \
-                         RETURN {}", fields_return.join(", ")
-                    )
-                } else {
-                    format!(
-                        "UNWIND $items AS item \
-                         MATCH (t:{title_entity} {{_uuid: item.uuid}})<-[:{rel_name}]-(c:{content_entity_name}) \
-                         RETURN {}", fields_return.join(", ")
-                    )
-                };
+                let cypher = dialect.kb_gather_content(
+                    title_entity, &rel_name, content_entity_name,
+                    is_forward, &content_return_fields,
+                );
 
                 let result = conn
                     .execute_with_params(
@@ -2228,10 +2208,8 @@ impl KBGatherNode {
                 }).collect()
             );
 
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
-                 RETURN item.uuid AS _idx_uuid, idx._content_hash AS _hash"
+            let cypher = dialect.batch_select(
+                &index_table, "uuid", "_uuid", &["_uuid", "_content_hash"],
             );
 
             let result = conn
@@ -2341,6 +2319,8 @@ impl Node for KBGatherNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBGatherNode: 'conn' service not registered")?;
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("KBGatherNode: 'dialect' service not registered")?;
         let config = ctx.service::<CatalogConfig>("config")
             .ok_or("KBGatherNode: 'config' service not registered")?;
         let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
@@ -2375,7 +2355,7 @@ impl Node for KBGatherNode {
             };
 
             let (changed, skipped, n_queries) = Self::gather_batch(
-                &**conn, &config, kb_meta, kb_name, _title_entity, &group_ops,
+                &**conn, &**dialect, &config, kb_meta, kb_name, _title_entity, &group_ops,
             ).await?;
 
             total_skipped += skipped;
@@ -2453,6 +2433,8 @@ impl Node for KBUpdateNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBUpdateNode: 'conn' service not registered")?;
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("KBUpdateNode: 'dialect' service not registered")?;
 
         // Group by kb_name for UNWIND batching
         let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -2479,10 +2461,9 @@ impl Node for KBUpdateNode {
                         CypherValue::Map(m)
                     }).collect()
                 );
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (idx:{index_table} {{_uuid: item.uuid}}) \
-                     RETURN idx._uuid, idx._title, idx._content, idx._content_hash"
+                let cypher = dialect.batch_select(
+                    &index_table, "uuid", "_uuid",
+                    &["_uuid", "_title", "_content", "_content_hash"],
                 );
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
@@ -2520,14 +2501,10 @@ impl Node for KBUpdateNode {
                     }).collect()
                 );
 
-                let cypher = format!(
-                    "UNWIND $items AS item \
-                     MERGE (idx:{index_table} {{_uuid: item.uuid}}) \
-                     ON CREATE SET idx._title = item.title, idx._content = item.content, \
-                     idx._content_hash = item.hash, idx._source_entity = item.source_entity, \
-                     idx._source_uuid = item.source_uuid \
-                     ON MATCH SET idx._title = item.title, idx._content = item.content, \
-                     idx._content_hash = item.hash"
+                let cypher = dialect.kb_upsert_index(
+                    &index_table,
+                    &["_title", "_content", "_content_hash", "_source_entity", "_source_uuid"],
+                    &["_title", "_content", "_content_hash"],
                 );
 
                 conn.execute_with_params(

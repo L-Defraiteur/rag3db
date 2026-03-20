@@ -630,7 +630,10 @@ impl SchemaDialect for Rag3dbDialect {
         direction_forward: bool,
         return_fields: &[&str],
     ) -> String {
-        let returns = return_fields.join(", ");
+        let returns = std::iter::once("item.uuid AS _source_uuid".to_string())
+            .chain(return_fields.iter().map(|f| format!("c.{f} AS {f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
         if direction_forward {
             format!(
                 "UNWIND $items AS item \
@@ -1035,8 +1038,10 @@ impl SchemaDialect for PostgresDialect {
         _direction_forward: bool,
         return_fields: &[&str],
     ) -> String {
-        let returns = return_fields.join(", ");
-        // PostgreSQL: join via relation table regardless of direction
+        let returns = std::iter::once("v.uuid AS _source_uuid".to_string())
+            .chain(return_fields.iter().map(|f| format!("{content_entity}.{f}")))
+            .collect::<Vec<_>>()
+            .join(", ");
         format!(
             "SELECT {returns} FROM {content_entity} \
              INNER JOIN {rel} ON {rel}.to_uuid = {content_entity}._uuid \
