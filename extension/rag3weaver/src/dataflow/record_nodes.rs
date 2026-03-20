@@ -243,9 +243,9 @@ impl Node for InsertRecordNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let cypher = format!(
-                "UNWIND $uuids AS uuid MATCH (n:{entity_name} {{_uuid: uuid}}) DETACH DELETE n"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("InsertRecordNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_cascade_delete(entity_name);
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
@@ -347,21 +347,11 @@ impl Node for LinkRecordNode {
             .collect::<Vec<_>>());
 
         for ((rel_name, prop_keys), indices) in &groups {
-            // Build UNWIND MATCH+MERGE (idempotent — skip if relation already exists)
-            let prop_set = if prop_keys.is_empty() {
-                String::new()
-            } else {
-                let assigns: String = prop_keys.iter()
-                    .map(|k| format!("r.{k} = item.{k}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(" SET {assigns}")
-            };
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (a {{_uuid: item.from_uuid}}), (b {{_uuid: item.to_uuid}}) \
-                 MERGE (a)-[r:{rel_name}]->(b){prop_set}"
-            );
+            // Build batch link via dialect (idempotent — skip if relation already exists)
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("LinkRecordNode: 'dialect' service not registered")?;
+            let prop_refs: Vec<&str> = prop_keys.iter().map(|s| s.as_str()).collect();
+            let cypher = dialect.batch_link(rel_name, &prop_refs);
 
             let items_param = CypherValue::List(
                 indices
