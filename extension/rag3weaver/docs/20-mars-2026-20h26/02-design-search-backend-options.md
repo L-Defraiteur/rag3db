@@ -203,32 +203,91 @@ let vector_node = match dialect.name() {
 - Refactorer le search en DAG c'est un chantier en soi
 - Over-engineering si on a que 2 backends
 
-## Recommandation : Option B (SearchBackend trait)
+## Décision : B d'abord, puis C au-dessus
 
-**Raison** : c'est le bon niveau d'abstraction. Le search est une opération **complète** (embedding → vector → BM25 → sparse → fusion → resolution → enrichment) qui est fondamentalement différente selon le backend. Le trait SearchBackend encapsule toute cette logique.
+Les options B et C ne sont pas exclusives — C est une **super étape** de B.
 
-L'Option A (étendre le dialect) est trop bas niveau — le vector filtré ne peut pas être abstrait en une seule query string.
+```
+Phase actuelle :
+  Catalog::search() → appels séquentiels → Cypher inline → résultat
 
-L'Option C (search DAG) est over-engineering — on n'a pas besoin d'un DAG pour le search, les appels séquentiels suffisent. Le DAG d'ingestion est justifié par le parallélisme des merges, le checkpoint, l'undo. Le search n'a pas ces besoins.
+Étape B (SearchBackend trait) :
+  Catalog::search() → appels séquentiels → SearchBackend.method() → résultat
+  ✓ Backend swappable (rag3db ↔ PostgreSQL)
+  ✓ Mécanique, pas de refactoring du flow
+
+Étape C (Search DAG, au-dessus de B) :
+  Catalog::search() → build search DAG → execute_dag() → résultat
+  ✓ Les nœuds DAG utilisent SearchBackend en interne
+  ✓ Vector + BM25 + Sparse en parallèle (3x potentiel)
+  ✓ Search streaming (résultats partiels)
+  ✓ Timeout par signal (dégradation gracieuse)
+  ✓ Re-ranking nodes (CrossEncoder, etc.)
+  ✓ Multi-KB parallèle
+  ✓ Observabilité par étape (vector 12ms, BM25 45ms, fusion 2ms)
+  ✓ Extensible (A/B testing, cache, cascade re-rank)
+```
+
+### Search DAG (étape C) — structure
+
+```
+EmbedQueryNode ─────────┬──▸ VectorSearchNode  ──┐
+                        ├──▸ BM25SearchNode     ──┤──▸ FuseNode ──▸ ChunkResolveNode ──▸ EnrichNode
+                        └──▸ SparseSearchNode   ──┘
+                        (parallèle)                    (séquentiel après fusion)
+```
+
+Chaque search node encapsule un `Arc<dyn SearchBackend>` :
+```rust
+struct VectorSearchNode {
+    backend: Arc<dyn SearchBackend>,
+    table: String,
+    limit: usize,
+}
+
+impl Node for VectorSearchNode {
+    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let embedding = ctx.input::<Vec<f32>>("embedding")?;
+        let results = self.backend.vector_search(&self.table, &embedding, self.limit).await?;
+        ctx.set_output("results", results);
+        Ok(())
+    }
+}
+```
 
 ### Plan d'implémentation
 
 ```
-Phase 1 : Trait + types de retour structurés
+Phase B-1 : Trait SearchBackend + types structurés
   - Définir SearchBackend + OffsetResult, EntityRow, ChunkMeta, ChunkWithParent
-  - Implémenter Rag3dbSearchBackend (copier le code existant de search.rs)
+  - Implémenter Rag3dbSearchBackend (extraire le code existant de search.rs)
 
-Phase 2 : Refactorer search.rs pour utiliser SearchBackend
+Phase B-2 : Refactorer search.rs pour utiliser SearchBackend
   - Les fonctions publiques prennent &dyn SearchBackend au lieu de &dyn DbConnection
   - Le Catalog crée le bon SearchBackend dans initialize()
 
-Phase 3 : Implémenter PostgresSearchBackend
+Phase B-3 : Implémenter PostgresSearchBackend
   - Vector search via pgvector <=> operator
   - Offset resolution via _row_id
   - Enrichment via SELECT ... WHERE _uuid = ANY(...)
 
-Phase 4 : Tests d'intégration
+Phase B-4 : Tests d'intégration
   - Mêmes tests, deux backends
+
+Phase C-1 : Search nodes
+  - VectorSearchNode, BM25SearchNode, SparseSearchNode
+  - FuseNode, ChunkResolveNode, EnrichNode
+  - Factory functions par backend
+
+Phase C-2 : Search DAG builder
+  - Catalog::search() construit un DAG selon les signals actifs
+  - execute_dag() avec parallélisme vector+BM25+sparse
+
+Phase C-3 : Features avancées
+  - Timeout par signal
+  - Search streaming
+  - Re-ranking nodes
+  - Multi-KB parallèle
 ```
 
 ### Ce qui ne change PAS
