@@ -981,15 +981,9 @@ pub async fn enrich_results_with_data(
     Ok(())
 }
 
-/// Resolve node offsets to UUIDs and fetch entity properties in one query.
+/// Resolve offsets to UUIDs + entity data (legacy, rag3db Cypher).
 ///
-/// Merges the offset→UUID resolution and data enrichment into a single
-/// `MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [...] RETURN _offset, _uuid, field1, ...`
-/// query. Returns `SearchResult` with `data` already populated.
-///
-/// When `return_fields` is empty, only `_offset` and `_uuid` are fetched.
-/// Prefer `resolve_and_enrich()` / `resolve_and_enrich_chunked()` / `resolve_vector_chunks()`
-/// for composed queries (Level 1+).
+/// Prefer the SearchBackend version when available.
 pub async fn resolve_and_enrich(
     conn: &dyn DbConnection,
     entity: &str,
@@ -1023,7 +1017,6 @@ pub async fn resolve_and_enrich(
         .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-    // Build offset → (uuid, data) map
     let mut offset_map: HashMap<u64, (String, Option<BTreeMap<String, CypherValue>>)> =
         HashMap::new();
     for row in &result.rows {
@@ -1049,7 +1042,6 @@ pub async fn resolve_and_enrich(
         offset_map.insert(offset, (uuid, data));
     }
 
-    // Build results preserving original score order
     Ok(offsets_scores
         .iter()
         .filter_map(|(offset, score)| {
@@ -1059,6 +1051,45 @@ pub async fn resolve_and_enrich(
                 score: *score,
                 entity: Some(entity.to_string()),
                 data: data.clone(),
+                chunk: None,
+                chunks: None,
+            })
+        })
+        .collect())
+}
+
+/// Resolve offsets to UUIDs + entity data via SearchBackend (multi-backend).
+pub async fn resolve_and_enrich_via_backend(
+    backend: &dyn crate::search_backend::SearchBackend,
+    entity: &str,
+    offsets_scores: &[(u64, f64)],
+    return_fields: &[String],
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if offsets_scores.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let offsets: Vec<u64> = offsets_scores.iter().map(|(o, _)| *o).collect();
+    let field_refs: Vec<&str> = return_fields.iter().map(|s| s.as_str()).collect();
+
+    let resolved = backend.resolve_offsets(entity, &offsets, &field_refs)
+        .await
+        .map_err(|e| CatalogError::DbError(e))?;
+
+    let mut offset_map: HashMap<u64, &crate::search_backend::OffsetResult> = HashMap::new();
+    for r in &resolved {
+        offset_map.insert(r.offset, r);
+    }
+
+    Ok(offsets_scores
+        .iter()
+        .filter_map(|(offset, score)| {
+            let r = offset_map.get(offset)?;
+            Some(SearchResult {
+                uuid: r.uuid.clone(),
+                score: *score,
+                entity: Some(entity.to_string()),
+                data: r.data.clone(),
                 chunk: None,
                 chunks: None,
             })
