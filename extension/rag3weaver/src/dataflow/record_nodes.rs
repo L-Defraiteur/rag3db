@@ -3126,6 +3126,9 @@ impl Node for DeleteRecordNode {
             groups.entry(rec.entity_name.clone()).or_default().push(rec.uuid.clone());
         }
 
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("DeleteRecordNode: 'dialect' service not registered")?;
+
         ctx.log_metric("items", items.len());
         ctx.log_metric("groups", groups.len());
 
@@ -3157,8 +3160,6 @@ impl Node for DeleteRecordNode {
                     );
 
                     // Delete index chunks
-                    let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                        .ok_or("DeleteRecordNode: 'dialect' service not registered")?;
                     let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
                     let result = conn
                         .execute_with_params(
@@ -3206,12 +3207,8 @@ impl Node for DeleteRecordNode {
                         uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
                     );
 
-                    // Delete SOURCED chunks
-                    let del_sourced = format!(
-                        "UNWIND $uuids AS uuid \
-                         MATCH (e:{entity_name} {{_uuid: uuid}})-[:{sourced_rel}]->(c:{chunk_table}) \
-                         DETACH DELETE c RETURN uuid, count(c) AS cnt"
-                    );
+                    // Delete SOURCED chunks via dialect
+                    let del_sourced = dialect.join_delete_returning_count(entity_name, &sourced_rel, &chunk_table);
                     let result = conn
                         .execute_with_params(
                             &del_sourced,
@@ -3233,16 +3230,14 @@ impl Node for DeleteRecordNode {
                         find_relation_to_entity(&config, &title_entity, entity_name)
                     {
                         let match_pattern = if title_is_from {
-                            format!(
-                                "UNWIND $uuids AS uuid \
-                                 MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: uuid}}) \
-                                 RETURN t._uuid"
+                            dialect.join_select(
+                                entity_name, &rel_name, &title_entity,
+                                false, "_uuid", &["m._uuid"],
                             )
                         } else {
-                            format!(
-                                "UNWIND $uuids AS uuid \
-                                 MATCH (e:{entity_name} {{_uuid: uuid}})-[:{rel_name}]->(t:{title_entity}) \
-                                 RETURN t._uuid"
+                            dialect.join_select(
+                                entity_name, &rel_name, &title_entity,
+                                true, "_uuid", &["m._uuid"],
                             )
                         };
                         let title_results = conn
@@ -3285,11 +3280,7 @@ impl Node for DeleteRecordNode {
                 let uuid_list = CypherValue::List(
                     uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
                 );
-                let del_chunks = format!(
-                    "UNWIND $uuids AS uuid \
-                     MATCH (c:{chunk_table} {{_parent_uuid: uuid}}) \
-                     DETACH DELETE c RETURN uuid, count(c) AS cnt"
-                );
+                let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
                 let result = conn
                     .execute_with_params(
                         &del_chunks,
@@ -3313,10 +3304,7 @@ impl Node for DeleteRecordNode {
             );
             let existing: HashSet<String> = {
                 let read = conn.execute_with_params(
-                    &format!(
-                        "UNWIND $uuids AS uuid \
-                         MATCH (n:{entity_name} {{_uuid: uuid}}) RETURN n"
-                    ),
+                    &dialect.select_entity_all_by_uuids(entity_name),
                     &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
                 ).await.map_err(|e| e.to_string())?;
                 let mut found = HashSet::new();
@@ -3344,10 +3332,7 @@ impl Node for DeleteRecordNode {
             }
 
             // Delete entities themselves
-            let del_entities = format!(
-                "UNWIND $uuids AS uuid \
-                 MATCH (n:{entity_name} {{_uuid: uuid}}) DETACH DELETE n"
-            );
+            let del_entities = dialect.batch_cascade_delete(entity_name);
             conn.execute_with_params(
                 &del_entities,
                 &[QueryParam { name: "uuids".into(), value: uuid_list }],
@@ -3416,25 +3401,11 @@ impl Node for DeleteRecordNode {
         for (entity_name, items) in &groups {
             if items.is_empty() { continue; }
 
-            // Build column list from first item's keys
+            // Re-create deleted entities via batch upsert (MERGE/INSERT)
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("DeleteRecordNode undo: 'dialect' service not registered")?;
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
-            let other_cols: Vec<&str> = columns.iter()
-                .filter(|c| **c != "_uuid")
-                .copied()
-                .collect();
-            let set_clause = if other_cols.is_empty() {
-                String::new()
-            } else {
-                let assigns: String = other_cols.iter()
-                    .map(|c| format!("n.{c} = item.{c}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(" SET {assigns}")
-            };
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MERGE (n:{entity_name} {{_uuid: item._uuid}}){set_clause}"
-            );
+            let cypher = dialect.batch_upsert(entity_name, &columns);
 
             let items_param = CypherValue::List(
                 items.iter().map(|m| CypherValue::Map(m.clone())).collect()

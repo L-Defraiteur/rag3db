@@ -215,6 +215,16 @@ pub trait SchemaDialect: Send + Sync {
     /// pg: SELECT * FROM table WHERE _uuid = ANY($uuids)
     fn select_entity_all_by_uuids(&self, table: &str) -> String;
 
+    /// Delete related entities via a relation, returning count per source UUID.
+    /// rag3db: MATCH (e {_uuid})-[:REL]->(c:Target) DETACH DELETE c RETURN uuid, count
+    /// pg: DELETE via subquery on rel table, GROUP BY source
+    fn join_delete_returning_count(
+        &self,
+        source_table: &str,
+        rel_table: &str,
+        target_table: &str,
+    ) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -502,6 +512,19 @@ impl SchemaDialect for Rag3dbDialect {
             "UNWIND $uuids AS uuid \
              MATCH (n:{table} {{_uuid: uuid}}) \
              RETURN n"
+        )
+    }
+
+    fn join_delete_returning_count(
+        &self,
+        source_table: &str,
+        rel_table: &str,
+        target_table: &str,
+    ) -> String {
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (e:{source_table} {{_uuid: uuid}})-[:{rel_table}]->(c:{target_table}) \
+             DETACH DELETE c RETURN uuid, count(c) AS cnt"
         )
     }
 
@@ -802,6 +825,21 @@ impl SchemaDialect for PostgresDialect {
 
     fn select_entity_all_by_uuids(&self, table: &str) -> String {
         format!("SELECT * FROM {table} WHERE _uuid = ANY($uuids)")
+    }
+
+    fn join_delete_returning_count(
+        &self,
+        _source_table: &str,
+        rel_table: &str,
+        target_table: &str,
+    ) -> String {
+        format!(
+            "WITH deleted AS (\
+             DELETE FROM {target_table} \
+             WHERE _uuid IN (SELECT to_uuid FROM {rel_table} WHERE from_uuid = ANY($uuids)) \
+             RETURNING (SELECT from_uuid FROM {rel_table} WHERE to_uuid = {target_table}._uuid LIMIT 1) AS uuid\
+             ) SELECT uuid, count(*) AS cnt FROM deleted GROUP BY uuid"
+        )
     }
 
     fn count_rows(&self, table: &str) -> String {
