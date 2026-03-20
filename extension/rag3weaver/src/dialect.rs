@@ -210,6 +210,11 @@ pub trait SchemaDialect: Send + Sync {
         return_fields: &[&str],
     ) -> String;
 
+    /// Select full entity rows by UUID list (all columns).
+    /// rag3db: RETURN n (returns node as Map with all properties)
+    /// pg: SELECT * FROM table WHERE _uuid = ANY($uuids)
+    fn select_entity_all_by_uuids(&self, table: &str) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -490,6 +495,14 @@ impl SchemaDialect for Rag3dbDialect {
                  RETURN {returns}"
             )
         }
+    }
+
+    fn select_entity_all_by_uuids(&self, table: &str) -> String {
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (n:{table} {{_uuid: uuid}}) \
+             RETURN n"
+        )
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -785,6 +798,10 @@ impl SchemaDialect for PostgresDialect {
              INNER JOIN {to_table} ON {rel_table}.to_uuid = {to_table}._uuid \
              WHERE {from_table}._uuid = ANY($uuids)"
         )
+    }
+
+    fn select_entity_all_by_uuids(&self, table: &str) -> String {
+        format!("SELECT * FROM {table} WHERE _uuid = ANY($uuids)")
     }
 
     fn count_rows(&self, table: &str) -> String {

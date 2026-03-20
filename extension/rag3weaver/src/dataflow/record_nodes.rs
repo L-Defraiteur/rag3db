@@ -3563,11 +3563,9 @@ impl Node for UpdateRecordNode {
                     .map(|&i| CypherValue::String(items[i].uuid.clone()))
                     .collect(),
             );
-            let old_read_query = format!(
-                "UNWIND $uuids AS uuid \
-                 MATCH (n:{entity_name} {{_uuid: uuid}}) \
-                 RETURN n"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("UpdateRecordNode: 'dialect' service not registered")?;
+            let old_read_query = dialect.select_entity_all_by_uuids(entity_name);
             let old_result = conn
                 .execute_with_params(
                     &old_read_query,
@@ -3637,17 +3635,9 @@ impl Node for UpdateRecordNode {
                     }).collect(),
                 );
 
-                let set_parts: Vec<String> = field_keys.iter()
-                    .map(|k| format!("n.{k} = item.{k}"))
-                    .chain(std::iter::once("n._content_hash = item._content_hash".to_string()))
-                    .collect();
-
-                let set_cypher = format!(
-                    "UNWIND $items AS item \
-                     MATCH (n:{entity_name} {{_uuid: item._uuid}}) \
-                     SET {}",
-                    set_parts.join(", ")
-                );
+                let mut update_cols: Vec<&str> = field_keys.iter().map(|s| s.as_str()).collect();
+                update_cols.push("_content_hash");
+                let set_cypher = dialect.batch_update_fields(entity_name, &update_cols);
                 conn.execute_with_params(
                     &set_cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -3696,16 +3686,14 @@ impl Node for UpdateRecordNode {
                                 changed_uuids.iter().map(|u| CypherValue::String(u.to_string())).collect(),
                             );
                             let match_pattern = if title_is_from {
-                                format!(
-                                    "UNWIND $uuids AS uuid \
-                                     MATCH (t:{title_entity})-[:{rel_name}]->(e:{entity_name} {{_uuid: uuid}}) \
-                                     RETURN t._uuid"
+                                dialect.join_select(
+                                    entity_name, &rel_name, &title_entity,
+                                    false, "_uuid", &["m._uuid"],
                                 )
                             } else {
-                                format!(
-                                    "UNWIND $uuids AS uuid \
-                                     MATCH (e:{entity_name} {{_uuid: uuid}})-[:{rel_name}]->(t:{title_entity}) \
-                                     RETURN t._uuid"
+                                dialect.join_select(
+                                    entity_name, &rel_name, &title_entity,
+                                    true, "_uuid", &["m._uuid"],
                                 )
                             };
                             let title_results = conn
@@ -3747,11 +3735,7 @@ impl Node for UpdateRecordNode {
                     let uuid_param = CypherValue::List(
                         changed_uuids.iter().map(|u| CypherValue::String(u.to_string())).collect(),
                     );
-                    let read_cypher = format!(
-                        "UNWIND $uuids AS uuid \
-                         MATCH (n:{entity_name} {{_uuid: uuid}}) \
-                         RETURN n"
-                    );
+                    let read_cypher = dialect.select_entity_all_by_uuids(entity_name);
                     let read_result = conn
                         .execute_with_params(
                             &read_cypher,
@@ -3866,14 +3850,9 @@ impl Node for UpdateRecordNode {
                 .collect();
             if other_cols.is_empty() { continue; }
 
-            let assigns: String = other_cols.iter()
-                .map(|c| format!("n.{c} = item.{c}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let cypher = format!(
-                "UNWIND $items AS item \
-                 MATCH (n:{entity_name} {{_uuid: item._uuid}}) SET {assigns}"
-            );
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .ok_or("UpdateRecordNode undo: 'dialect' service not registered")?;
+            let cypher = dialect.batch_update_fields(entity_name, &other_cols);
 
             let items_param = CypherValue::List(
                 items.iter().map(|m| CypherValue::Map(m.clone())).collect()
