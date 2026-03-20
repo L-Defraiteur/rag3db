@@ -15,6 +15,7 @@ pub mod catalog;
 pub mod cypher_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
+pub mod rag3db_search_backend;
 #[cfg(feature = "wasm-emscripten")]
 pub mod wasm_ffi;
 pub mod chunker;
