@@ -957,6 +957,70 @@ pub async fn resolve_chunk_results(
     Ok(resolved)
 }
 
+/// Resolve chunk results via SearchBackend (multi-backend).
+pub async fn resolve_chunk_results_via_backend(
+    backend: &dyn crate::search_backend::SearchBackend,
+    chunk_entity: &str,
+    parent_entity: &str,
+    results: Vec<SearchResult>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+    let chunks = backend.fetch_chunks(chunk_entity, &chunk_uuids)
+        .await
+        .map_err(|e| CatalogError::DbError(e))?;
+
+    let mut chunk_map: HashMap<String, &crate::search_backend::ChunkMeta> = HashMap::new();
+    for c in &chunks {
+        chunk_map.insert(c.uuid.clone(), c);
+    }
+
+    // Group by parent, keep best-scoring chunk per parent
+    let mut parent_best: HashMap<String, (f64, String, ChunkInfo)> = HashMap::new();
+    for r in &results {
+        if let Some(meta) = chunk_map.get(&r.uuid) {
+            let chunk_info = ChunkInfo {
+                uuid: r.uuid.clone(),
+                text: meta.text.clone(),
+                index: meta.index,
+                score: r.score,
+                start_line: meta.start_line,
+                end_line: meta.end_line,
+                start_char: meta.start_char,
+                end_char: meta.end_char,
+            };
+            let entry = parent_best.entry(meta.parent_uuid.clone());
+            match entry {
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
+                }
+                std::collections::hash_map::Entry::Occupied(mut e) => {
+                    if r.score > e.get().0 {
+                        e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut resolved: Vec<SearchResult> = parent_best
+        .into_values()
+        .map(|(score, parent_uuid, chunk_info)| SearchResult {
+            uuid: parent_uuid,
+            score,
+            entity: Some(parent_entity.to_string()),
+            data: None,
+            chunk: Some(chunk_info),
+            chunks: None,
+        })
+        .collect();
+    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(resolved)
+}
+
 /// Enrich search results with parent entity data (title, body, etc.).
 ///
 /// Batch-fetches entity data for all result UUIDs and populates `result.data`.
