@@ -73,6 +73,19 @@ pub trait SchemaDialect: Send + Sync {
     /// Statements to run before any DDL (e.g. CREATE SCHEMA, CREATE EXTENSION).
     fn setup_statements(&self) -> Vec<String> { vec![] }
 
+    // ── Row identity ──────────────────────────────────────────────────
+
+    /// Expression to get the stable row offset for a matched node.
+    /// Used by sparse index as node_id.
+    /// - rag3db: `OFFSET(id(n))` — builtin internal offset
+    /// - pg: `n._row_id` — BIGSERIAL column added by create_table
+    fn node_offset_expr(&self, alias: &str) -> String;
+
+    /// Expression to get the internal node ID (for NodeIdCache).
+    /// - rag3db: `ID(n)` — internal node ID struct
+    /// - pg: `n._row_id` — same BIGSERIAL
+    fn node_id_expr(&self, alias: &str) -> String;
+
     // ── Types ────────────────────────────────────────────────────────────
 
     /// Map a column type to the backend's type string.
@@ -179,6 +192,14 @@ pub struct Rag3dbDialect;
 impl SchemaDialect for Rag3dbDialect {
     fn name(&self) -> &'static str {
         "rag3db"
+    }
+
+    fn node_offset_expr(&self, alias: &str) -> String {
+        format!("OFFSET(id({alias}))")
+    }
+
+    fn node_id_expr(&self, alias: &str) -> String {
+        format!("ID({alias})")
     }
 
     fn type_name(&self, ct: &ColumnType) -> String {
@@ -391,6 +412,14 @@ impl SchemaDialect for PostgresDialect {
         "postgresql"
     }
 
+    fn node_offset_expr(&self, alias: &str) -> String {
+        format!("{alias}._row_id")
+    }
+
+    fn node_id_expr(&self, alias: &str) -> String {
+        format!("{alias}._row_id")
+    }
+
     fn internal_schema(&self) -> Option<&'static str> {
         Some("rag3weaver")
     }
@@ -427,10 +456,10 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn create_table(&self, name: &str, columns: &[ColumnDef]) -> String {
-        let col_defs: Vec<String> = columns
-            .iter()
-            .map(|c| format!("{} {}", c.name, self.type_name(&c.col_type)))
-            .collect();
+        // _row_id BIGSERIAL first — stable row offset for sparse index + NodeIdCache
+        let mut col_defs = vec!["_row_id BIGSERIAL".to_string()];
+        col_defs.extend(columns.iter()
+            .map(|c| format!("{} {}", c.name, self.type_name(&c.col_type))));
         format!(
             "CREATE TABLE IF NOT EXISTS {name} (\n    {},\n    PRIMARY KEY (_uuid)\n)",
             col_defs.join(",\n    ")
@@ -911,6 +940,38 @@ mod tests {
         let stmt = d.batch_cascade_delete_returning_count("doc_chunk", "_parent_uuid");
         assert!(stmt.contains("DELETE FROM doc_chunk WHERE _parent_uuid = ANY($uuids)"));
         assert!(stmt.contains("count(*) AS cnt"));
+    }
+
+    #[test]
+    fn rag3db_node_offset_expr() {
+        let d = Rag3dbDialect;
+        assert_eq!(d.node_offset_expr("n"), "OFFSET(id(n))");
+        assert_eq!(d.node_id_expr("n"), "ID(n)");
+    }
+
+    #[test]
+    fn postgres_node_offset_expr() {
+        let d = PostgresDialect;
+        assert_eq!(d.node_offset_expr("n"), "n._row_id");
+        assert_eq!(d.node_id_expr("n"), "n._row_id");
+    }
+
+    #[test]
+    fn postgres_create_table_has_row_id() {
+        let d = PostgresDialect;
+        let ddl = d.create_table("Document", &sample_columns());
+        assert!(ddl.contains("_row_id BIGSERIAL"));
+        // _row_id should be before _uuid
+        let row_id_pos = ddl.find("_row_id").unwrap();
+        let uuid_pos = ddl.find("_uuid").unwrap();
+        assert!(row_id_pos < uuid_pos, "_row_id should come before _uuid");
+    }
+
+    #[test]
+    fn rag3db_create_table_no_row_id() {
+        let d = Rag3dbDialect;
+        let ddl = d.create_table("Document", &sample_columns());
+        assert!(!ddl.contains("_row_id"));
     }
 
     #[test]
