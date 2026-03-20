@@ -180,6 +180,36 @@ pub trait SchemaDialect: Send + Sync {
     /// E.g. delete chunks where _parent_uuid IN $uuids.
     fn batch_delete_by_field(&self, table: &str, field: &str) -> String;
 
+    /// Delete relations between two entities by UUID pairs.
+    /// Expects `$items` param as List<Map{from, to}>.
+    fn batch_delete_relation(&self, rel_table: &str) -> String;
+
+    /// Batch select with UNWIND: match by a field in each item, return specified fields.
+    /// Expects `$items` param as List<Map{match_field: value}>.
+    /// `match_field`: which item field to match on (e.g. "uuid" matched against "_uuid")
+    fn batch_select(
+        &self,
+        table: &str,
+        match_field: &str,
+        table_match_col: &str,
+        return_fields: &[&str],
+    ) -> String;
+
+    /// Batch SET a field to NULL for entities by UUID list.
+    fn batch_set_null(&self, table: &str, field: &str) -> String;
+
+    /// Join two tables via a relation table and return fields.
+    /// E.g. MATCH (a:From)-[:REL]->(b:To {_uuid: uuid}) RETURN a.field, b.field
+    fn join_select(
+        &self,
+        from_table: &str,
+        rel_table: &str,
+        to_table: &str,
+        direction_forward: bool,
+        match_col: &str,
+        return_fields: &[&str],
+    ) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 }
@@ -396,6 +426,70 @@ impl SchemaDialect for Rag3dbDialect {
              MATCH (n:{table} {{{field}: uuid}}) \
              DETACH DELETE n"
         )
+    }
+
+    fn batch_delete_relation(&self, rel_table: &str) -> String {
+        format!(
+            "UNWIND $items AS item \
+             MATCH (a {{_uuid: item.from}})-[r:{rel_table}]->(b {{_uuid: item.to}}) \
+             DELETE r"
+        )
+    }
+
+    fn batch_select(
+        &self,
+        table: &str,
+        match_field: &str,
+        table_match_col: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let returns = return_fields.iter()
+            .map(|f| format!("n.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "UNWIND $items AS item \
+             MATCH (n:{table} {{{table_match_col}: item.{match_field}}}) \
+             RETURN {returns}"
+        )
+    }
+
+    fn batch_set_null(&self, table: &str, field: &str) -> String {
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (n:{table} {{_uuid: uuid}}) \
+             SET n.{field} = NULL"
+        )
+    }
+
+    fn join_select(
+        &self,
+        from_table: &str,
+        rel_table: &str,
+        to_table: &str,
+        direction_forward: bool,
+        match_col: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let returns = return_fields.iter()
+            .map(|f| {
+                if f.contains('.') { f.to_string() } else { format!("n.{f}") }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        if direction_forward {
+            format!(
+                "UNWIND $uuids AS uuid \
+                 MATCH (n:{from_table} {{_uuid: uuid}})-[:{rel_table}]->(m:{to_table}) \
+                 RETURN {returns}"
+            )
+        } else {
+            format!(
+                "UNWIND $uuids AS uuid \
+                 MATCH (n:{from_table} {{_uuid: uuid}})<-[:{rel_table}]-(m:{to_table}) \
+                 RETURN {returns}"
+            )
+        }
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -646,6 +740,51 @@ impl SchemaDialect for PostgresDialect {
 
     fn batch_delete_by_field(&self, table: &str, field: &str) -> String {
         format!("DELETE FROM {table} WHERE {field} = ANY($uuids)")
+    }
+
+    fn batch_delete_relation(&self, rel_table: &str) -> String {
+        format!(
+            "DELETE FROM {rel_table} \
+             USING unnest($items) AS v(from_uuid TEXT, to_uuid TEXT) \
+             WHERE {rel_table}.from_uuid = v.from_uuid AND {rel_table}.to_uuid = v.to_uuid"
+        )
+    }
+
+    fn batch_select(
+        &self,
+        table: &str,
+        match_field: &str,
+        table_match_col: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let cols = return_fields.join(", ");
+        format!(
+            "SELECT {cols} FROM {table} \
+             INNER JOIN unnest($items) AS v({match_field} TEXT) \
+             ON {table}.{table_match_col} = v.{match_field}"
+        )
+    }
+
+    fn batch_set_null(&self, table: &str, field: &str) -> String {
+        format!("UPDATE {table} SET {field} = NULL WHERE _uuid = ANY($uuids)")
+    }
+
+    fn join_select(
+        &self,
+        from_table: &str,
+        rel_table: &str,
+        to_table: &str,
+        _direction_forward: bool,
+        _match_col: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let cols = return_fields.join(", ");
+        format!(
+            "SELECT {cols} FROM {from_table} \
+             INNER JOIN {rel_table} ON {rel_table}.from_uuid = {from_table}._uuid \
+             INNER JOIN {to_table} ON {rel_table}.to_uuid = {to_table}._uuid \
+             WHERE {from_table}._uuid = ANY($uuids)"
+        )
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -943,6 +1082,78 @@ mod tests {
         let stmt = d.batch_cascade_delete_returning_count("doc_chunk", "_parent_uuid");
         assert!(stmt.contains("DELETE FROM doc_chunk WHERE _parent_uuid = ANY($uuids)"));
         assert!(stmt.contains("count(*) AS cnt"));
+    }
+
+    #[test]
+    fn rag3db_batch_delete_relation() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_delete_relation("AUTHORED_BY");
+        assert!(stmt.contains("UNWIND $items"));
+        assert!(stmt.contains("MATCH (a {_uuid: item.from})-[r:AUTHORED_BY]->(b {_uuid: item.to})"));
+        assert!(stmt.contains("DELETE r"));
+    }
+
+    #[test]
+    fn postgres_batch_delete_relation() {
+        let d = PostgresDialect;
+        let stmt = d.batch_delete_relation("authored_by");
+        assert!(stmt.contains("DELETE FROM authored_by"));
+        assert!(stmt.contains("unnest($items)"));
+    }
+
+    #[test]
+    fn rag3db_batch_select() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_select("kb_Index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
+        assert!(stmt.contains("UNWIND $items"));
+        assert!(stmt.contains("MATCH (n:kb_Index {_uuid: item.uuid})"));
+        assert!(stmt.contains("RETURN n._uuid, n._title, n._content"));
+    }
+
+    #[test]
+    fn postgres_batch_select() {
+        let d = PostgresDialect;
+        let stmt = d.batch_select("kb_index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
+        assert!(stmt.contains("SELECT _uuid, _title, _content FROM kb_index"));
+        assert!(stmt.contains("JOIN unnest($items)"));
+    }
+
+    #[test]
+    fn rag3db_batch_set_null() {
+        let d = Rag3dbDialect;
+        let stmt = d.batch_set_null("Document", "_embed_hash");
+        assert!(stmt.contains("UNWIND $uuids"));
+        assert!(stmt.contains("SET n._embed_hash = NULL"));
+    }
+
+    #[test]
+    fn postgres_batch_set_null() {
+        let d = PostgresDialect;
+        let stmt = d.batch_set_null("document", "_embed_hash");
+        assert!(stmt.contains("UPDATE document SET _embed_hash = NULL"));
+        assert!(stmt.contains("ANY($uuids)"));
+    }
+
+    #[test]
+    fn rag3db_join_select_forward() {
+        let d = Rag3dbDialect;
+        let stmt = d.join_select("Document", "IN_KB", "kb_Index", true, "_uuid", &["m._title"]);
+        assert!(stmt.contains("MATCH (n:Document {_uuid: uuid})-[:IN_KB]->(m:kb_Index)"));
+    }
+
+    #[test]
+    fn rag3db_join_select_reverse() {
+        let d = Rag3dbDialect;
+        let stmt = d.join_select("Document", "IN_KB", "kb_Index", false, "_uuid", &["m._title"]);
+        assert!(stmt.contains("MATCH (n:Document {_uuid: uuid})<-[:IN_KB]-(m:kb_Index)"));
+    }
+
+    #[test]
+    fn postgres_join_select() {
+        let d = PostgresDialect;
+        let stmt = d.join_select("document", "in_kb", "kb_index", true, "_uuid", &["kb_index._title"]);
+        assert!(stmt.contains("INNER JOIN in_kb"));
+        assert!(stmt.contains("INNER JOIN kb_index"));
     }
 
     #[test]
