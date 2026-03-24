@@ -18,6 +18,8 @@ pub mod rag3db_connection;
 pub mod rag3db_search_backend;
 #[cfg(feature = "postgres")]
 pub mod postgres_connection;
+#[cfg(feature = "postgres")]
+pub mod postgres_blob_store;
 #[cfg(feature = "wasm-emscripten")]
 pub mod wasm_ffi;
 pub mod chunker;
