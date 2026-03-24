@@ -34,6 +34,12 @@ sparse-vector = { path = "../sparse_vector/rust" }
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
 
+# PostgreSQL/Supabase backend (feature flag)
+tokio-postgres = { version = "0.7", optional = true }
+deadpool-postgres = { version = "0.14", optional = true }
+postgres-types = { version = "0.2", optional = true, features = ["derive"] }
+bytes = { version = "1", optional = true }
+
 # WASM: getrandom needs wasm_js backend for wasm32 targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -45,6 +51,7 @@ candle-wasm = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "d
 bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]
 rag3db-native = ["dep:rag3db"]
+postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types", "dep:bytes"]
 wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]
