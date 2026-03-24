@@ -225,6 +225,12 @@ pub trait SchemaDialect: Send + Sync {
         target_table: &str,
     ) -> String;
 
+    /// Select all rows from a table, returning specified fields.
+    fn select_all(&self, table: &str, fields: &[&str]) -> String;
+
+    /// Check if an entity exists by UUID. Expects `$uuid` param.
+    fn exists_by_uuid(&self, table: &str) -> String;
+
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 
@@ -586,6 +592,18 @@ impl SchemaDialect for Rag3dbDialect {
              MATCH (e:{source_table} {{_uuid: uuid}})-[:{rel_table}]->(c:{target_table}) \
              DETACH DELETE c RETURN uuid, count(c) AS cnt"
         )
+    }
+
+    fn select_all(&self, table: &str, fields: &[&str]) -> String {
+        let returns = fields.iter()
+            .map(|f| format!("n.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("MATCH (n:{table}) RETURN {returns}")
+    }
+
+    fn exists_by_uuid(&self, table: &str) -> String {
+        format!("MATCH (n:{table} {{_uuid: $uuid}}) RETURN count(n) AS cnt")
     }
 
     fn count_rows(&self, table: &str) -> String {
@@ -1039,6 +1057,15 @@ impl SchemaDialect for PostgresDialect {
              RETURNING (SELECT from_uuid FROM {rel_table} WHERE to_uuid = {target_table}._uuid LIMIT 1) AS uuid\
              ) SELECT uuid, count(*) AS cnt FROM deleted GROUP BY uuid"
         )
+    }
+
+    fn select_all(&self, table: &str, fields: &[&str]) -> String {
+        let cols = fields.join(", ");
+        format!("SELECT {cols} FROM {table}")
+    }
+
+    fn exists_by_uuid(&self, table: &str) -> String {
+        format!("SELECT count(*) AS cnt FROM {table} WHERE _uuid = $uuid")
     }
 
     fn count_rows(&self, table: &str) -> String {

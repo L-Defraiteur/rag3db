@@ -969,11 +969,9 @@ impl Catalog {
         let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
         field_names.sort();
 
-        let return_clause = std::iter::once("n._uuid".to_string())
-            .chain(field_names.iter().map(|f| format!("n.{f}")))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let cypher = format!("MATCH (n:{entity_name}) RETURN {return_clause}");
+        let mut all_fields = vec!["_uuid"];
+        all_fields.extend(field_names.iter().map(|s| s.as_str()));
+        let cypher = self.dialect.select_all(entity_name, &all_fields);
 
         let result = self.conn.execute(&cypher).await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -1705,12 +1703,10 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        let cypher = format!(
-            "MATCH (n:{entity_name} {{_uuid: $uuid}}) RETURN n"
-        );
+        let cypher = self.dialect.select_entity_all_by_uuids(entity_name);
         let result = self
             .conn
-            .execute_with_params(&cypher, &[QueryParam::new("uuid", uuid)])
+            .execute_with_params(&cypher, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(uuid.to_string())]))])
             .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
@@ -1738,9 +1734,7 @@ impl Catalog {
                 .map(|u| CypherValue::String(u.clone()))
                 .collect(),
         );
-        let cypher = format!(
-            "MATCH (n:{entity_name}) WHERE n._uuid IN $uuids RETURN n"
-        );
+        let cypher = self.dialect.select_entity_all_by_uuids(entity_name);
         let result = self
             .conn
             .execute_with_params(
@@ -1768,9 +1762,7 @@ impl Catalog {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
-        let cypher = format!(
-            "MATCH (n:{entity_name} {{_uuid: $uuid}}) RETURN count(n) AS cnt"
-        );
+        let cypher = self.dialect.exists_by_uuid(entity_name);
         let result = self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("uuid", uuid)])
@@ -2785,16 +2777,15 @@ impl Catalog {
         let mut source_data: HashMap<String, (String, BTreeMap<String, CypherValue>)> = HashMap::new();
         for (entity_name, uuids) in &by_entity {
             let deduped: HashSet<&str> = uuids.iter().map(|s| s.as_str()).collect();
-            let uuid_list = deduped
-                .iter()
-                .map(|u| format!("'{}'", u.replace('\'', "''")))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let cypher = format!(
-                "MATCH (n:{entity_name}) WHERE n._uuid IN [{uuid_list}] RETURN n"
+            let uuid_param = CypherValue::List(
+                deduped.iter().map(|u| CypherValue::String(u.to_string())).collect(),
             );
+            let cypher = self.dialect.select_entity_all_by_uuids(entity_name);
             let result = self.conn
-                .execute(&cypher)
+                .execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "uuids".into(), value: uuid_param }],
+                )
                 .await
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
