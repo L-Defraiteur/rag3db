@@ -766,9 +766,7 @@ impl Catalog {
             // Same definition → no-op, but persist anyway for idempotence
         } else {
             // Create the rel table
-            let ddl = format!(
-                "CREATE REL TABLE IF NOT EXISTS {rel_name}(FROM {from} TO {to})"
-            );
+            let ddl = self.dialect.create_rel_table(&rel_name, from, to, &[]);
             self.conn.execute(&ddl).await
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
@@ -971,7 +969,7 @@ impl Catalog {
 
         let mut all_fields = vec!["_uuid"];
         all_fields.extend(field_names.iter().map(|s| s.as_str()));
-        let cypher = self.dialect.select_all(entity_name, &all_fields);
+        let cypher = self.dialect.select_all(entity_name, &all_fields, None);
 
         let result = self.conn.execute(&cypher).await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -2431,7 +2429,7 @@ impl Catalog {
 
         // For vector search: compile ALL filters to Cypher WHERE (already pre-filter)
         let (filter_where, filter_params, filter_match) = if let Some(ref cond) = condition {
-            let mut parser = FilterParser::new(&self.config.relations);
+            let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
             let parsed = parser
                 .parse_condition(cond, &entity, "n")
                 .map_err(|e| CatalogError::FilterError(e.to_string()))?;
@@ -2454,82 +2452,43 @@ impl Catalog {
         // KB: filters resolved via title entity (e.g. Directory) JOINed to {KB}_Index.
         // Simple: filters resolved directly on the entity table.
         let allowed_ids = if let Some(ref cond) = condition {
-            if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
-                // KB path: filter via title entity → JOIN to index
-                let mut parser = FilterParser::new(&self.config.relations);
-                let parsed = parser
-                    .parse_condition(cond, title_entity, "t")
-                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-
-                if !parsed.where_clauses.is_empty() {
-                    let match_extra = if parsed.match_clauses.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {}", parsed.match_clauses.join(" "))
-                    };
-                    let cypher = format!(
-                        "MATCH (t:{title_entity})-[:{in_rel}]->(idx:{entity}){match_extra} \
-                         WHERE {} RETURN OFFSET(id(idx))",
-                        parsed.combine_where()
-                    );
-                    let result = if parsed.params.is_empty() {
-                        self.conn
-                            .execute(&cypher)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    } else {
-                        self.conn
-                            .execute_with_params(&cypher, &parsed.params)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    };
-                    let ids: Vec<u64> = result
-                        .rows
-                        .iter()
-                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                        .collect();
-                    Some(ids)
+            let (filter_entity, filter_alias, join_from): (&str, &str, Option<(&str, &str, &str)>) =
+                if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
+                    (title_entity.as_str(), "t", Some(("t", title_entity.as_str(), in_rel.as_str())))
                 } else {
-                    None
-                }
+                    (entity, "n", None)
+                };
+
+            let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
+            let parsed = parser
+                .parse_condition(cond, filter_entity, filter_alias)
+                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+
+            if !parsed.where_clauses.is_empty() {
+                let resolve_table = if join_from.is_some() { entity } else { entity };
+                let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
+                let query = self.dialect.filter_resolve_offsets(
+                    resolve_table,
+                    resolve_alias,
+                    &parsed.match_clauses,
+                    &parsed.combine_where(),
+                    join_from,
+                );
+                let result = if parsed.params.is_empty() {
+                    self.conn.execute(&query).await
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?
+                } else {
+                    self.conn.execute_with_params(&query, &parsed.params).await
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?
+                };
+                let ids: Vec<u64> = result
+                    .rows
+                    .iter()
+                    .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                    .collect();
+                Some(ids)
             } else {
-                // Simple entity path: filter directly on entity table
-                let mut parser = FilterParser::new(&self.config.relations);
-                let parsed = parser
-                    .parse_condition(cond, entity, "n")
-                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-
-                if !parsed.where_clauses.is_empty() {
-                    let match_extra = if parsed.match_clauses.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {}", parsed.match_clauses.join(" "))
-                    };
-                    let cypher = format!(
-                        "MATCH (n:{entity}){match_extra} \
-                         WHERE {} RETURN OFFSET(id(n))",
-                        parsed.combine_where()
-                    );
-                    let result = if parsed.params.is_empty() {
-                        self.conn
-                            .execute(&cypher)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    } else {
-                        self.conn
-                            .execute_with_params(&cypher, &parsed.params)
-                            .await
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?
-                    };
-                    let ids: Vec<u64> = result
-                        .rows
-                        .iter()
-                        .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                        .collect();
-                    Some(ids)
-                } else {
-                    None
-                }
+                None
             }
         } else {
             None
@@ -3131,34 +3090,30 @@ use crate::dataflow::checkpoint::{ExecutionCheckpoint, timestamp_ms};
 impl Catalog {
     /// Ensure migration schema tables exist.
     pub(crate) async fn migration_initialize(&self) -> Result<(), MigrationError> {
-        self.conn
-            .execute(
-                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigration(\
-                     _uuid STRING, \
-                     version INT64, \
-                     name STRING, \
-                     status STRING, \
-                     direction STRING, \
-                     checksum STRING, \
-                     execution_id STRING, \
-                     applied_at INT64, \
-                     duration_ms INT64, \
-                     error STRING, \
-                     PRIMARY KEY(_uuid))",
-            )
-            .await
+        use crate::dialect::{ColumnDef, ColumnType};
+
+        let migration_cols = vec![
+            ColumnDef { name: "version".into(), col_type: ColumnType::Int64 },
+            ColumnDef { name: "name".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "status".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "direction".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "checksum".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "execution_id".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "applied_at".into(), col_type: ColumnType::Int64 },
+            ColumnDef { name: "duration_ms".into(), col_type: ColumnType::Int64 },
+            ColumnDef { name: "error".into(), col_type: ColumnType::Text },
+        ];
+        let ddl = self.dialect.create_table("_DataflowMigration", &migration_cols);
+        self.conn.execute(&ddl).await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
-        self.conn
-            .execute(
-                "CREATE NODE TABLE IF NOT EXISTS _DataflowMigrationLock(\
-                     _uuid STRING, \
-                     locked_by STRING, \
-                     locked_at INT64, \
-                     expires_at INT64, \
-                     PRIMARY KEY(_uuid))",
-            )
-            .await
+        let lock_cols = vec![
+            ColumnDef { name: "locked_by".into(), col_type: ColumnType::Text },
+            ColumnDef { name: "locked_at".into(), col_type: ColumnType::Int64 },
+            ColumnDef { name: "expires_at".into(), col_type: ColumnType::Int64 },
+        ];
+        let ddl = self.dialect.create_table("_DataflowMigrationLock", &lock_cols);
+        self.conn.execute(&ddl).await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         Ok(())
@@ -3168,15 +3123,12 @@ impl Catalog {
     pub(crate) async fn migration_load_applied(
         &self,
     ) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
-        let result = self
-            .conn
-            .execute(
-                "MATCH (m:_DataflowMigration) \
-                 RETURN m.version, m.name, m.status, m.checksum, \
-                        m.execution_id, m.applied_at, m.duration_ms, m.error \
-                 ORDER BY m.version",
-            )
-            .await
+        let query = self.dialect.select_all(
+            "_DataflowMigration",
+            &["version", "name", "status", "checksum", "execution_id", "applied_at", "duration_ms", "error"],
+            Some("version"),
+        );
+        let result = self.conn.execute(&query).await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         let mut applied = HashMap::new();
@@ -3216,14 +3168,17 @@ impl Catalog {
         const LOCK_UUID: &str = "_migration_lock";
         let now = timestamp_ms();
 
-        let result = self
-            .conn
+        // Check existing lock
+        let query = self.dialect.select_by_uuids(
+            "_DataflowMigrationLock",
+            &["locked_by", "locked_at", "expires_at"],
+        );
+        let result = self.conn
             .execute_with_params(
-                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) \
-                 RETURN l.locked_by, l.locked_at, l.expires_at",
+                &query,
                 &[QueryParam::new(
-                    "uuid",
-                    CypherValue::String(LOCK_UUID.to_string()),
+                    "uuids",
+                    CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                 )],
             )
             .await
@@ -3240,34 +3195,37 @@ impl Catalog {
                     since: locked_at,
                 });
             }
+            // Delete expired lock
+            let del_query = self.dialect.batch_delete("_DataflowMigrationLock");
             self.conn
                 .execute_with_params(
-                    "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
+                    &del_query,
                     &[QueryParam::new(
-                        "uuid",
-                        CypherValue::String(LOCK_UUID.to_string()),
+                        "uuids",
+                        CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                     )],
                 )
                 .await
                 .map_err(|e| MigrationError::DbError(e.to_string()))?;
         }
 
+        // Create new lock
+        let insert_query = self.dialect.batch_upsert(
+            "_DataflowMigrationLock",
+            &["_uuid", "locked_by", "locked_at", "expires_at"],
+        );
+        let mut item = std::collections::BTreeMap::new();
+        item.insert("_uuid".to_string(), CypherValue::String(LOCK_UUID.to_string()));
+        item.insert("locked_by".to_string(), CypherValue::String(lock_id.to_string()));
+        item.insert("locked_at".to_string(), CypherValue::Int(now as i64));
+        item.insert("expires_at".to_string(), CypherValue::Int((now + LOCK_TTL_MS) as i64));
         self.conn
             .execute_with_params(
-                "CREATE (l:_DataflowMigrationLock {\
-                     _uuid: $uuid, \
-                     locked_by: $locked_by, \
-                     locked_at: $locked_at, \
-                     expires_at: $expires_at})",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(LOCK_UUID.to_string())),
-                    QueryParam::new("locked_by", CypherValue::String(lock_id.to_string())),
-                    QueryParam::new("locked_at", CypherValue::Int(now as i64)),
-                    QueryParam::new(
-                        "expires_at",
-                        CypherValue::Int((now + LOCK_TTL_MS) as i64),
-                    ),
-                ],
+                &insert_query,
+                &[QueryParam::new(
+                    "items",
+                    CypherValue::List(vec![CypherValue::Map(item)]),
+                )],
             )
             .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
@@ -3278,12 +3236,13 @@ impl Catalog {
     /// Release migration lock.
     pub(crate) async fn migration_release_lock(&self) -> Result<(), MigrationError> {
         const LOCK_UUID: &str = "_migration_lock";
+        let query = self.dialect.batch_delete("_DataflowMigrationLock");
         self.conn
             .execute_with_params(
-                "MATCH (l:_DataflowMigrationLock {_uuid: $uuid}) DELETE l",
+                &query,
                 &[QueryParam::new(
-                    "uuid",
-                    CypherValue::String(LOCK_UUID.to_string()),
+                    "uuids",
+                    CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                 )],
             )
             .await
@@ -3304,33 +3263,30 @@ impl Catalog {
         let uuid = format!("migration-{:03}", file.version);
         let now = timestamp_ms();
 
+        let query = self.dialect.batch_upsert(
+            "_DataflowMigration",
+            &["_uuid", "version", "name", "status", "direction", "checksum",
+              "execution_id", "applied_at", "duration_ms", "error"],
+        );
+        let mut item = std::collections::BTreeMap::new();
+        item.insert("_uuid".to_string(), CypherValue::String(uuid));
+        item.insert("version".to_string(), CypherValue::Int(file.version as i64));
+        item.insert("name".to_string(), CypherValue::String(file.name.clone()));
+        item.insert("status".to_string(), CypherValue::String(status.to_string()));
+        item.insert("direction".to_string(), CypherValue::String(direction.to_string()));
+        item.insert("checksum".to_string(), CypherValue::String(file.checksum.clone()));
+        item.insert("execution_id".to_string(), CypherValue::String(execution_id.to_string()));
+        item.insert("applied_at".to_string(), CypherValue::Int(now as i64));
+        item.insert("duration_ms".to_string(), CypherValue::Int(duration_ms as i64));
+        item.insert("error".to_string(), CypherValue::String(error.to_string()));
+
         self.conn
             .execute_with_params(
-                "MERGE (m:_DataflowMigration {_uuid: $uuid}) \
-                 SET m.version = $version, \
-                     m.name = $name, \
-                     m.status = $status, \
-                     m.direction = $direction, \
-                     m.checksum = $checksum, \
-                     m.execution_id = $execution_id, \
-                     m.applied_at = $applied_at, \
-                     m.duration_ms = $duration_ms, \
-                     m.error = $error",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(uuid)),
-                    QueryParam::new("version", CypherValue::Int(file.version as i64)),
-                    QueryParam::new("name", CypherValue::String(file.name.clone())),
-                    QueryParam::new("status", CypherValue::String(status.to_string())),
-                    QueryParam::new("direction", CypherValue::String(direction.to_string())),
-                    QueryParam::new("checksum", CypherValue::String(file.checksum.clone())),
-                    QueryParam::new(
-                        "execution_id",
-                        CypherValue::String(execution_id.to_string()),
-                    ),
-                    QueryParam::new("applied_at", CypherValue::Int(now as i64)),
-                    QueryParam::new("duration_ms", CypherValue::Int(duration_ms as i64)),
-                    QueryParam::new("error", CypherValue::String(error.to_string())),
-                ],
+                &query,
+                &[QueryParam::new(
+                    "items",
+                    CypherValue::List(vec![CypherValue::Map(item)]),
+                )],
             )
             .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
@@ -3345,13 +3301,18 @@ impl Catalog {
         status: &str,
     ) -> Result<(), MigrationError> {
         let uuid = format!("migration-{:03}", version);
+        let query = self.dialect.batch_update_fields("_DataflowMigration", &["status"]);
+        let mut item = std::collections::BTreeMap::new();
+        item.insert("_uuid".to_string(), CypherValue::String(uuid));
+        item.insert("status".to_string(), CypherValue::String(status.to_string()));
+
         self.conn
             .execute_with_params(
-                "MATCH (m:_DataflowMigration {_uuid: $uuid}) SET m.status = $status",
-                &[
-                    QueryParam::new("uuid", CypherValue::String(uuid)),
-                    QueryParam::new("status", CypherValue::String(status.to_string())),
-                ],
+                &query,
+                &[QueryParam::new(
+                    "items",
+                    CypherValue::List(vec![CypherValue::Map(item)]),
+                )],
             )
             .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;

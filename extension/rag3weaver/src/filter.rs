@@ -1,12 +1,12 @@
-//! Filter parser: generates parameterized Cypher WHERE clauses from filter maps.
+//! Filter parser: generates parameterized WHERE clauses from filter maps.
 //!
-//! Port of `l3/FilterParser.ts`. Supports:
+//! Backend-agnostic via `SchemaDialect`. Supports:
 //! - Simple equality: `{ "field": value }` → `n.field = $filter_p0`
 //! - Null checks: `Direct(Null)` → `IS NULL`
 //! - Arrays (IN): `List([val1, val2])` → `IN $filter_p0`
 //! - Operators: `Ops([Gt(18), Lt(65)])` → `> $p0 AND < $p1`
-//! - Cross-entity: `"Entity.field"` → MATCH clause + WHERE
-//! - List operations: HasAny, HasAll, HasNone (Kuzu list functions)
+//! - Cross-entity: `"Entity.field"` → JOIN/MATCH clause + WHERE
+//! - List operations: HasAny, HasAll, HasNone (dialect-specific functions)
 
 use std::collections::HashMap;
 
@@ -15,6 +15,7 @@ use thiserror::Error;
 
 use crate::config::RelationDef;
 use crate::connection::{CypherValue, QueryParam};
+use crate::dialect::SchemaDialect;
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
@@ -116,16 +117,18 @@ impl ParsedFilter {
 
 // ─── FilterParser ───────────────────────────────────────────────────────────
 
-/// Parse filter maps into parameterized Cypher WHERE/MATCH clauses.
+/// Parse filter maps into parameterized WHERE/JOIN clauses via dialect.
 pub struct FilterParser<'a> {
     relations: &'a HashMap<String, RelationDef>,
+    dialect: &'a dyn SchemaDialect,
     param_counter: usize,
 }
 
 impl<'a> FilterParser<'a> {
-    pub fn new(relations: &'a HashMap<String, RelationDef>) -> Self {
+    pub fn new(relations: &'a HashMap<String, RelationDef>, dialect: &'a dyn SchemaDialect) -> Self {
         Self {
             relations,
+            dialect,
             param_counter: 0,
         }
     }
@@ -180,17 +183,10 @@ impl<'a> FilterParser<'a> {
 
                 validate_identifier(&rel.name, "relation")?;
 
-                if rel.from == result_entity {
-                    match_clauses.push(format!(
-                        "MATCH ({result_alias})-[:{}]->({a}:{entity})",
-                        rel.name
-                    ));
-                } else {
-                    match_clauses.push(format!(
-                        "MATCH ({result_alias})<-[:{}]-({a}:{entity})",
-                        rel.name
-                    ));
-                }
+                let forward = rel.from == result_entity;
+                match_clauses.push(self.dialect.filter_join_clause(
+                    result_alias, &rel.name, &a, &entity, forward,
+                ));
 
                 a
             };
@@ -287,17 +283,10 @@ impl<'a> FilterParser<'a> {
                         })?;
                     validate_identifier(&rel.name, "relation")?;
 
-                    if rel.from == result_entity {
-                        match_clauses.push(format!(
-                            "MATCH ({result_alias})-[:{}]->({a}:{entity})",
-                            rel.name
-                        ));
-                    } else {
-                        match_clauses.push(format!(
-                            "MATCH ({result_alias})<-[:{}]-({a}:{entity})",
-                            rel.name
-                        ));
-                    }
+                    let forward = rel.from == result_entity;
+                    match_clauses.push(self.dialect.filter_join_clause(
+                        result_alias, &rel.name, &a, &entity, forward,
+                    ));
                     a
                 };
 
@@ -486,21 +475,15 @@ impl<'a> FilterParser<'a> {
             }
             FilterOp::HasAny(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!(
-                    "list_any_match({prop}, v -> list_contains(${p}, v))"
-                ))
+                Some(self.dialect.filter_list_any_match(prop, &p))
             }
             FilterOp::HasAll(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!(
-                    "list_all(${p}, v -> list_contains({prop}, v))"
-                ))
+                Some(self.dialect.filter_list_all(prop, &p))
             }
             FilterOp::HasNone(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!(
-                    "NOT list_any_match({prop}, v -> list_contains(${p}, v))"
-                ))
+                Some(self.dialect.filter_list_none(prop, &p))
             }
             FilterOp::NotIn(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
@@ -518,8 +501,8 @@ impl<'a> FilterParser<'a> {
         match op {
             FilterOp::IsNull => Some(format!("{prop} IS NULL")),
             FilterOp::IsNotNull => Some(format!("{prop} IS NOT NULL")),
-            FilterOp::IsEmpty => Some(format!("size({prop}) = 0")),
-            FilterOp::IsNotEmpty => Some(format!("size({prop}) > 0")),
+            FilterOp::IsEmpty => Some(format!("{} = 0", self.dialect.filter_size_expr(prop))),
+            FilterOp::IsNotEmpty => Some(format!("{} > 0", self.dialect.filter_size_expr(prop))),
             FilterOp::Between(lo, hi) => {
                 let p_lo = self.next_param();
                 let p_hi = self.next_param();
@@ -530,24 +513,25 @@ impl<'a> FilterParser<'a> {
             FilterOp::StartsWith(s) => {
                 let p = self.next_param();
                 params.push(QueryParam::new(&p, CypherValue::String(s.clone())));
-                Some(format!("starts_with({prop}, ${p})"))
+                Some(self.dialect.filter_starts_with(prop, &p))
             }
             FilterOp::Contains(s) => {
                 let p = self.next_param();
                 params.push(QueryParam::new(&p, CypherValue::String(s.clone())));
-                Some(format!("contains({prop}, ${p})"))
+                Some(self.dialect.filter_contains(prop, &p))
             }
             FilterOp::ValuesCount { min, max } => {
                 let mut clauses = Vec::new();
+                let size = self.dialect.filter_size_expr(prop);
                 if let Some(min_val) = min {
                     let p = self.next_param();
                     params.push(QueryParam::new(&p, CypherValue::Int(*min_val as i64)));
-                    clauses.push(format!("size({prop}) >= ${p}"));
+                    clauses.push(format!("{size} >= ${p}"));
                 }
                 if let Some(max_val) = max {
                     let p = self.next_param();
                     params.push(QueryParam::new(&p, CypherValue::Int(*max_val as i64)));
-                    clauses.push(format!("size({prop}) <= ${p}"));
+                    clauses.push(format!("{size} <= ${p}"));
                 }
                 if clauses.is_empty() {
                     None
@@ -813,6 +797,7 @@ impl Default for FilterBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dialect::Rag3dbDialect;
 
     fn no_relations() -> HashMap<String, RelationDef> {
         HashMap::new()
@@ -842,7 +827,7 @@ mod tests {
     #[test]
     fn empty_filters() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let result = parser.parse(&HashMap::new(), "Document", "n").unwrap();
         assert!(result.where_clauses.is_empty());
         assert!(result.match_clauses.is_empty());
@@ -855,7 +840,7 @@ mod tests {
     #[test]
     fn parse_simple_eq_string() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("status", "active".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -869,7 +854,7 @@ mod tests {
     #[test]
     fn parse_simple_eq_int() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("count", 42_i64.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -880,7 +865,7 @@ mod tests {
     #[test]
     fn parse_simple_eq_bool() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("active", true.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -891,7 +876,7 @@ mod tests {
     #[test]
     fn parse_null() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("field", CypherValue::Null.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -904,7 +889,7 @@ mod tests {
     #[test]
     fn parse_array_in() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "status",
             vec![CypherValue::from("active"), CypherValue::from("pending")].into(),
@@ -924,7 +909,7 @@ mod tests {
     #[test]
     fn parse_op_gt_lt() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "age",
             FilterValue::Ops(vec![
@@ -946,7 +931,7 @@ mod tests {
     #[test]
     fn parse_op_lte_gte() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "score",
             FilterValue::Ops(vec![
@@ -965,7 +950,7 @@ mod tests {
     #[test]
     fn parse_op_neq() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "status",
             FilterValue::Ops(vec![FilterOp::Neq(CypherValue::from("deleted"))]),
@@ -978,7 +963,7 @@ mod tests {
     #[test]
     fn parse_op_eq() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "type",
             FilterValue::Ops(vec![FilterOp::Eq(CypherValue::from("article"))]),
@@ -991,7 +976,7 @@ mod tests {
     #[test]
     fn parse_op_in() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "status",
             FilterValue::Ops(vec![FilterOp::In(vec![
@@ -1009,7 +994,7 @@ mod tests {
     #[test]
     fn parse_has_any() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::HasAny(vec![
@@ -1028,7 +1013,7 @@ mod tests {
     #[test]
     fn parse_has_all() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::HasAll(vec![
@@ -1047,7 +1032,7 @@ mod tests {
     #[test]
     fn parse_has_none() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::HasNone(vec![CypherValue::from("legacy")])]),
@@ -1065,7 +1050,7 @@ mod tests {
     #[test]
     fn parse_op_is_null() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "deleted_at",
             FilterValue::Ops(vec![FilterOp::IsNull]),
@@ -1078,7 +1063,7 @@ mod tests {
     #[test]
     fn parse_op_is_not_null() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "email",
             FilterValue::Ops(vec![FilterOp::IsNotNull]),
@@ -1091,7 +1076,7 @@ mod tests {
     #[test]
     fn parse_op_is_empty() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::IsEmpty]),
@@ -1103,7 +1088,7 @@ mod tests {
     #[test]
     fn parse_op_is_not_empty() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::IsNotEmpty]),
@@ -1115,7 +1100,7 @@ mod tests {
     #[test]
     fn parse_op_between() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "price",
             FilterValue::Ops(vec![FilterOp::Between(
@@ -1136,7 +1121,7 @@ mod tests {
     #[test]
     fn parse_op_not_in() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "status",
             FilterValue::Ops(vec![FilterOp::NotIn(vec![
@@ -1152,7 +1137,7 @@ mod tests {
     #[test]
     fn parse_op_starts_with() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "name",
             FilterValue::Ops(vec![FilterOp::StartsWith("Dr.".to_string())]),
@@ -1165,7 +1150,7 @@ mod tests {
     #[test]
     fn parse_op_contains() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "description",
             FilterValue::Ops(vec![FilterOp::Contains("important".to_string())]),
@@ -1181,7 +1166,7 @@ mod tests {
     #[test]
     fn parse_op_values_count() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "tags",
             FilterValue::Ops(vec![FilterOp::ValuesCount {
@@ -1204,7 +1189,7 @@ mod tests {
     #[test]
     fn parse_cross_entity_outgoing() {
         let rels = with_relation("WROTE", "Document", "Author");
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("Author.name", "John".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -1219,7 +1204,7 @@ mod tests {
         // Relation defined from Author to Document: Author -[:WROTE]-> Document
         // Filtering from Document perspective → incoming arrow
         let rels = with_relation("WROTE", "Author", "Document");
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("Author.name", "John".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
@@ -1230,7 +1215,7 @@ mod tests {
     #[test]
     fn parse_no_relation_error() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("Author.name", "John".into());
         let err = parser.parse(&filters, "Document", "n").unwrap_err();
 
@@ -1246,7 +1231,7 @@ mod tests {
     #[test]
     fn cross_entity_reuses_alias() {
         let rels = with_relation("WROTE", "Document", "Author");
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let mut filters = HashMap::new();
         filters.insert("Author.name".to_string(), FilterValue::from("John"));
         filters.insert("Author.age".to_string(), FilterValue::from(30_i64));
@@ -1264,7 +1249,7 @@ mod tests {
     #[test]
     fn parse_multiple_filters() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let mut filters = HashMap::new();
         filters.insert("status".to_string(), FilterValue::from("active"));
         filters.insert("count".to_string(), FilterValue::from(10_i64));
@@ -1335,7 +1320,7 @@ mod tests {
     #[test]
     fn invalid_entity_in_parse() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("status", "active".into());
         let err = parser.parse(&filters, "123Bad", "n").unwrap_err();
         matches!(err, FilterError::InvalidIdentifier { .. });
@@ -1344,7 +1329,7 @@ mod tests {
     #[test]
     fn invalid_field_in_filter() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one("has space", "active".into());
         let err = parser.parse(&filters, "Document", "n").unwrap_err();
         matches!(err, FilterError::InvalidIdentifier { .. });
@@ -1355,7 +1340,7 @@ mod tests {
     #[test]
     fn param_names_are_sequential() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let filters = filters_one(
             "age",
             FilterValue::Ops(vec![
@@ -1374,7 +1359,7 @@ mod tests {
     #[test]
     fn param_counter_resets_between_parses() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
 
         let f1 = filters_one("a", "x".into());
         let r1 = parser.parse(&f1, "Doc", "n").unwrap();
@@ -1391,7 +1376,7 @@ mod tests {
     #[test]
     fn condition_must_and() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let cond = FilterCondition::Must(vec![
             FilterCondition::Field {
                 key: "status".to_string(),
@@ -1415,7 +1400,7 @@ mod tests {
     #[test]
     fn condition_should_or() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let cond = FilterCondition::Should(vec![
             FilterCondition::Field {
                 key: "status".to_string(),
@@ -1438,7 +1423,7 @@ mod tests {
     #[test]
     fn condition_must_not() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let cond = FilterCondition::MustNot(vec![FilterCondition::Field {
             key: "deleted".to_string(),
             value: true.into(),
@@ -1454,7 +1439,7 @@ mod tests {
     #[test]
     fn condition_nested_must_should() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         // Must(Should(a, b), Field(c))
         let cond = FilterCondition::Must(vec![
             FilterCondition::Should(vec![
@@ -1485,7 +1470,7 @@ mod tests {
     #[test]
     fn condition_from_hashmap_retrocompat() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let mut filters = HashMap::new();
         filters.insert("status".to_string(), FilterValue::from("active"));
         let cond: FilterCondition = filters.into();
@@ -1501,7 +1486,7 @@ mod tests {
     #[test]
     fn builder_basic_chain() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let cond = FilterBuilder::new()
             .eq("status", CypherValue::from("active"))
             .is_not_null("email")
@@ -1520,7 +1505,7 @@ mod tests {
     #[test]
     fn builder_with_or() {
         let rels = no_relations();
-        let mut parser = FilterParser::new(&rels);
+        let mut parser = FilterParser::new(&rels, &Rag3dbDialect);
         let cond = FilterCondition::Must(vec![
             FilterBuilder::or(vec![
                 FilterCondition::Field {

@@ -226,7 +226,8 @@ pub trait SchemaDialect: Send + Sync {
     ) -> String;
 
     /// Select all rows from a table, returning specified fields.
-    fn select_all(&self, table: &str, fields: &[&str]) -> String;
+    /// `order_by`: optional column to ORDER BY (ascending).
+    fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String;
 
     /// Check if an entity exists by UUID. Expects `$uuid` param.
     fn exists_by_uuid(&self, table: &str) -> String;
@@ -292,6 +293,57 @@ pub trait SchemaDialect: Send + Sync {
         index_table: &str,
         all_fields: &[&str],
         update_fields: &[&str],
+    ) -> String;
+
+    // ── Filter expressions ──────────────────────────────────────────
+
+    /// Generate a JOIN/MATCH clause for cross-entity filter traversal.
+    /// `result_alias`: alias of the source node (e.g. "n")
+    /// `rel_name`: relation table name
+    /// `target_alias`: alias for the target entity (e.g. "e1")
+    /// `target_entity`: target entity table name
+    /// `forward`: true if result→target, false if target→result
+    fn filter_join_clause(
+        &self,
+        result_alias: &str,
+        rel_name: &str,
+        target_alias: &str,
+        target_entity: &str,
+        forward: bool,
+    ) -> String;
+
+    /// Expression for array/list length. E.g. `size(prop)` or `cardinality(prop)`.
+    fn filter_size_expr(&self, prop: &str) -> String;
+
+    /// starts_with filter expression.
+    fn filter_starts_with(&self, prop: &str, param: &str) -> String;
+
+    /// contains filter expression.
+    fn filter_contains(&self, prop: &str, param: &str) -> String;
+
+    /// List has any match: at least one element of `prop` is in `param` list.
+    fn filter_list_any_match(&self, prop: &str, param: &str) -> String;
+
+    /// List has all: all elements of `param` list are contained in `prop`.
+    fn filter_list_all(&self, prop: &str, param: &str) -> String;
+
+    /// List has none: no element of `prop` is in `param` list.
+    fn filter_list_none(&self, prop: &str, param: &str) -> String;
+
+    /// Build the full filter resolution query: given parsed filter parts,
+    /// return a query that resolves matching row offsets.
+    /// `table`: the entity table to resolve offsets from
+    /// `alias`: alias for that table (e.g. "n" or "idx")
+    /// `join_clauses`: cross-entity join/match clauses
+    /// `where_clause`: combined WHERE expression
+    /// `join_from`: optional (from_alias, from_table, rel, to_alias) for KB indirection
+    fn filter_resolve_offsets(
+        &self,
+        table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
     ) -> String;
 }
 
@@ -594,12 +646,15 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn select_all(&self, table: &str, fields: &[&str]) -> String {
+    fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String {
         let returns = fields.iter()
             .map(|f| format!("n.{f}"))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("MATCH (n:{table}) RETURN {returns}")
+        match order_by {
+            Some(col) => format!("MATCH (n:{table}) RETURN {returns} ORDER BY n.{col}"),
+            None => format!("MATCH (n:{table}) RETURN {returns}"),
+        }
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {
@@ -747,6 +802,80 @@ impl SchemaDialect for Rag3dbDialect {
              ON CREATE SET {create_set} \
              ON MATCH SET {match_set}"
         )
+    }
+
+    fn filter_join_clause(
+        &self,
+        result_alias: &str,
+        rel_name: &str,
+        target_alias: &str,
+        target_entity: &str,
+        forward: bool,
+    ) -> String {
+        if forward {
+            format!("MATCH ({result_alias})-[:{rel_name}]->({target_alias}:{target_entity})")
+        } else {
+            format!("MATCH ({result_alias})<-[:{rel_name}]-({target_alias}:{target_entity})")
+        }
+    }
+
+    fn filter_size_expr(&self, prop: &str) -> String {
+        format!("size({prop})")
+    }
+
+    fn filter_starts_with(&self, prop: &str, param: &str) -> String {
+        format!("starts_with({prop}, ${param})")
+    }
+
+    fn filter_contains(&self, prop: &str, param: &str) -> String {
+        format!("contains({prop}, ${param})")
+    }
+
+    fn filter_list_any_match(&self, prop: &str, param: &str) -> String {
+        format!("list_any_match({prop}, v -> list_contains(${param}, v))")
+    }
+
+    fn filter_list_all(&self, prop: &str, param: &str) -> String {
+        format!("list_all(${param}, v -> list_contains({prop}, v))")
+    }
+
+    fn filter_list_none(&self, prop: &str, param: &str) -> String {
+        format!("NOT list_any_match({prop}, v -> list_contains(${param}, v))")
+    }
+
+    fn filter_resolve_offsets(
+        &self,
+        table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
+    ) -> String {
+        let offset_expr = self.node_offset_expr(alias);
+        match join_from {
+            Some((from_alias, from_table, rel)) => {
+                let joins = if join_clauses.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", join_clauses.join(" "))
+                };
+                format!(
+                    "MATCH ({from_alias}:{from_table})-[:{rel}]->({alias}:{table}){joins} \
+                     WHERE {where_clause} RETURN {offset_expr}"
+                )
+            }
+            None => {
+                let joins = if join_clauses.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", join_clauses.join(" "))
+                };
+                format!(
+                    "MATCH ({alias}:{table}){joins} \
+                     WHERE {where_clause} RETURN {offset_expr}"
+                )
+            }
+        }
     }
 }
 
@@ -1059,9 +1188,12 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
-    fn select_all(&self, table: &str, fields: &[&str]) -> String {
+    fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String {
         let cols = fields.join(", ");
-        format!("SELECT {cols} FROM {table}")
+        match order_by {
+            Some(col) => format!("SELECT {cols} FROM {table} ORDER BY {col}"),
+            None => format!("SELECT {cols} FROM {table}"),
+        }
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {
@@ -1196,6 +1328,92 @@ impl SchemaDialect for PostgresDialect {
              SELECT {val_refs} FROM unnest($items) AS v(uuid TEXT, {col_list}) \
              ON CONFLICT (_uuid) DO UPDATE SET {update_set}"
         )
+    }
+
+    fn filter_join_clause(
+        &self,
+        result_alias: &str,
+        rel_name: &str,
+        target_alias: &str,
+        target_entity: &str,
+        forward: bool,
+    ) -> String {
+        // PostgreSQL: JOIN via relation join table + entity table
+        // rel_table has (from_uuid, to_uuid)
+        let rel_table = &self.internal_table(rel_name);
+        if forward {
+            format!(
+                "JOIN {rel_table} AS _r_{target_alias} ON _r_{target_alias}.from_uuid = {result_alias}._uuid \
+                 JOIN {target_entity} AS {target_alias} ON {target_alias}._uuid = _r_{target_alias}.to_uuid"
+            )
+        } else {
+            format!(
+                "JOIN {rel_table} AS _r_{target_alias} ON _r_{target_alias}.to_uuid = {result_alias}._uuid \
+                 JOIN {target_entity} AS {target_alias} ON {target_alias}._uuid = _r_{target_alias}.from_uuid"
+            )
+        }
+    }
+
+    fn filter_size_expr(&self, prop: &str) -> String {
+        format!("cardinality({prop})")
+    }
+
+    fn filter_starts_with(&self, prop: &str, param: &str) -> String {
+        format!("{prop} LIKE ${param} || '%'")
+    }
+
+    fn filter_contains(&self, prop: &str, param: &str) -> String {
+        format!("{prop} LIKE '%' || ${param} || '%'")
+    }
+
+    fn filter_list_any_match(&self, prop: &str, param: &str) -> String {
+        format!("{prop} && ${param}")
+    }
+
+    fn filter_list_all(&self, prop: &str, param: &str) -> String {
+        format!("{prop} @> ${param}")
+    }
+
+    fn filter_list_none(&self, prop: &str, param: &str) -> String {
+        format!("NOT ({prop} && ${param})")
+    }
+
+    fn filter_resolve_offsets(
+        &self,
+        table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
+    ) -> String {
+        let offset_expr = self.node_offset_expr(alias);
+        match join_from {
+            Some((from_alias, from_table, rel)) => {
+                let rel_table = self.internal_table(rel);
+                let joins = if join_clauses.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", join_clauses.join(" "))
+                };
+                format!(
+                    "SELECT {offset_expr} FROM {from_table} AS {from_alias} \
+                     JOIN {rel_table} AS _r ON _r.from_uuid = {from_alias}._uuid \
+                     JOIN {table} AS {alias} ON {alias}._uuid = _r.to_uuid\
+                     {joins} WHERE {where_clause}"
+                )
+            }
+            None => {
+                let joins = if join_clauses.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", join_clauses.join(" "))
+                };
+                format!(
+                    "SELECT {offset_expr} FROM {table} AS {alias}{joins} \
+                     WHERE {where_clause}"
+                )
+            }
+        }
     }
 }
 
