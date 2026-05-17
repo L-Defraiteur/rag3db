@@ -46,41 +46,69 @@ pub struct CheckpointPortValue {
 /// For `Batch` payloads, borrows the inner data via `downcast_ref` (without
 /// consuming it) and serializes to JSON based on the `batch_type`.
 pub fn port_value_to_checkpoint(value: &PortValue) -> Result<CheckpointPortValue, String> {
-    match value {
-        PortValue::Empty => Ok(CheckpointPortValue {
+    use crate::search::SearchMeta;
+    use crate::search_strategy::{ChildSummary, ExpansionRule, UnifiedResult};
+
+    // Trigger / Empty
+    if value.is_trigger() {
+        return Ok(CheckpointPortValue {
             port_type: PortType::Empty,
             is_batch: false,
             data_json: None,
             record_count: None,
-        }),
-
-        PortValue::Batch(payload) => {
-            let json = checkpoint_serialize_batch(payload)?;
-            Ok(CheckpointPortValue {
-                port_type: payload.batch_type,
-                is_batch: true,
-                data_json: Some(json),
-                record_count: Some(payload.count()),
-            })
-        }
-
-        // Search values: already Serialize via serde
-        other => {
-            let json = serde_json::to_string(other).map_err(|e| e.to_string())?;
-            Ok(CheckpointPortValue {
-                port_type: other.port_type(),
-                is_batch: false,
-                data_json: Some(json),
-                record_count: None,
-            })
-        }
+        });
     }
+
+    // BatchPayload (ingestion data)
+    if let Some(payload) = value.downcast::<BatchPayload>() {
+        let json = checkpoint_serialize_batch(payload)?;
+        return Ok(CheckpointPortValue {
+            port_type: payload.batch_type,
+            is_batch: true,
+            data_json: Some(json),
+            record_count: Some(payload.count()),
+        });
+    }
+
+    // Search value types (serializable)
+    if let Some(v) = value.downcast::<Vec<UnifiedResult>>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Results, is_batch: false, data_json: Some(json), record_count: None });
+    }
+    if let Some(v) = value.downcast::<HashMap<String, Vec<ChildSummary>>>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Children, is_batch: false, data_json: Some(json), record_count: None });
+    }
+    if let Some(v) = value.downcast::<Vec<(String, String)>>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Uuids, is_batch: false, data_json: Some(json), record_count: None });
+    }
+    if let Some(v) = value.downcast::<SearchMeta>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Meta, is_batch: false, data_json: Some(json), record_count: None });
+    }
+    if let Some(v) = value.downcast::<Vec<ExpansionRule>>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Rules, is_batch: false, data_json: Some(json), record_count: None });
+    }
+    if let Some(v) = value.downcast::<serde_json::Value>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Map, is_batch: false, data_json: Some(json), record_count: None });
+    }
+
+    // Unknown type — store as empty
+    Ok(CheckpointPortValue {
+        port_type: PortType::Any,
+        is_batch: false,
+        data_json: None,
+        record_count: None,
+    })
 }
 
 /// Convert a [`CheckpointPortValue`] back to a runtime [`PortValue`].
 pub fn port_value_from_checkpoint(cpv: CheckpointPortValue) -> Result<PortValue, String> {
     if cpv.port_type == PortType::Empty {
-        return Ok(PortValue::Empty);
+        return Ok(PortValue::Trigger);
     }
 
     let json = cpv
@@ -89,7 +117,7 @@ pub fn port_value_from_checkpoint(cpv: CheckpointPortValue) -> Result<PortValue,
 
     if cpv.is_batch {
         let payload = checkpoint_deserialize_batch(cpv.port_type, &json)?;
-        Ok(PortValue::Batch(payload))
+        Ok(PortValue::new(payload))
     } else {
         deserialize_non_batch_port_value(cpv.port_type, &json)
     }
@@ -205,36 +233,35 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
 
 /// Deserialize a non-batch, non-empty PortValue from checkpoint.
 fn deserialize_non_batch_port_value(port_type: PortType, json: &str) -> Result<PortValue, String> {
+    use crate::search::SearchMeta;
+    use crate::search_strategy::{ChildSummary, ExpansionRule, UnifiedResult};
+
     match port_type {
         PortType::Results => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Results deser: {e}"))?;
-            Ok(PortValue::Results(v))
+            let v: Vec<UnifiedResult> = serde_json::from_str(json).map_err(|e| format!("Results deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
         PortType::Children => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Children deser: {e}"))?;
-            Ok(PortValue::Children(v))
+            let v: HashMap<String, Vec<ChildSummary>> = serde_json::from_str(json).map_err(|e| format!("Children deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
         PortType::Uuids => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Uuids deser: {e}"))?;
-            Ok(PortValue::Uuids(v))
+            let v: Vec<(String, String)> = serde_json::from_str(json).map_err(|e| format!("Uuids deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
         PortType::Meta => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Meta deser: {e}"))?;
-            Ok(PortValue::Meta(v))
+            let v: SearchMeta = serde_json::from_str(json).map_err(|e| format!("Meta deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
         PortType::Rules => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Rules deser: {e}"))?;
-            Ok(PortValue::Rules(v))
+            let v: Vec<ExpansionRule> = serde_json::from_str(json).map_err(|e| format!("Rules deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
-        PortType::Map => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Map deser: {e}"))?;
-            Ok(PortValue::Map(v))
+        PortType::Map | PortType::Any => {
+            let v: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("Map deser: {e}"))?;
+            Ok(PortValue::new(v))
         }
-        PortType::Any => {
-            let v = serde_json::from_str(json).map_err(|e| format!("Any deser: {e}"))?;
-            Ok(PortValue::Any(v))
-        }
-        PortType::Empty => Ok(PortValue::Empty),
+        PortType::Empty => Ok(PortValue::Trigger),
         other => Err(format!(
             "checkpoint deserialization not supported for {other:?}"
         )),
@@ -320,7 +347,10 @@ impl DataflowGraph {
             NodeDef {
                 name: node.name().to_string(),
                 node_type: node.node_type().to_string(),
-                config: node.node_config(),
+                config: node.node_config()
+                    .and_then(|b| b.downcast::<serde_json::Value>().ok())
+                    .map(|v| *v)
+                    .unwrap_or_default(),
             }
         }).collect();
 
@@ -436,13 +466,13 @@ mod tests {
 
     #[test]
     fn checkpoint_empty_roundtrip() {
-        let cpv = port_value_to_checkpoint(&PortValue::Empty).unwrap();
+        let cpv = port_value_to_checkpoint(&PortValue::Trigger).unwrap();
         assert_eq!(cpv.port_type, PortType::Empty);
         assert!(!cpv.is_batch);
         assert!(cpv.data_json.is_none());
 
         let restored = port_value_from_checkpoint(cpv).unwrap();
-        assert!(matches!(restored, PortValue::Empty));
+        assert!(restored.is_trigger());
     }
 
     #[test]
@@ -469,7 +499,7 @@ mod tests {
         };
 
         let payload = BatchPayload::new(PortType::Entities, vec![record]);
-        let pv = PortValue::Batch(payload);
+        let pv = PortValue::new(payload);
 
         // Serialize to checkpoint
         let cpv = port_value_to_checkpoint(&pv).unwrap();
@@ -480,24 +510,21 @@ mod tests {
 
         // Deserialize from checkpoint
         let restored = port_value_from_checkpoint(cpv).unwrap();
-        if let PortValue::Batch(payload) = restored {
-            assert_eq!(payload.batch_type, PortType::Entities);
-            assert_eq!(payload.count(), 1);
+        let payload = restored.take::<BatchPayload>().expect("expected BatchPayload");
+        assert_eq!(payload.batch_type, PortType::Entities);
+        assert_eq!(payload.count(), 1);
 
-            let records = payload.take::<EntityRecord>().unwrap();
-            assert_eq!(records.len(), 1);
-            assert_eq!(records[0].entity_name, "Document");
-            assert_eq!(
-                records[0].data.get("title").and_then(|v| v.as_str()),
-                Some("Hello")
-            );
-            // Pre-resolved ref
-            assert_eq!(records[0].entity_ref.uuid().unwrap(), "uuid-abc");
-            // No resolver (consumed in original execution)
-            assert!(records[0].resolver.is_none());
-        } else {
-            panic!("expected Batch");
-        }
+        let records = payload.take::<EntityRecord>().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].entity_name, "Document");
+        assert_eq!(
+            records[0].data.get("title").and_then(|v| v.as_str()),
+            Some("Hello")
+        );
+        // Pre-resolved ref
+        assert_eq!(records[0].entity_ref.uuid().unwrap(), "uuid-abc");
+        // No resolver (consumed in original execution)
+        assert!(records[0].resolver.is_none());
     }
 
     #[test]
@@ -516,19 +543,16 @@ mod tests {
                 source_uuid: "dir-2".into(),
             },
         ];
-        let pv = PortValue::Batch(BatchPayload::new(PortType::Aggregates, records));
+        let pv = PortValue::new(BatchPayload::new(PortType::Aggregates, records));
 
         let cpv = port_value_to_checkpoint(&pv).unwrap();
         let restored = port_value_from_checkpoint(cpv).unwrap();
 
-        if let PortValue::Batch(payload) = restored {
-            let records = payload.take::<AggregateRecord>().unwrap();
-            assert_eq!(records.len(), 2);
-            assert_eq!(records[0].index_entry_uuid, "idx-1");
-            assert_eq!(records[1].index_entry_uuid, "idx-2");
-        } else {
-            panic!("expected Batch");
-        }
+        let payload = restored.take::<BatchPayload>().expect("expected BatchPayload");
+        let records = payload.take::<AggregateRecord>().unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].index_entry_uuid, "idx-1");
+        assert_eq!(records[1].index_entry_uuid, "idx-2");
     }
 
     #[test]
@@ -672,7 +696,9 @@ mod tests {
         let registry = builtin_registry();
         let config = serde_json::json!({"gpu_batch_size": 64});
         let node = registry.create("KBEmbedNode", "embeds", &config).unwrap();
-        let restored_config = node.node_config();
+        let restored_config = node.node_config()
+            .and_then(|b| b.downcast::<serde_json::Value>().ok())
+            .expect("expected serde_json::Value config");
         assert_eq!(restored_config.get("gpu_batch_size").unwrap().as_u64(), Some(64));
     }
 }

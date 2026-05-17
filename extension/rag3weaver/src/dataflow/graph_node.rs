@@ -207,7 +207,7 @@ impl Node for GraphNode {
         }
 
         // 3. Create sub-runtime sharing the parent's services
-        let services = ctx.services();
+        let services = ctx.services_arc();
         let runtime = DataflowRuntime::with_services_arc(
             self.definition.nodes.len() + 1,
             services,
@@ -230,8 +230,9 @@ impl Node for GraphNode {
         "GraphNode"
     }
 
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::to_value(&self.definition).unwrap_or_default()
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        let val = serde_json::to_value(&self.definition).unwrap_or_default();
+        Some(Box::new(val))
     }
 }
 
@@ -492,7 +493,9 @@ mod tests {
         let gn = GraphNode::from_definition("test", def.clone(), registry).unwrap();
 
         assert_eq!(gn.node_type(), "GraphNode");
-        let config = gn.node_config();
+        let config = *gn.node_config()
+            .and_then(|b| b.downcast::<serde_json::Value>().ok())
+            .expect("expected serde_json::Value config");
         // Config should be the serialized definition
         let restored: GraphDefinition = serde_json::from_value(config).unwrap();
         assert_eq!(restored.nodes.len(), def.nodes.len());

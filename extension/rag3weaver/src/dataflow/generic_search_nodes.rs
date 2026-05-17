@@ -26,7 +26,7 @@ use crate::search::{
 use crate::search_strategy::UnifiedResult;
 
 use super::node::{Node, NodeContext};
-use super::port::{PortDef, PortType, PortValue};
+use super::port::{PortDef, PortType, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── SearchSourceNode ────────────────────────────────────────────────────────
@@ -62,11 +62,11 @@ impl Node for SearchSourceNode {
     fn node_type(&self) -> &'static str {
         "SearchSourceNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({
             "target_name": self.target_name,
             "query": self.query,
-        })
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![]
@@ -79,8 +79,8 @@ impl Node for SearchSourceNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let catalog: Arc<Mutex<Catalog>> = ctx
-            .service::<Mutex<Catalog>>("catalog")
+        let catalog = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("SearchSourceNode: 'catalog' service not found")?;
 
         let target = {
@@ -92,12 +92,12 @@ impl Node for SearchSourceNode {
 
         ctx.set_output(
             "query",
-            PortValue::Query {
+            PortValue::new(QueryPayload {
                 target_name: self.target_name.clone(),
                 query: self.query.clone(),
                 options: self.options.clone(),
                 target: Some(target),
-            },
+            }),
         );
         Ok(())
     }
@@ -130,8 +130,8 @@ impl Node for VectorSearchNode {
     fn node_type(&self) -> &'static str {
         "VectorSearchNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({ "limit": self.limit })
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({ "limit": self.limit })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -152,17 +152,18 @@ impl Node for VectorSearchNode {
 
         let conn = ctx
             .service::<ConnService>("conn")
-            .ok_or("VectorSearchNode: 'conn' service not found")?;
+            .ok_or("VectorSearchNode: 'conn' service not found")?
+            .0.clone();
         let embedder = ctx
-            .service::<Arc<dyn Embedder>>("embedder")
+            .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
 
         let mut cache = HashMap::new();
-        let embedding = embed_query(&**embedder, &query_str, &mut cache)
+        let embedding = embed_query(&*embedder, &query_str, &mut cache)
             .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?;
 
         let chunk_results = search_vector(
-            &*conn.0,
+            &*conn,
             &target.chunk_table,
             &target.name,
             &embedding,
@@ -175,7 +176,7 @@ impl Node for VectorSearchNode {
 
         // Resolve chunk-level results → parent-level with data enrichment
         let results = resolve_vector_chunks(
-            &*conn.0,
+            &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
@@ -184,7 +185,7 @@ impl Node for VectorSearchNode {
         .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
-        ctx.set_output("results", PortValue::Results(unified));
+        ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
 }
@@ -228,12 +229,12 @@ impl Node for BM25SearchNode {
     fn node_type(&self) -> &'static str {
         "BM25SearchNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({
             "limit": self.limit,
             "fuzzy_distance": self.fuzzy_distance,
             "result_mode": format!("{:?}", self.result_mode),
-        })
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -254,10 +255,11 @@ impl Node for BM25SearchNode {
 
         let conn = ctx
             .service::<ConnService>("conn")
-            .ok_or("BM25SearchNode: 'conn' service not found")?;
+            .ok_or("BM25SearchNode: 'conn' service not found")?
+            .0.clone();
 
         let results = search_bm25_chunked(
-            &*conn.0,
+            &*conn,
             &target,
             &query_str,
             &target.bm25_fields,
@@ -272,7 +274,7 @@ impl Node for BM25SearchNode {
         .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
-        ctx.set_output("results", PortValue::Results(unified));
+        ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
 }
@@ -302,8 +304,8 @@ impl Node for SparseSearchNode {
     fn node_type(&self) -> &'static str {
         "SparseSearchNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({ "limit": self.limit })
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({ "limit": self.limit })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -324,15 +326,18 @@ impl Node for SparseSearchNode {
 
         let conn = ctx
             .service::<ConnService>("conn")
-            .ok_or("SparseSearchNode: 'conn' service not found")?;
+            .ok_or("SparseSearchNode: 'conn' service not found")?
+            .0.clone();
 
         // Try dual embedder first, then sparse embedder
-        let sparse_vec = if let Some(dual) = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder") {
+        let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
+        let sparse_emb = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
+        let sparse_vec = if let Some(dual) = dual_emb {
             let (_, sparse_vecs) = dual
                 .embed_dual(&[query_str.clone()])
                 .map_err(|e| format!("SparseSearchNode: dual embed failed: {e}"))?;
             sparse_vecs.into_iter().next().unwrap()
-        } else if let Some(sparse) = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder") {
+        } else if let Some(sparse) = sparse_emb {
             let vecs = sparse
                 .embed_sparse(&[query_str.clone()])
                 .map_err(|e| format!("SparseSearchNode: sparse embed failed: {e}"))?;
@@ -342,7 +347,7 @@ impl Node for SparseSearchNode {
         };
 
         let handles = ctx
-            .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+            .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned()
             .ok_or("SparseSearchNode: 'sparse_handles' service not found")?;
 
         let handle = handles.get(&target.chunk_table)
@@ -350,7 +355,7 @@ impl Node for SparseSearchNode {
 
         let chunk_results = search_sparse(
             handle,
-            &*conn.0,
+            &*conn,
             &target.chunk_table,
             &sparse_vec,
             self.limit,
@@ -360,7 +365,7 @@ impl Node for SparseSearchNode {
 
         // Resolve chunk-level results → parent-level with data enrichment
         let results = resolve_vector_chunks(
-            &*conn.0,
+            &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
@@ -369,7 +374,7 @@ impl Node for SparseSearchNode {
         .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
-        ctx.set_output("results", PortValue::Results(unified));
+        ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
 }
@@ -465,7 +470,7 @@ impl Node for FuseResultsNode {
             })
             .collect();
 
-        ctx.set_output("results", PortValue::Results(fused));
+        ctx.set_output("results", PortValue::new(fused));
         Ok(())
     }
 }
@@ -503,12 +508,12 @@ impl Node for ResolveParentNode {
     fn node_type(&self) -> &'static str {
         "ResolveParentNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        if self.return_fields.is_empty() {
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(if self.return_fields.is_empty() {
             serde_json::json!({})
         } else {
             serde_json::json!({ "return_fields": self.return_fields })
-        }
+        }))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -532,29 +537,26 @@ impl Node for ResolveParentNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let results = match ctx.take_input("results") {
-            Some(PortValue::Results(r)) => r,
-            _ => return Err("ResolveParentNode: missing 'results' input".into()),
-        };
+        let results = ctx.take_input("results")
+            .and_then(|pv| pv.take::<Vec<UnifiedResult>>())
+            .ok_or("ResolveParentNode: missing 'results' input")?;
 
         // Get SearchTarget from query input
-        let target = match ctx.take_input("query") {
-            Some(PortValue::Query { target, .. }) => {
-                target.ok_or("ResolveParentNode: Query has no resolved SearchTarget")?
-            }
-            _ => {
-                return Err("ResolveParentNode: no 'query' input with resolved SearchTarget".into());
-            }
-        };
+        let qp = ctx.take_input("query")
+            .and_then(|pv| pv.take::<QueryPayload>())
+            .ok_or("ResolveParentNode: no 'query' input with resolved SearchTarget")?;
+        let target = qp.target
+            .ok_or("ResolveParentNode: Query has no resolved SearchTarget")?;
 
         if results.is_empty() {
-            ctx.set_output("results", PortValue::Results(vec![]));
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
             return Ok(());
         }
 
         let conn = ctx
             .service::<ConnService>("conn")
-            .ok_or("ResolveParentNode: 'conn' service not found")?;
+            .ok_or("ResolveParentNode: 'conn' service not found")?
+            .0.clone();
 
         let return_fields = if self.return_fields.is_empty() {
             &target.enrich_fields
@@ -567,13 +569,13 @@ impl Node for ResolveParentNode {
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
-        enrich_results_with_data(&*conn.0, &target.name, return_fields, &mut search_results)
+        enrich_results_with_data(&*conn, &target.name, return_fields, &mut search_results)
             .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
         let enriched: Vec<UnifiedResult> =
             search_results.into_iter().map(UnifiedResult::from).collect();
 
-        ctx.set_output("results", PortValue::Results(enriched));
+        ctx.set_output("results", PortValue::new(enriched));
         Ok(())
     }
 }
@@ -585,25 +587,20 @@ fn extract_query_and_target(
     ctx: &mut NodeContext,
     node_type: &str,
 ) -> Result<(String, SearchTarget), String> {
-    match ctx.take_input("query") {
-        Some(PortValue::Query {
-            query,
-            target: Some(t),
-            ..
-        }) => Ok((query, t)),
-        Some(PortValue::Query { target: None, .. }) => {
-            Err(format!("{node_type}: Query has no resolved SearchTarget (use SearchSourceNode upstream)"))
-        }
-        _ => Err(format!("{node_type}: missing 'query' input")),
+    let qp = ctx.take_input("query")
+        .and_then(|pv| pv.take::<QueryPayload>())
+        .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
+    match qp.target {
+        Some(t) => Ok((qp.query, t)),
+        None => Err(format!("{node_type}: Query has no resolved SearchTarget (use SearchSourceNode upstream)")),
     }
 }
 
 /// Take optional Results from a port, defaulting to empty vec.
 fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult> {
-    match ctx.take_input(port) {
-        Some(PortValue::Results(r)) => r,
-        _ => vec![],
-    }
+    ctx.take_input(port)
+        .and_then(|pv| pv.take::<Vec<UnifiedResult>>())
+        .unwrap_or_default()
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -714,11 +711,10 @@ mod tests {
         node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
-        if let Some(PortValue::Results(results)) = outputs.get("results") {
-            assert_eq!(results.len(), 0);
-        } else {
-            panic!("expected Results output");
-        }
+        let results = outputs.get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output");
+        assert_eq!(results.len(), 0);
     }
 
     #[test]
@@ -728,7 +724,7 @@ mod tests {
 
         ctx.set_input(
             "bm25",
-            PortValue::Results(vec![
+            PortValue::new(vec![
                 make_unified_result("a", 0.9),
                 make_unified_result("b", 0.7),
             ]),
@@ -737,14 +733,13 @@ mod tests {
         node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
-        if let Some(PortValue::Results(results)) = outputs.get("results") {
-            assert_eq!(results.len(), 2);
-            // Single input → passthrough, scores re-ranked by RRF
-            assert_eq!(results[0].uuid, "a");
-            assert_eq!(results[1].uuid, "b");
-        } else {
-            panic!("expected Results output");
-        }
+        let results = outputs.get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output");
+        assert_eq!(results.len(), 2);
+        // Single input → passthrough, scores re-ranked by RRF
+        assert_eq!(results[0].uuid, "a");
+        assert_eq!(results[1].uuid, "b");
     }
 
     #[test]
@@ -754,14 +749,14 @@ mod tests {
 
         ctx.set_input(
             "vector",
-            PortValue::Results(vec![
+            PortValue::new(vec![
                 make_unified_result("a", 0.9),
                 make_unified_result("c", 0.5),
             ]),
         );
         ctx.set_input(
             "bm25",
-            PortValue::Results(vec![
+            PortValue::new(vec![
                 make_unified_result("b", 0.8),
                 make_unified_result("a", 0.6),
             ]),
@@ -770,14 +765,13 @@ mod tests {
         node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
-        if let Some(PortValue::Results(results)) = outputs.get("results") {
-            // "a" appears in both → highest fused score
-            assert!(results.len() >= 2);
-            // "a" should be first (appears in both signals)
-            assert_eq!(results[0].uuid, "a");
-        } else {
-            panic!("expected Results output");
-        }
+        let results = outputs.get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output");
+        // "a" appears in both → highest fused score
+        assert!(results.len() >= 2);
+        // "a" should be first (appears in both signals)
+        assert_eq!(results[0].uuid, "a");
     }
 
     #[test]

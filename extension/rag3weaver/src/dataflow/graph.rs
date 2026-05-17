@@ -260,6 +260,9 @@ mod tests {
 
     
     impl Node for TestNode {
+        fn node_type(&self) -> &'static str {
+            "TestNode"
+        }
         fn name(&self) -> &str {
             &self.name
         }

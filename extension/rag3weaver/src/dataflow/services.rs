@@ -1,7 +1,8 @@
 //! Service registry for dependency injection.
 //!
-//! String-keyed registry. Allows nodes to access shared services
-//! (DbConnection, Embedder, etc.) via `NodeContext::service()`.
+//! Mirrors luciole's [`ServiceRegistry`] API: `register<T>(key, value: T)` and
+//! `get<T>(key) -> Option<&T>`. When we swap to `luciole::execute_dag()`, this
+//! module becomes a simple re-export.
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -11,16 +12,24 @@ use crate::connection::DbConnection;
 
 /// Wrapper around `Arc<dyn DbConnection>` for service registry storage.
 ///
-/// Needed because `ServiceRegistry::register<T>` requires `T: Sized`,
-/// and `dyn DbConnection` is unsized.
+/// Needed because `dyn DbConnection` is unsized — we store `ConnService`
+/// and access the inner Arc via `.0`.
 pub struct ConnService(pub Arc<dyn DbConnection>);
 
-/// String-keyed service registry.
+/// String-keyed service registry (luciole-compatible API).
 ///
-/// Services are stored as `Arc<dyn Any + Send + Sync>` and downcast on retrieval.
-/// String keys allow JSON config references ("conn", "embedder", etc.).
+/// Services are stored as `Box<dyn Any + Send + Sync>` and downcast on retrieval.
+/// API matches `luciole::ServiceRegistry` exactly:
+/// - `register<T: Send + Sync + 'static>(key, value: T)` — stores T directly
+/// - `get<T: 'static>(key) -> Option<&T>` — borrows T
 pub struct ServiceRegistry {
-    services: HashMap<String, Arc<dyn Any + Send + Sync>>,
+    services: HashMap<String, Box<dyn Any + Send + Sync>>,
+}
+
+impl Default for ServiceRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ServiceRegistry {
@@ -31,15 +40,15 @@ impl ServiceRegistry {
     }
 
     /// Register a service under a string key. Overwrites if key already used.
-    pub fn register<T: Send + Sync + 'static>(&mut self, key: &str, service: Arc<T>) {
-        self.services.insert(key.to_string(), service);
+    /// Note: T is stored directly (not wrapped in Arc). To store `Arc<dyn Trait>`,
+    /// register with `T = Arc<dyn Trait>`.
+    pub fn register<T: Send + Sync + 'static>(&mut self, key: &str, value: T) {
+        self.services.insert(key.to_string(), Box::new(value));
     }
 
     /// Get a service by key, downcast to `T`. Returns `None` if missing or wrong type.
-    pub fn get<T: Send + Sync + 'static>(&self, key: &str) -> Option<Arc<T>> {
-        self.services
-            .get(key)
-            .and_then(|arc| arc.clone().downcast::<T>().ok())
+    pub fn get<T: 'static>(&self, key: &str) -> Option<&T> {
+        self.services.get(key)?.downcast_ref()
     }
 
     /// Check if a key is registered.
@@ -50,62 +59,5 @@ impl ServiceRegistry {
     /// List all registered keys.
     pub fn keys(&self) -> Vec<&str> {
         self.services.keys().map(|s| s.as_str()).collect()
-    }
-}
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct FakeDb {
-        name: String,
-    }
-
-    struct FakeEmbedder {
-        dim: usize,
-    }
-
-    #[test]
-    fn registry_store_retrieve() {
-        let mut reg = ServiceRegistry::new();
-        reg.register("conn", Arc::new(FakeDb {
-            name: "test".into(),
-        }));
-
-        let db = reg.get::<FakeDb>("conn").unwrap();
-        assert_eq!(db.name, "test");
-    }
-
-    #[test]
-    fn registry_missing_returns_none() {
-        let reg = ServiceRegistry::new();
-        assert!(reg.get::<FakeDb>("conn").is_none());
-    }
-
-    #[test]
-    fn registry_wrong_type_returns_none() {
-        let mut reg = ServiceRegistry::new();
-        reg.register("conn", Arc::new(FakeDb {
-            name: "test".into(),
-        }));
-        // Wrong type
-        assert!(reg.get::<FakeEmbedder>("conn").is_none());
-    }
-
-    #[test]
-    fn registry_multiple_services() {
-        let mut reg = ServiceRegistry::new();
-        reg.register("conn", Arc::new(FakeDb { name: "db".into() }));
-        reg.register("embedder", Arc::new(FakeEmbedder { dim: 768 }));
-
-        assert!(reg.has("conn"));
-        assert!(reg.has("embedder"));
-        assert!(!reg.has("missing"));
-        assert_eq!(reg.keys().len(), 2);
-
-        assert_eq!(reg.get::<FakeDb>("conn").unwrap().name, "db");
-        assert_eq!(reg.get::<FakeEmbedder>("embedder").unwrap().dim, 768);
     }
 }

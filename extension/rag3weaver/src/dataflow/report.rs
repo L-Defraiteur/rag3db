@@ -64,18 +64,34 @@ pub struct ExecutionReport {
 
 /// Summarize a PortValue for display (type + count).
 pub fn summarize_port_value(value: &PortValue) -> String {
-    match value {
-        PortValue::Results(r) => format!("Results({})", r.len()),
-        PortValue::Children(c) => format!("Children({} parents)", c.len()),
-        PortValue::Uuids(u) => format!("Uuids({})", u.len()),
-        PortValue::Meta(_) => "Meta".into(),
-        PortValue::Query { target_name, .. } => format!("Query({})", target_name),
-        PortValue::Rules(r) => format!("Rules({})", r.len()),
-        PortValue::Map(_) => "Map".into(),
-        PortValue::Any(_) => "Any".into(),
-        PortValue::Empty => "Empty".into(),
-        PortValue::Batch(p) => format!("{:?}({})", p.batch_type, p.count()),
+    use crate::search_strategy::{ChildSummary, UnifiedResult};
+    use crate::dataflow::port::{BatchPayload, QueryPayload};
+
+    if value.is_trigger() {
+        return "Trigger".into();
     }
+    if let Some(r) = value.downcast::<Vec<UnifiedResult>>() {
+        return format!("Results({})", r.len());
+    }
+    if let Some(c) = value.downcast::<std::collections::HashMap<String, Vec<ChildSummary>>>() {
+        return format!("Children({} parents)", c.len());
+    }
+    if let Some(u) = value.downcast::<Vec<(String, String)>>() {
+        return format!("Uuids({})", u.len());
+    }
+    if value.is::<crate::search::SearchMeta>() {
+        return "Meta".into();
+    }
+    if let Some(q) = value.downcast::<QueryPayload>() {
+        return format!("Query({})", q.target_name);
+    }
+    if let Some(p) = value.downcast::<BatchPayload>() {
+        return format!("{:?}({})", p.batch_type, p.count());
+    }
+    if value.is::<serde_json::Value>() {
+        return "Map".into();
+    }
+    "Data(?)".into()
 }
 
 impl ExecutionReport {
@@ -218,7 +234,7 @@ mod tests {
 
     #[test]
     fn summarize_results() {
-        let val = PortValue::Results(vec![
+        let val = PortValue::new(vec![
             UnifiedResult {
                 uuid: "u1".into(),
                 score: 1.0,
@@ -249,7 +265,7 @@ mod tests {
 
     #[test]
     fn summarize_empty() {
-        assert_eq!(summarize_port_value(&PortValue::Empty), "Empty");
+        assert_eq!(summarize_port_value(&PortValue::Trigger), "Trigger");
     }
 
     #[test]

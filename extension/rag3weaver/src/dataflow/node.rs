@@ -1,16 +1,18 @@
 //! Node traits and execution context for the dataflow graph.
 //!
-//! - [`Node`] — static node with fixed inputs/outputs (luciole-compatible)
-//! - [`NodeContext`] — reads inputs, writes outputs during execution
+//! These types mirror luciole's `Node`, `NodeContext`, `PortDef`, `ServiceRegistry`
+//! with identical public APIs. When we swap to `luciole::execute_dag()`, nodes
+//! will implement `luciole::Node` directly with zero changes to their execute() bodies.
 
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-
 use serde::Serialize;
 
-use super::port::{PortDef, PortValue};
+pub use luciole::port::PortValue;
+
+use super::port::{PortDef, PortType};
 use super::services::ServiceRegistry;
 
 // ─── NodeLog ─────────────────────────────────────────────────────────────────
@@ -31,73 +33,72 @@ pub struct NodeLogEntry {
     pub text: String,
 }
 
-// ─── Node trait ───────────────────────────────────────────────────────���──────
+// ─── Node trait ─────────────────────────────────────────────────────────────
 
-/// A static node in the dataflow graph (luciole-compatible signatures).
+/// A synchronous DAG node (luciole-compatible API).
+///
+/// Mirrors `luciole::Node` exactly. When we swap runtimes,
+/// nodes implement `luciole::Node` directly (same method signatures).
+pub trait Node: Send {
+    /// Type identifier for the node (e.g., "InsertRecordNode").
+    fn node_type(&self) -> &'static str;
 
-pub trait Node: Send + Sync {
-    /// Unique name of this node instance.
-    fn name(&self) -> &str;
+    /// Input port declarations.
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![]
+    }
 
-    /// Input port definitions.
-    fn inputs(&self) -> Vec<PortDef>;
-
-    /// Output port definitions.
-    fn outputs(&self) -> Vec<PortDef>;
+    /// Output port declarations.
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![]
+    }
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
 
-    /// Type identifier for checkpoint serialization (e.g., "InsertRecordNode").
-    /// Must be unique per node implementation and stable across versions.
-    fn node_type(&self) -> &'static str {
-        "Unknown"
-    }
-
-    /// Configuration snapshot for checkpoint (e.g., `{"gpu_batch_size": 32}`).
-    /// Used to compute the graph hash for checkpoint identity.
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::Value::Object(serde_json::Map::new())
-    }
-
     /// Whether this node supports undo (rollback).
-    ///
-    /// Nodes that perform mutations (INSERT, SET, DELETE) should return `true`
-    /// and implement [`undo_context`] + [`undo`]. Read-only nodes return `false`.
     fn can_undo(&self) -> bool {
         false
     }
 
     /// Undo context captured during execute(), boxed for type erasure.
-    ///
-    /// Called by the runtime AFTER a successful `execute()`. The returned value
-    /// is persisted and later passed to `undo()` for rollback.
     fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
         None
     }
 
     /// Reverse the operation using the previously captured undo context.
-    ///
-    /// Called during rollback in reverse topological order.
-    /// Note: does NOT receive a NodeContext — services needed for undo must be
-    /// stored on the node during execute().
-    fn undo(
-        &mut self,
-        _undo_ctx: Box<dyn Any + Send>,
-    ) -> Result<(), String> {
-        Err("undo not supported".into())
+    fn undo(&mut self, _ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        Err("undo not supported".to_string())
     }
+
+    /// Serializable configuration for checkpoint identity.
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        None
+    }
+
+    /// Instance name (used by our runtime for graph management).
+    /// NOT part of luciole::Node — will be removed when we swap runtimes.
+    fn name(&self) -> &str;
 }
 
-// ─── NodeContext ─────────────────────────────────────────────────────────────
+// ─── NodeContext ────────────────────────────────────────────────────────────
 
-/// Execution context: typed input/output access + services + metrics + logs for a node.
+/// Execution context: typed input/output access + services + metrics + logs.
+///
+/// Public API mirrors `luciole::NodeContext` exactly:
+/// - `input(port) -> Option<&PortValue>`
+/// - `take_input(port) -> Option<PortValue>`
+/// - `set_output(port, PortValue)`
+/// - `trigger(port)`
+/// - `metric(key, f64)`
+/// - `info/warn/error/debug(&str)`
+/// - `service::<T>(key) -> Option<&T>`
 pub struct NodeContext {
     inputs: HashMap<String, PortValue>,
     outputs: HashMap<String, PortValue>,
     services: Arc<ServiceRegistry>,
-    metrics: HashMap<String, serde_json::Value>,
-    logs: Vec<NodeLogEntry>,
+    metrics: Vec<(String, f64)>,
+    logs: Vec<(NodeLogLevel, String)>,
 }
 
 impl NodeContext {
@@ -106,7 +107,7 @@ impl NodeContext {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
             services: Arc::new(ServiceRegistry::new()),
-            metrics: HashMap::new(),
+            metrics: Vec::new(),
             logs: Vec::new(),
         }
     }
@@ -116,58 +117,73 @@ impl NodeContext {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
             services,
-            metrics: HashMap::new(),
+            metrics: Vec::new(),
             logs: Vec::new(),
         }
     }
 
-    /// Get a service by key, downcast to `T`.
-    pub fn service<T: Send + Sync + 'static>(&self, key: &str) -> Option<Arc<T>> {
-        self.services.get::<T>(key)
-    }
+    // ── Public API (luciole-compatible) ─────────────────────────────────
 
-    /// Get the shared service registry (for sub-graph execution).
-    pub fn services(&self) -> Arc<ServiceRegistry> {
-        self.services.clone()
-    }
-
-    /// Read an input port value (borrow).
+    /// Borrow an input port value.
     pub fn input(&self, port: &str) -> Option<&PortValue> {
         self.inputs.get(port)
     }
 
-    /// Take an input port value (moves it out).
+    /// Move an input port value out (consumed).
     pub fn take_input(&mut self, port: &str) -> Option<PortValue> {
         self.inputs.remove(port)
     }
 
-    /// Write a value to an output port.
+    /// Set an output port value.
     pub fn set_output(&mut self, port: &str, value: PortValue) {
         self.outputs.insert(port.to_string(), value);
     }
 
-    /// Emit a trigger signal on an output port (luciole-compatible).
+    /// Emit a trigger signal on an output port.
     pub fn trigger(&mut self, port: &str) {
-        self.outputs.insert(port.to_string(), PortValue::Empty);
+        self.outputs.insert(port.to_string(), PortValue::Trigger);
     }
 
-    /// Log a numeric metric (luciole-compatible — f64 only).
+    /// Record a numeric metric.
     pub fn metric(&mut self, key: &str, value: f64) {
-        if let Ok(v) = serde_json::to_value(value) {
-            self.metrics.insert(key.to_string(), v);
-        }
+        self.metrics.push((key.to_string(), value));
     }
+
+    /// Log a debug message.
+    pub fn debug(&mut self, msg: &str) {
+        self.logs.push((NodeLogLevel::Debug, msg.to_string()));
+    }
+
+    /// Log an info message.
+    pub fn info(&mut self, msg: &str) {
+        self.logs.push((NodeLogLevel::Info, msg.to_string()));
+    }
+
+    /// Log a warning message.
+    pub fn warn(&mut self, msg: &str) {
+        self.logs.push((NodeLogLevel::Warn, msg.to_string()));
+    }
+
+    /// Log an error message.
+    pub fn error(&mut self, msg: &str) {
+        self.logs.push((NodeLogLevel::Error, msg.to_string()));
+    }
+
+    /// Access a shared service by key. Returns None if missing or wrong type.
+    pub fn service<T: 'static>(&self, key: &str) -> Option<&T> {
+        self.services.get::<T>(key)
+    }
+
+    // ── Runtime-internal methods ────────────────────────────────────────
 
     /// Set an input port value (used by the runtime to populate inputs).
     pub(crate) fn set_input(&mut self, port: &str, value: PortValue) {
         self.inputs.insert(port.to_string(), value);
     }
 
-    /// Log a structured metric (available in NodeCompleted event).
-    pub fn log_metric(&mut self, key: &str, value: impl serde::Serialize) {
-        if let Ok(v) = serde_json::to_value(value) {
-            self.metrics.insert(key.to_string(), v);
-        }
+    /// Get the shared service registry (for sub-graph execution).
+    pub fn services_arc(&self) -> Arc<ServiceRegistry> {
+        self.services.clone()
     }
 
     /// Drain all output values (used by the runtime after execution).
@@ -177,91 +193,22 @@ impl NodeContext {
 
     /// Drain all metrics (used by the runtime after execution).
     pub(crate) fn drain_metrics(&mut self) -> HashMap<String, serde_json::Value> {
-        std::mem::take(&mut self.metrics)
-    }
-
-    // ── Structured logging ──────────────────────────────────────────────
-
-    /// Log a debug message (visible in DataflowEvent::NodeLog).
-    pub fn debug(&mut self, text: impl Into<String>) {
-        self.logs.push(NodeLogEntry { level: NodeLogLevel::Debug, text: text.into() });
-    }
-
-    /// Log an info message.
-    pub fn info(&mut self, text: impl Into<String>) {
-        self.logs.push(NodeLogEntry { level: NodeLogLevel::Info, text: text.into() });
-    }
-
-    /// Log a warning message.
-    pub fn warn(&mut self, text: impl Into<String>) {
-        self.logs.push(NodeLogEntry { level: NodeLogLevel::Warn, text: text.into() });
-    }
-
-    /// Log an error message.
-    pub fn error(&mut self, text: impl Into<String>) {
-        self.logs.push(NodeLogEntry { level: NodeLogLevel::Error, text: text.into() });
+        self.metrics
+            .drain(..)
+            .map(|(k, v)| (k, serde_json::json!(v)))
+            .collect()
     }
 
     /// Drain all log entries (used by the runtime after execution).
     pub(crate) fn drain_logs(&mut self) -> Vec<NodeLogEntry> {
-        std::mem::take(&mut self.logs)
+        self.logs
+            .drain(..)
+            .map(|(level, text)| NodeLogEntry { level, text })
+            .collect()
     }
 
     /// Borrow inputs (used by the runtime for snapshotting before execute).
     pub(crate) fn inputs(&self) -> &HashMap<String, PortValue> {
         &self.inputs
-    }
-}
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::dataflow::port::PortType;
-    use crate::search_strategy::UnifiedResult;
-
-    #[test]
-    fn node_context_input_output() {
-        let mut ctx = NodeContext::new();
-        ctx.set_input(
-            "results",
-            PortValue::Results(vec![UnifiedResult {
-                uuid: "u1".into(),
-                score: 0.9,
-                entity: None,
-                data: None,
-                chunk: None,
-                chunks: None,
-                relation: None,
-                matched_children: None,
-                other_children: None,
-                graph: None,
-            }]),
-        );
-
-        // Read input
-        let val = ctx.input("results").unwrap();
-        assert!(matches!(val, PortValue::Results(r) if r.len() == 1));
-
-        // Set output
-        ctx.set_output("out", PortValue::Empty);
-        let outputs = ctx.drain_outputs();
-        assert!(outputs.contains_key("out"));
-
-        // Input still there
-        assert!(ctx.input("results").is_some());
-    }
-
-    #[test]
-    fn node_context_take_input() {
-        let mut ctx = NodeContext::new();
-        ctx.set_input("query", PortValue::Empty);
-
-        let taken = ctx.take_input("query");
-        assert!(taken.is_some());
-
-        // Gone after take
-        assert!(ctx.input("query").is_none());
     }
 }

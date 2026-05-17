@@ -17,7 +17,7 @@ use crate::search_strategy::{
 };
 
 use super::node::{Node, NodeContext};
-use super::port::{PortDef, PortType, PortValue};
+use super::port::{PortDef, PortType, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── KBQuerySourceNode ─────────────────────────────────────────────────────────
@@ -71,12 +71,12 @@ impl Node for KBQuerySourceNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         ctx.set_output(
             "query",
-            PortValue::Query {
+            PortValue::new(QueryPayload {
                 target_name: self.kb_name.clone(),
                 query: self.query.clone(),
                 options: self.options.clone(),
                 target: None,
-            },
+            }),
         );
         Ok(())
     }
@@ -127,18 +127,13 @@ impl Node for KBSearchNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let (target_name, query, options) = match ctx.take_input("query") {
-            Some(PortValue::Query {
-                target_name,
-                query,
-                options,
-                ..
-            }) => (target_name, query, options),
-            _ => return Err("KBSearchNode: missing 'query' input".into()),
-        };
+        let qp = ctx.take_input("query")
+            .and_then(|pv| pv.take::<QueryPayload>())
+            .ok_or("KBSearchNode: missing 'query' input")?;
+        let (target_name, query, options) = (qp.target_name, qp.query, qp.options);
 
-        let catalog: Arc<Mutex<Catalog>> = ctx
-            .service::<Mutex<Catalog>>("catalog")
+        let catalog = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("KBSearchNode: 'catalog' service not found")?;
 
         let response = {
@@ -154,8 +149,8 @@ impl Node for KBSearchNode {
             .map(UnifiedResult::from)
             .collect();
 
-        ctx.set_output("results", PortValue::Results(results));
-        ctx.set_output("meta", PortValue::Meta(response.meta));
+        ctx.set_output("results", PortValue::new(results));
+        ctx.set_output("meta", PortValue::new(response.meta));
         Ok(())
     }
 }
@@ -200,13 +195,13 @@ impl Node for FetchRelatedNode {
     fn node_type(&self) -> &'static str {
         "FetchRelatedNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({
             "relation": self.relation,
             "direction": format!("{:?}", self.direction),
             "limit": self.limit,
             "source_entity": self.source_entity,
-        })
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -226,10 +221,11 @@ impl Node for FetchRelatedNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
             .service::<ConnService>("conn")
-            .ok_or("FetchRelatedNode: 'conn' service not found")?;
+            .ok_or("FetchRelatedNode: 'conn' service not found")?
+            .0.clone();
 
         let results = match ctx.take_input("results") {
-            Some(PortValue::Results(r)) => r,
+            Some(pv) => pv.take::<Vec<UnifiedResult>>().ok_or("expected Vec<UnifiedResult>")?,
             _ => return Err("FetchRelatedNode: missing 'results' input".into()),
         };
 
@@ -253,7 +249,7 @@ impl Node for FetchRelatedNode {
             .collect();
 
         if source_uuids.is_empty() {
-            ctx.set_output("children", PortValue::Children(HashMap::new()));
+            ctx.set_output("children", PortValue::new(HashMap::<String, Vec<ChildSummary>>::new()));
             return Ok(());
         }
 
@@ -280,7 +276,6 @@ impl Node for FetchRelatedNode {
         };
 
         let result = conn
-            .0
             .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
             .map_err(|e| e.to_string())?;
 
@@ -325,7 +320,7 @@ impl Node for FetchRelatedNode {
             }
         }
 
-        ctx.set_output("children", PortValue::Children(children_map));
+        ctx.set_output("children", PortValue::new(children_map));
         Ok(())
     }
 }
@@ -375,12 +370,12 @@ impl Node for ComposeNode {
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut results = match ctx.take_input("results") {
-            Some(PortValue::Results(r)) => r,
+            Some(pv) => pv.take::<Vec<UnifiedResult>>().ok_or("expected Vec<UnifiedResult>")?,
             _ => return Err("ComposeNode: missing 'results' input".into()),
         };
 
         let children = match ctx.take_input("children") {
-            Some(PortValue::Children(c)) => c,
+            Some(pv) => pv.take::<HashMap<String, Vec<ChildSummary>>>().ok_or("expected Children")?,
             _ => HashMap::new(),
         };
 
@@ -392,7 +387,7 @@ impl Node for ComposeNode {
             }
         }
 
-        ctx.set_output("results", PortValue::Results(results));
+        ctx.set_output("results", PortValue::new(results));
         Ok(())
     }
 }
@@ -487,12 +482,12 @@ mod tests {
 
         ctx.set_input(
             "results",
-            PortValue::Results(vec![make_result("dir-1", "Directory")]),
+            PortValue::new(vec![make_result("dir-1", "Directory")]),
         );
         ctx.set_input(
             "children",
-            PortValue::Children(HashMap::from([(
-                "dir-1".into(),
+            PortValue::new(HashMap::from([(
+                "dir-1".to_string(),
                 vec![ChildSummary {
                     uuid: "file-1".into(),
                     entity: "File".into(),
@@ -505,14 +500,13 @@ mod tests {
         node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
-        if let Some(PortValue::Results(results)) = outputs.get("results") {
-            assert!(results[0].other_children.is_some());
-            let children = results[0].other_children.as_ref().unwrap();
-            assert_eq!(children.len(), 1);
-            assert_eq!(children[0].uuid, "file-1");
-        } else {
-            panic!("expected Results output");
-        }
+        let results = outputs.get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output");
+        assert!(results[0].other_children.is_some());
+        let children = results[0].other_children.as_ref().unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].uuid, "file-1");
     }
 
     #[test]
@@ -522,17 +516,16 @@ mod tests {
 
         ctx.set_input(
             "results",
-            PortValue::Results(vec![make_result("dir-1", "Directory")]),
+            PortValue::new(vec![make_result("dir-1", "Directory")]),
         );
         // No children input
 
         node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
-        if let Some(PortValue::Results(results)) = outputs.get("results") {
-            assert!(results[0].other_children.is_none());
-        } else {
-            panic!("expected Results output");
-        }
+        let results = outputs.get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output");
+        assert!(results[0].other_children.is_none());
     }
 }

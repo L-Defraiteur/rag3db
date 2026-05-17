@@ -456,7 +456,10 @@ impl MigrationRunner {
             .map(|n| DryRunNode {
                 name: n.name().to_string(),
                 node_type: n.node_type().to_string(),
-                config: n.node_config(),
+                config: n.node_config()
+                    .and_then(|b| b.downcast::<serde_json::Value>().ok())
+                    .map(|v| *v)
+                    .unwrap_or_default(),
                 can_undo: n.can_undo(),
             })
             .collect();

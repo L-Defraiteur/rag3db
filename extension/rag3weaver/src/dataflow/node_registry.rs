@@ -221,7 +221,7 @@ mod tests {
             vec![PortDef { name: "out", port_type: PortType::Empty, required: false }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-            ctx.set_output("out", PortValue::Empty);
+            ctx.set_output("out", PortValue::Trigger);
             Ok(())
         }
         fn node_type(&self) -> &'static str { "FakeNode" }

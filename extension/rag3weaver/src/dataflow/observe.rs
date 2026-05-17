@@ -47,6 +47,7 @@ pub struct TapEvent {
     pub from_port: String,
     pub to_node: String,
     pub to_port: String,
+    #[serde(skip)]
     pub value: PortValue,
 }
 
@@ -164,7 +165,7 @@ mod tests {
             to_node: "b".into(),
             to_port: "in".into(),
         };
-        registry.check_and_emit(&edge, &PortValue::Empty);
+        registry.check_and_emit(&edge, &PortValue::Trigger);
 
         let event = rx.try_recv().unwrap();
         assert_eq!(event.from_node, "a");
@@ -183,7 +184,7 @@ mod tests {
             to_node: "y".into(),
             to_port: "in".into(),
         };
-        registry.check_and_emit(&edge, &PortValue::Empty);
+        registry.check_and_emit(&edge, &PortValue::Trigger);
 
         assert!(rx.try_recv().is_err());
     }
@@ -206,8 +207,8 @@ mod tests {
             to_node: "y".into(),
             to_port: "in".into(),
         };
-        registry.check_and_emit(&edge1, &PortValue::Empty);
-        registry.check_and_emit(&edge2, &PortValue::Empty);
+        registry.check_and_emit(&edge1, &PortValue::Trigger);
+        registry.check_and_emit(&edge2, &PortValue::Trigger);
 
         assert!(rx.try_recv().is_ok());
         assert!(rx.try_recv().is_ok());

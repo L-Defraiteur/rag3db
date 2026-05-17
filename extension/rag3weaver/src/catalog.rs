@@ -1386,7 +1386,7 @@ impl Catalog {
         // 1. Insert entities
         graph.add_node(Box::new(InsertRecordNode::new("insert"))).unwrap();
         graph.set_initial_input("insert", "entities",
-            PortValue::Batch(BatchPayload::new(PortType::Entities, entity_records)));
+            PortValue::new(BatchPayload::new(PortType::Entities, entity_records)));
 
         // 2. Chunk entities (uses entity_configs service)
         graph.add_node(Box::new(ChunkRecordNode::new("chunk"))).unwrap();
@@ -1413,27 +1413,24 @@ impl Catalog {
 
         // Build services
         let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
-        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
-        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
-        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
-        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
-        services.register::<HashMap<String, crate::config::EntityConfig>>(
-            "entity_configs", Arc::new(self.entity_configs.clone()));
-        services.register::<HashMap<ChunkerConfig, Chunker>>(
-            "chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
-        services.register::<bool>("has_sparse", Arc::new(
-            self.sparse_embedder.is_some() || self.dual_embedder.is_some()));
-        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
-        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
-            "sparse_handles", Arc::new(self.sparse_handles.clone()));
+        services.register("conn", self.conn.clone());
+        services.register("dialect", self.dialect.clone());
+        services.register("node_id_cache", self.node_id_cache.clone());
+        services.register("embedder", self.embedder.clone());
+        services.register("embedding_dim", self.config.embedding_dim);
+        services.register("config", self.config.clone());
+        services.register("entity_configs", self.entity_configs.clone());
+        services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
+        services.register("has_sparse",
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
+        services.register("has_dual", self.dual_embedder.is_some());
+        services.register("sparse_handles", self.sparse_handles.clone());
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
+            services.register("sparse_embedder", sparse_emb.clone());
         }
         if let Some(ref dual_emb) = self.dual_embedder {
-            services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
+            services.register("dual_embedder", dual_emb.clone());
         }
 
         // Execute
@@ -1925,14 +1922,14 @@ impl Catalog {
         if has_deletes {
             graph.add_node(Box::new(DeleteRecordNode::new("deletes"))).unwrap();
             graph.set_initial_input("deletes", "deletes",
-                PortValue::Batch(BatchPayload::new(PortType::Deletes, pending.deletes)));
+                PortValue::new(BatchPayload::new(PortType::Deletes, pending.deletes)));
         }
 
         // ─── 1. UpdateRecordNode ────────────────────────────────────
         if has_updates {
             graph.add_node(Box::new(UpdateRecordNode::new("updates"))).unwrap();
             graph.set_initial_input("updates", "updates",
-                PortValue::Batch(BatchPayload::new(PortType::Updates, pending.updates)));
+                PortValue::new(BatchPayload::new(PortType::Updates, pending.updates)));
             if has_deletes {
                 graph.connect("deletes", "done", "updates", "trigger").unwrap();
             }
@@ -1942,7 +1939,7 @@ impl Catalog {
         if has_entities {
             graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
             graph.set_initial_input("inserts", "entities",
-                PortValue::Batch(BatchPayload::new(PortType::Entities, pending.entities)));
+                PortValue::new(BatchPayload::new(PortType::Entities, pending.entities)));
             // Ordering: deletes → updates → inserts
             if has_updates {
                 graph.connect("updates", "done", "inserts", "trigger").unwrap();
@@ -1955,7 +1952,7 @@ impl Catalog {
         if has_relations {
             graph.add_node(Box::new(LinkRecordNode::new("links"))).unwrap();
             graph.set_initial_input("links", "relations",
-                PortValue::Batch(BatchPayload::new(PortType::Relations, pending.relations)));
+                PortValue::new(BatchPayload::new(PortType::Relations, pending.relations)));
             if has_entities {
                 graph.connect("inserts", "done", "links", "trigger").unwrap();
             }
@@ -2025,49 +2022,43 @@ impl Catalog {
 
         // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
-        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
-        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
-        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
-        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
-        services.register::<HashMap<String, KBMetadata>>("kb_metadata", Arc::new(self.kb_metadata.clone()));
-        services.register::<bool>("has_sparse", Arc::new(
-            self.sparse_embedder.is_some() || self.dual_embedder.is_some(),
-        ));
-        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
-        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
-            "sparse_handles", Arc::new(self.sparse_handles.clone()));
+        services.register("conn", self.conn.clone());
+        services.register("dialect", self.dialect.clone());
+        services.register("node_id_cache", self.node_id_cache.clone());
+        services.register("embedder", self.embedder.clone());
+        services.register("embedding_dim", self.config.embedding_dim);
+        services.register("config", self.config.clone());
+        services.register("kb_metadata", self.kb_metadata.clone());
+        services.register("has_sparse",
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
+        services.register("has_dual", self.dual_embedder.is_some());
+        services.register("sparse_handles", self.sparse_handles.clone());
 
         // Shared services for delete/update nodes
-        services.register::<Mutex<Vec<AggregateRecord>>>("pending_aggregates", pending_aggregates);
-        services.register::<Mutex<Vec<UpdateResult>>>("update_results", update_results.clone());
-        services.register::<Mutex<Vec<DeleteResult>>>("delete_results", delete_results.clone());
+        services.register("pending_aggregates", pending_aggregates);
+        services.register("update_results", update_results.clone());
+        services.register("delete_results", delete_results.clone());
 
         // Event bus for node-emitted lifecycle events + warnings
-        services.register::<EventBus>("event_bus", Arc::new(self.event_bus.shared()));
+        services.register("event_bus", Arc::new(self.event_bus.shared()));
 
         // entity_configs needed by DeleteRecordNode, UpdateRecordNode, ChunkRecordNode
         if has_deletes || has_updates || needs_kb {
-            services.register::<HashMap<String, crate::config::EntityConfig>>(
-                "entity_configs", Arc::new(self.entity_configs.clone()));
+            services.register("entity_configs", self.entity_configs.clone());
         }
 
         // chunker_cache needed by KBChunkNode and ChunkRecordNode (rechunk)
         if needs_kb || has_updates {
-            services.register::<HashMap<ChunkerConfig, Chunker>>(
-                "chunker_cache",
-                Arc::new(std::mem::take(&mut self.chunker_cache)),
-            );
+            services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
         }
         if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse_emb.clone()));
+            services.register("sparse_embedder", sparse_emb.clone());
         }
         if let Some(ref dual_emb) = self.dual_embedder {
-            services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
+            services.register("dual_embedder", dual_emb.clone());
         }
         if let Some(ref fail_node) = self.fail_node {
-            services.register::<String>("fail_node", Arc::new(fail_node.clone()));
+            services.register("fail_node", fail_node.clone());
         }
 
         (graph, services, op_count, update_results, delete_results)
@@ -2148,12 +2139,12 @@ impl Catalog {
         let mut graph = DataflowGraph::new();
         graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
         graph.set_initial_input("inserts", "entities",
-            PortValue::Batch(BatchPayload::new(PortType::Entities, entities)));
+            PortValue::new(BatchPayload::new(PortType::Entities, entities)));
 
         let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
-        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
+        services.register("conn", self.conn.clone());
+        services.register("dialect", self.dialect.clone());
+        services.register("node_id_cache", self.node_id_cache.clone());
 
         let runtime = DataflowRuntime::with_services(5, services);
         match runtime.execute(&mut graph) {
@@ -2237,43 +2228,30 @@ impl Catalog {
 
         // Rebuild the ServiceRegistry (same as build_ingestion_graph)
         let mut services = ServiceRegistry::new();
-        services.register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
-        services.register::<Arc<dyn crate::dialect::SchemaDialect>>("dialect", Arc::new(self.dialect.clone()));
-        services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
-        services.register::<Arc<dyn Embedder>>("embedder", Arc::new(self.embedder.clone()));
-        services.register::<usize>("embedding_dim", Arc::new(self.config.embedding_dim));
-        services.register::<CatalogConfig>("config", Arc::new(self.config.clone()));
-        services.register::<HashMap<String, KBMetadata>>(
-            "kb_metadata",
-            Arc::new(self.kb_metadata.clone()),
-        );
-        services.register::<bool>(
-            "has_sparse",
-            Arc::new(self.sparse_embedder.is_some() || self.dual_embedder.is_some()),
-        );
-        services.register::<bool>("has_dual", Arc::new(self.dual_embedder.is_some()));
-        services.register::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>(
-            "sparse_handles", Arc::new(self.sparse_handles.clone()));
+        services.register("conn", self.conn.clone());
+        services.register("dialect", self.dialect.clone());
+        services.register("node_id_cache", self.node_id_cache.clone());
+        services.register("embedder", self.embedder.clone());
+        services.register("embedding_dim", self.config.embedding_dim);
+        services.register("config", self.config.clone());
+        services.register("kb_metadata", self.kb_metadata.clone());
+        services.register("has_sparse",
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
+        services.register("has_dual", self.dual_embedder.is_some());
+        services.register("sparse_handles", self.sparse_handles.clone());
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();
-        services.register::<HashMap<ChunkerConfig, Chunker>>(
-            "chunker_cache",
-            Arc::new(std::mem::take(&mut self.chunker_cache)),
-        );
+        services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register::<Arc<dyn SparseEmbedder>>(
-                "sparse_embedder",
-                Arc::new(sparse_emb.clone()),
-            );
+            services.register("sparse_embedder", sparse_emb.clone());
         }
         if let Some(ref dual_emb) = self.dual_embedder {
-            services
-                .register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual_emb.clone()));
+            services.register("dual_embedder", dual_emb.clone());
         }
         if let Some(ref fail_node) = self.fail_node {
-            services.register::<String>("fail_node", Arc::new(fail_node.clone()));
+            services.register("fail_node", fail_node.clone());
         }
 
         let node_count = graph.nodes.len();
@@ -2953,8 +2931,8 @@ impl Catalog {
         // Services
         let mut services = ServiceRegistry::new();
         let conn = catalog.lock().unwrap().conn_arc();
-        services.register::<Mutex<Catalog>>("catalog", catalog.clone());
-        services.register("conn", std::sync::Arc::new(ConnService(conn)));
+        services.register("catalog", catalog.clone());
+        services.register("conn", ConnService(conn));
 
         // Source node
         graph
@@ -3038,18 +3016,14 @@ impl Catalog {
         };
         let results = output
             .get(results_node, "results")
-            .and_then(|v| match v {
-                PortValue::Results(r) => Some(r.clone()),
-                _ => None,
-            })
+            .and_then(|v| v.downcast::<Vec<crate::search_strategy::UnifiedResult>>())
+            .cloned()
             .unwrap_or_default();
 
         let meta = output
             .get("primary_search", "meta")
-            .and_then(|v| match v {
-                PortValue::Meta(m) => Some(m.clone()),
-                _ => None,
-            })
+            .and_then(|v| v.downcast::<crate::search::SearchMeta>())
+            .cloned()
             .ok_or_else(|| {
                 CatalogError::DbError(
                     "search_with_strategy: no meta after processing".into(),
@@ -3301,8 +3275,7 @@ impl Catalog {
         execution_id: &str,
     ) -> Result<(), MigrationError> {
         let mut services = ServiceRegistry::new();
-        services
-            .register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register("conn", self.conn.clone());
 
         let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
         checkpoint_store
@@ -3337,8 +3310,7 @@ impl Catalog {
         let reversed: Vec<String> = order.into_iter().rev().collect();
 
         let mut services = ServiceRegistry::new();
-        services
-            .register::<Arc<dyn DbConnection>>("conn", Arc::new(self.conn.clone()));
+        services.register("conn", self.conn.clone());
         let services = Arc::new(services);
 
         for node_name in &reversed {

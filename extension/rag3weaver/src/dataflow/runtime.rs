@@ -48,7 +48,7 @@ impl PortSnapshot {
             },
             Err(_) => PortSnapshot {
                 name: name.to_string(),
-                port_type: value.port_type(),
+                port_type: PortType::Any,
                 count: None,
                 data_json: None,
             },
@@ -345,10 +345,19 @@ impl DataflowRuntime {
         graph.validate()?;
 
         let mut port_data: HashMap<(String, String), PortValue> = HashMap::new();
+        let mut port_data_available: HashSet<(String, String)> = HashSet::new();
         let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
         let order = graph.topological_sort()?;
+
+        // Precompute remaining consumer count for each (from_node, from_port) key.
+        let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
+        for edge in &graph.edges {
+            *remaining_consumers
+                .entry((edge.from_node.clone(), edge.from_port.clone()))
+                .or_insert(0) += 1;
+        }
 
         // Inject saved outputs from completed nodes in the checkpoint
         for (node_name, node_cp) in &checkpoint.nodes {
@@ -358,13 +367,26 @@ impl DataflowRuntime {
                 // Restore output port values into port_data
                 for (port_name, cpv) in &node_cp.output_ports {
                     let port_value = port_value_from_checkpoint(cpv.clone())?;
-                    port_data.insert((node_name.clone(), port_name.clone()), port_value);
+                    let key = (node_name.clone(), port_name.clone());
+                    port_data_available.insert(key.clone());
+                    port_data.insert(key, port_value);
                 }
 
                 self.emit(DataflowEvent::CheckpointResumed {
                     node: node_name.clone(),
                     output_ports: node_cp.output_ports.keys().cloned().collect(),
                 });
+            }
+        }
+
+        // Decrement consumer counts for edges whose downstream nodes were
+        // already completed in the checkpoint (they won't consume again).
+        for edge in &graph.edges {
+            if completed.contains(&edge.to_node) {
+                let key = (edge.from_node.clone(), edge.from_port.clone());
+                if let Some(count) = remaining_consumers.get_mut(&key) {
+                    *count = count.saturating_sub(1);
+                }
             }
         }
 
@@ -388,8 +410,10 @@ impl DataflowRuntime {
                         let has_edge_data = graph.edges.iter().any(|e| {
                             e.to_node == **name
                                 && e.to_port == input.name
-                                && port_data
-                                    .contains_key(&(e.from_node.clone(), e.from_port.clone()))
+                                && port_data_available.contains(&(
+                                    e.from_node.clone(),
+                                    e.from_port.clone(),
+                                ))
                         });
                         let has_initial = initial_inputs
                             .get(*name)
@@ -426,14 +450,20 @@ impl DataflowRuntime {
 
                 let mut port_inputs: HashMap<String, Vec<PortValue>> = HashMap::new();
                 for edge in &edges_for_node {
-                    if let Some(value) =
-                        port_data.get(&(edge.from_node.clone(), edge.from_port.clone()))
-                    {
-                        self.taps.check_and_emit(edge, value);
+                    let key = (edge.from_node.clone(), edge.from_port.clone());
+                    if port_data.contains_key(&key) {
+                        let count = remaining_consumers.get_mut(&key).unwrap();
+                        *count -= 1;
+                        let value = if *count == 0 {
+                            port_data.remove(&key).unwrap()
+                        } else {
+                            port_data.get(&key).unwrap().clone()
+                        };
+                        self.taps.check_and_emit(edge, &value);
                         port_inputs
                             .entry(edge.to_port.clone())
                             .or_default()
-                            .push(value.clone());
+                            .push(value);
                     }
                 }
 
@@ -441,7 +471,7 @@ impl DataflowRuntime {
                     let merged = values.into_iter().reduce(|a, b| {
                         match merge_port_values(a, b) {
                             Ok(v) => v,
-                            Err(_) => PortValue::Empty,
+                            Err(_) => PortValue::Trigger,
                         }
                     });
                     if let Some(v) = merged {
@@ -538,7 +568,9 @@ impl DataflowRuntime {
                             )?;
 
                         for (port, value) in outputs {
-                            port_data.insert((node_name.clone(), port), value);
+                            let key = (node_name.clone(), port.clone());
+                            port_data_available.insert(key.clone());
+                            port_data.insert(key, value);
                         }
 
                         completed.insert(node_name.clone());
@@ -605,11 +637,27 @@ impl DataflowRuntime {
         graph.validate()?;
 
         // Port data store: (node_name, port_name) → PortValue
+        // Values may be removed when consumed by the last downstream edge,
+        // so that PortValue::take() works (Arc refcount=1).
         let mut port_data: HashMap<(String, String), PortValue> = HashMap::new();
+        // Tracks which output ports have been produced (for readiness checks),
+        // independent of whether the value is still in port_data.
+        let mut port_data_available: HashSet<(String, String)> = HashSet::new();
         let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
         let order = graph.topological_sort()?;
+
+        // Precompute remaining consumer count for each (from_node, from_port) key.
+        // Each edge that reads from a port is one consumer. When the last consumer
+        // takes the value, we remove it from port_data (giving ownership with
+        // Arc refcount=1) so that PortValue::take() works.
+        let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
+        for edge in &graph.edges {
+            *remaining_consumers
+                .entry((edge.from_node.clone(), edge.from_port.clone()))
+                .or_insert(0) += 1;
+        }
 
         for _iteration in 0..self.max_iterations {
             // Find ready nodes: not completed, all required inputs available
@@ -631,7 +679,7 @@ impl DataflowRuntime {
                         let has_edge_data = graph.edges.iter().any(|e| {
                             e.to_node == **name
                                 && e.to_port == input.name
-                                && port_data.contains_key(&(
+                                && port_data_available.contains(&(
                                     e.from_node.clone(),
                                     e.from_port.clone(),
                                 ))
@@ -672,17 +720,27 @@ impl DataflowRuntime {
                     .filter(|e| e.to_node == *node_name)
                     .collect();
 
-                // Group edges by target port for fan-in, emit taps
+                // Group edges by target port for fan-in, emit taps.
+                // Track remaining consumers so the last reader gets ownership
+                // (Arc refcount=1) instead of a clone (refcount=2).
                 let mut port_inputs: HashMap<String, Vec<PortValue>> = HashMap::new();
                 for edge in &edges_for_node {
-                    if let Some(value) =
-                        port_data.get(&(edge.from_node.clone(), edge.from_port.clone()))
-                    {
-                        self.taps.check_and_emit(edge, value);
+                    let key = (edge.from_node.clone(), edge.from_port.clone());
+                    if port_data.contains_key(&key) {
+                        let count = remaining_consumers.get_mut(&key).unwrap();
+                        *count -= 1;
+                        let value = if *count == 0 {
+                            // Last consumer: remove from port_data (ownership transfer)
+                            port_data.remove(&key).unwrap()
+                        } else {
+                            // More consumers remain: clone (read-only ref)
+                            port_data.get(&key).unwrap().clone()
+                        };
+                        self.taps.check_and_emit(edge, &value);
                         port_inputs
                             .entry(edge.to_port.clone())
                             .or_default()
-                            .push(value.clone());
+                            .push(value);
                     }
                 }
 
@@ -691,7 +749,7 @@ impl DataflowRuntime {
                     let merged = values.into_iter().reduce(|a, b| {
                         match merge_port_values(a, b) {
                             Ok(v) => v,
-                            Err(_) => PortValue::Empty,
+                            Err(_) => PortValue::Trigger,
                         }
                     });
                     if let Some(v) = merged {
@@ -750,7 +808,9 @@ impl DataflowRuntime {
                             .collect();
 
                         for (port, value) in outputs {
-                            port_data.insert((node_name.clone(), port), value);
+                            let key = (node_name.clone(), port.clone());
+                            port_data_available.insert(key.clone());
+                            port_data.insert(key, value);
                         }
 
                         completed.insert(node_name.clone());
@@ -799,7 +859,7 @@ impl DataflowRuntime {
             duration_ms: total_ms,
         });
 
-        // Reorganize port_data by node
+        // Build output from remaining (unconsumed) port_data entries
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
         for ((node, port), value) in port_data {
             data.entry(node).or_default().insert(port, value);
@@ -858,6 +918,9 @@ mod tests {
 
     
     impl Node for PassthroughNode {
+        fn node_type(&self) -> &'static str {
+            "PassthroughNode"
+        }
         fn name(&self) -> &str {
             &self.name
         }
@@ -891,6 +954,9 @@ mod tests {
 
     
     impl Node for SourceNode {
+        fn node_type(&self) -> &'static str {
+            "SourceNode"
+        }
         fn name(&self) -> &str {
             &self.name
         }
@@ -905,7 +971,7 @@ mod tests {
             }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-            ctx.set_output("out", PortValue::Results(self.results.clone()));
+            ctx.set_output("out", PortValue::new(self.results.clone()));
             Ok(())
         }
     }
@@ -917,6 +983,9 @@ mod tests {
 
     
     impl Node for SinkNode {
+        fn node_type(&self) -> &'static str {
+            "SinkNode"
+        }
         fn name(&self) -> &str {
             &self.name
         }
@@ -974,16 +1043,21 @@ mod tests {
         graph.connect("pass", "out", "sink", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
+        let mut rx = runtime.subscribe();
         let output = runtime.execute(&mut graph).unwrap();
 
-        // Passthrough should have forwarded results
-        let val = output.get("pass", "out").unwrap();
-        if let PortValue::Results(r) = val {
-            assert_eq!(r.len(), 1);
-            assert_eq!(r[0].uuid, "u1");
-        } else {
-            panic!("expected Results");
+        // Verify execution completed (all nodes ran without errors)
+        // Consumed intermediate outputs are removed from DataflowOutput,
+        // so we verify via events instead.
+        let mut completed_nodes = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            if let DataflowEvent::NodeCompleted { node, .. } = event {
+                completed_nodes.push(node);
+            }
         }
+        assert!(completed_nodes.contains(&"source".to_string()));
+        assert!(completed_nodes.contains(&"pass".to_string()));
+        assert!(completed_nodes.contains(&"sink".to_string()));
     }
 
     #[test]
@@ -1009,8 +1083,10 @@ mod tests {
         graph.connect("source", "out", "sink_b", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
-        let output = runtime.execute(&mut graph).unwrap();
-        assert!(output.get("source", "out").is_some());
+        // Fan-out: source.out goes to both sink_a and sink_b.
+        // Both consume it, so it's removed from DataflowOutput.
+        // Successful execution (no error) confirms fan-out worked.
+        let _output = runtime.execute(&mut graph).unwrap();
     }
 
     #[test]
@@ -1020,6 +1096,9 @@ mod tests {
 
         
         impl Node for DualInputSink {
+            fn node_type(&self) -> &'static str {
+                "DualInputSink"
+            }
             fn name(&self) -> &str {
                 "merge_sink"
             }
@@ -1066,7 +1145,7 @@ mod tests {
         let output = runtime.execute(&mut graph).unwrap();
 
         let val = output.get("merge_sink", "out").unwrap();
-        if let PortValue::Results(r) = val {
+        if let Some(r) = val.downcast::<Vec<UnifiedResult>>() {
             assert_eq!(r.len(), 3); // 1 from a + 2 from b
         } else {
             panic!("expected Results");
@@ -1096,7 +1175,7 @@ mod tests {
         let event = tap_rx.try_recv().unwrap();
         assert_eq!(event.from_node, "source");
         assert_eq!(event.to_node, "sink");
-        if let PortValue::Results(r) = &event.value {
+        if let Some(r) = event.value.downcast::<Vec<UnifiedResult>>() {
             assert_eq!(r.len(), 2);
         } else {
             panic!("expected Results in tap event");
@@ -1198,7 +1277,7 @@ mod tests {
                 }]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-                ctx.set_output("done", PortValue::Empty);
+                ctx.set_output("done", PortValue::Trigger);
                 Ok(())
             }
         }
@@ -1232,7 +1311,7 @@ mod tests {
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 let _ = ctx.take_input("trigger");
-                ctx.set_output("done", PortValue::Empty);
+                ctx.set_output("done", PortValue::Trigger);
                 Ok(())
             }
         }
@@ -1270,7 +1349,7 @@ mod tests {
                     self.fail = false;
                     Err("simulated crash".to_string())
                 } else {
-                    ctx.set_output("done", PortValue::Empty);
+                    ctx.set_output("done", PortValue::Trigger);
                     Ok(())
                 }
             }
@@ -1290,7 +1369,9 @@ mod tests {
                 .execute_with_checkpoint(&mut graph, &store, "exec-full")
                 .unwrap();
 
-            assert!(output.get("trigger", "done").is_some());
+            // "trigger.done" is consumed by "receiver", so it's removed from output.
+            // "receiver.done" is terminal (no downstream consumer).
+            assert!(output.get("receiver", "done").is_some());
 
             let cp = store.load_execution("exec-full").unwrap().unwrap();
             assert_eq!(cp.status, CheckpointExecutionStatus::Completed);

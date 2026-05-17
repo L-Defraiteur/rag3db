@@ -88,16 +88,14 @@ impl Node for InsertRecordNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("InsertRecordNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("InsertRecordNode: missing 'entities' input".to_string()),
-        };
+        let mut items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("InsertRecordNode: missing 'entities' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("InsertRecordNode: 'conn' service not registered")?;
-        let node_id_cache = ctx.service::<RwLock<NodeIdCache>>("node_id_cache")
+        let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
             .ok_or("InsertRecordNode: 'node_id_cache' service not registered")?;
 
         // Group by (entity_name, sorted column_set) for UNWIND batching.
@@ -111,11 +109,11 @@ impl Node for InsertRecordNode {
                 .push(i);
         }
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("groups", groups.len());
-        ctx.log_metric("group_summary", groups.iter()
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("groups", groups.len() as f64);
+        ctx.info(&format!("group_summary: {}", groups.iter()
             .map(|((name, _), idxs)| format!("{}×{}", name, idxs.len()))
-            .collect::<Vec<_>>());
+            .collect::<Vec<_>>().join(", ")));
 
         for ((entity_name, columns), indices) in &groups {
             let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
@@ -200,13 +198,13 @@ impl Node for InsertRecordNode {
         self.undo_data = Some(serde_json::json!(undo_groups));
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        self.conn = Some(conn.clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("InsertRecordNode: 'dialect' service not registered")?;
-        self.dialect = Some((*dialect).clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("inserted", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("inserted", PortValue::new(
             BatchPayload::new(PortType::Entities, items),
         ));
         Ok(())
@@ -294,14 +292,12 @@ impl Node for LinkRecordNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let mut items: Vec<RelationRecord> = match ctx.take_input("relations") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<RelationRecord>()
-                .ok_or("LinkRecordNode: failed to extract Vec<RelationRecord>")?,
-            _ => return Err("LinkRecordNode: missing 'relations' input".to_string()),
-        };
+        let mut items: Vec<RelationRecord> = ctx.take_input("relations")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<RelationRecord>())
+            .ok_or("LinkRecordNode: missing 'relations' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("LinkRecordNode: 'conn' service not registered")?;
 
         // Resolve all refs first (should be instant — InsertRecordNode already completed)
@@ -335,11 +331,11 @@ impl Node for LinkRecordNode {
                 .push(ri);
         }
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("groups", groups.len());
-        ctx.log_metric("group_summary", groups.iter()
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("groups", groups.len() as f64);
+        ctx.info(&format!("group_summary: {}", groups.iter()
             .map(|((name, _), idxs)| format!("{}×{}", name, idxs.len()))
-            .collect::<Vec<_>>());
+            .collect::<Vec<_>>().join(", ")));
 
         for ((rel_name, prop_keys), indices) in &groups {
             // Build batch link via dialect (idempotent — skip if relation already exists)
@@ -405,12 +401,12 @@ impl Node for LinkRecordNode {
         self.undo_data = Some(serde_json::json!(undo_groups));
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        self.conn = Some(conn.clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("LinkRecordNode: 'dialect' service not registered")?;
-        self.dialect = Some((*dialect).clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -504,8 +500,8 @@ impl Node for KBEmbedNode {
     fn node_type(&self) -> &'static str {
         "KBEmbedNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -521,27 +517,25 @@ impl Node for KBEmbedNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("KBEmbedNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("KBEmbedNode: missing 'entities' input".to_string()),
-        };
+        let mut items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("KBEmbedNode: missing 'entities' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("KBEmbedNode: 'conn' service not registered")?;
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("KBEmbedNode: 'dialect' service not registered")?;
-        let config = ctx.service::<CatalogConfig>("config")
+        let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("KBEmbedNode: 'config' service not registered")?;
-        let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
+        let embedder = ctx.service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("KBEmbedNode: 'embedder' service not registered")?;
-        let embedding_dim = *ctx.service::<usize>("embedding_dim")
+        let embedding_dim = ctx.service::<usize>("embedding_dim").copied()
             .ok_or("KBEmbedNode: 'embedding_dim' service not registered")?;
-        let has_sparse_svc = ctx.service::<bool>("has_sparse").map(|v| *v).unwrap_or(false);
-        let has_dual_svc = ctx.service::<bool>("has_dual").map(|v| *v).unwrap_or(false);
-        let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder");
-        let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder");
+        let has_sparse_svc = ctx.service::<bool>("has_sparse").copied().unwrap_or(false);
+        let has_dual_svc = ctx.service::<bool>("has_dual").copied().unwrap_or(false);
+        let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
+        let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
 
         // For each chunk, extract the text to embed and determine signals.
         //
@@ -667,11 +661,11 @@ impl Node for KBEmbedNode {
         dual_works.retain(is_changed);
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
 
-        ctx.log_metric("entities", items.len());
-        ctx.log_metric("dense", dense_works.len());
-        ctx.log_metric("sparse", sparse_works.len());
-        ctx.log_metric("dual", dual_works.len());
-        ctx.log_metric("skipped_unchanged", skipped);
+        ctx.metric("entities", items.len() as f64);
+        ctx.metric("dense", dense_works.len() as f64);
+        ctx.metric("sparse", sparse_works.len() as f64);
+        ctx.metric("dual", dual_works.len() as f64);
+        ctx.metric("skipped_unchanged", skipped as f64);
 
         // ── Dense embedding ──
         if !dense_works.is_empty() {
@@ -726,7 +720,7 @@ impl Node for KBEmbedNode {
         }
 
         // ── Sparse embedding → insert into SparseHandle ──
-        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles");
+        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned();
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
                 let texts: Vec<String> = sparse_works.iter().map(|w| w.text.clone()).collect();
@@ -924,10 +918,10 @@ impl Node for KBEmbedNode {
         }
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        self.dialect = Some((*dialect).clone());
+        self.conn = Some(conn.clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -1133,18 +1127,16 @@ impl Node for KBChunkRecordNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
 
-        let items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("KBChunkRecordNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("KBChunkRecordNode: missing 'entities' input".to_string()),
-        };
+        let items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("KBChunkRecordNode: missing 'entities' input")?;
 
-        let config = ctx.service::<CatalogConfig>("config")
+        let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("KBChunkRecordNode: 'config' service not registered")?;
-        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata").cloned()
             .ok_or("KBChunkRecordNode: 'kb_metadata' service not registered")?;
-        let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
+        let chunker_cache = ctx.service::<Arc<HashMap<ChunkerConfig, Chunker>>>("chunker_cache").cloned()
             .ok_or("KBChunkRecordNode: 'chunker_cache' service not registered")?;
 
         // Parallel chunking via rayon
@@ -1174,15 +1166,15 @@ impl Node for KBChunkRecordNode {
             all_chunk_relations.extend(relations);
         }
 
-        ctx.log_metric("entities", items.len());
-        ctx.log_metric("chunks", all_chunk_entities.len());
-        ctx.log_metric("chunk_links", all_chunk_relations.len());
+        ctx.metric("entities", items.len() as f64);
+        ctx.metric("chunks", all_chunk_entities.len() as f64);
+        ctx.metric("chunk_links", all_chunk_relations.len() as f64);
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("chunks", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("chunks", PortValue::new(
             BatchPayload::new(PortType::Entities, all_chunk_entities),
         ));
-        ctx.set_output("chunk_links", PortValue::Batch(
+        ctx.set_output("chunk_links", PortValue::new(
             BatchPayload::new(PortType::Relations, all_chunk_relations),
         ));
         Ok(())
@@ -1352,16 +1344,14 @@ impl Node for ChunkRecordNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
 
-        let items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("ChunkRecordNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("ChunkRecordNode: missing 'entities' input".to_string()),
-        };
+        let items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("ChunkRecordNode: missing 'entities' input")?;
 
-        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned()
             .ok_or("ChunkRecordNode: 'entity_configs' service not registered")?;
-        let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
+        let chunker_cache = ctx.service::<Arc<HashMap<ChunkerConfig, Chunker>>>("chunker_cache").cloned()
             .ok_or("ChunkRecordNode: 'chunker_cache' service not registered")?;
 
         // Parallel chunking via rayon
@@ -1390,15 +1380,15 @@ impl Node for ChunkRecordNode {
             all_chunk_relations.extend(relations);
         }
 
-        ctx.log_metric("entities", items.len());
-        ctx.log_metric("chunks", all_chunk_entities.len());
-        ctx.log_metric("chunk_links", all_chunk_relations.len());
+        ctx.metric("entities", items.len() as f64);
+        ctx.metric("chunks", all_chunk_entities.len() as f64);
+        ctx.metric("chunk_links", all_chunk_relations.len() as f64);
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("chunks", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("chunks", PortValue::new(
             BatchPayload::new(PortType::Entities, all_chunk_entities),
         ));
-        ctx.set_output("chunk_links", PortValue::Batch(
+        ctx.set_output("chunk_links", PortValue::new(
             BatchPayload::new(PortType::Relations, all_chunk_relations),
         ));
         Ok(())
@@ -1476,13 +1466,13 @@ impl Node for EmbedNode {
     fn node_type(&self) -> &'static str {
         "EmbedNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(serde_json::json!({
             "gpu_batch_size": self.gpu_batch_size,
             "text_field": self.text_field,
             "embedding_col": self.embedding_col,
             "sparse_col": self.sparse_col,
-        })
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -1498,28 +1488,26 @@ impl Node for EmbedNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("EmbedNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("EmbedNode: missing 'entities' input".to_string()),
-        };
+        let mut items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("EmbedNode: missing 'entities' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("EmbedNode: 'conn' service not registered")?;
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("EmbedNode: 'dialect' service not registered")?;
-        let embedder = ctx.service::<Arc<dyn Embedder>>("embedder")
+        let embedder = ctx.service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("EmbedNode: 'embedder' service not registered")?;
-        let embedding_dim = *ctx.service::<usize>("embedding_dim")
+        let embedding_dim = ctx.service::<usize>("embedding_dim").copied()
             .ok_or("EmbedNode: 'embedding_dim' service not registered")?;
-        let has_sparse_svc = ctx.service::<bool>("has_sparse").map(|v| *v).unwrap_or(false);
-        let has_dual_svc = ctx.service::<bool>("has_dual").map(|v| *v).unwrap_or(false);
-        let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder");
-        let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder");
+        let has_sparse_svc = ctx.service::<bool>("has_sparse").copied().unwrap_or(false);
+        let has_dual_svc = ctx.service::<bool>("has_dual").copied().unwrap_or(false);
+        let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
+        let dual_embedder = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
 
         // Per-entity signals: read from entity_configs if available, fallback to self.signals.
-        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs");
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned();
         let resolve_signals = |entity_name: &str| -> search::SearchSignals {
             entity_configs.as_ref()
                 .and_then(|cfgs| cfgs.get(entity_name))
@@ -1634,11 +1622,11 @@ impl Node for EmbedNode {
         dual_works.retain(is_changed);
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
 
-        ctx.log_metric("entities", items.len());
-        ctx.log_metric("dense", dense_works.len());
-        ctx.log_metric("sparse", sparse_works.len());
-        ctx.log_metric("dual", dual_works.len());
-        ctx.log_metric("skipped_unchanged", skipped);
+        ctx.metric("entities", items.len() as f64);
+        ctx.metric("dense", dense_works.len() as f64);
+        ctx.metric("sparse", sparse_works.len() as f64);
+        ctx.metric("dual", dual_works.len() as f64);
+        ctx.metric("skipped_unchanged", skipped as f64);
 
         let embedding_col = &self.embedding_col;
 
@@ -1693,7 +1681,7 @@ impl Node for EmbedNode {
         }
 
         // ── Sparse embedding (GPU mini-batches) → insert into SparseHandle ──
-        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles");
+        let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned();
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
                 for chunk in sparse_works.chunks(self.gpu_batch_size) {
@@ -1887,10 +1875,10 @@ impl Node for EmbedNode {
         }
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        self.dialect = Some((*dialect).clone());
+        self.conn = Some(conn.clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -2318,34 +2306,32 @@ impl Node for KBGatherNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // Read from port (optional — might be connected to initial input)
-        let mut items: Vec<AggregateRecord> = match ctx.take_input("aggregates") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<AggregateRecord>()
-                .unwrap_or_default(),
-            _ => vec![],
-        };
+        let mut items: Vec<AggregateRecord> = ctx.take_input("aggregates")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<AggregateRecord>())
+            .unwrap_or_default();
 
         // Also read from shared service (populated by DeleteRecordNode + UpdateRecordNode)
-        if let Some(pending_agg) = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates") {
+        if let Some(pending_agg) = ctx.service::<Arc<Mutex<Vec<AggregateRecord>>>>("pending_aggregates").cloned() {
             let mut service_items = pending_agg.lock().map_err(|e| format!("lock: {e}"))?;
             items.append(&mut *service_items);
         }
 
         if items.is_empty() {
-            ctx.set_output("done", PortValue::Empty);
-            ctx.set_output("kb_content", PortValue::Batch(
+            ctx.trigger("done");
+            ctx.set_output("kb_content", PortValue::new(
                 BatchPayload::new(PortType::KBContent, Vec::<KBContentRecord>::new()),
             ));
             return Ok(());
         }
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("KBGatherNode: 'conn' service not registered")?;
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("KBGatherNode: 'dialect' service not registered")?;
-        let config = ctx.service::<CatalogConfig>("config")
+        let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("KBGatherNode: 'config' service not registered")?;
-        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata").cloned()
             .ok_or("KBGatherNode: 'kb_metadata' service not registered")?;
 
         // Deduplicate by index_entry_uuid
@@ -2377,7 +2363,7 @@ impl Node for KBGatherNode {
             };
 
             let (changed, skipped, n_queries) = Self::gather_batch(
-                &**conn, &**dialect, &config, kb_meta, kb_name, _title_entity, &group_ops,
+                &*conn, &*dialect, &config, kb_meta, kb_name, _title_entity, &group_ops,
             )?;
 
             total_skipped += skipped;
@@ -2385,18 +2371,18 @@ impl Node for KBGatherNode {
             all_changed.extend(changed);
         }
 
-        ctx.log_metric("ops", items.len());
-        ctx.log_metric("unique_ops", seen.len());
-        ctx.log_metric("groups", groups.len());
-        ctx.log_metric("group_summary", groups.iter()
+        ctx.metric("ops", items.len() as f64);
+        ctx.metric("unique_ops", seen.len() as f64);
+        ctx.metric("groups", groups.len() as f64);
+        ctx.info(&format!("group_summary: {}", groups.iter()
             .map(|((te, kb), ops)| format!("{te}@{kb}×{}", ops.len()))
-            .collect::<Vec<_>>());
-        ctx.log_metric("queries", total_queries);
-        ctx.log_metric("skipped", total_skipped);
-        ctx.log_metric("changed", all_changed.len());
+            .collect::<Vec<_>>().join(", ")));
+        ctx.metric("queries", total_queries as f64);
+        ctx.metric("skipped", total_skipped as f64);
+        ctx.metric("changed", all_changed.len() as f64);
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("kb_content", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("kb_content", PortValue::new(
             BatchPayload::new(PortType::KBContent, all_changed),
         ));
         Ok(())
@@ -2448,16 +2434,14 @@ impl Node for KBUpdateNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<KBContentRecord>()
-                .ok_or("KBUpdateNode: failed to extract Vec<KBContentRecord>")?,
-            _ => return Err("KBUpdateNode: missing 'kb_content' input".to_string()),
-        };
+        let items: Vec<KBContentRecord> = ctx.take_input("kb_content")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<KBContentRecord>())
+            .ok_or("KBUpdateNode: missing 'kb_content' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("KBUpdateNode: 'conn' service not registered")?;
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("KBUpdateNode: 'dialect' service not registered")?;
 
         // Group by kb_name for UNWIND batching
@@ -2584,16 +2568,16 @@ impl Node for KBUpdateNode {
             self.undo_data = Some(serde_json::json!(undo_entries));
         }
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("updated", total_updated);
-        ctx.log_metric("deleted", total_deleted);
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("updated", total_updated as f64);
+        ctx.metric("deleted", total_deleted as f64);
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        self.dialect = Some((*dialect).clone());
+        self.conn = Some(conn.clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("kb_content", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("kb_content", PortValue::new(
             BatchPayload::new(PortType::KBContent, items),
         ));
         Ok(())
@@ -2685,16 +2669,14 @@ impl Node for KBChunkNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<KBContentRecord>()
-                .ok_or("KBChunkNode: failed to extract Vec<KBContentRecord>")?,
-            _ => return Err("KBChunkNode: missing 'kb_content' input".to_string()),
-        };
+        let items: Vec<KBContentRecord> = ctx.take_input("kb_content")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<KBContentRecord>())
+            .ok_or("KBChunkNode: missing 'kb_content' input")?;
 
-        let chunker_cache = ctx.service::<HashMap<ChunkerConfig, Chunker>>("chunker_cache")
+        let chunker_cache = ctx.service::<Arc<HashMap<ChunkerConfig, Chunker>>>("chunker_cache").cloned()
             .ok_or("KBChunkNode: 'chunker_cache' service not registered")?;
-        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata").cloned()
             .ok_or("KBChunkNode: 'kb_metadata' service not registered")?;
 
         let mut all_entities: Vec<EntityRecord> = Vec::new();
@@ -2723,15 +2705,15 @@ impl Node for KBChunkNode {
             all_relations.extend(relations);
         }
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("chunks", all_entities.len());
-        ctx.log_metric("relations", all_relations.len());
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("chunks", all_entities.len() as f64);
+        ctx.metric("relations", all_relations.len() as f64);
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.set_output("entities", PortValue::Batch(
+        ctx.trigger("done");
+        ctx.set_output("entities", PortValue::new(
             BatchPayload::new(PortType::Entities, all_entities),
         ));
-        ctx.set_output("relations", PortValue::Batch(
+        ctx.set_output("relations", PortValue::new(
             BatchPayload::new(PortType::Relations, all_relations),
         ));
         Ok(())
@@ -2774,8 +2756,8 @@ impl Node for FlushNode {
     fn node_type(&self) -> &'static str {
         "FlushNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({ "tables": self.tables })
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(serde_json::json!({ "tables": self.tables })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -2788,7 +2770,7 @@ impl Node for FlushNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("FlushNode: 'conn' service not registered")?;
 
         let mut flushed: usize = 0;
@@ -2800,11 +2782,11 @@ impl Node for FlushNode {
 
         // Capture tables for undo (re-flush)
         self.undo_data = Some(serde_json::json!(self.tables));
-        self.conn = Some((*conn).clone());
+        self.conn = Some(conn.clone());
 
-        ctx.log_metric("table_count", self.tables.len());
-        ctx.log_metric("flushed", flushed);
-        ctx.set_output("done", PortValue::Empty);
+        ctx.metric("table_count", self.tables.len() as f64);
+        ctx.metric("flushed", flushed as f64);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -2864,8 +2846,8 @@ impl Node for SparseCommitNode {
     fn node_type(&self) -> &'static str {
         "SparseCommitNode"
     }
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({ "tables": self.tables })
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(serde_json::json!({ "tables": self.tables })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -2878,7 +2860,7 @@ impl Node for SparseCommitNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+        let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned()
             .ok_or("SparseCommitNode: 'sparse_handles' service not registered")?;
 
         let mut committed: usize = 0;
@@ -2891,10 +2873,10 @@ impl Node for SparseCommitNode {
         }
 
         self.undo_data = Some(serde_json::json!(self.tables));
-        self.sparse_handles = Some(handles);
-        ctx.log_metric("table_count", self.tables.len());
-        ctx.log_metric("committed", committed);
-        ctx.set_output("done", PortValue::Empty);
+        self.sparse_handles = Some(Arc::new(handles));
+        ctx.metric("table_count", self.tables.len() as f64);
+        ctx.metric("committed", committed as f64);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -2958,14 +2940,12 @@ impl Node for RechunkDeleteNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<EntityRecord> = match ctx.take_input("entities") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<EntityRecord>()
-                .ok_or("RechunkDeleteNode: failed to extract Vec<EntityRecord>")?,
-            _ => return Err("RechunkDeleteNode: missing 'entities' input".to_string()),
-        };
+        let items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .ok_or("RechunkDeleteNode: missing 'entities' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("RechunkDeleteNode: 'conn' service not registered")?;
 
         // Group by entity_name
@@ -3000,11 +2980,11 @@ impl Node for RechunkDeleteNode {
             }
         }
 
-        ctx.log_metric("entities", items.len());
-        ctx.log_metric("groups", groups.len());
-        ctx.log_metric("chunks_deleted", total_deleted);
+        ctx.metric("entities", items.len() as f64);
+        ctx.metric("groups", groups.len() as f64);
+        ctx.metric("chunks_deleted", total_deleted as f64);
 
-        ctx.set_output("entities", PortValue::Batch(
+        ctx.set_output("entities", PortValue::new(
             BatchPayload::new(PortType::Entities, items),
         ));
         Ok(())
@@ -3056,28 +3036,26 @@ impl Node for DeleteRecordNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let items: Vec<DeleteRecord> = match ctx.take_input("deletes") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<DeleteRecord>()
-                .ok_or("DeleteRecordNode: failed to extract Vec<DeleteRecord>")?,
-            _ => return Err("DeleteRecordNode: missing 'deletes' input".to_string()),
-        };
+        let items: Vec<DeleteRecord> = ctx.take_input("deletes")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<DeleteRecord>())
+            .ok_or("DeleteRecordNode: missing 'deletes' input")?;
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("DeleteRecordNode: 'conn' service not registered")?;
-        let node_id_cache = ctx.service::<RwLock<NodeIdCache>>("node_id_cache")
+        let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
             .ok_or("DeleteRecordNode: 'node_id_cache' service not registered")?;
-        let config = ctx.service::<CatalogConfig>("config")
+        let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("DeleteRecordNode: 'config' service not registered")?;
-        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned()
             .ok_or("DeleteRecordNode: 'entity_configs' service not registered")?;
-        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata").cloned()
             .ok_or("DeleteRecordNode: 'kb_metadata' service not registered")?;
-        let pending_agg = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates")
+        let pending_agg = ctx.service::<Arc<Mutex<Vec<AggregateRecord>>>>("pending_aggregates").cloned()
             .ok_or("DeleteRecordNode: 'pending_aggregates' service not registered")?;
-        let results_svc = ctx.service::<Mutex<Vec<DeleteResult>>>("delete_results")
+        let results_svc = ctx.service::<Arc<Mutex<Vec<DeleteResult>>>>("delete_results").cloned()
             .ok_or("DeleteRecordNode: 'delete_results' service not registered")?;
-        let event_bus = ctx.service::<EventBus>("event_bus");
+        let event_bus = ctx.service::<Arc<EventBus>>("event_bus").cloned();
 
         // Group by entity_name
         let mut groups: HashMap<String, Vec<String>> = HashMap::new();
@@ -3085,11 +3063,11 @@ impl Node for DeleteRecordNode {
             groups.entry(rec.entity_name.clone()).or_default().push(rec.uuid.clone());
         }
 
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("DeleteRecordNode: 'dialect' service not registered")?;
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("groups", groups.len());
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("groups", groups.len() as f64);
 
         let mut all_results: Vec<DeleteResult> = Vec::new();
         let mut undo_groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> = HashMap::new();
@@ -3283,7 +3261,7 @@ impl Node for DeleteRecordNode {
 
             // Warn for nonexistent UUIDs
             for uuid in uuids.iter().filter(|u| !existing.contains(u.as_str())) {
-                ctx.warn(format!("{entity_name} with uuid '{uuid}' not found, skipping"));
+                ctx.warn(&format!("{entity_name} with uuid '{uuid}' not found, skipping"));
             }
 
             // Delete entities themselves
@@ -3335,10 +3313,10 @@ impl Node for DeleteRecordNode {
         }
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        self.dialect = Some((*dialect).clone());
+        self.conn = Some(conn.clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.set_output("done", PortValue::Empty);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -3420,12 +3398,10 @@ impl Node for UpdateRecordNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let raw_items: Vec<UpdateRecord> = match ctx.take_input("updates") {
-            Some(PortValue::Batch(payload)) => payload
-                .take::<UpdateRecord>()
-                .ok_or("UpdateRecordNode: failed to extract Vec<UpdateRecord>")?,
-            _ => return Err("UpdateRecordNode: missing 'updates' input".to_string()),
-        };
+        let raw_items: Vec<UpdateRecord> = ctx.take_input("updates")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<UpdateRecord>())
+            .ok_or("UpdateRecordNode: missing 'updates' input")?;
 
         // ─── Merge duplicate updates for same (entity_name, uuid) ───
         let items: Vec<UpdateRecord> = {
@@ -3444,24 +3420,24 @@ impl Node for UpdateRecordNode {
                 }
             }
             if merge_count > 0 {
-                ctx.info(format!("merged {merge_count} duplicate update(s) into existing records"));
+                ctx.info(&format!("merged {merge_count} duplicate update(s) into existing records"));
             }
             merged
         };
 
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("UpdateRecordNode: 'conn' service not registered")?;
-        let config = ctx.service::<CatalogConfig>("config")
+        let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("UpdateRecordNode: 'config' service not registered")?;
-        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+        let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned()
             .ok_or("UpdateRecordNode: 'entity_configs' service not registered")?;
-        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata")
+        let kb_metadata = ctx.service::<HashMap<String, KBMetadata>>("kb_metadata").cloned()
             .ok_or("UpdateRecordNode: 'kb_metadata' service not registered")?;
-        let pending_agg = ctx.service::<Mutex<Vec<AggregateRecord>>>("pending_aggregates")
+        let pending_agg = ctx.service::<Arc<Mutex<Vec<AggregateRecord>>>>("pending_aggregates").cloned()
             .ok_or("UpdateRecordNode: 'pending_aggregates' service not registered")?;
-        let results_svc = ctx.service::<Mutex<Vec<UpdateResult>>>("update_results")
+        let results_svc = ctx.service::<Arc<Mutex<Vec<UpdateResult>>>>("update_results").cloned()
             .ok_or("UpdateRecordNode: 'update_results' service not registered")?;
-        let event_bus = ctx.service::<EventBus>("event_bus");
+        let event_bus = ctx.service::<Arc<EventBus>>("event_bus").cloned();
 
         // Group by entity_name
         let mut entity_groups: HashMap<String, Vec<usize>> = HashMap::new();
@@ -3469,8 +3445,8 @@ impl Node for UpdateRecordNode {
             entity_groups.entry(rec.entity_name.clone()).or_default().push(i);
         }
 
-        ctx.log_metric("items", items.len());
-        ctx.log_metric("entity_groups", entity_groups.len());
+        ctx.metric("items", items.len() as f64);
+        ctx.metric("entity_groups", entity_groups.len() as f64);
 
         let mut all_results: Vec<UpdateResult> = Vec::new();
         let mut all_rechunk_entities: Vec<EntityRecord> = Vec::new();
@@ -3489,7 +3465,7 @@ impl Node for UpdateRecordNode {
                     .map(|&i| CypherValue::String(items[i].uuid.clone()))
                     .collect(),
             );
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
                 .ok_or("UpdateRecordNode: 'dialect' service not registered")?;
             let old_read_query = dialect.select_entity_all_by_uuids(entity_name);
             let old_result = conn
@@ -3522,7 +3498,7 @@ impl Node for UpdateRecordNode {
             // Warn for UUIDs not found in DB
             for &i in entity_indices {
                 if !old_hashes.contains_key(&items[i].uuid) {
-                    ctx.warn(format!(
+                    ctx.warn(&format!(
                         "{entity_name} with uuid '{}' not found, update is a no-op",
                         items[i].uuid
                     ));
@@ -3737,19 +3713,19 @@ impl Node for UpdateRecordNode {
         }
 
         // Store services for undo
-        self.conn = Some((*conn).clone());
-        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+        self.conn = Some(conn.clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("UpdateRecordNode: 'dialect' service not registered")?;
-        self.dialect = Some((*dialect).clone());
+        self.dialect = Some(dialect.clone());
 
-        ctx.log_metric("rechunk_entities", all_rechunk_entities.len());
+        ctx.metric("rechunk_entities", all_rechunk_entities.len() as f64);
 
         // Always emit rechunk_entities (even empty) so downstream rechunk pipeline
         // receives its input and doesn't deadlock.
-        ctx.set_output("rechunk_entities", PortValue::Batch(
+        ctx.set_output("rechunk_entities", PortValue::new(
             BatchPayload::new(PortType::Entities, all_rechunk_entities),
         ));
-        ctx.set_output("done", PortValue::Empty);
+        ctx.trigger("done");
         Ok(())
     }
 
@@ -4102,7 +4078,9 @@ mod tests {
         assert_eq!(node.node_type(), "EmbedNode");
         assert_eq!(node.name(), "test");
 
-        let config = node.node_config();
+        let config = *node.node_config()
+            .and_then(|b| b.downcast::<serde_json::Value>().ok())
+            .expect("expected serde_json::Value config");
         assert_eq!(config["text_field"], "_text");
         assert_eq!(config["embedding_col"], "embedding");
         assert_eq!(config["sparse_col"], "sparse");
@@ -4113,7 +4091,9 @@ mod tests {
     fn embed_node_custom_columns() {
         let node = EmbedNode::new("e", search::SearchSignals::VECTOR, 128)
             .with_columns("content", "my_emb", "my_sparse");
-        let config = node.node_config();
+        let config = *node.node_config()
+            .and_then(|b| b.downcast::<serde_json::Value>().ok())
+            .expect("expected serde_json::Value config");
         assert_eq!(config["text_field"], "content");
         assert_eq!(config["embedding_col"], "my_emb");
         assert_eq!(config["sparse_col"], "my_sparse");

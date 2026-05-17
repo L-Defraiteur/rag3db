@@ -81,7 +81,7 @@ impl Node for CypherNode {
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
-            .service::<Arc<dyn DbConnection>>("conn")
+            .service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("CypherNode: 'conn' service not registered")?;
 
         // Capture undo data before mutation
@@ -130,12 +130,12 @@ impl Node for CypherNode {
             })
             .collect();
 
-        ctx.set_output("result", PortValue::Map(serde_json::json!(rows)));
-        ctx.set_output("done", PortValue::Empty);
-        ctx.log_metric("rows_affected", rows.len());
+        ctx.set_output("result", PortValue::new(serde_json::json!(rows)));
+        ctx.trigger("done");
+        ctx.metric("rows_affected", rows.len() as f64);
 
         // Store conn for undo
-        self.conn = Some((*conn).clone());
+        self.conn = Some(conn.clone());
 
         Ok(())
     }
@@ -144,12 +144,12 @@ impl Node for CypherNode {
         "CypherNode"
     }
 
-    fn node_config(&self) -> serde_json::Value {
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
         let mut config = serde_json::json!({ "query": self.query });
         if let Some(ref capture) = self.capture_query {
             config["capture"] = serde_json::Value::String(capture.clone());
         }
-        config
+        Some(Box::new(config))
     }
 
     fn can_undo(&self) -> bool {
@@ -491,7 +491,7 @@ impl Node for ValidateNode {
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
-            .service::<Arc<dyn DbConnection>>("conn")
+            .service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("ValidateNode: 'conn' service not registered")?;
 
         let result = conn
@@ -518,8 +518,8 @@ impl Node for ValidateNode {
             .check(result.rows.len(), first_row_value)
             .map_err(|e| format!("{}: {e}", self.message))?;
 
-        ctx.set_output("done", PortValue::Empty);
-        ctx.log_metric("validated", true);
+        ctx.trigger("done");
+        ctx.metric("validated", 1.0);
 
         Ok(())
     }
@@ -528,12 +528,12 @@ impl Node for ValidateNode {
         "ValidateNode"
     }
 
-    fn node_config(&self) -> serde_json::Value {
-        serde_json::json!({
+    fn node_config(&self) -> Option<Box<dyn Any + Send>> {
+        Some(Box::new(serde_json::json!({
             "query": self.query,
             "assert": format!("{:?}", self.assertion),
             "message": self.message,
-        })
+        })))
     }
 
     // ValidateNode is read-only — no undo needed
@@ -791,7 +791,9 @@ mod tests {
         );
         assert_eq!(node.node_type(), "CypherNode");
         assert!(node.can_undo());
-        let config = node.node_config();
+        let config = *node.node_config()
+            .and_then(|b| b.downcast::<serde_json::Value>().ok())
+            .expect("expected serde_json::Value config");
         assert_eq!(config["query"].as_str(), Some("MATCH (n) SET n.v = 2"));
         assert_eq!(
             config["capture"].as_str(),
