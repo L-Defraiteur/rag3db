@@ -223,7 +223,7 @@ fn rag3db_root() -> String {
 
 /// Load required extensions (vector, lucivy_fts, sparse_vector) into a native connection.
 /// Extensions are found in build/native-test/ (built by run_e2e.sh).
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
 
     // cmake places .rag3db_extension files in extension/<name>/build/ (source tree)
@@ -241,7 +241,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
         }
         let result = conn
             .execute(&format!("LOAD EXTENSION '{ext_path}'"))
-            .await;
+            ;
         match result {
             Ok(_) => eprintln!("✓ Loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -249,10 +249,10 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn make_catalog_with_extensions() -> Catalog {
+fn make_catalog_with_extensions() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("failed to create in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_kb_config())
 }
 
@@ -268,11 +268,11 @@ fn get_prop<'a>(data: &'a BTreeMap<String, CypherValue>, prop: &str) -> Option<&
 // Phase 0 — CRUD with realistic KB config
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_initialize_with_kb_config() {
-    let mut catalog = make_catalog_with_extensions().await;
-    catalog.initialize().await.unwrap();
+fn phase0_initialize_with_kb_config() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
 
     // Entity/relation defs accessible
     assert!(catalog.get_entity_def("Document").is_some());
@@ -294,15 +294,15 @@ async fn phase0_initialize_with_kb_config() {
     assert!(authors_kb.content.iter().any(|c| c.field == "bio"));
 
     // Empty tables
-    assert_eq!(catalog.count("Document").await.unwrap(), 0);
-    assert_eq!(catalog.count("Author").await.unwrap(), 0);
+    assert_eq!(catalog.count("Document").unwrap(), 0);
+    assert_eq!(catalog.count("Author").unwrap(), 0);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_create_drain_all_field_types() {
-    let mut catalog = make_catalog_with_extensions().await;
-    catalog.initialize().await.unwrap();
+fn phase0_create_drain_all_field_types() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
 
     let d1 = catalog
         .create(
@@ -393,20 +393,20 @@ async fn phase0_create_drain_all_field_types() {
         .unwrap();
 
     // 5 docs + 2 authors = 7 inserts + embed ops
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain result: processed={}, failed={}", result.processed, result.failed);
     assert!(result.processed >= 7, "at least 7 inserts: {}", result.processed);
     assert_eq!(result.failed, 0);
 
     // Counts
-    assert_eq!(catalog.count("Document").await.unwrap(), 5);
-    assert_eq!(catalog.count("Author").await.unwrap(), 2);
+    assert_eq!(catalog.count("Document").unwrap(), 5);
+    assert_eq!(catalog.count("Author").unwrap(), 2);
 
     // Get and verify all field types
     let uuid = d1.uuid().unwrap();
     let data = catalog
         .get("Document", &uuid)
-        .await
+        
         .unwrap()
         .expect("D1 should exist");
     assert_eq!(get_prop(&data, "title").and_then(|v| v.as_str()), Some("Rust Programming"));
@@ -432,14 +432,14 @@ async fn phase0_create_drain_all_field_types() {
     assert!(a2.uuid().is_ok());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_hashsafe_dedup() {
+fn phase0_hashsafe_dedup() {
     // Two separate catalogs, same config, same data → same UUID
-    let mut cat1 = make_catalog_with_extensions().await;
-    let mut cat2 = make_catalog_with_extensions().await;
-    cat1.initialize().await.unwrap();
-    cat2.initialize().await.unwrap();
+    let mut cat1 = make_catalog_with_extensions();
+    let mut cat2 = make_catalog_with_extensions();
+    cat1.initialize().unwrap();
+    cat2.initialize().unwrap();
 
     let r1 = cat1
         .create(
@@ -454,8 +454,8 @@ async fn phase0_hashsafe_dedup() {
         )
         .unwrap();
 
-    cat1.drain().await;
-    cat2.drain().await;
+    cat1.drain();
+    cat2.drain();
 
     let uuid1 = r1.uuid().unwrap();
     let uuid2 = r2.uuid().unwrap();
@@ -469,15 +469,15 @@ async fn phase0_hashsafe_dedup() {
             make_doc("Other Title", "Body", "Sum", "cat", 2024, 1.0, false),
         )
         .unwrap();
-    cat1.drain().await;
+    cat1.drain();
     assert_ne!(uuid1, r3.uuid().unwrap());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_link_relations() {
-    let mut catalog = make_catalog_with_extensions().await;
-    catalog.initialize().await.unwrap();
+fn phase0_link_relations() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
 
     let d1 = catalog
         .create(
@@ -513,7 +513,7 @@ async fn phase0_link_relations() {
         .link("CITES", d1.clone(), d2.clone(), cites_props)
         .unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert!(result.processed >= 6, "3 inserts + 3 links minimum");
     assert_eq!(result.failed, 0);
@@ -524,11 +524,11 @@ async fn phase0_link_relations() {
     assert!(a1.is_ready());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_update_and_delete() {
-    let mut catalog = make_catalog_with_extensions().await;
-    catalog.initialize().await.unwrap();
+fn phase0_update_and_delete() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
 
     let d1 = catalog
         .create(
@@ -536,7 +536,7 @@ async fn phase0_update_and_delete() {
             make_doc("Original", "Original body", "Sum", "cat", 2024, 5.0, false),
         )
         .unwrap();
-    catalog.drain().await;
+    catalog.drain();
     let uuid = d1.uuid().unwrap();
 
     // Update body
@@ -544,11 +544,11 @@ async fn phase0_update_and_delete() {
     upd.insert("body".into(), CypherValue::String("Updated body content".into()));
     upd.insert("score".into(), CypherValue::Float(7.0));
     catalog.update("Document", &uuid, upd).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.update_results[0].uuid, uuid);
 
     // Verify update
-    let data = catalog.get("Document", &uuid).await.unwrap().unwrap();
+    let data = catalog.get("Document", &uuid).unwrap().unwrap();
     assert_eq!(get_prop(&data, "body").and_then(|v| v.as_str()), Some("Updated body content"));
     assert_eq!(get_prop(&data, "score").and_then(|v| v.as_f64()), Some(7.0));
     // Title unchanged
@@ -556,16 +556,16 @@ async fn phase0_update_and_delete() {
 
     // Delete
     catalog.delete("Document", &uuid).unwrap();
-    catalog.drain().await;
-    assert!(!catalog.exists("Document", &uuid).await.unwrap());
-    assert_eq!(catalog.count("Document").await.unwrap(), 0);
+    catalog.drain();
+    assert!(!catalog.exists("Document", &uuid).unwrap());
+    assert_eq!(catalog.count("Document").unwrap(), 0);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0_error_cases() {
-    let mut catalog = make_catalog_with_extensions().await;
-    catalog.initialize().await.unwrap();
+fn phase0_error_cases() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
 
     // Unknown entity
     let err = catalog.create("Unknown", BTreeMap::new());
@@ -582,7 +582,7 @@ async fn phase0_error_cases() {
     assert!(err.is_err(), "link unknown relation should fail");
 
     // Unknown KB search
-    catalog.drain().await;
+    catalog.drain();
     let err = catalog
         .search(
             "nonexistent_kb",
@@ -592,14 +592,14 @@ async fn phase0_error_cases() {
                 ..Default::default()
             },
         )
-        .await;
+        ;
     assert!(err.is_err(), "search unknown KB should fail");
 
     // Update of nonexistent uuid — enqueue succeeds, drain succeeds (no-op MATCH)
     let mut data = BTreeMap::new();
     data.insert("title".into(), CypherValue::String("x".into()));
     catalog.update("Document", "fake-uuid", data).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     // The MATCH finds 0 rows, so UpdateRecordNode reports Unchanged (no old hash found)
     assert_eq!(flush.failed, 0);
     assert_eq!(flush.update_results.len(), 1);
@@ -608,7 +608,7 @@ async fn phase0_error_cases() {
     let check = catalog.conn().execute_with_params(
         "MATCH (n:Document {_uuid: $uuid}) RETURN n._uuid",
         &[rag3weaver::connection::QueryParam::new("uuid", CypherValue::String("fake-uuid".into()))],
-    ).await.unwrap();
+    ).unwrap();
     assert!(check.rows.is_empty(), "fake entity should not exist");
 }
 
@@ -617,17 +617,17 @@ async fn phase0_error_cases() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Helper: create catalog with BM25-only search mode and populate data.
-async fn setup_bm25_catalog() -> Catalog {
+fn setup_bm25_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let mut config = make_kb_config();
     // Override main KB to fulltext-only (no vector needed)
     config.knowledge_bases.get_mut("main").unwrap().signals = SearchSignals::FULLTEXT;
 
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Insert documents
     catalog
@@ -691,7 +691,7 @@ async fn setup_bm25_catalog() -> Catalog {
         )
         .unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!(
         "BM25 setup drain: processed={}, failed={}",
         result.processed, result.failed
@@ -704,10 +704,10 @@ async fn setup_bm25_catalog() -> Catalog {
 
 // ── Contains (exact substring) ──────────────────────────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_contains_exact() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_contains_exact() {
+    let mut catalog = setup_bm25_catalog();
 
     // "neural networks" exists as contiguous substring → Contains should find it
     let response = catalog
@@ -720,17 +720,17 @@ async fn phase1_bm25_contains_exact() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Contains 'neural networks': {} results", response.results.len());
     assert!(response.results.len() > 0, "Contains should find contiguous 'neural networks'");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_contains_no_distant() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_contains_no_distant() {
+    let mut catalog = setup_bm25_catalog();
 
     // "Rust safety" does NOT exist as contiguous substring → Contains returns 0
     let response = catalog
@@ -743,7 +743,7 @@ async fn phase1_bm25_contains_no_distant() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Contains 'Rust safety': {} results", response.results.len());
@@ -752,10 +752,10 @@ async fn phase1_bm25_contains_no_distant() {
 
 // ── ContainsSplit (fuzzy per-word, distant match) ───────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_split_distant_words() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_split_distant_words() {
+    let mut catalog = setup_bm25_catalog();
 
     // "Rust safety" — both words exist in Rust doc but far apart.
     // ContainsSplit should find it.
@@ -769,7 +769,7 @@ async fn phase1_bm25_split_distant_words() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("ContainsSplit 'Rust safety': {} results, meta={:?}", response.results.len(), response.meta);
@@ -777,10 +777,10 @@ async fn phase1_bm25_split_distant_words() {
     assert!(response.meta.bm25_count > 0, "bm25_count should be > 0");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_split_french() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_split_french() {
+    let mut catalog = setup_bm25_catalog();
 
     let response = catalog
         .search(
@@ -792,7 +792,7 @@ async fn phase1_bm25_split_french() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("ContainsSplit 'cuisine française': {} results", response.results.len());
@@ -801,10 +801,10 @@ async fn phase1_bm25_split_french() {
 
 // ── Parse (native Lucivy QueryParser) ──────────────────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_parse_multi_term() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_parse_multi_term() {
+    let mut catalog = setup_bm25_catalog();
 
     let response = catalog
         .search(
@@ -816,7 +816,7 @@ async fn phase1_bm25_parse_multi_term() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Parse 'Rust safety': {} results", response.results.len());
@@ -825,10 +825,10 @@ async fn phase1_bm25_parse_multi_term() {
 
 // ── Common ──────────────────────────────────────────────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase1_bm25_no_results() {
-    let mut catalog = setup_bm25_catalog().await;
+fn phase1_bm25_no_results() {
+    let mut catalog = setup_bm25_catalog();
 
     let response = catalog
         .search(
@@ -839,7 +839,7 @@ async fn phase1_bm25_no_results() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     assert_eq!(response.results.len(), 0, "nonsense query should return 0 results");
@@ -884,16 +884,16 @@ fn make_vector_config(dim: usize) -> CatalogConfig {
 }
 
 /// Insert 3 thematically distinct docs, drain, return catalog ready for search.
-async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
+fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_vector_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(embedder);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // 3 distinct topics
     let docs = [
@@ -908,16 +908,16 @@ async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
         catalog.create("Document", data).unwrap();
     }
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("Vector setup drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
     // Debug: verify DB state after drain
-    let docs = catalog.execute_raw("MATCH (d:Document) RETURN count(d) AS cnt").await.unwrap();
+    let docs = catalog.execute_raw("MATCH (d:Document) RETURN count(d) AS cnt").unwrap();
     eprintln!("  Documents: {:?}", docs.rows);
-    let chunks = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN count(c) AS cnt").await.unwrap();
+    let chunks = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN count(c) AS cnt").unwrap();
     eprintln!("  Chunks: {:?}", chunks.rows);
-    let embs = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN c._uuid, c._parent_uuid, c._text, size(c.kb_embedding) AS dim").await.unwrap();
+    let embs = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN c._uuid, c._parent_uuid, c._text, size(c.kb_embedding) AS dim").unwrap();
     for row in &embs.rows {
         let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("?");
         let parent = row.get(1).and_then(|v| v.as_str()).unwrap_or("?");
@@ -931,7 +931,7 @@ async fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
 }
 
 /// Generic vector search test: query should return the expected doc as top result.
-async fn assert_vector_top_result(
+fn assert_vector_top_result(
     catalog: &mut Catalog,
     query: &str,
     expected_title_contains: &str,
@@ -946,7 +946,7 @@ async fn assert_vector_top_result(
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -980,12 +980,12 @@ async fn assert_vector_top_result(
 // ── Raw vector pipeline test (bypass Catalog) ──────────────────────────
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_raw_vector_pipeline() {
+fn phase2_raw_vector_pipeline() {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let dim = MINILM.dim();
     eprintln!("MiniLM dim={}", dim);
@@ -994,7 +994,7 @@ async fn phase2_raw_vector_pipeline() {
     let ddl = format!(
         "CREATE NODE TABLE Doc(name STRING, embedding FLOAT[{dim}], PRIMARY KEY(name))"
     );
-    boxed.execute(&ddl).await.unwrap();
+    boxed.execute(&ddl).unwrap();
     eprintln!("✓ Table created");
 
     // 2. Embed 3 texts
@@ -1003,7 +1003,7 @@ async fn phase2_raw_vector_pipeline() {
         "French cuisine is world renowned".to_string(),
         "Deep learning uses neural networks".to_string(),
     ];
-    let embeddings = MINILM.embed(&texts).await.unwrap();
+    let embeddings = MINILM.embed(&texts).unwrap();
     eprintln!("✓ Embedded {} texts, dims={}", embeddings.len(), embeddings[0].len());
 
     // 3. Insert rows with embeddings
@@ -1022,14 +1022,14 @@ async fn phase2_raw_vector_pipeline() {
         let q = format!(
             "CREATE (:Doc {{name: '{name}', embedding: [{emb_str}]}})"
         );
-        boxed.execute(&q).await.unwrap();
+        boxed.execute(&q).unwrap();
     }
     eprintln!("✓ Inserted 3 docs");
 
     // 4. Verify embeddings stored
     let r = boxed
         .execute("MATCH (d:Doc) RETURN d.name, size(d.embedding)")
-        .await
+        
         .unwrap();
     for row in &r.rows {
         eprintln!("  {:?}", row);
@@ -1041,14 +1041,14 @@ async fn phase2_raw_vector_pipeline() {
         .execute(
             "CALL CREATE_VECTOR_INDEX('Doc', 'doc_vec', 'embedding', metric := 'cosine', skip_if_exists := true)",
         )
-        .await
+        
         .unwrap();
     eprintln!("✓ HNSW index created");
 
     // 6. Query — embed a search query and search
     let query_emb = MINILM
         .embed(&["systems programming language".to_string()])
-        .await
+        
         .unwrap();
     let emb_str = query_emb[0]
         .iter()
@@ -1058,7 +1058,7 @@ async fn phase2_raw_vector_pipeline() {
     let q = format!(
         "CALL QUERY_VECTOR_INDEX('Doc', 'doc_vec', [{emb_str}], 3) RETURN node.name, distance"
     );
-    let r = boxed.execute(&q).await.unwrap();
+    let r = boxed.execute(&q).unwrap();
     eprintln!("✓ Vector search: {} results", r.rows.len());
     for row in &r.rows {
         eprintln!("  {:?}", row);
@@ -1077,136 +1077,136 @@ async fn phase2_raw_vector_pipeline() {
 // ── MiniLM (all-MiniLM-L6-v2, 384d) ────────────────────────────────────
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_minilm_programming() {
-    let mut catalog = setup_vector_catalog(MINILM.clone()).await;
+fn phase2_vector_minilm_programming() {
+    let mut catalog = setup_vector_catalog(MINILM.clone());
     assert_vector_top_result(
         &mut catalog,
         "memory safety in systems programming",
         "Rust",
         "MiniLM",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_minilm_cooking() {
-    let mut catalog = setup_vector_catalog(MINILM.clone()).await;
+fn phase2_vector_minilm_cooking() {
+    let mut catalog = setup_vector_catalog(MINILM.clone());
     assert_vector_top_result(
         &mut catalog,
         "pastry and cooking techniques",
         "Cuisine",
         "MiniLM",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_minilm_ml() {
-    let mut catalog = setup_vector_catalog(MINILM.clone()).await;
+fn phase2_vector_minilm_ml() {
+    let mut catalog = setup_vector_catalog(MINILM.clone());
     assert_vector_top_result(
         &mut catalog,
         "artificial intelligence and deep learning",
         "Machine Learning",
         "MiniLM",
     )
-    .await;
+    ;
 }
 
 // ── MultilingualMiniLM (384d) ───────────────────────────────────────────
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_multilingual_french() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone()).await;
+fn phase2_vector_multilingual_french() {
+    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
     assert_vector_top_result(
         &mut catalog,
         "gastronomie et pâtisserie française",
         "Cuisine",
         "Multilingual",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_multilingual_programming() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone()).await;
+fn phase2_vector_multilingual_programming() {
+    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
     assert_vector_top_result(
         &mut catalog,
         "langage de programmation et gestion mémoire",
         "Rust",
         "Multilingual",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_multilingual_ml() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone()).await;
+fn phase2_vector_multilingual_ml() {
+    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
     assert_vector_top_result(
         &mut catalog,
         "réseaux de neurones et intelligence artificielle",
         "Machine Learning",
         "Multilingual",
     )
-    .await;
+    ;
 }
 
 // ── BGE-M3 (1024d) ─────────────────────────────────────────────────────
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_bgem3_programming() {
+fn phase2_vector_bgem3_programming() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder).await;
+    let mut catalog = setup_vector_catalog(embedder);
     assert_vector_top_result(
         &mut catalog,
         "memory safety in systems programming",
         "Rust",
         "BGE-M3",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_bgem3_french() {
+fn phase2_vector_bgem3_french() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder).await;
+    let mut catalog = setup_vector_catalog(embedder);
     assert_vector_top_result(
         &mut catalog,
         "gastronomie et pâtisserie française",
         "Cuisine",
         "BGE-M3",
     )
-    .await;
+    ;
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase2_vector_bgem3_ml() {
+fn phase2_vector_bgem3_ml() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder).await;
+    let mut catalog = setup_vector_catalog(embedder);
     assert_vector_top_result(
         &mut catalog,
         "artificial intelligence and deep learning",
         "Machine Learning",
         "BGE-M3",
     )
-    .await;
+    ;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1251,7 +1251,7 @@ fn make_sparse_config() -> CatalogConfig {
 /// Setup catalog with BGE-M3 as both dense embedder and sparse embedder.
 /// Inserts 3 thematically distinct docs, drains (builds vector + sparse + BM25 indexes).
 #[cfg(feature = "bge-m3")]
-async fn setup_sparse_catalog() -> Catalog {
+fn setup_sparse_catalog() -> Catalog {
     use std::time::Instant;
     let t0 = Instant::now();
 
@@ -1260,7 +1260,7 @@ async fn setup_sparse_catalog() -> Catalog {
     eprintln!("  [timing] connection: {:?}", t0.elapsed());
 
     let t1 = Instant::now();
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     eprintln!("  [timing] load_extensions: {:?}", t1.elapsed());
 
     let t2 = Instant::now();
@@ -1270,7 +1270,7 @@ async fn setup_sparse_catalog() -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
     catalog.set_embedder(embedder);
     catalog.set_sparse_embedder(sparse);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
     eprintln!("  [timing] initialize: {:?}", t2.elapsed());
 
     let t3 = Instant::now();
@@ -1288,7 +1288,7 @@ async fn setup_sparse_catalog() -> Catalog {
     eprintln!("  [timing] create 3 docs: {:?}", t3.elapsed());
 
     let t4 = Instant::now();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("  [timing] drain: {:?} (processed={}, failed={})", t4.elapsed(), result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
@@ -1298,10 +1298,10 @@ async fn setup_sparse_catalog() -> Catalog {
 
 /// Sparse search finds results — hybrid mode with sparse enabled.
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase3_sparse_search_finds_results() {
-    let mut catalog = setup_sparse_catalog().await;
+fn phase3_sparse_search_finds_results() {
+    let mut catalog = setup_sparse_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1312,7 +1312,7 @@ async fn phase3_sparse_search_finds_results() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1331,10 +1331,10 @@ async fn phase3_sparse_search_finds_results() {
 
 /// Sparse + vector + BM25 all contribute in 3-way hybrid.
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase3_hybrid_3way() {
-    let mut catalog = setup_sparse_catalog().await;
+fn phase3_hybrid_3way() {
+    let mut catalog = setup_sparse_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1345,7 +1345,7 @@ async fn phase3_hybrid_3way() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1365,10 +1365,10 @@ async fn phase3_hybrid_3way() {
 
 /// Top result for programming query should be Rust doc.
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase3_sparse_top_result_programming() {
-    let mut catalog = setup_sparse_catalog().await;
+fn phase3_sparse_top_result_programming() {
+    let mut catalog = setup_sparse_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1379,7 +1379,7 @@ async fn phase3_sparse_top_result_programming() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     assert!(!response.results.is_empty());
@@ -1399,10 +1399,10 @@ async fn phase3_sparse_top_result_programming() {
 
 /// Data enrichment: results should have data populated directly (Level 1 optimization).
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase3_sparse_data_enriched() {
-    let mut catalog = setup_sparse_catalog().await;
+fn phase3_sparse_data_enriched() {
+    let mut catalog = setup_sparse_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1413,7 +1413,7 @@ async fn phase3_sparse_data_enriched() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     assert!(!response.results.is_empty());
@@ -1473,12 +1473,12 @@ fn make_phase4_config(signals: SearchSignals) -> CatalogConfig {
 /// Setup a catalog with the given signals, BGE-M3 as needed, same 3 docs.
 /// Returns (catalog, drain_ms).
 #[cfg(feature = "bge-m3")]
-async fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
+fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
     use std::time::Instant;
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_phase4_config(signals);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
@@ -1492,7 +1492,7 @@ async fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
         catalog.set_sparse_embedder(sparse);
     }
 
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let docs = [
         ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
@@ -1507,7 +1507,7 @@ async fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
     }
 
     let t0 = Instant::now();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     let drain_ms = t0.elapsed().as_millis();
     assert_eq!(result.failed, 0);
 
@@ -1522,10 +1522,10 @@ async fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
 // ── Individual signals ──────────────────────────────────────────────────
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_bm25_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::BM25).await;
+fn phase4_bm25_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::BM25);
     let response = catalog
         .search(
             "kb",
@@ -1536,7 +1536,7 @@ async fn phase4_bm25_only() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1553,10 +1553,10 @@ async fn phase4_bm25_only() {
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_dense_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::VECTOR).await;
+fn phase4_dense_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::VECTOR);
     let response = catalog
         .search(
             "kb",
@@ -1566,7 +1566,7 @@ async fn phase4_dense_only() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1583,10 +1583,10 @@ async fn phase4_dense_only() {
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_sparse_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::SPARSE).await;
+fn phase4_sparse_only() {
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::SPARSE);
     let response = catalog
         .search(
             "kb",
@@ -1596,7 +1596,7 @@ async fn phase4_sparse_only() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1615,11 +1615,11 @@ async fn phase4_sparse_only() {
 // ── Pairwise combinations ───────────────────────────────────────────────
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_bm25_vector() {
+fn phase4_bm25_vector() {
     let signals = SearchSignals::BM25 | SearchSignals::VECTOR;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
     let response = catalog
         .search(
             "kb",
@@ -1630,7 +1630,7 @@ async fn phase4_bm25_vector() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1646,11 +1646,11 @@ async fn phase4_bm25_vector() {
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_bm25_sparse() {
+fn phase4_bm25_sparse() {
     let signals = SearchSignals::BM25 | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
     let response = catalog
         .search(
             "kb",
@@ -1661,7 +1661,7 @@ async fn phase4_bm25_sparse() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1677,11 +1677,11 @@ async fn phase4_bm25_sparse() {
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_vector_sparse() {
+fn phase4_vector_sparse() {
     let signals = SearchSignals::VECTOR | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
     let response = catalog
         .search(
             "kb",
@@ -1691,7 +1691,7 @@ async fn phase4_vector_sparse() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1709,11 +1709,11 @@ async fn phase4_vector_sparse() {
 // ── All three signals ───────────────────────────────────────────────────
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase4_all_three() {
+fn phase4_all_three() {
     let signals = SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals).await;
+    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
     let response = catalog
         .search(
             "kb",
@@ -1724,7 +1724,7 @@ async fn phase4_all_three() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1761,13 +1761,13 @@ use rag3weaver::embedder::DualEmbedder;
 /// Setup catalog with BGE-M3 as DualEmbedder (single forward pass for dense+sparse).
 /// Same 3 docs as phase3, but uses the dual path.
 #[cfg(feature = "bge-m3")]
-async fn setup_dual_catalog() -> Catalog {
+fn setup_dual_catalog() -> Catalog {
     use std::time::Instant;
     let t0 = Instant::now();
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_sparse_config();
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
@@ -1775,7 +1775,7 @@ async fn setup_dual_catalog() -> Catalog {
     // but DualEmbedBatchNode will be used instead for KBs with vector+sparse.
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
     catalog.set_dual_embedder(dual);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let docs = [
         ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
@@ -1790,7 +1790,7 @@ async fn setup_dual_catalog() -> Catalog {
     }
 
     let t1 = Instant::now();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!(
         "  [dual] drain: {:?} (processed={}, failed={})",
         t1.elapsed(), result.processed, result.failed,
@@ -1802,10 +1802,10 @@ async fn setup_dual_catalog() -> Catalog {
 
 /// DualEmbedder: sparse search finds results (same assertion as phase3).
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase5_dual_sparse_search() {
-    let mut catalog = setup_dual_catalog().await;
+fn phase5_dual_sparse_search() {
+    let mut catalog = setup_dual_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1816,7 +1816,7 @@ async fn phase5_dual_sparse_search() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1833,10 +1833,10 @@ async fn phase5_dual_sparse_search() {
 
 /// DualEmbedder: top result is Rust doc (same assertion as phase3).
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase5_dual_top_result() {
-    let mut catalog = setup_dual_catalog().await;
+fn phase5_dual_top_result() {
+    let mut catalog = setup_dual_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1847,7 +1847,7 @@ async fn phase5_dual_top_result() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     let top = &response.results[0];
@@ -1866,10 +1866,10 @@ async fn phase5_dual_top_result() {
 
 /// DualEmbedder: 3-way hybrid (BM25 + vector + sparse) works.
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase5_dual_3way_hybrid() {
-    let mut catalog = setup_dual_catalog().await;
+fn phase5_dual_3way_hybrid() {
+    let mut catalog = setup_dual_catalog();
     let response = catalog
         .search(
             "kb",
@@ -1880,7 +1880,7 @@ async fn phase5_dual_3way_hybrid() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -1929,21 +1929,21 @@ fn make_items_param() -> CypherValue {
     ])
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn debug_unwind_match_set() {
+fn debug_unwind_match_set() {
     use rag3weaver::connection::{DbConnection, QueryParam};
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
-    boxed.execute("CREATE NODE TABLE T(id STRING, val FLOAT[4], PRIMARY KEY(id))").await.unwrap();
-    boxed.execute("CREATE (:T {id: 'aaa'})").await.unwrap();
-    boxed.execute("CREATE (:T {id: 'bbb'})").await.unwrap();
-    boxed.execute("CREATE (:T {id: 'ccc'})").await.unwrap();
+    boxed.execute("CREATE NODE TABLE T(id STRING, val FLOAT[4], PRIMARY KEY(id))").unwrap();
+    boxed.execute("CREATE (:T {id: 'aaa'})").unwrap();
+    boxed.execute("CREATE (:T {id: 'bbb'})").unwrap();
+    boxed.execute("CREATE (:T {id: 'ccc'})").unwrap();
 
-    let check = boxed.execute("MATCH (t:T) RETURN t.id ORDER BY t.id").await.unwrap();
+    let check = boxed.execute("MATCH (t:T) RETURN t.id ORDER BY t.id").unwrap();
     assert_eq!(check.rows.len(), 3, "should have 3 nodes");
 
     // ── Diagnostic 1: UNWIND alone → does it produce 3 items?
@@ -1951,7 +1951,7 @@ async fn debug_unwind_match_set() {
     let r1 = boxed.execute_with_params(
         "UNWIND $items AS item RETURN item.id ORDER BY item.id",
         &[QueryParam { name: "items".into(), value: items }],
-    ).await.unwrap();
+    ).unwrap();
     eprintln!("=== Diag 1: UNWIND RETURN → {} rows", r1.rows.len());
     for row in &r1.rows { eprintln!("  {:?}", row); }
     assert_eq!(r1.rows.len(), 3, "UNWIND should produce 3 items");
@@ -1961,7 +1961,7 @@ async fn debug_unwind_match_set() {
     let r2 = boxed.execute_with_params(
         "UNWIND $items AS item MATCH (t:T {id: item.id}) RETURN t.id ORDER BY t.id",
         &[QueryParam { name: "items".into(), value: items }],
-    ).await.unwrap();
+    ).unwrap();
     eprintln!("=== Diag 2: UNWIND + MATCH + RETURN → {} rows", r2.rows.len());
     for row in &r2.rows { eprintln!("  {:?}", row); }
 
@@ -1970,8 +1970,8 @@ async fn debug_unwind_match_set() {
     boxed.execute_with_params(
         "UNWIND $items AS item MATCH (t:T {id: item.id}) SET t.val = item.emb",
         &[QueryParam { name: "items".into(), value: items }],
-    ).await.unwrap();
-    let r3 = boxed.execute("MATCH (t:T) RETURN t.id, size(t.val) AS dim ORDER BY t.id").await.unwrap();
+    ).unwrap();
+    let r3 = boxed.execute("MATCH (t:T) RETURN t.id, size(t.val) AS dim ORDER BY t.id").unwrap();
     eprintln!("=== Diag 3: After UNWIND + MATCH + SET:");
     let mut nulls = 0;
     for row in &r3.rows {
@@ -2003,12 +2003,12 @@ async fn debug_unwind_match_set() {
         }),
     ]);
     // Reset vals first
-    boxed.execute("MATCH (t:T) SET t.val = null").await.unwrap();
+    boxed.execute("MATCH (t:T) SET t.val = null").unwrap();
     boxed.execute_with_params(
         "UNWIND $items AS item MATCH (t:T {id: item.id}) SET t.val = item.emb",
         &[QueryParam { name: "items".into(), value: items2 }],
-    ).await.unwrap();
-    let r4 = boxed.execute("MATCH (t:T) WHERE t.id IN ['aaa','bbb'] RETURN t.id, size(t.val) AS dim ORDER BY t.id").await.unwrap();
+    ).unwrap();
+    let r4 = boxed.execute("MATCH (t:T) WHERE t.id IN ['aaa','bbb'] RETURN t.id, size(t.val) AS dim ORDER BY t.id").unwrap();
     eprintln!("=== Diag 4: UNWIND 2 items:");
     let mut nulls2 = 0;
     for row in &r4.rows {
@@ -2020,8 +2020,8 @@ async fn debug_unwind_match_set() {
     eprintln!("=== Diag 4: nulls with 2 items = {}", nulls2);
 
     // ── Diagnostic 5: test with 4 items (add a 4th node)
-    boxed.execute("CREATE (:T {id: 'ddd'})").await.unwrap();
-    boxed.execute("MATCH (t:T) SET t.val = null").await.unwrap();
+    boxed.execute("CREATE (:T {id: 'ddd'})").unwrap();
+    boxed.execute("MATCH (t:T) SET t.val = null").unwrap();
     let items4 = CypherValue::List(vec![
         CypherValue::Map({ let mut m = BTreeMap::new(); m.insert("id".into(), CypherValue::String("aaa".into())); m.insert("emb".into(), CypherValue::List(vec![CypherValue::Float(1.0), CypherValue::Float(0.0), CypherValue::Float(0.0), CypherValue::Float(0.0)])); m }),
         CypherValue::Map({ let mut m = BTreeMap::new(); m.insert("id".into(), CypherValue::String("bbb".into())); m.insert("emb".into(), CypherValue::List(vec![CypherValue::Float(0.0), CypherValue::Float(1.0), CypherValue::Float(0.0), CypherValue::Float(0.0)])); m }),
@@ -2031,8 +2031,8 @@ async fn debug_unwind_match_set() {
     boxed.execute_with_params(
         "UNWIND $items AS item MATCH (t:T {id: item.id}) SET t.val = item.emb",
         &[QueryParam { name: "items".into(), value: items4 }],
-    ).await.unwrap();
-    let r5 = boxed.execute("MATCH (t:T) RETURN t.id, size(t.val) AS dim ORDER BY t.id").await.unwrap();
+    ).unwrap();
+    let r5 = boxed.execute("MATCH (t:T) RETURN t.id, size(t.val) AS dim ORDER BY t.id").unwrap();
     eprintln!("=== Diag 5: UNWIND 4 items:");
     let mut nulls4 = 0;
     for row in &r5.rows {
@@ -2048,7 +2048,7 @@ async fn debug_unwind_match_set() {
     let explain = boxed.execute_with_params(
         "EXPLAIN UNWIND $items AS item MATCH (t:T {id: item.id}) SET t.val = item.emb",
         &[QueryParam { name: "items".into(), value: items }],
-    ).await;
+    );
     eprintln!("=== Diag 6: EXPLAIN:");
     match explain {
         Ok(r) => { for row in &r.rows { eprintln!("  {:?}", row); } },
@@ -2099,9 +2099,9 @@ fn make_sparse_only_config() -> CatalogConfig {
 
 /// Sparse search survives close + reopen (mmap persistence roundtrip).
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase6_sparse_mmap_persistence() {
+fn phase6_sparse_mmap_persistence() {
     use std::time::Instant;
 
     let tmpdir = tempfile::tempdir().unwrap();
@@ -2114,7 +2114,7 @@ async fn phase6_sparse_mmap_persistence() {
         let conn = Rag3dbConnection::new(&db_str).expect("create DB");
         let sync_conn = conn.create_sync_connection().expect("sync conn");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-        load_extensions(boxed.as_ref()).await;
+        load_extensions(boxed.as_ref());
 
         let config = make_sparse_only_config();
         let embedder: Arc<dyn Embedder> = BGE_M3.clone();
@@ -2123,7 +2123,7 @@ async fn phase6_sparse_mmap_persistence() {
         catalog.set_embedder(embedder);
         catalog.set_sparse_embedder(sparse);
         catalog.set_sync_connection(sync_conn);
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let docs = [
             ("Rust Programming", "Rust is a systems programming language focused on safety and performance. Its ownership model prevents memory bugs at compile time."),
@@ -2137,13 +2137,13 @@ async fn phase6_sparse_mmap_persistence() {
             catalog.create("Document", data).unwrap();
         }
 
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.failed, 0);
         eprintln!("  [mmap-persist] session 1: drain {:?} (processed={})", t0.elapsed(), result.processed);
         // Subscribe to events for diagnostics.
         let mut rx = catalog.subscribe();
         // Gracefully close lucivy/sparse indexes to release writer locks before reopen.
-        catalog.shutdown().await.unwrap();
+        catalog.shutdown().unwrap();
         // Drain shutdown events.
         while let Ok(event) = rx.try_recv() {
             eprintln!("  [event] {event:?}");
@@ -2157,7 +2157,7 @@ async fn phase6_sparse_mmap_persistence() {
         let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
         let sync_conn = conn.create_sync_connection().expect("sync conn 2");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-        load_extensions(boxed.as_ref()).await;
+        load_extensions(boxed.as_ref());
 
         let config = make_sparse_only_config();
         let embedder: Arc<dyn Embedder> = BGE_M3.clone();
@@ -2166,7 +2166,7 @@ async fn phase6_sparse_mmap_persistence() {
         catalog.set_embedder(embedder);
         catalog.set_sparse_embedder(sparse);
         catalog.set_sync_connection(sync_conn);
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
         eprintln!("  [mmap-persist] session 2: reopen {:?}", t0.elapsed());
 
         // Sparse search should find results from persisted mmap index
@@ -2179,7 +2179,7 @@ async fn phase6_sparse_mmap_persistence() {
                     ..Default::default()
                 },
             )
-            .await
+            
             .unwrap();
 
         eprintln!(

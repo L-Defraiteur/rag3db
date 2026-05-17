@@ -118,11 +118,11 @@ fn get_node_prop<'a>(
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_initialize_creates_schema() {
+fn e2e_initialize_creates_schema() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Catalog reports entity/relation definitions
     assert!(catalog.get_entity_def("Document").is_some());
@@ -130,17 +130,17 @@ async fn e2e_initialize_creates_schema() {
     assert!(catalog.get_relation_def("WRITTEN_BY").is_some());
 
     // DB should have empty tables
-    let doc_count = catalog.count("Document").await.unwrap();
+    let doc_count = catalog.count("Document").unwrap();
     assert_eq!(doc_count, 0);
-    let author_count = catalog.count("Author").await.unwrap();
+    let author_count = catalog.count("Author").unwrap();
     assert_eq!(author_count, 0);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_create_drain_count() {
+fn e2e_create_drain_count() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     catalog
         .create("Document", make_doc("Doc A", "Body A", 10))
@@ -156,30 +156,30 @@ async fn e2e_create_drain_count() {
     let stats = catalog.drain_stats();
     assert_eq!(stats.pending, 3);
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.processed, 3);
     assert_eq!(result.failed, 0);
 
-    let count = catalog.count("Document").await.unwrap();
+    let count = catalog.count("Document").unwrap();
     assert_eq!(count, 3);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_create_drain_get() {
+fn e2e_create_drain_get() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let entity_ref = catalog
         .create("Document", make_doc("Hello World", "Content here", 42))
         .unwrap();
 
-    catalog.drain().await;
+    catalog.drain();
 
     let uuid = entity_ref.uuid().unwrap();
     let data = catalog
         .get("Document", &uuid)
-        .await
+        
         .unwrap()
         .expect("document should exist");
 
@@ -202,31 +202,31 @@ async fn e2e_create_drain_get() {
     );
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_create_drain_exists() {
+fn e2e_create_drain_exists() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let entity_ref = catalog
         .create("Document", make_doc("Test Doc", "Body", 1))
         .unwrap();
 
-    catalog.drain().await;
+    catalog.drain();
 
     let uuid = entity_ref.uuid().unwrap();
-    assert!(catalog.exists("Document", &uuid).await.unwrap());
-    assert!(!catalog.exists("Document", "nonexistent-uuid").await.unwrap());
+    assert!(catalog.exists("Document", &uuid).unwrap());
+    assert!(!catalog.exists("Document", "nonexistent-uuid").unwrap());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_hashsafe_deterministic() {
+fn e2e_hashsafe_deterministic() {
     // Two catalogs, same hashsafe config, same title → same UUID
     let mut cat1 = make_catalog();
     let mut cat2 = make_catalog();
-    cat1.initialize().await.unwrap();
-    cat2.initialize().await.unwrap();
+    cat1.initialize().unwrap();
+    cat2.initialize().unwrap();
 
     let ref1 = cat1
         .create("Document", make_doc("Same Title", "Different body 1", 10))
@@ -235,8 +235,8 @@ async fn e2e_hashsafe_deterministic() {
         .create("Document", make_doc("Same Title", "Different body 2", 20))
         .unwrap();
 
-    cat1.drain().await;
-    cat2.drain().await;
+    cat1.drain();
+    cat2.drain();
 
     let uuid1 = ref1.uuid().unwrap();
     let uuid2 = ref2.uuid().unwrap();
@@ -246,21 +246,21 @@ async fn e2e_hashsafe_deterministic() {
     // Different title → different UUID
     let ref3 = {
         let mut cat3 = make_catalog();
-        cat3.initialize().await.unwrap();
+        cat3.initialize().unwrap();
         let r = cat3
             .create("Document", make_doc("Other Title", "Body", 10))
             .unwrap();
-        cat3.drain().await;
+        cat3.drain();
         r
     };
     assert_ne!(uuid1, ref3.uuid().unwrap());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_create_link_drain() {
+fn e2e_create_link_drain() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let doc_ref = catalog
         .create("Document", make_doc("My Paper", "Great content", 100))
@@ -281,7 +281,7 @@ async fn e2e_create_link_drain() {
     // Queue: 2 inserts + 1 link = 3
     assert_eq!(catalog.drain_stats().pending, 3);
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.processed, 3);
     assert_eq!(result.failed, 0);
 
@@ -295,20 +295,20 @@ async fn e2e_create_link_drain() {
     assert_eq!(resolved.to_uuid, author_ref.uuid().unwrap());
 
     // Both entities exist in DB
-    assert!(catalog.exists("Document", &doc_ref.uuid().unwrap()).await.unwrap());
-    assert!(catalog.exists("Author", &author_ref.uuid().unwrap()).await.unwrap());
+    assert!(catalog.exists("Document", &doc_ref.uuid().unwrap()).unwrap());
+    assert!(catalog.exists("Author", &author_ref.uuid().unwrap()).unwrap());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_update_document() {
+fn e2e_update_document() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let entity_ref = catalog
         .create("Document", make_doc("Original Title", "Original body", 10))
         .unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
     let uuid = entity_ref.uuid().unwrap();
 
@@ -321,14 +321,14 @@ async fn e2e_update_document() {
     new_data.insert("page_count".to_string(), CypherValue::Int(99));
 
     catalog.update("Document", &uuid, new_data).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.update_results[0].uuid, uuid);
     assert_eq!(flush.update_results[0].entity, "Document");
 
     // Verify changes
     let data = catalog
         .get("Document", &uuid)
-        .await
+        
         .unwrap()
         .expect("document should still exist");
 
@@ -347,36 +347,36 @@ async fn e2e_update_document() {
     );
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_delete_document() {
+fn e2e_delete_document() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let entity_ref = catalog
         .create("Document", make_doc("To Be Deleted", "Bye bye", 1))
         .unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
     let uuid = entity_ref.uuid().unwrap();
-    assert!(catalog.exists("Document", &uuid).await.unwrap());
+    assert!(catalog.exists("Document", &uuid).unwrap());
 
     catalog.delete("Document", &uuid).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.delete_results[0].uuid, uuid);
     assert_eq!(flush.delete_results[0].entity, "Document");
 
     // Verify deletion
-    assert!(!catalog.exists("Document", &uuid).await.unwrap());
-    assert_eq!(catalog.count("Document").await.unwrap(), 0);
-    assert!(catalog.get("Document", &uuid).await.unwrap().is_none());
+    assert!(!catalog.exists("Document", &uuid).unwrap());
+    assert_eq!(catalog.count("Document").unwrap(), 0);
+    assert!(catalog.get("Document", &uuid).unwrap().is_none());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_get_many() {
+fn e2e_get_many() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let ref1 = catalog
         .create("Document", make_doc("Doc 1", "Body 1", 10))
@@ -387,7 +387,7 @@ async fn e2e_get_many() {
     let ref3 = catalog
         .create("Document", make_doc("Doc 3", "Body 3", 30))
         .unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
     let uuids = vec![
         ref1.uuid().unwrap(),
@@ -395,19 +395,19 @@ async fn e2e_get_many() {
         ref3.uuid().unwrap(),
     ];
 
-    let results = catalog.get_many("Document", &uuids).await.unwrap();
+    let results = catalog.get_many("Document", &uuids).unwrap();
     assert_eq!(results.len(), 3);
 
     // Empty list returns empty
-    let empty = catalog.get_many("Document", &[]).await.unwrap();
+    let empty = catalog.get_many("Document", &[]).unwrap();
     assert!(empty.is_empty());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_full_pipeline() {
+fn e2e_full_pipeline() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Create 2 authors
     let alice = catalog.create("Author", make_author("Alice")).unwrap();
@@ -442,13 +442,13 @@ async fn e2e_full_pipeline() {
     assert_eq!(catalog.drain_stats().pending, 9);
 
     // Drain all
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.processed, 9);
     assert_eq!(result.failed, 0);
 
     // Verify counts
-    assert_eq!(catalog.count("Document").await.unwrap(), 3);
-    assert_eq!(catalog.count("Author").await.unwrap(), 2);
+    assert_eq!(catalog.count("Document").unwrap(), 3);
+    assert_eq!(catalog.count("Author").unwrap(), 2);
 
     // All refs resolved
     assert!(alice.is_ready());
@@ -460,7 +460,7 @@ async fn e2e_full_pipeline() {
     // Get specific document
     let d = catalog
         .get("Document", &doc1.uuid().unwrap())
-        .await
+        
         .unwrap()
         .expect("doc1 should exist");
     assert_eq!(
@@ -474,11 +474,11 @@ async fn e2e_full_pipeline() {
     catalog
         .update("Document", &doc1.uuid().unwrap(), update)
         .unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
     let d = catalog
         .get("Document", &doc1.uuid().unwrap())
-        .await
+        
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -490,19 +490,19 @@ async fn e2e_full_pipeline() {
     catalog
         .delete("Document", &doc2.uuid().unwrap())
         .unwrap();
-    catalog.drain().await;
-    assert_eq!(catalog.count("Document").await.unwrap(), 2);
+    catalog.drain();
+    assert_eq!(catalog.count("Document").unwrap(), 2);
     assert!(!catalog
         .exists("Document", &doc2.uuid().unwrap())
-        .await
+        
         .unwrap());
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn e2e_update_not_found() {
+fn e2e_update_not_found() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut data = BTreeMap::new();
     data.insert("title".to_string(), CypherValue::String("x".to_string()));
@@ -512,14 +512,14 @@ async fn e2e_update_not_found() {
     catalog
         .update("Document", "nonexistent-uuid", data)
         .unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
 
     // Drain succeeds (no hard error), but the entity was never in the DB.
     assert_eq!(flush.failed, 0);
     assert!(
         !catalog
             .exists("Document", "nonexistent-uuid")
-            .await
+            
             .unwrap(),
         "nonexistent entity should not appear after a no-op update"
     );

@@ -29,14 +29,14 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     for (name, path) in [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
         ("lucivy_fts", format!("{root}/extension/lucivy_fts/build/liblucivy_fts.rag3db_extension")),
         ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ] {
-        conn.execute(&format!("LOAD EXTENSION '{path}'")).await
+        conn.execute(&format!("LOAD EXTENSION '{path}'"))
             .unwrap_or_else(|e| panic!("Failed to load {name}: {e}"));
     }
 }
@@ -66,10 +66,10 @@ fn make_product(name: &str, desc: &str, price: f64) -> BTreeMap<String, CypherVa
     data
 }
 
-async fn setup() -> Catalog {
+fn setup() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     let config = CatalogConfig {
         name: Some("drain-unified-test".into()),
         entities: HashMap::new(),
@@ -78,60 +78,60 @@ async fn setup() -> Catalog {
         ..Default::default()
     };
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
     catalog
 }
 
 /// Ingest products via ingest_entities() (creates entities + chunks + embeddings).
 /// Returns the UUIDs assigned.
-async fn ingest_products(catalog: &mut Catalog, products: Vec<BTreeMap<String, CypherValue>>) -> Vec<String> {
+fn ingest_products(catalog: &mut Catalog, products: Vec<BTreeMap<String, CypherValue>>) -> Vec<String> {
     let count = products.len();
-    let result = catalog.ingest_entities("Product", products).await.unwrap();
+    let result = catalog.ingest_entities("Product", products).unwrap();
     assert_eq!(result.processed, count);
 
     // Read all UUIDs back
-    let qr = catalog.conn().execute("MATCH (n:Product) RETURN n._uuid ORDER BY n.name").await.unwrap();
+    let qr = catalog.conn().execute("MATCH (n:Product) RETURN n._uuid ORDER BY n.name").unwrap();
     qr.rows.iter().map(|row| match &row[0] {
         CypherValue::String(s) => s.clone(),
         other => panic!("expected String uuid, got {other:?}"),
     }).collect()
 }
 
-async fn count_entities(catalog: &Catalog, entity: &str) -> i64 {
+fn count_entities(catalog: &Catalog, entity: &str) -> i64 {
     let result = catalog.conn().execute(&format!(
         "MATCH (n:{entity}) RETURN count(n)"
-    )).await.unwrap();
+    )).unwrap();
     match &result.rows[0][0] {
         CypherValue::Int(n) => *n,
         other => panic!("expected Int, got {other:?}"),
     }
 }
 
-async fn count_chunks(catalog: &Catalog, entity: &str) -> i64 {
+fn count_chunks(catalog: &Catalog, entity: &str) -> i64 {
     let result = catalog.conn().execute(&format!(
         "MATCH (c:{entity}_Chunk) RETURN count(c)"
-    )).await.unwrap();
+    )).unwrap();
     match &result.rows[0][0] {
         CypherValue::Int(n) => *n,
         other => panic!("expected Int, got {other:?}"),
     }
 }
 
-async fn read_field(catalog: &Catalog, entity: &str, uuid: &str, field: &str) -> CypherValue {
+fn read_field(catalog: &Catalog, entity: &str, uuid: &str, field: &str) -> CypherValue {
     let result = catalog.conn().execute_with_params(
         &format!("MATCH (n:{entity} {{_uuid: $uuid}}) RETURN n.{field}"),
         &[rag3weaver::connection::QueryParam::new("uuid", CypherValue::String(uuid.into()))],
-    ).await.unwrap();
+    ).unwrap();
     assert!(!result.rows.is_empty(), "entity {uuid} not found");
     result.rows[0][0].clone()
 }
 
-async fn entity_exists(catalog: &Catalog, entity: &str, uuid: &str) -> bool {
+fn entity_exists(catalog: &Catalog, entity: &str, uuid: &str) -> bool {
     let result = catalog.conn().execute_with_params(
         &format!("MATCH (n:{entity} {{_uuid: $uuid}}) RETURN n._uuid"),
         &[rag3weaver::connection::QueryParam::new("uuid", CypherValue::String(uuid.into()))],
-    ).await.unwrap();
+    ).unwrap();
     !result.rows.is_empty()
 }
 
@@ -139,51 +139,51 @@ async fn entity_exists(catalog: &Catalog, entity: &str, uuid: &str) -> bool {
 // Tests
 // ═════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_delete_simple_entity() {
-    let mut catalog = setup().await;
+fn drain_delete_simple_entity() {
+    let mut catalog = setup();
 
     // Ingest 3 products (with chunks)
     let uuids = ingest_products(&mut catalog, vec![
         make_product("Alpha", "First product about alpha", 10.0),
         make_product("Beta", "Second product about beta", 20.0),
         make_product("Gamma", "Third product about gamma", 30.0),
-    ]).await;
-    assert_eq!(count_entities(&catalog, "Product").await, 3);
-    let chunks_before = count_chunks(&catalog, "Product").await;
+    ]);
+    assert_eq!(count_entities(&catalog, "Product"), 3);
+    let chunks_before = count_chunks(&catalog, "Product");
     eprintln!("after ingest: 3 entities, {chunks_before} chunks");
     assert!(chunks_before > 0);
 
     // Enqueue delete of Alpha + Beta
     catalog.delete("Product", &uuids[0]).unwrap();
     catalog.delete("Product", &uuids[1]).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain delete: processed={}, failed={}", result.processed, result.failed);
     for dr in &result.delete_results {
         eprintln!("  {}: chunks_deleted={}", dr.uuid, dr.chunks_deleted);
     }
 
     assert_eq!(result.delete_results.len(), 2);
-    assert_eq!(count_entities(&catalog, "Product").await, 1);
-    assert!(!entity_exists(&catalog, "Product", &uuids[0]).await);
-    assert!(!entity_exists(&catalog, "Product", &uuids[1]).await);
-    assert!(entity_exists(&catalog, "Product", &uuids[2]).await);
+    assert_eq!(count_entities(&catalog, "Product"), 1);
+    assert!(!entity_exists(&catalog, "Product", &uuids[0]));
+    assert!(!entity_exists(&catalog, "Product", &uuids[1]));
+    assert!(entity_exists(&catalog, "Product", &uuids[2]));
     eprintln!("after delete: {} entities, {} chunks",
-        count_entities(&catalog, "Product").await,
-        count_chunks(&catalog, "Product").await);
+        count_entities(&catalog, "Product"),
+        count_chunks(&catalog, "Product"));
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_update_simple_entity() {
-    let mut catalog = setup().await;
+fn drain_update_simple_entity() {
+    let mut catalog = setup();
 
     let uuids = ingest_products(&mut catalog, vec![
         make_product("Alpha", "Original description for Alpha product here", 10.0),
-    ]).await;
+    ]);
     let uuid = &uuids[0];
-    let chunks_before = count_chunks(&catalog, "Product").await;
+    let chunks_before = count_chunks(&catalog, "Product");
     eprintln!("before update: {chunks_before} chunks");
     assert!(chunks_before > 0);
 
@@ -191,7 +191,7 @@ async fn drain_update_simple_entity() {
     catalog.update("Product", uuid,
         make_product("Alpha", "Completely new description replacing original text", 15.0),
     ).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain update: processed={}, failed={}", result.processed, result.failed);
     for ur in &result.update_results {
         eprintln!("  {}: status={:?}, reembedded={}", ur.uuid, ur.status, ur.reembedded);
@@ -202,31 +202,31 @@ async fn drain_update_simple_entity() {
     assert!(result.update_results[0].reembedded);
 
     // Verify entity updated
-    let desc = read_field(&catalog, "Product", uuid, "description").await;
+    let desc = read_field(&catalog, "Product", uuid, "description");
     assert_eq!(desc, CypherValue::String("Completely new description replacing original text".into()));
-    let price = read_field(&catalog, "Product", uuid, "price").await;
+    let price = read_field(&catalog, "Product", uuid, "price");
     assert_eq!(price, CypherValue::Float(15.0));
 
     // Chunks were re-created
-    let chunks_after = count_chunks(&catalog, "Product").await;
+    let chunks_after = count_chunks(&catalog, "Product");
     eprintln!("after update: {chunks_after} chunks");
     assert!(chunks_after > 0);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_update_unchanged() {
-    let mut catalog = setup().await;
+fn drain_update_unchanged() {
+    let mut catalog = setup();
 
     let uuids = ingest_products(&mut catalog, vec![
         make_product("Alpha", "Same content stays same", 10.0),
-    ]).await;
+    ]);
 
     // Enqueue update with identical content
     catalog.update("Product", &uuids[0],
         make_product("Alpha", "Same content stays same", 10.0),
     ).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("update unchanged: {:?}", result.update_results);
 
     assert_eq!(result.update_results.len(), 1);
@@ -234,18 +234,18 @@ async fn drain_update_unchanged() {
     assert!(!result.update_results[0].reembedded);
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_mixed_create_update_delete() {
-    let mut catalog = setup().await;
+fn drain_mixed_create_update_delete() {
+    let mut catalog = setup();
 
     // Phase 1: ingest 3 products
     let uuids = ingest_products(&mut catalog, vec![
         make_product("Alpha", "Alpha description original", 10.0),
         make_product("Beta", "Beta description original", 20.0),
         make_product("Gamma", "Gamma description original", 30.0),
-    ]).await;
-    assert_eq!(count_entities(&catalog, "Product").await, 3);
+    ]);
+    assert_eq!(count_entities(&catalog, "Product"), 3);
 
     // Phase 2: mixed operations → single drain
     catalog.delete("Product", &uuids[0]).unwrap();  // delete Alpha
@@ -254,7 +254,7 @@ async fn drain_mixed_create_update_delete() {
     ).unwrap();
     let r4 = catalog.create("Product", make_product("Delta", "New Delta product added", 40.0)).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("mixed drain: processed={}, failed={}", result.processed, result.failed);
     eprintln!("  delete_results: {}", result.delete_results.len());
     eprintln!("  update_results: {}", result.update_results.len());
@@ -264,57 +264,57 @@ async fn drain_mixed_create_update_delete() {
     assert_eq!(result.update_results[0].status, UpdateStatus::Updated);
 
     // Alpha gone
-    assert!(!entity_exists(&catalog, "Product", &uuids[0]).await);
+    assert!(!entity_exists(&catalog, "Product", &uuids[0]));
     // Beta updated
-    let desc = read_field(&catalog, "Product", &uuids[1], "description").await;
+    let desc = read_field(&catalog, "Product", &uuids[1], "description");
     assert_eq!(desc, CypherValue::String("Beta completely rewritten".into()));
     // Gamma untouched
-    let desc = read_field(&catalog, "Product", &uuids[2], "description").await;
+    let desc = read_field(&catalog, "Product", &uuids[2], "description");
     assert_eq!(desc, CypherValue::String("Gamma description original".into()));
     // Delta created
     let delta_uuid = r4.uuid().unwrap().to_string();
-    assert!(entity_exists(&catalog, "Product", &delta_uuid).await);
+    assert!(entity_exists(&catalog, "Product", &delta_uuid));
 
     // 3 entities remain: Beta + Gamma + Delta
-    assert_eq!(count_entities(&catalog, "Product").await, 3);
+    assert_eq!(count_entities(&catalog, "Product"), 3);
     eprintln!("after mixed: {} entities, {} chunks",
-        count_entities(&catalog, "Product").await,
-        count_chunks(&catalog, "Product").await);
+        count_entities(&catalog, "Product"),
+        count_chunks(&catalog, "Product"));
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_batch_delete() {
-    let mut catalog = setup().await;
+fn drain_batch_delete() {
+    let mut catalog = setup();
 
     let uuids = ingest_products(&mut catalog, vec![
         make_product("A", "Desc A product", 1.0),
         make_product("B", "Desc B product", 2.0),
         make_product("C", "Desc C product", 3.0),
-    ]).await;
-    assert_eq!(count_entities(&catalog, "Product").await, 3);
+    ]);
+    assert_eq!(count_entities(&catalog, "Product"), 3);
 
     // Delete A and C
     catalog.delete("Product", &uuids[0]).unwrap();
     catalog.delete("Product", &uuids[2]).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
 
     assert_eq!(result.delete_results.len(), 2);
-    assert_eq!(count_entities(&catalog, "Product").await, 1);
-    let name = read_field(&catalog, "Product", &uuids[1], "name").await;
+    assert_eq!(count_entities(&catalog, "Product"), 1);
+    let name = read_field(&catalog, "Product", &uuids[1], "name");
     assert_eq!(name, CypherValue::String("B".into()));
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn drain_batch_update() {
-    let mut catalog = setup().await;
+fn drain_batch_update() {
+    let mut catalog = setup();
 
     let uuids = ingest_products(&mut catalog, vec![
         make_product("A", "Original A description text", 1.0),
         make_product("B", "Original B description text", 2.0),
         make_product("C", "Original C description text", 3.0),
-    ]).await;
+    ]);
 
     // A changed, B unchanged, C changed
     catalog.update("Product", &uuids[0],
@@ -323,7 +323,7 @@ async fn drain_batch_update() {
         make_product("B", "Original B description text", 2.0)).unwrap();
     catalog.update("Product", &uuids[2],
         make_product("C", "Updated C with different text now", 33.0)).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
 
     eprintln!("batch update results:");
     for ur in &result.update_results {
@@ -344,6 +344,6 @@ async fn drain_batch_update() {
     assert!(r_c.reembedded);
 
     // Verify DB values
-    assert_eq!(read_field(&catalog, "Product", &uuids[0], "price").await, CypherValue::Float(11.0));
-    assert_eq!(read_field(&catalog, "Product", &uuids[2], "price").await, CypherValue::Float(33.0));
+    assert_eq!(read_field(&catalog, "Product", &uuids[0], "price"), CypherValue::Float(11.0));
+    assert_eq!(read_field(&catalog, "Product", &uuids[2], "price"), CypherValue::Float(33.0));
 }

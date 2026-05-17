@@ -2500,11 +2500,11 @@ impl Node for KBUpdateNode {
                         let rec = &items[i];
                         let mut m = BTreeMap::new();
                         m.insert("uuid".into(), CypherValue::String(rec.index_entry_uuid.clone()));
-                        m.insert("title".into(), CypherValue::String(rec.title_text.clone()));
-                        m.insert("content".into(), CypherValue::String(rec.content_text.clone()));
-                        m.insert("hash".into(), CypherValue::String(rec.new_hash.clone()));
-                        m.insert("source_entity".into(), CypherValue::String(rec.source_entity.clone()));
-                        m.insert("source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
+                        m.insert("_title".into(), CypherValue::String(rec.title_text.clone()));
+                        m.insert("_content".into(), CypherValue::String(rec.content_text.clone()));
+                        m.insert("_content_hash".into(), CypherValue::String(rec.new_hash.clone()));
+                        m.insert("_source_entity".into(), CypherValue::String(rec.source_entity.clone()));
+                        m.insert("_source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
                         CypherValue::Map(m)
                     }).collect()
                 );

@@ -139,7 +139,7 @@ fn rag3db_root() -> String {
 }
 
 /// Load required extensions into a native connection.
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -152,7 +152,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("  loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -160,18 +160,18 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn make_catalog() -> Catalog {
+fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_phase0b_config())
 }
 
 /// Same as make_catalog but with a custom ChunkingConfig override.
-async fn make_catalog_with_chunking(chunking: ChunkingConfig) -> Catalog {
+fn make_catalog_with_chunking(chunking: ChunkingConfig) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     let mut config = make_phase0b_config();
     for kb in config.knowledge_bases.values_mut() {
         kb.chunking = chunking.clone();
@@ -195,14 +195,14 @@ fn make_file(name: &str, absolute_path: &str, body: &str) -> BTreeMap<String, Cy
 }
 
 /// Query helper: execute raw Cypher and return all rows.
-async fn query_rows(catalog: &Catalog, cypher: &str) -> Vec<Vec<CypherValue>> {
-    let result = catalog.execute_raw(cypher).await.unwrap();
+fn query_rows(catalog: &Catalog, cypher: &str) -> Vec<Vec<CypherValue>> {
+    let result = catalog.execute_raw(cypher).unwrap();
     result.rows
 }
 
 /// Query helper: return the single scalar value from a COUNT query.
-async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
-    let rows = query_rows(catalog, cypher).await;
+fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
+    let rows = query_rows(catalog, cypher);
     rows.first()
         .and_then(|r| r.first())
         .and_then(|v| v.as_i64())
@@ -213,11 +213,11 @@ async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
 // Test 1: Ingestion + schema validation
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_ingest_and_schema() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_ingest_and_schema() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Schema should have created all required tables
     // Entity tables
@@ -244,23 +244,23 @@ async fn phase0b_ingest_and_schema() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
     // Verify entity counts
-    assert_eq!(catalog.count("Directory").await.unwrap(), 1);
-    assert_eq!(catalog.count("File").await.unwrap(), 1);
+    assert_eq!(catalog.count("Directory").unwrap(), 1);
+    assert_eq!(catalog.count("File").unwrap(), 1);
 
     // TreeKB_Index should have 1 entry (Directory = title entity)
-    let tree_idx_count = query_count(&catalog, "MATCH (t:TreeKB_Index) RETURN count(t)").await;
+    let tree_idx_count = query_count(&catalog, "MATCH (t:TreeKB_Index) RETURN count(t)");
     assert_eq!(tree_idx_count, 1, "TreeKB should have 1 index entry (for the Directory)");
 
     // TreeKB_Index entry should have aggregated content from Directory + File
     let rows = query_rows(
         &catalog,
         "MATCH (t:TreeKB_Index) RETURN t._title, t._content, t._content_hash",
-    ).await;
+    );
     assert_eq!(rows.len(), 1);
     let title = rows[0][0].as_str().unwrap_or("");
     let content = rows[0][1].as_str().unwrap_or("");
@@ -272,34 +272,34 @@ async fn phase0b_ingest_and_schema() {
     assert!(!content_hash.is_empty(), "content_hash should be set (not sentinel)");
 
     // TreeKB_Index_Chunk should exist
-    let chunk_count = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)").await;
+    let chunk_count = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
     assert!(chunk_count > 0, "TreeKB should have chunks: got {chunk_count}");
 
     // FileKB_Index should have 1 entry (File = title entity for FileKB)
-    let file_idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)").await;
+    let file_idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)");
     assert_eq!(file_idx_count, 1, "FileKB should have 1 index entry");
 
     // FileKB chunks
-    let filekb_chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)").await;
+    let filekb_chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)");
     assert!(filekb_chunk_count > 0, "FileKB should have chunks: got {filekb_chunk_count}");
 
     // SOURCED rels should exist
     let dir_sourced = query_count(
         &catalog,
         "MATCH (:Directory)-[:Directory_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
-    ).await;
+    );
     assert!(dir_sourced > 0, "Directory should have SOURCED rels to TreeKB chunks");
 
     let file_sourced_tree = query_count(
         &catalog,
         "MATCH (:File)-[:File_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
-    ).await;
+    );
     assert!(file_sourced_tree > 0, "File should have SOURCED rels to TreeKB chunks");
 
     let file_sourced_file = query_count(
         &catalog,
         "MATCH (:File)-[:File_SOURCED_FileKB]->(:FileKB_Index_Chunk) RETURN count(*)",
-    ).await;
+    );
     assert!(file_sourced_file > 0, "File should have SOURCED rels to FileKB chunks");
 
     eprintln!(
@@ -312,11 +312,11 @@ async fn phase0b_ingest_and_schema() {
 // Test 2: BM25 search on multi-entity KB (TreeKB)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_bm25_search_multi_entity() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_bm25_search_multi_entity() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -327,7 +327,7 @@ async fn phase0b_bm25_search_multi_entity() {
 
     catalog.link("HAS_FILE", hashsafe_uuid("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
@@ -339,7 +339,7 @@ async fn phase0b_bm25_search_multi_entity() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
 
     eprintln!("TreeKB search 'auth': {} results, bm25_count={}", response.results.len(), response.meta.bm25_count);
     assert!(response.results.len() > 0, "TreeKB should find 'auth' in File content");
@@ -352,7 +352,7 @@ async fn phase0b_bm25_search_multi_entity() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
     eprintln!("TreeKB search 'lib': {} results", response2.results.len());
     assert!(response2.results.len() > 0, "TreeKB should find 'lib' in Directory content");
 
@@ -364,7 +364,7 @@ async fn phase0b_bm25_search_multi_entity() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
     assert_eq!(response3.results.len(), 0, "nonsense query should return 0 results");
 }
 
@@ -372,11 +372,11 @@ async fn phase0b_bm25_search_multi_entity() {
 // Test 3: BM25 highlight → chunk resolution (single-entity FileKB)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_bm25_highlight_chunk_single_entity() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_bm25_highlight_chunk_single_entity() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Create a File with a body long enough to produce multiple chunks,
     // containing "authentication" at a known position.
@@ -391,7 +391,7 @@ async fn phase0b_bm25_highlight_chunk_single_entity() {
         make_file("auth_module.ts", "/repo/src/auth_module.ts", &body),
     ).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
@@ -403,7 +403,7 @@ async fn phase0b_bm25_highlight_chunk_single_entity() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
 
     eprintln!("FileKB search 'authentication': {} results", response.results.len());
     assert!(response.results.len() > 0, "FileKB should find 'authentication'");
@@ -432,11 +432,11 @@ async fn phase0b_bm25_highlight_chunk_single_entity() {
 // Test 4: Vector search + chunk-to-source entity resolution
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_vector_chunk_to_source_entity() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_vector_chunk_to_source_entity() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Two files with distinct bodies
     catalog.create(
@@ -456,16 +456,16 @@ async fn phase0b_vector_chunk_to_source_entity() {
         ),
     ).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
     // FileKB should have 2 index entries
-    let idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)").await;
+    let idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)");
     assert_eq!(idx_count, 2, "FileKB should have 2 index entries");
 
     // Chunks should exist and be linked via SOURCED
-    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)").await;
+    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)");
     assert!(chunk_count >= 2, "FileKB should have at least 2 chunks");
 
     // Verify SOURCED rels link chunks back to the correct File
@@ -473,7 +473,7 @@ async fn phase0b_vector_chunk_to_source_entity() {
         &catalog,
         "MATCH (f:File)-[:File_SOURCED_FileKB]->(c:FileKB_Index_Chunk) \
          RETURN f.name, c._text",
-    ).await;
+    );
     assert!(!sourced_rows.is_empty(), "SOURCED rels should exist");
     for row in &sourced_rows {
         let file_name = row[0].as_str().unwrap_or("");
@@ -493,11 +493,11 @@ async fn phase0b_vector_chunk_to_source_entity() {
 // Test 5: _content_offset verified arithmetically
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_content_offset_arithmetic() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_content_offset_arithmetic() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("src", "/app/src/")).unwrap();
     let file_ref = catalog.create(
@@ -506,14 +506,14 @@ async fn phase0b_content_offset_arithmetic() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
 
     // Get the concatenated _content
     let content_rows = query_rows(
         &catalog,
         "MATCH (t:TreeKB_Index) RETURN t._content",
-    ).await;
+    );
     assert_eq!(content_rows.len(), 1);
     let full_content = content_rows[0][0].as_str().unwrap();
     eprintln!("TreeKB _content: '{full_content}' (len={})", full_content.len());
@@ -524,7 +524,7 @@ async fn phase0b_content_offset_arithmetic() {
         "MATCH (c:TreeKB_Index_Chunk) \
          RETURN c._text, c._start_char, c._end_char, c._content_offset, c._source_field \
          ORDER BY c._content_offset, c._start_char",
-    ).await;
+    );
     assert!(!chunk_rows.is_empty(), "Should have TreeKB chunks");
 
     for row in &chunk_rows {
@@ -559,11 +559,11 @@ async fn phase0b_content_offset_arithmetic() {
 // Test 6: Delete contentFor-only entity → re-aggregate
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_delete_content_for_only() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_delete_content_for_only() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -572,14 +572,14 @@ async fn phase0b_delete_content_for_only() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
 
     // Verify File content is in TreeKB
-    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let content_str = content_before[0][0].as_str().unwrap();
     assert!(content_str.contains("auth.ts"), "Before delete: content should contain 'auth.ts'");
-    let hash_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash").await;
+    let hash_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
     let hash_str = hash_before[0][0].as_str().unwrap().to_string();
 
     // Delete the File (contentFor-only for TreeKB)
@@ -587,12 +587,12 @@ async fn phase0b_delete_content_for_only() {
     catalog.delete("File", &file_uuid).unwrap();
 
     // Drain the AggregateOp that was enqueued by delete
-    let drain2 = catalog.drain().await;
+    let drain2 = catalog.drain();
     eprintln!("drain after delete: processed={}, failed={}", drain2.processed, drain2.failed);
     assert_eq!(drain2.failed, 0);
 
     // TreeKB content should no longer contain File data
-    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let content_after_str = content_after[0][0].as_str().unwrap();
     assert!(
         !content_after_str.contains("auth.ts"),
@@ -604,7 +604,7 @@ async fn phase0b_delete_content_for_only() {
     );
 
     // Hash should have changed
-    let hash_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash").await;
+    let hash_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
     let hash_after_str = hash_after[0][0].as_str().unwrap();
     assert_ne!(hash_str, hash_after_str, "content_hash should change after delete");
 
@@ -612,7 +612,7 @@ async fn phase0b_delete_content_for_only() {
     let file_sourced = query_count(
         &catalog,
         "MATCH (:File)-[:File_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
-    ).await;
+    );
     assert_eq!(file_sourced, 0, "File SOURCED rels should be deleted");
 
     // BM25 search for "auth" should return 0 results
@@ -623,7 +623,7 @@ async fn phase0b_delete_content_for_only() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
     assert_eq!(response.results.len(), 0, "After delete, 'auth' should not be found in TreeKB");
 }
 
@@ -631,11 +631,11 @@ async fn phase0b_delete_content_for_only() {
 // Test 7: Update contentFor-only entity → re-aggregate
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_update_content_for_only() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_update_content_for_only() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -644,11 +644,11 @@ async fn phase0b_update_content_for_only() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
 
     // Verify initial state
-    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     assert!(content_before[0][0].as_str().unwrap().contains("auth.ts"));
 
     // Update the File: rename to login.ts
@@ -659,12 +659,12 @@ async fn phase0b_update_content_for_only() {
     catalog.update("File", &file_uuid, update_data).unwrap();
 
     // Drain the AggregateOp enqueued by update
-    let drain2 = catalog.drain().await;
+    let drain2 = catalog.drain();
     assert_eq!(drain2.failed, 0);
     assert_eq!(drain2.failed, 0);
 
     // TreeKB content should now contain "login.ts" instead of "auth.ts"
-    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let content_str = content_after[0][0].as_str().unwrap();
     assert!(
         content_str.contains("login.ts"),
@@ -683,7 +683,7 @@ async fn phase0b_update_content_for_only() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
     assert!(response_login.results.len() > 0, "TreeKB should find 'login' after update");
 
     let response_auth = catalog.search(
@@ -693,7 +693,7 @@ async fn phase0b_update_content_for_only() {
             consistency: Consistency::Immediate,
             ..Default::default()
         },
-    ).await.unwrap();
+    ).unwrap();
     assert_eq!(response_auth.results.len(), 0, "TreeKB should NOT find 'auth' after update");
 }
 
@@ -701,15 +701,15 @@ async fn phase0b_update_content_for_only() {
 // Test 8: Title truncation (title_max_chars)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_title_truncation() {
+fn phase0b_title_truncation() {
     let chunking = ChunkingConfig {
         title_max_chars: 20,
         ..Default::default()
     };
-    let mut catalog = make_catalog_with_chunking(chunking).await;
-    catalog.initialize().await.unwrap();
+    let mut catalog = make_catalog_with_chunking(chunking);
+    catalog.initialize().unwrap();
 
     // Create a File with a very long name (100 chars)
     let long_name = "a".repeat(100);
@@ -718,7 +718,7 @@ async fn phase0b_title_truncation() {
         make_file(&long_name, "/repo/long_name_file.ts", "Some body content here."),
     ).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
@@ -726,7 +726,7 @@ async fn phase0b_title_truncation() {
     let rows = query_rows(
         &catalog,
         "MATCH (f:FileKB_Index) RETURN f._title",
-    ).await;
+    );
     assert_eq!(rows.len(), 1);
     let title = rows[0][0].as_str().unwrap();
     eprintln!("FileKB_Index._title: '{}' (len={})", title, title.len());
@@ -740,7 +740,7 @@ async fn phase0b_title_truncation() {
     let chunk_rows = query_rows(
         &catalog,
         "MATCH (c:FileKB_Index_Chunk) RETURN c._start_char, c._end_char, c._text",
-    ).await;
+    );
     for row in &chunk_rows {
         let start = row[0].as_i64().unwrap() as usize;
         let end = row[1].as_i64().unwrap() as usize;
@@ -754,11 +754,11 @@ async fn phase0b_title_truncation() {
 // Test 9: SOURCED rels multi-entity correctness
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_sourced_rels_multi_entity() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_sourced_rels_multi_entity() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("components", "/repo/components/")).unwrap();
     let file1_ref = catalog.create(
@@ -773,7 +773,7 @@ async fn phase0b_sourced_rels_multi_entity() {
     catalog.link("HAS_FILE", dir_ref.clone(), file1_ref.clone(), BTreeMap::new()).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file2_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
@@ -782,7 +782,7 @@ async fn phase0b_sourced_rels_multi_entity() {
         &catalog,
         "MATCH (d:Directory)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) \
          RETURN d.name, c._source_field, c._text",
-    ).await;
+    );
     eprintln!("Directory SOURCED chunks: {}", dir_sourced.len());
     for row in &dir_sourced {
         let dname = row[0].as_str().unwrap_or("");
@@ -798,7 +798,7 @@ async fn phase0b_sourced_rels_multi_entity() {
         "MATCH (f:File)-[:File_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) \
          RETURN f.name, c._source_field, c._text \
          ORDER BY f.name",
-    ).await;
+    );
     eprintln!("File SOURCED chunks: {}", file_sourced.len());
     for row in &file_sourced {
         let fname = row[0].as_str().unwrap_or("");
@@ -819,7 +819,7 @@ async fn phase0b_sourced_rels_multi_entity() {
     let cross_check = query_count(
         &catalog,
         "MATCH (f:File)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN count(*)",
-    ).await;
+    );
     assert_eq!(cross_check, 0, "No File should have Directory_SOURCED_TreeKB rels");
 }
 
@@ -827,11 +827,11 @@ async fn phase0b_sourced_rels_multi_entity() {
 // Test 10: Aggregate idempotent (hash unchanged → skip)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_aggregate_skip_unchanged() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_aggregate_skip_unchanged() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -841,14 +841,14 @@ async fn phase0b_aggregate_skip_unchanged() {
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
     // First drain: full processing
-    let drain1 = catalog.drain().await;
+    let drain1 = catalog.drain();
     assert_eq!(drain1.failed, 0);
 
     // Record hash and chunk count
-    let hash1_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash, t._uuid").await;
+    let hash1_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash, t._uuid");
     let hash1 = hash1_rows[0][0].as_str().unwrap().to_string();
     let _idx_uuid = hash1_rows[0][1].as_str().unwrap().to_string();
-    let chunk_count1 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)").await;
+    let chunk_count1 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
 
     eprintln!("After drain 1: hash={hash1}, chunks={chunk_count1}");
 
@@ -861,17 +861,17 @@ async fn phase0b_aggregate_skip_unchanged() {
     catalog.update("Directory", &dir_uuid, same_data).unwrap();
 
     // Second drain: AggregateBatchNode should detect hash unchanged and skip
-    let drain2 = catalog.drain().await;
+    let drain2 = catalog.drain();
     eprintln!("After drain 2: processed={}, failed={}", drain2.processed, drain2.failed);
     assert_eq!(drain2.failed, 0);
 
     // Hash should be identical
-    let hash2_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash").await;
+    let hash2_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
     let hash2 = hash2_rows[0][0].as_str().unwrap();
     assert_eq!(hash1, hash2, "content_hash should be unchanged after re-aggregate with same content");
 
     // Chunk count should be the same
-    let chunk_count2 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)").await;
+    let chunk_count2 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
     assert_eq!(chunk_count1, chunk_count2, "chunk count should be unchanged");
 }
 
@@ -879,19 +879,19 @@ async fn phase0b_aggregate_skip_unchanged() {
 // Test 11: link() incremental triggers AggregateOp
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_link_incremental_aggregate() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_link_incremental_aggregate() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Create Directory and drain (no files linked yet)
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
-    let drain1 = catalog.drain().await;
+    let drain1 = catalog.drain();
     assert_eq!(drain1.failed, 0);
 
     // TreeKB should have the Directory's content only
-    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let content1_str = content1[0][0].as_str().unwrap();
     assert!(!content1_str.contains("utils.ts"), "Before link: no File content in TreeKB");
 
@@ -900,17 +900,17 @@ async fn phase0b_link_incremental_aggregate() {
         "File",
         make_file("utils.ts", "/repo/src/utils.ts", "export function helper() {}"),
     ).unwrap();
-    let drain2 = catalog.drain().await;
+    let drain2 = catalog.drain();
     assert_eq!(drain2.failed, 0);
 
     // Now link File to Directory — should trigger incremental AggregateOp
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
-    let drain3 = catalog.drain().await;
+    let drain3 = catalog.drain();
     eprintln!("drain after link: processed={}, failed={}", drain3.processed, drain3.failed);
     assert_eq!(drain3.failed, 0);
 
     // TreeKB content should now include the File's data
-    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let content2_str = content2[0][0].as_str().unwrap();
     assert!(
         content2_str.contains("utils.ts"),
@@ -926,11 +926,11 @@ async fn phase0b_link_incremental_aggregate() {
 // Test 12: Multiple files + delete one → only that file's content removed
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_delete_one_of_multiple_files() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_delete_one_of_multiple_files() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file1 = catalog.create(
@@ -944,11 +944,11 @@ async fn phase0b_delete_one_of_multiple_files() {
     catalog.link("HAS_FILE", dir_ref.clone(), file1.clone(), BTreeMap::new()).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file2.clone(), BTreeMap::new()).unwrap();
 
-    let drain1 = catalog.drain().await;
+    let drain1 = catalog.drain();
     assert_eq!(drain1.failed, 0);
 
     // Both files should be in TreeKB
-    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let c1 = content1[0][0].as_str().unwrap();
     assert!(c1.contains("alpha.ts"), "TreeKB should contain alpha.ts");
     assert!(c1.contains("beta.ts"), "TreeKB should contain beta.ts");
@@ -956,11 +956,11 @@ async fn phase0b_delete_one_of_multiple_files() {
     // Delete alpha.ts
     let alpha_uuid = file1.uuid().unwrap();
     catalog.delete("File", &alpha_uuid).unwrap();
-    let drain2 = catalog.drain().await;
+    let drain2 = catalog.drain();
     assert_eq!(drain2.failed, 0);
 
     // Only beta.ts should remain
-    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content").await;
+    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
     let c2 = content2[0][0].as_str().unwrap();
     assert!(
         !c2.contains("alpha.ts"),
@@ -975,13 +975,13 @@ async fn phase0b_delete_one_of_multiple_files() {
     let r_beta = catalog.search("TreeKB", "beta", SearchOptions {
         consistency: Consistency::Immediate,
         ..Default::default()
-    }).await.unwrap();
+    }).unwrap();
     assert!(r_beta.results.len() > 0, "Should find 'beta' after deleting alpha");
 
     let r_alpha = catalog.search("TreeKB", "alpha", SearchOptions {
         consistency: Consistency::Immediate,
         ..Default::default()
-    }).await.unwrap();
+    }).unwrap();
     assert_eq!(r_alpha.results.len(), 0, "Should NOT find 'alpha' after deletion");
 }
 
@@ -989,11 +989,11 @@ async fn phase0b_delete_one_of_multiple_files() {
 // Test DEBUG: Full pipeline trace with queue events
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_debug_trace_pipeline() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_debug_trace_pipeline() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Create Directory + File + link
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
@@ -1003,19 +1003,19 @@ async fn phase0b_debug_trace_pipeline() {
     ).unwrap();
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
 
     // Dump DB state
     eprintln!("\n══ DB STATE ══");
-    let dirs = query_rows(&catalog, "MATCH (d:Directory) RETURN d._uuid, d.name").await;
+    let dirs = query_rows(&catalog, "MATCH (d:Directory) RETURN d._uuid, d.name");
     eprintln!("Directories: {:?}", dirs);
-    let files = query_rows(&catalog, "MATCH (f:File) RETURN f._uuid, f.name").await;
+    let files = query_rows(&catalog, "MATCH (f:File) RETURN f._uuid, f.name");
     eprintln!("Files: {:?}", files);
 
     let tree_idx = query_rows(&catalog,
         "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content, t._content_hash, t._source_entity, t._source_uuid"
-    ).await;
+    );
     eprintln!("TreeKB_Index entries: {}", tree_idx.len());
     for row in &tree_idx {
         eprintln!("  {:?}", row);
@@ -1023,7 +1023,7 @@ async fn phase0b_debug_trace_pipeline() {
 
     let tree_chunks = query_rows(&catalog,
         "MATCH (c:TreeKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field, c._content_offset, c._start_char, c._end_char"
-    ).await;
+    );
     eprintln!("TreeKB_Index_Chunk: {}", tree_chunks.len());
     for row in &tree_chunks {
         eprintln!("  {:?}", row);
@@ -1031,7 +1031,7 @@ async fn phase0b_debug_trace_pipeline() {
 
     let file_idx = query_rows(&catalog,
         "MATCH (f:FileKB_Index) RETURN f._uuid, f._title, f._content, f._content_hash, f._source_entity, f._source_uuid"
-    ).await;
+    );
     eprintln!("FileKB_Index entries: {}", file_idx.len());
     for row in &file_idx {
         eprintln!("  {:?}", row);
@@ -1039,7 +1039,7 @@ async fn phase0b_debug_trace_pipeline() {
 
     let file_chunks = query_rows(&catalog,
         "MATCH (c:FileKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field, c._content_offset"
-    ).await;
+    );
     eprintln!("FileKB_Index_Chunk: {}", file_chunks.len());
     for row in &file_chunks {
         eprintln!("  {:?}", row);
@@ -1048,19 +1048,19 @@ async fn phase0b_debug_trace_pipeline() {
     // SOURCED rels — query each known rel type separately
     let dir_sourced = query_rows(&catalog,
         "MATCH (d:Directory)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN d.name, c._uuid, c._text"
-    ).await;
+    );
     eprintln!("Directory_SOURCED_TreeKB: {}", dir_sourced.len());
     for row in &dir_sourced { eprintln!("  {:?}", row); }
 
     let file_sourced_tree = query_rows(&catalog,
         "MATCH (f:File)-[:File_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN f.name, c._uuid, c._text"
-    ).await;
+    );
     eprintln!("File_SOURCED_TreeKB: {}", file_sourced_tree.len());
     for row in &file_sourced_tree { eprintln!("  {:?}", row); }
 
     let file_sourced_file = query_rows(&catalog,
         "MATCH (f:File)-[:File_SOURCED_FileKB]->(c:FileKB_Index_Chunk) RETURN f.name, c._uuid, c._text"
-    ).await;
+    );
     eprintln!("File_SOURCED_FileKB: {}", file_sourced_file.len());
     for row in &file_sourced_file { eprintln!("  {:?}", row); }
 
@@ -1068,7 +1068,7 @@ async fn phase0b_debug_trace_pipeline() {
     eprintln!("\n══ RAW LUCIVY QUERY ══");
     let fts_result = catalog.execute_raw(
         "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{\"type\":\"parse\",\"fields\":[\"_title\",\"_content\"],\"value\":\"auth\"}', 10) RETURN node_id, score"
-    ).await;
+    );
     match fts_result {
         Ok(r) => {
             eprintln!("Lucivy 'auth' on TreeKB_Index: {} results", r.rows.len());
@@ -1082,7 +1082,7 @@ async fn phase0b_debug_trace_pipeline() {
     let search_result = catalog.search(
         "TreeKB", "auth",
         SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
-    ).await;
+    );
     match search_result {
         Ok(r) => eprintln!("Catalog search 'auth': {} results, bm25={}", r.results.len(), r.meta.bm25_count),
         Err(e) => eprintln!("Catalog search error: {e:?}"),
@@ -1093,11 +1093,11 @@ async fn phase0b_debug_trace_pipeline() {
 // Test 14: Isolate Lucivy query modes — Contains vs Parse on same index
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn phase0b_lucivy_contains_vs_parse() {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn phase0b_lucivy_contains_vs_parse() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
     let file_ref = catalog.create(
@@ -1106,15 +1106,15 @@ async fn phase0b_lucivy_contains_vs_parse() {
     ).unwrap();
     catalog.link("HAS_FILE", hashsafe_uuid("Directory", &["/repo/src/"]), file_ref.clone(), BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
 
     // Dump what's in the index
-    let idx = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content").await;
+    let idx = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content");
     eprintln!("\nTreeKB_Index rows:");
     for row in &idx { eprintln!("  {:?}", row); }
 
-    let chunks = query_rows(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field").await;
+    let chunks = query_rows(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field");
     eprintln!("TreeKB_Index_Chunk rows:");
     for row in &chunks { eprintln!("  {:?}", row); }
 
@@ -1145,7 +1145,7 @@ async fn phase0b_lucivy_contains_vs_parse() {
             "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{}', 10) RETURN node_id, score, highlights",
             escaped,
         );
-        match catalog.execute_raw(&cypher).await {
+        match catalog.execute_raw(&cypher) {
             Ok(r) => {
                 eprintln!("\n  {} → {} results", label, r.rows.len());
                 for row in &r.rows { eprintln!("    {:?}", row); }

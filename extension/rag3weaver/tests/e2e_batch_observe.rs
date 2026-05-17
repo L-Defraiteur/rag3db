@@ -106,7 +106,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -119,7 +119,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("  loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -127,10 +127,10 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn make_catalog() -> Catalog {
+fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_batch_config())
 }
 
@@ -146,8 +146,8 @@ fn make_document(content: &str) -> BTreeMap<String, CypherValue> {
     d
 }
 
-async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
-    let result = catalog.execute_raw(cypher).await.unwrap();
+fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
+    let result = catalog.execute_raw(cypher).unwrap();
     result
         .rows
         .first()
@@ -170,15 +170,15 @@ async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
 /// - InsertBatchNode(agg_inserts): 1 group — FileKB_Index_Chunk×N
 /// - LinkBatchNode(agg_links): 1 group — SOURCED×N
 /// - EmbedBatchNode(agg_embeds): 1 group — FileKB_Index_Chunk.FileKB_embedding×N
-#[tokio::test]
+#[test]
 #[ignore]
-async fn batch_observe_multi_entity() {
+fn batch_observe_multi_entity() {
     eprintln!("\n{}", "=".repeat(70));
     eprintln!("  BATCH OBSERVABILITY TEST — 5 File + 5 Document (HYBRID KB)");
     eprintln!("{}\n", "=".repeat(70));
 
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     // Generate 5 content bodies long enough to produce multiple chunks each.
     // Default chunking: max_size=512, overlap=50 — so ~1500 chars = ~3 chunks.
@@ -268,7 +268,7 @@ async fn batch_observe_multi_entity() {
     let mut rx = catalog.subscribe();
 
     eprintln!("\n--- DRAIN START ---\n");
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("\n--- DRAIN END ---\n");
 
     // Drain all events and print errors
@@ -285,10 +285,10 @@ async fn batch_observe_multi_entity() {
     assert_eq!(result.failed, 0, "drain should have no failures");
 
     // Verify entity counts
-    let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)").await;
-    let doc_count = query_count(&catalog, "MATCH (d:Document) RETURN COUNT(d)").await;
-    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)").await;
-    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN COUNT(c)").await;
+    let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)");
+    let doc_count = query_count(&catalog, "MATCH (d:Document) RETURN COUNT(d)");
+    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)");
+    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN COUNT(c)");
 
     eprintln!("\n--- DB STATE ---");
     eprintln!("  File:               {file_count}");
@@ -305,17 +305,17 @@ async fn batch_observe_multi_entity() {
     let has_doc_count = query_count(
         &catalog,
         "MATCH (:File)-[r:HAS_DOCUMENT]->(:Document) RETURN COUNT(r)",
-    ).await;
+    );
     let in_kb_count = query_count(
         &catalog,
         "MATCH (:File)-[r:File_IN_FileKB]->(:FileKB_Index) RETURN COUNT(r)",
-    ).await;
+    );
     // Chunk rels: the actual names come from compute_chunk_ops —
     // use a generic match to count all rels to chunks regardless of name.
     let chunk_rel_count = query_count(
         &catalog,
         "MATCH ()-[r]->(:FileKB_Index_Chunk) RETURN COUNT(r)",
-    ).await;
+    );
 
     eprintln!("  HAS_DOCUMENT:       {has_doc_count}");
     eprintln!("  File_IN_FileKB:     {in_kb_count}");
@@ -332,7 +332,7 @@ async fn batch_observe_multi_entity() {
     let embedded_count = query_count(
         &catalog,
         "MATCH (c:FileKB_Index_Chunk) WHERE c.FileKB_embedding IS NOT NULL RETURN COUNT(c)",
-    ).await;
+    );
     eprintln!("  chunks with embedding: {embedded_count}");
     assert_eq!(
         embedded_count, chunk_count,
@@ -357,28 +357,28 @@ async fn batch_observe_multi_entity() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Ingests 10 Files (no documents) — all File inserts should batch into 1 group.
-#[tokio::test]
+#[test]
 #[ignore]
-async fn batch_observe_single_entity_type() {
+fn batch_observe_single_entity_type() {
     eprintln!("\n{}", "=".repeat(70));
     eprintln!("  BATCH OBSERVABILITY TEST — 10 Files, single entity type");
     eprintln!("{}\n", "=".repeat(70));
 
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     for i in 0..10 {
         catalog.create("File", make_file(&format!("file_{i}.rs"))).unwrap();
     }
 
     eprintln!("\n--- DRAIN START ---\n");
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("\n--- DRAIN END ---\n");
 
     assert_eq!(result.failed, 0);
 
-    let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)").await;
-    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)").await;
+    let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)");
+    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)");
 
     eprintln!("  File:          {file_count}");
     eprintln!("  FileKB_Index:  {index_count}");

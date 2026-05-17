@@ -2109,6 +2109,7 @@ impl Catalog {
                 }
             }
             Err(e) => {
+                eprintln!("[rag3weaver] drain FAILED: {e}");
                 self.event_bus.emit(CatalogEvent::Error {
                     context: "drain".to_string(),
                     message: format!("ingestion dataflow failed: {e}"),

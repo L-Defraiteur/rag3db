@@ -147,7 +147,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -160,7 +160,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("  loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -168,17 +168,17 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn make_catalog() -> Catalog {
+fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_config())
 }
 
 /// Setup: 1 Directory ("src") with 2 Files, linked via HAS_FILE.
-async fn setup_catalog() -> Catalog {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn setup_catalog() -> Catalog {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog
         .create("Directory", make_directory("src", "/repo/src/", 1))
@@ -211,7 +211,7 @@ async fn setup_catalog() -> Catalog {
         .link("HAS_FILE", dir_ref.clone(), file2_ref.clone(), BTreeMap::new())
         .unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!(
         "setup drain: processed={}, failed={}",
         result.processed, result.failed
@@ -225,10 +225,10 @@ async fn setup_catalog() -> Catalog {
 // Test 1: strategy_no_expansion — no expansions, same as search(), children=None
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn strategy_no_expansion() {
-    let catalog = setup_catalog().await;
+fn strategy_no_expansion() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
@@ -246,7 +246,7 @@ async fn strategy_no_expansion() {
         "src",
         strategy,
     )
-    .await
+    
     .unwrap();
 
     eprintln!(
@@ -276,10 +276,10 @@ async fn strategy_no_expansion() {
 // Test 2: strategy_expand_has_file — Directory expanded with HAS_FILE → 2 File children
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn strategy_expand_has_file() {
-    let catalog = setup_catalog().await;
+fn strategy_expand_has_file() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
@@ -303,11 +303,11 @@ async fn strategy_expand_has_file() {
         "src",
         strategy,
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
     let mut rx = runtime.subscribe();
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
 
     // Dump all events
     while let Ok(ev) = rx.try_recv() {
@@ -376,10 +376,10 @@ async fn strategy_expand_has_file() {
 // Test 3: strategy_entity_filter — File results NOT expanded (filter = Directory only)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn strategy_entity_filter() {
-    let catalog = setup_catalog().await;
+fn strategy_entity_filter() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     // Search "auth" — should match File(auth.ts) content, not Directory
@@ -403,7 +403,7 @@ async fn strategy_entity_filter() {
         "auth",
         strategy,
     )
-    .await
+    
     .unwrap();
 
     eprintln!(
@@ -426,10 +426,10 @@ async fn strategy_entity_filter() {
 // Test 4: strategy_child_data — ChildSummary.data contains File fields
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn strategy_child_data() {
-    let catalog = setup_catalog().await;
+fn strategy_child_data() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
@@ -452,7 +452,7 @@ async fn strategy_child_data() {
         "src",
         strategy,
     )
-    .await
+    
     .unwrap();
 
     assert!(!response.results.is_empty());
@@ -493,10 +493,10 @@ async fn strategy_child_data() {
 // Test 5: strategy_max_rounds_guard — max_rounds=0 → error
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn strategy_max_rounds_guard() {
-    let catalog = setup_catalog().await;
+fn strategy_max_rounds_guard() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
@@ -514,7 +514,7 @@ async fn strategy_max_rounds_guard() {
         "src",
         strategy,
     )
-    .await;
+    ;
 
     assert!(result.is_err(), "max_rounds=0 should produce an error");
     let err = result.unwrap_err().to_string();

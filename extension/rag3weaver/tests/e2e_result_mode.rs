@@ -150,7 +150,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -163,7 +163,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("  loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -171,19 +171,19 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn make_catalog() -> Catalog {
+fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_config())
 }
 
 /// Setup: 1 Directory ("src") with 2 Files, both linked via HAS_FILE.
 /// TreeKB has 1 index entry (Directory = title entity), aggregating content from Dir + Files.
 /// FileKB has 2 index entries (one per File).
-async fn setup_catalog() -> Catalog {
-    let mut catalog = make_catalog().await;
-    catalog.initialize().await.unwrap();
+fn setup_catalog() -> Catalog {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog
         .create("Directory", make_directory("src", "/repo/src/", 1))
@@ -216,7 +216,7 @@ async fn setup_catalog() -> Catalog {
         .link("HAS_FILE", dir_ref.clone(), file2_ref.clone(), BTreeMap::new())
         .unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!(
         "setup drain: processed={}, failed={}",
         result.processed, result.failed
@@ -226,18 +226,18 @@ async fn setup_catalog() -> Catalog {
     catalog
 }
 
-async fn query_rows(catalog: &Catalog, cypher: &str) -> Vec<Vec<CypherValue>> {
-    catalog.execute_raw(cypher).await.unwrap().rows
+fn query_rows(catalog: &Catalog, cypher: &str) -> Vec<Vec<CypherValue>> {
+    catalog.execute_raw(cypher).unwrap().rows
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Test 1: Aggregated mode (default) — non-regression
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_aggregated_default() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_aggregated_default() {
+    let mut catalog = setup_catalog();
 
     // Search TreeKB with default options (Aggregated) + diagnostics
     let response = catalog
@@ -250,7 +250,7 @@ async fn result_mode_aggregated_default() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -322,10 +322,10 @@ async fn result_mode_aggregated_default() {
 // Test 2: Aggregated explicitly — same as default
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_aggregated_explicit() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_aggregated_explicit() {
+    let mut catalog = setup_catalog();
 
     let response = catalog
         .search(
@@ -338,7 +338,7 @@ async fn result_mode_aggregated_explicit() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Aggregated explicit 'auth': {} results, bm25={}", response.results.len(), response.meta.bm25_count);
@@ -363,10 +363,10 @@ async fn result_mode_aggregated_explicit() {
 // Test 3: SourceResolved — entity/uuid/data resolved to source
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_source_resolved() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_source_resolved() {
+    let mut catalog = setup_catalog();
 
     // Search TreeKB for "auth" in SourceResolved mode
     let response = catalog
@@ -379,7 +379,7 @@ async fn result_mode_source_resolved() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -444,17 +444,17 @@ async fn result_mode_source_resolved() {
 // Test 4: SourceResolved — uuid matches the source entity
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_source_resolved_uuid_matches() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_source_resolved_uuid_matches() {
+    let mut catalog = setup_catalog();
 
     // Get the Directory UUID for reference
     let dir_rows = query_rows(
         &catalog,
         "MATCH (d:Directory {name: 'src'}) RETURN d._uuid",
     )
-    .await;
+    ;
     assert_eq!(dir_rows.len(), 1);
     let dir_uuid = dir_rows[0][0].as_str().unwrap().to_string();
 
@@ -469,7 +469,7 @@ async fn result_mode_source_resolved_uuid_matches() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("SourceResolved 'src': {} results", response.results.len());
@@ -490,10 +490,10 @@ async fn result_mode_source_resolved_uuid_matches() {
 // Test 5: Detailed mode — chunks populated with attribution
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_detailed_chunks() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_detailed_chunks() {
+    let mut catalog = setup_catalog();
 
     let response = catalog
         .search(
@@ -506,7 +506,7 @@ async fn result_mode_detailed_chunks() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Detailed 'auth': {} results", response.results.len());
@@ -591,19 +591,19 @@ async fn result_mode_detailed_chunks() {
 // Test 6: Detailed — chunk source_uuid matches actual entity UUIDs
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_detailed_chunk_source_uuid_valid() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_detailed_chunk_source_uuid_valid() {
+    let mut catalog = setup_catalog();
 
     // Get all entity UUIDs
     let dir_uuids: Vec<String> = query_rows(&catalog, "MATCH (d:Directory) RETURN d._uuid")
-        .await
+        
         .iter()
         .filter_map(|r| r[0].as_str().map(|s| s.to_string()))
         .collect();
     let file_uuids: Vec<String> = query_rows(&catalog, "MATCH (f:File) RETURN f._uuid")
-        .await
+        
         .iter()
         .filter_map(|r| r[0].as_str().map(|s| s.to_string()))
         .collect();
@@ -618,7 +618,7 @@ async fn result_mode_detailed_chunk_source_uuid_valid() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     assert!(!response.results.is_empty());
@@ -645,10 +645,10 @@ async fn result_mode_detailed_chunk_source_uuid_valid() {
 // Test 7: Detailed on FileKB (single-entity, with vector)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_detailed_filekb() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_detailed_filekb() {
+    let mut catalog = setup_catalog();
 
     let response = catalog
         .search(
@@ -660,7 +660,7 @@ async fn result_mode_detailed_filekb() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Detailed FileKB 'authenticate': {} results", response.results.len());
@@ -685,10 +685,10 @@ async fn result_mode_detailed_filekb() {
 // Test 8: SourceResolved on FileKB — should resolve to File entity
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_source_resolved_filekb() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_source_resolved_filekb() {
+    let mut catalog = setup_catalog();
 
     let response = catalog
         .search(
@@ -700,7 +700,7 @@ async fn result_mode_source_resolved_filekb() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -730,10 +730,10 @@ async fn result_mode_source_resolved_filekb() {
 // Test 9: _source_entity and _source_uuid columns on chunks
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_chunk_columns_persisted() {
-    let catalog = setup_catalog().await;
+fn result_mode_chunk_columns_persisted() {
+    let catalog = setup_catalog();
 
     // Verify _source_entity and _source_uuid are stored on chunks
     let chunk_rows = query_rows(
@@ -742,7 +742,7 @@ async fn result_mode_chunk_columns_persisted() {
          RETURN c._source_entity, c._source_uuid, c._source_field \
          ORDER BY c._source_entity",
     )
-    .await;
+    ;
 
     assert!(!chunk_rows.is_empty(), "Should have TreeKB chunks");
 
@@ -776,7 +776,7 @@ async fn result_mode_chunk_columns_persisted() {
         "MATCH (c:FileKB_Index_Chunk) \
          RETURN c._source_entity, c._source_uuid",
     )
-    .await;
+    ;
     assert!(!filekb_chunks.is_empty());
     for row in &filekb_chunks {
         assert_eq!(
@@ -791,10 +791,10 @@ async fn result_mode_chunk_columns_persisted() {
 // Test 10: Aggregated non-regression — existing tests' search patterns still work
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn result_mode_aggregated_data_enrichment() {
-    let mut catalog = setup_catalog().await;
+fn result_mode_aggregated_data_enrichment() {
+    let mut catalog = setup_catalog();
 
     // Aggregated mode: data should contain index fields (_title, _source_entity, _source_uuid, etc.)
     let response = catalog
@@ -808,7 +808,7 @@ async fn result_mode_aggregated_data_enrichment() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("Aggregated enrichment 'src': {} results, bm25={}", response.results.len(), response.meta.bm25_count);

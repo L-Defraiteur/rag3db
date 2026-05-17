@@ -59,7 +59,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -71,7 +71,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
             panic!("Extension '{name}' not found at: {ext_path}\nRun ./run_e2e.sh --build-only first.");
         }
         conn.execute(&format!("LOAD EXTENSION '{ext_path}'"))
-            .await
+            
             .unwrap_or_else(|e| panic!("Failed to load {name}: {e}"));
         eprintln!("✓ Loaded {name}");
     }
@@ -152,15 +152,15 @@ fn test_products() -> Vec<BTreeMap<String, CypherValue>> {
     ]
 }
 
-async fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
+fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(embedder_dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(embedder_dim)), config);
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
     catalog
 }
 
@@ -216,11 +216,11 @@ fn assert_same_uuids(pipeline: &[UnifiedResult], catalog: &[SearchResult], label
 // BM25 pipeline
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_bm25_pipeline_matches_catalog() {
-    let mut catalog = setup_simple_catalog(4).await;
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+fn generic_bm25_pipeline_matches_catalog() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     // 1. catalog.search() reference
     let cat_response = catalog
@@ -233,7 +233,7 @@ async fn generic_bm25_pipeline_matches_catalog() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
     eprintln!(
         "[BM25 catalog] {} results, bm25_count={}",
@@ -257,7 +257,7 @@ async fn generic_bm25_pipeline_matches_catalog() {
     graph.connect("bm25", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     eprintln!("[BM25 pipeline] {} results", pipe_results.len());
@@ -281,23 +281,23 @@ async fn generic_bm25_pipeline_matches_catalog() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_vector_pipeline_matches_catalog() {
+fn generic_vector_pipeline_matches_catalog() {
     let dim = MINILM.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(MINILM.clone());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::SEMANTIC;
-    catalog.register_entity("Product", product_config).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     // 1. catalog.search() reference
     let cat_response = catalog
@@ -310,7 +310,7 @@ async fn generic_vector_pipeline_matches_catalog() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
     eprintln!(
         "[Vector catalog] {} results, vector_count={}",
@@ -334,7 +334,7 @@ async fn generic_vector_pipeline_matches_catalog() {
     graph.connect("vector", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     eprintln!("[Vector pipeline] {} results", pipe_results.len());
@@ -353,20 +353,20 @@ async fn generic_vector_pipeline_matches_catalog() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_hybrid_pipeline_matches_catalog() {
+fn generic_hybrid_pipeline_matches_catalog() {
     let dim = MINILM.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(MINILM.clone());
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     // 1. catalog.search() reference (HYBRID = BM25 + SEMANTIC)
     let cat_response = catalog
@@ -379,7 +379,7 @@ async fn generic_hybrid_pipeline_matches_catalog() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
     eprintln!(
         "[Hybrid catalog] {} results, bm25={}, vector={}, fused={}",
@@ -410,7 +410,7 @@ async fn generic_hybrid_pipeline_matches_catalog() {
     graph.connect("fuse", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     eprintln!("[Hybrid pipeline] {} results", pipe_results.len());
@@ -428,9 +428,9 @@ async fn generic_hybrid_pipeline_matches_catalog() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_sparse_pipeline_matches_catalog() {
+fn generic_sparse_pipeline_matches_catalog() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
@@ -438,19 +438,19 @@ async fn generic_sparse_pipeline_matches_catalog() {
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(embedder.clone());
     catalog.set_sparse_embedder(sparse.clone());
     catalog.set_dual_embedder(dual.clone());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::SPARSE;
-    catalog.register_entity("Product", product_config).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     // 1. catalog.search() reference
     let cat_response = catalog
@@ -463,7 +463,7 @@ async fn generic_sparse_pipeline_matches_catalog() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
     eprintln!(
         "[Sparse catalog] {} results, sparse_count={}",
@@ -491,7 +491,7 @@ async fn generic_sparse_pipeline_matches_catalog() {
     graph.connect("sparse", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     eprintln!("[Sparse pipeline] {} results", pipe_results.len());
@@ -509,9 +509,9 @@ async fn generic_sparse_pipeline_matches_catalog() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_full_hybrid_pipeline_matches_catalog() {
+fn generic_full_hybrid_pipeline_matches_catalog() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
@@ -519,19 +519,19 @@ async fn generic_full_hybrid_pipeline_matches_catalog() {
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(embedder.clone());
     catalog.set_sparse_embedder(sparse.clone());
     catalog.set_dual_embedder(dual.clone());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
-    catalog.register_entity("Product", product_config).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     // 1. catalog.search() reference (HYBRID + SPARSE = all 3 signals)
     let cat_response = catalog
@@ -543,7 +543,7 @@ async fn generic_full_hybrid_pipeline_matches_catalog() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
     eprintln!(
         "[Full hybrid catalog] {} results, bm25={}, vector={}, sparse={}, fused={}",
@@ -582,7 +582,7 @@ async fn generic_full_hybrid_pipeline_matches_catalog() {
     graph.connect("fuse", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     eprintln!("[Full hybrid pipeline] {} results", pipe_results.len());
@@ -599,15 +599,15 @@ async fn generic_full_hybrid_pipeline_matches_catalog() {
 // Edge cases
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_bm25_pipeline_no_results() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn generic_bm25_pipeline_no_results() {
+    let mut catalog = setup_simple_catalog(4);
     catalog
         .ingest_entities("Product", vec![
             make_product("Test", "some description here", "some details", 10.0),
         ])
-        .await
+        
         .unwrap();
 
     let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
@@ -625,30 +625,30 @@ async fn generic_bm25_pipeline_no_results() {
     graph.connect("bm25", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     assert_eq!(pipe_results.len(), 0, "nonsense query should return 0 results");
 }
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_vector_pipeline_with_limit() {
+fn generic_vector_pipeline_with_limit() {
     let dim = MINILM.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(MINILM.clone());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::SEMANTIC;
-    catalog.register_entity("Product", product_config).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     let embedder: Arc<dyn Embedder> = MINILM.clone();
     let (services, _) = build_services(catalog, embedder, None, None);
@@ -665,7 +665,7 @@ async fn generic_vector_pipeline_with_limit() {
     graph.connect("vector", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let output = runtime.execute(&mut graph).await.unwrap();
+    let output = runtime.execute(&mut graph).unwrap();
     let pipe_results = extract_results(&output, "resolve");
 
     assert_eq!(pipe_results.len(), 1, "limit=1 should return exactly 1 result");
@@ -676,20 +676,20 @@ async fn generic_vector_pipeline_with_limit() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn generic_hybrid_pipeline_with_report() {
+fn generic_hybrid_pipeline_with_report() {
     let dim = MINILM.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(MINILM.clone());
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
-    catalog.ingest_entities("Product", test_products()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
 
     let embedder: Arc<dyn Embedder> = MINILM.clone();
     let (services, _) = build_services(catalog, embedder, None, None);
@@ -711,7 +711,7 @@ async fn generic_hybrid_pipeline_with_report() {
     graph.connect("fuse", "results", "resolve", "results").unwrap();
 
     let runtime = DataflowRuntime::with_services(100, services);
-    let (output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     // Verify report structure
     assert!(

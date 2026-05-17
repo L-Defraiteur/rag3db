@@ -52,7 +52,7 @@ fn rag3db_root() -> String {
 }
 
 /// Load required extensions (vector, lucivy_fts, sparse_vector) into a native connection.
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -66,7 +66,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("✓ Loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -148,15 +148,15 @@ fn make_product(
 }
 
 /// Create catalog, load extensions, initialize, register Product entity.
-async fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
+fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(embedder_dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(embedder_dim)), config);
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
     catalog
 }
 
@@ -164,10 +164,10 @@ async fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
 // Phase 1 — Register + Ingest basics
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_register_and_ingest() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_register_and_ingest() {
+    let mut catalog = setup_simple_catalog(4);
 
     // Subscribe to events for debug
     let mut rx = catalog.subscribe();
@@ -193,7 +193,7 @@ async fn simple_register_and_ingest() {
         ),
     ];
 
-    let result = catalog.ingest_entities("Product", products).await.unwrap();
+    let result = catalog.ingest_entities("Product", products).unwrap();
     eprintln!("ingest: processed={}, failed={}", result.processed, result.failed);
 
     // Drain events
@@ -212,7 +212,7 @@ async fn simple_register_and_ingest() {
     // Verify entity count
     let count = catalog
         .execute_raw("MATCH (p:Product) RETURN count(p) AS cnt")
-        .await
+        
         .unwrap();
     let cnt = count.rows[0][0].as_i64().unwrap();
     assert_eq!(cnt, 3, "should have 3 products");
@@ -220,7 +220,7 @@ async fn simple_register_and_ingest() {
     // Verify chunks created
     let chunks = catalog
         .execute_raw("MATCH (c:Product_Chunk) RETURN count(c) AS cnt")
-        .await
+        
         .unwrap();
     let chunk_cnt = chunks.rows[0][0].as_i64().unwrap();
     assert!(chunk_cnt >= 3, "should have at least 3 chunks: {chunk_cnt}");
@@ -229,7 +229,7 @@ async fn simple_register_and_ingest() {
     // Debug: show rel tables
     let tables = catalog
         .execute_raw("CALL show_tables() RETURN *")
-        .await
+        
         .unwrap();
     eprintln!("--- Tables ---");
     for row in &tables.rows {
@@ -239,14 +239,14 @@ async fn simple_register_and_ingest() {
     // Debug: try both directions for CHUNKED_FROM
     let fwd = catalog
         .execute_raw("MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(p:Product) RETURN count(c) AS cnt")
-        .await
+        
         .unwrap();
     let fwd_cnt = fwd.rows[0][0].as_i64().unwrap();
     eprintln!("CHUNKED_FROM fwd (chunk→product): {fwd_cnt}");
 
     let rev = catalog
         .execute_raw("MATCH (p:Product)-[:Product_CHUNKED_FROM]->(c:Product_Chunk) RETURN count(c) AS cnt")
-        .await
+        
         .unwrap();
     let rev_cnt = rev.rows[0][0].as_i64().unwrap();
     eprintln!("CHUNKED_FROM rev (product→chunk): {rev_cnt}");
@@ -254,7 +254,7 @@ async fn simple_register_and_ingest() {
     // Undirected
     let undir = catalog
         .execute_raw("MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]-(p:Product) RETURN count(c) AS cnt")
-        .await
+        
         .unwrap();
     let undir_cnt = undir.rows[0][0].as_i64().unwrap();
     eprintln!("CHUNKED_FROM undirected: {undir_cnt}");
@@ -264,19 +264,19 @@ async fn simple_register_and_ingest() {
     eprintln!("✓ {rel_cnt} CHUNKED_FROM relations");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_ingest_unknown_entity_fails() {
-    let mut catalog = setup_simple_catalog(4).await;
-    let result = catalog.ingest_entities("Unknown", vec![]).await;
+fn simple_ingest_unknown_entity_fails() {
+    let mut catalog = setup_simple_catalog(4);
+    let result = catalog.ingest_entities("Unknown", vec![]);
     assert!(result.is_err(), "should fail for unknown entity");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_register_duplicate_fails() {
-    let mut catalog = setup_simple_catalog(4).await;
-    let result = catalog.register_entity("Product", make_product_config()).await;
+fn simple_register_duplicate_fails() {
+    let mut catalog = setup_simple_catalog(4);
+    let result = catalog.register_entity("Product", make_product_config());
     assert!(result.is_err(), "should fail for duplicate entity");
 }
 
@@ -284,10 +284,10 @@ async fn simple_register_duplicate_fails() {
 // Phase 2 — BM25 search (FTS only, no embeddings needed)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_bm25_search_finds_results() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_bm25_search_finds_results() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![
         make_product(
@@ -310,7 +310,7 @@ async fn simple_bm25_search_finds_results() {
         ),
     ];
 
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
     let response = catalog
         .search(
@@ -322,7 +322,7 @@ async fn simple_bm25_search_finds_results() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -342,17 +342,17 @@ async fn simple_bm25_search_finds_results() {
     }
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_bm25_no_results_for_nonsense() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_bm25_no_results_for_nonsense() {
+    let mut catalog = setup_simple_catalog(4);
 
     catalog
         .ingest_entities(
             "Product",
             vec![make_product("Test", "some description here", "some details", 10.0)],
         )
-        .await
+        
         .unwrap();
 
     let response = catalog
@@ -365,7 +365,7 @@ async fn simple_bm25_no_results_for_nonsense() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     assert_eq!(response.results.len(), 0, "nonsense query should return 0 results");
@@ -376,22 +376,22 @@ async fn simple_bm25_no_results_for_nonsense() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "candle-embedder")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_vector_minilm_search() {
+fn simple_vector_minilm_search() {
     let dim = MINILM.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(MINILM.clone());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::SEMANTIC;
-    catalog.register_entity("Product", product_config).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
 
     let products = vec![
         make_product(
@@ -415,7 +415,7 @@ async fn simple_vector_minilm_search() {
     ];
 
     let mut rx = catalog.subscribe();
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
     // Drain events
     while let Ok(event) = rx.try_recv() {
@@ -428,20 +428,20 @@ async fn simple_vector_minilm_search() {
     }
 
     // Debug: DB state
-    let products_cnt = catalog.execute_raw("MATCH (p:Product) RETURN count(p)").await.unwrap();
+    let products_cnt = catalog.execute_raw("MATCH (p:Product) RETURN count(p)").unwrap();
     eprintln!("[MiniLM] Products: {:?}", products_cnt.rows);
-    let chunks = catalog.execute_raw("MATCH (c:Product_Chunk) RETURN count(c)").await.unwrap();
+    let chunks = catalog.execute_raw("MATCH (c:Product_Chunk) RETURN count(c)").unwrap();
     eprintln!("[MiniLM] Chunks: {:?}", chunks.rows);
     let embs = catalog.execute_raw(
         "MATCH (c:Product_Chunk) RETURN c._uuid, c._text, size(c.embedding) AS dim, c._embed_hash LIMIT 5"
-    ).await.unwrap();
+    ).unwrap();
     for row in &embs.rows {
         eprintln!("[MiniLM] Chunk: {:?}", row);
     }
 
     // Debug: check CHUNKED_FROM direction
-    let fwd = catalog.execute_raw("MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(p:Product) RETURN count(c)").await.unwrap();
-    let rev = catalog.execute_raw("MATCH (p:Product)-[:Product_CHUNKED_FROM]->(c:Product_Chunk) RETURN count(c)").await.unwrap();
+    let fwd = catalog.execute_raw("MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(p:Product) RETURN count(c)").unwrap();
+    let rev = catalog.execute_raw("MATCH (p:Product)-[:Product_CHUNKED_FROM]->(c:Product_Chunk) RETURN count(c)").unwrap();
     eprintln!("[MiniLM] CHUNKED_FROM fwd={:?} rev={:?}", fwd.rows, rev.rows);
 
     // Search for programming → should find Rust Book
@@ -456,7 +456,7 @@ async fn simple_vector_minilm_search() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -495,21 +495,21 @@ async fn simple_vector_minilm_search() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_hybrid_bgem3_search() {
+fn simple_hybrid_bgem3_search() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(embedder);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
-    catalog.register_entity("Product", make_product_config()).await.unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
 
     let products = vec![
         make_product(
@@ -532,7 +532,7 @@ async fn simple_hybrid_bgem3_search() {
         ),
     ];
 
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
     // Hybrid search → should use both BM25 and vector
     let response = catalog
@@ -544,7 +544,7 @@ async fn simple_hybrid_bgem3_search() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -564,25 +564,25 @@ async fn simple_hybrid_bgem3_search() {
 }
 
 #[cfg(feature = "bge-m3")]
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_sparse_bgem3_search() {
+fn simple_sparse_bgem3_search() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let sparse: Arc<dyn SparseEmbedder> = BGE_M3.clone();
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_empty_config(dim);
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.set_embedder(embedder);
     catalog.set_sparse_embedder(sparse);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let mut product_config = make_product_config();
     product_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
-    catalog.register_entity("Product", product_config).await.unwrap();
+    catalog.register_entity("Product", product_config).unwrap();
 
     let products = vec![
         make_product(
@@ -599,7 +599,7 @@ async fn simple_sparse_bgem3_search() {
         ),
     ];
 
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
     let response = catalog
         .search(
@@ -610,7 +610,7 @@ async fn simple_sparse_bgem3_search() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!(
@@ -628,10 +628,10 @@ async fn simple_sparse_bgem3_search() {
 // Phase 5 — BM25 highlights + chunk resolution (long multi-field content)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_bm25_highlights_resolve_to_correct_chunks() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_bm25_highlights_resolve_to_correct_chunks() {
+    let mut catalog = setup_simple_catalog(4);
 
     // Long content across 2 fields to force multiple chunks.
     // "description" field: ~600 chars about Rust, mentions "borrow checker" only here.
@@ -664,7 +664,7 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
         79.99,
     )];
 
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
     // Debug: show chunks with offsets
     let chunks_debug = catalog
@@ -674,7 +674,7 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
                     substring(c._text, 0, 60) AS snippet \
              ORDER BY c._content_offset, c._start_char"
         )
-        .await
+        
         .unwrap();
     eprintln!("\n--- Chunks ---");
     for row in &chunks_debug.rows {
@@ -700,7 +700,7 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Search 'borrow checker' ---");
@@ -743,7 +743,7 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Search 'kubernetes' ---");
@@ -784,7 +784,7 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Search 'performance' (Detailed) ---");
@@ -811,30 +811,30 @@ async fn simple_bm25_highlights_resolve_to_correct_chunks() {
 // Phase 6 — Multiple ingestions + incremental
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_multiple_ingestions() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_multiple_ingestions() {
+    let mut catalog = setup_simple_catalog(4);
 
     // First batch
     let batch1 = vec![
         make_product("Product A", "First batch item alpha", "Details about alpha", 10.0),
         make_product("Product B", "First batch item beta", "Details about beta", 20.0),
     ];
-    let r1 = catalog.ingest_entities("Product", batch1).await.unwrap();
+    let r1 = catalog.ingest_entities("Product", batch1).unwrap();
     assert_eq!(r1.failed, 0);
 
     // Second batch
     let batch2 = vec![
         make_product("Product C", "Second batch item gamma", "Details about gamma", 30.0),
     ];
-    let r2 = catalog.ingest_entities("Product", batch2).await.unwrap();
+    let r2 = catalog.ingest_entities("Product", batch2).unwrap();
     assert_eq!(r2.failed, 0);
 
     // Total count should be 3
     let count = catalog
         .execute_raw("MATCH (p:Product) RETURN count(p) AS cnt")
-        .await
+        
         .unwrap();
     let cnt = count.rows[0][0].as_i64().unwrap();
     assert_eq!(cnt, 3, "should have 3 products after 2 batches");
@@ -850,7 +850,7 @@ async fn simple_multiple_ingestions() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("multi-ingest search: {} results", response.results.len());
@@ -866,8 +866,8 @@ async fn simple_multiple_ingestions() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Helper: execute a Cypher count query and return the single i64 result.
-async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
-    let result = catalog.execute_raw(cypher).await.unwrap();
+fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
+    let result = catalog.execute_raw(cypher).unwrap();
     result
         .rows
         .first()
@@ -877,10 +877,10 @@ async fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
 }
 
 /// Helper: get all UUIDs of Product entities.
-async fn get_product_uuids(catalog: &Catalog) -> Vec<String> {
+fn get_product_uuids(catalog: &Catalog) -> Vec<String> {
     let result = catalog
         .execute_raw("MATCH (p:Product) RETURN p._uuid ORDER BY p.name")
-        .await
+        
         .unwrap();
     result
         .rows
@@ -889,26 +889,26 @@ async fn get_product_uuids(catalog: &Catalog) -> Vec<String> {
         .collect()
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_delete_removes_chunks() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_delete_removes_chunks() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![
         make_product("Alpha Widget", "Advanced alpha technology for computing", "Alpha details here", 10.0),
         make_product("Beta Gadget", "Beta engineering and manufacturing process", "Beta details here", 20.0),
         make_product("Gamma Tool", "Gamma precision instruments for research", "Gamma details here", 30.0),
     ];
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
-    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)");
     assert_eq!(product_count, 3);
-    let total_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let total_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     assert!(total_chunks >= 3, "should have chunks: {total_chunks}");
     eprintln!("Before delete: {product_count} products, {total_chunks} chunks");
 
     // Get UUID of the first product
-    let uuids = get_product_uuids(&catalog).await;
+    let uuids = get_product_uuids(&catalog);
     let delete_uuid = &uuids[0];
     eprintln!("Deleting product: {delete_uuid}");
 
@@ -917,19 +917,19 @@ async fn simple_delete_removes_chunks() {
         &catalog,
         &format!("MATCH (c:Product_Chunk {{_parent_uuid: '{delete_uuid}'}}) RETURN count(c)"),
     )
-    .await;
+    ;
     assert!(chunks_before >= 1, "product should have chunks: {chunks_before}");
 
     // Delete via catalog API
     catalog.delete("Product", delete_uuid).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.delete_results.len(), 1, "drain should have one delete result");
     let del_result = &flush.delete_results[0];
     eprintln!("delete result: chunks_deleted={}", del_result.chunks_deleted);
     assert!(del_result.chunks_deleted >= 1, "should report deleted chunks");
 
     // Verify entity gone
-    let product_count_after = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    let product_count_after = query_count(&catalog, "MATCH (p:Product) RETURN count(p)");
     assert_eq!(product_count_after, 2);
 
     // Verify chunks gone for deleted product
@@ -937,11 +937,11 @@ async fn simple_delete_removes_chunks() {
         &catalog,
         &format!("MATCH (c:Product_Chunk {{_parent_uuid: '{delete_uuid}'}}) RETURN count(c)"),
     )
-    .await;
+    ;
     assert_eq!(chunks_after, 0, "deleted product's chunks should be gone");
 
     // Remaining products still have chunks
-    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     assert!(remaining_chunks > 0, "other products should still have chunks");
     eprintln!("After delete: {product_count_after} products, {remaining_chunks} chunks");
 
@@ -952,7 +952,7 @@ async fn simple_delete_removes_chunks() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert_eq!(response.results.len(), 0, "deleted product should not be searchable");
 
@@ -963,15 +963,15 @@ async fn simple_delete_removes_chunks() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(!response2.results.is_empty(), "remaining product should still be searchable");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_update_refreshes_chunks() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_update_refreshes_chunks() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![make_product(
         "Rust Book",
@@ -979,9 +979,9 @@ async fn simple_update_refreshes_chunks() {
         "Covers ownership, lifetimes, and concurrency patterns",
         49.99,
     )];
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
-    let uuids = get_product_uuids(&catalog).await;
+    let uuids = get_product_uuids(&catalog);
     let uuid = &uuids[0];
 
     // Verify initial search
@@ -991,7 +991,7 @@ async fn simple_update_refreshes_chunks() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(!response.results.is_empty(), "should find 'programming' before update");
 
@@ -1003,7 +1003,7 @@ async fn simple_update_refreshes_chunks() {
         39.99,
     );
     catalog.update("Product", uuid, new_data).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.update_results.len(), 1, "drain should have one update result");
     let result = &flush.update_results[0];
     eprintln!(
@@ -1020,7 +1020,7 @@ async fn simple_update_refreshes_chunks() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert_eq!(
         response_old.results.len(),
@@ -1035,7 +1035,7 @@ async fn simple_update_refreshes_chunks() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(
         !response_new.results.is_empty(),
@@ -1043,10 +1043,10 @@ async fn simple_update_refreshes_chunks() {
     );
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_update_unchanged_no_rechunk() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_update_unchanged_no_rechunk() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![make_product(
         "Widget",
@@ -1054,11 +1054,11 @@ async fn simple_update_unchanged_no_rechunk() {
         "Details about the widget",
         10.0,
     )];
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
-    let uuids = get_product_uuids(&catalog).await;
+    let uuids = get_product_uuids(&catalog);
     let uuid = &uuids[0];
-    let chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
 
     // Update only price (non-content field) — content fields unchanged
     let same_content_data = make_product(
@@ -1068,7 +1068,7 @@ async fn simple_update_unchanged_no_rechunk() {
         99.99, // only price changed
     );
     catalog.update("Product", uuid, same_content_data).unwrap();
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.update_results.len(), 1, "drain should have one update result");
     let result = &flush.update_results[0];
     eprintln!(
@@ -1084,25 +1084,25 @@ async fn simple_update_unchanged_no_rechunk() {
     assert_eq!(result.chunks_created, 0);
 
     // Chunk count unchanged
-    let chunks_after = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let chunks_after = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     assert_eq!(chunks_before, chunks_after, "chunk count should be unchanged");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_batch_delete_multiple() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_batch_delete_multiple() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![
         make_product("Alpha", "Alpha description content here", "Alpha details", 10.0),
         make_product("Beta", "Beta description content here", "Beta details", 20.0),
         make_product("Gamma", "Gamma description content here", "Gamma details", 30.0),
     ];
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
-    let uuids = get_product_uuids(&catalog).await;
+    let uuids = get_product_uuids(&catalog);
     assert_eq!(uuids.len(), 3);
-    let total_chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let total_chunks_before = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     eprintln!("Before batch_delete: 3 products, {total_chunks_before} chunks");
 
     // Delete first and third
@@ -1110,7 +1110,7 @@ async fn simple_batch_delete_multiple() {
     for uuid in &to_delete {
         catalog.delete("Product", uuid).unwrap();
     }
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     assert_eq!(flush.delete_results.len(), 2);
     for r in &flush.delete_results {
         eprintln!("  deleted {}: chunks_deleted={}", &r.uuid[..8], r.chunks_deleted);
@@ -1118,15 +1118,15 @@ async fn simple_batch_delete_multiple() {
     }
 
     // Only Beta remains
-    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)").await;
+    let product_count = query_count(&catalog, "MATCH (p:Product) RETURN count(p)");
     assert_eq!(product_count, 1);
 
-    let remaining_uuids = get_product_uuids(&catalog).await;
+    let remaining_uuids = get_product_uuids(&catalog);
     assert_eq!(remaining_uuids.len(), 1);
     assert_eq!(remaining_uuids[0], uuids[1], "Beta should remain");
 
     // Chunks only for Beta
-    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)").await;
+    let remaining_chunks = query_count(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     let beta_chunks = query_count(
         &catalog,
         &format!(
@@ -1134,7 +1134,7 @@ async fn simple_batch_delete_multiple() {
             uuids[1]
         ),
     )
-    .await;
+    ;
     assert_eq!(remaining_chunks, beta_chunks, "all remaining chunks should belong to Beta");
 
     // BM25: Beta still searchable
@@ -1144,7 +1144,7 @@ async fn simple_batch_delete_multiple() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(!response.results.is_empty(), "Beta should still be searchable");
 
@@ -1155,24 +1155,24 @@ async fn simple_batch_delete_multiple() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert_eq!(response2.results.len(), 0, "Alpha should not be searchable after batch delete");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_batch_update_multiple() {
-    let mut catalog = setup_simple_catalog(4).await;
+fn simple_batch_update_multiple() {
+    let mut catalog = setup_simple_catalog(4);
 
     let products = vec![
         make_product("Alpha", "Alpha original description", "Alpha original details", 10.0),
         make_product("Beta", "Beta original description", "Beta original details", 20.0),
         make_product("Gamma", "Gamma original description", "Gamma original details", 30.0),
     ];
-    catalog.ingest_entities("Product", products).await.unwrap();
+    catalog.ingest_entities("Product", products).unwrap();
 
-    let uuids = get_product_uuids(&catalog).await;
+    let uuids = get_product_uuids(&catalog);
     assert_eq!(uuids.len(), 3);
 
     // batch_update: change Alpha + Gamma content, Beta only price
@@ -1193,7 +1193,7 @@ async fn simple_batch_update_multiple() {
     for (uuid, data) in updates {
         catalog.update("Product", &uuid, data).unwrap();
     }
-    let flush = catalog.drain().await;
+    let flush = catalog.drain();
     let results = &flush.update_results;
     assert_eq!(results.len(), 3);
 
@@ -1228,7 +1228,7 @@ async fn simple_batch_update_multiple() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert_eq!(response.results.len(), 0, "old Alpha content should be gone");
 
@@ -1239,7 +1239,7 @@ async fn simple_batch_update_multiple() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(!response2.results.is_empty(), "new Alpha content should be findable");
 
@@ -1250,7 +1250,7 @@ async fn simple_batch_update_multiple() {
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        .await
+        
         .unwrap();
     assert!(!response3.results.is_empty(), "Beta original content should still be findable");
 }

@@ -124,7 +124,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -137,7 +137,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
                  Run ./run_e2e.sh --build-only first."
             );
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("  loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -145,12 +145,12 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
-async fn setup_catalog() -> Catalog {
+fn setup_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_config());
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     let dir_ref = catalog
         .create(
@@ -196,7 +196,7 @@ async fn setup_catalog() -> Catalog {
     catalog.link("HAS_FILE", dir_ref.clone(), file1_ref, BTreeMap::new()).unwrap();
     catalog.link("HAS_FILE", dir_ref, file2_ref, BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
     catalog
 }
@@ -232,10 +232,10 @@ fn strategy_no_expansion() -> SearchStrategy {
 // Test 1: execute_with_report — simple search produces a valid report
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_execute_with_report_simple() {
-    let catalog = setup_catalog().await;
+fn observe_execute_with_report_simple() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -244,10 +244,10 @@ async fn observe_execute_with_report_simple() {
         "src",
         strategy_no_expansion(),
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
-    let (output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     eprintln!("report: {}", serde_json::to_string_pretty(&report).unwrap());
 
@@ -272,10 +272,10 @@ async fn observe_execute_with_report_simple() {
 // Test 2: execute_with_report — expansion produces expanded_nodes + more edges
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_execute_with_report_expansion() {
-    let catalog = setup_catalog().await;
+fn observe_execute_with_report_expansion() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -284,10 +284,10 @@ async fn observe_execute_with_report_expansion() {
         "src",
         strategy_with_expansion(),
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
-    let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     eprintln!("report: {}", serde_json::to_string_pretty(&report).unwrap());
 
@@ -324,10 +324,10 @@ async fn observe_execute_with_report_expansion() {
 // Test 3: tap_all — captures data flowing through every edge
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_tap_all() {
-    let catalog = setup_catalog().await;
+fn observe_tap_all() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -336,11 +336,11 @@ async fn observe_tap_all() {
         "src",
         strategy_with_expansion(),
     )
-    .await;
+    ;
 
     let mut runtime = DataflowRuntime::with_services(10, services);
     let mut tap_rx = runtime.tap_all();
-    runtime.execute(&mut graph).await.unwrap();
+    runtime.execute(&mut graph).unwrap();
 
     // Collect all tap events
     let mut tap_events: Vec<TapEvent> = Vec::new();
@@ -398,10 +398,10 @@ async fn observe_tap_all() {
 // Test 4: tap specific edge — only captures the targeted edge
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_tap_specific_edge() {
-    let catalog = setup_catalog().await;
+fn observe_tap_specific_edge() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -410,12 +410,12 @@ async fn observe_tap_specific_edge() {
         "src",
         strategy_no_expansion(),
     )
-    .await;
+    ;
 
     let mut runtime = DataflowRuntime::with_services(10, services);
     // Only tap the query edge
     let mut tap_rx = runtime.tap("query_source", "query", "primary_search", "query");
-    runtime.execute(&mut graph).await.unwrap();
+    runtime.execute(&mut graph).unwrap();
 
     let mut tap_events: Vec<TapEvent> = Vec::new();
     while let Ok(ev) = tap_rx.try_recv() {
@@ -436,10 +436,10 @@ async fn observe_tap_specific_edge() {
 // Test 5: record to JSONL — write execution report to file
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_record_jsonl() {
-    let catalog = setup_catalog().await;
+fn observe_record_jsonl() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -448,16 +448,16 @@ async fn observe_record_jsonl() {
         "src",
         strategy_with_expansion(),
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
-    let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     // Record to JSONL
     let jsonl_path = std::env::temp_dir().join("e2e_observe_test.jsonl");
     let _ = std::fs::remove_file(&jsonl_path);
     let recorder = DataflowRecorder::new(RecordSink::File(jsonl_path.clone()));
-    recorder.record("search_pipeline", &report).await.unwrap();
+    recorder.record("search_pipeline", &report).unwrap();
 
     // Verify file contents
     let content = std::fs::read_to_string(&jsonl_path).unwrap();
@@ -480,10 +480,10 @@ async fn observe_record_jsonl() {
 // Test 6: record to rag3db — write execution to database nodes
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_record_database() {
-    let catalog = setup_catalog().await;
+fn observe_record_database() {
+    let catalog = setup_catalog();
     let conn = catalog.conn_arc();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
@@ -493,19 +493,19 @@ async fn observe_record_database() {
         "src",
         strategy_with_expansion(),
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
-    let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     // Record to database
     let recorder = DataflowRecorder::new(RecordSink::Database(conn.clone()));
-    recorder.record("search_pipeline", &report).await.unwrap();
+    recorder.record("search_pipeline", &report).unwrap();
 
     // Query back: _DataflowExecution
     let exec_result = conn
         .execute("MATCH (e:_DataflowExecution) WHERE e.pipeline_name = 'search_pipeline' RETURN e.pipeline_name, e.status, e.duration_ms, e.node_count")
-        .await
+        
         .unwrap();
     eprintln!("executions: {:?}", exec_result.rows);
     assert!(
@@ -521,7 +521,7 @@ async fn observe_record_database() {
     // Query back: _DataflowNodeRun
     let node_result = conn
         .execute("MATCH (n:_DataflowNodeRun)-[:_NodeRunOf]->(e:_DataflowExecution) RETURN n.node_name, n.status ORDER BY n.node_name")
-        .await
+        
         .unwrap();
     eprintln!("node runs: {:?}", node_result.rows);
     assert!(
@@ -533,7 +533,7 @@ async fn observe_record_database() {
     // Query back: _DataflowEdgeRun
     let edge_result = conn
         .execute("MATCH (r:_DataflowEdgeRun)-[:_EdgeRunOf]->(e:_DataflowExecution) RETURN r.from_node, r.to_node, r.value_summary")
-        .await
+        
         .unwrap();
     eprintln!("edge runs: {:?}", edge_result.rows);
     assert!(
@@ -546,10 +546,10 @@ async fn observe_record_database() {
 // Test 7: report serializes to JSON correctly
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn observe_report_json_structure() {
-    let catalog = setup_catalog().await;
+fn observe_report_json_structure() {
+    let catalog = setup_catalog();
     let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
@@ -558,10 +558,10 @@ async fn observe_report_json_structure() {
         "src",
         strategy_with_expansion(),
     )
-    .await;
+    ;
 
     let runtime = DataflowRuntime::with_services(10, services);
-    let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+    let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
     // Serialize to JSON
     let json = serde_json::to_value(&report).unwrap();

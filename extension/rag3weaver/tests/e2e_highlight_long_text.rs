@@ -35,7 +35,7 @@ fn rag3db_root() -> String {
     })
 }
 
-async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
+fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
@@ -46,7 +46,7 @@ async fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
         if !std::path::Path::new(ext_path).exists() {
             panic!("Extension '{name}' not found at: {ext_path}\nRun ./run_e2e.sh --build-only first.");
         }
-        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).await;
+        let result = conn.execute(&format!("LOAD EXTENSION '{ext_path}'"));
         match result {
             Ok(_) => eprintln!("✓ Loaded {name}"),
             Err(e) => panic!("Failed to load {name} from {ext_path}: {e}"),
@@ -111,10 +111,10 @@ fn make_article(
     data
 }
 
-async fn setup_simple_catalog() -> Catalog {
+fn setup_simple_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = CatalogConfig {
         name: Some("highlight-long-test".into()),
@@ -124,8 +124,8 @@ async fn setup_simple_catalog() -> Catalog {
         ..Default::default()
     };
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
-    catalog.initialize().await.unwrap();
-    catalog.register_entity("Article", make_article_config()).await.unwrap();
+    catalog.initialize().unwrap();
+    catalog.register_entity("Article", make_article_config()).unwrap();
     catalog
 }
 
@@ -187,14 +187,14 @@ requirements. Self-healing deployment systems automatically detect and remediate
 drift, ensuring that production environments remain consistent with their declared specifications.";
 
 /// Debug helper: print chunk info for an entity.
-async fn debug_chunks(catalog: &mut Catalog, entity: &str) {
+fn debug_chunks(catalog: &mut Catalog, entity: &str) {
     let query = format!(
         "MATCH (c:{entity}_Chunk)-[:{entity}_CHUNKED_FROM]->(p:{entity}) \
          RETURN c._uuid, c._parent_field, c._content_offset, c._start_char, c._end_char, \
                 c._index, substring(c._text, 0, 50) AS snippet \
          ORDER BY c._parent_field, c._start_char"
     );
-    let result = catalog.execute_raw(&query).await.unwrap();
+    let result = catalog.execute_raw(&query).unwrap();
     eprintln!("\n--- {entity} Chunks ({} rows) ---", result.rows.len());
     for row in &result.rows {
         let uuid = row[0].as_str().unwrap_or("?");
@@ -240,10 +240,10 @@ fn debug_bm25_diagnostics(response: &rag3weaver::search::SearchResponse) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_long_text_generates_multiple_chunks() {
-    let mut catalog = setup_simple_catalog().await;
+fn simple_long_text_generates_multiple_chunks() {
+    let mut catalog = setup_simple_catalog();
     let mut rx = catalog.subscribe();
 
     catalog
@@ -251,7 +251,7 @@ async fn simple_long_text_generates_multiple_chunks() {
             "Article",
             vec![make_article("Test Article", LONG_DESCRIPTION, LONG_DETAILS)],
         )
-        .await
+        
         .unwrap();
 
     // Drain events
@@ -261,14 +261,14 @@ async fn simple_long_text_generates_multiple_chunks() {
         }
     }
 
-    debug_chunks(&mut catalog, "Article").await;
+    debug_chunks(&mut catalog, "Article");
 
     // Count chunks per field
     let desc_chunks = catalog
         .execute_raw(
             "MATCH (c:Article_Chunk) WHERE c._parent_field = 'description' RETURN count(c) AS cnt",
         )
-        .await
+        
         .unwrap();
     let desc_cnt = desc_chunks.rows[0][0].as_i64().unwrap();
 
@@ -276,7 +276,7 @@ async fn simple_long_text_generates_multiple_chunks() {
         .execute_raw(
             "MATCH (c:Article_Chunk) WHERE c._parent_field = 'details' RETURN count(c) AS cnt",
         )
-        .await
+        
         .unwrap();
     let det_cnt = det_chunks.rows[0][0].as_i64().unwrap();
 
@@ -291,20 +291,20 @@ async fn simple_long_text_generates_multiple_chunks() {
     );
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
-    let mut catalog = setup_simple_catalog().await;
+fn simple_highlight_resolves_to_correct_chunk_per_zone() {
+    let mut catalog = setup_simple_catalog();
 
     catalog
         .ingest_entities(
             "Article",
             vec![make_article("Test Article", LONG_DESCRIPTION, LONG_DETAILS)],
         )
-        .await
+        
         .unwrap();
 
-    debug_chunks(&mut catalog, "Article").await;
+    debug_chunks(&mut catalog, "Article");
 
     let search_opts = |_query: &str| SearchOptions {
         consistency: Consistency::Immediate,
@@ -314,7 +314,7 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     };
 
     // 1. "XYLOPHONE" — only in description zone 1 (start)
-    let r1 = catalog.search("Article", "XYLOPHONE", search_opts("")).await.unwrap();
+    let r1 = catalog.search("Article", "XYLOPHONE", search_opts("")).unwrap();
     eprintln!("\n--- Search 'XYLOPHONE' (desc zone 1) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -331,7 +331,7 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 2. "ZEPPELIN" — only in description zone 2 (middle)
-    let r2 = catalog.search("Article", "ZEPPELIN", search_opts("")).await.unwrap();
+    let r2 = catalog.search("Article", "ZEPPELIN", search_opts("")).unwrap();
     eprintln!("\n--- Search 'ZEPPELIN' (desc zone 2) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -347,7 +347,7 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 3. "QUASAR" — only in description zone 3 (end)
-    let r3 = catalog.search("Article", "QUASAR", search_opts("")).await.unwrap();
+    let r3 = catalog.search("Article", "QUASAR", search_opts("")).unwrap();
     eprintln!("\n--- Search 'QUASAR' (desc zone 3) ---");
     eprintln!("results={}, bm25_count={}", r3.results.len(), r3.meta.bm25_count);
     debug_bm25_diagnostics(&r3);
@@ -363,7 +363,7 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 4. "FIBONACCI" — only in details zone 1 (different field)
-    let r4 = catalog.search("Article", "FIBONACCI", search_opts("")).await.unwrap();
+    let r4 = catalog.search("Article", "FIBONACCI", search_opts("")).unwrap();
     eprintln!("\n--- Search 'FIBONACCI' (details zone 1) ---");
     eprintln!("results={}, bm25_count={}", r4.results.len(), r4.meta.bm25_count);
     debug_bm25_diagnostics(&r4);
@@ -379,7 +379,7 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 5. "NEBULA" — only in details zone 3 (end of second field)
-    let r5 = catalog.search("Article", "NEBULA", search_opts("")).await.unwrap();
+    let r5 = catalog.search("Article", "NEBULA", search_opts("")).unwrap();
     eprintln!("\n--- Search 'NEBULA' (details zone 3) ---");
     eprintln!("results={}, bm25_count={}", r5.results.len(), r5.meta.bm25_count);
     debug_bm25_diagnostics(&r5);
@@ -395,17 +395,17 @@ async fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn simple_highlight_detailed_multi_field_multi_chunk() {
-    let mut catalog = setup_simple_catalog().await;
+fn simple_highlight_detailed_multi_field_multi_chunk() {
+    let mut catalog = setup_simple_catalog();
 
     catalog
         .ingest_entities(
             "Article",
             vec![make_article("Test Article", LONG_DESCRIPTION, LONG_DETAILS)],
         )
-        .await
+        
         .unwrap();
 
     // "software" appears multiple times in LONG_DESCRIPTION (zones 1, 2, 3)
@@ -422,7 +422,7 @@ async fn simple_highlight_detailed_multi_field_multi_chunk() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Search 'software' (Detailed) ---");
@@ -457,7 +457,7 @@ async fn simple_highlight_detailed_multi_field_multi_chunk() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Search 'deployment' (Detailed) ---");
@@ -555,14 +555,14 @@ fn make_doc(
     data
 }
 
-async fn setup_kb_catalog() -> Catalog {
+fn setup_kb_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_kb_config_small_chunks();
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
     catalog
 }
 
@@ -607,7 +607,7 @@ part of standard SQL queries without external service calls.";
 
 /// Debug helper for KB chunks (Index table).
 /// KB uses {kb}_Index_HAS_CHUNK (FROM Index TO Chunk), so direction is reversed vs simple entity.
-async fn debug_kb_chunks(catalog: &mut Catalog, kb: &str) {
+fn debug_kb_chunks(catalog: &mut Catalog, kb: &str) {
     let index = format!("{kb}_Index");
     let chunk = format!("{kb}_Index_Chunk");
     let rel = format!("{kb}_Index_HAS_CHUNK");
@@ -617,7 +617,7 @@ async fn debug_kb_chunks(catalog: &mut Catalog, kb: &str) {
                 c._index, substring(c._text, 0, 50) AS snippet \
          ORDER BY c._content_offset, c._start_char"
     );
-    let result = catalog.execute_raw(&query).await.unwrap();
+    let result = catalog.execute_raw(&query).unwrap();
     eprintln!("\n--- KB '{kb}' Chunks ({} rows) ---", result.rows.len());
     for row in &result.rows {
         let uuid = row[0].as_str().unwrap_or("?");
@@ -634,21 +634,21 @@ async fn debug_kb_chunks(catalog: &mut Catalog, kb: &str) {
     }
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn kb_long_text_generates_multiple_chunks() {
-    let mut catalog = setup_kb_catalog().await;
+fn kb_long_text_generates_multiple_chunks() {
+    let mut catalog = setup_kb_catalog();
 
     catalog.create("Document", make_doc("Test Doc", KB_LONG_BODY, KB_LONG_SUMMARY)).unwrap();
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
 
-    debug_kb_chunks(&mut catalog, "main").await;
+    debug_kb_chunks(&mut catalog, "main");
 
     // Count total chunks
     let chunks = catalog
         .execute_raw("MATCH (c:main_Index_Chunk) RETURN count(c) AS cnt")
-        .await
+        
         .unwrap();
     let cnt = chunks.rows[0][0].as_i64().unwrap();
     eprintln!("✓ total KB chunks: {cnt}");
@@ -656,15 +656,15 @@ async fn kb_long_text_generates_multiple_chunks() {
     assert!(cnt >= 4, "should have 4+ chunks total, got {cnt}");
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn kb_highlight_resolves_to_correct_chunk_body() {
-    let mut catalog = setup_kb_catalog().await;
+fn kb_highlight_resolves_to_correct_chunk_body() {
+    let mut catalog = setup_kb_catalog();
 
     catalog.create("Document", make_doc("Test Doc", KB_LONG_BODY, KB_LONG_SUMMARY)).unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
-    debug_kb_chunks(&mut catalog, "main").await;
+    debug_kb_chunks(&mut catalog, "main");
 
     let search_opts = SearchOptions {
         consistency: Consistency::Immediate,
@@ -674,7 +674,7 @@ async fn kb_highlight_resolves_to_correct_chunk_body() {
     };
 
     // 1. "METAMORPHOSIS" — body zone 1
-    let r1 = catalog.search("main", "METAMORPHOSIS", search_opts.clone()).await.unwrap();
+    let r1 = catalog.search("main", "METAMORPHOSIS", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'METAMORPHOSIS' (body zone 1) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -690,7 +690,7 @@ async fn kb_highlight_resolves_to_correct_chunk_body() {
     }
 
     // 2. "PARADOXICAL" — body zone 2
-    let r2 = catalog.search("main", "PARADOXICAL", search_opts.clone()).await.unwrap();
+    let r2 = catalog.search("main", "PARADOXICAL", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'PARADOXICAL' (body zone 2) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -706,7 +706,7 @@ async fn kb_highlight_resolves_to_correct_chunk_body() {
     }
 
     // 3. "HOLOGRAPHIC" — body zone 3
-    let r3 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).await.unwrap();
+    let r3 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'HOLOGRAPHIC' (body zone 3) ---");
     eprintln!("results={}, bm25_count={}", r3.results.len(), r3.meta.bm25_count);
     debug_bm25_diagnostics(&r3);
@@ -722,15 +722,15 @@ async fn kb_highlight_resolves_to_correct_chunk_body() {
     }
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn kb_highlight_resolves_to_correct_chunk_summary() {
-    let mut catalog = setup_kb_catalog().await;
+fn kb_highlight_resolves_to_correct_chunk_summary() {
+    let mut catalog = setup_kb_catalog();
 
     catalog.create("Document", make_doc("Test Doc", KB_LONG_BODY, KB_LONG_SUMMARY)).unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
-    debug_kb_chunks(&mut catalog, "main").await;
+    debug_kb_chunks(&mut catalog, "main");
 
     // "CRYSTALLINE" — only in summary (different _content_offset from body)
     let response = catalog
@@ -744,7 +744,7 @@ async fn kb_highlight_resolves_to_correct_chunk_summary() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- KB Search 'CRYSTALLINE' (summary) ---");
@@ -762,13 +762,13 @@ async fn kb_highlight_resolves_to_correct_chunk_summary() {
     }
 }
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn kb_detailed_multi_chunk_attribution() {
-    let mut catalog = setup_kb_catalog().await;
+fn kb_detailed_multi_chunk_attribution() {
+    let mut catalog = setup_kb_catalog();
 
     catalog.create("Document", make_doc("Test Doc", KB_LONG_BODY, KB_LONG_SUMMARY)).unwrap();
-    catalog.drain().await;
+    catalog.drain();
 
     // "database" appears in body zones 1, 2, 3 AND summary → many chunks
     let response = catalog
@@ -783,7 +783,7 @@ async fn kb_detailed_multi_chunk_attribution() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- KB Search 'database' (Detailed) ---");
@@ -867,16 +867,16 @@ has led to breakthroughs in both academic and industrial settings. She currently
 the distributed systems lab at the Institute of Advanced Computing, where her team \
 develops next-generation query engines for heterogeneous data environments.";
 
-#[tokio::test]
+#[test]
 #[ignore]
-async fn kb_multi_entity_highlight_in_linked_content() {
+fn kb_multi_entity_highlight_in_linked_content() {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    load_extensions(boxed.as_ref()).await;
+    load_extensions(boxed.as_ref());
 
     let config = make_multi_entity_kb_config();
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Create Document with long body (no summary in multi-entity config)
     let mut doc_data = BTreeMap::new();
@@ -893,11 +893,11 @@ async fn kb_multi_entity_highlight_in_linked_content() {
     // Link doc → author
     catalog.link("WRITTEN_BY", doc, author, BTreeMap::new()).unwrap();
 
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
-    debug_kb_chunks(&mut catalog, "main").await;
+    debug_kb_chunks(&mut catalog, "main");
 
     let search_opts = SearchOptions {
         consistency: Consistency::Immediate,
@@ -907,7 +907,7 @@ async fn kb_multi_entity_highlight_in_linked_content() {
     };
 
     // 1. "HOLOGRAPHIC" — in body (Document's own content)
-    let r1 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).await.unwrap();
+    let r1 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
     eprintln!("\n--- Multi-entity KB Search 'HOLOGRAPHIC' (body) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -920,7 +920,7 @@ async fn kb_multi_entity_highlight_in_linked_content() {
     }
 
     // 2. "SYNCHRONICITY" — in Author bio (linked content)
-    let r2 = catalog.search("main", "SYNCHRONICITY", search_opts.clone()).await.unwrap();
+    let r2 = catalog.search("main", "SYNCHRONICITY", search_opts.clone()).unwrap();
     eprintln!("\n--- Multi-entity KB Search 'SYNCHRONICITY' (author bio) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -946,7 +946,7 @@ async fn kb_multi_entity_highlight_in_linked_content() {
                 ..Default::default()
             },
         )
-        .await
+        
         .unwrap();
 
     eprintln!("\n--- Multi-entity KB 'database' (Detailed) ---");

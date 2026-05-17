@@ -460,6 +460,7 @@ impl SchemaDialect for Rag3dbDialect {
     fn batch_upsert(&self, table: &str, columns: &[&str]) -> String {
         let set_clause: Vec<String> = columns
             .iter()
+            .filter(|c| **c != "_uuid")
             .map(|c| format!("n.{c} = item.{c}"))
             .collect();
         let id_expr = self.node_id_expr("n");
@@ -700,7 +701,7 @@ impl SchemaDialect for Rag3dbDialect {
         };
 
         format!(
-            "MATCH (c:{chunk_table}) WHERE c._uuid IN [$uuids] \
+            "MATCH (c:{chunk_table}) WHERE c._uuid IN $uuids \
              {rel_match} \
              RETURN {}",
             return_cols.join(", ")

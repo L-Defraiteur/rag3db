@@ -104,11 +104,11 @@ fn make_catalog() -> Catalog {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 /// Normal drain → checkpoint completed → no pending checkpoints → DB tables exist.
-#[tokio::test]
+#[test]
 #[ignore]
-async fn checkpoint_drain_completed() {
+fn checkpoint_drain_completed() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Create entities + link
     let doc_ref = catalog.create("Document", make_doc("Test Doc")).unwrap();
@@ -118,7 +118,7 @@ async fn checkpoint_drain_completed() {
         .unwrap();
 
     // Drain with checkpoint
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     assert_eq!(result.failed, 0);
     assert!(result.processed > 0);
 
@@ -127,14 +127,14 @@ async fn checkpoint_drain_completed() {
     assert!(author_ref.is_ready());
 
     // No pending checkpoints
-    let pending = catalog.check_pending_checkpoints().await.unwrap();
+    let pending = catalog.check_pending_checkpoints().unwrap();
     assert!(pending.is_empty(), "no pending checkpoints after successful drain");
 
     // Verify _DataflowExecution table has a completed row
     let exec_rows = catalog
         .conn()
         .execute("MATCH (n:_DataflowExecution) RETURN n.status")
-        .await
+        
         .unwrap();
     assert!(
         !exec_rows.rows.is_empty(),
@@ -149,11 +149,11 @@ async fn checkpoint_drain_completed() {
 /// Graph: inserts → links (via trigger edge).
 /// First drain: RAG3WEAVER_FAIL_NODE=links → inserts completes, links fails.
 /// Resume: links executes normally → checkpoint completed.
-#[tokio::test]
+#[test]
 #[ignore]
-async fn checkpoint_fail_and_resume() {
+fn checkpoint_fail_and_resume() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // Create entities + link (graph = inserts → links)
     let doc_ref = catalog.create("Document", make_doc("Resume Doc")).unwrap();
@@ -164,14 +164,14 @@ async fn checkpoint_fail_and_resume() {
 
     // Inject failure on "links" node
     catalog.set_fail_node(Some("links"));
-    let result = catalog.drain().await;
+    let result = catalog.drain();
     catalog.set_fail_node(None);
 
     // Drain failed
     assert!(result.failed > 0, "drain should have failed");
 
     // Checkpoint is pending (failed)
-    let pending = catalog.check_pending_checkpoints().await.unwrap();
+    let pending = catalog.check_pending_checkpoints().unwrap();
     assert_eq!(pending.len(), 1, "one failed checkpoint should be pending");
     let exec_id = pending[0].clone();
 
@@ -179,7 +179,7 @@ async fn checkpoint_fail_and_resume() {
     let exec_rows = catalog
         .conn()
         .execute("MATCH (n:_DataflowExecution) RETURN n.status")
-        .await
+        
         .unwrap();
     assert_eq!(exec_rows.rows[0][0].as_str().unwrap(), "failed");
 
@@ -191,7 +191,7 @@ async fn checkpoint_fail_and_resume() {
              WHERE n.status = 'completed' \
              RETURN n.node_name",
         )
-        .await
+        
         .unwrap();
     let completed_nodes: Vec<&str> = node_rows
         .rows
@@ -205,39 +205,39 @@ async fn checkpoint_fail_and_resume() {
     );
 
     // Resume without fail injection → links should execute normally
-    let resume_result = catalog.drain_resume(&exec_id).await.unwrap();
+    let resume_result = catalog.drain_resume(&exec_id).unwrap();
     assert_eq!(
         resume_result.failed, 0,
         "resume should succeed after removing fail injection"
     );
 
     // No more pending checkpoints
-    let pending = catalog.check_pending_checkpoints().await.unwrap();
+    let pending = catalog.check_pending_checkpoints().unwrap();
     assert!(pending.is_empty(), "checkpoint should be completed after resume");
 
     // Data is in the DB
-    let doc_count = catalog.count("Document").await.unwrap();
-    let author_count = catalog.count("Author").await.unwrap();
+    let doc_count = catalog.count("Document").unwrap();
+    let author_count = catalog.count("Author").unwrap();
     assert_eq!(doc_count, 1);
     assert_eq!(author_count, 1);
 }
 
 /// After successful drain, checkpoint tables are cleaned up (status=completed).
 /// A second drain creates a new independent checkpoint.
-#[tokio::test]
+#[test]
 #[ignore]
-async fn checkpoint_independent_per_drain() {
+fn checkpoint_independent_per_drain() {
     let mut catalog = make_catalog();
-    catalog.initialize().await.unwrap();
+    catalog.initialize().unwrap();
 
     // First drain
     catalog.create("Document", make_doc("Doc 1")).unwrap();
-    let r1 = catalog.drain().await;
+    let r1 = catalog.drain();
     assert_eq!(r1.failed, 0);
 
     // Second drain
     catalog.create("Document", make_doc("Doc 2")).unwrap();
-    let r2 = catalog.drain().await;
+    let r2 = catalog.drain();
     assert_eq!(r2.failed, 0);
 
     // Both executions should be completed
@@ -247,7 +247,7 @@ async fn checkpoint_independent_per_drain() {
             "MATCH (n:_DataflowExecution) \
              RETURN n.status ORDER BY n.created_at",
         )
-        .await
+        
         .unwrap();
     assert_eq!(exec_rows.rows.len(), 2, "should have 2 checkpoint executions");
     for row in &exec_rows.rows {
@@ -255,9 +255,9 @@ async fn checkpoint_independent_per_drain() {
     }
 
     // No pending
-    let pending = catalog.check_pending_checkpoints().await.unwrap();
+    let pending = catalog.check_pending_checkpoints().unwrap();
     assert!(pending.is_empty());
 
     // Both documents in DB
-    assert_eq!(catalog.count("Document").await.unwrap(), 2);
+    assert_eq!(catalog.count("Document").unwrap(), 2);
 }
