@@ -695,9 +695,11 @@ impl SchemaDialect for Rag3dbDialect {
         }
 
         let rel_match = if rel_forward {
-            format!("MATCH (c)-[:{rel_table}]->(p:{parent_table})")
-        } else {
+            // rel_forward = true means parent→chunk (e.g. HAS_CHUNK)
             format!("MATCH (p:{parent_table})-[:{rel_table}]->(c)")
+        } else {
+            // rel_forward = false means chunk→parent (e.g. CHUNKED_FROM)
+            format!("MATCH (c)-[:{rel_table}]->(p:{parent_table})")
         };
 
         format!(
