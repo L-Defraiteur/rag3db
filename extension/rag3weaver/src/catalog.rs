@@ -2996,17 +2996,15 @@ impl Catalog {
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
     ) -> Result<crate::search_strategy::SearchStrategyResponse, CatalogError> {
-        use crate::dataflow::PortValue;
-
-        let max_rounds = strategy.max_rounds;
         let has_expansions = !strategy.expansions.is_empty();
         let (mut graph, services) =
             Self::build_dataflow_graph(catalog, kb_name, query, strategy);
 
-        let runtime = crate::dataflow::DataflowRuntime::with_services(max_rounds, services);
-        let output = runtime
-            .execute(&mut graph)
-            .map_err(|e| CatalogError::DbError(e))?;
+        let output = crate::dataflow::execute_via_luciole(
+            &mut graph,
+            std::sync::Arc::new(services),
+        )
+        .map_err(|e| CatalogError::DbError(e))?;
 
         // Results from terminal node
         let results_node = if has_expansions {

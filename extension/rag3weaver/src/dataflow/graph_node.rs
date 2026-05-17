@@ -1,7 +1,7 @@
 //! GraphNode: a composable sub-graph node.
 //!
 //! Wraps a [`GraphDefinition`] and implements [`Node`], delegating `execute()`
-//! to an internal [`DataflowRuntime`]. Free (unconnected) ports of the inner
+//! to luciole's DAG engine via the bridge. Free (unconnected) ports of the inner
 //! graph become the inputs/outputs of the GraphNode.
 
 use std::collections::{HashMap, HashSet};
@@ -13,7 +13,6 @@ use super::graph::DataflowGraph;
 use super::node::{Node, NodeContext};
 use super::node_registry::{NodeFactory, NodeRegistry, NodeSchema};
 use super::port::{PortDef, PortType};
-use super::runtime::DataflowRuntime;
 
 // ─── GraphNode ──────────────────────────────────────────────────────────────
 
@@ -206,15 +205,12 @@ impl Node for GraphNode {
             }
         }
 
-        // 3. Create sub-runtime sharing the parent's services
+        // 3. Execute the sub-graph via luciole
         let services = ctx.services_arc();
-        let runtime = DataflowRuntime::with_services_arc(
-            self.definition.nodes.len() + 1,
+        let output = super::luciole_bridge::execute_via_luciole(
+            &mut sub_graph,
             services,
-        );
-
-        // 4. Execute the sub-graph
-        let output = runtime.execute(&mut sub_graph)?;
+        )?;
 
         // 5. Collect free outputs and set them on the parent context
         for (ext_name, (inner_node, inner_port)) in &self.output_map {
