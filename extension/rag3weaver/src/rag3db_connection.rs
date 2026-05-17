@@ -7,8 +7,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-
 use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryResult};
 
 /// In-process rag3db connection.
@@ -128,27 +126,12 @@ impl Rag3dbConnection {
     }
 }
 
-#[async_trait]
 impl DbConnection for Rag3dbConnection {
-    async fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
+    fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
         self.query_sync(cypher)
     }
 
-    async fn execute_with_params(
-        &self,
-        cypher: &str,
-        params: &[QueryParam],
-    ) -> Result<QueryResult, DbError> {
-        self.query_with_params_sync(cypher, params)
-    }
-}
-
-impl crate::connection::SyncDbConnection for Rag3dbConnection {
-    fn execute_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
-        self.query_sync(cypher)
-    }
-
-    fn execute_with_params_sync(
+    fn execute_with_params(
         &self,
         cypher: &str,
         params: &[QueryParam],
@@ -395,24 +378,20 @@ mod tests {
 
     // ── Integration tests (require rag3db build) ───────────────────────
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn in_memory_create_and_query() {
+    fn in_memory_create_and_query() {
         let conn = Rag3dbConnection::in_memory().unwrap();
 
         conn.execute("CREATE NODE TABLE Person(name STRING, age INT64, PRIMARY KEY(name));")
-            .await
             .unwrap();
         conn.execute("CREATE (:Person {name: 'Alice', age: 25});")
-            .await
             .unwrap();
         conn.execute("CREATE (:Person {name: 'Bob', age: 30});")
-            .await
             .unwrap();
 
         let result = conn
             .execute("MATCH (p:Person) RETURN p.name AS name, p.age AS age ORDER BY p.name;")
-            .await
             .unwrap();
 
         assert_eq!(result.columns, vec!["name", "age"]);
@@ -423,13 +402,12 @@ mod tests {
         assert_eq!(result.rows[1][1], CypherValue::Int(30));
     }
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn execute_with_params() {
+    fn execute_with_params() {
         let conn = Rag3dbConnection::in_memory().unwrap();
 
         conn.execute("CREATE NODE TABLE Item(id INT64, label STRING, PRIMARY KEY(id));")
-            .await
             .unwrap();
 
         let params = vec![
@@ -440,7 +418,6 @@ mod tests {
             "CREATE (:Item {id: $id, label: $label});",
             &params,
         )
-        .await
         .unwrap();
 
         let params = vec![
@@ -451,12 +428,10 @@ mod tests {
             "CREATE (:Item {id: $id, label: $label});",
             &params,
         )
-        .await
         .unwrap();
 
         let result = conn
             .execute("MATCH (i:Item) RETURN i.id, i.label ORDER BY i.id;")
-            .await
             .unwrap();
 
         assert_eq!(result.num_rows(), 2);
@@ -466,21 +441,18 @@ mod tests {
         assert_eq!(result.rows[1][1], CypherValue::String("second".into()));
     }
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn query_returns_node_as_map() {
+    fn query_returns_node_as_map() {
         let conn = Rag3dbConnection::in_memory().unwrap();
 
         conn.execute("CREATE NODE TABLE Person(name STRING, age INT64, PRIMARY KEY(name));")
-            .await
             .unwrap();
         conn.execute("CREATE (:Person {name: 'Alice', age: 25});")
-            .await
             .unwrap();
 
         let result = conn
             .execute("MATCH (p:Person) RETURN p;")
-            .await
             .unwrap();
 
         assert_eq!(result.num_rows(), 1);
@@ -494,32 +466,26 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn query_returns_rel_as_map() {
+    fn query_returns_rel_as_map() {
         let conn = Rag3dbConnection::in_memory().unwrap();
 
         conn.execute("CREATE NODE TABLE Person(name STRING, PRIMARY KEY(name));")
-            .await
             .unwrap();
         conn.execute("CREATE REL TABLE knows(FROM Person TO Person, since INT64);")
-            .await
             .unwrap();
         conn.execute("CREATE (:Person {name: 'Alice'});")
-            .await
             .unwrap();
         conn.execute("CREATE (:Person {name: 'Bob'});")
-            .await
             .unwrap();
         conn.execute(
             "MATCH (a:Person), (b:Person) WHERE a.name='Alice' AND b.name='Bob' CREATE (a)-[:knows {since: 2020}]->(b);",
         )
-        .await
         .unwrap();
 
         let result = conn
             .execute("MATCH (a)-[r:knows]->(b) RETURN r;")
-            .await
             .unwrap();
 
         assert_eq!(result.num_rows(), 1);
@@ -533,28 +499,26 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn as_trait_object() {
+    fn as_trait_object() {
         let conn: Box<dyn DbConnection> = Box::new(Rag3dbConnection::in_memory().unwrap());
         conn.execute("CREATE NODE TABLE T(id INT64, PRIMARY KEY(id));")
-            .await
             .unwrap();
-        conn.execute("CREATE (:T {id: 1});").await.unwrap();
+        conn.execute("CREATE (:T {id: 1});").unwrap();
 
         let result = conn
             .execute("MATCH (t:T) RETURN t.id;")
-            .await
             .unwrap();
         assert_eq!(result.num_rows(), 1);
         assert_eq!(result.rows[0][0], CypherValue::Int(1));
     }
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn error_on_invalid_query() {
+    fn error_on_invalid_query() {
         let conn = Rag3dbConnection::in_memory().unwrap();
-        let result = conn.execute("INVALID CYPHER SYNTAX!!!").await;
+        let result = conn.execute("INVALID CYPHER SYNTAX!!!");
         assert!(result.is_err());
     }
 }

@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use serde::Serialize;
 
@@ -34,7 +33,7 @@ pub struct NodeLogEntry {
 // ─── Node trait ──────────────────────────────────────────────────────────────
 
 /// A static node in the dataflow graph.
-#[async_trait]
+
 pub trait Node: Send + Sync {
     /// Unique name of this node instance.
     fn name(&self) -> &str;
@@ -46,7 +45,7 @@ pub trait Node: Send + Sync {
     fn outputs(&self) -> &[PortDef];
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
 
     /// Type identifier for checkpoint serialization (e.g., "InsertRecordNode").
     /// Must be unique per node implementation and stable across versions.
@@ -79,7 +78,7 @@ pub trait Node: Send + Sync {
     /// Reverse the operation using the previously captured undo context.
     ///
     /// Called during rollback in reverse topological order.
-    async fn undo(
+    fn undo(
         &mut self,
         _ctx: &mut NodeContext,
         _undo_ctx: serde_json::Value,

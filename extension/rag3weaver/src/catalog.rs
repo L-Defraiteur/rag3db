@@ -270,7 +270,7 @@ impl Catalog {
     /// Gracefully close all lucivy FTS indexes to release file locks.
     /// Must be called before dropping the Catalog when the DB will be reopened
     /// in the same process (e.g. tests, hot reload).
-    pub async fn shutdown(&mut self) -> Result<(), CatalogError> {
+    pub fn shutdown(&mut self) -> Result<(), CatalogError> {
         // Collect table names for FTS and sparse.
         let mut fts_tables: Vec<String> = Vec::new();
         for name in self.entity_configs.keys() {
@@ -291,7 +291,7 @@ impl Catalog {
         let mut fts_failed: Vec<String> = Vec::new();
         for table in &fts_tables {
             let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
-            match self.conn.execute(&query).await {
+            match self.conn.execute(&query) {
                 Ok(_) => fts_closed += 1,
                 Err(e) => {
                     eprintln!("[rag3weaver] shutdown: failed to close lucivy index on {table}: {e}");
@@ -323,10 +323,10 @@ impl Catalog {
         Ok(())
     }
 
-    pub async fn initialize(&mut self) -> Result<(), CatalogError> {
+    pub fn initialize(&mut self) -> Result<(), CatalogError> {
         // 0. Backend setup (CREATE EXTENSION, CREATE SCHEMA, etc.)
         for stmt in self.dialect.setup_statements() {
-            self.conn.execute(&stmt).await
+            self.conn.execute(&stmt)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
@@ -346,7 +346,6 @@ impl Catalog {
         for ddl in &schema.ddl {
             self.conn
                 .execute(ddl)
-                .await
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
@@ -354,7 +353,6 @@ impl Catalog {
         for idx in &schema.indexes {
             self.conn
                 .execute(idx)
-                .await
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
@@ -409,7 +407,6 @@ impl Catalog {
                 Arc::new(CypherCheckpointStore::new(self.conn.clone()));
             cp_store
                 .initialize()
-                .await
                 .map_err(|e| CatalogError::DbError(e))?;
             self.checkpoint_store = Some(cp_store);
         }
@@ -418,8 +415,7 @@ impl Catalog {
         //    Must be before ensure_sparse_handle() which needs blob_store.
         if let Some(ref sync_conn) = self.sync_conn {
             let blob_ddl = self.dialect.create_blob_table();
-            self.conn.execute(&blob_ddl)
-                .await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+            self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
             self.blob_store = Some(Arc::new(CypherBlobStore::from_sync_connection(sync_conn.clone())));
         } else if self.blob_store.is_none() {
             // Fallback: in-memory blob store for tests / in-memory DBs (no persistence needed)
@@ -438,9 +434,9 @@ impl Catalog {
         }
 
         // 10. Load persisted entity configs, relations, and KB configs from _catalog_meta
-        self.load_entity_configs().await?;
-        self.load_relations().await?;
-        self.load_kb_configs().await?;
+        self.load_entity_configs()?;
+        self.load_relations()?;
+        self.load_kb_configs()?;
 
         // 11. Initialize search backend (default: Rag3dbSearchBackend)
         if self.search_backend.is_none() {
@@ -470,7 +466,7 @@ impl Catalog {
     ///
     /// Order-independent: if a KB mentioned by this entity is already registered,
     /// it will be re-triggered to pick up the new fields.
-    pub async fn register_entity(
+    pub fn register_entity(
         &mut self,
         entity_name: &str,
         config: crate::config::EntityConfig,
@@ -496,10 +492,10 @@ impl Catalog {
 
         if let Some(old_config) = self.entity_configs.get(entity_name) {
             // ── Idempotent path: entity already registered ──
-            self.migrate_entity(entity_name, old_config.clone(), &config).await?;
+            self.migrate_entity(entity_name, old_config.clone(), &config)?;
         } else {
             // ── Fresh registration: create tables + indexes ──
-            self.create_entity_tables(entity_name, &config, &entity_def).await?;
+            self.create_entity_tables(entity_name, &config, &entity_def)?;
         }
 
         // Create sparse handle if needed (simple pipeline with sparse signal)
@@ -509,7 +505,7 @@ impl Catalog {
         }
 
         // Persist + update in-memory
-        self.persist_entity_config(entity_name, &config).await?;
+        self.persist_entity_config(entity_name, &config)?;
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
 
@@ -532,7 +528,7 @@ impl Catalog {
         }
         for kb_name in kb_names_to_retrigger {
             let kb_config = self.config.knowledge_bases.get(&kb_name).cloned().unwrap_or_default();
-            self.register_kb(&kb_name, kb_config).await?;
+            self.register_kb(&kb_name, kb_config)?;
         }
 
         Ok(())
@@ -562,7 +558,7 @@ impl Catalog {
     /// vector and sparse indexes if the entity has simple pipeline content
     /// fields (is_content=true). KB-only entities get their indexes through
     /// `register_kb()` instead.
-    async fn create_entity_tables(
+    fn create_entity_tables(
         &self,
         entity_name: &str,
         config: &crate::config::EntityConfig,
@@ -571,7 +567,7 @@ impl Catalog {
         // 1. Entity node table (always)
         let entity_ddl = crate::schema::generate_node_table_ddl(entity_name, entity_def)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&entity_ddl).await
+        self.conn.execute(&entity_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // Skip chunk/FTS/vector/sparse for KB-only entities (no simple pipeline)
@@ -583,19 +579,19 @@ impl Catalog {
         let chunk_ddl = crate::schema::generate_simple_chunk_table_ddl(
             entity_name, config, self.config.embedding_dim,
         ).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&chunk_ddl).await
+        self.conn.execute(&chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 3. CHUNKED_FROM relation
         let rel_ddl = crate::schema::generate_simple_chunk_rel_ddl(entity_name)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&rel_ddl).await
+        self.conn.execute(&rel_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 4. FTS index on entity content fields
         let fts_fields: Vec<&str> = config.content_fields();
         let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
-        let _ = self.conn.execute(&fts_ddl).await; // ignore if already exists
+        let _ = self.conn.execute(&fts_ddl); // ignore if already exists
 
         // 5. Vector index on chunk table
         if config.signals.vector() {
@@ -604,7 +600,7 @@ impl Catalog {
             let vec_ddl = crate::schema::generate_vector_index_ddl(
                 &chunk_table, "embedding", &idx_name,
             );
-            let _ = self.conn.execute(&vec_ddl).await;
+            let _ = self.conn.execute(&vec_ddl);
         }
 
         // 6. Sparse vector index — handled by ensure_sparse_handle() in register_entity()
@@ -613,7 +609,7 @@ impl Catalog {
     }
 
     /// Migrate an existing entity: add new fields, detect removed/changed fields.
-    async fn migrate_entity(
+    fn migrate_entity(
         &self,
         entity_name: &str,
         old_config: crate::config::EntityConfig,
@@ -652,7 +648,7 @@ impl Catalog {
                     col_type: ColumnType::from_field_type(&new_f.field_type),
                 };
                 let alter_ddl = self.dialect.alter_add_column(entity_name, &col);
-                self.conn.execute(&alter_ddl).await
+                self.conn.execute(&alter_ddl)
                     .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
                 if new_f.is_content || new_f.is_title || new_f.content_for.is_some() || new_f.title_for.is_some() {
@@ -686,11 +682,11 @@ impl Catalog {
                 // On PostgreSQL, FTS will be managed by lucivy handles directly.
                 if self.dialect.name() == "rag3db" {
                     let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{entity_name}')");
-                    let _ = self.conn.execute(&drop_fts).await;
+                    let _ = self.conn.execute(&drop_fts);
 
                     let fts_fields: Vec<&str> = new_config.content_fields();
                     let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
-                    let _ = self.conn.execute(&fts_ddl).await;
+                    let _ = self.conn.execute(&fts_ddl);
                 }
             }
 
@@ -698,7 +694,7 @@ impl Catalog {
             self.persist_meta_key(
                 &format!("needs_reindex:{entity_name}"),
                 "true",
-            ).await?;
+            )?;
             eprintln!("[rag3weaver] warning: Entity '{entity_name}' needs reindex after schema change — run catalog.reindex('{entity_name}')");
         }
 
@@ -707,7 +703,7 @@ impl Catalog {
             let chunk_table = format!("{entity_name}_Chunk");
             let idx_name = format!("{entity_name}_Chunk_vec");
             let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
-            let _ = self.conn.execute(&vec_ddl).await;
+            let _ = self.conn.execute(&vec_ddl);
         }
         // Sparse handle creation is handled by register_entity() after migrate_entity().
 
@@ -735,7 +731,7 @@ impl Catalog {
     ///
     /// Both `from` and `to` must be known entities (registered via `register_entity()`
     /// or declared in `CatalogConfig`).
-    pub async fn register_relation(
+    pub fn register_relation(
         &mut self,
         rel_name: &str,
         from: &str,
@@ -767,7 +763,7 @@ impl Catalog {
         } else {
             // Create the rel table
             let ddl = self.dialect.create_rel_table(&rel_name, from, to, &[]);
-            self.conn.execute(&ddl).await
+            self.conn.execute(&ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
@@ -777,7 +773,7 @@ impl Catalog {
             to: to.to_string(),
             properties: None,
         };
-        self.persist_relation(rel_name, &rel_def).await?;
+        self.persist_relation(rel_name, &rel_def)?;
         self.config.relations.insert(rel_name.to_string(), rel_def);
 
         Ok(())
@@ -794,7 +790,7 @@ impl Catalog {
     /// Order-independent with `register_entity()`: if entities are registered
     /// after the KB, `register_entity()` will re-trigger this method. If
     /// re-called with new content refs, rebuilds the FTS index on `{KB}_Index`.
-    pub async fn register_kb(
+    pub fn register_kb(
         &mut self,
         kb_name: &str,
         kb_config: crate::config::KBConfig,
@@ -838,15 +834,15 @@ impl Catalog {
                     // Rebuild FTS on {KB}_Index to include new content fields
                     let index_table = format!("{kb_name}_Index");
                     let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{index_table}')");
-                    let _ = self.conn.execute(&drop_fts).await;
+                    let _ = self.conn.execute(&drop_fts);
                     let fts_ddl = crate::schema::generate_fts_index_ddl(
                         &index_table, &["_title", "_content"], &["_source_entity"],
                     );
-                    let _ = self.conn.execute(&fts_ddl).await;
+                    let _ = self.conn.execute(&fts_ddl);
                 }
             } else {
                 // ── Fresh KB: create all tables + indexes ──
-                self.create_kb_tables(kb_name, &kb_config, info, &kb_entities).await?;
+                self.create_kb_tables(kb_name, &kb_config, info, &kb_entities)?;
             }
 
             // Create sparse handle if needed
@@ -878,7 +874,7 @@ impl Catalog {
         // it will re-trigger register_kb() and create the tables then.
 
         // Persist + update config
-        self.persist_kb_config(kb_name, &kb_config).await?;
+        self.persist_kb_config(kb_name, &kb_config)?;
         self.config.knowledge_bases.insert(kb_name.to_string(), kb_config);
 
         // Warm chunker cache for the new KB
@@ -888,7 +884,7 @@ impl Catalog {
     }
 
     /// Create all tables and indexes for a new Knowledge Base.
-    async fn create_kb_tables(
+    fn create_kb_tables(
         &self,
         kb_name: &str,
         kb_config: &crate::config::KBConfig,
@@ -900,32 +896,32 @@ impl Catalog {
         // 1. {KB}_Index table
         let idx_ddl = crate::schema::generate_index_table_ddl(kb_name, kb_config, embedding_dim)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&idx_ddl).await
+        self.conn.execute(&idx_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 2. {KB}_Index_Chunk table
         let chunk_ddl = crate::schema::generate_index_chunk_table_ddl(kb_name, kb_config, embedding_dim)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&chunk_ddl).await
+        self.conn.execute(&chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 3. {KB}_Index_HAS_CHUNK rel
         let has_chunk_ddl = crate::schema::generate_index_chunk_rel_ddl(kb_name)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&has_chunk_ddl).await
+        self.conn.execute(&has_chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 4. {TitleEntity}_IN_{KB} rel
         let in_ddl = crate::schema::generate_index_rel_ddl(&kb_info.title_entity, kb_name)
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&in_ddl).await
+        self.conn.execute(&in_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 5. {Entity}_SOURCED_{KB} rels (one per contributing entity)
         for entity_name in kb_entities {
             let source_ddl = crate::schema::generate_source_rel_ddl(entity_name, kb_name)
                 .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-            self.conn.execute(&source_ddl).await
+            self.conn.execute(&source_ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
@@ -934,7 +930,7 @@ impl Catalog {
         let fts_ddl = crate::schema::generate_fts_index_ddl(
             &index_table, &["_title", "_content"], &["_source_entity"],
         );
-        let _ = self.conn.execute(&fts_ddl).await;
+        let _ = self.conn.execute(&fts_ddl);
 
         // 7. Vector index on {KB}_Index_Chunk
         if kb_config.signals.vector() {
@@ -942,7 +938,7 @@ impl Catalog {
             let emb_col = format!("{kb_name}_embedding");
             let idx_name = format!("{kb_name}_Index_Chunk_vec");
             let vec_ddl = crate::schema::generate_vector_index_ddl(&chunk_table, &emb_col, &idx_name);
-            let _ = self.conn.execute(&vec_ddl).await;
+            let _ = self.conn.execute(&vec_ddl);
         }
 
         // 8. Sparse handle — created by register_kb() after create_kb_tables().
@@ -959,7 +955,7 @@ impl Catalog {
     /// re-aggregate for KB entities.
     ///
     /// Clears the `needs_reindex:{entity}` flag on success.
-    pub async fn reindex(&mut self, entity_name: &str) -> Result<ReindexStats, CatalogError> {
+    pub fn reindex(&mut self, entity_name: &str) -> Result<ReindexStats, CatalogError> {
         self.check_initialized()?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
@@ -971,7 +967,7 @@ impl Catalog {
         all_fields.extend(field_names.iter().map(|s| s.as_str()));
         let cypher = self.dialect.select_all(entity_name, &all_fields, None);
 
-        let result = self.conn.execute(&cypher).await
+        let result = self.conn.execute(&cypher)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         let mut records_enqueued = 0usize;
@@ -1005,14 +1001,14 @@ impl Catalog {
 
         // Drain if there's work to do
         if records_enqueued > 0 {
-            self.drain().await;
+            self.drain();
         }
 
         // Clear the needs_reindex flag
         self.persist_meta_key(
             &format!("needs_reindex:{entity_name}"),
             "false",
-        ).await?;
+        )?;
 
         Ok(ReindexStats {
             entity: entity_name.to_string(),
@@ -1023,7 +1019,7 @@ impl Catalog {
     // ── Persistence (_catalog_meta) ─────────────────────────────────────
 
     /// Persist a key-value pair to `_catalog_meta`.
-    async fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
+    fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
         let stmt = self.dialect.upsert_meta("key", "value");
         self.conn.execute_with_params(
             &stmt,
@@ -1031,29 +1027,29 @@ impl Catalog {
                 QueryParam::new("key", CypherValue::String(key.to_string())),
                 QueryParam::new("value", CypherValue::String(value.to_string())),
             ],
-        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
         Ok(())
     }
 
     /// Persist an entity config to `_catalog_meta`.
-    async fn persist_entity_config(
+    fn persist_entity_config(
         &self,
         entity_name: &str,
         config: &crate::config::EntityConfig,
     ) -> Result<(), CatalogError> {
         let json = serde_json::to_string(config)
             .map_err(|e| CatalogError::SchemaError(format!("serialize entity config: {e}")))?;
-        self.persist_meta_key(&format!("entity_config:{entity_name}"), &json).await
+        self.persist_meta_key(&format!("entity_config:{entity_name}"), &json)
     }
 
     /// Load all persisted entity configs from `_catalog_meta`.
     /// Called at the end of `initialize()` to restore simple entities.
-    async fn load_entity_configs(&mut self) -> Result<(), CatalogError> {
+    fn load_entity_configs(&mut self) -> Result<(), CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self.conn.execute_with_params(
             &stmt,
             &[QueryParam::new("prefix", CypherValue::String("entity_config:".into()))],
-        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
             let key = match row.get(0) {
@@ -1080,35 +1076,35 @@ impl Catalog {
     }
 
     /// Persist a relation definition to `_catalog_meta`.
-    async fn persist_relation(
+    fn persist_relation(
         &self,
         rel_name: &str,
         rel_def: &RelationDef,
     ) -> Result<(), CatalogError> {
         let json = serde_json::to_string(rel_def)
             .map_err(|e| CatalogError::SchemaError(format!("serialize relation: {e}")))?;
-        self.persist_meta_key(&format!("relation:{rel_name}"), &json).await
+        self.persist_meta_key(&format!("relation:{rel_name}"), &json)
     }
 
     /// Persist a KB config to `_catalog_meta`.
-    async fn persist_kb_config(
+    fn persist_kb_config(
         &self,
         kb_name: &str,
         kb_config: &crate::config::KBConfig,
     ) -> Result<(), CatalogError> {
         let json = serde_json::to_string(kb_config)
             .map_err(|e| CatalogError::SchemaError(format!("serialize kb config: {e}")))?;
-        self.persist_meta_key(&format!("kb_config:{kb_name}"), &json).await
+        self.persist_meta_key(&format!("kb_config:{kb_name}"), &json)
     }
 
     /// Load all persisted KB configs from `_catalog_meta` and rebuild KBMetadata.
     /// Called at the end of `initialize()` to restore dynamically registered KBs.
-    async fn load_kb_configs(&mut self) -> Result<(), CatalogError> {
+    fn load_kb_configs(&mut self) -> Result<(), CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self.conn.execute_with_params(
             &stmt,
             &[QueryParam::new("prefix", CypherValue::String("kb_config:".into()))],
-        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
             let key = match row.get(0) {
@@ -1176,12 +1172,12 @@ impl Catalog {
 
     /// Load all persisted relations from `_catalog_meta`.
     /// Called at the end of `initialize()` to restore dynamically registered relations.
-    async fn load_relations(&mut self) -> Result<(), CatalogError> {
+    fn load_relations(&mut self) -> Result<(), CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self.conn.execute_with_params(
             &stmt,
             &[QueryParam::new("prefix", CypherValue::String("relation:".into()))],
-        ).await.map_err(|e| CatalogError::DbError(e.to_string()))?;
+        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         for row in &result.rows {
             let key = match row.get(0) {
@@ -1301,7 +1297,7 @@ impl Catalog {
     ///             ←|trigger| chunk_insert.done
     ///     →|done:trigger| FlushNode("flush_fts", tables=["{Entity}"])
     /// ```
-    pub async fn ingest_entities(
+    pub fn ingest_entities(
         &mut self,
         entity_name: &str,
         records: Vec<BTreeMap<String, CypherValue>>,
@@ -1454,9 +1450,8 @@ impl Catalog {
         let result = if let Some(ref store) = self.checkpoint_store {
             runtime
                 .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
-                .await
         } else {
-            runtime.execute(&mut graph).await
+            runtime.execute(&mut graph)
         };
 
         match result {
@@ -1490,7 +1485,7 @@ impl Catalog {
                             new_content_hash: String::new(),
                         });
                     }
-                    self.drain().await;
+                    self.drain();
                 }
 
                 Ok(FlushResult {
@@ -1693,7 +1688,7 @@ impl Catalog {
 
     // ── Direct DB reads ────────────────────────────────────────────────
 
-    pub async fn get(
+    pub fn get(
         &self,
         entity_name: &str,
         uuid: &str,
@@ -1705,7 +1700,6 @@ impl Catalog {
         let result = self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(uuid.to_string())]))])
-            .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         if result.is_empty() {
@@ -1714,7 +1708,7 @@ impl Catalog {
         Ok(Some(self.row_to_map(&result.columns, &result.rows[0])))
     }
 
-    pub async fn get_many(
+    pub fn get_many(
         &self,
         entity_name: &str,
         uuids: &[String],
@@ -1742,7 +1736,6 @@ impl Catalog {
                     value: uuid_list,
                 }],
             )
-            .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         Ok(result
@@ -1752,7 +1745,7 @@ impl Catalog {
             .collect())
     }
 
-    pub async fn exists(
+    pub fn exists(
         &self,
         entity_name: &str,
         uuid: &str,
@@ -1764,7 +1757,6 @@ impl Catalog {
         let result = self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("uuid", uuid)])
-            .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         let count = result
@@ -1776,7 +1768,7 @@ impl Catalog {
         Ok(count > 0)
     }
 
-    pub async fn count(&self, entity_name: &str) -> Result<usize, CatalogError> {
+    pub fn count(&self, entity_name: &str) -> Result<usize, CatalogError> {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
 
@@ -1784,7 +1776,6 @@ impl Catalog {
         let result = self
             .conn
             .execute(&cypher)
-            .await
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         let count = result
@@ -2083,7 +2074,7 @@ impl Catalog {
     }
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
-    pub async fn drain(&mut self) -> FlushResult {
+    pub fn drain(&mut self) -> FlushResult {
         let (mut graph, services, op_count, update_results, delete_results) =
             self.build_ingestion_graph();
         if graph.nodes.is_empty() {
@@ -2104,9 +2095,8 @@ impl Catalog {
         let result = if let Some(ref store) = self.checkpoint_store {
             runtime
                 .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
-                .await
         } else {
-            runtime.execute(&mut graph).await
+            runtime.execute(&mut graph)
         };
 
         match result {
@@ -2148,7 +2138,7 @@ impl Catalog {
 
     /// Flush only entity inserts via a minimal dataflow graph.
     /// Leaves relations and aggregates in `pending` for a later `drain()`.
-    pub async fn flush_insertions(&mut self) -> FlushResult {
+    pub fn flush_insertions(&mut self) -> FlushResult {
         let entities = std::mem::take(&mut self.pending.entities);
         if entities.is_empty() {
             return FlushResult::default();
@@ -2166,7 +2156,7 @@ impl Catalog {
         services.register::<RwLock<NodeIdCache>>("node_id_cache", self.node_id_cache.clone());
 
         let runtime = DataflowRuntime::with_services(5, services);
-        match runtime.execute(&mut graph).await {
+        match runtime.execute(&mut graph) {
             Ok(_) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
@@ -2209,7 +2199,7 @@ impl Catalog {
     /// Reconstructs the graph from the checkpointed `GraphDefinition`
     /// (nodes + edges), then calls `execute_with_checkpoint()` which skips
     /// already-completed nodes and resumes from the failure point.
-    pub async fn drain_resume(&mut self, execution_id: &str) -> Result<FlushResult, CatalogError> {
+    pub fn drain_resume(&mut self, execution_id: &str) -> Result<FlushResult, CatalogError> {
         let store = self
             .checkpoint_store
             .clone()
@@ -2218,7 +2208,6 @@ impl Catalog {
         // Load the checkpoint to get the graph definition
         let checkpoint = store
             .load_execution(execution_id)
-            .await
             .map_err(|e| CatalogError::DbError(e))?
             .ok_or_else(|| {
                 CatalogError::DbError(format!("checkpoint not found: {execution_id}"))
@@ -2292,7 +2281,6 @@ impl Catalog {
 
         match runtime
             .execute_with_checkpoint(&mut graph, store.as_ref(), execution_id)
-            .await
         {
             Ok(_) => {
                 self.drain_counters.flush_count += 1;
@@ -2320,14 +2308,13 @@ impl Catalog {
     /// Check for incomplete checkpoint executions (status=Running).
     ///
     /// Returns execution IDs that can be passed to `drain_resume()`.
-    pub async fn check_pending_checkpoints(&self) -> Result<Vec<String>, CatalogError> {
+    pub fn check_pending_checkpoints(&self) -> Result<Vec<String>, CatalogError> {
         let store = self
             .checkpoint_store
             .as_ref()
             .ok_or(CatalogError::NotInitialized)?;
         store
             .find_incomplete()
-            .await
             .map_err(|e| CatalogError::DbError(e))
     }
 
@@ -2342,8 +2329,8 @@ impl Catalog {
     }
 
     /// Execute raw Cypher (useful for debugging/tests).
-    pub async fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
-        self.conn.execute(cypher).await.map_err(|e| CatalogError::DbError(e.to_string()))
+    pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
     }
 
     // ── Event bus ──────────────────────────────────────────────────────
@@ -2384,7 +2371,7 @@ impl Catalog {
 
     // ── Search ─────────────────────────────────────────────────────────
 
-    pub async fn search(
+    pub fn search(
         &mut self,
         name: &str,
         query: &str,
@@ -2399,11 +2386,11 @@ impl Catalog {
         // Consistency
         match options.consistency {
             search::Consistency::Strict => {
-                self.drain().await;
+                self.drain();
             }
             search::Consistency::Eventual => {
                 if self.has_pending() {
-                    self.flush_insertions().await;
+                    self.flush_insertions();
                 }
             }
             search::Consistency::Immediate => {}
@@ -2475,10 +2462,10 @@ impl Catalog {
                     join_from,
                 );
                 let result = if parsed.params.is_empty() {
-                    self.conn.execute(&query).await
+                    self.conn.execute(&query)
                         .map_err(|e| CatalogError::DbError(e.to_string()))?
                 } else {
-                    self.conn.execute_with_params(&query, &parsed.params).await
+                    self.conn.execute_with_params(&query, &parsed.params)
                         .map_err(|e| CatalogError::DbError(e.to_string()))?
                 };
                 let ids: Vec<u64> = result
@@ -2515,7 +2502,6 @@ impl Catalog {
                 // Single forward pass → dense + sparse
                 let (dense_vecs, sparse_vecs) = dual_emb
                     .embed_dual(&[query.to_string()])
-                    .await
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
                 (
                     dense_vecs.into_iter().next().unwrap_or_default(),
@@ -2523,9 +2509,9 @@ impl Catalog {
                 )
             } else {
                 // Fallback: separate embedders
-                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache).await?;
+                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?;
                 let sparse = if let Some(ref sparse_emb) = self.sparse_embedder {
-                    sparse_emb.embed_sparse(&[query.to_string()]).await
+                    sparse_emb.embed_sparse(&[query.to_string()])
                         .map_err(|e| CatalogError::EmbedError(e.to_string()))?
                         .into_iter().next()
                 } else { None };
@@ -2533,20 +2519,20 @@ impl Catalog {
             }
         } else if need_dense {
             let dense = if let Some(ref dual_emb) = self.dual_embedder {
-                let (dense_vecs, _) = dual_emb.embed_dual(&[query.to_string()]).await
+                let (dense_vecs, _) = dual_emb.embed_dual(&[query.to_string()])
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
                 dense_vecs.into_iter().next().unwrap_or_default()
             } else {
-                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache).await?
+                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?
             };
             (dense, None)
         } else if need_sparse {
             let sparse = if let Some(ref dual_emb) = self.dual_embedder {
-                let (_, sparse_vecs) = dual_emb.embed_dual(&[query.to_string()]).await
+                let (_, sparse_vecs) = dual_emb.embed_dual(&[query.to_string()])
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
                 sparse_vecs.into_iter().next()
             } else if let Some(ref sparse_emb) = self.sparse_embedder {
-                sparse_emb.embed_sparse(&[query.to_string()]).await
+                sparse_emb.embed_sparse(&[query.to_string()])
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?
                     .into_iter().next()
             } else { None };
@@ -2568,8 +2554,7 @@ impl Catalog {
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
-            )
-            .await?
+            )?
         } else {
             vec![]
         };
@@ -2584,13 +2569,13 @@ impl Catalog {
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields, options.result_mode,
                     diag.as_mut(),
-                ).await?
+                )?
             } else {
                 search::search_bm25(
                     self.conn.as_ref(), entity, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields,
-                ).await?
+                )?
             }
         } else {
             vec![]
@@ -2612,8 +2597,7 @@ impl Catalog {
                     &qv,
                     search_limit,
                     sparse_fields,
-                )
-                .await?
+                )?
             } else {
                 vec![]
             }
@@ -2629,13 +2613,13 @@ impl Catalog {
             search::resolve_vector_chunks_with_dialect(
                 self.conn.as_ref(), &target, vector_results, enrich_fields,
                 options.result_mode, self.dialect.as_ref(),
-            ).await?
+            )?
         } else { vector_results };
         let sparse_results = if is_chunked && !sparse_results.is_empty() {
             search::resolve_vector_chunks_with_dialect(
                 self.conn.as_ref(), &target, sparse_results, enrich_fields,
                 options.result_mode, self.dialect.as_ref(),
-            ).await?
+            )?
         } else { sparse_results };
 
         if let Some(ref mut d) = diag { d.resolve_ms = t_resolve.elapsed().as_millis() as u64; }
@@ -2670,12 +2654,12 @@ impl Catalog {
         if needs_enrich && !enrich_fields.is_empty() {
             search::enrich_results_with_data_via_backend(
                 self.search_backend.as_ref().unwrap().as_ref(), entity, enrich_fields, &mut fused,
-            ).await?;
+            )?;
         }
 
         // SourceResolved: resolve index entries → source entities (KB only)
         if target.has_source_refs && options.result_mode == search::ResultMode::SourceResolved {
-            self.resolve_to_source_entities(&mut fused).await?;
+            self.resolve_to_source_entities(&mut fused)?;
         }
 
         if let Some(ref mut d) = diag { d.enrich_ms = t_enrich.elapsed().as_millis() as u64; }
@@ -2714,7 +2698,7 @@ impl Catalog {
     /// Reads `_source_entity` and `_source_uuid` from each result's data,
     /// batch-fetches the source entities, and replaces uuid/entity/data.
     /// Deduplicates by source UUID, keeping the highest score.
-    async fn resolve_to_source_entities(
+    fn resolve_to_source_entities(
         &self,
         results: &mut Vec<search::SearchResult>,
     ) -> Result<(), CatalogError> {
@@ -2745,7 +2729,6 @@ impl Catalog {
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuid_param }],
                 )
-                .await
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
             for row in &result.rows {
@@ -2800,13 +2783,13 @@ impl Catalog {
         Ok(())
     }
 
-    pub async fn search_with_explore(
+    pub fn search_with_explore(
         &mut self,
         kb_name: &str,
         query: &str,
         options: search::ExploreOptions,
     ) -> Result<search::ExploreResult, CatalogError> {
-        let response = self.search(kb_name, query, options.search).await?;
+        let response = self.search(kb_name, query, options.search)?;
 
         let seed_nodes: Vec<search::GraphNode> = response
             .results
@@ -2828,8 +2811,7 @@ impl Catalog {
             &options.incoming_relations,
             options.depth,
             options.top_k,
-        )
-        .await?;
+        )?;
 
         Ok(search::ExploreResult {
             results: response.results,
@@ -2952,13 +2934,13 @@ impl Catalog {
     ///
     /// Use with [`DataflowRuntime`] for event observation:
     /// ```ignore
-    /// let (mut graph, services) = Catalog::build_dataflow_graph(catalog, kb, q, strategy).await;
+    /// let (mut graph, services) = Catalog::build_dataflow_graph(catalog, kb, q, strategy);
     /// let runtime = DataflowRuntime::with_services(10, services);
     /// let mut rx = runtime.subscribe();
-    /// let output = runtime.execute(&mut graph).await?;
+    /// let output = runtime.execute(&mut graph)?;
     /// ```
-    pub async fn build_dataflow_graph(
-        catalog: Arc<tokio::sync::Mutex<Catalog>>,
+    pub fn build_dataflow_graph(
+        catalog: Arc<Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
@@ -2970,8 +2952,8 @@ impl Catalog {
 
         // Services
         let mut services = ServiceRegistry::new();
-        let conn = catalog.lock().await.conn_arc();
-        services.register::<tokio::sync::Mutex<Catalog>>("catalog", catalog.clone());
+        let conn = catalog.lock().unwrap().conn_arc();
+        services.register::<Mutex<Catalog>>("catalog", catalog.clone());
         services.register("conn", std::sync::Arc::new(ConnService(conn)));
 
         // Source node
@@ -3030,8 +3012,8 @@ impl Catalog {
     ///
     /// For event observation, use [`Self::build_dataflow_graph()`] +
     /// [`DataflowRuntime::subscribe()`] + [`DataflowRuntime::execute()`].
-    pub async fn search_with_strategy(
-        catalog: Arc<tokio::sync::Mutex<Catalog>>,
+    pub fn search_with_strategy(
+        catalog: Arc<Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
@@ -3041,12 +3023,11 @@ impl Catalog {
         let max_rounds = strategy.max_rounds;
         let has_expansions = !strategy.expansions.is_empty();
         let (mut graph, services) =
-            Self::build_dataflow_graph(catalog, kb_name, query, strategy).await;
+            Self::build_dataflow_graph(catalog, kb_name, query, strategy);
 
         let runtime = crate::dataflow::DataflowRuntime::with_services(max_rounds, services);
         let output = runtime
             .execute(&mut graph)
-            .await
             .map_err(|e| CatalogError::DbError(e))?;
 
         // Results from terminal node
@@ -3089,7 +3070,7 @@ use crate::dataflow::checkpoint::{ExecutionCheckpoint, timestamp_ms};
 
 impl Catalog {
     /// Ensure migration schema tables exist.
-    pub(crate) async fn migration_initialize(&self) -> Result<(), MigrationError> {
+    pub(crate) fn migration_initialize(&self) -> Result<(), MigrationError> {
         use crate::dialect::{ColumnDef, ColumnType};
 
         let migration_cols = vec![
@@ -3104,7 +3085,7 @@ impl Catalog {
             ColumnDef { name: "error".into(), col_type: ColumnType::Text },
         ];
         let ddl = self.dialect.create_table("_DataflowMigration", &migration_cols);
-        self.conn.execute(&ddl).await
+        self.conn.execute(&ddl)
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         let lock_cols = vec![
@@ -3113,14 +3094,14 @@ impl Catalog {
             ColumnDef { name: "expires_at".into(), col_type: ColumnType::Int64 },
         ];
         let ddl = self.dialect.create_table("_DataflowMigrationLock", &lock_cols);
-        self.conn.execute(&ddl).await
+        self.conn.execute(&ddl)
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         Ok(())
     }
 
     /// Load applied migrations from the database.
-    pub(crate) async fn migration_load_applied(
+    pub(crate) fn migration_load_applied(
         &self,
     ) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
         let query = self.dialect.select_all(
@@ -3128,7 +3109,7 @@ impl Catalog {
             &["version", "name", "status", "checksum", "execution_id", "applied_at", "duration_ms", "error"],
             Some("version"),
         );
-        let result = self.conn.execute(&query).await
+        let result = self.conn.execute(&query)
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         let mut applied = HashMap::new();
@@ -3160,7 +3141,7 @@ impl Catalog {
     }
 
     /// Acquire migration lock (TTL-based).
-    pub(crate) async fn migration_acquire_lock(
+    pub(crate) fn migration_acquire_lock(
         &self,
         lock_id: &str,
     ) -> Result<(), MigrationError> {
@@ -3181,7 +3162,6 @@ impl Catalog {
                     CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                 )],
             )
-            .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         if let Some(row) = result.rows.first() {
@@ -3205,7 +3185,6 @@ impl Catalog {
                         CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                     )],
                 )
-                .await
                 .map_err(|e| MigrationError::DbError(e.to_string()))?;
         }
 
@@ -3227,14 +3206,13 @@ impl Catalog {
                     CypherValue::List(vec![CypherValue::Map(item)]),
                 )],
             )
-            .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         Ok(())
     }
 
     /// Release migration lock.
-    pub(crate) async fn migration_release_lock(&self) -> Result<(), MigrationError> {
+    pub(crate) fn migration_release_lock(&self) -> Result<(), MigrationError> {
         const LOCK_UUID: &str = "_migration_lock";
         let query = self.dialect.batch_delete("_DataflowMigrationLock");
         self.conn
@@ -3245,13 +3223,12 @@ impl Catalog {
                     CypherValue::List(vec![CypherValue::String(LOCK_UUID.to_string())]),
                 )],
             )
-            .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
         Ok(())
     }
 
     /// Record a migration apply/rollback result.
-    pub(crate) async fn migration_record(
+    pub(crate) fn migration_record(
         &self,
         file: &MigrationFile,
         status: &str,
@@ -3288,14 +3265,13 @@ impl Catalog {
                     CypherValue::List(vec![CypherValue::Map(item)]),
                 )],
             )
-            .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         Ok(())
     }
 
     /// Update migration status only (used when file is missing on rollback).
-    pub(crate) async fn migration_update_status(
+    pub(crate) fn migration_update_status(
         &self,
         version: u64,
         status: &str,
@@ -3314,13 +3290,12 @@ impl Catalog {
                     CypherValue::List(vec![CypherValue::Map(item)]),
                 )],
             )
-            .await
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
         Ok(())
     }
 
     /// Execute a migration graph with checkpoint support.
-    pub(crate) async fn migration_execute_graph(
+    pub(crate) fn migration_execute_graph(
         &self,
         graph: &mut DataflowGraph,
         execution_id: &str,
@@ -3332,13 +3307,11 @@ impl Catalog {
         let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
         checkpoint_store
             .initialize()
-            .await
             .map_err(|e| MigrationError::DbError(e))?;
 
         let runtime = DataflowRuntime::with_services(100, services);
         runtime
             .execute_with_checkpoint(graph, &checkpoint_store, execution_id)
-            .await
             .map_err(|e| MigrationError::ExecutionError {
                 version: 0,
                 name: String::new(),
@@ -3349,7 +3322,7 @@ impl Catalog {
 
     /// Rollback a migration: undo nodes in reverse topological order,
     /// then re-enqueue restored entities and auto-drain.
-    pub(crate) async fn migration_rollback_graph(
+    pub(crate) fn migration_rollback_graph(
         &mut self,
         graph: &mut DataflowGraph,
         checkpoint: &ExecutionCheckpoint,
@@ -3389,7 +3362,6 @@ impl Catalog {
                 let mut ctx =
                     crate::dataflow::node::NodeContext::with_services(services.clone());
                 node.undo(&mut ctx, ctx_val.clone())
-                    .await
                     .map_err(|e| MigrationError::ExecutionError {
                         version: 0,
                         name: String::new(),
@@ -3405,7 +3377,7 @@ impl Catalog {
 
         // Auto-drain: rebuild chunks, embeddings, FTS for restored entities
         if self.has_pending() {
-            let _ = self.drain().await;
+            let _ = self.drain();
         }
 
         Ok(())
@@ -3603,17 +3575,17 @@ mod tests {
         assert!(catalog.kb_metadata.is_empty());
     }
 
-    #[tokio::test]
-    async fn initialize_success() {
+    #[test]
+    fn initialize_success() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
         assert!(catalog.initialized);
         assert_eq!(catalog.kb_metadata.len(), 1);
         assert!(catalog.kb_metadata.contains_key("main"));
     }
 
-    #[tokio::test]
-    async fn initialize_validates_schema() {
+    #[test]
+    fn initialize_validates_schema() {
         // Config with contentFor but no titleFor → invalid
         let mut fields = HashMap::new();
         fields.insert(
@@ -3644,7 +3616,7 @@ mod tests {
             Box::new(MockEmbedder::new(384)),
             config,
         );
-        let err = catalog.initialize().await.unwrap_err();
+        let err = catalog.initialize().unwrap_err();
         assert!(
             matches!(err, CatalogError::ValidationFailed(_)),
             "expected ValidationFailed, got {err:?}"
@@ -3669,19 +3641,19 @@ mod tests {
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
-    #[tokio::test]
-    async fn get_before_init_errors() {
+    #[test]
+    fn get_before_init_errors() {
         let catalog = make_catalog();
-        let err = catalog.get("Document", "uuid").await.unwrap_err();
+        let err = catalog.get("Document", "uuid").unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
     // ── create ─────────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn create_returns_pending_ref() {
+    #[test]
+    fn create_returns_pending_ref() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let data = make_doc_data("Hello", "World");
         let entity_ref = catalog.create("Document", data).unwrap();
@@ -3690,19 +3662,19 @@ mod tests {
         assert!(!entity_ref.is_ready()); // pending until drain
     }
 
-    #[tokio::test]
-    async fn create_unknown_entity_errors() {
+    #[test]
+    fn create_unknown_entity_errors() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let err = catalog.create("Ghost", BTreeMap::new()).unwrap_err();
         assert!(matches!(err, CatalogError::UnknownEntity(ref s) if s == "Ghost"));
     }
 
-    #[tokio::test]
-    async fn create_enqueues_insert_and_embed() {
+    #[test]
+    fn create_enqueues_insert_and_embed() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let body = "Body text";
         let data = make_doc_data("Title", body);
@@ -3714,12 +3686,12 @@ mod tests {
         assert_eq!(stats.pending, expected);
     }
 
-    #[tokio::test]
-    async fn create_hashsafe_deterministic() {
+    #[test]
+    fn create_hashsafe_deterministic() {
         let mut c1 = make_catalog();
         let mut c2 = make_catalog();
-        c1.initialize().await.unwrap();
-        c2.initialize().await.unwrap();
+        c1.initialize().unwrap();
+        c2.initialize().unwrap();
 
         let data1 = make_doc_data("Same Title", "Different body 1");
         let data2 = make_doc_data("Same Title", "Different body 2");
@@ -3728,8 +3700,8 @@ mod tests {
         let ref2 = c2.create("Document", data2).unwrap();
 
         // Drain both to resolve refs
-        c1.drain().await;
-        c2.drain().await;
+        c1.drain();
+        c2.drain();
 
         // Same hashsafe field (title) → same UUID
         assert_eq!(ref1.uuid().unwrap(), ref2.uuid().unwrap());
@@ -3737,10 +3709,10 @@ mod tests {
 
     // ── link ───────────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn link_returns_pending_ref() {
+    #[test]
+    fn link_returns_pending_ref() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let rel_ref = catalog
             .link("REFERENCES", "uuid-a", "uuid-b", BTreeMap::new())
@@ -3750,10 +3722,10 @@ mod tests {
         assert!(!rel_ref.is_ready());
     }
 
-    #[tokio::test]
-    async fn link_unknown_relation_errors() {
+    #[test]
+    fn link_unknown_relation_errors() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let err = catalog
             .link("GHOST_REL", "a", "b", BTreeMap::new())
@@ -3763,10 +3735,10 @@ mod tests {
 
     // ── drain ──────────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn drain_resolves_inserts() {
+    #[test]
+    fn drain_resolves_inserts() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let body = "Content here";
         let data = make_doc_data("Test Doc", body);
@@ -3774,7 +3746,7 @@ mod tests {
 
         assert!(!entity_ref.is_ready());
 
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.processed, ops_per_create(body));
         assert_eq!(result.failed, 0);
 
@@ -3784,10 +3756,10 @@ mod tests {
         assert_eq!(uuid.len(), 36); // UUID format
     }
 
-    #[tokio::test]
-    async fn drain_resolves_links() {
+    #[test]
+    fn drain_resolves_links() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let body_a = "Body A";
         let body_b = "Body B";
@@ -3805,7 +3777,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         let expected = ops_per_create(body_a) + ops_per_create(body_b) + 1; // +1 user link
         assert_eq!(result.processed, expected);
         assert_eq!(result.failed, 0);
@@ -3819,60 +3791,60 @@ mod tests {
         assert_eq!(resolved.to_uuid, ref2.uuid().unwrap());
     }
 
-    #[tokio::test]
-    async fn drain_empty_queue() {
+    #[test]
+    fn drain_empty_queue() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.processed, 0);
         assert_eq!(result.failed, 0);
     }
 
     // ── read operations (with mock) ────────────────────────────────────
 
-    #[tokio::test]
-    async fn get_returns_none_empty_mock() {
+    #[test]
+    fn get_returns_none_empty_mock() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let result = catalog.get("Document", "nonexistent").await.unwrap();
+        let result = catalog.get("Document", "nonexistent").unwrap();
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn exists_false_empty_mock() {
+    #[test]
+    fn exists_false_empty_mock() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let result = catalog.exists("Document", "nonexistent").await.unwrap();
+        let result = catalog.exists("Document", "nonexistent").unwrap();
         assert!(!result);
     }
 
-    #[tokio::test]
-    async fn count_zero_empty_mock() {
+    #[test]
+    fn count_zero_empty_mock() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let result = catalog.count("Document").await.unwrap();
+        let result = catalog.count("Document").unwrap();
         assert_eq!(result, 0);
     }
 
-    #[tokio::test]
-    async fn get_many_empty_uuids() {
+    #[test]
+    fn get_many_empty_uuids() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let result = catalog.get_many("Document", &[]).await.unwrap();
+        let result = catalog.get_many("Document", &[]).unwrap();
         assert!(result.is_empty());
     }
 
     // ── update / delete (with mock) ────────────────────────────────────
 
-    #[tokio::test]
-    async fn update_enqueues_sync() {
+    #[test]
+    fn update_enqueues_sync() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // update() is sync — just enqueues, no error for nonexistent uuid
         let data = make_doc_data("New Title", "New Body");
@@ -3881,10 +3853,10 @@ mod tests {
         assert!(!catalog.pending.updates.is_empty());
     }
 
-    #[tokio::test]
-    async fn delete_enqueues_sync() {
+    #[test]
+    fn delete_enqueues_sync() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // delete() is sync — just enqueues
         catalog.delete("Document", "some-uuid").unwrap();
@@ -3895,10 +3867,10 @@ mod tests {
 
     // ── schema queries ─────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn get_kb_metadata_after_init() {
+    #[test]
+    fn get_kb_metadata_after_init() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let kb = catalog.get_kb_metadata("main").unwrap();
         assert_eq!(kb.name, "main");
@@ -3912,10 +3884,10 @@ mod tests {
         assert!(catalog.get_kb_metadata("nonexistent").is_none());
     }
 
-    #[tokio::test]
-    async fn get_kbs_for_entity_after_init() {
+    #[test]
+    fn get_kbs_for_entity_after_init() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let kbs = catalog.get_kbs_for_entity("Document");
         assert_eq!(kbs, vec!["main"]);
@@ -3924,8 +3896,8 @@ mod tests {
         assert!(kbs.is_empty());
     }
 
-    #[tokio::test]
-    async fn get_entity_def_and_relation_def() {
+    #[test]
+    fn get_entity_def_and_relation_def() {
         let catalog = make_catalog();
 
         assert!(catalog.get_entity_def("Document").is_some());
@@ -3936,10 +3908,10 @@ mod tests {
 
     // ── drain stats ────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn has_pending_and_stats() {
+    #[test]
+    fn has_pending_and_stats() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         assert!(!catalog.has_pending());
         assert_eq!(catalog.drain_stats().total_queued, 0);
@@ -3955,7 +3927,7 @@ mod tests {
         assert_eq!(stats.total_queued, enqueued);
         assert_eq!(stats.pending, enqueued);
 
-        catalog.drain().await;
+        catalog.drain();
 
         assert!(!catalog.has_pending());
         let stats = catalog.drain_stats();
@@ -3964,17 +3936,17 @@ mod tests {
 
     // ── flush_insertions ───────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn flush_insertions_only() {
+    #[test]
+    fn flush_insertions_only() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let body = "Flush test";
         let data = make_doc_data("Partial", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
         // Flush prio <= 1.0: 2 InsertOps (entity + {KB}_Index)
-        let result = catalog.flush_insertions().await;
+        let result = catalog.flush_insertions();
         assert_eq!(result.processed, 2);
         assert!(entity_ref.is_ready());
 
@@ -3982,20 +3954,20 @@ mod tests {
         assert!(catalog.has_pending());
 
         // Drain the rest: 1 link + 1 aggregate
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.processed, 2);
         assert!(!catalog.has_pending());
     }
 
     // ── filter_condition priority ─────────────────────────────────────
 
-    #[tokio::test]
-    async fn search_filter_condition_takes_priority() {
+    #[test]
+    fn search_filter_condition_takes_priority() {
         use crate::filter::{FilterCondition, FilterValue};
         use crate::search::SearchOptions;
 
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // Both filters and filter_condition set — filter_condition should win
         let mut opts = SearchOptions::default();
@@ -4009,16 +3981,16 @@ mod tests {
         });
 
         // With MockConnection, search returns empty but should not error
-        let response = catalog.search("main", "test", opts).await.unwrap();
+        let response = catalog.search("main", "test", opts).unwrap();
         assert!(response.results.is_empty());
     }
 
     // ── Phase A: Shadow records tests ─────────────────────────────────
 
-    #[tokio::test]
-    async fn create_populates_pending_work() {
+    #[test]
+    fn create_populates_pending_work() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let _ref = catalog.create("Document", make_doc_data("Hello", "World")).unwrap();
 
@@ -4038,10 +4010,10 @@ mod tests {
         assert_eq!(pw.aggregates[0].title_entity, "Document");
     }
 
-    #[tokio::test]
-    async fn link_populates_pending_work() {
+    #[test]
+    fn link_populates_pending_work() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let from_ref = catalog.create("Document", make_doc_data("A", "aaa")).unwrap();
         let to_ref = catalog.create("Document", make_doc_data("B", "bbb")).unwrap();
@@ -4056,16 +4028,16 @@ mod tests {
         assert_eq!(pw.relations[2].rel_name, "REFERENCES");
     }
 
-    #[tokio::test]
-    async fn drain_clears_pending_work() {
+    #[test]
+    fn drain_clears_pending_work() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         catalog.create("Document", make_doc_data("Test", "body")).unwrap();
         assert!(!catalog.pending_work().is_empty());
 
         // drain() clears pending work
-        let _ = catalog.drain().await;
+        let _ = catalog.drain();
         assert!(catalog.pending_work().is_empty(), "pending should be cleared after drain");
     }
 
@@ -4081,40 +4053,40 @@ mod tests {
         (catalog, mock_store)
     }
 
-    #[tokio::test]
-    async fn checkpoint_drain_marks_completed() {
+    #[test]
+    fn checkpoint_drain_marks_completed() {
         let (mut catalog, store) = make_catalog_with_mock_checkpoint();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         catalog.create("Document", make_doc_data("Test", "Body")).unwrap();
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.failed, 0);
         assert!(result.processed > 0);
 
         // Checkpoint should be marked completed (no pending checkpoints)
-        let pending = catalog.check_pending_checkpoints().await.unwrap();
+        let pending = catalog.check_pending_checkpoints().unwrap();
         assert!(pending.is_empty(), "checkpoint should be cleaned up after successful drain");
     }
 
-    #[tokio::test]
-    async fn checkpoint_resume_nonexistent_returns_error() {
+    #[test]
+    fn checkpoint_resume_nonexistent_returns_error() {
         let (mut catalog, _store) = make_catalog_with_mock_checkpoint();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let err = catalog.drain_resume("nonexistent-exec-id").await;
+        let err = catalog.drain_resume("nonexistent-exec-id");
         assert!(err.is_err());
         let msg = format!("{}", err.unwrap_err());
         assert!(msg.contains("not found"), "expected 'not found' error, got: {msg}");
     }
 
-    #[tokio::test]
-    async fn checkpoint_resume_already_completed_is_noop() {
+    #[test]
+    fn checkpoint_resume_already_completed_is_noop() {
         let (mut catalog, store) = make_catalog_with_mock_checkpoint();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // Do a normal drain to create a completed checkpoint
         catalog.create("Document", make_doc_data("Test", "Body")).unwrap();
-        let result = catalog.drain().await;
+        let result = catalog.drain();
         assert_eq!(result.failed, 0);
 
         // Find the completed execution_id
@@ -4132,18 +4104,18 @@ mod tests {
         };
 
         // Resume on completed execution → should succeed as no-op
-        let resume_result = catalog.drain_resume(&exec_id).await.unwrap();
+        let resume_result = catalog.drain_resume(&exec_id).unwrap();
         // execute_with_checkpoint returns Ok(DataflowOutput::empty()) for completed,
         // so drain_resume sees Ok → reports processed
         assert_eq!(resume_result.failed, 0);
     }
 
-    #[tokio::test]
-    async fn checkpoint_check_pending_empty_initially() {
+    #[test]
+    fn checkpoint_check_pending_empty_initially() {
         let (mut catalog, _store) = make_catalog_with_mock_checkpoint();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
-        let pending = catalog.check_pending_checkpoints().await.unwrap();
+        let pending = catalog.check_pending_checkpoints().unwrap();
         assert!(pending.is_empty());
     }
 
@@ -4181,25 +4153,25 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn register_entity_stores_config() {
+    #[test]
+    fn register_entity_stores_config() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         assert!(catalog.is_simple_entity("Product"));
         assert!(!catalog.is_simple_entity("Unknown"));
     }
 
-    #[tokio::test]
-    async fn register_entity_adds_to_catalog_entities() {
+    #[test]
+    fn register_entity_adds_to_catalog_entities() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         // Should be in config.entities too (for ChunkRecordNode compatibility)
         assert!(catalog.config.entities.contains_key("Product"));
@@ -4209,13 +4181,13 @@ mod tests {
         assert!(entity_def.fields.contains_key("price"));
     }
 
-    #[tokio::test]
-    async fn register_entity_content_fields() {
+    #[test]
+    fn register_entity_content_fields() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let ec = catalog.entity_config("Product").unwrap();
         let content = ec.content_fields();
@@ -4223,48 +4195,48 @@ mod tests {
         assert_eq!(ec.title_field(), Some("name"));
     }
 
-    #[tokio::test]
-    async fn register_entity_before_init_fails() {
+    #[test]
+    fn register_entity_before_init_fails() {
         let mut catalog = make_catalog();
         let config = make_product_entity_config();
-        let err = catalog.register_entity("Product", config).await.unwrap_err();
+        let err = catalog.register_entity("Product", config).unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
-    #[tokio::test]
-    async fn ingest_entities_before_init_fails() {
+    #[test]
+    fn ingest_entities_before_init_fails() {
         let mut catalog = make_catalog();
-        let err = catalog.ingest_entities("Product", vec![]).await.unwrap_err();
+        let err = catalog.ingest_entities("Product", vec![]).unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
-    #[tokio::test]
-    async fn ingest_entities_unknown_entity_fails() {
+    #[test]
+    fn ingest_entities_unknown_entity_fails() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
-        let err = catalog.ingest_entities("Unknown", vec![BTreeMap::new()]).await.unwrap_err();
+        catalog.initialize().unwrap();
+        let err = catalog.ingest_entities("Unknown", vec![BTreeMap::new()]).unwrap_err();
         assert!(matches!(err, CatalogError::UnknownEntity(_)));
     }
 
-    #[tokio::test]
-    async fn ingest_entities_empty_records_ok() {
+    #[test]
+    fn ingest_entities_empty_records_ok() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
-        let result = catalog.ingest_entities("Product", vec![]).await.unwrap();
+        let result = catalog.ingest_entities("Product", vec![]).unwrap();
         assert_eq!(result.processed, 0);
     }
 
-    #[tokio::test]
-    async fn ingest_entities_returns_processed_count() {
+    #[test]
+    fn ingest_entities_returns_processed_count() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let mut data = BTreeMap::new();
         data.insert("name".into(), CypherValue::String("Red Shoes".into()));
@@ -4272,17 +4244,17 @@ mod tests {
         data.insert("details".into(), CypherValue::String("Made in Italy.".into()));
         data.insert("price".into(), CypherValue::Float(59.99));
 
-        let result = catalog.ingest_entities("Product", vec![data]).await.unwrap();
+        let result = catalog.ingest_entities("Product", vec![data]).unwrap();
         assert_eq!(result.processed, 1);
         assert_eq!(result.failed, 0);
     }
 
     // ── resolve_search_target ─────────────────────────────────────────
 
-    #[tokio::test]
-    async fn resolve_search_target_kb() {
+    #[test]
+    fn resolve_search_target_kb() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let t = catalog.resolve_search_target("main").unwrap();
         assert_eq!(t.name, "main");
@@ -4298,13 +4270,13 @@ mod tests {
         assert_eq!(in_rel, "Document_IN_main");
     }
 
-    #[tokio::test]
-    async fn resolve_search_target_simple_entity() {
+    #[test]
+    fn resolve_search_target_simple_entity() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let t = catalog.resolve_search_target("Product").unwrap();
         assert_eq!(t.name, "Product");
@@ -4323,19 +4295,19 @@ mod tests {
         assert!(t.enrich_fields.contains(&"_content_hash".to_string()));
     }
 
-    #[tokio::test]
-    async fn resolve_search_target_unknown_fails() {
+    #[test]
+    fn resolve_search_target_unknown_fails() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let err = catalog.resolve_search_target("Unknown").unwrap_err();
         assert!(matches!(err, CatalogError::UnknownKB(_)));
     }
 
-    #[tokio::test]
-    async fn search_target_parent_to_chunk_match_kb() {
+    #[test]
+    fn search_target_parent_to_chunk_match_kb() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let t = catalog.resolve_search_target("main").unwrap();
         let pattern = t.parent_to_chunk_match("n", "c");
@@ -4345,13 +4317,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn search_target_parent_to_chunk_match_simple() {
+    #[test]
+    fn search_target_parent_to_chunk_match_simple() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let t = catalog.resolve_search_target("Product").unwrap();
         let pattern = t.parent_to_chunk_match("n", "c");
@@ -4362,10 +4334,10 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn search_target_chunk_to_parent_match_kb() {
+    #[test]
+    fn search_target_chunk_to_parent_match_kb() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let t = catalog.resolve_search_target("main").unwrap();
         let pattern = t.chunk_to_parent_match("p", "c");
@@ -4375,13 +4347,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn search_target_chunk_to_parent_match_simple() {
+    #[test]
+    fn search_target_chunk_to_parent_match_simple() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let t = catalog.resolve_search_target("Product").unwrap();
         let pattern = t.chunk_to_parent_match("p", "c");
@@ -4392,13 +4364,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn search_target_signals_default() {
+    #[test]
+    fn search_target_signals_default() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let config = make_product_entity_config();
-        catalog.register_entity("Product", config).await.unwrap();
+        catalog.register_entity("Product", config).unwrap();
 
         let t = catalog.resolve_search_target("Product").unwrap();
         // Default = HYBRID (BM25 + Vector)

@@ -70,21 +70,21 @@ impl DataflowRecorder {
     }
 
     /// Record an execution report.
-    pub async fn record(
+    pub fn record(
         &self,
         pipeline_name: &str,
         report: &ExecutionReport,
     ) -> Result<(), RecordError> {
         match &self.sink {
             RecordSink::Database(conn) => {
-                self.record_to_db(conn, pipeline_name, report).await?;
+                self.record_to_db(conn, pipeline_name, report)?;
             }
             RecordSink::File(path) => {
                 self.record_to_jsonl(path, pipeline_name, report)?;
             }
             RecordSink::Both(conn, path) => {
                 // Try DB first, JSONL as fallback on DB error
-                if let Err(e) = self.record_to_db(conn, pipeline_name, report).await {
+                if let Err(e) = self.record_to_db(conn, pipeline_name, report) {
                     eprintln!("DB record failed ({}), falling back to JSONL", e);
                     self.record_to_jsonl(path, pipeline_name, report)?;
                 } else {
@@ -97,7 +97,7 @@ impl DataflowRecorder {
     }
 
     /// Ensure the dataflow recording schema exists (node tables + rel tables).
-    async fn ensure_schema(conn: &Arc<dyn DbConnection>) -> Result<(), RecordError> {
+    fn ensure_schema(conn: &Arc<dyn DbConnection>) -> Result<(), RecordError> {
         let stmts = [
             "CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(\
                 _uuid STRING, pipeline_name STRING, status STRING, \
@@ -119,19 +119,19 @@ impl DataflowRecorder {
                 FROM _DataflowEdgeRun TO _DataflowExecution)",
         ];
         for stmt in &stmts {
-            conn.execute(stmt).await.map_err(RecordError::Db)?;
+            conn.execute(stmt).map_err(RecordError::Db)?;
         }
         Ok(())
     }
 
     /// Write a single Cypher batch that creates the execution + node runs + edge runs.
-    async fn record_to_db(
+    fn record_to_db(
         &self,
         conn: &Arc<dyn DbConnection>,
         pipeline_name: &str,
         report: &ExecutionReport,
     ) -> Result<(), RecordError> {
-        Self::ensure_schema(conn).await?;
+        Self::ensure_schema(conn)?;
 
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -167,7 +167,6 @@ impl DataflowRecorder {
                 QueryParam::new("created_at", now_ms),
             ],
         )
-        .await
         .map_err(RecordError::Db)?;
 
         // Create _DataflowNodeRun nodes + link to execution
@@ -195,7 +194,6 @@ impl DataflowRecorder {
                     QueryParam::new("ports", node.outputs.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(",")),
                 ],
             )
-            .await
             .map_err(RecordError::Db)?;
         }
 
@@ -218,12 +216,11 @@ impl DataflowRecorder {
                     QueryParam::new("summary", edge.value_summary.as_str()),
                 ],
             )
-            .await
             .map_err(RecordError::Db)?;
         }
 
         // Apply retention if configured
-        self.apply_retention_db(conn, pipeline_name).await?;
+        self.apply_retention_db(conn, pipeline_name)?;
 
         Ok(())
     }
@@ -260,7 +257,7 @@ impl DataflowRecorder {
     }
 
     /// Delete old records beyond retention limits.
-    async fn apply_retention_db(
+    fn apply_retention_db(
         &self,
         conn: &Arc<dyn DbConnection>,
         pipeline_name: &str,
@@ -274,7 +271,6 @@ impl DataflowRecorder {
                     count_cypher,
                     &[QueryParam::new("pipeline", pipeline_name)],
                 )
-                .await
                 .map_err(RecordError::Db)?;
 
             if let Some(row) = result.rows.first() {
@@ -302,7 +298,6 @@ impl DataflowRecorder {
                             &delete_cypher,
                             &[QueryParam::new("pipeline", pipeline_name)],
                         )
-                        .await
                         .map_err(RecordError::Db)?;
                     }
                 }
@@ -398,10 +393,7 @@ mod tests {
         let recorder = DataflowRecorder::new(RecordSink::File(dir.clone()));
         let report = sample_report();
 
-        // Sync wrapper for test
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            recorder.record("test_pipeline", &report).await.unwrap();
-        });
+        recorder.record("test_pipeline", &report).unwrap();
 
         let content = std::fs::read_to_string(&dir).unwrap();
         assert!(content.contains("test_pipeline"));
@@ -417,13 +409,11 @@ mod tests {
         let recorder = DataflowRecorder::new(RecordSink::None);
         let report = sample_report();
 
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            recorder.record("test", &report).await.unwrap();
-        });
+        recorder.record("test", &report).unwrap();
     }
 
-    #[tokio::test]
-    async fn record_to_mock_db() {
+    #[test]
+    fn record_to_mock_db() {
         use crate::connection::MockConnection;
 
         let conn = Arc::new(MockConnection::new());
@@ -431,7 +421,7 @@ mod tests {
         let report = sample_report();
 
         // MockConnection returns empty results, but the recording shouldn't error
-        recorder.record("test_pipeline", &report).await.unwrap();
+        recorder.record("test_pipeline", &report).unwrap();
     }
 
     #[test]

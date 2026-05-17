@@ -14,8 +14,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 use crate::catalog::Catalog;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
@@ -55,7 +54,7 @@ impl SearchSourceNode {
     }
 }
 
-#[async_trait]
+
 impl Node for SearchSourceNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -79,13 +78,13 @@ impl Node for SearchSourceNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let catalog: Arc<Mutex<Catalog>> = ctx
             .service::<Mutex<Catalog>>("catalog")
             .ok_or("SearchSourceNode: 'catalog' service not found")?;
 
         let target = {
-            let catalog = catalog.lock().await;
+            let catalog = catalog.lock().unwrap();
             catalog
                 .resolve_search_target(&self.target_name)
                 .map_err(|e| format!("SearchSourceNode: {e}"))?
@@ -123,7 +122,7 @@ impl VectorSearchNode {
     }
 }
 
-#[async_trait]
+
 impl Node for VectorSearchNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -148,7 +147,7 @@ impl Node for VectorSearchNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target) = extract_query_and_target(ctx, "VectorSearchNode")?;
 
         let conn = ctx
@@ -160,7 +159,6 @@ impl Node for VectorSearchNode {
 
         let mut cache = HashMap::new();
         let embedding = embed_query(&**embedder, &query_str, &mut cache)
-            .await
             .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?;
 
         let chunk_results = search_vector(
@@ -173,7 +171,6 @@ impl Node for VectorSearchNode {
             &[],
             None,
         )
-        .await
         .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
@@ -184,7 +181,6 @@ impl Node for VectorSearchNode {
             &target.enrich_fields,
             ResultMode::Aggregated,
         )
-        .await
         .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
@@ -224,7 +220,7 @@ impl BM25SearchNode {
     }
 }
 
-#[async_trait]
+
 impl Node for BM25SearchNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -253,7 +249,7 @@ impl Node for BM25SearchNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target) = extract_query_and_target(ctx, "BM25SearchNode")?;
 
         let conn = ctx
@@ -273,7 +269,6 @@ impl Node for BM25SearchNode {
             self.result_mode,
             None,
         )
-        .await
         .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
@@ -299,7 +294,7 @@ impl SparseSearchNode {
     }
 }
 
-#[async_trait]
+
 impl Node for SparseSearchNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -324,7 +319,7 @@ impl Node for SparseSearchNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target) = extract_query_and_target(ctx, "SparseSearchNode")?;
 
         let conn = ctx
@@ -335,13 +330,11 @@ impl Node for SparseSearchNode {
         let sparse_vec = if let Some(dual) = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder") {
             let (_, sparse_vecs) = dual
                 .embed_dual(&[query_str.clone()])
-                .await
                 .map_err(|e| format!("SparseSearchNode: dual embed failed: {e}"))?;
             sparse_vecs.into_iter().next().unwrap()
         } else if let Some(sparse) = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder") {
             let vecs = sparse
                 .embed_sparse(&[query_str.clone()])
-                .await
                 .map_err(|e| format!("SparseSearchNode: sparse embed failed: {e}"))?;
             vecs.into_iter().next().unwrap()
         } else {
@@ -363,7 +356,6 @@ impl Node for SparseSearchNode {
             self.limit,
             &[], // empty fields for chunked entities (fields are on parent table)
         )
-        .await
         .map_err(|e| format!("SparseSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
@@ -374,7 +366,6 @@ impl Node for SparseSearchNode {
             &target.enrich_fields,
             ResultMode::Aggregated,
         )
-        .await
         .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
@@ -401,7 +392,7 @@ impl FuseResultsNode {
     }
 }
 
-#[async_trait]
+
 impl Node for FuseResultsNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -435,7 +426,7 @@ impl Node for FuseResultsNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let vector_u = take_results(ctx, "vector");
         let bm25_u = take_results(ctx, "bm25");
         let sparse_u = take_results(ctx, "sparse");
@@ -504,7 +495,7 @@ impl ResolveParentNode {
     }
 }
 
-#[async_trait]
+
 impl Node for ResolveParentNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -540,7 +531,7 @@ impl Node for ResolveParentNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let results = match ctx.take_input("results") {
             Some(PortValue::Results(r)) => r,
             _ => return Err("ResolveParentNode: missing 'results' input".into()),
@@ -577,7 +568,6 @@ impl Node for ResolveParentNode {
             results.into_iter().map(SearchResult::from).collect();
 
         enrich_results_with_data(&*conn.0, &target.name, return_fields, &mut search_results)
-            .await
             .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
         let enriched: Vec<UnifiedResult> =
@@ -715,13 +705,13 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn fuse_empty_inputs_returns_empty() {
+    #[test]
+    fn fuse_empty_inputs_returns_empty() {
         let mut node = FuseResultsNode::new("fuse");
         let mut ctx = NodeContext::new();
         // No inputs set — all empty
 
-        node.execute(&mut ctx).await.unwrap();
+        node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
         if let Some(PortValue::Results(results)) = outputs.get("results") {
@@ -731,8 +721,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn fuse_single_input_passthrough() {
+    #[test]
+    fn fuse_single_input_passthrough() {
         let mut node = FuseResultsNode::new("fuse");
         let mut ctx = NodeContext::new();
 
@@ -744,7 +734,7 @@ mod tests {
             ]),
         );
 
-        node.execute(&mut ctx).await.unwrap();
+        node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
         if let Some(PortValue::Results(results)) = outputs.get("results") {
@@ -757,8 +747,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn fuse_two_inputs_merges() {
+    #[test]
+    fn fuse_two_inputs_merges() {
         let mut node = FuseResultsNode::new("fuse");
         let mut ctx = NodeContext::new();
 
@@ -777,7 +767,7 @@ mod tests {
             ]),
         );
 
-        node.execute(&mut ctx).await.unwrap();
+        node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
         if let Some(PortValue::Results(results)) = outputs.get("results") {

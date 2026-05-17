@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use super::checkpoint::{
@@ -30,9 +29,9 @@ impl CypherCheckpointStore {
     }
 }
 
-#[async_trait]
+
 impl CheckpointStore for CypherCheckpointStore {
-    async fn initialize(&self) -> Result<(), String> {
+    fn initialize(&self) -> Result<(), String> {
         self.conn
             .execute(
                 "CREATE NODE TABLE IF NOT EXISTS _DataflowExecution(\
@@ -51,7 +50,6 @@ impl CheckpointStore for CypherCheckpointStore {
                      updated_at INT64, \
                      PRIMARY KEY(_uuid))",
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         self.conn
@@ -68,13 +66,12 @@ impl CheckpointStore for CypherCheckpointStore {
                      completed_at INT64, \
                      PRIMARY KEY(_uuid))",
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
-    async fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
+    fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
         let graph_json =
             serde_json::to_string(&checkpoint.graph_def).map_err(|e| e.to_string())?;
         let inputs_json =
@@ -104,7 +101,6 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("updated_at", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         // Create pending node state rows for all nodes
@@ -133,14 +129,13 @@ impl CheckpointStore for CypherCheckpointStore {
                         QueryParam::new("completed_at", CypherValue::Int(0)),
                     ],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
         }
 
         Ok(())
     }
 
-    async fn load_execution(
+    fn load_execution(
         &self,
         execution_id: &str,
     ) -> Result<Option<ExecutionCheckpoint>, String> {
@@ -153,7 +148,6 @@ impl CheckpointStore for CypherCheckpointStore {
                         n.error, n.created_at, n.updated_at, n.inputs_json",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         if result.rows.is_empty() {
@@ -185,7 +179,6 @@ impl CheckpointStore for CypherCheckpointStore {
                         n.error, n.completed_at, n.undo_json",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         let mut nodes = HashMap::new();
@@ -248,7 +241,7 @@ impl CheckpointStore for CypherCheckpointStore {
         }))
     }
 
-    async fn find_incomplete(&self) -> Result<Vec<String>, String> {
+    fn find_incomplete(&self) -> Result<Vec<String>, String> {
         let result = self
             .conn
             .execute(
@@ -256,7 +249,6 @@ impl CheckpointStore for CypherCheckpointStore {
                  WHERE n.status = 'running' OR n.status = 'failed' \
                  RETURN n._uuid ORDER BY n.created_at",
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(result
@@ -266,7 +258,7 @@ impl CheckpointStore for CypherCheckpointStore {
             .collect())
     }
 
-    async fn save_node_completed(
+    fn save_node_completed(
         &self,
         execution_id: &str,
         node_name: &str,
@@ -299,7 +291,6 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("completed_at", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         // Update execution updated_at
@@ -312,13 +303,12 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("now", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
-    async fn save_node_failed(
+    fn save_node_failed(
         &self,
         execution_id: &str,
         node_name: &str,
@@ -340,13 +330,12 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("completed_at", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
-    async fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
+    fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
         let now = timestamp_ms();
 
         // Update execution status
@@ -360,7 +349,6 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("now", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         // Clean up node state rows:
@@ -373,7 +361,6 @@ impl CheckpointStore for CypherCheckpointStore {
                  DELETE n",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         // Clear bulky output_ports from surviving undo nodes
@@ -383,13 +370,12 @@ impl CheckpointStore for CypherCheckpointStore {
                  SET n.output_ports = ''",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
-    async fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+    fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
         let now = timestamp_ms();
 
         self.conn
@@ -403,20 +389,18 @@ impl CheckpointStore for CypherCheckpointStore {
                     QueryParam::new("now", CypherValue::Int(now as i64)),
                 ],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
-    async fn delete(&self, execution_id: &str) -> Result<(), String> {
+    fn delete(&self, execution_id: &str) -> Result<(), String> {
         // Delete node states first
         self.conn
             .execute_with_params(
                 "MATCH (n:_DataflowNodeState {execution_id: $exec_id}) DELETE n",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         // Delete execution
@@ -425,7 +409,6 @@ impl CheckpointStore for CypherCheckpointStore {
                 "MATCH (n:_DataflowExecution {_uuid: $exec_id}) DELETE n",
                 &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(())
@@ -499,19 +482,19 @@ impl MockCheckpointStore {
 }
 
 #[cfg(test)]
-#[async_trait]
+
 impl CheckpointStore for MockCheckpointStore {
-    async fn initialize(&self) -> Result<(), String> {
+    fn initialize(&self) -> Result<(), String> {
         Ok(())
     }
 
-    async fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
+    fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
         execs.insert(checkpoint.execution_id.clone(), checkpoint.clone());
         Ok(())
     }
 
-    async fn load_execution(
+    fn load_execution(
         &self,
         execution_id: &str,
     ) -> Result<Option<ExecutionCheckpoint>, String> {
@@ -519,7 +502,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(execs.get(execution_id).cloned())
     }
 
-    async fn find_incomplete(&self) -> Result<Vec<String>, String> {
+    fn find_incomplete(&self) -> Result<Vec<String>, String> {
         let execs = self.executions.lock().unwrap();
         Ok(execs
             .values()
@@ -531,7 +514,7 @@ impl CheckpointStore for MockCheckpointStore {
             .collect())
     }
 
-    async fn save_node_completed(
+    fn save_node_completed(
         &self,
         execution_id: &str,
         node_name: &str,
@@ -556,7 +539,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(())
     }
 
-    async fn save_node_failed(
+    fn save_node_failed(
         &self,
         execution_id: &str,
         node_name: &str,
@@ -576,7 +559,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(())
     }
 
-    async fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
+    fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
         let cp = execs
             .get_mut(execution_id)
@@ -590,7 +573,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(())
     }
 
-    async fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+    fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
         let cp = execs
             .get_mut(execution_id)
@@ -600,7 +583,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(())
     }
 
-    async fn delete(&self, execution_id: &str) -> Result<(), String> {
+    fn delete(&self, execution_id: &str) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
         execs.remove(execution_id);
         Ok(())
@@ -657,15 +640,15 @@ mod tests {
 
     // ── Tests ───────────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn mock_store_create_and_load() {
+    #[test]
+    fn mock_store_create_and_load() {
         let store = MockCheckpointStore::new();
-        store.initialize().await.unwrap();
+        store.initialize().unwrap();
 
         let cp = make_test_checkpoint("exec-1");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
-        let loaded = store.load_execution("exec-1").await.unwrap();
+        let loaded = store.load_execution("exec-1").unwrap();
         assert!(loaded.is_some());
         let loaded = loaded.unwrap();
         assert_eq!(loaded.execution_id, "exec-1");
@@ -674,18 +657,18 @@ mod tests {
         assert_eq!(loaded.graph_hash, "abc123");
     }
 
-    #[tokio::test]
-    async fn mock_store_load_missing() {
+    #[test]
+    fn mock_store_load_missing() {
         let store = MockCheckpointStore::new();
-        let loaded = store.load_execution("nonexistent").await.unwrap();
+        let loaded = store.load_execution("nonexistent").unwrap();
         assert!(loaded.is_none());
     }
 
-    #[tokio::test]
-    async fn mock_store_node_completed() {
+    #[test]
+    fn mock_store_node_completed() {
         let store = MockCheckpointStore::new();
         let cp = make_test_checkpoint("exec-2");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
         let mut outputs = HashMap::new();
         outputs.insert(
@@ -699,57 +682,53 @@ mod tests {
         );
         store
             .save_node_completed("exec-2", "inserts", &outputs, None, 42)
-            .await
             .unwrap();
 
-        let loaded = store.load_execution("exec-2").await.unwrap().unwrap();
+        let loaded = store.load_execution("exec-2").unwrap().unwrap();
         let node = &loaded.nodes["inserts"];
         assert_eq!(node.status, NodeCheckpointStatus::Completed);
         assert_eq!(node.duration_ms, Some(42));
         assert!(node.output_ports.contains_key("done"));
     }
 
-    #[tokio::test]
-    async fn mock_store_node_failed() {
+    #[test]
+    fn mock_store_node_failed() {
         let store = MockCheckpointStore::new();
         let cp = make_test_checkpoint("exec-3");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
         store
             .save_node_failed("exec-3", "links", "connection timeout")
-            .await
             .unwrap();
 
-        let loaded = store.load_execution("exec-3").await.unwrap().unwrap();
+        let loaded = store.load_execution("exec-3").unwrap().unwrap();
         let node = &loaded.nodes["links"];
         assert_eq!(node.status, NodeCheckpointStatus::Failed);
         assert_eq!(node.error.as_deref(), Some("connection timeout"));
     }
 
-    #[tokio::test]
-    async fn mock_store_find_incomplete() {
+    #[test]
+    fn mock_store_find_incomplete() {
         let store = MockCheckpointStore::new();
 
         store
             .create_execution(&make_test_checkpoint("exec-a"))
-            .await
             .unwrap();
         store
             .create_execution(&make_test_checkpoint("exec-b"))
-            .await
             .unwrap();
-        store.mark_completed("exec-a").await.unwrap();
+        store.mark_completed("exec-a").unwrap();
 
-        let incomplete = store.find_incomplete().await.unwrap();
+        let incomplete = store.find_incomplete().unwrap();
         assert_eq!(incomplete.len(), 1);
         assert!(incomplete.contains(&"exec-b".to_string()));
     }
 
-    #[tokio::test]
-    async fn mock_store_mark_completed_cleans_outputs() {
+    #[test]
+    fn mock_store_mark_completed_cleans_outputs() {
         let store = MockCheckpointStore::new();
         let cp = make_test_checkpoint("exec-4");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
         let mut outputs = HashMap::new();
         outputs.insert(
@@ -763,41 +742,39 @@ mod tests {
         );
         store
             .save_node_completed("exec-4", "inserts", &outputs, None, 10)
-            .await
             .unwrap();
 
-        store.mark_completed("exec-4").await.unwrap();
+        store.mark_completed("exec-4").unwrap();
 
-        let loaded = store.load_execution("exec-4").await.unwrap().unwrap();
+        let loaded = store.load_execution("exec-4").unwrap().unwrap();
         assert_eq!(loaded.status, CheckpointExecutionStatus::Completed);
         // Node outputs cleaned on success
         assert!(loaded.nodes["inserts"].output_ports.is_empty());
     }
 
-    #[tokio::test]
-    async fn mock_store_mark_failed() {
+    #[test]
+    fn mock_store_mark_failed() {
         let store = MockCheckpointStore::new();
         let cp = make_test_checkpoint("exec-5");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
         store
             .mark_failed("exec-5", "graph execution error")
-            .await
             .unwrap();
 
-        let loaded = store.load_execution("exec-5").await.unwrap().unwrap();
+        let loaded = store.load_execution("exec-5").unwrap().unwrap();
         assert_eq!(loaded.status, CheckpointExecutionStatus::Failed);
     }
 
-    #[tokio::test]
-    async fn mock_store_delete() {
+    #[test]
+    fn mock_store_delete() {
         let store = MockCheckpointStore::new();
         let cp = make_test_checkpoint("exec-6");
-        store.create_execution(&cp).await.unwrap();
+        store.create_execution(&cp).unwrap();
 
-        store.delete("exec-6").await.unwrap();
+        store.delete("exec-6").unwrap();
 
-        let loaded = store.load_execution("exec-6").await.unwrap();
+        let loaded = store.load_execution("exec-6").unwrap();
         assert!(loaded.is_none());
     }
 }

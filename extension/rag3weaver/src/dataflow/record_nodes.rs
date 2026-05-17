@@ -20,7 +20,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 
-use async_trait::async_trait;
 
 use crate::catalog::KBMetadata;
 use crate::events::{CatalogEvent, EventBus};
@@ -63,7 +62,7 @@ impl InsertRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for InsertRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -83,7 +82,7 @@ impl Node for InsertRecordNode {
             PortDef { name: "inserted", port_type: PortType::Entities, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
@@ -150,7 +149,6 @@ impl Node for InsertRecordNode {
                         value: items_param,
                     }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
 
             // Build UUID → node_id map for safe matching (don't rely on row order)
@@ -209,7 +207,7 @@ impl Node for InsertRecordNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("InsertRecordNode undo: 'conn' service not registered")?;
 
@@ -234,7 +232,7 @@ impl Node for InsertRecordNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).await.map_err(|e| format!("InsertRecordNode undo failed: {e}"))?;
+            ).map_err(|e| format!("InsertRecordNode undo failed: {e}"))?;
         }
         Ok(())
     }
@@ -260,7 +258,7 @@ impl LinkRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for LinkRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -281,7 +279,7 @@ impl Node for LinkRecordNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<RelationRecord> = match ctx.take_input("relations") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<RelationRecord>()
@@ -303,12 +301,10 @@ impl Node for LinkRecordNode {
             let from_uuid = rel
                 .from
                 .resolve()
-                .await
                 .map_err(|e| format!("link from resolution failed: {e}"))?;
             let to_uuid = rel
                 .to
                 .resolve()
-                .await
                 .map_err(|e| format!("link to resolution failed: {e}"))?;
             resolved.push(ResolvedLink { from_uuid, to_uuid, index: i });
         }
@@ -372,7 +368,6 @@ impl Node for LinkRecordNode {
                         value: items_param,
                     }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
 
             // Resolve relation refs
@@ -405,7 +400,7 @@ impl Node for LinkRecordNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("LinkRecordNode undo: 'conn' service not registered")?;
 
@@ -433,7 +428,7 @@ impl Node for LinkRecordNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
-            ).await.map_err(|e| format!("LinkRecordNode undo failed: {e}"))?;
+            ).map_err(|e| format!("LinkRecordNode undo failed: {e}"))?;
         }
         Ok(())
     }
@@ -476,7 +471,7 @@ struct EmbedWork {
     kb_name: String,
 }
 
-#[async_trait]
+
 impl Node for KBEmbedNode {
     fn name(&self) -> &str {
         &self.name
@@ -500,7 +495,7 @@ impl Node for KBEmbedNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
@@ -537,7 +532,6 @@ impl Node for KBEmbedNode {
             let uuid = rec
                 .entity_ref
                 .ready()
-                .await
                 .map_err(|e| format!("embed ref resolution failed: {e}"))?;
 
             // Extract chunk fields
@@ -622,7 +616,7 @@ impl Node for KBEmbedNode {
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).await {
+                ) {
                     for row in &result.rows {
                         if let (Some(uuid), Some(hash)) = (
                             row.first().and_then(|v| v.as_str()),
@@ -659,7 +653,6 @@ impl Node for KBEmbedNode {
             let texts: Vec<String> = dense_works.iter().map(|w| w.text.clone()).collect();
             let vectors = embedder
                 .embed(&texts)
-                .await
                 .map_err(|e| format!("dense embedding failed: {e}"))?;
 
             if vectors.len() != dense_works.len() {
@@ -703,7 +696,7 @@ impl Node for KBEmbedNode {
                 conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).await.map_err(|e| e.to_string())?;
+                ).map_err(|e| e.to_string())?;
             }
         }
 
@@ -714,7 +707,6 @@ impl Node for KBEmbedNode {
                 let texts: Vec<String> = sparse_works.iter().map(|w| w.text.clone()).collect();
                 let sparse_vecs = sparse_emb
                     .embed_sparse(&texts)
-                    .await
                     .map_err(|e| format!("sparse embedding failed: {e}"))?;
 
                 if sparse_vecs.len() != sparse_works.len() {
@@ -749,7 +741,7 @@ impl Node for KBEmbedNode {
                     let result = conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
-                    ).await.map_err(|e| e.to_string())?;
+                    ).map_err(|e| e.to_string())?;
 
                     // Insert into SparseHandle using offsets
                     if let Some(ref handles) = sparse_handles {
@@ -787,7 +779,6 @@ impl Node for KBEmbedNode {
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
-                        .await
                         .map_err(|e| format!("dual embed failed: {e}"))?;
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
@@ -838,7 +829,7 @@ impl Node for KBEmbedNode {
                         conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
-                        ).await.map_err(|e| e.to_string())?;
+                        ).map_err(|e| e.to_string())?;
                     }
                 }
 
@@ -867,7 +858,7 @@ impl Node for KBEmbedNode {
                         let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
-                        ).await.map_err(|e| e.to_string())?;
+                        ).map_err(|e| e.to_string())?;
 
                         if let Some(ref handles) = sparse_handles {
                             if let Some(handle) = handles.get(*entity_name) {
@@ -917,7 +908,7 @@ impl Node for KBEmbedNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBEmbedNode undo: 'conn' service not registered")?;
 
@@ -943,7 +934,7 @@ impl Node for KBEmbedNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).await.map_err(|e| format!("KBEmbedNode undo failed: {e}"))?;
+            ).map_err(|e| format!("KBEmbedNode undo failed: {e}"))?;
         }
         Ok(())
     }
@@ -1089,7 +1080,7 @@ impl KBChunkRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBChunkRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -1110,7 +1101,7 @@ impl Node for KBChunkRecordNode {
             PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
 
         let items: Vec<EntityRecord> = match ctx.take_input("entities") {
@@ -1308,7 +1299,7 @@ impl ChunkRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for ChunkRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -1329,7 +1320,7 @@ impl Node for ChunkRecordNode {
             PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
 
         let items: Vec<EntityRecord> = match ctx.take_input("entities") {
@@ -1444,7 +1435,7 @@ struct SimpleEmbedWork {
     entity_name: String,
 }
 
-#[async_trait]
+
 impl Node for EmbedNode {
     fn name(&self) -> &str {
         &self.name
@@ -1473,7 +1464,7 @@ impl Node for EmbedNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
@@ -1512,7 +1503,6 @@ impl Node for EmbedNode {
             let uuid = rec
                 .entity_ref
                 .ready()
-                .await
                 .map_err(|e| format!("embed ref resolution failed: {e}"))?;
 
             let embed_text = match rec.data.get(&self.text_field).and_then(|v| v.as_str()) {
@@ -1585,7 +1575,7 @@ impl Node for EmbedNode {
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).await {
+                ) {
                     for row in &result.rows {
                         if let (Some(uuid), Some(hash)) = (
                             row.first().and_then(|v| v.as_str()),
@@ -1625,7 +1615,6 @@ impl Node for EmbedNode {
                 let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                 let vectors = embedder
                     .embed(&texts)
-                    .await
                     .map_err(|e| format!("dense embedding failed: {e}"))?;
 
                 if vectors.len() != chunk.len() {
@@ -1665,7 +1654,7 @@ impl Node for EmbedNode {
                     conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
-                    ).await.map_err(|e| e.to_string())?;
+                    ).map_err(|e| e.to_string())?;
                 }
             }
         }
@@ -1678,7 +1667,6 @@ impl Node for EmbedNode {
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let sparse_vecs = sparse_emb
                         .embed_sparse(&texts)
-                        .await
                         .map_err(|e| format!("sparse embedding failed: {e}"))?;
 
                     if sparse_vecs.len() != chunk.len() {
@@ -1710,7 +1698,7 @@ impl Node for EmbedNode {
                         let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
-                        ).await.map_err(|e| e.to_string())?;
+                        ).map_err(|e| e.to_string())?;
 
                         // Insert into SparseHandle using offsets
                         if let Some(ref handles) = sparse_handles {
@@ -1749,7 +1737,6 @@ impl Node for EmbedNode {
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
-                        .await
                         .map_err(|e| format!("dual embed failed: {e}"))?;
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
@@ -1799,7 +1786,7 @@ impl Node for EmbedNode {
                         conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
-                        ).await.map_err(|e| e.to_string())?;
+                        ).map_err(|e| e.to_string())?;
                     }
                 }
 
@@ -1826,7 +1813,7 @@ impl Node for EmbedNode {
                         let result = conn.execute_with_params(
                             &cypher,
                             &[QueryParam { name: "items".into(), value: items_param }],
-                        ).await.map_err(|e| e.to_string())?;
+                        ).map_err(|e| e.to_string())?;
 
                         if let Some(ref handles) = sparse_handles {
                             if let Some(handle) = handles.get(*entity_name) {
@@ -1876,7 +1863,7 @@ impl Node for EmbedNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("EmbedNode undo: 'conn' service not registered")?;
 
@@ -1901,7 +1888,7 @@ impl Node for EmbedNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).await.map_err(|e| format!("EmbedNode undo failed: {e}"))?;
+            ).map_err(|e| format!("EmbedNode undo failed: {e}"))?;
         }
         Ok(())
     }
@@ -2042,7 +2029,7 @@ impl KBGatherNode {
 
     /// Process a batch of aggregates sharing the same (title_entity, kb_name).
     /// Steps 1-4: read titles, linked content, hashes, detect changes.
-    async fn gather_batch(
+    fn gather_batch(
         conn: &dyn DbConnection,
         dialect: &dyn crate::dialect::SchemaDialect,
         config: &CatalogConfig,
@@ -2101,7 +2088,6 @@ impl KBGatherNode {
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
             n_queries += 1;
 
@@ -2174,7 +2160,6 @@ impl KBGatherNode {
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
                     )
-                    .await
                     .map_err(|e| e.to_string())?;
                 n_queries += 1;
 
@@ -2217,7 +2202,6 @@ impl KBGatherNode {
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
             n_queries += 1;
 
@@ -2274,7 +2258,7 @@ impl KBGatherNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBGatherNode {
     fn name(&self) -> &str {
         &self.name
@@ -2294,7 +2278,7 @@ impl Node for KBGatherNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // Read from port (optional — might be connected to initial input)
         let mut items: Vec<AggregateRecord> = match ctx.take_input("aggregates") {
             Some(PortValue::Batch(payload)) => payload
@@ -2356,7 +2340,7 @@ impl Node for KBGatherNode {
 
             let (changed, skipped, n_queries) = Self::gather_batch(
                 &**conn, &**dialect, &config, kb_meta, kb_name, _title_entity, &group_ops,
-            ).await?;
+            )?;
 
             total_skipped += skipped;
             total_queries += n_queries;
@@ -2404,7 +2388,7 @@ impl KBUpdateNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBUpdateNode {
     fn name(&self) -> &str {
         &self.name
@@ -2423,7 +2407,7 @@ impl Node for KBUpdateNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<KBContentRecord>()
@@ -2468,7 +2452,7 @@ impl Node for KBUpdateNode {
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).await {
+                ) {
                     for row in &result.rows {
                         let uuid = row[0].as_str().unwrap_or("").to_string();
                         let title = row[1].as_str().unwrap_or("").to_string();
@@ -2510,7 +2494,7 @@ impl Node for KBUpdateNode {
                 conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).await.map_err(|e| e.to_string())?;
+                ).map_err(|e| e.to_string())?;
                 total_updated += indices.len();
             }
 
@@ -2536,7 +2520,7 @@ impl Node for KBUpdateNode {
                     let _ = conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
-                    ).await;
+                    );
                 }
             }
 
@@ -2551,7 +2535,7 @@ impl Node for KBUpdateNode {
                 let _ = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuids_param }],
-                ).await;
+                );
                 total_deleted += indices.len();
             }
         }
@@ -2577,7 +2561,7 @@ impl Node for KBUpdateNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("KBUpdateNode undo: 'conn' service not registered")?;
 
@@ -2611,7 +2595,7 @@ impl Node for KBUpdateNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
-            ).await.map_err(|e| format!("KBUpdateNode undo failed: {e}"))?;
+            ).map_err(|e| format!("KBUpdateNode undo failed: {e}"))?;
         }
         Ok(())
     }
@@ -2635,7 +2619,7 @@ impl KBChunkNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBChunkNode {
     fn name(&self) -> &str {
         &self.name
@@ -2655,7 +2639,7 @@ impl Node for KBChunkNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<KBContentRecord> = match ctx.take_input("kb_content") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<KBContentRecord>()
@@ -2736,7 +2720,7 @@ impl FlushNode {
     }
 }
 
-#[async_trait]
+
 impl Node for FlushNode {
     fn name(&self) -> &str {
         &self.name
@@ -2757,13 +2741,13 @@ impl Node for FlushNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("FlushNode: 'conn' service not registered")?;
 
         let mut flushed: usize = 0;
         for table in &self.tables {
-            if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).await.is_ok() {
+            if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).is_ok() {
                 flushed += 1;
             }
         }
@@ -2783,7 +2767,7 @@ impl Node for FlushNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("FlushNode undo: 'conn' service not registered")?;
 
@@ -2793,7 +2777,6 @@ impl Node for FlushNode {
         for t in tables {
             if let Some(table) = t.as_str() {
                 conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')"))
-                    .await
                     .ok(); // Best-effort
             }
         }
@@ -2824,7 +2807,7 @@ impl SparseCommitNode {
     }
 }
 
-#[async_trait]
+
 impl Node for SparseCommitNode {
     fn name(&self) -> &str {
         &self.name
@@ -2845,7 +2828,7 @@ impl Node for SparseCommitNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
             .ok_or("SparseCommitNode: 'sparse_handles' service not registered")?;
 
@@ -2871,7 +2854,7 @@ impl Node for SparseCommitNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
             .ok_or("SparseCommitNode undo: 'sparse_handles' service not registered")?;
 
@@ -2909,7 +2892,7 @@ impl RechunkDeleteNode {
     }
 }
 
-#[async_trait]
+
 impl Node for RechunkDeleteNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "RechunkDeleteNode" }
@@ -2923,7 +2906,7 @@ impl Node for RechunkDeleteNode {
             PortDef { name: "entities", port_type: PortType::Entities, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<EntityRecord> = match ctx.take_input("entities") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<EntityRecord>()
@@ -2958,7 +2941,6 @@ impl Node for RechunkDeleteNode {
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuid_list }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
             for row in &result.rows {
                 if let Some(cnt) = row.get(1).and_then(|v| v.as_i64()) {
@@ -3005,7 +2987,7 @@ impl DeleteRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for DeleteRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "DeleteRecordNode" }
@@ -3020,7 +3002,7 @@ impl Node for DeleteRecordNode {
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<DeleteRecord> = match ctx.take_input("deletes") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<DeleteRecord>()
@@ -3090,7 +3072,6 @@ impl Node for DeleteRecordNode {
                             &del_chunks,
                             &[QueryParam { name: "uuids".into(), value: idx_list.clone() }],
                         )
-                        .await
                         .map_err(|e| e.to_string())?;
 
                     let idx_to_entity: HashMap<&str, &str> = index_uuids.iter()
@@ -3116,7 +3097,7 @@ impl Node for DeleteRecordNode {
                             &del_idx,
                             &[QueryParam { name: "uuids".into(), value: idx_list }],
                         )
-                        .await;
+                        ;
                 } else {
                     // contentFor: delete SOURCED chunks, enqueue re-aggregation
                     let kb_meta = match kb_metadata.get(kb_name.as_str()) {
@@ -3138,7 +3119,6 @@ impl Node for DeleteRecordNode {
                             &del_sourced,
                             &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
                         )
-                        .await
                         .map_err(|e| e.to_string())?;
                     for row in &result.rows {
                         if let (Some(uuid), Some(cnt)) = (
@@ -3169,7 +3149,6 @@ impl Node for DeleteRecordNode {
                                 &match_pattern,
                                 &[QueryParam { name: "uuids".into(), value: uuid_list }],
                             )
-                            .await
                             .map_err(|e| e.to_string())?;
 
                         let mut new_aggregates: Vec<AggregateRecord> = Vec::new();
@@ -3210,7 +3189,6 @@ impl Node for DeleteRecordNode {
                         &del_chunks,
                         &[QueryParam { name: "uuids".into(), value: uuid_list }],
                     )
-                    .await
                     .map_err(|e| e.to_string())?;
                 for row in &result.rows {
                     if let (Some(uuid), Some(cnt)) = (
@@ -3230,7 +3208,7 @@ impl Node for DeleteRecordNode {
                 let read = conn.execute_with_params(
                     &dialect.select_entity_all_by_uuids(entity_name),
                     &[QueryParam { name: "uuids".into(), value: uuid_list.clone() }],
-                ).await.map_err(|e| e.to_string())?;
+                ).map_err(|e| e.to_string())?;
                 let mut found = HashSet::new();
                 for row in &read.rows {
                     if let Some(CypherValue::Map(props)) = row.first() {
@@ -3261,7 +3239,6 @@ impl Node for DeleteRecordNode {
                 &del_entities,
                 &[QueryParam { name: "uuids".into(), value: uuid_list }],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
             // Remove from node_id_cache
@@ -3314,7 +3291,7 @@ impl Node for DeleteRecordNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("DeleteRecordNode undo: 'conn' service not registered")?;
 
@@ -3337,7 +3314,7 @@ impl Node for DeleteRecordNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
-            ).await.map_err(|e| format!("DeleteRecordNode undo failed: {e}"))?;
+            ).map_err(|e| format!("DeleteRecordNode undo failed: {e}"))?;
 
             ctx.info(format!(
                 "restored {} {entity_name}(s), re-ingestion needed for chunks/embeddings",
@@ -3372,7 +3349,7 @@ impl UpdateRecordNode {
     }
 }
 
-#[async_trait]
+
 impl Node for UpdateRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "UpdateRecordNode" }
@@ -3388,7 +3365,7 @@ impl Node for UpdateRecordNode {
             PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let raw_items: Vec<UpdateRecord> = match ctx.take_input("updates") {
             Some(PortValue::Batch(payload)) => payload
                 .take::<UpdateRecord>()
@@ -3466,7 +3443,6 @@ impl Node for UpdateRecordNode {
                     &old_read_query,
                     &[QueryParam { name: "uuids".into(), value: uuid_list }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
 
             let mut old_hashes: HashMap<String, String> = HashMap::new();
@@ -3537,7 +3513,6 @@ impl Node for UpdateRecordNode {
                     &set_cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
                 )
-                .await
                 .map_err(|e| e.to_string())?;
             }
 
@@ -3596,7 +3571,6 @@ impl Node for UpdateRecordNode {
                                     &match_pattern,
                                     &[QueryParam { name: "uuids".into(), value: uuid_param }],
                                 )
-                                .await
                                 .map_err(|e| e.to_string())?;
 
                             let mut new_aggregates: Vec<AggregateRecord> = Vec::new();
@@ -3636,7 +3610,6 @@ impl Node for UpdateRecordNode {
                             &read_cypher,
                             &[QueryParam { name: "uuids".into(), value: uuid_param }],
                         )
-                        .await
                         .map_err(|e| e.to_string())?;
 
                     for row in &read_result.rows {
@@ -3726,7 +3699,7 @@ impl Node for UpdateRecordNode {
         self.undo_data.clone()
     }
 
-    async fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
+    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
             .ok_or("UpdateRecordNode undo: 'conn' service not registered")?;
 
@@ -3755,7 +3728,7 @@ impl Node for UpdateRecordNode {
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
-            ).await.map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
+            ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
 
             ctx.info(format!(
                 "restored {} {entity_name}(s) to pre-update state",

@@ -10,7 +10,6 @@
 
 use std::sync::Mutex;
 
-use async_trait::async_trait;
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config, DTYPE};
@@ -92,7 +91,7 @@ impl Default for DefaultModel {
 /// use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
 ///
 /// let embedder = CandleEmbedder::new(DefaultModel::MiniLM)?;
-/// let vectors = embedder.embed(&["hello world".into()]).await?;
+/// let vectors = embedder.embed(&["hello world".into()])?;
 /// assert_eq!(vectors[0].len(), 384);
 /// ```
 pub struct CandleEmbedder {
@@ -283,9 +282,9 @@ impl CandleEmbedder {
     }
 }
 
-#[async_trait]
+
 impl Embedder for CandleEmbedder {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.embed_sync(texts)
     }
 
@@ -497,9 +496,9 @@ impl CandleDualEmbedder {
     }
 }
 
-#[async_trait]
+
 impl DualEmbedder for CandleDualEmbedder {
-    async fn embed_dual(
+    fn embed_dual(
         &self,
         texts: &[String],
     ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
@@ -552,14 +551,14 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore] // run with: cargo test -- --ignored
-    async fn candle_embedder_minilm_embed() {
+    fn candle_embedder_minilm_embed() {
         let embedder = shared_minilm();
         assert_eq!(embedder.dim(), 384);
 
         let texts = vec!["hello world".into(), "foo bar".into()];
-        let vectors = embedder.embed(&texts).await.unwrap();
+        let vectors = embedder.embed(&texts).unwrap();
 
         assert_eq!(vectors.len(), 2);
         assert_eq!(vectors[0].len(), 384);
@@ -570,14 +569,14 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_bge_base_embed() {
+    fn candle_embedder_bge_base_embed() {
         let embedder = CandleEmbedder::new(DefaultModel::BgeBase).unwrap();
         assert_eq!(embedder.dim(), 768);
 
         let texts = vec!["hello world".into()];
-        let vectors = embedder.embed(&texts).await.unwrap();
+        let vectors = embedder.embed(&texts).unwrap();
 
         assert_eq!(vectors.len(), 1);
         assert_eq!(vectors[0].len(), 768);
@@ -587,25 +586,25 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_empty_batch() {
+    fn candle_embedder_empty_batch() {
         let embedder = shared_minilm();
-        let vectors = embedder.embed(&[]).await.unwrap();
+        let vectors = embedder.embed(&[]).unwrap();
         assert!(vectors.is_empty());
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_cosine_similarity() {
+    fn candle_embedder_cosine_similarity() {
         let embedder = shared_minilm();
         let texts = vec![
             "Rust programming language".into(),
             "Rust systems programming".into(),
             "cooking pasta recipes".into(),
         ];
-        let vecs = embedder.embed(&texts).await.unwrap();
+        let vecs = embedder.embed(&texts).unwrap();
 
         let sim_related = cosine(&vecs[0], &vecs[1]);
         let sim_unrelated = cosine(&vecs[0], &vecs[2]);
@@ -617,25 +616,25 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_as_trait_object() {
+    fn candle_embedder_as_trait_object() {
         let embedder: &dyn Embedder = shared_minilm();
         assert_eq!(embedder.dim(), 384);
-        let result = embedder.embed(&["test".into()]).await.unwrap();
+        let result = embedder.embed(&["test".into()]).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 384);
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_multilingual_minilm_embed() {
+    fn candle_embedder_multilingual_minilm_embed() {
         let embedder = shared_multilingual();
         assert_eq!(embedder.dim(), 384);
 
         let texts = vec!["hello world".into(), "bonjour le monde".into()];
-        let vectors = embedder.embed(&texts).await.unwrap();
+        let vectors = embedder.embed(&texts).unwrap();
 
         assert_eq!(vectors.len(), 2);
         assert_eq!(vectors[0].len(), 384);
@@ -646,9 +645,9 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn candle_embedder_multilingual_cosine() {
+    fn candle_embedder_multilingual_cosine() {
         let embedder = shared_multilingual();
         let vecs = embedder
             .embed(&[
@@ -656,7 +655,6 @@ mod tests {
                 "Langage de programmation Rust".into(),
                 "recetas de cocina".into(),
             ])
-            .await
             .unwrap();
 
         let sim_translation = cosine(&vecs[0], &vecs[1]);

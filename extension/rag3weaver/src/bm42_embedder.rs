@@ -15,14 +15,13 @@
 //! use rag3weaver::candle_embedder::DefaultModel;
 //!
 //! let embedder = Bm42Embedder::new(DefaultModel::MiniLM)?;
-//! let sparse = embedder.embed_sparse(&["hello world".into()]).await?;
+//! let sparse = embedder.embed_sparse(&["hello world".into()])?;
 //! assert!(!sparse[0].is_empty());
 //! ```
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use async_trait::async_trait;
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
@@ -211,9 +210,9 @@ impl Bm42Embedder {
     }
 }
 
-#[async_trait]
+
 impl SparseEmbedder for Bm42Embedder {
-    async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+    fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
         self.embed_sparse_sync(texts)
     }
 }
@@ -225,13 +224,12 @@ mod tests {
     use super::*;
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore] // requires network + model download: cargo test -- --ignored
-    async fn bm42_minilm_sparse_basic() {
+    fn bm42_minilm_sparse_basic() {
         let embedder = Bm42Embedder::new(DefaultModel::MiniLM).unwrap();
         let results = embedder
             .embed_sparse(&["hello world".into()])
-            .await
             .unwrap();
 
         assert_eq!(results.len(), 1);
@@ -246,16 +244,15 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn bm42_minilm_batch() {
+    fn bm42_minilm_batch() {
         let embedder = Bm42Embedder::new(DefaultModel::MiniLM).unwrap();
         let results = embedder
             .embed_sparse(&[
                 "rust programming language".into(),
                 "cooking pasta recipes".into(),
             ])
-            .await
             .unwrap();
 
         assert_eq!(results.len(), 2);
@@ -264,17 +261,15 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn bm42_minilm_deterministic() {
+    fn bm42_minilm_deterministic() {
         let embedder = Bm42Embedder::new(DefaultModel::MiniLM).unwrap();
         let r1 = embedder
             .embed_sparse(&["test".into()])
-            .await
             .unwrap();
         let r2 = embedder
             .embed_sparse(&["test".into()])
-            .await
             .unwrap();
 
         assert_eq!(r1[0].indices, r2[0].indices);
@@ -284,25 +279,24 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn bm42_minilm_empty_batch() {
+    fn bm42_minilm_empty_batch() {
         let embedder = Bm42Embedder::new(DefaultModel::MiniLM).unwrap();
-        let results = embedder.embed_sparse(&[]).await.unwrap();
+        let results = embedder.embed_sparse(&[]).unwrap();
         assert!(results.is_empty());
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn bm42_minilm_similar_texts_share_tokens() {
+    fn bm42_minilm_similar_texts_share_tokens() {
         let embedder = Bm42Embedder::new(DefaultModel::MiniLM).unwrap();
         let results = embedder
             .embed_sparse(&[
                 "rust programming".into(),
                 "rust systems programming".into(),
             ])
-            .await
             .unwrap();
 
         // Both mention "rust" → should share at least the same sub-word token IDs
@@ -318,12 +312,12 @@ mod tests {
     }
 
     #[cfg(feature = "candle-embedder")]
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn bm42_as_sparse_embedder_trait() {
+    fn bm42_as_sparse_embedder_trait() {
         let embedder: Box<dyn SparseEmbedder> =
             Box::new(Bm42Embedder::new(DefaultModel::MiniLM).unwrap());
-        let results = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        let results = embedder.embed_sparse(&["test".into()]).unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].is_empty());
     }

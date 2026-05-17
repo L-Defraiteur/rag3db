@@ -207,12 +207,12 @@ impl DataflowRuntime {
     }
 
     /// Execute the graph and return both the output and an ExecutionReport.
-    pub async fn execute_with_report(
+    pub fn execute_with_report(
         &self,
         graph: &mut DataflowGraph,
     ) -> Result<(DataflowOutput, ExecutionReport), String> {
         let mut rx = self.subscribe();
-        let output = self.execute(graph).await?;
+        let output = self.execute(graph)?;
 
         // Collect all events
         let mut events = Vec::new();
@@ -231,7 +231,7 @@ impl DataflowRuntime {
     /// - If new, creates a checkpoint and persists after each node completes.
     /// - On success: marks execution completed and cleans up node data.
     /// - On failure: marks execution failed (node data preserved for resume).
-    pub async fn execute_with_checkpoint(
+    pub fn execute_with_checkpoint(
         &self,
         graph: &mut DataflowGraph,
         store: &dyn CheckpointStore,
@@ -241,7 +241,7 @@ impl DataflowRuntime {
         let graph_hash = graph_def.hash();
 
         // Check for existing checkpoint
-        let existing = store.load_execution(execution_id).await?;
+        let existing = store.load_execution(execution_id)?;
 
         if let Some(ref cp) = existing {
             // Validate graph hash matches
@@ -312,22 +312,21 @@ impl DataflowRuntime {
                     created_at: now,
                     updated_at: now,
                 };
-                store.create_execution(&cp).await?;
+                store.create_execution(&cp)?;
                 cp
             }
         };
 
         // Run with checkpoint awareness
         let result = self
-            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint)
-            .await;
+            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint);
 
         match &result {
             Ok(_) => {
-                store.mark_completed(execution_id).await?;
+                store.mark_completed(execution_id)?;
             }
             Err(error) => {
-                let _ = store.mark_failed(execution_id, error).await;
+                let _ = store.mark_failed(execution_id, error);
             }
         }
 
@@ -335,7 +334,7 @@ impl DataflowRuntime {
     }
 
     /// Inner execution loop with checkpoint skip/save logic.
-    async fn execute_inner_with_checkpoint(
+    fn execute_inner_with_checkpoint(
         &self,
         graph: &mut DataflowGraph,
         store: &dyn CheckpointStore,
@@ -485,7 +484,7 @@ impl DataflowRuntime {
                 let exec_result = if should_fail {
                     Err(format!("injected failure for node '{}'", node_name))
                 } else {
-                    graph.nodes[node_idx].execute(&mut ctx).await
+                    graph.nodes[node_idx].execute(&mut ctx)
                 };
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
@@ -531,8 +530,7 @@ impl DataflowRuntime {
                                 &checkpoint_outputs,
                                 undo_ctx.as_ref(),
                                 duration_ms,
-                            )
-                            .await?;
+                            )?;
 
                         for (port, value) in outputs {
                             port_data.insert((node_name.clone(), port), value);
@@ -548,8 +546,7 @@ impl DataflowRuntime {
                     }
                     Err(error) => {
                         let _ = store
-                            .save_node_failed(execution_id, node_name, &error)
-                            .await;
+                            .save_node_failed(execution_id, node_name, &error);
                         self.emit(DataflowEvent::NodeFailed {
                             node: node_name.clone(),
                             error: error.clone(),
@@ -595,7 +592,7 @@ impl DataflowRuntime {
     }
 
     /// Execute the graph. Returns all output values.
-    pub async fn execute(
+    pub fn execute(
         &self,
         graph: &mut DataflowGraph,
     ) -> Result<DataflowOutput, String> {
@@ -722,7 +719,7 @@ impl DataflowRuntime {
                 });
                 let node_start = Instant::now();
 
-                let exec_result = graph.nodes[node_idx].execute(&mut ctx).await;
+                let exec_result = graph.nodes[node_idx].execute(&mut ctx);
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
 
@@ -854,7 +851,7 @@ mod tests {
         name: String,
     }
 
-    #[async_trait::async_trait]
+    
     impl Node for PassthroughNode {
         fn name(&self) -> &str {
             &self.name
@@ -873,7 +870,7 @@ mod tests {
                 required: false,
             }]
         }
-        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             if let Some(v) = ctx.take_input("in") {
                 ctx.set_output("out", v);
             }
@@ -887,7 +884,7 @@ mod tests {
         results: Vec<UnifiedResult>,
     }
 
-    #[async_trait::async_trait]
+    
     impl Node for SourceNode {
         fn name(&self) -> &str {
             &self.name
@@ -902,7 +899,7 @@ mod tests {
                 required: false,
             }]
         }
-        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Results(self.results.clone()));
             Ok(())
         }
@@ -913,7 +910,7 @@ mod tests {
         name: String,
     }
 
-    #[async_trait::async_trait]
+    
     impl Node for SinkNode {
         fn name(&self) -> &str {
             &self.name
@@ -928,7 +925,7 @@ mod tests {
         fn outputs(&self) -> &[PortDef] {
             &[]
         }
-        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             let _ = ctx.take_input("in");
             Ok(())
         }
@@ -949,8 +946,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn runtime_linear_pipeline() {
+    #[test]
+    fn runtime_linear_pipeline() {
         let mut graph = DataflowGraph::new();
         graph
             .add_node(Box::new(SourceNode {
@@ -972,7 +969,7 @@ mod tests {
         graph.connect("pass", "out", "sink", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
-        let output = runtime.execute(&mut graph).await.unwrap();
+        let output = runtime.execute(&mut graph).unwrap();
 
         // Passthrough should have forwarded results
         let val = output.get("pass", "out").unwrap();
@@ -984,8 +981,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn runtime_fanout() {
+    #[test]
+    fn runtime_fanout() {
         let mut graph = DataflowGraph::new();
         graph
             .add_node(Box::new(SourceNode {
@@ -1007,16 +1004,16 @@ mod tests {
         graph.connect("source", "out", "sink_b", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
-        let output = runtime.execute(&mut graph).await.unwrap();
+        let output = runtime.execute(&mut graph).unwrap();
         assert!(output.get("source", "out").is_some());
     }
 
-    #[tokio::test]
-    async fn runtime_fanin() {
+    #[test]
+    fn runtime_fanin() {
         // Two sources feed into same input port of a sink
         struct DualInputSink;
 
-        #[async_trait::async_trait]
+        
         impl Node for DualInputSink {
             fn name(&self) -> &str {
                 "merge_sink"
@@ -1035,7 +1032,7 @@ mod tests {
                     required: false,
                 }]
             }
-            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if let Some(v) = ctx.take_input("in") {
                     ctx.set_output("out", v);
                 }
@@ -1061,7 +1058,7 @@ mod tests {
         graph.connect("src_b", "out", "merge_sink", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
-        let output = runtime.execute(&mut graph).await.unwrap();
+        let output = runtime.execute(&mut graph).unwrap();
 
         let val = output.get("merge_sink", "out").unwrap();
         if let PortValue::Results(r) = val {
@@ -1071,8 +1068,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn runtime_tap_specific_edge() {
+    #[test]
+    fn runtime_tap_specific_edge() {
         let mut graph = DataflowGraph::new();
         graph
             .add_node(Box::new(SourceNode {
@@ -1089,7 +1086,7 @@ mod tests {
 
         let mut runtime = DataflowRuntime::new(10);
         let mut tap_rx = runtime.tap("source", "out", "sink", "in");
-        runtime.execute(&mut graph).await.unwrap();
+        runtime.execute(&mut graph).unwrap();
 
         let event = tap_rx.try_recv().unwrap();
         assert_eq!(event.from_node, "source");
@@ -1101,8 +1098,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn runtime_tap_all() {
+    #[test]
+    fn runtime_tap_all() {
         let mut graph = DataflowGraph::new();
         graph
             .add_node(Box::new(SourceNode {
@@ -1125,7 +1122,7 @@ mod tests {
 
         let mut runtime = DataflowRuntime::new(10);
         let mut tap_rx = runtime.tap_all();
-        runtime.execute(&mut graph).await.unwrap();
+        runtime.execute(&mut graph).unwrap();
 
         // Should have 2 tap events (source→pass, pass→sink)
         let ev1 = tap_rx.try_recv().unwrap();
@@ -1134,8 +1131,8 @@ mod tests {
         assert_eq!(ev2.from_node, "pass");
     }
 
-    #[tokio::test]
-    async fn runtime_execute_with_report() {
+    #[test]
+    fn runtime_execute_with_report() {
         let mut graph = DataflowGraph::new();
         graph
             .add_node(Box::new(SourceNode {
@@ -1151,7 +1148,7 @@ mod tests {
         graph.connect("source", "out", "sink", "in").unwrap();
 
         let runtime = DataflowRuntime::new(10);
-        let (_output, report) = runtime.execute_with_report(&mut graph).await.unwrap();
+        let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
 
         assert_eq!(report.nodes.len(), 2);
         assert!(matches!(
@@ -1177,7 +1174,7 @@ mod tests {
             name: String,
         }
 
-        #[async_trait::async_trait]
+        
         impl Node for TriggerNode {
             fn name(&self) -> &str {
                 &self.name
@@ -1195,7 +1192,7 @@ mod tests {
                     required: false,
                 }]
             }
-            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 ctx.set_output("done", PortValue::Empty);
                 Ok(())
             }
@@ -1206,7 +1203,7 @@ mod tests {
             name: String,
         }
 
-        #[async_trait::async_trait]
+        
         impl Node for ReceiverNode {
             fn name(&self) -> &str {
                 &self.name
@@ -1228,7 +1225,7 @@ mod tests {
                     required: false,
                 }]
             }
-            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 let _ = ctx.take_input("trigger");
                 ctx.set_output("done", PortValue::Empty);
                 Ok(())
@@ -1241,7 +1238,7 @@ mod tests {
             fail: bool,
         }
 
-        #[async_trait::async_trait]
+        
         impl Node for FailOnceNode {
             fn name(&self) -> &str {
                 &self.name
@@ -1263,7 +1260,7 @@ mod tests {
                     required: false,
                 }]
             }
-            async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if self.fail {
                     self.fail = false;
                     Err("simulated crash".to_string())
@@ -1274,8 +1271,8 @@ mod tests {
             }
         }
 
-        #[tokio::test]
-        async fn checkpoint_full_execution() {
+        #[test]
+        fn checkpoint_full_execution() {
             let store = MockCheckpointStore::new();
 
             let mut graph = DataflowGraph::new();
@@ -1286,17 +1283,16 @@ mod tests {
             let runtime = DataflowRuntime::new(10);
             let output = runtime
                 .execute_with_checkpoint(&mut graph, &store, "exec-full")
-                .await
                 .unwrap();
 
             assert!(output.get("trigger", "done").is_some());
 
-            let cp = store.load_execution("exec-full").await.unwrap().unwrap();
+            let cp = store.load_execution("exec-full").unwrap().unwrap();
             assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
         }
 
-        #[tokio::test]
-        async fn checkpoint_resume_after_failure() {
+        #[test]
+        fn checkpoint_resume_after_failure() {
             let store = MockCheckpointStore::new();
 
             // First run: trigger succeeds, crasher fails
@@ -1314,13 +1310,12 @@ mod tests {
                 let runtime = DataflowRuntime::new(10);
                 let err = runtime
                     .execute_with_checkpoint(&mut graph, &store, "exec-resume")
-                    .await
                     .unwrap_err();
                 assert!(err.contains("simulated crash"));
             }
 
             // Check store: execution failed, trigger completed, crasher failed
-            let cp = store.load_execution("exec-resume").await.unwrap().unwrap();
+            let cp = store.load_execution("exec-resume").unwrap().unwrap();
             assert_eq!(cp.status, CheckpointExecutionStatus::Failed);
             assert_eq!(cp.nodes["trigger"].status, NodeCheckpointStatus::Completed);
             assert_eq!(cp.nodes["crasher"].status, NodeCheckpointStatus::Failed);
@@ -1349,7 +1344,6 @@ mod tests {
                 let mut rx = runtime.subscribe();
                 let output = runtime
                     .execute_with_checkpoint(&mut graph, &store, "exec-resume")
-                    .await
                     .unwrap();
 
                 assert!(output.get("crasher", "done").is_some());
@@ -1365,12 +1359,12 @@ mod tests {
                 assert!(resumed, "should emit CheckpointResumed for trigger");
             }
 
-            let cp = store.load_execution("exec-resume").await.unwrap().unwrap();
+            let cp = store.load_execution("exec-resume").unwrap().unwrap();
             assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
         }
 
-        #[tokio::test]
-        async fn checkpoint_graph_hash_mismatch() {
+        #[test]
+        fn checkpoint_graph_hash_mismatch() {
             let store = MockCheckpointStore::new();
 
             // First run
@@ -1381,7 +1375,6 @@ mod tests {
                 let runtime = DataflowRuntime::new(10);
                 runtime
                     .execute_with_checkpoint(&mut graph, &store, "exec-hash")
-                    .await
                     .unwrap();
             }
 
@@ -1400,14 +1393,13 @@ mod tests {
                 let runtime = DataflowRuntime::new(10);
                 let err = runtime
                     .execute_with_checkpoint(&mut graph, &store, "exec-hash")
-                    .await
                     .unwrap_err();
                 assert!(err.contains("graph_hash mismatch"));
             }
         }
 
-        #[tokio::test]
-        async fn checkpoint_already_completed_is_noop() {
+        #[test]
+        fn checkpoint_already_completed_is_noop() {
             let store = MockCheckpointStore::new();
 
             let mut graph = DataflowGraph::new();
@@ -1416,7 +1408,6 @@ mod tests {
             let runtime = DataflowRuntime::new(10);
             runtime
                 .execute_with_checkpoint(&mut graph, &store, "exec-done")
-                .await
                 .unwrap();
 
             // Second call → no-op
@@ -1424,7 +1415,6 @@ mod tests {
             graph2.add_node(Box::new(TriggerNode { name: "trigger".into() })).unwrap();
             let output = runtime
                 .execute_with_checkpoint(&mut graph2, &store, "exec-done")
-                .await
                 .unwrap();
 
             assert!(output.get("trigger", "done").is_none());

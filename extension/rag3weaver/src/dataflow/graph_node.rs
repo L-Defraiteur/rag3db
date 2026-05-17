@@ -7,7 +7,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use super::checkpoint::GraphDefinition;
 use super::graph::DataflowGraph;
@@ -182,7 +181,7 @@ impl GraphNode {
     }
 }
 
-#[async_trait]
+
 impl Node for GraphNode {
     fn name(&self) -> &str {
         &self.name
@@ -196,7 +195,7 @@ impl Node for GraphNode {
         &self.outputs
     }
 
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // 1. Materialize the sub-graph
         let mut sub_graph = DataflowGraph::from_definition(&self.definition, &self.registry)?;
 
@@ -215,7 +214,7 @@ impl Node for GraphNode {
         );
 
         // 4. Execute the sub-graph
-        let output = runtime.execute(&mut sub_graph).await?;
+        let output = runtime.execute(&mut sub_graph)?;
 
         // 5. Collect free outputs and set them on the parent context
         for (ext_name, (inner_node, inner_port)) in &self.output_map {

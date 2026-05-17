@@ -383,25 +383,12 @@ pub struct ExecutionCheckpoint {
 }
 
 /// Persistence layer for dataflow checkpoints.
-#[async_trait::async_trait]
 pub trait CheckpointStore: Send + Sync {
-    /// Initialize storage (create tables, etc.).
-    async fn initialize(&self) -> Result<(), String>;
-
-    /// Save initial execution state (graph definition + all nodes pending).
-    async fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String>;
-
-    /// Load an existing checkpoint by execution_id.
-    async fn load_execution(
-        &self,
-        execution_id: &str,
-    ) -> Result<Option<ExecutionCheckpoint>, String>;
-
-    /// Find incomplete executions (status = Running) for resume.
-    async fn find_incomplete(&self) -> Result<Vec<String>, String>;
-
-    /// Mark a node as completed with its output port data and optional undo context.
-    async fn save_node_completed(
+    fn initialize(&self) -> Result<(), String>;
+    fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String>;
+    fn load_execution(&self, execution_id: &str) -> Result<Option<ExecutionCheckpoint>, String>;
+    fn find_incomplete(&self) -> Result<Vec<String>, String>;
+    fn save_node_completed(
         &self,
         execution_id: &str,
         node_name: &str,
@@ -409,23 +396,10 @@ pub trait CheckpointStore: Send + Sync {
         undo_context: Option<&serde_json::Value>,
         duration_ms: u64,
     ) -> Result<(), String>;
-
-    /// Mark a node as failed.
-    async fn save_node_failed(
-        &self,
-        execution_id: &str,
-        node_name: &str,
-        error: &str,
-    ) -> Result<(), String>;
-
-    /// Mark execution as completed — deletes node data (successful run = clean up).
-    async fn mark_completed(&self, execution_id: &str) -> Result<(), String>;
-
-    /// Mark execution as failed.
-    async fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String>;
-
-    /// Delete a checkpoint and all its node data.
-    async fn delete(&self, execution_id: &str) -> Result<(), String>;
+    fn save_node_failed(&self, execution_id: &str, node_name: &str, error: &str) -> Result<(), String>;
+    fn mark_completed(&self, execution_id: &str) -> Result<(), String>;
+    fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String>;
+    fn delete(&self, execution_id: &str) -> Result<(), String>;
 }
 
 // ─── Timestamp helper ────────────────────────────────────────────────────────

@@ -41,9 +41,9 @@ impl CypherBlobStore {
     /// Create a CypherBlobStore from a sync database connection.
     ///
     /// No async runtime needed — calls the connection's sync methods directly.
-    pub fn from_sync_connection(conn: Arc<dyn crate::connection::SyncDbConnection>) -> Self {
+    pub fn from_sync_connection(conn: Arc<dyn crate::connection::DbConnection>) -> Self {
         let query_fn: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
-            conn.execute_with_params_sync(cypher, params)
+            conn.execute_with_params(cypher, params)
                 .map_err(|e| e.to_string())
         });
         Self { query_fn }

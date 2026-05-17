@@ -34,10 +34,10 @@ impl RefOrUuid {
         }
     }
 
-    pub async fn resolve(&mut self) -> Result<String, RefError> {
+    pub fn resolve(&mut self) -> Result<String, RefError> {
         match self {
             Self::Uuid(s) => Ok(s.clone()),
-            Self::Ref(r) => r.ready().await,
+            Self::Ref(r) => r.ready(),
         }
     }
 }

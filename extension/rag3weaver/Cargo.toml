@@ -26,7 +26,10 @@ tokenizers = { version = "0.21", optional = true, default-features = false, feat
 hf-hub = { version = "0.4", optional = true }
 
 # lucivy_core (BlobStore trait)
-lucivy-core = { path = "../lucivy/ld-lucivy/lucivy_core" }
+lucivy-core = "2.0.0"
+
+# luciole (DAG execution engine, actor runtime)
+luciole = "0.1.0"
 
 # sparse_vector (SparseHandle for BlobStore-backed sparse indexes)
 sparse-vector = { path = "../sparse_vector/rust" }

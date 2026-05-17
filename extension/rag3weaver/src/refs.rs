@@ -137,7 +137,7 @@ impl EntityRef {
     /// Wait asynchronously for resolution.
     ///
     /// Returns immediately if already resolved/failed.
-    pub async fn ready(&mut self) -> Result<String, RefError> {
+    pub fn ready(&mut self) -> Result<String, RefError> {
         loop {
             {
                 let state = self.rx.borrow();
@@ -147,7 +147,7 @@ impl EntityRef {
                     EntityState::Pending => {}
                 }
             }
-            if self.rx.changed().await.is_err() {
+            if self.rx.has_changed().is_err() {
                 return Err(RefError::Failed("channel closed".to_string()));
             }
         }
@@ -290,7 +290,7 @@ impl RelationRef {
     }
 
     /// Wait asynchronously for resolution.
-    pub async fn ready(&mut self) -> Result<RelResolved, RefError> {
+    pub fn ready(&mut self) -> Result<RelResolved, RefError> {
         loop {
             {
                 let state = self.rx.borrow();
@@ -300,7 +300,7 @@ impl RelationRef {
                     RelState::Pending => {}
                 }
             }
-            if self.rx.changed().await.is_err() {
+            if self.rx.has_changed().is_err() {
                 return Err(RefError::Failed("channel closed".to_string()));
             }
         }
@@ -440,18 +440,18 @@ mod tests {
 
     // ── entity ref async ──────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn entity_ref_ready_resolve() {
+    #[test]
+    fn entity_ref_ready_resolve() {
         let (mut r, resolver) = EntityRef::new("Document");
         resolver.resolve("final".to_string());
-        assert_eq!(r.ready().await.unwrap(), "final");
+        assert_eq!(r.ready().unwrap(), "final");
     }
 
-    #[tokio::test]
-    async fn entity_ref_ready_fail() {
+    #[test]
+    fn entity_ref_ready_fail() {
         let (mut r, resolver) = EntityRef::new("Document");
         resolver.fail("oops".to_string());
-        match r.ready().await {
+        match r.ready() {
             Err(RefError::Failed(msg)) => assert!(msg.contains("oops")),
             other => panic!("expected Failed, got {other:?}"),
         }
@@ -498,11 +498,11 @@ mod tests {
         assert_eq!(r.queue_item_id().unwrap(), "opi_2");
     }
 
-    #[tokio::test]
-    async fn relation_ref_ready() {
+    #[test]
+    fn relation_ref_ready() {
         let (mut r, resolver) = RelationRef::new("WROTE");
         resolver.resolve("a".to_string(), "b".to_string());
-        let res = r.ready().await.unwrap();
+        let res = r.ready().unwrap();
         assert_eq!(
             res,
             RelResolved {

@@ -7,7 +7,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::search_backend::*;
@@ -40,9 +39,9 @@ fn inline_params(cypher: &str, params: &[QueryParam]) -> String {
     result
 }
 
-#[async_trait]
+
 impl SearchBackend for Rag3dbSearchBackend {
-    async fn vector_search(
+    fn vector_search(
         &self,
         table: &str,
         index_name: &str,
@@ -63,7 +62,6 @@ impl SearchBackend for Rag3dbSearchBackend {
                 &cypher,
                 &[QueryParam { name: "embedding".into(), value: embedding_value }],
             )
-            .await
             .map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
@@ -77,7 +75,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         }).collect())
     }
 
-    async fn vector_search_filtered(
+    fn vector_search_filtered(
         &self,
         table: &str,
         index_name: &str,
@@ -113,14 +111,13 @@ impl SearchBackend for Rag3dbSearchBackend {
             .execute(&format!(
                 "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
             ))
-            .await;
+            ;
 
         // Create projected graph from filter
         self.conn
             .execute(&format!(
                 "CALL PROJECT_GRAPH_CYPHER('{graph_name}', '{escaped}')"
             ))
-            .await
             .map_err(|e| format!("PROJECT_GRAPH_CYPHER failed: {e}"))?;
 
         // Query HNSW on projected graph
@@ -133,14 +130,14 @@ impl SearchBackend for Rag3dbSearchBackend {
                 &cypher,
                 &[QueryParam { name: "embedding".into(), value: embedding_value }],
             )
-            .await;
+            ;
 
         // Always cleanup
         let _ = self.conn
             .execute(&format!(
                 "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
             ))
-            .await;
+            ;
 
         let result = result.map_err(|e| e.to_string())?;
         Ok(result.rows.iter().map(|row| {
@@ -154,7 +151,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         }).collect())
     }
 
-    async fn resolve_offsets(
+    fn resolve_offsets(
         &self,
         table: &str,
         offsets: &[u64],
@@ -181,7 +178,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         let cypher = format!(
             "MATCH (n:{table}) WHERE OFFSET(id(n)) IN [{offset_list}] RETURN {return_clause}"
         );
-        let result = self.conn.execute(&cypher).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
         let mut results = Vec::new();
         for row in &result.rows {
@@ -206,7 +203,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         Ok(results)
     }
 
-    async fn fetch_entities(
+    fn fetch_entities(
         &self,
         table: &str,
         uuids: &[&str],
@@ -229,7 +226,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         let cypher = format!(
             "MATCH (n:{table}) WHERE n._uuid IN [{uuid_list}] RETURN {return_clause}"
         );
-        let result = self.conn.execute(&cypher).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
         let mut rows = Vec::new();
         for row in &result.rows {
@@ -245,7 +242,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         Ok(rows)
     }
 
-    async fn fetch_chunks(
+    fn fetch_chunks(
         &self,
         chunk_table: &str,
         uuids: &[&str],
@@ -264,7 +261,7 @@ impl SearchBackend for Rag3dbSearchBackend {
              RETURN c._uuid, c._parent_uuid, c._text, c._index, \
              c._start_line, c._end_line, c._start_char, c._end_char"
         );
-        let result = self.conn.execute(&cypher).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
             ChunkMeta {
@@ -280,7 +277,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         }).collect())
     }
 
-    async fn fetch_with_chunks(
+    fn fetch_with_chunks(
         &self,
         entity: &str,
         chunk_table: &str,
@@ -329,7 +326,7 @@ impl SearchBackend for Rag3dbSearchBackend {
              {rel_match} \
              RETURN {return_clause}"
         );
-        let result = self.conn.execute(&cypher).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
         let entity_field_count = entity_fields.len();
         let mut results = Vec::new();

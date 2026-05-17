@@ -9,7 +9,6 @@
 
 use std::collections::BTreeMap;
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, QueryParam};
 
@@ -73,13 +72,13 @@ pub struct VectorHit {
 /// Abstracts over vector search, offset resolution, and entity enrichment.
 /// BM25 (lucivy) and sparse (SparseHandle) search are NOT part of this trait —
 /// they use Rust handles directly and are already backend-agnostic.
-#[async_trait]
+
 pub trait SearchBackend: Send + Sync {
     /// Vector similarity search (top-K nearest neighbors).
     ///
     /// Returns UUIDs + similarity scores (higher = more similar).
     /// Implementation: HNSW index (rag3db) or pgvector `<=>` operator (PostgreSQL).
-    async fn vector_search(
+    fn vector_search(
         &self,
         table: &str,
         index_name: &str,
@@ -91,7 +90,7 @@ pub trait SearchBackend: Send + Sync {
     ///
     /// rag3db: creates a projected graph from the filter, then HNSW on that graph.
     /// PostgreSQL: WHERE clause + ORDER BY embedding <=> $1.
-    async fn vector_search_filtered(
+    fn vector_search_filtered(
         &self,
         table: &str,
         index_name: &str,
@@ -106,7 +105,7 @@ pub trait SearchBackend: Send + Sync {
     ///
     /// Used by sparse search to convert SparseHandle offsets to entity UUIDs.
     /// When `return_fields` is non-empty, also fetches entity data (combined query).
-    async fn resolve_offsets(
+    fn resolve_offsets(
         &self,
         table: &str,
         offsets: &[u64],
@@ -114,7 +113,7 @@ pub trait SearchBackend: Send + Sync {
     ) -> Result<Vec<OffsetResult>, String>;
 
     /// Batch fetch entity data by UUIDs.
-    async fn fetch_entities(
+    fn fetch_entities(
         &self,
         table: &str,
         uuids: &[&str],
@@ -122,7 +121,7 @@ pub trait SearchBackend: Send + Sync {
     ) -> Result<Vec<EntityRow>, String>;
 
     /// Batch fetch chunk metadata by UUIDs.
-    async fn fetch_chunks(
+    fn fetch_chunks(
         &self,
         chunk_table: &str,
         uuids: &[&str],
@@ -132,7 +131,7 @@ pub trait SearchBackend: Send + Sync {
     ///
     /// Combines offset resolution + parent data + chunk data in one query.
     /// Used for vector/sparse results that need chunk context.
-    async fn fetch_with_chunks(
+    fn fetch_with_chunks(
         &self,
         entity: &str,
         chunk_table: &str,

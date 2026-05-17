@@ -9,11 +9,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use deadpool_postgres::{Config, Pool, Runtime};
 use tokio_postgres::NoTls;
 
-use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryResult, SyncDbConnection};
+use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryResult};
 
 /// PostgreSQL connection backed by a connection pool.
 pub struct PostgresConnection {
@@ -173,9 +172,9 @@ fn pg_row_to_cypher(row: &tokio_postgres::Row) -> Vec<CypherValue> {
     values
 }
 
-#[async_trait]
-impl DbConnection for PostgresConnection {
-    async fn execute(&self, sql: &str) -> Result<QueryResult, DbError> {
+impl PostgresConnection {
+    /// Internal async execute, called from sync DbConnection via block_on.
+    async fn execute_async(&self, sql: &str) -> Result<QueryResult, DbError> {
         let conn = self.pool.get().await
             .map_err(|e| DbError::ConnectionError(e.to_string()))?;
 
@@ -196,13 +195,13 @@ impl DbConnection for PostgresConnection {
         })
     }
 
-    async fn execute_with_params(
+    async fn execute_with_params_async(
         &self,
         sql: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
         if params.is_empty() {
-            return self.execute(sql).await;
+            return self.execute_async(sql).await;
         }
 
         let (translated_sql, values) = translate_params(sql, params);
@@ -230,23 +229,22 @@ impl DbConnection for PostgresConnection {
             rows: result_rows,
         })
     }
+
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        tokio::runtime::Handle::current().block_on(future)
+    }
 }
 
-impl SyncDbConnection for PostgresConnection {
-    fn execute_sync(&self, sql: &str) -> Result<QueryResult, DbError> {
-        // Use tokio's block_on for sync access
-        let rt = tokio::runtime::Handle::try_current()
-            .map_err(|_| DbError::ConnectionError("no tokio runtime for sync execution".into()))?;
-        rt.block_on(self.execute(sql))
+impl DbConnection for PostgresConnection {
+    fn execute(&self, sql: &str) -> Result<QueryResult, DbError> {
+        self.block_on(self.execute_async(sql))
     }
 
-    fn execute_with_params_sync(
+    fn execute_with_params(
         &self,
         sql: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
-        let rt = tokio::runtime::Handle::try_current()
-            .map_err(|_| DbError::ConnectionError("no tokio runtime for sync execution".into()))?;
-        rt.block_on(self.execute_with_params(sql, params))
+        self.block_on(self.execute_with_params_async(sql, params))
     }
 }

@@ -15,8 +15,8 @@
 //! use rag3weaver::bge_m3_embedder::BgeM3Embedder;
 //!
 //! let embedder = BgeM3Embedder::new()?;
-//! let dense = embedder.embed(&["hello world".into()]).await?;
-//! let sparse = embedder.embed_sparse(&["hello world".into()]).await?;
+//! let dense = embedder.embed(&["hello world".into()])?;
+//! let sparse = embedder.embed_sparse(&["hello world".into()])?;
 //! assert_eq!(dense[0].len(), 1024);
 //! assert!(!sparse[0].is_empty());
 //! ```
@@ -24,7 +24,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use async_trait::async_trait;
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::xlm_roberta::{Config, XLMRobertaModel};
@@ -312,9 +311,9 @@ impl BgeM3Embedder {
     }
 }
 
-#[async_trait]
+
 impl Embedder for BgeM3Embedder {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         self.embed_dense_sync(texts)
     }
 
@@ -323,16 +322,16 @@ impl Embedder for BgeM3Embedder {
     }
 }
 
-#[async_trait]
+
 impl SparseEmbedder for BgeM3Embedder {
-    async fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+    fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
         self.embed_sparse_sync(texts)
     }
 }
 
-#[async_trait]
+
 impl DualEmbedder for BgeM3Embedder {
-    async fn embed_dual(
+    fn embed_dual(
         &self,
         texts: &[String],
     ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
@@ -368,12 +367,12 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_dense_basic() {
+    fn bge_m3_dense_basic() {
         let embedder = shared_embedder();
         assert_eq!(Embedder::dim(&*embedder), 1024);
 
         let start = std::time::Instant::now();
-        let results = embedder.embed(&["hello world".into()]).await.unwrap();
+        let results = embedder.embed(&["hello world".into()]).unwrap();
         eprintln!("[dense 1 text] {:.2}s", start.elapsed().as_secs_f64());
 
         assert_eq!(results.len(), 1);
@@ -387,13 +386,12 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_sparse_basic() {
+    fn bge_m3_sparse_basic() {
         let embedder = shared_embedder();
 
         let start = std::time::Instant::now();
         let results = embedder
             .embed_sparse(&["hello world".into()])
-            .await
             .unwrap();
         eprintln!("[sparse 1 text] {:.2}s, nnz={}", start.elapsed().as_secs_f64(), results[0].nnz());
 
@@ -418,7 +416,7 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_batch() {
+    fn bge_m3_batch() {
         let embedder = shared_embedder();
 
         let start = std::time::Instant::now();
@@ -427,7 +425,6 @@ mod tests {
                 "rust programming".into(),
                 "cooking pasta".into(),
             ])
-            .await
             .unwrap();
         eprintln!("[dense 2 texts] {:.2}s", start.elapsed().as_secs_f64());
 
@@ -441,7 +438,6 @@ mod tests {
                 "rust programming".into(),
                 "cooking pasta".into(),
             ])
-            .await
             .unwrap();
         eprintln!("[sparse 2 texts] {:.2}s", start.elapsed().as_secs_f64());
 
@@ -453,16 +449,16 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_empty_batch() {
+    fn bge_m3_empty_batch() {
         let embedder = shared_embedder();
-        assert!(embedder.embed(&[]).await.unwrap().is_empty());
-        assert!(embedder.embed_sparse(&[]).await.unwrap().is_empty());
+        assert!(embedder.embed(&[]).unwrap().is_empty());
+        assert!(embedder.embed_sparse(&[]).unwrap().is_empty());
     }
 
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_dense_cosine_similarity() {
+    fn bge_m3_dense_cosine_similarity() {
         let embedder = shared_embedder();
         let vecs = embedder
             .embed(&[
@@ -470,7 +466,6 @@ mod tests {
                 "Rust systems programming".into(),
                 "cooking pasta recipes".into(),
             ])
-            .await
             .unwrap();
 
         let sim_related = cosine(&vecs[0], &vecs[1]);
@@ -486,14 +481,13 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_sparse_shared_tokens() {
+    fn bge_m3_sparse_shared_tokens() {
         let embedder = shared_embedder();
         let results = embedder
             .embed_sparse(&[
                 "rust programming".into(),
                 "rust systems programming".into(),
             ])
-            .await
             .unwrap();
 
         let set0: std::collections::HashSet<u32> =
@@ -511,17 +505,17 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_deterministic() {
+    fn bge_m3_deterministic() {
         let embedder = shared_embedder();
 
-        let d1 = embedder.embed(&["test".into()]).await.unwrap();
-        let d2 = embedder.embed(&["test".into()]).await.unwrap();
+        let d1 = embedder.embed(&["test".into()]).unwrap();
+        let d2 = embedder.embed(&["test".into()]).unwrap();
         for (a, b) in d1[0].iter().zip(d2[0].iter()) {
             assert!((a - b).abs() < 1e-6, "dense should be deterministic");
         }
 
-        let s1 = embedder.embed_sparse(&["test".into()]).await.unwrap();
-        let s2 = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        let s1 = embedder.embed_sparse(&["test".into()]).unwrap();
+        let s2 = embedder.embed_sparse(&["test".into()]).unwrap();
         assert_eq!(s1[0].indices, s2[0].indices);
         for (a, b) in s1[0].values.iter().zip(s2[0].values.iter()) {
             assert!((a - b).abs() < 1e-6, "sparse should be deterministic");
@@ -531,10 +525,10 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_as_embedder_trait() {
+    fn bge_m3_as_embedder_trait() {
         let embedder: &dyn Embedder = shared_embedder();
         assert_eq!(Embedder::dim(&*embedder), 1024);
-        let result = embedder.embed(&["test".into()]).await.unwrap();
+        let result = embedder.embed(&["test".into()]).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 1024);
     }
@@ -542,13 +536,13 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_dual_matches_separate() {
+    fn bge_m3_dual_matches_separate() {
         let embedder = shared_embedder();
         let texts = vec!["rust programming".into(), "cooking pasta".into()];
 
-        let (dual_dense, dual_sparse) = embedder.embed_dual(&texts).await.unwrap();
-        let sep_dense = embedder.embed(&texts).await.unwrap();
-        let sep_sparse = embedder.embed_sparse(&texts).await.unwrap();
+        let (dual_dense, dual_sparse) = embedder.embed_dual(&texts).unwrap();
+        let sep_dense = embedder.embed(&texts).unwrap();
+        let sep_sparse = embedder.embed_sparse(&texts).unwrap();
 
         // Dense results should be identical (same forward pass extraction)
         for (i, (dd, sd)) in dual_dense.iter().zip(sep_dense.iter()).enumerate() {
@@ -569,9 +563,9 @@ mod tests {
     #[cfg(feature = "bge-m3")]
     #[tokio::test]
     #[ignore]
-    async fn bge_m3_as_sparse_embedder_trait() {
+    fn bge_m3_as_sparse_embedder_trait() {
         let embedder: &dyn SparseEmbedder = shared_embedder();
-        let result = embedder.embed_sparse(&["test".into()]).await.unwrap();
+        let result = embedder.embed_sparse(&["test".into()]).unwrap();
         assert_eq!(result.len(), 1);
         assert!(!result[0].is_empty());
     }

@@ -15,7 +15,7 @@ cxx = "1.0"
 ordered-float = "4"
 parking_lot = "0.12"
 memmap2 = "0.9"
-lucivy-core = { path = "../../lucivy/ld-lucivy/lucivy_core" }
+lucivy-core = "2.0.0"
 
 [build-dependencies]
 cxx-build = "1.0"

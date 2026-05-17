@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::search_backend::*;
@@ -22,9 +21,9 @@ impl PostgresSearchBackend {
     }
 }
 
-#[async_trait]
+
 impl SearchBackend for PostgresSearchBackend {
-    async fn vector_search(
+    fn vector_search(
         &self,
         table: &str,
         _index_name: &str,
@@ -46,7 +45,7 @@ impl SearchBackend for PostgresSearchBackend {
              LIMIT {limit}"
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
             let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -59,7 +58,7 @@ impl SearchBackend for PostgresSearchBackend {
         }).collect())
     }
 
-    async fn vector_search_filtered(
+    fn vector_search_filtered(
         &self,
         table: &str,
         _index_name: &str,
@@ -89,7 +88,7 @@ impl SearchBackend for PostgresSearchBackend {
              LIMIT {limit}"
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
             let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -102,7 +101,7 @@ impl SearchBackend for PostgresSearchBackend {
         }).collect())
     }
 
-    async fn resolve_offsets(
+    fn resolve_offsets(
         &self,
         table: &str,
         offsets: &[u64],
@@ -130,7 +129,7 @@ impl SearchBackend for PostgresSearchBackend {
             select_cols.join(", ")
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         let mut results = Vec::new();
         for row in &result.rows {
@@ -155,7 +154,7 @@ impl SearchBackend for PostgresSearchBackend {
         Ok(results)
     }
 
-    async fn fetch_entities(
+    fn fetch_entities(
         &self,
         table: &str,
         uuids: &[&str],
@@ -179,7 +178,7 @@ impl SearchBackend for PostgresSearchBackend {
             "SELECT {select_cols} FROM {table} WHERE _uuid = ANY(ARRAY[{uuid_list}])"
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         let mut rows = Vec::new();
         for row in &result.rows {
@@ -195,7 +194,7 @@ impl SearchBackend for PostgresSearchBackend {
         Ok(rows)
     }
 
-    async fn fetch_chunks(
+    fn fetch_chunks(
         &self,
         chunk_table: &str,
         uuids: &[&str],
@@ -215,7 +214,7 @@ impl SearchBackend for PostgresSearchBackend {
              FROM {chunk_table} WHERE _uuid = ANY(ARRAY[{uuid_list}])"
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
             ChunkMeta {
@@ -231,7 +230,7 @@ impl SearchBackend for PostgresSearchBackend {
         }).collect())
     }
 
-    async fn fetch_with_chunks(
+    fn fetch_with_chunks(
         &self,
         entity: &str,
         chunk_table: &str,
@@ -272,7 +271,7 @@ impl SearchBackend for PostgresSearchBackend {
             select_cols.join(", ")
         );
 
-        let result = self.conn.execute(&sql).await.map_err(|e| e.to_string())?;
+        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
 
         let mut results = Vec::new();
         for row in &result.rows {

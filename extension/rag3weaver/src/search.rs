@@ -581,7 +581,7 @@ pub(crate) const EMBEDDING_CACHE_MAX: usize = 100;
 /// Embed a query string, using the cache if available.
 ///
 /// FIFO eviction when cache exceeds [`EMBEDDING_CACHE_MAX`] entries.
-pub async fn embed_query(
+pub fn embed_query(
     embedder: &dyn Embedder,
     query: &str,
     cache: &mut HashMap<String, Vec<f32>>,
@@ -593,7 +593,6 @@ pub async fn embed_query(
     let texts = vec![query.to_string()];
     let vectors = embedder
         .embed(&texts)
-        .await
         .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
 
     if vectors.is_empty() {
@@ -660,7 +659,7 @@ fn inline_params(query: &str, params: &[QueryParam]) -> String {
 /// Always uses `QUERY_VECTOR_INDEX`. When filters are present, creates a
 /// temporary projected graph via `PROJECT_GRAPH_CYPHER` so the HNSW search
 /// operates on a SemiMask (Roaring Bitmap) — no brute-force fallback needed.
-pub async fn search_vector(
+pub fn search_vector(
     conn: &dyn DbConnection,
     entity: &str,
     kb_name: &str,
@@ -683,14 +682,14 @@ pub async fn search_vector(
         search_vector_hnsw_filtered(
             conn, entity, kb_name, &embedding_value, limit,
             extra_where, extra_params, extra_match,
-        ).await
+        )
     } else {
-        search_vector_hnsw(conn, entity, kb_name, &embedding_value, limit).await
+        search_vector_hnsw(conn, entity, kb_name, &embedding_value, limit)
     }
 }
 
 /// Vector search via SearchBackend (multi-backend).
-pub async fn search_vector_via_backend(
+pub fn search_vector_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
     embedding: &[f32],
@@ -706,9 +705,9 @@ pub async fn search_vector_via_backend(
         backend.vector_search_filtered(
             entity, &index_name, embedding, limit,
             extra_match, extra_where, extra_params,
-        ).await
+        )
     } else {
-        backend.vector_search(entity, &index_name, embedding, limit).await
+        backend.vector_search(entity, &index_name, embedding, limit)
     }.map_err(|e| CatalogError::DbError(e))?;
 
     Ok(hits.into_iter().map(|h| SearchResult {
@@ -725,7 +724,7 @@ pub async fn search_vector_via_backend(
 ///
 /// Index name convention: `{entity}_vec` (matches schema.rs `{kb}_Index_Chunk_vec`).
 /// Cosine metric returns distance = 1 - similarity, so we convert back.
-async fn search_vector_hnsw(
+fn search_vector_hnsw(
     conn: &dyn DbConnection,
     entity: &str,
     _kb_name: &str,
@@ -746,7 +745,6 @@ async fn search_vector_hnsw(
 
     let result = conn
         .execute_with_params(&cypher, &params)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     Ok(parse_hnsw_results(&result, entity))
@@ -760,7 +758,7 @@ async fn search_vector_hnsw(
 ///
 /// The filter parameters are inlined into the Cypher string because
 /// PROJECT_GRAPH_CYPHER takes a literal query string (no $param support).
-async fn search_vector_hnsw_filtered(
+fn search_vector_hnsw_filtered(
     conn: &dyn DbConnection,
     entity: &str,
     _kb_name: &str,
@@ -794,13 +792,12 @@ async fn search_vector_hnsw_filtered(
         .execute(&format!(
             "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
         ))
-        .await;
+        ;
 
     // Create projected graph from filter
     conn.execute(&format!(
         "CALL PROJECT_GRAPH_CYPHER('{graph_name}', '{escaped}')"
     ))
-    .await
     .map_err(|e| CatalogError::DbError(format!("PROJECT_GRAPH_CYPHER failed: {e}")))?;
 
     // Query HNSW on projected graph
@@ -814,15 +811,14 @@ async fn search_vector_hnsw_filtered(
     }];
 
     let result = conn
-        .execute_with_params(&cypher, &params)
-        .await;
+        .execute_with_params(&cypher, &params);
 
     // Always cleanup the projected graph
     let _ = conn
         .execute(&format!(
             "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
         ))
-        .await;
+        ;
 
     let result = result.map_err(|e| CatalogError::DbError(e.to_string()))?;
     Ok(parse_hnsw_results(&result, entity))
@@ -858,7 +854,7 @@ fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> 
 ///
 /// Used by both vector and sparse search when the entity has chunks.
 /// Groups results by parent, keeps the best-scoring chunk per parent.
-pub async fn resolve_chunk_results(
+pub fn resolve_chunk_results(
     conn: &dyn DbConnection,
     chunk_entity: &str,
     parent_entity: &str,
@@ -884,7 +880,6 @@ pub async fn resolve_chunk_results(
     );
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     // 3. Build chunk metadata map
@@ -958,7 +953,7 @@ pub async fn resolve_chunk_results(
 }
 
 /// Resolve chunk results via SearchBackend (multi-backend).
-pub async fn resolve_chunk_results_via_backend(
+pub fn resolve_chunk_results_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     chunk_entity: &str,
     parent_entity: &str,
@@ -970,7 +965,6 @@ pub async fn resolve_chunk_results_via_backend(
 
     let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
     let chunks = backend.fetch_chunks(chunk_entity, &chunk_uuids)
-        .await
         .map_err(|e| CatalogError::DbError(e))?;
 
     let mut chunk_map: HashMap<String, &crate::search_backend::ChunkMeta> = HashMap::new();
@@ -1024,7 +1018,7 @@ pub async fn resolve_chunk_results_via_backend(
 /// Enrich search results with parent entity data (title, body, etc.).
 ///
 /// Batch-fetches entity data for all result UUIDs and populates `result.data`.
-pub async fn enrich_results_with_data(
+pub fn enrich_results_with_data(
     conn: &dyn DbConnection,
     entity: &str,
     fields: &[String],
@@ -1051,7 +1045,6 @@ pub async fn enrich_results_with_data(
     );
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     // Build uuid → data map
@@ -1078,7 +1071,7 @@ pub async fn enrich_results_with_data(
 }
 
 /// Enrich search results via SearchBackend (multi-backend).
-pub async fn enrich_results_with_data_via_backend(
+pub fn enrich_results_with_data_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
     fields: &[String],
@@ -1092,7 +1085,6 @@ pub async fn enrich_results_with_data_via_backend(
     let field_refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
 
     let rows = backend.fetch_entities(entity, &uuids, &field_refs)
-        .await
         .map_err(|e| CatalogError::DbError(e))?;
 
     let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
@@ -1112,7 +1104,7 @@ pub async fn enrich_results_with_data_via_backend(
 /// Resolve offsets to UUIDs + entity data (legacy, rag3db Cypher).
 ///
 /// Prefer the SearchBackend version when available.
-pub async fn resolve_and_enrich(
+pub fn resolve_and_enrich(
     conn: &dyn DbConnection,
     entity: &str,
     offsets_scores: &[(u64, f64)],
@@ -1142,7 +1134,6 @@ pub async fn resolve_and_enrich(
     );
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     let mut offset_map: HashMap<u64, (String, Option<BTreeMap<String, CypherValue>>)> =
@@ -1187,7 +1178,7 @@ pub async fn resolve_and_enrich(
 }
 
 /// Resolve offsets to UUIDs + entity data via SearchBackend (multi-backend).
-pub async fn resolve_and_enrich_via_backend(
+pub fn resolve_and_enrich_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
     offsets_scores: &[(u64, f64)],
@@ -1201,7 +1192,6 @@ pub async fn resolve_and_enrich_via_backend(
     let field_refs: Vec<&str> = return_fields.iter().map(|s| s.as_str()).collect();
 
     let resolved = backend.resolve_offsets(entity, &offsets, &field_refs)
-        .await
         .map_err(|e| CatalogError::DbError(e))?;
 
     let mut offset_map: HashMap<u64, &crate::search_backend::OffsetResult> = HashMap::new();
@@ -1258,7 +1248,7 @@ pub struct ChunkRecord {
 /// When a parent has no chunks (OPTIONAL MATCH), it appears with an empty chunks vec.
 ///
 /// Prefer `resolve_and_enrich_chunked()` for BM25 chunked searches (Level 1+).
-pub async fn resolve_and_enrich_chunked(
+pub fn resolve_and_enrich_chunked(
     conn: &dyn DbConnection,
     target: &SearchTarget,
     offsets: &[u64],
@@ -1314,7 +1304,6 @@ pub async fn resolve_and_enrich_chunked(
     );
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     // Group rows by offset → ResolvedParent
@@ -1374,7 +1363,7 @@ pub async fn resolve_and_enrich_chunked(
 /// Cypher query that fetches chunk metadata, parent UUID, and parent fields.
 ///
 /// Uses `SearchTarget` to determine relationship pattern and whether source refs exist.
-pub async fn resolve_vector_chunks(
+pub fn resolve_vector_chunks(
     conn: &dyn DbConnection,
     target: &SearchTarget,
     results: Vec<SearchResult>,
@@ -1384,11 +1373,11 @@ pub async fn resolve_vector_chunks(
     resolve_vector_chunks_with_dialect(
         conn, target, results, return_fields, result_mode,
         &crate::dialect::Rag3dbDialect,
-    ).await
+    )
 }
 
 /// Resolve vector chunk results to parent-level with dialect support.
-pub async fn resolve_vector_chunks_with_dialect(
+pub fn resolve_vector_chunks_with_dialect(
     conn: &dyn DbConnection,
     target: &SearchTarget,
     results: Vec<SearchResult>,
@@ -1423,7 +1412,6 @@ pub async fn resolve_vector_chunks_with_dialect(
             &cypher,
             &[QueryParam { name: "uuids".into(), value: uuid_param }],
         )
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     // 3. Build chunk_uuid → (parent_uuid, chunk_meta, parent_data) map
@@ -1581,7 +1569,7 @@ pub async fn resolve_vector_chunks_with_dialect(
 /// Legacy fallback — kept for environments where the HNSW vector extension
 /// is not loaded. Not used in the normal search path.
 #[allow(dead_code)]
-async fn search_vector_bruteforce(
+fn search_vector_bruteforce(
     conn: &dyn DbConnection,
     entity: &str,
     kb_name: &str,
@@ -1618,7 +1606,6 @@ async fn search_vector_bruteforce(
 
     let result = conn
         .execute_with_params(&cypher, &params)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     Ok(result
@@ -1737,7 +1724,7 @@ fn build_contains_clauses(
 /// The query is sent as a JSON QueryConfig to the lucivy_fts extension.
 ///
 /// Pre-filtering: `allowed_ids` are pre-resolved node offsets (from Kuzu), passed to QUERY_LUCIVY_INDEX.
-pub async fn search_bm25(
+pub fn search_bm25(
     conn: &dyn DbConnection,
     entity: &str,
     query: &str,
@@ -1775,7 +1762,6 @@ pub async fn search_bm25(
 
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     if result.rows.is_empty() {
@@ -1798,7 +1784,7 @@ pub async fn search_bm25(
     }
 
     // Resolve offsets → UUIDs + fetch entity data in one query
-    resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await
+    resolve_and_enrich(conn, entity, &offsets_scores, return_fields)
 }
 
 /// BM25 result with per-field highlight byte offsets.
@@ -1812,7 +1798,7 @@ pub struct BM25Hit {
 /// Like `search_bm25` but returns raw hits with per-field highlight offsets.
 ///
 /// Uses `RETURN node_id, score, highlights` (3rd column = JSON).
-pub async fn search_bm25_raw(
+pub fn search_bm25_raw(
     conn: &dyn DbConnection,
     entity: &str,
     query: &str,
@@ -1849,7 +1835,6 @@ pub async fn search_bm25_raw(
 
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     if result.rows.is_empty() {
@@ -1884,7 +1869,6 @@ pub async fn search_bm25_raw(
     );
     let resolve_result = conn
         .execute(&resolve_cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
@@ -1937,7 +1921,7 @@ fn parse_highlights_json(json: &str) -> HashMap<String, Vec<(usize, usize)>> {
 /// For each hit, returns one result per chunk that intersects any highlight range.
 /// Chunks are sorted by descending overlap. When no chunk intersects (e.g. match
 /// in a non-chunked field like title), returns a single result with `chunk: None`.
-pub async fn resolve_bm25_to_chunks(
+pub fn resolve_bm25_to_chunks(
     conn: &dyn DbConnection,
     chunk_entity: &str,
     parent_entity: &str,
@@ -1964,7 +1948,6 @@ pub async fn resolve_bm25_to_chunks(
     );
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     // 3. Build parent → chunks map
@@ -2062,7 +2045,7 @@ pub async fn resolve_bm25_to_chunks(
 /// offset resolution, chunk fetching, and data enrichment into one Cypher query.
 ///
 /// Prefer `search_bm25_chunked()` for chunked BM25 searches (Level 1+).
-pub async fn search_bm25_chunked(
+pub fn search_bm25_chunked(
     conn: &dyn DbConnection,
     target: &SearchTarget,
     query: &str,
@@ -2104,7 +2087,6 @@ pub async fn search_bm25_chunked(
 
     let result = conn
         .execute(&cypher)
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     if result.rows.is_empty() {
@@ -2129,7 +2111,7 @@ pub async fn search_bm25_chunked(
 
     // Query 2: resolve offsets + fetch chunks + enrich in one query
     let offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
-    let parents = resolve_and_enrich_chunked(conn, target, &offsets, return_fields).await?;
+    let parents = resolve_and_enrich_chunked(conn, target, &offsets, return_fields)?;
 
     // Match highlights to chunks for each hit
     let mut results: Vec<SearchResult> = Vec::new();
@@ -2273,7 +2255,7 @@ pub async fn search_bm25_chunked(
 /// 1. Calls `handle.search()` → (node_id offset, score) pairs
 /// 2. Resolves offsets → UUIDs via `MATCH ... WHERE OFFSET(id(n)) IN [...]`
 /// 3. Returns `SearchResult` with real UUIDs, sorted by descending score.
-pub async fn search_sparse(
+pub fn search_sparse(
     handle: &sparse_vector::handle::SparseHandle,
     conn: &dyn DbConnection,
     entity: &str,
@@ -2303,11 +2285,11 @@ pub async fn search_sparse(
         .collect();
 
     // 3. Resolve offsets → UUIDs + fetch entity data in one query
-    resolve_and_enrich(conn, entity, &offsets_scores, return_fields).await
+    resolve_and_enrich(conn, entity, &offsets_scores, return_fields)
 }
 
 /// Sparse search via SearchBackend (multi-backend).
-pub async fn search_sparse_via_backend(
+pub fn search_sparse_via_backend(
     handle: &sparse_vector::handle::SparseHandle,
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
@@ -2334,7 +2316,7 @@ pub async fn search_sparse_via_backend(
         .map(|(offset, score)| (offset, score as f64))
         .collect();
 
-    resolve_and_enrich_via_backend(backend, entity, &offsets_scores, return_fields).await
+    resolve_and_enrich_via_backend(backend, entity, &offsets_scores, return_fields)
 }
 
 /// Fuse vector, BM25, and optional sparse results using per-signal config.
@@ -2585,7 +2567,7 @@ fn normalize_scores(results: &[SearchResult], mode: Option<NormalizeMode>) -> Ha
 ///
 /// Follows outgoing and incoming relations up to `depth` hops.
 /// Prunes to `top_k` nodes, keeping seed results and closer nodes.
-pub async fn explore_bfs(
+pub fn explore_bfs(
     conn: &dyn DbConnection,
     seed_nodes: Vec<GraphNode>,
     outgoing_relations: &[String],
@@ -2613,7 +2595,7 @@ pub async fn explore_bfs(
 
         // Batch: one query per (relation, direction) for the entire frontier
         for rel in outgoing_relations {
-            let neighbors = explore_relation_batch(conn, &frontier, rel, "outgoing").await?;
+            let neighbors = explore_relation_batch(conn, &frontier, rel, "outgoing")?;
             for (from_uuid, n_uuid, n_entity, n_data) in neighbors {
                 if !visited.contains(&n_uuid) {
                     visited.insert(n_uuid.clone());
@@ -2647,7 +2629,7 @@ pub async fn explore_bfs(
         }
 
         for rel in incoming_relations {
-            let neighbors = explore_relation_batch(conn, &frontier, rel, "incoming").await?;
+            let neighbors = explore_relation_batch(conn, &frontier, rel, "incoming")?;
             for (to_uuid, n_uuid, n_entity, n_data) in neighbors {
                 if !visited.contains(&n_uuid) {
                     visited.insert(n_uuid.clone());
@@ -2709,7 +2691,7 @@ pub async fn explore_bfs(
 
 /// Batch explore: one query for the entire frontier × one relation type.
 /// Returns (from_uuid, neighbor_uuid, neighbor_entity, neighbor_data).
-async fn explore_relation_batch(
+fn explore_relation_batch(
     conn: &dyn DbConnection,
     uuids: &[String],
     relation: &str,
@@ -2748,7 +2730,6 @@ async fn explore_relation_batch(
                 value: uuids_param,
             }],
         )
-        .await
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
     Ok(result
@@ -2823,9 +2804,9 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    
     impl Embedder for CountingEmbedder {
-        async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(texts.iter().map(|_| vec![0.1_f32; self.dim]).collect())
         }
@@ -2902,45 +2883,43 @@ mod tests {
 
     // ── embed_query ──────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn embed_query_cache_miss() {
+    #[test]
+    fn embed_query_cache_miss() {
         let embedder = CountingEmbedder::new(3);
         let mut cache = HashMap::new();
 
-        let result = embed_query(&embedder, "hello", &mut cache).await.unwrap();
+        let result = embed_query(&embedder, "hello", &mut cache).unwrap();
         assert_eq!(result.len(), 3);
         assert_eq!(embedder.calls(), 1);
         assert!(cache.contains_key("hello"));
     }
 
-    #[tokio::test]
-    async fn embed_query_cache_hit() {
+    #[test]
+    fn embed_query_cache_hit() {
         let embedder = CountingEmbedder::new(3);
         let mut cache = HashMap::new();
 
-        let r1 = embed_query(&embedder, "hello", &mut cache).await.unwrap();
-        let r2 = embed_query(&embedder, "hello", &mut cache).await.unwrap();
+        let r1 = embed_query(&embedder, "hello", &mut cache).unwrap();
+        let r2 = embed_query(&embedder, "hello", &mut cache).unwrap();
 
         assert_eq!(r1, r2);
         assert_eq!(embedder.calls(), 1, "embedder should be called only once");
     }
 
-    #[tokio::test]
-    async fn embed_query_cache_eviction() {
+    #[test]
+    fn embed_query_cache_eviction() {
         let embedder = CountingEmbedder::new(3);
         let mut cache = HashMap::new();
 
         // Fill cache to max
         for i in 0..EMBEDDING_CACHE_MAX {
             embed_query(&embedder, &format!("q{i}"), &mut cache)
-                .await
                 .unwrap();
         }
         assert_eq!(cache.len(), EMBEDDING_CACHE_MAX);
 
         // One more triggers eviction
         embed_query(&embedder, "overflow", &mut cache)
-            .await
             .unwrap();
         assert_eq!(cache.len(), EMBEDDING_CACHE_MAX);
         assert!(cache.contains_key("overflow"));
@@ -2948,19 +2927,18 @@ mod tests {
 
     // ── search_vector / search_bm25 ─────────────────────────────────────
 
-    #[tokio::test]
-    async fn search_vector_empty() {
+    #[test]
+    fn search_vector_empty() {
         let conn = MockConnection::new();
         let embedding = vec![0.1_f32; 384];
 
         let results = search_vector(&conn, "Document", "main", &embedding, 10, None, &[], None)
-            .await
             .unwrap();
         assert!(results.is_empty());
     }
 
-    #[tokio::test]
-    async fn search_bm25_empty() {
+    #[test]
+    fn search_bm25_empty() {
         let conn = MockConnection::new();
         let fields = vec!["title".to_string(), "body".to_string()];
 
@@ -2975,17 +2953,15 @@ mod tests {
             None,
             &[],
         )
-        .await
         .unwrap();
         assert!(results.is_empty());
     }
 
-    #[tokio::test]
-    async fn search_bm25_empty_fields() {
+    #[test]
+    fn search_bm25_empty_fields() {
         let conn = MockConnection::new();
 
         let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, &[])
-            .await
             .unwrap();
         assert!(results.is_empty());
     }
@@ -3171,36 +3147,33 @@ mod tests {
 
     // ── Catalog::search ──────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn catalog_search_not_initialized() {
+    #[test]
+    fn catalog_search_not_initialized() {
         let mut catalog = make_catalog();
         let err = catalog
             .search("main", "test", SearchOptions::default())
-            .await
             .unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
 
-    #[tokio::test]
-    async fn catalog_search_unknown_kb() {
+    #[test]
+    fn catalog_search_unknown_kb() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let err = catalog
             .search("nonexistent", "test", SearchOptions::default())
-            .await
             .unwrap_err();
         assert!(matches!(err, CatalogError::UnknownKB(_)));
     }
 
-    #[tokio::test]
-    async fn catalog_search_returns_meta() {
+    #[test]
+    fn catalog_search_returns_meta() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let response = catalog
             .search("main", "hello world", SearchOptions::default())
-            .await
             .unwrap();
 
         assert!(response.results.is_empty()); // MockConnection → empty
@@ -3212,14 +3185,13 @@ mod tests {
         assert_eq!(response.meta.fused_count, 0);
     }
 
-    #[tokio::test]
-    async fn catalog_search_with_explore_empty() {
+    #[test]
+    fn catalog_search_with_explore_empty() {
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         let result = catalog
             .search_with_explore("main", "hello", ExploreOptions::default())
-            .await
             .unwrap();
 
         assert!(result.results.is_empty());
@@ -3230,11 +3202,10 @@ mod tests {
 
     // ── explore_bfs ──────────────────────────────────────────────────────
 
-    #[tokio::test]
-    async fn explore_bfs_empty_seed() {
+    #[test]
+    fn explore_bfs_empty_seed() {
         let conn = MockConnection::new();
         let graph = explore_bfs(&conn, vec![], &["REL".to_string()], &[], 2, 15)
-            .await
             .unwrap();
         assert!(graph.nodes.is_empty());
         assert!(graph.edges.is_empty());
@@ -3342,12 +3313,12 @@ mod tests {
 
     // ── search() with simple entity (smoke test) ────────────────────────
 
-    #[tokio::test]
-    async fn catalog_search_simple_entity_smoke() {
+    #[test]
+    fn catalog_search_simple_entity_smoke() {
         use crate::config::SimpleFieldDef;
 
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // Register a simple entity
         let mut fields = std::collections::HashMap::new();
@@ -3367,12 +3338,11 @@ mod tests {
             fields,
             ..Default::default()
         };
-        catalog.register_entity("Product", ec).await.unwrap();
+        catalog.register_entity("Product", ec).unwrap();
 
         // Search should succeed (MockConnection → empty results, no errors)
         let response = catalog
             .search("Product", "shoes", SearchOptions::default())
-            .await
             .unwrap();
 
         assert!(response.results.is_empty()); // MockConnection → empty
@@ -3381,13 +3351,13 @@ mod tests {
         assert_eq!(response.meta.signals, SearchSignals::HYBRID);
     }
 
-    #[tokio::test]
-    async fn catalog_search_simple_entity_with_ingest_smoke() {
+    #[test]
+    fn catalog_search_simple_entity_with_ingest_smoke() {
         use crate::config::SimpleFieldDef;
         use std::collections::BTreeMap;
 
         let mut catalog = make_catalog();
-        catalog.initialize().await.unwrap();
+        catalog.initialize().unwrap();
 
         // Register + ingest
         let mut fields = std::collections::HashMap::new();
@@ -3407,17 +3377,16 @@ mod tests {
             fields,
             ..Default::default()
         };
-        catalog.register_entity("Product", ec).await.unwrap();
+        catalog.register_entity("Product", ec).unwrap();
 
         let mut data = BTreeMap::new();
         data.insert("name".into(), CypherValue::String("Red Shoes".into()));
         data.insert("description".into(), CypherValue::String("A nice pair of shoes.".into()));
-        catalog.ingest_entities("Product", vec![data]).await.unwrap();
+        catalog.ingest_entities("Product", vec![data]).unwrap();
 
         // Search after ingest — should not error
         let response = catalog
             .search("Product", "shoes", SearchOptions::default())
-            .await
             .unwrap();
         assert_eq!(response.meta.target, "Product");
     }

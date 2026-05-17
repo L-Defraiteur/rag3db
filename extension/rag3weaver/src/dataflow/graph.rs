@@ -258,7 +258,7 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    
     impl Node for TestNode {
         fn name(&self) -> &str {
             &self.name
@@ -269,7 +269,7 @@ mod tests {
         fn outputs(&self) -> &[PortDef] {
             &self.outputs
         }
-        async fn execute(&mut self, _ctx: &mut NodeContext) -> Result<(), String> {
+        fn execute(&mut self, _ctx: &mut NodeContext) -> Result<(), String> {
             Ok(())
         }
     }

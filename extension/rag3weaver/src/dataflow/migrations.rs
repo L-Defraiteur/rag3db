@@ -287,8 +287,8 @@ impl MigrationRunner {
     // ─── Schema initialization ──────────────────────────────────────────
 
     /// Ensure migration tables exist.
-    pub async fn initialize(&self, catalog: &Catalog) -> Result<(), MigrationError> {
-        catalog.migration_initialize().await
+    pub fn initialize(&self, catalog: &Catalog) -> Result<(), MigrationError> {
+        catalog.migration_initialize()
     }
 
     // ─── Scanning ───────────────────────────────────────────────────────
@@ -319,9 +319,9 @@ impl MigrationRunner {
     // ─── Status ─────────────────────────────────────────────────────────
 
     /// List all migrations with their current status.
-    pub async fn status(&self, catalog: &Catalog) -> Result<Vec<MigrationStatus>, MigrationError> {
+    pub fn status(&self, catalog: &Catalog) -> Result<Vec<MigrationStatus>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = catalog.migration_load_applied().await?;
+        let applied = catalog.migration_load_applied()?;
 
         let mut statuses = Vec::new();
         for file in &files {
@@ -360,9 +360,9 @@ impl MigrationRunner {
     }
 
     /// List pending migrations (not yet applied), sorted by version.
-    pub async fn pending(&self, catalog: &Catalog) -> Result<Vec<MigrationFile>, MigrationError> {
+    pub fn pending(&self, catalog: &Catalog) -> Result<Vec<MigrationFile>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = catalog.migration_load_applied().await?;
+        let applied = catalog.migration_load_applied()?;
 
         Ok(files
             .into_iter()
@@ -379,14 +379,14 @@ impl MigrationRunner {
     /// Apply pending migrations, optionally up to a target version.
     ///
     /// If `dry_run` is true, parse and validate each migration but do not execute.
-    pub async fn apply(
+    pub fn apply(
         &self,
         catalog: &mut Catalog,
         target_version: Option<u64>,
         dry_run: bool,
         vars: &HashMap<String, String>,
     ) -> Result<Vec<MigrationResult>, MigrationError> {
-        let mut pending = self.pending(catalog).await?;
+        let mut pending = self.pending(catalog)?;
         if let Some(target) = target_version {
             pending.retain(|f| f.version <= target);
         }
@@ -396,7 +396,7 @@ impl MigrationRunner {
         }
 
         if !dry_run {
-            catalog.migration_acquire_lock(&self.lock_id).await?;
+            catalog.migration_acquire_lock(&self.lock_id)?;
         }
 
         let mut results = Vec::new();
@@ -404,7 +404,7 @@ impl MigrationRunner {
             let result = if dry_run {
                 self.dry_run_migration(file, vars)?
             } else {
-                self.apply_migration(catalog, file, vars).await
+                self.apply_migration(catalog, file, vars)
                     .unwrap_or_else(|e| MigrationResult {
                         version: file.version,
                         name: file.name.clone(),
@@ -424,7 +424,7 @@ impl MigrationRunner {
         }
 
         if !dry_run {
-            catalog.migration_release_lock().await.ok(); // Best-effort release
+            catalog.migration_release_lock().ok(); // Best-effort release
         }
 
         Ok(results)
@@ -480,7 +480,7 @@ impl MigrationRunner {
     }
 
     /// Apply a single migration via Catalog.
-    async fn apply_migration(
+    fn apply_migration(
         &self,
         catalog: &mut Catalog,
         file: &MigrationFile,
@@ -507,8 +507,7 @@ impl MigrationRunner {
         let execution_id = format!("migration-{:03}_{}", file.version, file.name);
 
         let exec_result = catalog
-            .migration_execute_graph(&mut graph, &execution_id)
-            .await;
+            .migration_execute_graph(&mut graph, &execution_id);
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -516,8 +515,7 @@ impl MigrationRunner {
             Ok(_) => {
                 catalog.migration_record(
                     file, "applied", "up", &execution_id, duration_ms, "",
-                )
-                .await?;
+                )?;
 
                 Ok(MigrationResult {
                     version: file.version,
@@ -533,7 +531,6 @@ impl MigrationRunner {
                 catalog.migration_record(
                     file, "failed", "up", &execution_id, duration_ms, &e.to_string(),
                 )
-                .await
                 .ok(); // Best-effort
 
                 Err(MigrationError::ExecutionError {
@@ -552,7 +549,7 @@ impl MigrationRunner {
     /// Loads the undo contexts from the checkpoint, reconstructs the nodes,
     /// calls undo() in reverse topological order, then auto-drains to rebuild
     /// chunks/embeddings/FTS for any restored entities.
-    pub async fn rollback(
+    pub fn rollback(
         &self,
         catalog: &mut Catalog,
         version: u64,
@@ -560,19 +557,18 @@ impl MigrationRunner {
         let start = std::time::Instant::now();
 
         // Check it was applied
-        let applied = catalog.migration_load_applied().await?;
+        let applied = catalog.migration_load_applied()?;
         let am = applied.get(&version).ok_or(MigrationError::NotApplied { version })?;
         if am.status != "applied" {
             return Err(MigrationError::NotApplied { version });
         }
 
-        catalog.migration_acquire_lock(&self.lock_id).await?;
+        catalog.migration_acquire_lock(&self.lock_id)?;
 
         // Load the checkpoint for this execution
         let checkpoint_store = CypherCheckpointStore::new(catalog.conn_arc());
         let checkpoint = checkpoint_store
             .load_execution(&am.execution_id)
-            .await
             .map_err(|e| MigrationError::DbError(e))?
             .ok_or_else(|| MigrationError::DbError(
                 format!("checkpoint not found for execution '{}'", am.execution_id)
@@ -594,7 +590,7 @@ impl MigrationRunner {
             .map(|n| n.name().to_string())
             .collect();
         if !non_reversible.is_empty() {
-            catalog.migration_release_lock().await.ok();
+            catalog.migration_release_lock().ok();
             return Err(MigrationError::NotReversible {
                 version,
                 name: am.name.clone(),
@@ -607,7 +603,6 @@ impl MigrationRunner {
         let am_execution_id = am.execution_id.clone();
 
         catalog.migration_rollback_graph(&mut graph, &checkpoint)
-            .await
             .map_err(|e| MigrationError::ExecutionError {
                 version,
                 name: am_name.clone(),
@@ -623,13 +618,12 @@ impl MigrationRunner {
         if let Some(file) = file {
             catalog.migration_record(
                 file, "rolled_back", "down", &am_execution_id, duration_ms, "",
-            )
-            .await?;
+            )?;
         } else {
-            catalog.migration_update_status(version, "rolled_back").await?;
+            catalog.migration_update_status(version, "rolled_back")?;
         }
 
-        catalog.migration_release_lock().await.ok();
+        catalog.migration_release_lock().ok();
 
         Ok(MigrationResult {
             version,
@@ -645,12 +639,12 @@ impl MigrationRunner {
     // ─── Check reversibility ────────────────────────────────────────────
 
     /// Check which pending migrations are fully reversible.
-    pub async fn check_reversible(
+    pub fn check_reversible(
         &self,
         catalog: &Catalog,
         vars: &HashMap<String, String>,
     ) -> Result<Vec<(MigrationFile, bool)>, MigrationError> {
-        let pending = self.pending(catalog).await?;
+        let pending = self.pending(catalog)?;
         let mut results = Vec::new();
 
         for file in pending {

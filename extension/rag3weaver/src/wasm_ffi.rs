@@ -7,7 +7,6 @@
 use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryResult};
 
@@ -810,13 +809,13 @@ impl WasmDbConnection {
     }
 }
 
-#[async_trait]
+
 impl DbConnection for WasmDbConnection {
-    async fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
+    fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
         self.query_sync(cypher)
     }
 
-    async fn execute_with_params(
+    fn execute_with_params(
         &self,
         cypher: &str,
         params: &[QueryParam],

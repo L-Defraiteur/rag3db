@@ -164,22 +164,22 @@ impl EventBus {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn emit_and_receive() {
+    #[test]
+    fn emit_and_receive() {
         let bus = EventBus::new(16);
         let mut rx = bus.subscribe();
 
         bus.emit(CatalogEvent::EntitiesStored { count: 42 });
 
-        let event = rx.recv().await.unwrap();
+        let event = rx.try_recv().unwrap();
         match event {
             CatalogEvent::EntitiesStored { count } => assert_eq!(count, 42),
             other => panic!("unexpected event: {other:?}"),
         }
     }
 
-    #[tokio::test]
-    async fn multiple_subscribers() {
+    #[test]
+    fn multiple_subscribers() {
         let bus = EventBus::new(16);
         let mut rx1 = bus.subscribe();
         let mut rx2 = bus.subscribe();
@@ -189,8 +189,8 @@ mod tests {
             uuid: "abc-123".into(),
         });
 
-        let e1 = rx1.recv().await.unwrap();
-        let e2 = rx2.recv().await.unwrap();
+        let e1 = rx1.try_recv().unwrap();
+        let e2 = rx2.try_recv().unwrap();
 
         match (&e1, &e2) {
             (
@@ -212,8 +212,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn overflow_drops_oldest() {
+    #[test]
+    fn overflow_drops_oldest() {
         let bus = EventBus::new(2);
         let mut rx = bus.subscribe();
 
@@ -222,15 +222,15 @@ mod tests {
         bus.emit(CatalogEvent::EntitiesStored { count: 3 });
 
         // async_broadcast notifies the receiver that messages were lost.
-        let first = rx.recv().await;
+        let first = rx.try_recv();
         assert!(
             first.is_err(),
             "expected Overflowed error, got {first:?}"
         );
 
         // After the overflow notification, remaining messages are available.
-        let e1 = rx.recv().await.unwrap();
-        let e2 = rx.recv().await.unwrap();
+        let e1 = rx.try_recv().unwrap();
+        let e2 = rx.try_recv().unwrap();
 
         match (&e1, &e2) {
             (
@@ -244,8 +244,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn no_subscriber_does_not_panic() {
+    #[test]
+    fn no_subscriber_does_not_panic() {
         let bus = EventBus::new(4);
         bus.emit(CatalogEvent::Error {
             context: "test".into(),
@@ -253,8 +253,8 @@ mod tests {
         });
     }
 
-    #[tokio::test]
-    async fn drain_stats_event() {
+    #[test]
+    fn drain_stats_event() {
         let bus = EventBus::new(4);
         let mut rx = bus.subscribe();
 
@@ -271,7 +271,7 @@ mod tests {
             stats: stats.clone(),
         });
 
-        match rx.recv().await.unwrap() {
+        match rx.try_recv().unwrap() {
             CatalogEvent::DrainCompleted { stats: s } => {
                 assert_eq!(s.entities_prepared, 10);
                 assert_eq!(s.duration_ms, 1234);

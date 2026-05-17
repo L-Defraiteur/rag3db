@@ -7,7 +7,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 
 use crate::connection::{CypherValue, DbConnection};
 
@@ -48,7 +47,7 @@ impl std::fmt::Debug for CypherNode {
     }
 }
 
-#[async_trait]
+
 impl Node for CypherNode {
     fn name(&self) -> &str {
         &self.name
@@ -77,7 +76,7 @@ impl Node for CypherNode {
         ]
     }
 
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
             .service::<Arc<dyn DbConnection>>("conn")
             .ok_or("CypherNode: 'conn' service not registered")?;
@@ -86,7 +85,6 @@ impl Node for CypherNode {
         if let Some(ref capture) = self.capture_query {
             let capture_result = conn
                 .execute(capture)
-                .await
                 .map_err(|e| format!("CypherNode capture query failed: {e}"))?;
 
             let rows: Vec<serde_json::Value> = capture_result
@@ -112,7 +110,6 @@ impl Node for CypherNode {
         // Execute the mutation
         let result = conn
             .execute(&self.query)
-            .await
             .map_err(|e| format!("CypherNode query failed: {e}"))?;
 
         // Emit results as Map
@@ -157,7 +154,7 @@ impl Node for CypherNode {
         self.undo_data.clone()
     }
 
-    async fn undo(
+    fn undo(
         &mut self,
         ctx: &mut NodeContext,
         undo_ctx: serde_json::Value,
@@ -202,7 +199,6 @@ impl Node for CypherNode {
                     set_parts.join(", ")
                 );
                 conn.execute(&undo_query)
-                    .await
                     .map_err(|e| format!("CypherNode undo failed: {e}"))?;
             }
         }
@@ -466,7 +462,7 @@ impl std::fmt::Debug for ValidateNode {
     }
 }
 
-#[async_trait]
+
 impl Node for ValidateNode {
     fn name(&self) -> &str {
         &self.name
@@ -488,14 +484,13 @@ impl Node for ValidateNode {
         }]
     }
 
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
             .service::<Arc<dyn DbConnection>>("conn")
             .ok_or("ValidateNode: 'conn' service not registered")?;
 
         let result = conn
             .execute(&self.query)
-            .await
             .map_err(|e| format!("ValidateNode query failed: {e}"))?;
 
         // Extract first-row column value for expression assertions

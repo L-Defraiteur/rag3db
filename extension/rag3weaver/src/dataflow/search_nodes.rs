@@ -8,8 +8,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 use crate::catalog::Catalog;
 use crate::connection::{CypherValue, QueryParam};
@@ -51,7 +50,7 @@ impl KBQuerySourceNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBQuerySourceNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -69,7 +68,7 @@ impl Node for KBQuerySourceNode {
             required: false,
         }]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         ctx.set_output(
             "query",
             PortValue::Query {
@@ -98,7 +97,7 @@ impl KBSearchNode {
     }
 }
 
-#[async_trait]
+
 impl Node for KBSearchNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -127,7 +126,7 @@ impl Node for KBSearchNode {
             },
         ]
     }
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (target_name, query, options) = match ctx.take_input("query") {
             Some(PortValue::Query {
                 target_name,
@@ -143,10 +142,9 @@ impl Node for KBSearchNode {
             .ok_or("KBSearchNode: 'catalog' service not found")?;
 
         let response = {
-            let mut catalog = catalog.lock().await;
+            let mut catalog = catalog.lock().unwrap();
             catalog
                 .search(&target_name, &query, options)
-                .await
                 .map_err(|e| e.to_string())?
         };
 
@@ -194,7 +192,7 @@ impl FetchRelatedNode {
     }
 }
 
-#[async_trait]
+
 impl Node for FetchRelatedNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -225,7 +223,7 @@ impl Node for FetchRelatedNode {
         }]
     }
 
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("FetchRelatedNode: 'conn' service not found")?;
@@ -284,7 +282,6 @@ impl Node for FetchRelatedNode {
         let result = conn
             .0
             .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
-            .await
             .map_err(|e| e.to_string())?;
 
         let mut children_map: HashMap<String, Vec<ChildSummary>> = HashMap::new();
@@ -346,7 +343,7 @@ impl ComposeNode {
     }
 }
 
-#[async_trait]
+
 impl Node for ComposeNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -376,7 +373,7 @@ impl Node for ComposeNode {
         }]
     }
 
-    async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut results = match ctx.take_input("results") {
             Some(PortValue::Results(r)) => r,
             _ => return Err("ComposeNode: missing 'results' input".into()),
@@ -483,8 +480,8 @@ mod tests {
         assert_eq!(node.outputs()[0].name, "children");
     }
 
-    #[tokio::test]
-    async fn compose_attaches_children() {
+    #[test]
+    fn compose_attaches_children() {
         let mut node = ComposeNode::new("compose");
         let mut ctx = NodeContext::new();
 
@@ -505,7 +502,7 @@ mod tests {
             )])),
         );
 
-        node.execute(&mut ctx).await.unwrap();
+        node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
         if let Some(PortValue::Results(results)) = outputs.get("results") {
@@ -518,8 +515,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn compose_no_children_passthrough() {
+    #[test]
+    fn compose_no_children_passthrough() {
         let mut node = ComposeNode::new("compose");
         let mut ctx = NodeContext::new();
 
@@ -529,7 +526,7 @@ mod tests {
         );
         // No children input
 
-        node.execute(&mut ctx).await.unwrap();
+        node.execute(&mut ctx).unwrap();
 
         let outputs = ctx.drain_outputs();
         if let Some(PortValue::Results(results)) = outputs.get("results") {

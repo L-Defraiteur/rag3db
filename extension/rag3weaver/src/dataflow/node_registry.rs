@@ -198,7 +198,6 @@ macro_rules! named_factory {
 mod tests {
     use super::*;
     use super::super::port::{PortDef, PortType, PortValue};
-    use async_trait::async_trait;
     use super::super::node::NodeContext;
 
     // ── Fake node for testing ────────────────────────────────────────
@@ -214,14 +213,14 @@ mod tests {
         }
     }
 
-    #[async_trait]
+    
     impl Node for FakeNode {
         fn name(&self) -> &str { &self.node_name }
         fn inputs(&self) -> &[PortDef] { &[] }
         fn outputs(&self) -> &[PortDef] {
             &[PortDef { name: "out", port_type: PortType::Empty, required: false }]
         }
-        async fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Empty);
             Ok(())
         }
