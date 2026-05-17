@@ -187,12 +187,12 @@ impl Node for GraphNode {
         &self.name
     }
 
-    fn inputs(&self) -> &[PortDef] {
-        &self.inputs
+    fn inputs(&self) -> Vec<PortDef> {
+        self.inputs.clone()
     }
 
-    fn outputs(&self) -> &[PortDef] {
-        &self.outputs
+    fn outputs(&self) -> Vec<PortDef> {
+        self.outputs.clone()
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {

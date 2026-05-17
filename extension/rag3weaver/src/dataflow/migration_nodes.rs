@@ -5,6 +5,7 @@
 //! - [`CypherNode`] — executes a Cypher query, optionally captures undo context
 //! - [`ValidateNode`] — asserts a condition on query results, fails the graph if violated
 
+use std::any::Any;
 use std::sync::Arc;
 
 
@@ -25,6 +26,7 @@ pub struct CypherNode {
     query: String,
     capture_query: Option<String>,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
 }
 
 impl CypherNode {
@@ -34,6 +36,7 @@ impl CypherNode {
             query,
             capture_query,
             undo_data: None,
+            conn: None,
         }
     }
 }
@@ -53,16 +56,16 @@ impl Node for CypherNode {
         &self.name
     }
 
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "trigger",
             port_type: PortType::Empty,
             required: false,
         }]
     }
 
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef {
                 name: "result",
                 port_type: PortType::Map,
@@ -131,6 +134,9 @@ impl Node for CypherNode {
         ctx.set_output("done", PortValue::Empty);
         ctx.log_metric("rows_affected", rows.len());
 
+        // Store conn for undo
+        self.conn = Some((*conn).clone());
+
         Ok(())
     }
 
@@ -150,18 +156,17 @@ impl Node for CypherNode {
         self.capture_query.is_some()
     }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
     fn undo(
         &mut self,
-        ctx: &mut NodeContext,
-        undo_ctx: serde_json::Value,
+        undo_ctx: Box<dyn Any + Send>,
     ) -> Result<(), String> {
-        let conn = ctx
-            .service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("CypherNode undo: 'conn' service not registered")?;
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("CypherNode undo: 'conn' not stored")?;
 
         let rows = undo_ctx["captured_rows"]
             .as_array()
@@ -468,16 +473,16 @@ impl Node for ValidateNode {
         &self.name
     }
 
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "trigger",
             port_type: PortType::Empty,
             required: false,
         }]
     }
 
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "done",
             port_type: PortType::Empty,
             required: false,

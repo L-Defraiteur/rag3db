@@ -216,9 +216,9 @@ mod tests {
     
     impl Node for FakeNode {
         fn name(&self) -> &str { &self.node_name }
-        fn inputs(&self) -> &[PortDef] { &[] }
-        fn outputs(&self) -> &[PortDef] {
-            &[PortDef { name: "out", port_type: PortType::Empty, required: false }]
+        fn inputs(&self) -> Vec<PortDef> { vec![] }
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef { name: "out", port_type: PortType::Empty, required: false }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Empty);

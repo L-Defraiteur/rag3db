@@ -39,6 +39,8 @@ use crate::sparse_index::SparseVector;
 use crate::schema::resolve_entity_kbs;
 use crate::uuid::{chunk_uuid, hashsafe_uuid};
 
+use std::any::Any;
+
 use super::node::{Node, NodeContext};
 use super::port::{BatchPayload, PortDef, PortType, PortValue};
 
@@ -54,11 +56,14 @@ use super::port::{BatchPayload, PortDef, PortType, PortValue};
 pub struct InsertRecordNode {
     name: String,
     undo_data: Option<serde_json::Value>,
+    // Stored during execute() for undo()
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl InsertRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
 }
 
@@ -70,14 +75,14 @@ impl Node for InsertRecordNode {
     fn node_type(&self) -> &'static str {
         "InsertRecordNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
             PortDef { name: "inserted", port_type: PortType::Entities, required: false },
         ]
@@ -194,6 +199,12 @@ impl Node for InsertRecordNode {
         }
         self.undo_data = Some(serde_json::json!(undo_groups));
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("InsertRecordNode: 'dialect' service not registered")?;
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         ctx.set_output("inserted", PortValue::Batch(
             BatchPayload::new(PortType::Entities, items),
@@ -203,13 +214,16 @@ impl Node for InsertRecordNode {
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("InsertRecordNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("InsertRecordNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("InsertRecordNode undo: 'dialect' not stored")?;
 
         let groups = undo_ctx.as_object()
             .ok_or("InsertRecordNode undo: expected object")?;
@@ -226,8 +240,6 @@ impl Node for InsertRecordNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("InsertRecordNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_cascade_delete(entity_name);
             conn.execute_with_params(
                 &cypher,
@@ -250,11 +262,13 @@ impl Node for InsertRecordNode {
 pub struct LinkRecordNode {
     name: String,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl LinkRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
 }
 
@@ -266,14 +280,14 @@ impl Node for LinkRecordNode {
     fn node_type(&self) -> &'static str {
         "LinkRecordNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "relations", port_type: PortType::Relations, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "done",
             port_type: PortType::Empty,
             required: false,
@@ -390,19 +404,28 @@ impl Node for LinkRecordNode {
         }
         self.undo_data = Some(serde_json::json!(undo_groups));
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("LinkRecordNode: 'dialect' service not registered")?;
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         Ok(())
     }
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("LinkRecordNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("LinkRecordNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("LinkRecordNode undo: 'dialect' not stored")?;
 
         let groups = undo_ctx.as_object()
             .ok_or("LinkRecordNode undo: expected object")?;
@@ -422,8 +445,6 @@ impl Node for LinkRecordNode {
                 }).collect()
             );
 
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("LinkRecordNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_delete_relation(rel_name);
             conn.execute_with_params(
                 &cypher,
@@ -450,6 +471,8 @@ pub struct KBEmbedNode {
     name: String,
     gpu_batch_size: usize,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl KBEmbedNode {
@@ -458,6 +481,8 @@ impl KBEmbedNode {
             name: name.into(),
             gpu_batch_size,
             undo_data: None,
+            conn: None,
+            dialect: None,
         }
     }
 }
@@ -482,14 +507,14 @@ impl Node for KBEmbedNode {
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "done",
             port_type: PortType::Empty,
             required: false,
@@ -898,19 +923,26 @@ impl Node for KBEmbedNode {
             self.undo_data = Some(serde_json::json!(undo_map));
         }
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         Ok(())
     }
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("KBEmbedNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("KBEmbedNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("KBEmbedNode undo: 'dialect' not stored")?;
 
         let groups = undo_ctx.as_object()
             .ok_or("KBEmbedNode undo: expected object")?;
@@ -927,9 +959,6 @@ impl Node for KBEmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            // Reset _embed_hash to trigger re-embedding on next ingestion
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("KBEmbedNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
             conn.execute_with_params(
                 &cypher,
@@ -1088,14 +1117,14 @@ impl Node for KBChunkRecordNode {
     fn node_type(&self) -> &'static str {
         "KBChunkRecordNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
             PortDef { name: "chunks", port_type: PortType::Entities, required: false },
             PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
@@ -1307,14 +1336,14 @@ impl Node for ChunkRecordNode {
     fn node_type(&self) -> &'static str {
         "ChunkRecordNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
             PortDef { name: "chunks", port_type: PortType::Entities, required: false },
             PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
@@ -1395,6 +1424,8 @@ pub struct EmbedNode {
     signals: search::SearchSignals,
     gpu_batch_size: usize,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl EmbedNode {
@@ -1411,6 +1442,8 @@ impl EmbedNode {
             signals,
             gpu_batch_size,
             undo_data: None,
+            conn: None,
+            dialect: None,
         }
     }
 
@@ -1451,14 +1484,14 @@ impl Node for EmbedNode {
             "sparse_col": self.sparse_col,
         })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "done",
             port_type: PortType::Empty,
             required: false,
@@ -1853,19 +1886,26 @@ impl Node for EmbedNode {
             self.undo_data = Some(serde_json::json!(undo_map));
         }
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         Ok(())
     }
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("EmbedNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("EmbedNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("EmbedNode undo: 'dialect' not stored")?;
 
         let groups = undo_ctx.as_object()
             .ok_or("EmbedNode undo: expected object")?;
@@ -1882,8 +1922,6 @@ impl Node for EmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("EmbedNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
             conn.execute_with_params(
                 &cypher,
@@ -2266,14 +2304,14 @@ impl Node for KBGatherNode {
     fn node_type(&self) -> &'static str {
         "KBGatherNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "aggregates", port_type: PortType::Aggregates, required: false },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
@@ -2380,11 +2418,13 @@ impl Node for KBGatherNode {
 pub struct KBUpdateNode {
     name: String,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl KBUpdateNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
 }
 
@@ -2396,13 +2436,13 @@ impl Node for KBUpdateNode {
     fn node_type(&self) -> &'static str {
         "KBUpdateNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "kb_content", port_type: PortType::KBContent, required: true },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
@@ -2548,6 +2588,10 @@ impl Node for KBUpdateNode {
         ctx.log_metric("updated", total_updated);
         ctx.log_metric("deleted", total_deleted);
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         ctx.set_output("kb_content", PortValue::Batch(
             BatchPayload::new(PortType::KBContent, items),
@@ -2557,13 +2601,16 @@ impl Node for KBUpdateNode {
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("KBUpdateNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("KBUpdateNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("KBUpdateNode undo: 'dialect' not stored")?;
 
         let entries = undo_ctx.as_array()
             .ok_or("KBUpdateNode undo: expected array of entries")?;
@@ -2589,8 +2636,6 @@ impl Node for KBUpdateNode {
                 }).collect()
             );
 
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("KBUpdateNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_update_fields(&index_table, &["_title", "_content", "_content_hash"]);
             conn.execute_with_params(
                 &cypher,
@@ -2627,13 +2672,13 @@ impl Node for KBChunkNode {
     fn node_type(&self) -> &'static str {
         "KBChunkNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "kb_content", port_type: PortType::KBContent, required: true },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: false },
             PortDef { name: "relations", port_type: PortType::Relations, required: false },
             PortDef { name: "done", port_type: PortType::Empty, required: false },
@@ -2712,11 +2757,12 @@ pub struct FlushNode {
     name: String,
     tables: Vec<String>,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
 }
 
 impl FlushNode {
     pub fn new(name: impl Into<String>, tables: Vec<String>) -> Self {
-        Self { name: name.into(), tables, undo_data: None }
+        Self { name: name.into(), tables, undo_data: None, conn: None }
     }
 }
 
@@ -2731,13 +2777,13 @@ impl Node for FlushNode {
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "tables": self.tables })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
@@ -2754,6 +2800,7 @@ impl Node for FlushNode {
 
         // Capture tables for undo (re-flush)
         self.undo_data = Some(serde_json::json!(self.tables));
+        self.conn = Some((*conn).clone());
 
         ctx.log_metric("table_count", self.tables.len());
         ctx.log_metric("flushed", flushed);
@@ -2763,13 +2810,14 @@ impl Node for FlushNode {
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("FlushNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("FlushNode undo: 'conn' not stored")?;
 
         let tables = undo_ctx.as_array()
             .ok_or("FlushNode undo: expected array of table names")?;
@@ -2799,11 +2847,12 @@ pub struct SparseCommitNode {
     name: String,
     tables: Vec<String>,
     undo_data: Option<serde_json::Value>,
+    sparse_handles: Option<Arc<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>>,
 }
 
 impl SparseCommitNode {
     pub fn new(name: impl Into<String>, tables: Vec<String>) -> Self {
-        Self { name: name.into(), tables, undo_data: None }
+        Self { name: name.into(), tables, undo_data: None, sparse_handles: None }
     }
 }
 
@@ -2818,13 +2867,13 @@ impl Node for SparseCommitNode {
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "tables": self.tables })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
@@ -2842,6 +2891,7 @@ impl Node for SparseCommitNode {
         }
 
         self.undo_data = Some(serde_json::json!(self.tables));
+        self.sparse_handles = Some(handles);
         ctx.log_metric("table_count", self.tables.len());
         ctx.log_metric("committed", committed);
         ctx.set_output("done", PortValue::Empty);
@@ -2850,13 +2900,14 @@ impl Node for SparseCommitNode {
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
-            .ok_or("SparseCommitNode undo: 'sparse_handles' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let handles = self.sparse_handles.as_ref()
+            .ok_or("SparseCommitNode undo: 'sparse_handles' not stored")?;
 
         let tables = undo_ctx.as_array()
             .ok_or("SparseCommitNode undo: expected array of table names")?;
@@ -2896,13 +2947,13 @@ impl RechunkDeleteNode {
 impl Node for RechunkDeleteNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "RechunkDeleteNode" }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: true },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "entities", port_type: PortType::Entities, required: false },
         ]
     }
@@ -2979,11 +3030,13 @@ impl Node for RechunkDeleteNode {
 pub struct DeleteRecordNode {
     name: String,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl DeleteRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
 }
 
@@ -2991,14 +3044,14 @@ impl DeleteRecordNode {
 impl Node for DeleteRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "DeleteRecordNode" }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "deletes", port_type: PortType::Deletes, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
         ]
     }
@@ -3281,19 +3334,26 @@ impl Node for DeleteRecordNode {
             );
         }
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        self.dialect = Some((*dialect).clone());
+
         ctx.set_output("done", PortValue::Empty);
         Ok(())
     }
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("DeleteRecordNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("DeleteRecordNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("DeleteRecordNode undo: 'dialect' not stored")?;
 
         let groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> =
             serde_json::from_value(undo_ctx)
@@ -3302,9 +3362,6 @@ impl Node for DeleteRecordNode {
         for (entity_name, items) in &groups {
             if items.is_empty() { continue; }
 
-            // Re-create deleted entities via batch upsert (MERGE/INSERT)
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("DeleteRecordNode undo: 'dialect' service not registered")?;
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
             let cypher = dialect.batch_upsert(entity_name, &columns);
 
@@ -3315,11 +3372,6 @@ impl Node for DeleteRecordNode {
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
             ).map_err(|e| format!("DeleteRecordNode undo failed: {e}"))?;
-
-            ctx.info(format!(
-                "restored {} {entity_name}(s), re-ingestion needed for chunks/embeddings",
-                items.len()
-            ));
         }
         Ok(())
     }
@@ -3341,11 +3393,13 @@ impl Node for DeleteRecordNode {
 pub struct UpdateRecordNode {
     name: String,
     undo_data: Option<serde_json::Value>,
+    conn: Option<Arc<dyn DbConnection>>,
+    dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
 impl UpdateRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
 }
 
@@ -3353,14 +3407,14 @@ impl UpdateRecordNode {
 impl Node for UpdateRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "UpdateRecordNode" }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "updates", port_type: PortType::Updates, required: true },
             PortDef { name: "trigger", port_type: PortType::Empty, required: false },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef { name: "done", port_type: PortType::Empty, required: false },
             PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
         ]
@@ -3682,6 +3736,12 @@ impl Node for UpdateRecordNode {
             );
         }
 
+        // Store services for undo
+        self.conn = Some((*conn).clone());
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .ok_or("UpdateRecordNode: 'dialect' service not registered")?;
+        self.dialect = Some((*dialect).clone());
+
         ctx.log_metric("rechunk_entities", all_rechunk_entities.len());
 
         // Always emit rechunk_entities (even empty) so downstream rechunk pipeline
@@ -3695,13 +3755,16 @@ impl Node for UpdateRecordNode {
 
     fn can_undo(&self) -> bool { true }
 
-    fn undo_context(&self) -> Option<serde_json::Value> {
-        self.undo_data.clone()
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
+        self.undo_data.clone().map(|v| Box::new(v) as Box<dyn Any + Send>)
     }
 
-    fn undo(&mut self, ctx: &mut NodeContext, undo_ctx: serde_json::Value) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn")
-            .ok_or("UpdateRecordNode undo: 'conn' service not registered")?;
+    fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
+        let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
+        let conn = self.conn.as_ref()
+            .ok_or("UpdateRecordNode undo: 'conn' not stored")?;
+        let dialect = self.dialect.as_ref()
+            .ok_or("UpdateRecordNode undo: 'dialect' not stored")?;
 
         let groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> =
             serde_json::from_value(undo_ctx)
@@ -3710,7 +3773,6 @@ impl Node for UpdateRecordNode {
         for (entity_name, items) in &groups {
             if items.is_empty() { continue; }
 
-            // Build SET clause from columns (restore all old values)
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
             let other_cols: Vec<&str> = columns.iter()
                 .filter(|c| **c != "_uuid")
@@ -3718,8 +3780,6 @@ impl Node for UpdateRecordNode {
                 .collect();
             if other_cols.is_empty() { continue; }
 
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("UpdateRecordNode undo: 'dialect' service not registered")?;
             let cypher = dialect.batch_update_fields(entity_name, &other_cols);
 
             let items_param = CypherValue::List(
@@ -3729,11 +3789,6 @@ impl Node for UpdateRecordNode {
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
             ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
-
-            ctx.info(format!(
-                "restored {} {entity_name}(s) to pre-update state",
-                items.len()
-            ));
         }
         Ok(())
     }

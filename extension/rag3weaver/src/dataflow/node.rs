@@ -1,8 +1,9 @@
 //! Node traits and execution context for the dataflow graph.
 //!
-//! - [`Node`] — static node with fixed inputs/outputs
+//! - [`Node`] — static node with fixed inputs/outputs (luciole-compatible)
 //! - [`NodeContext`] — reads inputs, writes outputs during execution
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,19 +31,19 @@ pub struct NodeLogEntry {
     pub text: String,
 }
 
-// ─── Node trait ──────────────────────────────────────────────────────────────
+// ─── Node trait ───────────────────────────────────────────────────────���──────
 
-/// A static node in the dataflow graph.
+/// A static node in the dataflow graph (luciole-compatible signatures).
 
 pub trait Node: Send + Sync {
     /// Unique name of this node instance.
     fn name(&self) -> &str;
 
     /// Input port definitions.
-    fn inputs(&self) -> &[PortDef];
+    fn inputs(&self) -> Vec<PortDef>;
 
     /// Output port definitions.
-    fn outputs(&self) -> &[PortDef];
+    fn outputs(&self) -> Vec<PortDef>;
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
@@ -67,21 +68,22 @@ pub trait Node: Send + Sync {
         false
     }
 
-    /// Undo context captured during execute(), serialized into the checkpoint.
+    /// Undo context captured during execute(), boxed for type erasure.
     ///
-    /// Called by the runtime AFTER a successful `execute()`. The returned JSON
+    /// Called by the runtime AFTER a successful `execute()`. The returned value
     /// is persisted and later passed to `undo()` for rollback.
-    fn undo_context(&self) -> Option<serde_json::Value> {
+    fn undo_context(&self) -> Option<Box<dyn Any + Send>> {
         None
     }
 
     /// Reverse the operation using the previously captured undo context.
     ///
     /// Called during rollback in reverse topological order.
+    /// Note: does NOT receive a NodeContext — services needed for undo must be
+    /// stored on the node during execute().
     fn undo(
         &mut self,
-        _ctx: &mut NodeContext,
-        _undo_ctx: serde_json::Value,
+        _undo_ctx: Box<dyn Any + Send>,
     ) -> Result<(), String> {
         Err("undo not supported".into())
     }
@@ -142,6 +144,18 @@ impl NodeContext {
     /// Write a value to an output port.
     pub fn set_output(&mut self, port: &str, value: PortValue) {
         self.outputs.insert(port.to_string(), value);
+    }
+
+    /// Emit a trigger signal on an output port (luciole-compatible).
+    pub fn trigger(&mut self, port: &str) {
+        self.outputs.insert(port.to_string(), PortValue::Empty);
+    }
+
+    /// Log a numeric metric (luciole-compatible — f64 only).
+    pub fn metric(&mut self, key: &str, value: f64) {
+        if let Ok(v) = serde_json::to_value(value) {
+            self.metrics.insert(key.to_string(), v);
+        }
     }
 
     /// Set an input port value (used by the runtime to populate inputs).

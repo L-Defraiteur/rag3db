@@ -68,11 +68,11 @@ impl Node for SearchSourceNode {
             "query": self.query,
         })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[]
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: false,
@@ -133,15 +133,15 @@ impl Node for VectorSearchNode {
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "limit": self.limit })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: true,
         }]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,
@@ -235,15 +235,15 @@ impl Node for BM25SearchNode {
             "result_mode": format!("{:?}", self.result_mode),
         })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: true,
         }]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,
@@ -305,15 +305,15 @@ impl Node for SparseSearchNode {
     fn node_config(&self) -> serde_json::Value {
         serde_json::json!({ "limit": self.limit })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: true,
         }]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,
@@ -400,8 +400,8 @@ impl Node for FuseResultsNode {
     fn node_type(&self) -> &'static str {
         "FuseResultsNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef {
                 name: "vector",
                 port_type: PortType::Results,
@@ -419,8 +419,8 @@ impl Node for FuseResultsNode {
             },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,
@@ -510,8 +510,8 @@ impl Node for ResolveParentNode {
             serde_json::json!({ "return_fields": self.return_fields })
         }
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef {
                 name: "results",
                 port_type: PortType::Results,
@@ -524,8 +524,8 @@ impl Node for ResolveParentNode {
             },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,

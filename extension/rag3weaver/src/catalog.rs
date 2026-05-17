@@ -3359,9 +3359,8 @@ impl Catalog {
                 .and_then(|nc| nc.undo_context.clone());
 
             if let Some(ref ctx_val) = undo_ctx {
-                let mut ctx =
-                    crate::dataflow::node::NodeContext::with_services(services.clone());
-                node.undo(&mut ctx, ctx_val.clone())
+                let boxed_ctx: Box<dyn std::any::Any + Send> = Box::new(ctx_val.clone());
+                node.undo(boxed_ctx)
                     .map_err(|e| MigrationError::ExecutionError {
                         version: 0,
                         name: String::new(),

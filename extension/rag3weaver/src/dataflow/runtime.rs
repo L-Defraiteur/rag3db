@@ -505,8 +505,13 @@ impl DataflowRuntime {
                             });
                         }
 
-                        // Capture undo context if the node supports it
-                        let undo_ctx = graph.nodes[node_idx].undo_context();
+                        // Capture undo context if the node supports it.
+                        // The new trait returns Box<dyn Any + Send>; downcast to
+                        // serde_json::Value for checkpoint serialization.
+                        let undo_ctx_any = graph.nodes[node_idx].undo_context();
+                        let undo_ctx: Option<serde_json::Value> = undo_ctx_any.and_then(|boxed| {
+                            boxed.downcast::<serde_json::Value>().ok().map(|v| *v)
+                        });
 
                         // Serialize outputs for checkpoint persistence + snapshots
                         let mut checkpoint_outputs = HashMap::new();
@@ -856,15 +861,15 @@ mod tests {
         fn name(&self) -> &str {
             &self.name
         }
-        fn inputs(&self) -> &[PortDef] {
-            &[PortDef {
+        fn inputs(&self) -> Vec<PortDef> {
+            vec![PortDef {
                 name: "in",
                 port_type: PortType::Results,
                 required: true,
             }]
         }
-        fn outputs(&self) -> &[PortDef] {
-            &[PortDef {
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef {
                 name: "out",
                 port_type: PortType::Results,
                 required: false,
@@ -889,11 +894,11 @@ mod tests {
         fn name(&self) -> &str {
             &self.name
         }
-        fn inputs(&self) -> &[PortDef] {
-            &[]
+        fn inputs(&self) -> Vec<PortDef> {
+            vec![]
         }
-        fn outputs(&self) -> &[PortDef] {
-            &[PortDef {
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef {
                 name: "out",
                 port_type: PortType::Results,
                 required: false,
@@ -915,15 +920,15 @@ mod tests {
         fn name(&self) -> &str {
             &self.name
         }
-        fn inputs(&self) -> &[PortDef] {
-            &[PortDef {
+        fn inputs(&self) -> Vec<PortDef> {
+            vec![PortDef {
                 name: "in",
                 port_type: PortType::Results,
                 required: true,
             }]
         }
-        fn outputs(&self) -> &[PortDef] {
-            &[]
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             let _ = ctx.take_input("in");
@@ -1018,15 +1023,15 @@ mod tests {
             fn name(&self) -> &str {
                 "merge_sink"
             }
-            fn inputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "in",
                     port_type: PortType::Results,
                     required: true,
                 }]
             }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "out",
                     port_type: PortType::Results,
                     required: false,
@@ -1182,11 +1187,11 @@ mod tests {
             fn node_type(&self) -> &'static str {
                 "TriggerNode"
             }
-            fn inputs(&self) -> &[PortDef] {
-                &[]
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![]
             }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "done",
                     port_type: PortType::Empty,
                     required: false,
@@ -1211,15 +1216,15 @@ mod tests {
             fn node_type(&self) -> &'static str {
                 "ReceiverNode"
             }
-            fn inputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "trigger",
                     port_type: PortType::Empty,
                     required: true,
                 }]
             }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "done",
                     port_type: PortType::Empty,
                     required: false,
@@ -1246,15 +1251,15 @@ mod tests {
             fn node_type(&self) -> &'static str {
                 "FailOnceNode"
             }
-            fn inputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "trigger",
                     port_type: PortType::Empty,
                     required: false,
                 }]
             }
-            fn outputs(&self) -> &[PortDef] {
-                &[PortDef {
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef {
                     name: "done",
                     port_type: PortType::Empty,
                     required: false,

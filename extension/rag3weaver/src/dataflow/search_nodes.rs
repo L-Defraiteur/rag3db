@@ -58,11 +58,11 @@ impl Node for KBQuerySourceNode {
     fn node_type(&self) -> &'static str {
         "KBQuerySourceNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[]
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: false,
@@ -105,15 +105,15 @@ impl Node for KBSearchNode {
     fn node_type(&self) -> &'static str {
         "KBSearchNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "query",
             port_type: PortType::Query,
             required: true,
         }]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef {
                 name: "results",
                 port_type: PortType::Results,
@@ -208,15 +208,15 @@ impl Node for FetchRelatedNode {
             "source_entity": self.source_entity,
         })
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: true,
         }]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "children",
             port_type: PortType::Children,
             required: false,
@@ -351,8 +351,8 @@ impl Node for ComposeNode {
     fn node_type(&self) -> &'static str {
         "ComposeNode"
     }
-    fn inputs(&self) -> &[PortDef] {
-        &[
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
             PortDef {
                 name: "results",
                 port_type: PortType::Results,
@@ -365,8 +365,8 @@ impl Node for ComposeNode {
             },
         ]
     }
-    fn outputs(&self) -> &[PortDef] {
-        &[PortDef {
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
             name: "results",
             port_type: PortType::Results,
             required: false,
