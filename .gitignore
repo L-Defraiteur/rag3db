@@ -95,3 +95,8 @@ extension/sparse_vector/rust/target/
 
 # References (cloned repos for study)
 references/
+
+# Secrets — jamais commiter (tokens HF, etc.)
+.vault/
+*.env
+!*.env.example
