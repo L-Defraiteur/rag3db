@@ -124,7 +124,7 @@ Exposé aux nodes comme service `"fts_handles"` (3 sites d'enregistrement).
   `CALL FLUSH_LUCIVY_INDEX` sinon**. Le repli est délibéré : les deux chemins doivent
   coexister pour que la parité de l'étape 5 soit mesurable.
 
-### ⬜ Étape 3 — recherche
+### ✅ Étape 3 — recherche
 
 `search_bm25` / `search_bm25_chunked` (`search.rs:1727` et `:2048`) →
 `handle.search_filtered(&query_config, limit, Some(sink), allowed_ids)`.
@@ -134,10 +134,24 @@ Exposé aux nodes comme service `"fts_handles"` (3 sites d'enregistrement).
 - Les highlights viennent d'un `HighlightSink` par requête, ou de
   `search_with_docs` → `SearchHit.highlights: HashMap<String, Vec<[usize;2]>>`,
   **même forme que `parse_highlights_json`**.
-- ⚠️ C'est l'étape sensible : voir les trois règles plus haut.
-- Bonus gratuit : `handle.query_warnings(&config)` → `Vec<String>` (littéral trop
-  court, regex sans littéral = full scan, fuzzy trop lâche, segments v2). À remonter
-  dans `SearchDiagnostics`.
+**Fait.** `fts_handle::search_hits()` rend le triplet `(offset, score, highlights)`
+— **exactement la forme** que rendait `CALL QUERY_LUCIVY_INDEX ... RETURN node_id,
+score, highlights`. Toute l'attribution aux chunks en aval est donc inchangée, ce
+qui rend la parité mesurable terme à terme.
+
+`search_bm25_chunked` prend un paramètre `fts: Option<&ShardedHandle>` et branche :
+handle présent → Rust, absent → repli C++. La partie commune (résolution des offsets,
+appariement, mise en forme) a été extraite dans **`finish_bm25_chunked`**, partagée
+par les deux chemins : toute divergence viendra donc du moteur, pas de la mise en forme.
+
+`SearchDiagnostics` gagne `engine_warnings: Vec<String>`, alimenté par
+`handle.query_warnings()` (littéral trop court, regex sans littéral = full scan,
+fuzzy trop lâche, segments v2). Vide sur le chemin C++, qui ne les expose pas.
+
+Test : `search_hits_returns_offsets_highlights_and_honours_filter` — vérifie les
+offsets, que les highlights sont clés par **nom de champ**, que les bornes tombent
+**dans** le texte indexé (sinon le référentiel serait cassé), et que `allowed_ids`
+est honoré.
 
 ### ⬜ Étape 4 — deletes / updates
 
@@ -150,13 +164,19 @@ implicitement sur les mutations Cypher. Sites : `DeleteRecordNode`,
 Mêmes requêtes via C++ et via Rust sur un même corpus, puis retrait des hooks C++.
 Enterre au passage le bug `_ngram`/`_raw` qui casse le mode Contains côté extension.
 
-### ⬜ Reste aussi : appeler `ensure_fts_handle`
+### ✅ Ouverture paresseuse câblée
 
-**Personne ne l'appelle encore.** Il faut décider où l'ouverture paresseuse se
-déclenche. La passation recommande le premier usage réel, ce qui plaide pour
-`build_ingestion_graph` et `Catalog::search` — les deux endroits où l'on connaît la
-table *et* ses `bm25_fields`. Pas à `register_entity` : ça paierait le
-téléchargement au démarrage.
+Deux points de déclenchement, tous deux gardés par `target.default_signals.bm25()` :
+
+- **`Catalog::search`** (après `resolve_search_target`) — pour la lecture.
+- **`build_ingestion_graph`** — pour l'écriture. Sans lui, `InsertRecordNode` ne
+  trouve aucun handle et n'indexe rien.
+
+Les deux passent par `resolve_search_target` pour prendre **exactement les mêmes
+`bm25_fields`** : une divergence entre champs indexés et champs cherchés casserait
+l'appariement des highlights.
+
+Pas à `register_entity`, qui paierait la rematérialisation complète au démarrage.
 
 ---
 

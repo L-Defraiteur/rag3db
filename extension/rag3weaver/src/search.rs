@@ -383,6 +383,10 @@ pub struct ChunkOverlapDiag {
 pub struct SearchDiagnostics {
     /// BM25 hit-level diagnostics (highlights vs chunks).
     pub bm25_hits: Vec<BM25HitDiagnostic>,
+    /// Avertissements honnêtes remontés par le moteur lucivy : littéral trop
+    /// court, regex sans littéral (donc full scan), fuzzy trop lâche, segments
+    /// v2 résiduels. Vide sur le chemin C++, qui ne les expose pas.
+    pub engine_warnings: Vec<String>,
     /// Per-phase timing in milliseconds.
     pub embed_ms: u64,
     pub vector_ms: u64,
@@ -2045,6 +2049,7 @@ pub fn resolve_bm25_to_chunks(
 /// offset resolution, chunk fetching, and data enrichment into one Cypher query.
 ///
 /// Prefer `search_bm25_chunked()` for chunked BM25 searches (Level 1+).
+#[allow(clippy::too_many_arguments)]
 pub fn search_bm25_chunked(
     conn: &dyn DbConnection,
     target: &SearchTarget,
@@ -2057,14 +2062,60 @@ pub fn search_bm25_chunked(
     return_fields: &[String],
     result_mode: ResultMode,
     mut diagnostics: Option<&mut SearchDiagnostics>,
+    // `fts` : index Rust de la table parente s'il est ouvert. Absent → repli
+    // sur l'extension C++, le temps que toutes les tables soient migrées.
+    fts: Option<&lucivy_core::sharded_handle::ShardedHandle>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     let entity = &target.parent_table;
     if fields.is_empty() {
         return Ok(vec![]);
     }
 
-    // Query 1: CALL QUERY_LUCIVY_INDEX → (offset, score, highlights)
     let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
+
+    // Chemin Rust direct : même triplet (offset, score, highlights) que le
+    // CALL Cypher, donc toute l'attribution aux chunks en aval est inchangée.
+    if let Some(handle) = fts {
+        let query_config: lucivy_core::query::QueryConfig =
+            serde_json::from_str(&json_query).map_err(|e| {
+                CatalogError::DbError(format!("QueryConfig invalide: {e}"))
+            })?;
+
+        let raw = crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
+            .map_err(CatalogError::DbError)?;
+
+        // Avertissements honnêtes du moteur (littéral trop court, regex sans
+        // littéral = full scan, fuzzy trop lâche...). Gratuit, et invisible
+        // depuis le chemin C++.
+        if let Some(ref mut diag) = diagnostics {
+            for w in handle.query_warnings(&query_config) {
+                diag.engine_warnings.push(w);
+            }
+        }
+
+        let hits: Vec<(u64, f64, String)> = raw
+            .into_iter()
+            .map(|(offset, score, hl)| {
+                let obj: serde_json::Map<String, serde_json::Value> = hl
+                    .into_iter()
+                    .map(|(f, spans)| {
+                        let arr: Vec<serde_json::Value> = spans
+                            .into_iter()
+                            .map(|(a, b)| serde_json::json!([a, b]))
+                            .collect();
+                        (f, serde_json::Value::Array(arr))
+                    })
+                    .collect();
+                (offset, score, serde_json::Value::Object(obj).to_string())
+            })
+            .collect();
+
+        return finish_bm25_chunked(
+            conn, target, hits, return_fields, result_mode, diagnostics,
+        );
+    }
+
+    // Repli : extension C++.
     let escaped_json = json_query.replace('\'', "''");
 
     let cypher = if let Some(ids) = allowed_ids {
@@ -2105,6 +2156,30 @@ pub fn search_bm25_chunked(
         })
         .collect();
 
+    if hits.is_empty() {
+        return Ok(vec![]);
+    }
+
+    finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics)
+}
+
+
+/// Partie commune aux deux chemins BM25 (Rust direct et extension C++) :
+/// résolution des offsets, appariement highlights↔chunks, mise en forme.
+///
+/// Extraite pour que les deux chemins partagent **exactement** la même logique
+/// d'attribution — c'est ce qui rend la parité de la migration vérifiable :
+/// toute divergence viendra du moteur, pas de la mise en forme.
+#[allow(clippy::too_many_arguments)]
+fn finish_bm25_chunked(
+    conn: &dyn DbConnection,
+    target: &SearchTarget,
+    hits: Vec<(u64, f64, String)>,
+    return_fields: &[String],
+    result_mode: ResultMode,
+    mut diagnostics: Option<&mut SearchDiagnostics>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    let entity = &target.parent_table;
     if hits.is_empty() {
         return Ok(vec![]);
     }
@@ -2249,6 +2324,7 @@ pub fn search_bm25_chunked(
 
     Ok(results)
 }
+
 
 /// Sparse vector search via direct SparseHandle.
 ///

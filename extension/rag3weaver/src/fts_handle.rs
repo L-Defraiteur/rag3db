@@ -99,6 +99,61 @@ pub fn node_id_of(
         .and_then(|(_, v)| v.as_value().as_u64())
 }
 
+/// Exécute une recherche et rend le triplet `(offset, score, highlights)`.
+///
+/// C'est **volontairement la même forme** que ce que rendait
+/// `CALL QUERY_LUCIVY_INDEX(...) RETURN node_id, score, highlights` : toute la
+/// logique d'attribution aux chunks en aval reste inchangée, et la parité de
+/// l'étape 5 devient mesurable terme à terme.
+///
+/// Les highlights sont clés par **nom de champ du schéma** et leurs bornes sont
+/// des **offsets en octets** dans la valeur indexée — même référentiel que
+/// `ChunkRecord.start_char`/`end_char`, qui contiennent eux aussi des octets
+/// malgré leur nom. C'est cette coïncidence qui fait marcher le recouvrement.
+pub fn search_hits(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    query_config: &lucivy_core::query::QueryConfig,
+    limit: usize,
+    allowed_ids: Option<&[u64]>,
+) -> Result<Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize)>>)>, String> {
+    let sink = Arc::new(ld_lucivy::query::HighlightSink::new());
+
+    let results = match allowed_ids {
+        Some(ids) => handle.search_filtered(
+            query_config,
+            limit,
+            Some(sink.clone()),
+            ids.iter().copied().collect(),
+        )?,
+        None => handle.search(query_config, limit, Some(sink.clone()))?,
+    };
+
+    let mut out = Vec::with_capacity(results.len());
+    for r in &results {
+        let Some(shard) = handle.shard(r.shard_id) else { continue };
+        let searcher = shard.reader.searcher();
+        let Ok(doc) = searcher.doc::<ld_lucivy::LucivyDocument>(r.doc_address) else {
+            continue;
+        };
+        let Some(offset) = node_id_of(handle, &doc) else { continue };
+
+        let seg = searcher.segment_reader(r.doc_address.segment_ord);
+        let hl = sink
+            .get(seg.segment_id(), r.doc_address.doc_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(field, spans)| {
+                let pairs: Vec<(usize, usize)> =
+                    spans.into_iter().map(|s| (s[0], s[1])).collect();
+                (field, pairs)
+            })
+            .collect();
+
+        out.push((offset, r.score as f64, hl));
+    }
+    Ok(out)
+}
+
 /// Topologie de stockage d'un index FTS.
 ///
 /// Ce n'est pas un détail d'implémentation, c'est une décision d'architecture :
@@ -278,6 +333,67 @@ mod tests {
             vec![41, 1337],
             "les deux documents contenant kmalloc, résolus par leurs vrais offsets"
         );
+
+        handle.close().ok();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `search_hits` doit rendre les mêmes offsets, des highlights clés par nom
+    /// de champ, et honorer `allowed_ids` — c'est le contrat qui remplace
+    /// `CALL QUERY_LUCIVY_INDEX ... RETURN node_id, score, highlights`.
+    #[test]
+    fn search_hits_returns_offsets_highlights_and_honours_filter() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+
+        let tmp = std::env::temp_dir()
+            .join(format!("rag3weaver_fts_hits_{}", std::process::id()));
+        let store = Arc::new(MemBlobStore::new());
+        let cfg = build_schema_config(&["content".to_string()], &[], 2).unwrap();
+        let storage = BlobShardStorage::new(store, fts_index_name("Hits"), &tmp);
+        let handle =
+            ShardedHandle::create_with_storage(Box::new(storage), &cfg).expect("création");
+
+        for (offset, text) in [
+            (10_u64, "spin_lock_init protège la file"),
+            (20_u64, "kmalloc alloue puis spin_lock_init verrouille"),
+            (30_u64, "aucun rapport avec le noyau"),
+        ] {
+            let doc =
+                build_document(&handle, &[("content".into(), text.to_string())], offset).unwrap();
+            handle.add_document(doc, offset).unwrap();
+        }
+        handle.commit().unwrap();
+
+        let q: lucivy_core::query::QueryConfig = serde_json::from_value(serde_json::json!({
+            "type": "contains", "field": "content", "value": "spin_lock_init"
+        }))
+        .unwrap();
+
+        // Sans filtre : les deux documents concernés.
+        let hits = search_hits(&handle, &q, 10, None).expect("recherche");
+        let mut offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
+        offsets.sort_unstable();
+        assert_eq!(offsets, vec![10, 20]);
+
+        // Les highlights sont clés par nom de champ, avec des bornes cohérentes.
+        let (_, _, hl) = hits.iter().find(|(o, _, _)| *o == 10).unwrap();
+        let spans = hl
+            .get("content")
+            .unwrap_or_else(|| panic!("highlights clés par nom de champ, reçu {hl:?}"));
+        assert!(!spans.is_empty());
+        for (a, b) in spans {
+            assert!(a < b, "span dégénéré ({a},{b})");
+            assert!(
+                *b <= "spin_lock_init protège la file".len(),
+                "offset hors du texte indexé — référentiel cassé"
+            );
+        }
+
+        // Avec filtre : le pré-filtrage BDD doit être respecté.
+        let filtered = search_hits(&handle, &q, 10, Some(&[20])).expect("recherche filtrée");
+        let got: Vec<u64> = filtered.iter().map(|(o, _, _)| *o).collect();
+        assert_eq!(got, vec![20], "allowed_ids non honoré");
 
         handle.close().ok();
         let _ = std::fs::remove_dir_all(&tmp);

@@ -1965,6 +1965,28 @@ impl Catalog {
             return empty_results();
         }
 
+        // Ouverture paresseuse des index FTS des tables touchées par ce drain.
+        // Sans ça, InsertRecordNode ne trouve aucun handle et n'indexe rien.
+        // On passe par resolve_search_target pour prendre exactement les mêmes
+        // `bm25_fields` que la recherche — toute divergence entre les champs
+        // indexés et les champs cherchés casserait l'appariement des highlights.
+        {
+            let entities: std::collections::HashSet<String> = pending
+                .entities
+                .iter()
+                .map(|r| r.entity_name.clone())
+                .collect();
+            for name in entities {
+                if let Ok(target) = self.resolve_search_target(&name) {
+                    if target.default_signals.bm25() {
+                        let table = target.parent_table.clone();
+                        let fields = target.bm25_fields.clone();
+                        self.ensure_fts_handle(&table, &fields, &[]);
+                    }
+                }
+            }
+        }
+
         // ─── Conflict resolution: delete wins over update for same UUID ───
         if !pending.deletes.is_empty() && !pending.updates.is_empty() {
             let delete_set: std::collections::HashSet<(&str, &str)> = pending.deletes.iter()
@@ -2468,6 +2490,15 @@ impl Catalog {
 
         let target = self.resolve_search_target(name)?;
 
+        // Ouverture paresseuse de l'index FTS : c'est ici qu'on connaît à la fois
+        // la table et ses champs BM25. Volontairement pas à `register_entity`,
+        // qui paierait la rematérialisation complète de l'index au démarrage.
+        if target.default_signals.bm25() {
+            let table = target.parent_table.clone();
+            let fields = target.bm25_fields.clone();
+            self.ensure_fts_handle(&table, &fields, &[]);
+        }
+
         let pending_count = self.pending.total_count();
 
         // Consistency
@@ -2656,6 +2687,7 @@ impl Catalog {
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields, options.result_mode,
                     diag.as_mut(),
+                    self.fts_handles.get(&target.parent_table).map(|h| h.as_ref()),
                 )?
             } else {
                 search::search_bm25(

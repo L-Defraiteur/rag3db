@@ -258,6 +258,10 @@ impl Node for BM25SearchNode {
             .ok_or("BM25SearchNode: 'conn' service not found")?
             .0.clone();
 
+        let fts_handles = ctx
+            .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
+
         let results = search_bm25_chunked(
             &*conn,
             &target,
@@ -270,6 +274,12 @@ impl Node for BM25SearchNode {
             &target.enrich_fields,
             self.result_mode,
             None,
+            // Handle FTS de la table parente si le service l'expose ; sinon on
+            // reste sur le chemin C++.
+            fts_handles
+                .as_ref()
+                .and_then(|h| h.get(&target.parent_table))
+                .map(|h| h.as_ref()),
         )
         .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
 
