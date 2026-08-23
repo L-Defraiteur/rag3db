@@ -711,6 +711,14 @@ impl WasmDbConnection {
                 let c_str = CString::new(json).unwrap_or_else(|_| CString::new("").unwrap());
                 rag3db_value_create_string(c_str.as_ptr())
             }
+            CypherValue::Blob(_) => {
+                // L'API C exposée ici ne fournit pas de constructeur de BLOB.
+                // On échoue en null plutôt que d'encoder en texte : un blob
+                // silencieusement converti en chaîne corromprait la colonne cible.
+                // Conséquence : CypherBlobStore n'est pas utilisable via ce chemin
+                // FFI (voir bind_param plus bas, qui échoue explicitement).
+                rag3db_value_create_null()
+            }
         }
     }
 
@@ -769,6 +777,16 @@ impl WasmDbConnection {
                 let c_val = CString::new(json)
                     .map_err(|e| DbError::QueryError(e.to_string()))?;
                 rag3db_prepared_statement_bind_string(stmt, name_ptr, c_val.as_ptr());
+            }
+            CypherValue::Blob(bytes) => {
+                // Pas de bind BLOB dans l'API C exposée au WASM. On échoue fort
+                // plutôt que d'encoder en texte : ça corromprait la donnée sans
+                // que rien ne le signale. Bloque CypherBlobStore sur ce chemin.
+                return Err(DbError::TypeError(format!(
+                    "BLOB binding ({} octets) non supporté par le FFI WASM : \
+                     l'API C n'expose pas de constructeur de blob",
+                    bytes.len()
+                )));
             }
         }
         Ok(())
@@ -849,11 +867,11 @@ pub struct WeaverContext {
     refs: std::sync::Arc<std::sync::Mutex<Vec<crate::refs::EntityRef>>>,
 }
 
-/// Thread-local buffer for returning strings to C.
-/// Each call overwrites the previous buffer; the old CString is freed.
-/// The returned pointer is valid until the next call on the same thread.
-/// Safe because the C++ side copies immediately via `std::string(result)`.
 thread_local! {
+    /// Thread-local buffer for returning strings to C.
+    /// Each call overwrites the previous buffer; the old CString is freed.
+    /// The returned pointer is valid until the next call on the same thread.
+    /// Safe because the C++ side copies immediately via `std::string(result)`.
     static RETURN_BUF: std::cell::RefCell<CString> =
         std::cell::RefCell::new(CString::new("").unwrap());
 }
@@ -912,8 +930,8 @@ pub extern "C" fn rag3weaver_catalog_new(
     // Create catalog
     let mut catalog = Catalog::new(Box::new(conn), Box::new(embedder), config);
 
-    // Initialize schema (async → block_on)
-    if futures::executor::block_on(catalog.initialize()).is_err() {
+    // Initialize schema (sync depuis la migration async→sync)
+    if catalog.initialize().is_err() {
         return std::ptr::null_mut();
     }
 
@@ -1246,8 +1264,12 @@ fn parse_search_options(json: &str) -> crate::search::SearchOptions {
                 opts.bm25_mode = crate::search::BM25Mode::Regex;
             }
         }
+        // `keyword_weight` a disparu de SearchOptions lors du refactoring fusion :
+        // le poids par signal vit maintenant dans FusionConfig.bm25.weight.
         if let Some(f) = v.get("keywordWeight").and_then(|v| v.as_f64()) {
-            opts.keyword_weight = Some(f);
+            let mut fusion = opts.fusion.unwrap_or_default();
+            fusion.bm25.weight = f;
+            opts.fusion = Some(fusion);
         }
     }
     opts
@@ -1292,7 +1314,7 @@ pub extern "C" fn rag3weaver_search_async(
             }
         };
 
-        let result = futures::executor::block_on(cat.search(&kb, &q, opts));
+        let result = cat.search(&kb, &q, opts);
         drop(cat);
 
         let json = match result {
@@ -1580,7 +1602,7 @@ pub extern "C" fn rag3weaver_count(
         }
     };
 
-    match futures::executor::block_on(catalog.count(&entity)) {
+    match catalog.count(&entity) {
         Ok(n) => return_string_to_c(format!(r#"{{"count":{n}}}"#)),
         Err(e) => return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
     }

@@ -2121,11 +2121,12 @@ impl Catalog {
         }
     }
 
-    /// Synchronous drain via block_on (WASM-only).
-    /// Uses the same dataflow pipeline as `drain()`.
+    /// Drain (WASM-only alias kept for the FFI surface).
+    /// `drain()` is synchronous since the async→sync migration; the rayon pool
+    /// argument is retained for call-site compatibility.
     #[cfg(feature = "wasm-emscripten")]
     pub fn drain_parallel(&mut self, _pool: &rayon::ThreadPool) -> FlushResult {
-        futures::executor::block_on(self.drain())
+        self.drain()
     }
 
     /// Flush only entity inserts via a minimal dataflow graph.
@@ -3310,7 +3311,7 @@ impl Catalog {
 
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
-        let services = Arc::new(services);
+        let _services = Arc::new(services);
 
         for node_name in &reversed {
             let node_idx = graph
@@ -3519,6 +3520,7 @@ mod tests {
     }
 
     /// Number of chunks produced by the Chunker for a given body text.
+    #[allow(dead_code)] // conservé : utilitaire de test/diagnostic
     fn count_chunks(body: &str) -> usize {
         let chunker = Chunker::new(ChunkerConfig::default());
         chunker.chunk(body).len()
@@ -4025,7 +4027,7 @@ mod tests {
 
     #[test]
     fn checkpoint_drain_marks_completed() {
-        let (mut catalog, store) = make_catalog_with_mock_checkpoint();
+        let (mut catalog, _store) = make_catalog_with_mock_checkpoint();
         catalog.initialize().unwrap();
 
         catalog.create("Document", make_doc_data("Test", "Body")).unwrap();
