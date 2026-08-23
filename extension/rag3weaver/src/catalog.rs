@@ -131,6 +131,14 @@ pub struct Catalog {
     blob_store: Option<Arc<dyn BlobStore>>,
     /// Sparse vector index handles, keyed by table name (e.g. "Product_Chunk").
     sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
+    /// Index FTS lucivy v3, un par table. Ouverture **paresseuse** : ouvrir un
+    /// index Blob télécharge tout l'index, donc on ne le fait qu'au premier
+    /// usage réel de la table (cf doc 04 de la passation lucivy).
+    fts_handles: HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>,
+    /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
+    /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
+    /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
+    fts_storage: crate::fts_handle::FtsStorage,
     /// Base directory for sparse/FTS mmap caches.
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
@@ -169,6 +177,8 @@ impl Catalog {
             checkpoint_store: None,
             blob_store: None,
             sparse_handles: HashMap::new(),
+            fts_handles: HashMap::new(),
+            fts_storage: Default::default(),
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
             fail_node: None,
@@ -265,6 +275,100 @@ impl Catalog {
             },
         };
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
+    }
+
+    /// Choisit la topologie de stockage des index FTS.
+    ///
+    /// À appeler **avant** le premier `ensure_fts_handle` : les handles déjà
+    /// ouverts gardent leur stockage d'origine.
+    pub fn set_fts_storage(&mut self, storage: crate::fts_handle::FtsStorage) {
+        self.fts_storage = storage;
+    }
+
+    /// Handle FTS d'une table, s'il est déjà ouvert.
+    pub fn fts_handle(
+        &self,
+        table: &str,
+    ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
+        self.fts_handles.get(table).cloned()
+    }
+
+    /// Ouvre (ou crée) l'index FTS d'une table, en le mémorisant.
+    ///
+    /// **Paresseux par conception** : ouvrir un index adossé au BlobStore
+    /// télécharge l'intégralité de ses blobs. On ne paie donc ce coût qu'au
+    /// premier usage effectif de la table, pas à `initialize()`.
+    ///
+    /// Même contrat que [`Self::ensure_sparse_handle`] : on tente l'ouverture,
+    /// et on ne crée que si l'index n'existe pas encore.
+    pub fn ensure_fts_handle(
+        &mut self,
+        table: &str,
+        text_fields: &[String],
+        filter_fields: &[(String, String)],
+    ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
+        if let Some(h) = self.fts_handles.get(table) {
+            return Some(h.clone());
+        }
+        if text_fields.is_empty() {
+            return None;
+        }
+        let blob_store = self.blob_store.clone()?;
+
+        use lucivy_core::sharded_handle::{
+            BlobShardStorage, FsShardStorage, ShardStorage, ShardedHandle,
+        };
+        let index_name = crate::fts_handle::fts_index_name(table);
+
+        let storage = || -> Option<Box<dyn ShardStorage>> {
+            match &self.fts_storage {
+                crate::fts_handle::FtsStorage::BlobBacked => Some(Box::new(
+                    BlobShardStorage::new(
+                        Arc::new(crate::fts_handle::DynBlobStore(blob_store.clone())),
+                        index_name.clone(),
+                        &self.cache_base,
+                    ),
+                )),
+                crate::fts_handle::FtsStorage::LocalFs { base_path } => {
+                    let dir = std::path::Path::new(base_path).join(&index_name);
+                    match FsShardStorage::new(&dir.to_string_lossy()) {
+                        Ok(s) => Some(Box::new(s)),
+                        Err(e) => {
+                            eprintln!("[rag3weaver] FsShardStorage {table}: {e}");
+                            None
+                        }
+                    }
+                }
+            }
+        };
+
+        let handle = match ShardedHandle::open_with_storage(storage()?) {
+            Ok(h) => h,
+            Err(_) => {
+                let config = match crate::fts_handle::build_schema_config(
+                    text_fields,
+                    filter_fields,
+                    crate::fts_handle::DEFAULT_SHARDS,
+                ) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("[rag3weaver] schéma FTS invalide pour {table}: {e}");
+                        return None;
+                    }
+                };
+                match ShardedHandle::create_with_storage(storage()?, &config) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        eprintln!("[rag3weaver] création de l'index FTS {table} échouée: {e}");
+                        return None;
+                    }
+                }
+            }
+        };
+
+        let handle = Arc::new(handle);
+        self.fts_handles.insert(table.to_string(), handle.clone());
+        Some(handle)
     }
 
     /// Gracefully close all lucivy FTS indexes to release file locks.
@@ -1425,6 +1529,7 @@ impl Catalog {
             self.sparse_embedder.is_some() || self.dual_embedder.is_some());
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
+        services.register("fts_handles", self.fts_handles.clone());
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
             services.register("sparse_embedder", sparse_emb.clone());
@@ -2033,6 +2138,7 @@ impl Catalog {
             self.sparse_embedder.is_some() || self.dual_embedder.is_some());
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
+        services.register("fts_handles", self.fts_handles.clone());
 
         // Shared services for delete/update nodes
         services.register("pending_aggregates", pending_aggregates);
@@ -2241,6 +2347,7 @@ impl Catalog {
             self.sparse_embedder.is_some() || self.dual_embedder.is_some());
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
+        services.register("fts_handles", self.fts_handles.clone());
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();

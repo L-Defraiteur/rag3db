@@ -97,6 +97,11 @@ impl Node for InsertRecordNode {
             .ok_or("InsertRecordNode: 'conn' service not registered")?;
         let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
             .ok_or("InsertRecordNode: 'node_id_cache' service not registered")?;
+        // Index FTS : présent seulement si des handles ont été ouverts. Absent
+        // pour les tables de chunks (l'index vit sur la table parente).
+        let fts_handles = ctx
+            .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
 
         // Group by (entity_name, sorted column_set) for UNWIND batching.
         let mut groups: HashMap<(String, Vec<String>), Vec<usize>> = HashMap::new();
@@ -178,6 +183,35 @@ impl Node for InsertRecordNode {
                     if let Some(node_id) = InternalNodeId::parse(id_str) {
                         if let Ok(mut cache) = node_id_cache.write() {
                             cache.insert(&uuid, node_id);
+                        }
+
+                        // Indexation FTS par offset, à l'identique du sparse.
+                        //
+                        // On passe TOUTES les valeurs texte du record :
+                        // `build_document` ne retient que les champs présents au
+                        // schéma, qui est donc l'unique source de vérité sur ce
+                        // qui est indexé. Et c'est exactement la valeur écrite en
+                        // base, donc celle que le chunker verra — condition
+                        // nécessaire pour que les offsets de highlight s'alignent
+                        // sur les spans de chunk.
+                        if let Some(ref handles) = fts_handles {
+                            if let Some(handle) = handles.get(entity_name) {
+                                let text_fields: Vec<(String, String)> = rec
+                                    .data
+                                    .iter()
+                                    .filter_map(|(k, v)| {
+                                        v.as_str().map(|s| (k.clone(), s.to_string()))
+                                    })
+                                    .collect();
+                                let doc = crate::fts_handle::build_document(
+                                    handle,
+                                    &text_fields,
+                                    node_id.offset,
+                                )?;
+                                handle
+                                    .add_document(doc, node_id.offset)
+                                    .map_err(|e| format!("indexation FTS de {entity_name}: {e}"))?;
+                            }
                         }
                     }
                 }
@@ -2773,9 +2807,33 @@ impl Node for FlushNode {
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("FlushNode: 'conn' service not registered")?;
 
+        // Commit des index FTS Rust quand ils existent ; repli sur l'extension
+        // C++ tant que toutes les tables ne sont pas migrées.
+        let fts_handles = ctx
+            .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
+
         let mut flushed: usize = 0;
         for table in &self.tables {
-            if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).is_ok() {
+            let handled_in_rust = fts_handles
+                .as_ref()
+                .and_then(|h| h.get(table))
+                .map(|handle| {
+                    // `commit()` est idempotent : il flush et recharge la lecture.
+                    // Les merges partent en tâche de fond selon la policy.
+                    match handle.commit() {
+                        Ok(()) => true,
+                        Err(e) => {
+                            ctx.info(&format!("commit FTS {table} échoué: {e}"));
+                            false
+                        }
+                    }
+                })
+                .unwrap_or(false);
+
+            if handled_in_rust {
+                flushed += 1;
+            } else if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).is_ok() {
                 flushed += 1;
             }
         }

@@ -8,6 +8,14 @@ description = "RAG pipeline orchestrator: events, config, embedder and DB traits
 [lib]
 crate-type = ["lib", "staticlib"]
 
+# Lints scopés au paquet. On n'utilise PAS RUSTFLAGS=-D warnings au CI : cargo
+# ne plafonne les lints (`--cap-lints allow`) que pour les dépendances issues
+# d'un registre, pas pour les dépendances par chemin. Avec lucivy en local, un
+# RUSTFLAGS global ferait échouer le build sur des warnings de lucistore — du
+# code qu'on ne maîtrise pas ici.
+[lints.rust]
+warnings = "deny"
+
 [dependencies]
 async-broadcast = "0.7"
 blake3 = "1"
@@ -25,8 +33,12 @@ candle-transformers = { version = "0.8", optional = true }
 tokenizers = { version = "0.21", optional = true, default-features = false, features = ["fancy-regex"] }
 hf-hub = { version = "0.4", optional = true }
 
-# lucivy_core (BlobStore trait)
-lucivy-core = "2.0.0"
+# lucivy_core — v3 (ShardedHandle, BlobShardStorage, SFX v3).
+# Dépendance par chemin en attendant la publication de 2.1.0 sur crates.io.
+# ⚠️ le v3 vit sur la branche `v3-recovery` du repo lucivy.
+lucivy-core = { path = "../../../lucivy/lucivy_core" }
+# Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
+ld-lucivy = { path = "../../../lucivy", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 # luciole (DAG execution engine, actor runtime)
 luciole = "0.1.0"
@@ -103,3 +115,11 @@ required-features = ["burn-embedder"]
 [[example]]
 name = "burn_throughput"
 required-features = ["burn-embedder"]
+
+# Tant que lucivy-core 2.1.0 (v3) n'est pas publiée, on redirige la version
+# crates.io vers le chemin local. Sans ça, sparse-vector tirerait la 2.0.0 de
+# crates.io et on se retrouverait avec DEUX traits BlobStore distincts dans le
+# graphe — CypherBlobStore n'implémenterait alors pas celui que sparse attend.
+# À retirer dès la publication de la 2.1.0.
+[patch.crates-io]
+lucivy-core = { path = "../../../lucivy/lucivy_core" }
