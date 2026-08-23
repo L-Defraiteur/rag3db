@@ -3103,6 +3103,9 @@ impl Node for DeleteRecordNode {
             .ok_or("DeleteRecordNode: 'conn' service not registered")?;
         let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
             .ok_or("DeleteRecordNode: 'node_id_cache' service not registered")?;
+        let fts_handles = ctx
+            .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
         let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("DeleteRecordNode: 'config' service not registered")?;
         let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned()
@@ -3330,10 +3333,29 @@ impl Node for DeleteRecordNode {
             )
             .map_err(|e| e.to_string())?;
 
-            // Remove from node_id_cache
+            // Retrait du cache uuid→offset, et désindexation FTS au passage :
+            // `remove` rend l'InternalNodeId, donc l'offset, qui est exactement
+            // la clé sous laquelle le document a été indexé.
+            //
+            // Les hooks C++ faisaient ça implicitement sur les mutations Cypher ;
+            // en Rust direct, c'est à nous de le faire explicitement, sinon
+            // l'index garde des documents fantômes qui ressortiraient en
+            // recherche avec des offsets ne résolvant plus vers rien.
+            let mut removed_offsets: Vec<u64> = Vec::new();
             if let Ok(mut cache) = node_id_cache.write() {
                 for uuid in uuids {
-                    cache.remove(uuid.as_str());
+                    if let Some(id) = cache.remove(uuid.as_str()) {
+                        removed_offsets.push(id.offset);
+                    }
+                }
+            }
+            if let Some(ref handles) = fts_handles {
+                if let Some(handle) = handles.get(entity_name) {
+                    for offset in &removed_offsets {
+                        handle
+                            .delete_by_node_id(*offset)
+                            .map_err(|e| format!("désindexation FTS de {entity_name}: {e}"))?;
+                    }
                 }
             }
 
@@ -3485,6 +3507,11 @@ impl Node for UpdateRecordNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("UpdateRecordNode: 'conn' service not registered")?;
+        let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
+            .ok_or("UpdateRecordNode: 'node_id_cache' service not registered")?;
+        let fts_handles = ctx
+            .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
         let config = ctx.service::<CatalogConfig>("config").cloned()
             .ok_or("UpdateRecordNode: 'config' service not registered")?;
         let entity_configs = ctx.service::<HashMap<String, crate::config::EntityConfig>>("entity_configs").cloned()
@@ -3602,6 +3629,67 @@ impl Node for UpdateRecordNode {
                     &[QueryParam { name: "items".into(), value: items_param }],
                 )
                 .map_err(|e| e.to_string())?;
+
+                // Ré-indexation FTS des entités modifiées.
+                //
+                // On RELIT la ligne entière plutôt que de réutiliser `rec.data` :
+                // celui-ci ne porte que les champs modifiés, or `add_document`
+                // n'est pas un merge — ré-indexer un sous-ensemble ferait
+                // disparaître silencieusement les champs texte inchangés.
+                if let Some(ref handles) = fts_handles {
+                    if let Some(handle) = handles.get(entity_name) {
+                        let all: Vec<String> = field_keys.clone();
+                        let indexed = crate::fts_handle::indexed_text_fields(handle, &all);
+                        // Si aucun champ modifié n'est indexé, l'index est déjà à jour.
+                        if !indexed.is_empty() {
+                            let schema_fields: Vec<String> =
+                                crate::fts_handle::indexed_text_fields(handle, &all);
+                            let mut cols: Vec<&str> = vec!["_uuid"];
+                            cols.extend(schema_fields.iter().map(|s| s.as_str()));
+                            let sel = dialect.select_by_uuids(entity_name, &cols);
+                            let uuids: Vec<CypherValue> = indices
+                                .iter()
+                                .map(|&i| CypherValue::String(items[i].uuid.clone()))
+                                .collect();
+                            let rows = conn
+                                .execute_with_params(
+                                    &sel,
+                                    &[QueryParam {
+                                        name: "uuids".into(),
+                                        value: CypherValue::List(uuids),
+                                    }],
+                                )
+                                .map_err(|e| e.to_string())?;
+
+                            for row in &rows.rows {
+                                let Some(uuid) = row.first().and_then(|v| v.as_str()) else {
+                                    continue;
+                                };
+                                let Some(offset) = node_id_cache
+                                    .read()
+                                    .ok()
+                                    .and_then(|c| c.get(uuid))
+                                    .map(|id| id.offset)
+                                else {
+                                    continue;
+                                };
+                                let values: Vec<(String, String)> = schema_fields
+                                    .iter()
+                                    .enumerate()
+                                    .filter_map(|(i, name)| {
+                                        row.get(i + 1)
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| (name.clone(), s.to_string()))
+                                    })
+                                    .collect();
+                                crate::fts_handle::reindex_document(handle, &values, offset)
+                                    .map_err(|e| {
+                                        format!("ré-indexation FTS de {entity_name}: {e}")
+                                    })?;
+                            }
+                        }
+                    }
+                }
             }
 
             // 4. Handle content changes

@@ -153,11 +153,31 @@ offsets, que les highlights sont clés par **nom de champ**, que les bornes tomb
 **dans** le texte indexé (sinon le référentiel serait cassé), et que `allowed_ids`
 est honoré.
 
-### ⬜ Étape 4 — deletes / updates
+### ✅ Étape 4 — deletes / updates
 
-`delete_by_node_id(offset)` explicite. Aujourd'hui les hooks C++ le faisaient
-implicitement sur les mutations Cypher. Sites : `DeleteRecordNode`,
-`UpdateRecordNode`, `RechunkDeleteNode`.
+**`DeleteRecordNode`** : `cache.remove(uuid)` rend l'`InternalNodeId`, donc l'offset,
+qui est exactement la clé d'indexation. On désindexe là. Sans ça l'index garderait des
+documents fantômes, qui ressortiraient en recherche avec des offsets ne résolvant plus.
+
+**`UpdateRecordNode`** : ré-indexation par `delete_by_node_id` + `add_document`.
+
+⚠️ **Subtilité coûteuse** : `add_document` **n'est pas un merge**. Ré-indexer en ne
+passant que les champs modifiés (`rec.data`) ferait disparaître silencieusement les
+champs texte inchangés. On **relit donc la ligne entière** via
+`dialect.select_by_uuids`, en ne demandant que les champs réellement présents au
+schéma de l'index (`fts_handle::indexed_text_fields`). Si aucun champ modifié n'est
+indexé, on ne fait rien.
+
+Helpers ajoutés : `indexed_text_fields()` et `reindex_document()`.
+
+Test `reindex_replaces_document_and_delete_removes_it` : indexe (titre, corps),
+ré-indexe en changeant le corps, vérifie que **l'ancien contenu disparaît**, que le
+nouveau est trouvable, et que **le titre non modifié survit** — ce dernier point
+échouerait si on ré-indexait un sous-ensemble. Puis supprime et vérifie l'absence de
+fantôme.
+
+`RechunkDeleteNode` supprime des *chunks*, qui n'ont pas d'index FTS (il vit sur la
+table parente) : rien à faire.
 
 ### ⬜ Étape 5 — parité puis débranchement
 

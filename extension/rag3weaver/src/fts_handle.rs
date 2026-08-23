@@ -154,6 +154,38 @@ pub fn search_hits(
     Ok(out)
 }
 
+/// Liste les champs texte du schéma d'un index, hors `_node_id`.
+///
+/// Sert à la ré-indexation : on doit relire **tous** les champs indexés, pas
+/// seulement ceux qui ont changé — `add_document` n'est pas un merge, il ajoute
+/// un document entier. Ré-indexer avec un sous-ensemble perdrait silencieusement
+/// les champs non modifiés.
+pub fn indexed_text_fields(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    candidates: &[String],
+) -> Vec<String> {
+    candidates
+        .iter()
+        .filter(|f| f.as_str() != lucivy_core::handle::NODE_ID_FIELD)
+        .filter(|f| handle.field(f).is_some())
+        .cloned()
+        .collect()
+}
+
+/// Remplace le document d'une entité : suppression puis ré-ajout.
+///
+/// `fields` doit porter **toutes** les valeurs indexées (voir
+/// [`indexed_text_fields`]), pas seulement les modifiées.
+pub fn reindex_document(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    fields: &[(String, String)],
+    offset: u64,
+) -> Result<(), String> {
+    handle.delete_by_node_id(offset)?;
+    let doc = build_document(handle, fields, offset)?;
+    handle.add_document(doc, offset)
+}
+
 /// Topologie de stockage d'un index FTS.
 ///
 /// Ce n'est pas un détail d'implémentation, c'est une décision d'architecture :
@@ -394,6 +426,76 @@ mod tests {
         let filtered = search_hits(&handle, &q, 10, Some(&[20])).expect("recherche filtrée");
         let got: Vec<u64> = filtered.iter().map(|(o, _, _)| *o).collect();
         assert_eq!(got, vec![20], "allowed_ids non honoré");
+
+        handle.close().ok();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Cycle de vie complet : indexer → ré-indexer → supprimer.
+    ///
+    /// Le point le plus important est la ré-indexation partielle : `add_document`
+    /// n'est pas un merge, donc ré-indexer en ne passant que le champ modifié
+    /// ferait disparaître l'autre. Ce test échouerait si `UpdateRecordNode`
+    /// relisait `rec.data` au lieu de relire la ligne entière.
+    #[test]
+    fn reindex_replaces_document_and_delete_removes_it() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+
+        let tmp = std::env::temp_dir()
+            .join(format!("rag3weaver_fts_life_{}", std::process::id()));
+        let store = Arc::new(MemBlobStore::new());
+        let cfg =
+            build_schema_config(&["titre".to_string(), "corps".to_string()], &[], 1).unwrap();
+        let storage = BlobShardStorage::new(store, fts_index_name("Life"), &tmp);
+        let handle =
+            ShardedHandle::create_with_storage(Box::new(storage), &cfg).expect("création");
+
+        let find = |needle: &str| -> Vec<u64> {
+            let q: lucivy_core::query::QueryConfig =
+                serde_json::from_value(serde_json::json!({
+                    "type": "contains", "field": "corps", "value": needle
+                }))
+                .unwrap();
+            let mut v: Vec<u64> = search_hits(&handle, &q, 10, None)
+                .unwrap()
+                .into_iter()
+                .map(|(o, _, _)| o)
+                .collect();
+            v.sort_unstable();
+            v
+        };
+
+        let fields = |t: &str, c: &str| {
+            vec![("titre".to_string(), t.to_string()), ("corps".to_string(), c.to_string())]
+        };
+
+        let doc = build_document(&handle, &fields("Noyau", "verrou spinlock"), 7).unwrap();
+        handle.add_document(doc, 7).unwrap();
+        handle.commit().unwrap();
+        assert_eq!(find("spinlock"), vec![7]);
+
+        // Ré-indexation avec les DEUX champs : l'ancien contenu disparaît,
+        // le nouveau est trouvable, et le titre non modifié survit.
+        reindex_document(&handle, &fields("Noyau", "allocation kmalloc"), 7).unwrap();
+        handle.commit().unwrap();
+        assert!(find("spinlock").is_empty(), "l'ancien contenu doit disparaître");
+        assert_eq!(find("kmalloc"), vec![7]);
+
+        let q_titre: lucivy_core::query::QueryConfig = serde_json::from_value(
+            serde_json::json!({"type": "contains", "field": "titre", "value": "Noyau"}),
+        )
+        .unwrap();
+        assert_eq!(
+            search_hits(&handle, &q_titre, 10, None).unwrap().len(),
+            1,
+            "le champ non modifié doit survivre à la ré-indexation"
+        );
+
+        // Suppression : plus aucun document fantôme.
+        handle.delete_by_node_id(7).unwrap();
+        handle.commit().unwrap();
+        assert!(find("kmalloc").is_empty(), "document fantôme après suppression");
 
         handle.close().ok();
         let _ = std::fs::remove_dir_all(&tmp);
