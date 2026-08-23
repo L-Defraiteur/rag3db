@@ -64,9 +64,11 @@ jobs:
           - label: wasm-emscripten
             flags: '--features wasm-emscripten'
     steps:
+      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
+      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
+      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
+      # accessible publiquement — c'était la cause de l'échec du premier run.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -85,9 +87,11 @@ jobs:
     name: tests unitaires
     runs-on: ubuntu-latest
     steps:
+      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
+      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
+      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
+      # accessible publiquement — c'était la cause de l'échec du premier run.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -104,9 +108,11 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
+      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
+      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
+      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
+      # accessible publiquement — c'était la cause de l'échec du premier run.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
