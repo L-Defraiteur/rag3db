@@ -20,7 +20,7 @@
 //!
 //! Checked against the candle implementation: dense cosine 1.00000000 (max |Δ| 3.5e-07),
 //! sparse identical token ids with weights within 6e-06 relative. See
-//! `docs/23-aout-2026-20h33/02-spike-burn-vulkan-amd.md`.
+//! `docs/23-aout-2026-20h33/02-spike-burn-vulkan-amd.md` (relatif au crate).
 //!
 //! # Example
 //!
