@@ -204,6 +204,7 @@ mod tests {
 
     struct FakeNode {
         node_name: String,
+        #[allow(dead_code)] // présent pour la désérialisation, pas relu
         value: i64,
     }
 

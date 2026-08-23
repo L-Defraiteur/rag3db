@@ -12,7 +12,7 @@ use serde::Serialize;
 
 pub use luciole::port::PortValue;
 
-use super::port::{PortDef, PortType};
+use super::port::PortDef;
 use super::services::ServiceRegistry;
 
 // ─── NodeLog ─────────────────────────────────────────────────────────────────

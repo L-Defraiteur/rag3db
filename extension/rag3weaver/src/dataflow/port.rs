@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 // Re-export luciole's PortValue as the canonical runtime value type.
 pub use luciole::port::PortValue;
 
-use crate::search::{SearchMeta, SearchOptions, SearchTarget};
-use crate::search_strategy::{ChildSummary, ExpansionRule, UnifiedResult};
+use crate::search::{SearchOptions, SearchTarget};
+use crate::search_strategy::{ChildSummary, UnifiedResult};
 
 // ─── PortType ────────────────────────────────────────────────────────────────
 

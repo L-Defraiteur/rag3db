@@ -238,7 +238,7 @@ impl DataflowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dataflow::port::{PortDef, PortType, PortValue};
+    use crate::dataflow::port::{PortDef, PortType};
     use crate::dataflow::node::NodeContext;
 
     /// Minimal test node.

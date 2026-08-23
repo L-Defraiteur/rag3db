@@ -297,7 +297,6 @@ mod tests {
     use super::*;
     use crate::dataflow::checkpoint::{EdgeDef, NodeDef};
     use crate::dataflow::node_factories::register_builtins;
-    use crate::dataflow::port::{PortType, PortValue};
 
     fn test_registry() -> Arc<NodeRegistry> {
         let mut registry = NodeRegistry::new();

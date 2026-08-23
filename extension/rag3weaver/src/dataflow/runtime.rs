@@ -1049,7 +1049,7 @@ mod tests {
 
         let runtime = DataflowRuntime::new(10);
         let mut rx = runtime.subscribe();
-        let output = runtime.execute(&mut graph).unwrap();
+        let _output = runtime.execute(&mut graph).unwrap();
 
         // Verify execution completed (all nodes ran without errors)
         // Consumed intermediate outputs are removed from DataflowOutput,

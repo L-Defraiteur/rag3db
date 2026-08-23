@@ -4,7 +4,7 @@
 //! a `SearchBackend` implementation. Uses `QUERY_VECTOR_INDEX`,
 //! `PROJECT_GRAPH_CYPHER`, and `OFFSET(id(n))`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 
@@ -332,7 +332,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         let mut results = Vec::new();
         for row in &result.rows {
             let offset = row.get(0).and_then(|v| v.as_i64()).unwrap_or(0) as u64;
-            let uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let _uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
 
             let mut parent_data = BTreeMap::new();
             for (i, f) in entity_fields.iter().enumerate() {

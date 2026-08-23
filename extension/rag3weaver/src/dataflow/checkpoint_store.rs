@@ -573,7 +573,7 @@ impl CheckpointStore for MockCheckpointStore {
         Ok(())
     }
 
-    fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+    fn mark_failed(&self, execution_id: &str, _error: &str) -> Result<(), String> {
         let mut execs = self.executions.lock().unwrap();
         let cp = execs
             .get_mut(execution_id)

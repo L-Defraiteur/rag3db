@@ -414,6 +414,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)] // conservé : utilitaire de test/diagnostic
     fn make_aggregated_result(
         uuid: &str,
         source_entity: &str,

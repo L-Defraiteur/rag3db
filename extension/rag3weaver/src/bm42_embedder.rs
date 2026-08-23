@@ -27,6 +27,9 @@ use candle_nn::VarBuilder;
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 use crate::bm42_model::{Bm42Model, Config, DTYPE};
+// `DefaultModel` ne sert qu'à `new()`, qui passe par hf-hub : même gating,
+// sinon l'import est mort sous `candle-wasm`.
+#[cfg(feature = "candle-embedder")]
 use crate::candle_embedder::DefaultModel;
 use crate::embedder::{EmbedError, SparseEmbedder};
 use crate::sparse_index::SparseVector;

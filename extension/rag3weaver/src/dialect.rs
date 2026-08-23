@@ -602,7 +602,7 @@ impl SchemaDialect for Rag3dbDialect {
         rel_table: &str,
         to_table: &str,
         direction_forward: bool,
-        match_col: &str,
+        _match_col: &str,
         return_fields: &[&str],
     ) -> String {
         let returns = return_fields.iter()
@@ -1065,7 +1065,7 @@ impl SchemaDialect for PostgresDialect {
         let mut cols = vec!["_uuid"];
         cols.extend(field_columns.iter().copied());
         let col_list = cols.join(", ");
-        let val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        let _val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
         format!(
             "UPDATE {table} SET {} \
              FROM unnest($items) AS v({col_list}) \

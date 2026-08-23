@@ -22,6 +22,10 @@ use crate::embedder::{DualEmbedder, EmbedError, Embedder};
 use crate::sparse_index::SparseVector;
 
 /// Select the best available device: CUDA GPU if available, otherwise CPU.
+///
+/// Seuls les constructeurs `from_repo` l'utilisent, et ils sont gatés sur
+/// `candle-embedder` (hf-hub). Sous `candle-wasm` le device vient de l'appelant.
+#[cfg(feature = "candle-embedder")]
 fn best_device() -> Device {
     #[cfg(feature = "cuda")]
     {
