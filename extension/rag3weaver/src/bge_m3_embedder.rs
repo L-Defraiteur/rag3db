@@ -88,6 +88,57 @@ impl BgeM3Embedder {
         })
     }
 
+    /// Load BGE-M3 from a local directory — no network, no hf-hub.
+    ///
+    /// Expects `config.json`, `tokenizer.json`, `pytorch_model.bin` and
+    /// `sparse_linear.pt` inside `dir`.
+    ///
+    /// Unlike [`Self::new`] and [`Self::from_repo`], this constructor is **not**
+    /// gated behind the `bge-m3` feature: it needs candle but not hf-hub. Use it
+    /// when weights are shipped alongside the binary rather than fetched at runtime.
+    pub fn from_local_dir<P: AsRef<std::path::Path>>(dir: P) -> Result<Self, EmbedError> {
+        let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
+        Self::from_local_dir_on(dir, device)
+    }
+
+    /// Same as [`Self::from_local_dir`], with an explicit device.
+    ///
+    /// Useful to force `Device::Cpu` for reproducible reference outputs.
+    pub fn from_local_dir_on<P: AsRef<std::path::Path>>(
+        dir: P,
+        device: Device,
+    ) -> Result<Self, EmbedError> {
+        let dir = dir.as_ref();
+        let need = |name: &str| -> Result<std::path::PathBuf, EmbedError> {
+            let path = dir.join(name);
+            if path.is_file() {
+                Ok(path)
+            } else {
+                Err(EmbedError::ProviderError(format!(
+                    "missing {name} in {}",
+                    dir.display()
+                )))
+            }
+        };
+
+        let config: Config = serde_json::from_str(
+            &std::fs::read_to_string(need("config.json")?)
+                .map_err(|e| EmbedError::ProviderError(format!("read config: {e}")))?,
+        )
+        .map_err(|e| EmbedError::ProviderError(format!("parse config: {e}")))?;
+
+        let tokenizer = Tokenizer::from_file(need("tokenizer.json")?)
+            .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
+
+        let model_vb = VarBuilder::from_pth(need("pytorch_model.bin")?, DTYPE, &device)
+            .map_err(|e| EmbedError::ProviderError(format!("load weights: {e}")))?;
+
+        let sparse_vb = VarBuilder::from_pth(need("sparse_linear.pt")?, DTYPE, &device)
+            .map_err(|e| EmbedError::ProviderError(format!("load sparse_linear: {e}")))?;
+
+        Self::new_inner(config, tokenizer, model_vb, sparse_vb, device)
+    }
+
     /// Load BGE-M3 from HuggingFace Hub (cached locally, ~2.2GB first download).
     #[cfg(feature = "bge-m3")]
     pub fn new() -> Result<Self, EmbedError> {

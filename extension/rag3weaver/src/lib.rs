@@ -3,7 +3,9 @@
 //! Provides typed events, config parsing, and async traits for embedding
 //! and database access. Designed to be runtime-agnostic (WASM-compatible).
 
-#[cfg(feature = "bge-m3")]
+// `candle-wasm` est la variante sans hf-hub : elle donne accès à
+// `BgeM3Embedder::from_local_dir` sans tirer le téléchargement runtime.
+#[cfg(any(feature = "bge-m3", feature = "candle-wasm"))]
 pub mod bge_m3_embedder;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod bm42_model;
@@ -11,6 +13,14 @@ pub mod bm42_model;
 pub mod bm42_embedder;
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod candle_embedder;
+/// Modèle BGE-M3 généré par burn-onnx depuis l'ONNX de BAAI — code machine, non édité.
+/// Voir `generated/README.md` pour la provenance et la régénération.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/bge_m3_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod bge_m3_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_bge_m3_embedder;
 pub mod catalog;
 pub mod cypher_blob_store;
 #[cfg(feature = "rag3db-native")]
