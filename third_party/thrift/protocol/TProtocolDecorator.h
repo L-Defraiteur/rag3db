@@ -23,6 +23,7 @@
 #include "thrift/protocol/TProtocol.h"
 #include <memory>
 #include "duckdb/common/vector.hpp"
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {

@@ -22,6 +22,7 @@
 
 #include "Thrift.h"
 #include "protocol/TProtocol.h"
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {

@@ -37,6 +37,7 @@
 #include <string>
 #include <map>
 #include <climits>
+#include <cstdint>
 
 // Use this to get around strict aliasing rules.
 // For example, uint64_t i = bitwise_cast<uint64_t>(returns_double());

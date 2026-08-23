@@ -22,6 +22,7 @@
 #include "thrift_export.h"
 
 #include "transport/TBufferTransports.h"
+#include <cstdint>
 
 using std::string;
 

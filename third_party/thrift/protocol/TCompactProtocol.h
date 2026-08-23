@@ -24,6 +24,7 @@
 
 #include <stack>
 #include <memory>
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {

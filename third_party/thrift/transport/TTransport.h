@@ -24,6 +24,7 @@
 #include "transport/TTransportException.h"
 #include <memory>
 #include <string>
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {

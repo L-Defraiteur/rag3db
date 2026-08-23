@@ -20,6 +20,7 @@
 #define _KUZU_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_TCC_ 1
 
 #include <limits>
+#include <cstdint>
 
 /*
  * TCompactProtocol::i*ToZigzag depend on the fact that the right shift

@@ -27,6 +27,7 @@
 
 #include "transport/TTransport.h"
 #include "transport/TVirtualTransport.h"
+#include <cstdint>
 
 #ifdef __GNUC__
 #define TDB_LIKELY(val) (__builtin_expect((val), 1))

@@ -83,6 +83,18 @@ fn build_bundled_cmake() -> Vec<PathBuf> {
         .define("BUILD_SHELL", "OFF")
         .define("BUILD_SINGLE_FILE_HEADER", "OFF")
         .define("AUTO_UPDATE_GRAMMAR", "OFF");
+    // GCC 13+ a resserré les includes transitifs : <memory>, <string> etc. ne
+    // tirent plus <cstdint>. Le cœur kuzu s'appuie dessus dans 613 fichiers, qui
+    // utilisent uint32_t & co sans l'inclure — d'où « 'uint32_t' does not name a
+    // type » sur toute chaîne récente.
+    //
+    // On force l'include plutôt que d'éditer 613 fichiers d'amont : c'est un
+    // problème de chaîne de compilation, il se règle au niveau de la chaîne. Sans
+    // effet sur les compilateurs plus anciens, qui l'incluaient déjà.
+    if !cfg!(windows) {
+        build.cxxflag("-include cstdint");
+    }
+
     if cfg!(windows) {
         build.generator("Ninja");
         build.cxxflag("/EHsc");

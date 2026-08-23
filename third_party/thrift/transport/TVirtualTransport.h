@@ -21,6 +21,7 @@
 #define _RAG3DB_THRIFT_TRANSPORT_TVIRTUALTRANSPORT_H_ 1
 
 #include "transport/TTransport.h"
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {

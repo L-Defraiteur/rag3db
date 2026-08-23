@@ -21,6 +21,7 @@
 #define _RAG3DB_THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1
 
 #include "protocol/TProtocol.h"
+#include <cstdint>
 
 namespace rag3db_apache {
 namespace thrift {
