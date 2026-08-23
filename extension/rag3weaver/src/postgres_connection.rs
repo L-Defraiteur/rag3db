@@ -6,8 +6,6 @@
 //! Parameter translation: named `$param` in queries are translated to
 //! positional `$1, $2, ...` based on the QueryParam order.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use deadpool_postgres::{Config, Pool, Runtime};
 use tokio_postgres::NoTls;

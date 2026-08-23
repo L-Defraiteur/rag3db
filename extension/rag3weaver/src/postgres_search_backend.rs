@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 
-use crate::connection::{CypherValue, DbConnection, QueryParam};
+use crate::connection::{DbConnection, QueryParam};
 use crate::search_backend::*;
 
 /// PostgreSQL search backend using pgvector for vector similarity.

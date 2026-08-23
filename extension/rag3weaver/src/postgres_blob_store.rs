@@ -28,7 +28,7 @@ impl BlobStore for PostgresBlobStore {
             crate::connection::QueryParam::new("data", crate::connection::CypherValue::Blob(data.to_vec())),
         ];
         self.conn
-            .execute_with_params_sync(
+            .execute_with_params(
                 "INSERT INTO rag3weaver._index_blobs (_key, _data) VALUES ($key, $data) \
                  ON CONFLICT (_key) DO UPDATE SET _data = EXCLUDED._data",
                 &params,
@@ -43,7 +43,7 @@ impl BlobStore for PostgresBlobStore {
             crate::connection::QueryParam::new("key", crate::connection::CypherValue::String(key)),
         ];
         let result = self.conn
-            .execute_with_params_sync(
+            .execute_with_params(
                 "SELECT _data FROM rag3weaver._index_blobs WHERE _key = $key",
                 &params,
             )
@@ -62,7 +62,7 @@ impl BlobStore for PostgresBlobStore {
             crate::connection::QueryParam::new("key", crate::connection::CypherValue::String(key)),
         ];
         self.conn
-            .execute_with_params_sync(
+            .execute_with_params(
                 "DELETE FROM rag3weaver._index_blobs WHERE _key = $key",
                 &params,
             )
@@ -76,7 +76,7 @@ impl BlobStore for PostgresBlobStore {
             crate::connection::QueryParam::new("key", crate::connection::CypherValue::String(key)),
         ];
         let result = self.conn
-            .execute_with_params_sync(
+            .execute_with_params(
                 "SELECT 1 FROM rag3weaver._index_blobs WHERE _key = $key",
                 &params,
             )
@@ -90,7 +90,7 @@ impl BlobStore for PostgresBlobStore {
             crate::connection::QueryParam::new("prefix", crate::connection::CypherValue::String(prefix.clone())),
         ];
         let result = self.conn
-            .execute_with_params_sync(
+            .execute_with_params(
                 "SELECT _key FROM rag3weaver._index_blobs WHERE _key LIKE $prefix || '%'",
                 &params,
             )
