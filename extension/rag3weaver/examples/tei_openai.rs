@@ -4,6 +4,11 @@
 //! use async-openai pointed at localhost. Same pattern works for OpenAI,
 //! Azure, Ollama, vLLM, or any compatible provider.
 //!
+//! Also shows how to wrap an **async-only** client behind the now-synchronous
+//! [`Embedder`] trait: the embedder owns its runtime and blocks on it. Owning the
+//! runtime matters — `Handle::current()` would panic when called from outside a
+//! reactor, or from a tokio worker thread.
+//!
 //! Run: cargo run --example tei_openai
 
 use async_openai::{
@@ -11,11 +16,12 @@ use async_openai::{
     types::embeddings::{CreateEmbeddingRequestArgs, EmbeddingInput},
     Client,
 };
-use async_trait::async_trait;
 use rag3weaver::{EmbedError, Embedder};
 
 struct OpenAIEmbedder {
     client: Client<OpenAIConfig>,
+    /// Owned runtime: the SDK is async, the trait is not.
+    runtime: tokio::runtime::Runtime,
     model: String,
     dim: usize,
 }
@@ -27,15 +33,18 @@ impl OpenAIEmbedder {
             .with_api_key("unused"); // TEI doesn't require an API key
         Self {
             client: Client::with_config(config),
+            runtime: tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime"),
             model: model.into(),
             dim,
         }
     }
 }
 
-#[async_trait]
 impl Embedder for OpenAIEmbedder {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -47,10 +56,8 @@ impl Embedder for OpenAIEmbedder {
             .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
 
         let response = self
-            .client
-            .embeddings()
-            .create(request)
-            .await
+            .runtime
+            .block_on(self.client.embeddings().create(request))
             .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
 
         let vectors: Vec<Vec<f32>> = response
@@ -87,8 +94,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let embedder = OpenAIEmbedder::new(
         "http://localhost:8081/v1",
         "BAAI/bge-base-en-v1.5",
@@ -103,7 +109,7 @@ async fn main() {
 
     println!("Embedding {} texts via TEI (async-openai)...", texts.len());
 
-    match embedder.embed(&texts).await {
+    match embedder.embed(&texts) {
         Ok(vectors) => {
             println!(
                 "Success! Got {} vectors of dim {}",

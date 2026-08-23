@@ -6,12 +6,11 @@
 //!
 //! Run: cargo run --example tei_reqwest
 
-use async_trait::async_trait;
 use rag3weaver::{EmbedError, Embedder};
 use serde::{Deserialize, Serialize};
 
 struct TeiEmbedder {
-    client: reqwest::Client,
+    client: reqwest::blocking::Client,
     url: String,
     model: String,
     dim: usize,
@@ -33,9 +32,8 @@ struct EmbedData {
     embedding: Vec<f32>,
 }
 
-#[async_trait]
 impl Embedder for TeiEmbedder {
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -50,18 +48,16 @@ impl Embedder for TeiEmbedder {
             .post(&self.url)
             .json(&request)
             .send()
-            .await
             .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let body = response.text().await.unwrap_or_default();
+            let body = response.text().unwrap_or_default();
             return Err(EmbedError::ProviderError(format!("{status}: {body}")));
         }
 
         let embed_response: EmbedResponse = response
             .json()
-            .await
             .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
 
         let vectors: Vec<Vec<f32>> = embed_response
@@ -98,10 +94,9 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let embedder = TeiEmbedder {
-        client: reqwest::Client::new(),
+        client: reqwest::blocking::Client::new(),
         url: "http://localhost:8081/v1/embeddings".into(),
         model: "BAAI/bge-base-en-v1.5".into(),
         dim: 768,
@@ -115,7 +110,7 @@ async fn main() {
 
     println!("Embedding {} texts via TEI (reqwest)...", texts.len());
 
-    match embedder.embed(&texts).await {
+    match embedder.embed(&texts) {
         Ok(vectors) => {
             println!(
                 "Success! Got {} vectors of dim {}",

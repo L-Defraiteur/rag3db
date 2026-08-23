@@ -19,8 +19,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // MiniLM: 384 dims, ~23MB — fast, lightweight
     println!("Loading MiniLM (384 dims, ~23MB)...");
     let embedder = CandleEmbedder::new(DefaultModel::MiniLM).expect("Failed to load MiniLM");
@@ -33,7 +32,7 @@ async fn main() {
     ];
 
     println!("Embedding {} texts via candle (MiniLM)...", texts.len());
-    match embedder.embed(&texts).await {
+    match embedder.embed(&texts) {
         Ok(vectors) => {
             println!(
                 "Success! Got {} vectors of dim {}",
@@ -61,7 +60,7 @@ async fn main() {
     println!("Model loaded! dim={}\n", embedder.dim());
 
     println!("Embedding {} texts via candle (BgeBase)...", texts.len());
-    match embedder.embed(&texts).await {
+    match embedder.embed(&texts) {
         Ok(vectors) => {
             println!(
                 "Success! Got {} vectors of dim {}",
