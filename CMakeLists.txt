@@ -14,6 +14,20 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+
+# GCC 13+ a resserré les includes transitifs : <memory>, <string> etc. ne tirent
+# plus <cstdint>. Le cœur s'appuie dessus dans ~613 fichiers, qui utilisent
+# uint32_t & co sans l'inclure — d'où « 'uint32_t' does not name a type » sur
+# toute chaîne récente. On force l'include plutôt que d'éditer 613 fichiers :
+# c'est un problème de chaîne de compilation. Sans effet sur les compilateurs
+# plus anciens, qui l'incluaient déjà. Miroir du flag de tools/rust_api/build.rs.
+# Restreint au C++ : <cstdint> n'existe pas en C, et add_compile_options
+# s'appliquerait sinon aussi aux unités C (fatal error: cstdint).
+if(NOT MSVC)
+    add_compile_options(
+        "$<$<COMPILE_LANGUAGE:CXX>:-include>"
+        "$<$<COMPILE_LANGUAGE:CXX>:cstdint>")
+endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)

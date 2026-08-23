@@ -179,6 +179,36 @@ fantôme.
 `RechunkDeleteNode` supprime des *chunks*, qui n'ont pas d'index FTS (il vit sur la
 table parente) : rien à faire.
 
+### 🔧 Déblocage préalable — build natif réparé (GCC 13+)
+
+L'étape 5 exige les E2E, donc le build natif, qui était cassé :
+`'uint32_t' does not name a type`. GCC 13 a resserré les includes transitifs —
+`<memory>`, `<string>` ne tirent plus `<cstdint>`. Le cœur kuzu s'en remettait à
+ce comportement dans **613 fichiers**.
+
+**Corrigé par un flag, pas par 613 éditions** — c'est un problème de chaîne de
+compilation, il se règle au niveau de la chaîne :
+
+- `tools/rust_api/build.rs` : `build.cxxflag("-include cstdint")` (non-Windows).
+- `CMakeLists.txt` : `add_compile_options` avec expression de générateur
+  **restreinte au C++**. Sans cette restriction, cmake applique le flag aux
+  unités **C** aussi, où `<cstdint>` n'existe pas → `fatal error: cstdint`.
+  C'est l'erreur commise puis corrigée ici, ne pas la refaire.
+- `third_party/thrift` : 11 en-têtes reçoivent l'include explicitement (compilés
+  par leur propre unité, hors périmètre du flag).
+
+`librag3db.so` se reconstruit (431 Mo, exit 0).
+
+**Les E2E ne bloquaient plus que sur des imports inutilisés**, devenus erreurs
+via `[lints]`. Nettoyés dans `e2e_search`, `e2e_result_mode`, `e2e_simple_entity`.
+
+⚠️ **Les 4 fichiers en dérive depuis mai ne sont PAS réparés** et c'est
+volontaire — ce n'est pas le périmètre FTS. Ils portent de vraies ruptures d'API
+héritées de la migration luciole : `tokio::sync::Mutex` vs `std::sync::Mutex`,
+variantes `PortValue::{Results,Children,Meta,Query}` disparues (PortValue est
+devenu Any-based), `Arc<dyn Trait>` qui n'implémente plus le trait. Fichiers :
+`e2e_dataflow_observe`, `e2e_generic_search`, `e2e_search_queue`, `e2e_undo`.
+
 ### ⬜ Étape 5 — parité puis débranchement
 
 Mêmes requêtes via C++ et via Rust sur un même corpus, puis retrait des hooks C++.

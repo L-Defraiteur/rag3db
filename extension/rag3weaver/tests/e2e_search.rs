@@ -12,10 +12,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use rag3weaver::config::{
-    CatalogConfig, ChunkingConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
+    CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
 };
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder, SparseEmbedder};
+use rag3weaver::embedder::{Embedder, MockEmbedder};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection, UpdateStatus};
 
@@ -1014,7 +1014,7 @@ fn phase2_raw_vector_pipeline() {
             .map(|f| f.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        let q = format!(
+        let _q = format!(
             "CREATE (:{name} {{name: '{name}', embedding: [{emb_str}]}})",
             name = "Doc"
         );

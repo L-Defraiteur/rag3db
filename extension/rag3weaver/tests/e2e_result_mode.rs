@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use rag3weaver::config::{
-    CatalogConfig, ChunkingConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
+    CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
 };
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;

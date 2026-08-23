@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder, SparseEmbedder};
+use rag3weaver::embedder::{Embedder, MockEmbedder};
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
 
