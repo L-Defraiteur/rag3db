@@ -37,6 +37,10 @@ sparse-vector = { path = "../sparse_vector/rust" }
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
 
+# burn (GPU-agnostique : Vulkan/WebGPU/Metal/CUDA — feature flag)
+burn = { version = "0.22.0-pre.2", optional = true, default-features = false, features = ["std", "wgpu", "vulkan"] }
+burn-store = { version = "0.22.0-pre.2", optional = true }
+
 # PostgreSQL/Supabase backend (feature flag)
 tokio-postgres = { version = "0.7", optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
@@ -55,6 +59,10 @@ bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:to
 cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]
 rag3db-native = ["dep:rag3db"]
 postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types", "dep:bytes"]
+# Embedder BGE-M3 via burn — pas de candle, pas de CUDA, pas de hf-hub.
+# Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
+# depuis un .bpk fourni par l'appelant (cf generated/README.md).
+burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers"]
 wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]
@@ -67,7 +75,7 @@ version = "1.10"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
 tempfile = "3"
 
@@ -80,3 +88,18 @@ name = "tei_openai"
 [[example]]
 name = "candle_local"
 required-features = ["candle-embedder"]
+
+# Vecteurs de référence candle, pour valider tout backend alternatif.
+[[example]]
+name = "bge_m3_reference"
+required-features = ["bge-m3"]
+
+# Parité burn vs candle, via les traits publics.
+[[example]]
+name = "burn_vs_candle"
+required-features = ["burn-embedder"]
+
+# Balayage de débit (batch × longueur de séquence).
+[[example]]
+name = "burn_throughput"
+required-features = ["burn-embedder"]
