@@ -452,6 +452,9 @@ mod tests {
         );
     }
 
+    // Utilisé seulement par les tests à vrai modèle (candle-embedder) ; sous
+    // candle-wasm seul il était compilé sans appelant, refusé par -D warnings.
+    #[cfg(feature = "candle-embedder")]
     fn cosine(a: &[f32], b: &[f32]) -> f32 {
         let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
         let na: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
