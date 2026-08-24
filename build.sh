@@ -7,14 +7,14 @@
 #   ./build.sh clean        # delete build/release and reconfigure
 #   ./build.sh <ext>        # build + test a single extension (e.g. ./build.sh tantivy_fts)
 #
-# Extensions built by default: tantivy_fts, sparse_vector, vector, geo
-# Override with: EXTENSIONS="tantivy_fts;sparse_vector" ./build.sh
+# Extensions built by default: vector, geo (FTS and sparse index live in rag3weaver, Rust)
+# Override with: EXTENSIONS="vector" ./build.sh
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
 BUILD_DIR="build/release"
-EXTENSIONS="${EXTENSIONS:-tantivy_fts;sparse_vector;vector;geo}"
+EXTENSIONS="${EXTENSIONS:-vector;geo}"
 JOBS="${JOBS:-$(nproc)}"
 
 # Check disk space (lesson from doc 13)

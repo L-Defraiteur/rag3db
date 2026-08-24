@@ -16,12 +16,10 @@ on:
     branches: [master, main]
     paths:
       - 'extension/rag3weaver/**'
-      - 'extension/sparse_vector/rust/**'
       - '.github/workflows/rag3weaver-workflow.yml'
   pull_request:
     paths:
       - 'extension/rag3weaver/**'
-      - 'extension/sparse_vector/rust/**'
       - '.github/workflows/rag3weaver-workflow.yml'
   workflow_dispatch:
 
@@ -66,11 +64,16 @@ jobs:
           - label: wasm-emscripten
             flags: '--features wasm-emscripten'
     steps:
-      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
-      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
-      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
-      # accessible publiquement — c'était la cause de l'échec du premier run.
+      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
+      # viennent d'un clone de lucivy à la révision épinglée par le submodule
+      # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.
       - uses: actions/checkout@v4
+      - name: lucivy à la révision du submodule (path deps de rag3weaver)
+        run: |
+          sha=$(git ls-tree HEAD extension/lucivy/ld-lucivy | awk '{print $3}')
+          git clone --quiet https://github.com/L-Defraiteur/lucivy.git ../lucivy
+          git -C ../lucivy checkout --quiet "$sha"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -89,11 +92,16 @@ jobs:
     name: tests unitaires
     runs-on: ubuntu-latest
     steps:
-      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
-      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
-      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
-      # accessible publiquement — c'était la cause de l'échec du premier run.
+      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
+      # viennent d'un clone de lucivy à la révision épinglée par le submodule
+      # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.
       - uses: actions/checkout@v4
+      - name: lucivy à la révision du submodule (path deps de rag3weaver)
+        run: |
+          sha=$(git ls-tree HEAD extension/lucivy/ld-lucivy | awk '{print $3}')
+          git clone --quiet https://github.com/L-Defraiteur/lucivy.git ../lucivy
+          git -C ../lucivy checkout --quiet "$sha"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -110,11 +118,16 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      # Pas de submodules : aucun n'est nécessaire au build Rust (les deux deps
-      # `path` sont ../sparse_vector/rust et ../../tools/rust_api, in-repo). Les
-      # demander rendrait le CI dépendant de third_party/fuzzy-fst, qui n'est pas
-      # accessible publiquement — c'était la cause de l'échec du premier run.
+      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
+      # viennent d'un clone de lucivy à la révision épinglée par le submodule
+      # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.
       - uses: actions/checkout@v4
+      - name: lucivy à la révision du submodule (path deps de rag3weaver)
+        run: |
+          sha=$(git ls-tree HEAD extension/lucivy/ld-lucivy | awk '{print $3}')
+          git clone --quiet https://github.com/L-Defraiteur/lucivy.git ../lucivy
+          git -C ../lucivy checkout --quiet "$sha"
 
       - uses: dtolnay/rust-toolchain@stable
         with:

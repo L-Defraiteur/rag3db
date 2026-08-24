@@ -53,16 +53,13 @@ RETURN node.id, node.title, distance
 
 Node deletions and updates automatically propagate to the HNSW index (batched edge cleanup).
 
-### sparse_vector — Sparse Vector Search
+### Sparse vectors — in rag3weaver, not a Cypher extension
 
-Sparse index for BM42/SPLADE-style lexical embeddings:
-
-```cypher
-CALL CREATE_SPARSE_VECTOR_INDEX('docs', 'sparse_idx', 'sparse_indices', 'sparse_weights')
-CALL QUERY_SPARSE_VECTOR_INDEX('docs', 'sparse_idx', [1,5,42], [0.8,0.3,0.1], 10)
-RETURN node_id, score
-```
-
+Learned-sparse search (BGE-M3 sparse head) runs on the `sparse-vector` crate
+(WAND pruning, Apache-2.0, derived in part from Qdrant — a lucivy *friend* crate
+persisted through lucistore), compiled **into rag3weaver**. The former
+`sparse_vector` C++ extension (`CREATE_SPARSE_VECTOR_INDEX`, `SPARSE_SEARCH`) was
+removed on 2026-08-24: rag3weaver never called it.
 ### geo — Spatial Indexing & Geometry
 
 N-dimensional R-tree spatial index with 5 query modes, plus 19 scalar geometry functions:
@@ -137,23 +134,23 @@ let response = catalog.search("main", "rust programming", &options).await?;
 | Node.js native (NAPI) | OK | contains/fuzzy/regex/phrase/parse verified |
 | Browser WASM | OK | Playwright (FTS + vector + persistence IDBFS) |
 
-Statically linked extensions in WASM: vector, sparse_vector, json, algo (FTS is inside rag3weaver).
+Statically linked extensions in WASM: vector, json, algo (FTS and sparse index are inside rag3weaver).
 
 ## Build
 
 See **[BUILD.md](BUILD.md)** for the full guide.
 
 ```bash
-# Quick build (all extensions: sparse_vector, vector, geo)
+# Quick build (all extensions: vector, geo)
 ./build.sh
 
 # Build + run all extension tests
 ./build.sh test
 
 # Build + test a single extension
-./build.sh sparse_vector
+./build.sh vector
 
-# Manual cmake (extensions default to sparse_vector;vector;geo)
+# Manual cmake (extensions default to vector;geo)
 mkdir -p build/release && cd build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
@@ -170,7 +167,6 @@ rag3db (fork Kuzu v0.11.2.2)
 |-- extension/lucivy/ld-lucivy/    Submodule lucivy (référence ; rag3weaver compile
 |                                    lucivy-core par chemin, voir extension/rag3weaver/Cargo.toml)
 |-- extension/vector/                HNSW extension (+ DELETE/UPDATE)
-|-- extension/sparse_vector/         Sparse vector extension
 |-- extension/geo/                   Spatial extension (R-tree + 19 geo functions)
 |-- extension/rag3weaver/            RAG framework (Rust)
 |   |-- src/                         Catalog, search, chunker, queue, embedders

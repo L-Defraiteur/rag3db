@@ -28,8 +28,6 @@ static constexpr std::array neo4jExtensionFunctions = {"NEO4J_MIGRATE"};
 static constexpr std::array algoExtensionFunctions = {"K_CORE_DECOMPOSITION", "PAGE_RANK",
     "STRONGLY_CONNECTED_COMPONENTS_KOSARAJU", "STRONGLY_CONNECTED_COMPONENTS",
     "WEAKLY_CONNECTED_COMPONENTS"};
-static constexpr std::array sparseVectorExtensionFunctions = {"CREATE_SPARSE_VECTOR_INDEX",
-    "QUERY_SPARSE_VECTOR_INDEX", "DROP_SPARSE_VECTOR_INDEX", "SPARSE_SEARCH", "SPARSE_SCORE"};
 
 static constexpr EntriesForExtension functionsForExtensionsRaw[] = {
     {"FTS", ftsExtensionFunctions, ftsExtensionFunctions.size()},
@@ -42,7 +40,6 @@ static constexpr EntriesForExtension functionsForExtensionsRaw[] = {
     {"LLM", llmExtensionFunctions, llmExtensionFunctions.size()},
     {"NEO4J", neo4jExtensionFunctions, neo4jExtensionFunctions.size()},
     {"ALGO", algoExtensionFunctions, algoExtensionFunctions.size()},
-    {"SPARSE_VECTOR", sparseVectorExtensionFunctions, sparseVectorExtensionFunctions.size()},
 };
 static constexpr std::array functionsForExtensions = std::to_array(functionsForExtensionsRaw);
 

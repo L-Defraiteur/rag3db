@@ -20,27 +20,17 @@ rag3db/
 ├── build/nodejs/      <- Node.js natif (rag3dbjs.node + extension)
 ├── build/wasm/        <- WASM browser (rag3db_wasm.js)
 │
-├── extension/sparse_vector/rust/         <- Rust : crate sparse-vector (cxx bridge)
-├── extension/sparse_vector/              <- C++ : extension rag3db
-│   └── build/libsparse_vector.rag3db_extension  <- shared lib (LOAD EXTENSION)
-│
-├── extension/rag3weaver/                 <- Rust : le produit (FTS lucivy v3 inclus,
-│                                            pas d'extension C++ pour le FTS)
+├── extension/vector/, extension/geo/     <- C++ : extensions rag3db (.rag3db_extension)
+├── extension/rag3weaver/                 <- Rust : le produit (FTS lucivy v3 et index
+│                                            sparse inclus, pas d'extension C++ pour eux)
 ```
 
-## IMPORTANT : Rust et cmake sont deconnectes
+## Rust et cmake
 
-cmake ne detecte **pas** les changements dans les fichiers `.rs`. Si vous modifiez du Rust, il faut reconstruire manuellement :
-
-```bash
-# 1. Recompiler le Rust
-cd extension/sparse_vector/rust
-cargo build --release
-
-# 2. Re-linker l'extension
-cd build/release  # (ou build/nodejs, build/wasm)
-cmake --build . --target rag3db_sparse_vector_extension -j$(nproc)
-```
+Depuis le 24 août 2026, plus aucune extension C++ n'embarque de Rust : le FTS
+(lucivy v3) et l'index sparse sont compilés par cargo dans rag3weaver
+(`extension/rag3weaver`, `cargo build` / `cargo test`). cmake ne construit que
+le moteur et les extensions C++ pures (vector, geo).
 
 
 ---
@@ -61,7 +51,7 @@ mkdir -p build/release && cd build/release
 # Config (une seule fois)
 cmake ../.. -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_EXTENSION_TESTS=TRUE \
-  -DBUILD_EXTENSIONS="vector;sparse_vector;geo" \
+  -DBUILD_EXTENSIONS="vector;geo" \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 
 cmake --build . -j$(nproc)
@@ -76,7 +66,7 @@ cd ../../extension/rag3weaver && ./run_e2e.sh
 mkdir -p build/nodejs && cd build/nodejs
 
 cmake ../.. -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXTENSIONS="vector;sparse_vector" \
+  -DBUILD_EXTENSIONS="vector" \
   -DBUILD_NODEJS=TRUE -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
 
 cmake --build . --target rag3dbjs -j$(nproc)
@@ -98,7 +88,7 @@ emmake cmake --build . -j$(nproc)
 
 Sortie : `tools/wasm/build/rag3db/rag3db_wasm.js` (~17MB, single file)
 
-Extensions liees statiquement : json, vector, sparse_vector, algo (le FTS est dans rag3weaver).
+Extensions liees statiquement : json, vector, algo (FTS et index sparse sont dans rag3weaver).
 
 ### Tests Playwright (browser IDBFS)
 
@@ -113,10 +103,8 @@ npx playwright test    # 2 tests, ~10s
 Commande complete depuis la racine rag3db :
 
 ```bash
-cd extension/sparse_vector/rust && cargo build --release && \
-  cd ../../../build/release && \
-  cmake --build . --target rag3db_sparse_vector_extension -j$(nproc)
-# Le FTS (lucivy v3) est compilé par cargo dans rag3weaver : rien à re-linker côté cmake.
+cd extension/rag3weaver && cargo build --release
+# Rien à re-linker côté cmake : le Rust (FTS, sparse) vit dans rag3weaver.
 ```
 
 ---
@@ -128,5 +116,4 @@ cd extension/sparse_vector/rust && cargo build --release && \
 | Les changements Rust ne sont pas pris en compte | cmake ne relance pas cargo | `cargo build --release` manuellement, puis re-linker l'extension |
 | `cargo build` dit `Finished` sans `Compiling` | cargo n'a pas detecte le changement | `touch src/lib.rs` puis rebuilder |
 | `GLIBCXX_3.4.32 not found` au runtime | miniconda injecte un vieux libstdc++ | `LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` |
-| Tests passent mais avec vieux scores | Extension `.rag3db_extension` pas re-linkee | `cmake --build . --target rag3db_sparse_vector_extension` |
 | WASM crash au demarrage | Mauvaise version emscripten ou manque nightly | Verifier `emcc --version` >= 5.0.1, `rustup run nightly rustc --version` |

@@ -27,13 +27,17 @@ est **tenu** depuis le 24 août : lucivy v3 le fait, `BM25Mode::Symbol` l'expose
 ```
 rag3db  (fork Kuzu v0.11.2.2, licence LRSL v1.2, seuil 100 k€/an)
 ├── extension/vector         HNSW C++ (inchangé)               — vivant
-├── extension/sparse_vector  C++ + crate Rust SparseHandle      — vivant (handle Rust)
-├── extension/lucivy_fts     C++ v2, plus jamais appelé         — CODE MORT, à supprimer
 ├── extension/geo            R-tree, jamais testé E2E, 2 bugs   — orphelin
 └── extension/rag3weaver     ~40 k lignes Rust                  — le produit
 ```
 
-**lucivy** (`~/git_workspaces/lucivy`, fork de tantivy 0.26 devenu sa propre lib —
+Supprimées le 24 août au soir : `extension/lucivy_fts` (C++ v2) et
+`extension/sparse_vector` (C++ + copie du crate Rust). Le FTS et l'index
+sparse sont des crates Rust compilés **dans** rag3weaver, tous deux issus du
+workspace lucivy par chemin : `lucivy-core`, `luciole`, `sparse-vector`
+(Apache-2.0, dérivé de Qdrant), sur `lucistore` (persistance commune).
+
+**lucivy** (`~/git_workspaces/lucivy`, **arbre vivant de la session lucivy, par chemin — voulu, c'est l'usage naïf de rag3weaver qui valide la v3 non publiée** ; fork de tantivy 0.26 devenu sa propre lib —
 ne jamais dire « fork de tantivy » devant Lucie) : SFX v3 (suffix FST), `contains`
 cross-token avec séparateurs stricts ou relaxed, `parse` booléen traduit en
 `boolean` de `contains`, `ShardedHandle` (4 shards par défaut chez nous),

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run rag3weaver E2E tests with a dedicated native build.
 #
-# This build includes all required extensions (vector, sparse_vector, geo)
+# This build includes all required extensions (vector, geo)
 # and is isolated from other builds (WASM, nodejs, etc.).
 #
 # Usage:
@@ -61,7 +61,7 @@ if [ "$NEED_BUILD" = true ]; then
     cd "$BUILD"
     cmake "$ROOT" \
       -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_EXTENSIONS="vector;sparse_vector;geo" \
+      -DBUILD_EXTENSIONS="vector;geo" \
       -DBUILD_SHELL=FALSE \
       -DBUILD_TESTS=FALSE \
       -DBUILD_EXTENSION_TESTS=FALSE

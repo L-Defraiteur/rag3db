@@ -218,7 +218,6 @@ fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     // cmake places .rag3db_extension files in extension/<name>/build/ (source tree)
     let extensions = [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
-        ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ];
     for (name, ext_path) in &extensions {
         if !std::path::Path::new(ext_path).exists() {

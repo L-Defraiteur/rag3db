@@ -43,8 +43,10 @@ ld-lucivy = { path = "../../../lucivy", default-features = false, features = ["s
 # luciole (DAG execution engine, actor runtime)
 luciole = "0.1.0"
 
-# sparse_vector (SparseHandle for BlobStore-backed sparse indexes)
-sparse-vector = { path = "../sparse_vector/rust" }
+# sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant, voir
+# son NOTICE), persistance via lucistore. Vit dans le workspace lucivy depuis le
+# 24 août (e344b93) ; même règle que lucivy-core : l'arbre vivant, par chemin.
+sparse-vector = { path = "../../../lucivy/sparse_vector" }
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
@@ -128,13 +130,7 @@ required-features = ["burn-embedder"]
 name = "burn_throughput"
 required-features = ["burn-embedder"]
 
-# Tant que lucivy-core 2.1.0 (v3) n'est pas publiée, on redirige la version
-# crates.io vers le chemin local. Sans ça, sparse-vector tirerait la 2.0.0 de
-# crates.io et on se retrouverait avec DEUX traits BlobStore distincts dans le
-# graphe — CypherBlobStore n'implémenterait alors pas celui que sparse attend.
-# À retirer dès la publication de la 2.1.0.
 [patch.crates-io]
-lucivy-core = { path = "../../../lucivy/lucivy_core" }
 # luciole : même raison. Sans ce patch, notre DAG (luciole_bridge) tourne sur la
 # 0.1.0 publiée pendant que lucivy-core utilise la copie locale — deux moteurs,
 # et le correctif du double free (3675c3d) absent du nôtre.

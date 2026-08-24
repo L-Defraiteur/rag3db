@@ -76,7 +76,6 @@ fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let root = rag3db_root();
     for (name, path) in [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
-        ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ] {
         if !std::path::Path::new(&path).exists() {
             panic!("Extension '{name}' not found at: {path}\nRun ./run_e2e.sh --build-only first.");

@@ -13,8 +13,8 @@ contredisent.
 | Branche | `fts-lucivy-v3`, **37 commits devant `master`**, tout poussé |
 | `master` | `962ce9dc2`, intact — fusionner est la décision de Lucie, pas la mienne |
 | `.gitmodules` | modifié localement par Lucie (routage SSH) — **ne pas commiter** |
-| Submodule `ld-lucivy` | épinglé `3c282c7` ; ne sert qu'au build C++ (voir doc 31) |
-| lucivy compilé par rag3weaver | `~/git_workspaces/lucivy` (path dep), arbre de la session lucivy, à `5204fa1` ce soir |
+| Submodule `ld-lucivy` | épinglé `34ec432` ; référence seulement (plus aucun build C++ ne l'utilise) |
+| lucivy compilé par rag3weaver | `~/git_workspaces/lucivy` (path deps `lucivy-core`, `luciole`, `sparse-vector` → `lucistore`), arbre de la session lucivy, à `34ec432` en fin de soirée |
 
 ## Ce qui a été livré aujourd'hui, dans l'ordre
 
@@ -64,6 +64,7 @@ e2e_symbol_search             32,1 s   →  1,2 s   (12 tests)
 e2e_search (13, natif)        60,6 s   →  ~3 s
 e2e_idempotent_registration   80,9 s   →  9,9 s   (22/22)
 passe complète 12 suites      ~4 min   →  ~90 s
+passe complète 18 suites (soir)  176/176 en 131 s   (candle sorti des E2E, 4 suites de mai remises)
 drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du moteur)
 ```
 
@@ -100,7 +101,7 @@ Aucun n'était visible tant que ces suites ne compilaient pas.
 
 ## Prochaines étapes, dans l'ordre fixé par Lucie (24 août, soir)
 
-1. **Finir la fiabilisation / tests.** ~~Épingler lucivy `832c503`, rejouer `e2e_search`~~ fait ; ~~supprimer `simple_register_duplicate_fails`~~ fait ; ~~E2E à vrai modèle sur burn~~ fait (`tests/common/mod.rs`, `e2e_search` 234 s → 23 s, candle ne reste que dans `examples/`) ; ~~supprimer l'extension C++ `lucivy_fts`~~ fait (cmake, `extension_entries.cpp`, 16 helpers de test, README/BUILD.md) — **le submodule `extension/lucivy/ld-lucivy` reste** (le retirer touche `.gitmodules`) ; **tranché par Lucie le 24 au soir : la path dep reste sur `~/git_workspaces/lucivy`, l'arbre vivant de la session lucivy** — la v3 n'est publiée nulle part, et c'est l'usage naïf de rag3weaver qui la valide (les gros benchs côté lucivy ne voient pas les « petits trucs à la con » comme le `HashMap` non trié). Ne pas « corriger » ça vers le submodule ; `sparse_vector` a la même anatomie (doc 33, question posée à lucivy) ; ~~remettre les 4 E2E qui ne compilent plus~~ fait — **toutes les suites E2E compilent et passent sur burn** (chiffre en bas de section).
+1. **Finir la fiabilisation / tests.** ~~Épingler lucivy `832c503`, rejouer `e2e_search`~~ fait ; ~~supprimer `simple_register_duplicate_fails`~~ fait ; ~~E2E à vrai modèle sur burn~~ fait (`tests/common/mod.rs`, `e2e_search` 234 s → 23 s, candle ne reste que dans `examples/`) ; ~~supprimer l'extension C++ `lucivy_fts`~~ fait (cmake, `extension_entries.cpp`, 16 helpers de test, README/BUILD.md) — **le submodule `extension/lucivy/ld-lucivy` reste** (le retirer touche `.gitmodules`) ; **tranché par Lucie le 24 au soir : la path dep reste sur `~/git_workspaces/lucivy`, l'arbre vivant de la session lucivy** — la v3 n'est publiée nulle part, et c'est l'usage naïf de rag3weaver qui la valide (les gros benchs côté lucivy ne voient pas les « petits trucs à la con » comme le `HashMap` non trié). Ne pas « corriger » ça vers le submodule ; `sparse_vector` avait la même anatomie (doc 33) → **réponse lucivy doc 34 : le crate vit chez eux** (`lucivy/sparse_vector`, Apache-2.0 car dérivé de Qdrant, sur `lucistore`) ; ~~bascule de la path dep, suppression de notre copie Rust et de l'extension C++ `sparse_vector`~~ fait (doc 35) — **plus aucune extension C++ n'embarque de Rust**, cmake ne construit que `vector` et `geo` ; ~~remettre les 4 E2E qui ne compilent plus~~ fait — **toutes les suites E2E compilent et passent sur burn : 176/176 en 131 s** (18 fichiers, lucivy `34ec432`, sparse via le crate lucivy, build natif `vector;geo`).
 2. **org id / project id.** Décision d'architecture d'abord (base par org vs colonne), puis `project` comme champ + filtre dans l'API de recherche.
 3. **Cross-encoder** (reranking) — sur burn, chemin produit, candle en oracle comme pour les embedders.
 4. **OCR en usage unitaire** : un petit nœud dataflow minimal, un modèle léger embarquable (PP-OCRv6 ONNX est la piste, cf. la note OCR de Lucie) — **pas** de markitdown ni de lib lourde, pas de use case « pipeline documents » à ce stade.

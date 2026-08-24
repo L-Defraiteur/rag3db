@@ -75,7 +75,7 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 ## Relation avec lucivy — deux copies, un seul chemin qui compte
 
 - rag3weaver compile `lucivy-core` par **path dep** : `../../../lucivy/lucivy_core` = `~/git_workspaces/lucivy`, **l'arbre de travail de la session lucivy**. Vérifier `git -C ~/git_workspaces/lucivy log -1` et `status` avant toute mesure. Ne jamais le déplacer sans leur accord.
-- Le submodule `extension/lucivy/ld-lucivy` ne sert qu'au build C++ (`lucivy_fts`, code mort). Épingler : `cd extension/lucivy/ld-lucivy && git fetch && git checkout <sha>`, puis `git add extension/lucivy/ld-lucivy`.
+- Le submodule `extension/lucivy/ld-lucivy` n'est qu'une **référence épinglée** (le CI clone lucivy à cette révision pour les path deps). Épingler à chaque avancée : `cd extension/lucivy/ld-lucivy && git fetch && git checkout <sha>`, puis `git add extension/lucivy/ld-lucivy`. Path deps depuis l'arbre vivant : `lucivy-core`, `luciole`, `sparse-vector` (→ `lucistore`).
 - Compiler contre un autre commit lucivy via worktree **ne marche pas** (collision de lockfile `ld-lucivy` par `sparse-vector`).
 - Le dialogue se fait par docs numérotés dans ce dossier (01 → 28 aujourd'hui). Leurs réponses arrivent comme fichiers ; Lucie relaie les nôtres.
 
@@ -91,6 +91,7 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 | Embedders burn | `src/burn_bge_m3_embedder.rs`, `src/burn_minilm_embedder.rs`, `generated/README.md` |
 | Enregistrement / migration d'entités et KB | `src/catalog.rs` (`register_entity`, `create_kb_tables`), `src/schema.rs` (`resolve_kb_title_entities`) |
 | Connexion native, config kuzu | `src/rag3db_connection.rs` |
+| Index sparse (WAND, 3 blobs par index) | crate `sparse-vector` dans le workspace **lucivy** (`~/git_workspaces/lucivy/sparse_vector`), ouvert dans `catalog.rs` (`SparseHandle::*_with_store`) |
 | FFI WASM | `src/wasm_ffi.rs` (`catalog_set_embedder` gardé par feature) |
 | CI | `.github/workflows/rag3weaver-workflow.yml` (matrice explicite) |
 

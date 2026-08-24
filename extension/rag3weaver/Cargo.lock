@@ -6657,12 +6657,10 @@ dependencies = [
 
 [[package]]
 name = "sparse-vector"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bincode",
- "cxx",
- "cxx-build",
- "lucivy-core",
+ "lucistore",
  "memmap2",
  "ordered-float 4.6.0",
  "parking_lot",
