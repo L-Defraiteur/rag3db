@@ -285,6 +285,75 @@ impl Catalog {
         self.fts_storage = storage;
     }
 
+    /// Ferme les index FTS ouverts, en drainant leurs merges.
+    ///
+    /// Appelé par [`Self::shutdown`] **et** par `Drop`, parce qu'un `Catalog`
+    /// peut sortir de portée sans que l'appelant ait pensé à `shutdown()`.
+    ///
+    /// Pourquoi c'est indispensable : lucivy exécute ses merges en tâche de
+    /// fond, et ces merges écrivent dans le `BlobStore` — lequel, en
+    /// `CypherBlobStore`, passe par la connexion C++ de rag3db. Si le `Catalog`
+    /// libère la base avant que les merges soient drainés, un thread de merge
+    /// écrit à travers une connexion morte : SIGSEGV, pas une erreur Rust.
+    ///
+    /// `close()` draine ces merges, c'est exactement sa raison d'être ici.
+    fn close_fts_handles(&mut self) -> (usize, Vec<String>) {
+        let mut closed = 0usize;
+        let mut failed = Vec::new();
+        for (table, handle) in self.fts_handles.drain() {
+            match Arc::try_unwrap(handle) {
+                Ok(h) => match h.close() {
+                    Ok(_) => closed += 1,
+                    Err(e) => failed.push(format!("{table}: {e}")),
+                },
+                Err(shared) => {
+                    // D'autres références vivent encore : on commite au moins,
+                    // pour ne pas perdre l'état, et on laisse le dernier `Drop`
+                    // faire le reste.
+                    if let Err(e) = shared.commit() {
+                        failed.push(format!("{table} (commit seul): {e}"));
+                    } else {
+                        closed += 1;
+                    }
+                }
+            }
+        }
+        (closed, failed)
+    }
+
+    /// Détruit l'index FTS d'une table via `ShardedHandle::drop_index`.
+    ///
+    /// Nécessaire au reindex : le schéma de l'index est **figé à sa création**,
+    /// alors que celui de l'entité évolue (`register_entity` v2). Sans
+    /// destruction, un champ ajouté serait silencieusement filtré par
+    /// `index_document` et resterait introuvable à la recherche.
+    ///
+    /// `drop_index` **consomme** le handle : il faut donc en détenir l'unique
+    /// référence. S'il en reste d'autres (registre de services d'un graphe
+    /// encore vivant), on refuse plutôt que de détruire sous leurs pieds — un
+    /// `close()` suivi d'une destruction partielle laisse un index incohérent,
+    /// et c'est ce qui provoquait un SIGSEGV à la réouverture.
+    pub fn drop_fts_index(&mut self, table: &str) {
+        let Some(handle) = self.fts_handles.remove(table) else { return };
+        match Arc::try_unwrap(handle) {
+            Ok(h) => {
+                if let Err(e) = h.drop_index() {
+                    eprintln!("[rag3weaver] drop_fts_index {table}: {e}");
+                }
+            }
+            Err(still_shared) => {
+                eprintln!(
+                    "[rag3weaver] drop_fts_index {table}: {} références encore vivantes, \
+                     index non détruit",
+                    Arc::strong_count(&still_shared)
+                );
+                // On le remet : mieux vaut un index périmé qu'un index à moitié
+                // détruit, et l'appelant peut réessayer.
+                self.fts_handles.insert(table.to_string(), still_shared);
+            }
+        }
+    }
+
     /// Handle FTS d'une table, s'il est déjà ouvert.
     pub fn fts_handle(
         &self,
@@ -399,19 +468,15 @@ impl Catalog {
         // 1. Close lucivy FTS indexes (release writer locks).
         let mut fts_closed: usize = 0;
         let mut fts_failed: Vec<String> = Vec::new();
-        // Handles Rust d'abord : `close()` draine les merges puis persiste dans
-        // le BlobStore. Sans lui, l'index n'est pas complet au disque et une
-        // réouverture repart d'un état partiel — les tests de persistance
-        // inter-sessions échouent alors sur « search should work after reopen ».
-        for (table, handle) in self.fts_handles.drain() {
-            match handle.close() {
-                Ok(_) => fts_closed += 1,
-                Err(e) => {
-                    eprintln!("[rag3weaver] shutdown: échec de close FTS sur {table}: {e}");
-                    fts_failed.push(format!("{table}: {e}"));
-                }
-            }
+        // Handles Rust d'abord, via le même chemin que `Drop` — voir
+        // `close_fts_handles` pour la raison (drainage des merges avant que la
+        // connexion C++ disparaisse).
+        let (closed, failed) = self.close_fts_handles();
+        fts_closed += closed;
+        for f in &failed {
+            eprintln!("[rag3weaver] shutdown: fermeture FTS incomplète — {f}");
         }
+        fts_failed.extend(failed);
 
         // Puis le chemin C++, pour les tables qui n'ont pas de handle Rust.
         for table in &fts_tables {
@@ -1094,6 +1159,17 @@ impl Catalog {
         self.check_initialized()?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
+        // Reindex = reconstruire, pas compléter. On détruit l'index FTS pour
+        // qu'il soit recréé au schéma courant : celui de l'index est figé à sa
+        // création, donc un champ ajouté depuis (register_entity v2) serait
+        // sinon filtré en silence par `index_document` et introuvable.
+        if let Ok(target) = self.resolve_search_target(entity_name) {
+            if target.default_signals.bm25() {
+                let table = target.parent_table.clone();
+                self.drop_fts_index(&table);
+            }
+        }
+
         // Build field list for the query
         let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
         field_names.sort();
@@ -1137,6 +1213,69 @@ impl Catalog {
         // Drain if there's work to do
         if records_enqueued > 0 {
             self.drain();
+        }
+
+        // Réindexation FTS explicite.
+        //
+        // On ne peut pas s'en remettre à `UpdateRecordNode` : il saute les
+        // enregistrements dont le hash de contenu est inchangé, ce qui est
+        // précisément le cas d'un reindex. Or l'index vient d'être détruit —
+        // il resterait vide.
+        //
+        // `reindex` veut dire « reconstruire », donc on indexe chaque ligne
+        // sans condition, depuis les valeurs qu'on vient de lire.
+        if let Ok(target) = self.resolve_search_target(entity_name) {
+            if target.default_signals.bm25() {
+                let table = target.parent_table.clone();
+                let fields = target.bm25_fields.clone();
+                if let Some(handle) = self.ensure_fts_handle(&table, &fields, &[]) {
+                    let uuid_items = CypherValue::List(
+                        result.rows.iter().filter_map(|row| {
+                            row.first().and_then(|v| v.as_str()).map(|u| {
+                                let mut m = BTreeMap::new();
+                                m.insert("uuid".to_string(), CypherValue::String(u.to_string()));
+                                CypherValue::Map(m)
+                            })
+                        }).collect()
+                    );
+                    let off_q = self.dialect.embed_get_offset(&table);
+                    if let Ok(offs) = self.conn.execute_with_params(
+                        &off_q,
+                        &[QueryParam { name: "items".into(), value: uuid_items }],
+                    ) {
+                        let mut by_uuid: HashMap<String, u64> = HashMap::new();
+                        for row in &offs.rows {
+                            if let (Some(u), Some(o)) = (
+                                row.first().and_then(|v| v.as_str()),
+                                row.get(1).and_then(|v| v.as_i64()),
+                            ) {
+                                by_uuid.insert(u.to_string(), o as u64);
+                            }
+                        }
+                        for row in &result.rows {
+                            let Some(uuid) = row.first().and_then(|v| v.as_str()) else { continue };
+                            let Some(&offset) = by_uuid.get(uuid) else { continue };
+                            let values: Vec<(String, String)> = field_names
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(i, name)| {
+                                    row.get(i + 1)
+                                        .and_then(|v| v.as_str())
+                                        .map(|sv| ((*name).clone(), sv.to_string()))
+                                })
+                                .collect();
+                            if let Err(e) =
+                                crate::fts_handle::index_document(&handle, &values, offset)
+                            {
+                                eprintln!("[rag3weaver] reindex FTS {table}: {e}");
+                            }
+                        }
+                        if let Err(e) = handle.commit() {
+                            eprintln!("[rag3weaver] reindex commit {table}: {e}");
+                        }
+                    }
+                }
+            }
         }
 
         // Clear the needs_reindex flag
@@ -4537,5 +4676,21 @@ mod tests {
         // Default = HYBRID (BM25 + Vector)
         assert!(t.default_signals.bm25());
         assert!(t.default_signals.vector());
+    }
+}
+
+
+impl Drop for Catalog {
+    /// Filet de sécurité : un `Catalog` peut sortir de portée sans `shutdown()`.
+    /// Sans drainage des merges FTS, un thread de fond peut écrire à travers une
+    /// connexion déjà libérée — ce qui se manifeste par un SIGSEGV, pas par une
+    /// erreur Rust.
+    fn drop(&mut self) {
+        if !self.fts_handles.is_empty() {
+            let (_, failed) = self.close_fts_handles();
+            for f in failed {
+                eprintln!("[rag3weaver] drop: fermeture FTS incomplète — {f}");
+            }
+        }
     }
 }

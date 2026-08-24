@@ -476,3 +476,51 @@ mod tests {
         assert_eq!(json["shards"], 1, "0 shard n'a pas de sens");
     }
 }
+
+#[cfg(test)]
+mod repro_drop {
+    use super::*;
+
+    /// Reproduction minimale d'un SIGSEGV observé en E2E : indexer, commiter,
+    /// puis **dropper** le handle sans appeler `close()`, et en rouvrir un.
+    ///
+    /// C'est le cycle de vie normal d'un `Catalog` qui sort de portée sans
+    /// `shutdown()` explicite. N'utilise que `MemBlobStore` — aucune base,
+    /// aucune extension C++.
+    #[test]
+    fn drop_without_close_then_reopen() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+
+        let tmp = std::env::temp_dir()
+            .join(format!("rag3weaver_repro_drop_{}", std::process::id()));
+        let store = Arc::new(MemBlobStore::new());
+        let cfg = build_schema_config(&["content".to_string()], &[], 2).unwrap();
+
+        // Session 1 : indexer, commiter, laisser le handle sortir de portée.
+        {
+            let storage =
+                BlobShardStorage::new(store.clone(), fts_index_name("Repro"), &tmp);
+            let h = ShardedHandle::create_with_storage(Box::new(storage), &cfg).unwrap();
+            index_document(&h, &[("content".into(), "kmalloc spinlock".into())], 1).unwrap();
+            h.commit().unwrap();
+            // pas de close() : c'est le point du test
+        }
+
+        // Session 2 : rouvrir depuis les mêmes blobs.
+        {
+            let storage =
+                BlobShardStorage::new(store.clone(), fts_index_name("Repro"), &tmp);
+            let h = ShardedHandle::open_with_storage(Box::new(storage))
+                .expect("réouverture depuis les blobs");
+            let q: lucivy_core::query::QueryConfig = serde_json::from_value(
+                serde_json::json!({"type":"contains","field":"content","value":"kmalloc"}),
+            )
+            .unwrap();
+            let hits = search_hits(&h, &q, 10, None).expect("recherche");
+            assert_eq!(hits.len(), 1, "le document doit survivre au drop sans close");
+            h.close().ok();
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+}
