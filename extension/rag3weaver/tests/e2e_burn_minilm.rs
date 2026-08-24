@@ -6,13 +6,17 @@
 //! embedder feeding the vector index during drain, and a query that only a real
 //! semantic embedding can answer.
 //!
-//! Artifacts (see `generated/README.md`), overridable with
-//! `RAG3WEAVER_MINILM_BPK` / `RAG3WEAVER_MINILM_TOKENIZER`:
+//! Weights are not bundled (90 MB). Fetch once — plain anonymous HTTPS:
 //!
-//! ```text
-//! ~/.cache/rag3weaver/minilm/model.bpk
-//! ~/.cache/rag3weaver/minilm/tokenizer.json
+//! ```bash
+//! mkdir -p ~/.cache/rag3weaver/minilm
+//! curl -L -o ~/.cache/rag3weaver/minilm/model.bpk \
+//!   https://huggingface.co/Lucie666/all-minilm-l6-v2-burnpack/resolve/main/model.bpk
+//! curl -L -o ~/.cache/rag3weaver/minilm/tokenizer.json \
+//!   https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json
 //! ```
+//!
+//! Override the location with `RAG3WEAVER_MINILM_BPK` / `RAG3WEAVER_MINILM_TOKENIZER`.
 //!
 //! ```bash
 //! cargo test --features rag3db-native,burn-embedder --test e2e_burn_minilm \

@@ -145,10 +145,24 @@ model.bpk   90 290 432 octets
 sha256      6089c3066b983985c4e0933eb3b88ba7ae62573206de5ee8b78d7317de9cdcd4
 ```
 
-Pas encore publiés sur Hugging Face (à faire, comme pour BGE-M3, avec l'attribution
-d'origine). En attendant, ils se régénèrent en deux minutes depuis l'ONNX ci-dessus
-(voir « Régénérer »), et les tests les cherchent dans `~/.cache/rag3weaver/minilm/`
+Publiés, comme BGE-M3, avec l'attribution d'origine (Apache-2.0, sentence-transformers) :
+
+**https://huggingface.co/Lucie666/all-minilm-l6-v2-burnpack**
+
+Téléchargement en HTTPS anonyme, sans compte ni token :
+
+```bash
+mkdir -p ~/.cache/rag3weaver/minilm
+curl -L -o ~/.cache/rag3weaver/minilm/model.bpk \
+  https://huggingface.co/Lucie666/all-minilm-l6-v2-burnpack/resolve/main/model.bpk
+curl -L -o ~/.cache/rag3weaver/minilm/tokenizer.json \
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json
+```
+
+Les tests les cherchent dans `~/.cache/rag3weaver/minilm/`
 (`RAG3WEAVER_MINILM_BPK` / `RAG3WEAVER_MINILM_TOKENIZER` pour un autre chemin).
+Ils se régénèrent aussi en deux minutes depuis l'ONNX (voir « Régénérer ») — mais le
+`.bpk` obtenu n'aura pas le même checksum, voir la réserve plus bas.
 
 Pourquoi ce modèle : c'est le **défaut navigateur** décidé le 24 août — 90 Mo contre
 2,2 Go pour BGE-M3 — avec `LoadStrategy::Bytes`, donc c'est JS qui fournit les octets
