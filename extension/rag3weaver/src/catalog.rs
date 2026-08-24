@@ -104,7 +104,17 @@ struct DrainCounters {
 }
 
 pub struct Catalog {
-    conn: Arc<dyn DbConnection>,
+    // ⚠️ ORDRE DE DÉCLARATION SIGNIFICATIF — Rust droppe les champs dans cet
+    // ordre. `conn` doit rester **en dernier**, après tout ce qui peut
+    // l'appeler pendant sa propre destruction : `fts_handles` et
+    // `sparse_handles` détiennent des index adossés au `blob_store`, lequel
+    // écrit à travers cette connexion.
+    //
+    // `conn` était déclaré en premier ; la connexion C++ était donc détruite
+    // avant les index. Ça n'a pas produit de crash une fois lucivy corrigé
+    // (6e6bd24 rend le handle inerte après `close()`), mais ça reposait sur le
+    // fait que personne n'appelle le store pendant le drop — une garantie
+    // qu'on ne veut pas devoir supposer.
     embedder: Arc<dyn Embedder>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
@@ -149,6 +159,9 @@ pub struct Catalog {
     dialect: Arc<dyn crate::dialect::SchemaDialect>,
     /// Search backend for multi-backend search operations.
     search_backend: Option<Arc<dyn crate::search_backend::SearchBackend>>,
+
+    // Déclaré en dernier : voir la note d'ordre de drop en tête de struct.
+    conn: Arc<dyn DbConnection>,
 }
 
 impl Catalog {
