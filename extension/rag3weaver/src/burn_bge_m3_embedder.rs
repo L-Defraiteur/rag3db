@@ -71,7 +71,8 @@ pub enum BurnDevice {
 }
 
 impl BurnDevice {
-    fn resolve(self) -> Device {
+    /// Shared with the other burn embedders in this crate.
+    pub(crate) fn resolve(self) -> Device {
         match self {
             BurnDevice::Default => Device::default(),
             BurnDevice::DiscreteGpu(i) => Device::wgpu(DeviceKind::DiscreteGpu(i)),

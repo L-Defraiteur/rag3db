@@ -21,6 +21,14 @@ pub mod candle_embedder;
 pub mod bge_m3_onnx;
 #[cfg(feature = "burn-embedder")]
 pub mod burn_bge_m3_embedder;
+/// all-MiniLM-L6-v2 généré par burn-onnx depuis l'ONNX de sentence-transformers —
+/// code machine, non édité. Voir `generated/README.md`.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/minilm_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod minilm_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_minilm_embedder;
 pub mod catalog;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;

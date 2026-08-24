@@ -118,3 +118,100 @@ Pour rejouer la comparaison :
 cargo run --release --example bge_m3_reference --features bge-m3 -- \
     <dir-des-poids-pytorch> /tmp/candle_reference.json
 ```
+
+---
+
+## `minilm_onnx.rs`
+
+Traduction mécanique, par `burn-onnx`, du graphe ONNX de
+**[sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)**
+(BERT : 6 couches, hidden 384, vocab 30 522, positions 512). Anglais uniquement.
+
+**Ce n'est pas notre modèle.** Licence Apache-2.0, tout le mérite revient à ses auteurs
+(Nils Reimers et l'équipe sentence-transformers, sur la base du MiniLM de Microsoft).
+Nous n'avons fait que changer le format pour pouvoir le charger depuis Rust.
+
+| | |
+|---|---|
+| Source | `onnx/model.onnx` de sentence-transformers/all-MiniLM-L6-v2 (export PyTorch 2.5, 90 405 214 octets) |
+| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::Bytes` — même chaîne que BGE-M3, pour que code généré et runtime `burn 0.22.0-pre.2` s'accordent |
+| Taille | 2 420 lignes (~9 Ko compressé) |
+| Poids | **non inclus** — 90 Mo |
+
+### Les poids
+
+```
+model.bpk   90 290 432 octets
+sha256      6089c3066b983985c4e0933eb3b88ba7ae62573206de5ee8b78d7317de9cdcd4
+```
+
+Pas encore publiés sur Hugging Face (à faire, comme pour BGE-M3, avec l'attribution
+d'origine). En attendant, ils se régénèrent en deux minutes depuis l'ONNX ci-dessus
+(voir « Régénérer »), et les tests les cherchent dans `~/.cache/rag3weaver/minilm/`
+(`RAG3WEAVER_MINILM_BPK` / `RAG3WEAVER_MINILM_TOKENIZER` pour un autre chemin).
+
+Pourquoi ce modèle : c'est le **défaut navigateur** décidé le 24 août — 90 Mo contre
+2,2 Go pour BGE-M3 — avec `LoadStrategy::Bytes`, donc c'est JS qui fournit les octets
+(IDBFS), jamais un poids embarqué dans le WASM.
+
+### Interface
+
+```rust
+pub fn forward(
+    &self,
+    input_ids: Tensor<2, Int>,
+    attention_mask: Tensor<2, Int>,
+    token_type_ids: Tensor<2, Int>,
+) -> Tensor<3>   // last_hidden_state [B, S, 384]
+```
+
+Contrairement à BGE-M3, le graphe **ne poole pas** : seul `last_hidden_state` sort.
+Le mean pooling sous masque puis la normalisation L2 sont faits dans
+`src/burn_minilm_embedder.rs`, avec exactement l'arithmétique de `CandleEmbedder`.
+
+Piège : le fichier généré contient un `forward` par sous-module (`Submodule1..6`) avant
+celui de `Model` (ligne ~2404). Le premier qu'on trouve en lisant rend un tuple avec un
+`Tensor<4>` — ce n'est pas le bon.
+
+Tokenisation : `tokenizer.json` de sentence-transformers, `[PAD]` = 0, troncature à 512.
+
+### Régénérer
+
+```rust
+// build.rs — identique à BGE-M3, seul l'input change
+ModelGen::new()
+    .input("~/.cache/rag3weaver/minilm/model.onnx")
+    .out_dir("model/")
+    .load_strategy(LoadStrategy::Bytes)
+    .run_from_script();
+```
+
+Le modèle tient sous les 2 Go du protobuf ONNX, donc pas d'external data : ici
+`burn-onnx 0.21` aurait suffi. On garde `0.22.0-pre.1` par cohérence avec le runtime.
+Même réserve que pour BGE-M3 : le `.bpk` n'est pas reproductible octet à octet, seules
+les valeurs le sont — ne pas régénérer sans raison.
+
+### Parité vérifiée
+
+Contre `CandleEmbedder` (`DefaultModel::MiniLM`, `candle_transformers` BERT, CPU),
+quatre phrases dont une de code (`let value = foo->bar;`) :
+
+```
+phrase        cosinus       max|Δ|       moy|Δ|
+------------------------------------------------
+[0]        1.00000012     2.09e-07     4.37e-08
+[1]        1.00000036     1.56e-07     3.87e-08
+[2]        1.00000012     1.88e-07     3.79e-08
+[3]        1.00000024     1.49e-07     3.80e-08
+```
+
+Bruit d'accumulation f32 sur 6 couches. Backend au moment du test : Burn + wgpu/Vulkan
+sur AMD Radeon AI PRO R9700 via RADV.
+
+Pour rejouer :
+
+```bash
+cargo run --release --example minilm_reference --features candle-embedder -- /tmp/minilm_reference.json
+cargo run --release --example burn_minilm_vs_candle --no-default-features --features burn-embedder -- \
+    ~/.cache/rag3weaver/minilm/model.bpk ~/.cache/rag3weaver/minilm/tokenizer.json /tmp/minilm_reference.json
+```
