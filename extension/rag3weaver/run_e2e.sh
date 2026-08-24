@@ -10,7 +10,7 @@
 #   ./run_e2e.sh --test e2e_phase0b       # run e2e_phase0b tests instead
 #   ./run_e2e.sh --build                  # force rebuild rag3db before tests
 #   ./run_e2e.sh --build-only             # just build, don't run tests
-#   ./run_e2e.sh --no-cuda phase0         # skip CUDA features (faster compile)
+#   ./run_e2e.sh --no-cuda phase0         # accepté, sans effet (burn/wgpu, pas de CUDA)
 #   ./run_e2e.sh --summary                # show only the per-suite summary at the end
 
 set -euo pipefail
@@ -82,11 +82,9 @@ fi
 cd "$WEAVER"
 
 # Build the cargo test filter args
-if [ "$NO_CUDA" = true ]; then
-  FEATURES="rag3db-native,candle-embedder,bge-m3"
-else
-  FEATURES="rag3db-native,candle-embedder,bge-m3,cuda"
-fi
+# Chemin produit : burn (wgpu — AMD/NVIDIA/Apple, un seul code). candle n'est
+# plus une feature des E2E ; --no-cuda est accepté pour compatibilité et sans effet.
+FEATURES="rag3db-native,burn-embedder"
 
 CARGO_ARGS=(
   --features "$FEATURES"

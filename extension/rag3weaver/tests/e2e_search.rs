@@ -9,7 +9,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+#[cfg(feature = "burn-embedder")]
 use std::sync::Arc;
 
 use rag3weaver::config::{
@@ -17,41 +17,25 @@ use rag3weaver::config::{
 };
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
-#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+#[cfg(feature = "burn-embedder")]
 use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection, UpdateStatus};
 
-#[cfg(feature = "candle-embedder")]
-use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
+mod common;
 
-#[cfg(feature = "bge-m3")]
-use rag3weaver::bge_m3_embedder::BgeM3Embedder;
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
+use common::burn::{BGE_M3, MINILM};
+#[cfg(feature = "burn-embedder")]
 use rag3weaver::embedder::SparseEmbedder;
 
-// ─── Cached embedders (loaded once across all tests) ────────────────────────
+// ─── Embedders (burn, chargés une fois par binaire — voir tests/common) ─────
 
-#[cfg(feature = "candle-embedder")]
-static MINILM: std::sync::LazyLock<Arc<dyn Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading all-MiniLM-L6-v2...");
-    Arc::new(CandleEmbedder::new(DefaultModel::MiniLM).expect("load MiniLM"))
-});
-
-#[cfg(feature = "candle-embedder")]
-static MULTILINGUAL: std::sync::LazyLock<Arc<dyn Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading multilingual-MiniLM-L12-v2...");
-    Arc::new(
-        CandleEmbedder::new(DefaultModel::MultilingualMiniLM)
-            .expect("load MultilingualMiniLM"),
-    )
-});
-
-#[cfg(feature = "bge-m3")]
-static BGE_M3: std::sync::LazyLock<Arc<BgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading BGE-M3...");
-    Arc::new(BgeM3Embedder::new().expect("load BGE-M3"))
-});
+/// Les tests « multilingual » tournaient sur multilingual-MiniLM-L12-v2 (candle),
+/// qui n'est pas porté sur burn. BGE-M3 est multilingue : même contrat, dense seul.
+#[cfg(feature = "burn-embedder")]
+static MULTILINGUAL: std::sync::LazyLock<Arc<dyn Embedder>> =
+    std::sync::LazyLock::new(|| BGE_M3.clone());
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -855,7 +839,7 @@ fn phase1_bm25_no_results() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Minimal config for vector search: 1 entity, 1 KB (semantic).
-#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+#[cfg(feature = "burn-embedder")]
 fn make_vector_config(dim: usize) -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), text_title_for("kb"));
@@ -890,7 +874,7 @@ fn make_vector_config(dim: usize) -> CatalogConfig {
 }
 
 /// Insert 3 thematically distinct docs, drain, return catalog ready for search.
-#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+#[cfg(feature = "burn-embedder")]
 fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
@@ -938,7 +922,7 @@ fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
 }
 
 /// Generic vector search test: query should return the expected doc as top result.
-#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+#[cfg(feature = "burn-embedder")]
 fn assert_vector_top_result(
     catalog: &mut Catalog,
     query: &str,
@@ -987,7 +971,7 @@ fn assert_vector_top_result(
 
 // ── Raw vector pipeline test (bypass Catalog) ──────────────────────────
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_raw_vector_pipeline() {
@@ -1084,7 +1068,7 @@ fn phase2_raw_vector_pipeline() {
 
 // ── MiniLM (all-MiniLM-L6-v2, 384d) ────────────────────────────────────
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_minilm_programming() {
@@ -1098,7 +1082,7 @@ fn phase2_vector_minilm_programming() {
     ;
 }
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_minilm_cooking() {
@@ -1112,7 +1096,7 @@ fn phase2_vector_minilm_cooking() {
     ;
 }
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_minilm_ml() {
@@ -1128,7 +1112,7 @@ fn phase2_vector_minilm_ml() {
 
 // ── MultilingualMiniLM (384d) ───────────────────────────────────────────
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_french() {
@@ -1142,7 +1126,7 @@ fn phase2_vector_multilingual_french() {
     ;
 }
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_programming() {
@@ -1156,7 +1140,7 @@ fn phase2_vector_multilingual_programming() {
     ;
 }
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_ml() {
@@ -1172,7 +1156,7 @@ fn phase2_vector_multilingual_ml() {
 
 // ── BGE-M3 (1024d) ─────────────────────────────────────────────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_programming() {
@@ -1187,7 +1171,7 @@ fn phase2_vector_bgem3_programming() {
     ;
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_french() {
@@ -1202,7 +1186,7 @@ fn phase2_vector_bgem3_french() {
     ;
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_ml() {
@@ -1222,7 +1206,7 @@ fn phase2_vector_bgem3_ml() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Config for sparse tests: Hybrid KB with sparse enabled, uses BGE-M3 dim (1024).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn make_sparse_config() -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), text_title_for("kb"));
@@ -1258,7 +1242,7 @@ fn make_sparse_config() -> CatalogConfig {
 
 /// Setup catalog with BGE-M3 as both dense embedder and sparse embedder.
 /// Inserts 3 thematically distinct docs, drains (builds vector + sparse + BM25 indexes).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn setup_sparse_catalog() -> Catalog {
     use std::time::Instant;
     let t0 = Instant::now();
@@ -1305,7 +1289,7 @@ fn setup_sparse_catalog() -> Catalog {
 }
 
 /// Sparse search finds results — hybrid mode with sparse enabled.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase3_sparse_search_finds_results() {
@@ -1338,7 +1322,7 @@ fn phase3_sparse_search_finds_results() {
 }
 
 /// Sparse + vector + BM25 all contribute in 3-way hybrid.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase3_hybrid_3way() {
@@ -1372,7 +1356,7 @@ fn phase3_hybrid_3way() {
 }
 
 /// Top result for programming query should be Rust doc.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase3_sparse_top_result_programming() {
@@ -1406,7 +1390,7 @@ fn phase3_sparse_top_result_programming() {
 }
 
 /// Data enrichment: results should have data populated directly (Level 1 optimization).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase3_sparse_data_enriched() {
@@ -1444,7 +1428,7 @@ fn phase3_sparse_data_enriched() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Build a catalog config with explicit SearchSignals.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn make_phase4_config(signals: SearchSignals) -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), text_title_for("kb"));
@@ -1480,7 +1464,7 @@ fn make_phase4_config(signals: SearchSignals) -> CatalogConfig {
 
 /// Setup a catalog with the given signals, BGE-M3 as needed, same 3 docs.
 /// Returns (catalog, drain_ms).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
     use std::time::Instant;
 
@@ -1529,7 +1513,7 @@ fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
 
 // ── Individual signals ──────────────────────────────────────────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_bm25_only() {
@@ -1560,7 +1544,7 @@ fn phase4_bm25_only() {
     assert_eq!(response.meta.sparse_count, 0);
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_dense_only() {
@@ -1590,7 +1574,7 @@ fn phase4_dense_only() {
     assert_eq!(response.meta.sparse_count, 0);
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_sparse_only() {
@@ -1622,7 +1606,7 @@ fn phase4_sparse_only() {
 
 // ── Pairwise combinations ───────────────────────────────────────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_bm25_vector() {
@@ -1653,7 +1637,7 @@ fn phase4_bm25_vector() {
     assert_eq!(response.meta.sparse_count, 0);
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_bm25_sparse() {
@@ -1684,7 +1668,7 @@ fn phase4_bm25_sparse() {
     assert_eq!(response.meta.vector_count, 0);
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_vector_sparse() {
@@ -1716,7 +1700,7 @@ fn phase4_vector_sparse() {
 
 // ── All three signals ───────────────────────────────────────────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase4_all_three() {
@@ -1763,12 +1747,12 @@ fn phase4_all_three() {
 
 // ── Phase 5: DualEmbedder (single forward pass dense+sparse) ────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 use rag3weaver::embedder::DualEmbedder;
 
 /// Setup catalog with BGE-M3 as DualEmbedder (single forward pass for dense+sparse).
 /// Same 3 docs as phase3, but uses the dual path.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn setup_dual_catalog() -> Catalog {
     use std::time::Instant;
     let t0 = Instant::now();
@@ -1809,7 +1793,7 @@ fn setup_dual_catalog() -> Catalog {
 }
 
 /// DualEmbedder: sparse search finds results (same assertion as phase3).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase5_dual_sparse_search() {
@@ -1840,7 +1824,7 @@ fn phase5_dual_sparse_search() {
 }
 
 /// DualEmbedder: top result is Rust doc (same assertion as phase3).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase5_dual_top_result() {
@@ -1873,7 +1857,7 @@ fn phase5_dual_top_result() {
 }
 
 /// DualEmbedder: 3-way hybrid (BM25 + vector + sparse) works.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase5_dual_3way_hybrid() {
@@ -2071,7 +2055,7 @@ fn debug_unwind_match_set() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Config for persistence test: sparse-only (no BM25/lucivy to avoid lock issues).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn make_sparse_only_config() -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), text_title_for("kb"));
@@ -2106,7 +2090,7 @@ fn make_sparse_only_config() -> CatalogConfig {
 }
 
 /// Sparse search survives close + reopen (mmap persistence roundtrip).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase6_sparse_mmap_persistence() {

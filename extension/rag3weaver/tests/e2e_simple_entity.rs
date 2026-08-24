@@ -8,33 +8,23 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+#[cfg(feature = "burn-embedder")]
 use std::sync::Arc;
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder};
+use rag3weaver::embedder::MockEmbedder;
+#[cfg(feature = "burn-embedder")]
+use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
 
-#[cfg(feature = "candle-embedder")]
-use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
+mod common;
 
-#[cfg(feature = "bge-m3")]
-use rag3weaver::bge_m3_embedder::BgeM3Embedder;
-
-// ─── Cached embedders ────────────────────────────────────────────────────────
-
-#[cfg(feature = "candle-embedder")]
-static MINILM: std::sync::LazyLock<Arc<dyn Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading all-MiniLM-L6-v2...");
-    Arc::new(CandleEmbedder::new(DefaultModel::MiniLM).expect("load MiniLM"))
-});
-
-#[cfg(feature = "bge-m3")]
-static BGE_M3: std::sync::LazyLock<Arc<BgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading BGE-M3...");
-    Arc::new(BgeM3Embedder::new().expect("load BGE-M3"))
-});
+#[cfg(feature = "burn-embedder")]
+use common::burn::{BGE_M3, MINILM};
+#[cfg(feature = "burn-embedder")]
+use rag3weaver::embedder::SparseEmbedder;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -272,14 +262,6 @@ fn simple_ingest_unknown_entity_fails() {
     assert!(result.is_err(), "should fail for unknown entity");
 }
 
-#[test]
-#[ignore]
-fn simple_register_duplicate_fails() {
-    let mut catalog = setup_simple_catalog(4);
-    let result = catalog.register_entity("Product", make_product_config());
-    assert!(result.is_err(), "should fail for duplicate entity");
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Phase 2 — BM25 search (FTS only, no embeddings needed)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -375,7 +357,7 @@ fn simple_bm25_no_results_for_nonsense() {
 // Phase 3 — Vector search with MiniLM embedder
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn simple_vector_minilm_search() {
@@ -494,7 +476,7 @@ fn simple_vector_minilm_search() {
 // Phase 4 — Hybrid search (BM25 + Vector) with BGE-M3
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn simple_hybrid_bgem3_search() {
@@ -563,7 +545,7 @@ fn simple_hybrid_bgem3_search() {
     );
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn simple_sparse_bgem3_search() {

@@ -71,9 +71,8 @@ drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du mo
 
 | | Cause | Chez qui |
 |---|---|---|
-| `e2e_search` 38 tests : 38/38, 37/38, 37/38 | **course** dans lucivy : `buffered_union.rs:72` `doc - min_doc` déborde, un scorer `contains` v3 rend `doc() < min_doc` sous recherches de shard parallèles. Doc 28. | lucivy |
-| `Pool::drain` lâche une `Reply` (`pool.rs:149`) | `send` vers un worker parti, ignoré avec la Reply ; `close()` panique. Nommé, doc 28. | lucivy |
-| `simple_register_duplicate_fails` 12/13 | obsolète depuis mai (`register_entity` idempotent par conception) | nous — à supprimer |
+| ~~`e2e_search` 37/38 aléatoire~~ | **fermé le 24 au soir** : scorer fuzzy/regex non trié (`HashMap`) corrigé côté lucivy `8a91053`, `close()` tolérant `a37d330` (doc 32). Rejoué 13/13 ×3 + 38/38. | — |
+| ~~`simple_register_duplicate_fails`~~ | **supprimé** (obsolète depuis mai, `register_entity` idempotent) | — |
 | 4 fichiers E2E ne compilent pas | dérive luciole de mai (`e2e_dataflow_observe`, `e2e_generic_search`, `e2e_search_queue`, `e2e_undo`) | nous — hors périmètre depuis mai |
 
 ## Décisions prises aujourd'hui (ne pas rouvrir sans raison)
@@ -87,7 +86,7 @@ drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du mo
 
 ## Prochaines étapes, dans l'ordre fixé par Lucie (24 août, soir)
 
-1. **Finir la fiabilisation / tests.** Épingler lucivy `832c503` (underflow du scorer fuzzy/regex corrigé — doc 32 — et `close()` tolérant), rejouer `e2e_search` 3× ; supprimer `simple_register_duplicate_fails` ; supprimer l'extension C++ `lucivy_fts` + submodule (retirer aussi son `LOAD EXTENSION` dans `load_extensions` des tests, vérifier `run_e2e.sh` / cmake) ; remettre les 4 E2E qui ne compilent plus (dérive luciole) ou les retirer explicitement.
+1. **Finir la fiabilisation / tests.** ~~Épingler lucivy `832c503`, rejouer `e2e_search`~~ fait ; ~~supprimer `simple_register_duplicate_fails`~~ fait ; ~~E2E à vrai modèle sur burn~~ fait (`tests/common/mod.rs`, `e2e_search` 234 s → 23 s, candle ne reste que dans `examples/`) ; supprimer l'extension C++ `lucivy_fts` + submodule (retirer aussi son `LOAD EXTENSION` dans `load_extensions` des tests, vérifier `run_e2e.sh` / cmake) ; remettre les 4 E2E qui ne compilent plus (dérive luciole) ou les retirer explicitement.
 2. **org id / project id.** Décision d'architecture d'abord (base par org vs colonne), puis `project` comme champ + filtre dans l'API de recherche.
 3. **Cross-encoder** (reranking) — sur burn, chemin produit, candle en oracle comme pour les embedders.
 4. **OCR en usage unitaire** : un petit nœud dataflow minimal, un modèle léger embarquable (PP-OCRv6 ONNX est la piste, cf. la note OCR de Lucie) — **pas** de markitdown ni de lib lourde, pas de use case « pipeline documents » à ce stade.

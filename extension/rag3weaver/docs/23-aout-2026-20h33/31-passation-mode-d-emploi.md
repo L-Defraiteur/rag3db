@@ -18,18 +18,22 @@ export RAG3DB_SHARED=1 RAG3DB_LIBRARY_DIR="$B" RAG3DB_INCLUDE_DIR="$B" \
 # suites sans modèle (rapides, mock embedder)
 cargo test --features rag3db-native --test e2e_symbol_search -- --ignored --test-threads=1
 cargo test --features rag3db-native --test e2e_idempotent_registration -- --ignored --test-threads=1
-# vrais modèles candle (oracle) — sinon 25 des 38 tests DISPARAISSENT sans erreur
-cargo test --features rag3db-native,candle-embedder,bge-m3 --test e2e_search -- --ignored --test-threads=1
-# burn (poids dans ~/.cache/rag3weaver/{bge-m3,minilm}/, voir generated/README.md)
+# vrais modèles = burn (poids dans ~/.cache/rag3weaver/{bge-m3,minilm}/, voir generated/README.md)
+# — sans `burn-embedder`, 25 des 38 tests de e2e_search DISPARAISSENT sans erreur
+cargo test --features rag3db-native,burn-embedder --test e2e_search -- --ignored --test-threads=1
+cargo test --features rag3db-native,burn-embedder --test e2e_idempotent_registration -- --ignored --test-threads=1
+cargo test --features rag3db-native,burn-embedder --test e2e_simple_entity -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_embedder -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_minilm   -- --ignored --test-threads=1
+# candle n'est PLUS une feature des E2E (depuis le 24 août au soir) : oracle de parité
+# seulement, via examples/*_reference.rs et examples/burn_*_vs_candle.rs
 # profil (drain par phase, moteur seul vs chaîne, N croissant)
 cargo test --features rag3db-native --test e2e_profile_overhead -- --ignored --nocapture
 ```
 
 `RAG3DB_SHARED=1` est indispensable (sinon `undefined symbol: IndexAuxInfo`).
 Les 12 suites vertes (hors `simple_entity` 12/13 obsolète) font ~90 s.
-`run_e2e.sh` passe déjà `rag3db-native,candle-embedder,bge-m3[,cuda]`.
+`run_e2e.sh` passe `rag3db-native,burn-embedder` (`--no-cuda` accepté, sans effet). Les embedders partagés des E2E sont dans `tests/common/mod.rs`.
 
 ## Matrice de features — une combinaison par appel, jamais `--all-features`
 

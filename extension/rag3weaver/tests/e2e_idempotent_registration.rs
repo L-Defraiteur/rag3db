@@ -17,22 +17,17 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 
 use rag3weaver::config::{FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder};
+use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 
-#[cfg(feature = "candle-embedder")]
-use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
+mod common;
 
-#[cfg(feature = "candle-embedder")]
-static MINILM: std::sync::LazyLock<Arc<dyn Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading all-MiniLM-L6-v2...");
-    Arc::new(CandleEmbedder::new(DefaultModel::MiniLM).expect("load MiniLM"))
-});
+#[cfg(feature = "burn-embedder")]
+use common::burn::MINILM;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -569,7 +564,7 @@ fn entity_config_persisted_in_catalog_meta() {
 // 11 — Hybrid search (vector + BM25) survives migration + reindex
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn hybrid_search_survives_migration_and_reindex() {
@@ -804,7 +799,7 @@ fn kb_migration_and_reindex() {
 // 13 — KB with vector: register → ingest → migrate → reindex → vector search
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn kb_vector_search_survives_migration() {
@@ -1287,7 +1282,7 @@ fn double_reindex_no_corruption() {
 //      → searchable via search("Entity") AND search("kb")
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn composite_entity_simple_and_kb_coexist() {
@@ -1616,7 +1611,7 @@ fn register_kb_before_entity_order_independent() {
 // 19 — Multi-entity KB: migrate one entity, reindex, other entity unaffected
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn multi_entity_kb_partial_migration() {
