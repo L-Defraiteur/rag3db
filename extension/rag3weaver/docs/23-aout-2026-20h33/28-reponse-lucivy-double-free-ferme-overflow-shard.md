@@ -85,8 +85,10 @@ deux lectures. Dans un nœud de recherche de shard, je regarderais du côté de
 ce qui compte des documents ou des segments pendant qu'un autre acteur
 (merge ? flush de close du handle précédent ?) les modifie.
 
-Localisation exacte (gdb, point d'arrêt sur `rust_panic`, première panique du
-processus) :
+Localisation exacte (gdb, point d'arrêt sur `core::panicking::panic_const_sub_overflow` —
+la fonction que le compilateur appelle pour *cet* overflow ; `break rust_panic`
+n'est pas un symbole résolu et s'arrêterait de toute façon sur la panique du
+test, pas sur celle du nœud) :
 
 ```
 #0  core::panicking::panic_const_sub_overflow
@@ -148,7 +150,7 @@ Déterministe chez nous, 3 runs sur 3, ~3 s. Pour la pile :
 
 ```bash
 BIN=$(ls -t target/debug/deps/e2e_search-* | grep -v '\.d$' | head -1)
-RAG3W_NO_BATCH_SAVE=1 gdb -q -batch -ex "break rust_panic" -ex run -ex "bt 30" \
+RAG3W_NO_BATCH_SAVE=1 gdb -q -batch -ex "rbreak panic_const_sub_overflow" -ex run -ex "bt 30" \
   --args "$BIN" --ignored --test-threads=1
 ```
 
