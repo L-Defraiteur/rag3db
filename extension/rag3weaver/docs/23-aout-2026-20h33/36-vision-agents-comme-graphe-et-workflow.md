@@ -1,4 +1,4 @@
-# Doc 36 — Vision : l'agent est un sous-graphe qui se compile en workflow, et des agents construisent des agents
+# Doc 36 — Vision : l'agent est un sous-graphe qui se compile en workflow, des agents construisent des agents, et le RAG embarqué est le substrat
 
 Notée le 24 août 2026 au soir, à la demande de Lucie. Ce n'est pas un plan :
 c'est la direction qui donne un sens à l'ordre des chantiers du doc 29. À
@@ -88,6 +88,59 @@ Deux garde-fous qui sont *aussi* des données du graphe : `(:Policy {budget})`
 borne ce qu'un agent constructeur peut dépenser, et un agent dérivé n'est
 promu qu'après une évaluation rejouée — la promotion est une arête, pas un
 déploiement.
+
+## 4 bis. La thèse au-dessus : le RAG embarqué est le substrat, et les utilisateurs sont des unités de calcul
+
+Ajouté le 24 août au soir, sur une remarque de Lucie.
+
+Le fullstack agentique d'aujourd'hui part d'un serveur et ajoute des
+clients ; le workflow y est une *feature* parmi d'autres. Nous partons de
+l'inverse : **tout est RAG, toujours embarqué** — le graphe, l'index, les
+modèles, le workflow tournent là où est l'utilisateur. Le critère fondateur
+de février (« remplace Neo4j, zéro Docker, embarqué », doc 30) n'était pas de
+la frugalité : c'était la condition pour que **chaque machine qui exécute le
+substrat soit un nœud du système**, y compris un onglet de navigateur.
+
+Ce qui rend la thèse défendable ici, et pas seulement belle :
+
+- MiniLM sur burn charge en 172 ms par `LoadStrategy::Bytes` ; burn/wgpu est
+  le même code natif et navigateur. Un onglet *peut* embarquer, indexer,
+  chercher.
+- `ShardedHandle` (4 shards par défaut), `BlobShardStorage`, et lucistore
+  qui porte déjà `delta`, `snapshot`, `sync_server` : **le shard est l'unité
+  de distribution**, et un shard qui vit dans le `BlobStore` d'un navigateur,
+  synchronisé par delta, c'est un utilisateur qui héberge une partie de
+  l'index. Lucivy rend le sparse shardable de la même façon (doc 34, §3).
+- L'agent comme sous-graphe (§2-4) rend la chose composable : si
+  configuration, exécution et trace sont le même objet dans la même base,
+  distribuer ne demande pas une couche de plus — c'est distribuer la base.
+
+**Le §4 (des agents qui construisent des agents) présuppose ce substrat
+distribué** : le catalogue des agents, les sessions et les évaluations
+doivent être là où les agents tournent, pas sur un serveur central que
+l'architecture a précisément refusé. Les deux sessions (rag3weaver, lucivy)
+tirent donc dans la même direction : nous vers l'agent-graphe, eux vers le
+shard synchronisable.
+
+Ce qui n'est **pas** encore vrai, à nommer pour ne pas s'y brûler :
+
+1. **Aucune cohérence entre nœuds.** Kuzu verrouille au niveau processus
+   (`database.h:192`) — d'où « une base par org, un serveur MCP
+   propriétaire ». Des utilisateurs-unités-de-calcul, ce sont des réplicas
+   et un modèle de synchronisation ; delta/snapshot de lucistore en est le
+   début, pas la fin. C'est *la* question difficile.
+2. **Le navigateur n'a pas été revalidé depuis mai.** Le WASM compilait avec
+   les extensions C++ statiques supprimées ce soir ; burn-wgpu dans un onglet
+   est plausible, pas prouvé. Il faut une passe Playwright qui indexe,
+   cherche et embed dans le navigateur avant de dire « compute unit ».
+3. **Ce que le pair-à-pair coûte** : confiance (un shard chez un utilisateur
+   est lisible par lui), disponibilité (un shard hors ligne), et `org`/
+   `project` comme frontière de ce qui peut être distribué à qui — raison
+   de plus pour que org/project soit le chantier qui suit la fiabilisation.
+
+Ordre qui en découle, inchangé : fiabiliser (fait), org/project (la
+frontière de distribution), modèles sur burn en streaming (la preuve
+navigateur), puis le sharding distribué — *après* que lucivy a fini le sien.
 
 ## 5. Ce qui manque vraiment, dans l'ordre où ça bloque
 
