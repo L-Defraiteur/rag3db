@@ -120,6 +120,12 @@ pub fn scope_columns() -> Vec<ColumnDef> {
     ]
 }
 
+/// Les deux colonnes de scope déclarées comme champs `string` (rapides) de
+/// l'index FTS — ceinture et bretelles au-dessus de l'index par cellule.
+pub fn fts_filter_fields() -> Vec<(String, String)> {
+    vec![(ORG_COLUMN.into(), "STRING".into()), (PROJECT_COLUMN.into(), "STRING".into())]
+}
+
 /// Vrai si `name` est une colonne réservée au scope.
 pub fn is_scope_column(name: &str) -> bool {
     name == ORG_COLUMN || name == PROJECT_COLUMN

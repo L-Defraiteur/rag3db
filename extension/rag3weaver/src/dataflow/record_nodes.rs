@@ -2652,6 +2652,8 @@ impl Node for KBUpdateNode {
                             let fields = vec![
                                 ("_title".to_string(), rec.title_text.clone()),
                                 ("_content".to_string(), rec.content_text.clone()),
+                                (crate::scope::ORG_COLUMN.to_string(), scope.org.clone()),
+                                (crate::scope::PROJECT_COLUMN.to_string(), scope.project.clone()),
                             ];
                             crate::fts_handle::reindex_document(handle, &fields, offset)
                                 .map_err(|e| format!("indexation FTS de {index_table}: {e}"))?;

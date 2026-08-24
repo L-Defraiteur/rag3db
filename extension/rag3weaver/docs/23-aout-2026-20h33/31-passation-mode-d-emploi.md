@@ -61,6 +61,7 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 | `RAG3DB_MAX_DB_SIZE=$((1<<30))` | réservation VM kuzu (défaut 8 TiB — le défaut Rust `u32::MAX` est le sentinel `-1u`) ; **requis sous valgrind** ; puissance de 2 |
 | `RAG3DB_BUFFER_POOL_SIZE` | idem, buffer pool |
 | `LUCIOLE_REPLY_TRACE=1` | backtrace à chaque `Reply` lâchée sans `send` (luciole) |
+| `RAG3W_VEC_TRACE=1` | affiche le Cypher de projection envoyé à `QUERY_VECTOR_INDEX` (filtres vectoriels) |
 | `RAG3WEAVER_BGE_M3_BPK` / `_TOKENIZER`, `RAG3WEAVER_MINILM_BPK` / `_TOKENIZER` | chemins des poids burn |
 
 ## Chasser un crash mémoire (méthode qui a marché)
@@ -105,6 +106,20 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 - **`default = []` fait disparaître des tests en silence** si on oublie les features.
 - **Un destructeur ne laisse jamais passer une panique** (abort pendant un déroulement). Idem pour `close()` de toute lib.
 - **Un doc de rapport doit dire ce qu'il ne sait pas** ; les docs 19 et 25 ont affirmé des causes fausses, corrigées par erratum. Un « déterministe » vérifié sur 3 runs en était à 3/4.
+
+## Multi-tenant (doc 37) — comment s'en servir
+
+```rust
+catalog.set_scope(Scope::new("acme", "search"))?;   // cellule courante : ingestion + recherche
+catalog.ingest_entities("Doc", rows)?;              // lignes estampillées _org/_project, index de la cellule
+catalog.search("Doc", "q", SearchOptions { scope: Some(Scope::new("acme", "billing")), ..Default::default() })?;
+catalog.search("Doc", "q", SearchOptions { scopes: vec![a, b], ..Default::default() })?;   // fan-out, fusion par rang
+```
+
+- Sans `set_scope` : cellule `default/default`, index `Lucivy_{table}` d'avant, zéro coût.
+- Chaque cellule a ses index (`Lucivy_{table}__{org}__{project}` dans `_index_blobs`) ; `set_scope` gare/reprend les handles.
+- Le vecteur est post-filtré par colonnes (sur-fetch ×4) tant que le canari kuzu tient ; `meta.warnings` signale un sur-fetch épuisé.
+- Ids : `[A-Za-z0-9_.-/]`, ≤ 128 ; `/` pour une hiérarchie par convention (`starts_with`).
 
 ## Contrats à connaître avant de toucher au dataflow
 

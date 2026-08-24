@@ -105,6 +105,7 @@ impl SearchBackend for Rag3dbSearchBackend {
             filter_params,
         );
         let escaped = filter_cypher.replace('\'', "\\'");
+        if std::env::var_os("RAG3W_VEC_TRACE").is_some() { eprintln!("[vec-trace] {filter_cypher}"); }
 
         // Drop previous projected graph
         let _ = self.conn

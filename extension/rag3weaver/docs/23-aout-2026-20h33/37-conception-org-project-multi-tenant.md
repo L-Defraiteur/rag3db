@@ -88,3 +88,33 @@ Le test sparse de D **doit échouer avant C** — c'est la preuve du trou.
 
 Le plan de contrôle cloud (bases ↔ clients), la fédération des `UsageEvent`
 (lucistore `sync_server`), une table HNSW par cellule, des quotas par org.
+
+## 6. État au 24 août, tard — étapes A à D livrées
+
+- **A/B** : `Scope`, colonnes système sur les quatre DDL, `_Org`/`_Project`,
+  stamp au point de choc (`InsertRecordNode`, `KBUpdateNode`), migration des
+  bases d'avant (`schema_version = 2`).
+- **C** : un index FTS et sparse **par cellule** (`Lucivy_{table}__{org}__{project}`,
+  `Sparse_{table}__…`), handles des cellules quittées garés dans le `Catalog`
+  et repris à `set_scope` ; `_org`/`_project` déclarés champs `string` de
+  l'index FTS.
+- **D** : `SearchOptions.scope` (autre cellule), `SearchOptions.scopes`
+  (fan-out + fusion par rang, avertissement dans `meta.warnings`) ; sparse
+  filtré par `allowed_ids` (le trou §2.6 est fermé) ; vecteur : sur-fetch ×4
+  + **post-filtre par colonnes**.
+- **Trois découvertes en chemin**, toutes consignées :
+  1. **kuzu ignore la projection dans `QUERY_VECTOR_INDEX`** — une projection
+     Cypher `WHERE n._project = 'beta'` rend aussi les nœuds `alpha`. Ça
+     concerne *tous* les filtres vectoriels utilisateur (jamais testés en E2E
+     avant ce soir). Canari : `e2e_scope::canary_kuzu_projected_graph_vector_filter_is_ignored`
+     — il affirme le bug ; quand il échoue, le post-filtre peut sauter.
+     À investiguer côté C++ (`extension/vector/src/function/query_hnsw_index.cpp`,
+     masque sémantique `semiMasks`).
+  2. Le **sparse n'appliquait aucun filtre** (§2.6) — corrigé.
+  3. **`ingest_entities` ne flushait pas le blob store** : les fichiers d'index
+     d'une entité simple restaient dans le tampon jusqu'au drain suivant — ou
+     au `Drop`. Frontière ajoutée (`flush_blob_store("ingest")`).
+- Reste : **E** (FFI : `set_scope`, `scope`/`scopes` dans les options par
+  serde) et **F** (docs 30/31, README). RBAC : pas maintenant ; la charnière
+  est `set_scope` + une future vue restreinte (`restrict_to(cells)`), les
+  rôles seront des données du graphe avec le chantier MCP.

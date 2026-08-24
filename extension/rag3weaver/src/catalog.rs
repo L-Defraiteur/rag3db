@@ -131,6 +131,15 @@ pub struct Catalog {
     /// La cellule (org, project) courante : stampe l'ingestion, sélectionne
     /// les index, filtre la recherche par défaut (doc 37).
     scope: crate::scope::Scope,
+    /// Handles des autres cellules déjà ouvertes (un index par cellule, doc 37
+    /// §2.2). `fts_handles`/`sparse_handles` sont ceux de la cellule courante ;
+    /// `set_scope` les échange avec ceux-ci.
+    parked_fts: HashMap<crate::scope::Scope, HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>,
+    parked_sparse: HashMap<crate::scope::Scope, HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>,
+    /// Vrai dès que la base héberge (ou a hébergé) plus d'une cellule : le
+    /// filtre vectoriel par colonnes de scope n'est ajouté que dans ce cas —
+    /// le mono-tenant garde le chemin HNSW sans projection.
+    multi_cell: bool,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -191,6 +200,9 @@ impl Catalog {
             kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
             scope: crate::scope::Scope::default(),
+            parked_fts: HashMap::new(),
+            parked_sparse: HashMap::new(),
+            multi_cell: false,
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
@@ -281,13 +293,15 @@ impl Catalog {
             return;
         }
         let Some(ref blob_store) = self.blob_store else { return };
+        // Un index par cellule (org, project), comme pour le FTS.
+        let scoped = self.scope.index_name(table);
         // Try open first (index may already exist in BlobStore), fall back to create.
         let handle = match sparse_vector::handle::SparseHandle::open_with_store(
-            blob_store.clone(), table, &self.cache_base,
+            blob_store.clone(), &scoped, &self.cache_base,
         ) {
             Ok(h) => h,
             Err(_) => match sparse_vector::handle::SparseHandle::create_with_store(
-                blob_store.clone(), table, &self.cache_base,
+                blob_store.clone(), &scoped, &self.cache_base,
             ) {
                 Ok(h) => h,
                 Err(e) => {
@@ -335,7 +349,12 @@ impl Catalog {
                 .unwrap_or_else(|| "panic (non-string payload)".into())
         }
 
-        for (table, handle) in self.fts_handles.drain() {
+        let mut all: Vec<(String, Arc<lucivy_core::sharded_handle::ShardedHandle>)> =
+            self.fts_handles.drain().collect();
+        for (scope, handles) in self.parked_fts.drain() {
+            all.extend(handles.into_iter().map(|(t, h)| (format!("{t}@{}/{}", scope.org, scope.project), h)));
+        }
+        for (table, handle) in all {
             match Arc::try_unwrap(handle) {
                 Ok(h) => match catch_unwind(AssertUnwindSafe(|| h.close())) {
                     Ok(Ok(_)) => closed += 1,
@@ -423,7 +442,8 @@ impl Catalog {
         use lucivy_core::sharded_handle::{
             BlobShardStorage, FsShardStorage, ShardStorage, ShardedHandle,
         };
-        let index_name = crate::fts_handle::fts_index_name(table);
+        // Un index par cellule (org, project) : jamais partagé (doc 37 §2.2).
+        let index_name = self.scope.index_name(&crate::fts_handle::fts_index_name(table));
 
         let storage = || -> Option<Box<dyn ShardStorage>> {
             match &self.fts_storage {
@@ -520,7 +540,12 @@ impl Catalog {
         // 2. Commit and drop sparse handles (release writer locks).
         let mut sparse_committed: usize = 0;
         let mut sparse_failed: Vec<String> = Vec::new();
-        for (table, handle) in self.sparse_handles.drain() {
+        let mut all_sparse: Vec<(String, Arc<sparse_vector::handle::SparseHandle>)> =
+            self.sparse_handles.drain().collect();
+        for (scope, handles) in self.parked_sparse.drain() {
+            all_sparse.extend(handles.into_iter().map(|(t, h)| (format!("{t}@{}/{}", scope.org, scope.project), h)));
+        }
+        for (table, handle) in all_sparse {
             match handle.commit_inner() {
                 Ok(_) => sparse_committed += 1,
                 Err(e) => {
@@ -686,6 +711,7 @@ impl Catalog {
         }
         self.migrate_scope_columns()?;
         self.ensure_scope_nodes()?;
+        self.multi_cell = self.multi_cell || self.count_scope_nodes()? > 1;
 
         // 11. Initialize search backend (default: Rag3dbSearchBackend)
         if self.search_backend.is_none() {
@@ -1281,7 +1307,7 @@ impl Catalog {
             if target.default_signals.bm25() {
                 let table = target.parent_table.clone();
                 let fields = target.bm25_fields.clone();
-                if let Some(handle) = self.ensure_fts_handle(&table, &fields, &[]) {
+                if let Some(handle) = self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields()) {
                     let uuid_items = CypherValue::List(
                         result.rows.iter().filter_map(|row| {
                             row.first().and_then(|v| v.as_str()).map(|u| {
@@ -1391,11 +1417,57 @@ impl Catalog {
     /// `_Project` sont créés s'ils manquent.
     pub fn set_scope(&mut self, scope: crate::scope::Scope) -> Result<(), CatalogError> {
         scope.validate().map_err(CatalogError::SchemaError)?;
-        self.scope = scope;
+        if !scope.is_default() {
+            self.multi_cell = true;
+        }
+        if scope != self.scope {
+            // Un index par cellule : on gare ceux de la cellule qu'on quitte,
+            // on reprend ceux de la cellule qu'on rejoint (ouverts paresseusement
+            // sinon).
+            let old = std::mem::replace(&mut self.scope, scope);
+            let fts = std::mem::take(&mut self.fts_handles);
+            let sparse = std::mem::take(&mut self.sparse_handles);
+            if !fts.is_empty() {
+                self.parked_fts.insert(old.clone(), fts);
+            }
+            if !sparse.is_empty() {
+                self.parked_sparse.insert(old, sparse);
+            }
+            self.fts_handles = self.parked_fts.remove(&self.scope).unwrap_or_default();
+            self.sparse_handles = self.parked_sparse.remove(&self.scope).unwrap_or_default();
+        }
         if self.initialized {
             self.ensure_scope_nodes()?;
         }
         Ok(())
+    }
+
+    /// Les handles FTS d'une cellule (courante ou garée), par table.
+    pub fn fts_handles_in(
+        &self,
+        scope: &crate::scope::Scope,
+    ) -> Option<&HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>> {
+        if *scope == self.scope { Some(&self.fts_handles) } else { self.parked_fts.get(scope) }
+    }
+
+    /// Les handles sparse d'une cellule (courante ou garée), par table.
+    pub fn sparse_handles_in(
+        &self,
+        scope: &crate::scope::Scope,
+    ) -> Option<&HashMap<String, Arc<sparse_vector::handle::SparseHandle>>> {
+        if *scope == self.scope { Some(&self.sparse_handles) } else { self.parked_sparse.get(scope) }
+    }
+
+    /// Nombre de cellules connues (max des orgs et des projets).
+    fn count_scope_nodes(&self) -> Result<usize, CatalogError> {
+        let mut max = 0usize;
+        for table in [crate::scope::ORG_TABLE, crate::scope::PROJECT_TABLE] {
+            let res = self.conn.execute(&format!("MATCH (n:{table}) RETURN count(n)"))
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let n = res.rows.first().and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+            max = max.max(n);
+        }
+        Ok(max)
     }
 
     /// MERGE des nœuds `_Org {_uuid: org}` et `_Project {_uuid: project}`.
@@ -1923,6 +1995,10 @@ impl Catalog {
                 // A cross-entity KB failing to aggregate was therefore invisible
                 // to the caller — Ok(..) with a clean count, and only a line on
                 // stderr to show for it.
+                // Frontière de durabilité : sans ce flush, les fichiers d'index
+                // commités par ce graphe restaient dans le tampon jusqu'au
+                // prochain drain — ou au Drop.
+                self.flush_blob_store("ingest");
                 Ok(FlushResult {
                     processed: record_count,
                     failed: kb_failed,
@@ -2304,7 +2380,7 @@ impl Catalog {
                 if target.default_signals.bm25() {
                     let table = target.parent_table.clone();
                     let fields = target.bm25_fields.clone();
-                    self.ensure_fts_handle(&table, &fields, &[]);
+                    self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
                 }
             }
         }
@@ -2894,6 +2970,124 @@ impl Catalog {
 
     // ── Search ─────────────────────────────────────────────────────────
 
+    /// Ne garde que les hits vectoriels (chunks) de la cellule courante, dans
+    /// l'ordre reçu. Vérification par colonnes, parce que le graphe projeté
+    /// n'est pas respecté par QUERY_VECTOR_INDEX (voir le canari de e2e_scope).
+    fn scope_post_filter(
+        &self,
+        chunk_table: &str,
+        hits: Vec<search::SearchResult>,
+    ) -> Result<Vec<search::SearchResult>, CatalogError> {
+        if hits.is_empty() {
+            return Ok(hits);
+        }
+        let uuids = CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect());
+        let stmt = format!(
+            "MATCH (c:{chunk_table}) WHERE c.{} = $org AND c.{} = $project AND list_contains($uuids, c._uuid) RETURN c._uuid",
+            crate::scope::ORG_COLUMN, crate::scope::PROJECT_COLUMN
+        );
+        let res = self.conn.execute_with_params(&stmt, &[
+            QueryParam::new("org", CypherValue::String(self.scope.org.clone())),
+            QueryParam::new("project", CypherValue::String(self.scope.project.clone())),
+            QueryParam::new("uuids", uuids),
+        ]).map_err(|e| CatalogError::DbError(format!("scope post-filter: {e}")))?;
+        let keep: std::collections::HashSet<String> = res.rows.iter()
+            .filter_map(|r| r.get(0).and_then(|v| v.as_str()).map(String::from))
+            .collect();
+        Ok(hits.into_iter().filter(|h| keep.contains(&h.uuid)).collect())
+    }
+
+    /// Fan-out sur plusieurs cellules : une recherche par cellule, fusion par
+    /// rang (RRF, k = 60) — les scores BM25 de deux index ne sont pas
+    /// comparables (IDF distincts), les rangs le sont. Sur-fetch de
+    /// `limit + offset` par cellule, puis pagination sur la liste fusionnée.
+    fn search_fan_out(
+        &mut self,
+        name: &str,
+        query: &str,
+        options: search::SearchOptions,
+    ) -> Result<search::SearchResponse, CatalogError> {
+        let mut cells: Vec<crate::scope::Scope> = Vec::new();
+        for c in &options.scopes {
+            if !cells.contains(c) {
+                cells.push(c.clone());
+            }
+        }
+        let saved = self.scope.clone();
+        let mut per_cell: Vec<search::SearchResponse> = Vec::new();
+        let mut first_err: Option<CatalogError> = None;
+        let mut base = options.clone();
+        base.scopes.clear();
+        base.scope = None;
+        base.limit = options.limit + options.offset;
+        base.offset = 0;
+        for cell in &cells {
+            if let Err(e) = self.set_scope(cell.clone()) {
+                first_err = Some(e);
+                break;
+            }
+            match self.search(name, query, base.clone()) {
+                Ok(r) => per_cell.push(r),
+                Err(e) => {
+                    first_err = Some(e);
+                    break;
+                }
+            }
+        }
+        self.set_scope(saved)?;
+        if let Some(e) = first_err {
+            return Err(e);
+        }
+        let Some(mut first) = per_cell.first().cloned() else {
+            return Err(CatalogError::ValidationFailed("scopes: aucune cellule".into()));
+        };
+        const K: f64 = 60.0;
+        let mut fused: Vec<(f64, search::SearchResult)> = Vec::new();
+        let mut index: HashMap<String, usize> = HashMap::new();
+        let (mut meta_vector, mut meta_bm25, mut meta_sparse, mut time_ms) = (0usize, 0usize, 0usize, 0u64);
+        for resp in &per_cell {
+            meta_vector += resp.meta.vector_count;
+            meta_bm25 += resp.meta.bm25_count;
+            meta_sparse += resp.meta.sparse_count;
+            time_ms += resp.meta.search_time_ms;
+            for (rank, r) in resp.results.iter().enumerate() {
+                let contribution = 1.0 / (K + rank as f64 + 1.0);
+                match index.get(&r.uuid) {
+                    Some(&i) => fused[i].0 += contribution,
+                    None => {
+                        index.insert(r.uuid.clone(), fused.len());
+                        fused.push((contribution, r.clone()));
+                    }
+                }
+            }
+        }
+        fused.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.uuid.cmp(&b.1.uuid))
+        });
+        let results: Vec<search::SearchResult> = fused
+            .into_iter()
+            .skip(options.offset)
+            .take(options.limit)
+            .map(|(score, mut r)| {
+                r.score = score;
+                r
+            })
+            .collect();
+        first.meta.vector_count = meta_vector;
+        first.meta.bm25_count = meta_bm25;
+        first.meta.sparse_count = meta_sparse;
+        first.meta.fused_count = results.len();
+        first.meta.search_time_ms = time_ms;
+        first.meta.warnings.push(format!(
+            "fan-out sur {} cellule(s) : fusion par rang (RRF), les scores ne sont pas comparables entre cellules",
+            cells.len()
+        ));
+        first.results = results;
+        Ok(first)
+    }
+
     pub fn search(
         &mut self,
         name: &str,
@@ -2901,6 +3095,22 @@ impl Catalog {
         options: search::SearchOptions,
     ) -> Result<search::SearchResponse, CatalogError> {
         self.check_initialized()?;
+        // Multi-tenant (doc 37) : fan-out sur plusieurs cellules, ou une autre
+        // cellule que la courante — on bascule les handles le temps de l'appel.
+        if !options.scopes.is_empty() {
+            return self.search_fan_out(name, query, options);
+        }
+        if let Some(wanted) = options.scope.clone() {
+            if wanted != self.scope {
+                let saved = self.scope.clone();
+                self.set_scope(wanted)?;
+                let mut inner = options.clone();
+                inner.scope = None;
+                let out = self.search(name, query, inner);
+                self.set_scope(saved)?;
+                return out;
+            }
+        }
 
         let target = self.resolve_search_target(name)?;
 
@@ -2910,7 +3120,7 @@ impl Catalog {
         if target.default_signals.bm25() {
             let table = target.parent_table.clone();
             let fields = target.bm25_fields.clone();
-            self.ensure_fts_handle(&table, &fields, &[]);
+            self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
         }
 
         let pending_count = self.pending.total_count();
@@ -2965,6 +3175,24 @@ impl Catalog {
             (where_str, parsed.params, match_str)
         } else {
             (None, vec![], None)
+        };
+        // Multi-tenant : le HNSW est par table, l'isolation vectorielle vient
+        // du filtre sur les colonnes de scope (doc 37 §3). Mono-tenant : rien.
+        let (filter_where, filter_params) = if self.multi_cell {
+            let scope_where = format!(
+                "n.{} = $_scope_org AND n.{} = $_scope_project",
+                crate::scope::ORG_COLUMN, crate::scope::PROJECT_COLUMN
+            );
+            let mut params = filter_params;
+            params.push(QueryParam::new("_scope_org", CypherValue::String(self.scope.org.clone())));
+            params.push(QueryParam::new("_scope_project", CypherValue::String(self.scope.project.clone())));
+            let where_str = match filter_where {
+                Some(w) => format!("({w}) AND {scope_where}"),
+                None => scope_where,
+            };
+            (Some(where_str), params)
+        } else {
+            (filter_where, filter_params)
         };
 
         // For BM25 search: resolve ALL filters to allowed_ids.
@@ -3077,16 +3305,36 @@ impl Catalog {
 
         // ── Run searches based on signals ─────────────────────────────────
         let t_vector = Instant::now();
+        // Multi-tenant : QUERY_VECTOR_INDEX sur graphe projeté rend des nœuds
+        // hors projection (bug kuzu/vector, canari dans e2e_scope) — le WHERE
+        // de scope ne suffit donc pas. Sur-fetch, puis post-filtre par colonnes.
+        // Toujours collectés (`meta.warnings`) : moteur, attribution de chunks, scope.
+        let mut search_warnings: Vec<String> = Vec::new();
+        let vector_limit = if self.multi_cell { (search_limit * 4).max(50) } else { search_limit };
         let vector_results = if need_dense {
-            search::search_vector_via_backend(
+            let hits = search::search_vector_via_backend(
                 self.search_backend.as_ref().unwrap().as_ref(),
                 vector_entity,
                 &embedding,
-                search_limit,
+                vector_limit,
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
-            )?
+            )?;
+            if self.multi_cell {
+                let fetched = hits.len();
+                let kept = self.scope_post_filter(vector_entity, hits)?;
+                if kept.len() < search_limit && fetched >= vector_limit {
+                    search_warnings.push(format!(
+                        "scope vectoriel : sur-fetch épuisé ({fetched} candidats, {} dans la cellule) — \
+                         des résultats de la cellule peuvent manquer",
+                        kept.len()
+                    ));
+                }
+                kept.into_iter().take(search_limit).collect()
+            } else {
+                hits
+            }
         } else {
             vec![]
         };
@@ -3096,7 +3344,6 @@ impl Catalog {
         let t_bm25 = Instant::now();
         // Always collected, unlike `diag`: the engine's own warnings plus our
         // chunk-attribution anomalies ride back in `meta.warnings`.
-        let mut search_warnings: Vec<String> = Vec::new();
         let bm25_results = if signals.bm25() {
             if is_chunked {
                 search::search_bm25_chunked(
@@ -3133,8 +3380,7 @@ impl Catalog {
                     vector_entity,
                     &qv,
                     search_limit,
-                    sparse_fields,
-                )?
+                    sparse_fields, allowed_ids.as_deref())?
             } else {
                 vec![]
             }
@@ -4930,7 +5176,7 @@ impl Drop for Catalog {
     /// connexion déjà libérée — ce qui se manifeste par un SIGSEGV, pas par une
     /// erreur Rust.
     fn drop(&mut self) {
-        if !self.fts_handles.is_empty() {
+        if !self.fts_handles.is_empty() || !self.parked_fts.is_empty() {
             let (_, failed) = self.close_fts_handles();
             for f in failed {
                 eprintln!("[rag3weaver] drop: fermeture FTS incomplète — {f}");

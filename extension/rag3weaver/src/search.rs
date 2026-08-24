@@ -284,6 +284,13 @@ pub struct SearchOptions {
     /// When true, populate SearchMeta.diagnostics with detailed per-hit BM25
     /// highlight/chunk overlap info and per-phase timing.
     pub diagnostics: bool,
+    /// Chercher dans une autre cellule (org, project) que la courante du
+    /// `Catalog` (doc 37). `None` = la cellule courante.
+    pub scope: Option<crate::scope::Scope>,
+    /// Fan-out : chercher dans plusieurs cellules et fusionner par rang (RRF).
+    /// Les scores ne sont pas comparables entre cellules (IDF distincts) ;
+    /// `meta.warnings` le rappelle. Prime sur `scope`.
+    pub scopes: Vec<crate::scope::Scope>,
 }
 
 impl Default for SearchOptions {
@@ -301,6 +308,8 @@ impl Default for SearchOptions {
             fusion: None,
             result_mode: ResultMode::default(),
             diagnostics: false,
+            scope: None,
+            scopes: Vec::new(),
         }
     }
 }
@@ -2190,6 +2199,7 @@ pub fn search_sparse_via_backend(
     query_vector: &SparseVector,
     limit: usize,
     return_fields: &[String],
+    allowed_ids: Option<&[u64]>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if query_vector.is_empty() {
         return Ok(vec![]);
@@ -2199,7 +2209,13 @@ pub fn search_sparse_via_backend(
         query_vector.indices.clone(),
         query_vector.values.clone(),
     );
-    let raw_results = handle.search(&sv, limit);
+    // Le filtre utilisateur (FilterCondition → offsets) s'applique au sparse
+    // comme au BM25 ; avant le 24 août il n'était appliqué qu'au BM25 et au
+    // vecteur (doc 37 §2.6).
+    let raw_results = match allowed_ids {
+        Some(ids) => handle.search_filtered(&sv, limit, ids),
+        None => handle.search(&sv, limit),
+    };
 
     if raw_results.is_empty() {
         return Ok(vec![]);
