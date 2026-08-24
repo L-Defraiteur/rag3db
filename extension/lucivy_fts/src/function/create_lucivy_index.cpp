@@ -269,9 +269,14 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
             "\",\"stored\":true,\"indexed\":true,\"fast\":true}";
     }
     schemaJson += "]";
-    if (!bd.stemmer.empty()) {
-        schemaJson += ",\"stemmer\":\"" + bd.stemmer + "\"";
-    }
+    // Le champ "stemmer" a disparu de SchemaConfig en lucivy v3, qui rejette
+    // désormais les clés inconnues (lucivy 32ca1dc) : l'émettre fait échouer la
+    // création d'index avec « unknown field `stemmer` ».
+    //
+    // On le RETIRE plutôt que de le renommer en "tokenizer" : ce dernier ne
+    // désigne pas la même chose, et le renommer changerait silencieusement la
+    // sélection du tokenizer. v3 n'ayant aucun champ stemmer, ne rien envoyer
+    // est la traduction fidèle de ce qu'il sait faire.
     schemaJson += "}";
 
     // 3. Create Lucivy index via cxx bridge.
