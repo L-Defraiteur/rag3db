@@ -261,6 +261,21 @@ impl Default for BM25Mode {
 // ─── SearchOptions ───────────────────────────────────────────────────────────
 
 /// Options for search queries.
+/// Options de reranking.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RerankOptions {
+    /// Taille du pool rescoré (les `candidates` premiers résultats fusionnés),
+    /// au moins `limit + offset`. Le reste garde son ordre de fusion derrière.
+    pub candidates: usize,
+}
+
+impl Default for RerankOptions {
+    fn default() -> Self {
+        Self { candidates: 50 }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchOptions {
@@ -291,6 +306,9 @@ pub struct SearchOptions {
     /// Les scores ne sont pas comparables entre cellules (IDF distincts) ;
     /// `meta.warnings` le rappelle. Prime sur `scope`.
     pub scopes: Vec<crate::scope::Scope>,
+    /// Reranking (cross-encoder) du pool fusionné, avant la pagination.
+    /// Requiert un `Catalog::set_reranker` ; sinon `meta.warnings` le dit.
+    pub rerank: Option<RerankOptions>,
 }
 
 impl Default for SearchOptions {
@@ -310,6 +328,7 @@ impl Default for SearchOptions {
             diagnostics: false,
             scope: None,
             scopes: Vec::new(),
+            rerank: None,
         }
     }
 }
@@ -437,6 +456,7 @@ pub struct SearchDiagnostics {
     pub sparse_ms: u64,
     pub resolve_ms: u64,
     pub fuse_ms: u64,
+    pub rerank_ms: u64,
     pub enrich_ms: u64,
     pub total_ms: u64,
 }
@@ -541,6 +561,8 @@ pub struct SearchMeta {
     pub bm25_count: usize,
     pub sparse_count: usize,
     pub fused_count: usize,
+    /// Résultats rescorés par le reranker (0 sans `rerank`).
+    pub reranked_count: usize,
     pub search_time_ms: u64,
     /// Honest warnings about this search, populated **regardless** of the
     /// `diagnostics` flag: what lucivy reported before running the query

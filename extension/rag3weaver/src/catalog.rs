@@ -118,6 +118,8 @@ pub struct Catalog {
     // qu'on ne veut pas devoir supposer.
     embedder: Arc<dyn Embedder>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
+    /// Cross-encoder optionnel (doc 29, chantier 3) — `SearchOptions.rerank`.
+    reranker: Option<Arc<dyn crate::reranker::Reranker>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
@@ -192,6 +194,7 @@ impl Catalog {
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
             sparse_embedder: None,
+            reranker: None,
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
@@ -235,6 +238,12 @@ impl Catalog {
 
     /// Replace the dense embedder with a shared Arc.
     /// Use this to share a single model instance between dense and sparse roles.
+    /// Branche un reranker (cross-encoder). Activé par requête via
+    /// `SearchOptions.rerank`.
+    pub fn set_reranker(&mut self, reranker: Arc<dyn crate::reranker::Reranker>) {
+        self.reranker = Some(reranker);
+    }
+
     pub fn set_embedder(&mut self, embedder: Arc<dyn Embedder>) {
         self.embedder = embedder;
     }
@@ -3142,6 +3151,11 @@ impl Catalog {
         let signals = options.signals.unwrap_or(target.default_signals);
 
         let search_limit = (options.limit + options.offset) * 2;
+        // Reranking : le pool rescoré doit exister avant la pagination.
+        let search_limit = match options.rerank {
+            Some(ref rk) => search_limit.max(rk.candidates),
+            None => search_limit,
+        };
         let entity = &target.parent_table;
         let vector_entity = &target.chunk_table;
         let bm25_fields = &target.bm25_fields;
@@ -3419,6 +3433,69 @@ impl Catalog {
         );
         let fused_count = fused.len();
 
+        // Reranking (cross-encoder) du pool fusionné, avant la pagination —
+        // sinon on rescorerait une page, pas un pool.
+        let t_rerank = Instant::now();
+        let mut reranked_count = 0usize;
+        if let Some(ref rk) = options.rerank {
+            match self.reranker.clone() {
+                None => search_warnings.push(
+                    "rerank demandé, aucun reranker configuré (Catalog::set_reranker) — ordre de fusion conservé".into(),
+                ),
+                Some(reranker) => {
+                    let pool = rk.candidates.max(options.limit + options.offset).min(fused.len());
+                    let tail = fused.split_off(pool);
+                    // Le pool doit porter son texte : les résultats non chunkés
+                    // n'ont leurs champs qu'après enrichissement, qui vient
+                    // normalement après la pagination — on l'avance pour le pool.
+                    if fused.iter().any(|r| r.data.is_none()) && !enrich_fields.is_empty() {
+                        search::enrich_results_with_data_via_backend(
+                            self.search_backend.as_ref().unwrap().as_ref(), entity, enrich_fields, &mut fused,
+                        )?;
+                    }
+                    let passages: Vec<String> = fused.iter().map(crate::reranker::passage_text).collect();
+                    if passages.iter().all(|p| p.is_empty()) && !passages.is_empty() {
+                        search_warnings.push("rerank: aucun texte de passage disponible (ni chunk, ni _content) — ordre de fusion conservé".into());
+                        fused.extend(tail);
+                    } else {
+                        match reranker.rerank(query, &passages) {
+                            Ok(scores) if scores.len() == fused.len() => {
+                                let mut idx: Vec<usize> = (0..fused.len()).collect();
+                                idx.sort_by(|&a, &b| {
+                                    scores[b].partial_cmp(&scores[a])
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                        .then(a.cmp(&b))
+                                });
+                                let mut reordered: Vec<search::SearchResult> = idx
+                                    .into_iter()
+                                    .map(|i| {
+                                        let mut r = fused[i].clone();
+                                        r.score = scores[i] as f64;
+                                        r
+                                    })
+                                    .collect();
+                                reranked_count = reordered.len();
+                                reordered.extend(tail);
+                                fused = reordered;
+                            }
+                            Ok(scores) => {
+                                search_warnings.push(format!(
+                                    "rerank ({}): {} scores pour {} passages — ordre de fusion conservé",
+                                    reranker.name(), scores.len(), fused.len()
+                                ));
+                                fused.extend(tail);
+                            }
+                            Err(e) => {
+                                search_warnings.push(format!("rerank ({}): {e} — ordre de fusion conservé", reranker.name()));
+                                fused.extend(tail);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(ref mut d) = diag { d.rerank_ms = t_rerank.elapsed().as_millis() as u64; }
+
         // Pagination
         if options.offset > 0 {
             if options.offset >= fused.len() {
@@ -3471,6 +3548,7 @@ impl Catalog {
                 bm25_count,
                 sparse_count,
                 fused_count,
+                reranked_count,
                 search_time_ms: total_ms,
                 diagnostics: diag,
             },
