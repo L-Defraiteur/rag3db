@@ -318,20 +318,34 @@ impl Catalog {
     fn close_fts_handles(&mut self) -> (usize, Vec<String>) {
         let mut closed = 0usize;
         let mut failed = Vec::new();
+        // Appelé depuis `Drop`, donc potentiellement pendant un déroulement de
+        // pile. `close()` peut paniquer (`Scheduler::wait` sur un acteur mort —
+        // vu sous valgrind le 24 août) ; une panique qui s'échappe d'un
+        // destructeur pendant un déroulement n'est pas rattrapable : c'est un
+        // abort du processus. On la convertit en échec rapporté.
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+        fn describe(p: Box<dyn std::any::Any + Send>) -> String {
+            p.downcast_ref::<String>()
+                .cloned()
+                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "panic (non-string payload)".into())
+        }
+
         for (table, handle) in self.fts_handles.drain() {
             match Arc::try_unwrap(handle) {
-                Ok(h) => match h.close() {
-                    Ok(_) => closed += 1,
-                    Err(e) => failed.push(format!("{table}: {e}")),
+                Ok(h) => match catch_unwind(AssertUnwindSafe(|| h.close())) {
+                    Ok(Ok(_)) => closed += 1,
+                    Ok(Err(e)) => failed.push(format!("{table}: {e}")),
+                    Err(p) => failed.push(format!("{table}: close() a paniqué: {}", describe(p))),
                 },
                 Err(shared) => {
                     // D'autres références vivent encore : on commite au moins,
                     // pour ne pas perdre l'état, et on laisse le dernier `Drop`
                     // faire le reste.
-                    if let Err(e) = shared.commit() {
-                        failed.push(format!("{table} (commit seul): {e}"));
-                    } else {
-                        closed += 1;
+                    match catch_unwind(AssertUnwindSafe(|| shared.commit())) {
+                        Ok(Ok(())) => closed += 1,
+                        Ok(Err(e)) => failed.push(format!("{table} (commit seul): {e}")),
+                        Err(p) => failed.push(format!("{table} (commit seul) a paniqué: {}", describe(p))),
                     }
                 }
             }
