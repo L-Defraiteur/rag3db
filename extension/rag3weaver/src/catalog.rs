@@ -2905,13 +2905,16 @@ impl Catalog {
         if let Some(ref mut d) = diag { d.vector_ms = t_vector.elapsed().as_millis() as u64; }
 
         let t_bm25 = Instant::now();
+        // Always collected, unlike `diag`: the engine's own warnings plus our
+        // chunk-attribution anomalies ride back in `meta.warnings`.
+        let mut search_warnings: Vec<String> = Vec::new();
         let bm25_results = if signals.bm25() {
             if is_chunked {
                 search::search_bm25_chunked(
                     self.conn.as_ref(), &target, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields, options.result_mode,
-                    diag.as_mut(),
+                    diag.as_mut(), &mut search_warnings,
                     self.fts_handles.get(&target.parent_table).map(|h| h.as_ref()),
                 )?
             } else {
@@ -3027,6 +3030,7 @@ impl Catalog {
                 partial: pending_count > 0
                     && options.consistency == search::Consistency::Immediate,
                 pending_count,
+                warnings: std::mem::take(&mut search_warnings),
                 vector_count,
                 bm25_count,
                 sparse_count,

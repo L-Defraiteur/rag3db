@@ -370,6 +370,14 @@ pub struct BM25HitDiagnostic {
     pub chunks_matched: usize,
     /// Per-chunk overlap details (only for chunks with overlap > 0).
     pub chunk_overlaps: Vec<ChunkOverlapDiag>,
+    /// Why this hit got no chunk. `None` when it did.
+    ///
+    /// Distinguishing these matters: `NoHighlights` is the documented, expected
+    /// outcome of lucivy's QueryParser branch, while `NoOverlap` means spans
+    /// *were* produced and matched nothing — a chunking bug. Folding them
+    /// together would hide the second behind the first.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub unattributed: Option<ChunkAttributionMiss>,
 }
 
 /// Diagnostic for a single chunk's overlap with highlights.
@@ -383,6 +391,21 @@ pub struct ChunkOverlapDiag {
     pub global_start: usize,
     pub global_end: usize,
     pub overlap: usize,
+}
+
+/// Why a BM25 hit could not be attributed to any chunk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChunkAttributionMiss {
+    /// No highlight spans at all — expected on lucivy's QueryParser branch
+    /// (boolean syntax), which never touches the sink.
+    NoHighlights,
+    /// Highlights existed, but only on non-content fields (title-only match).
+    HighlightsOutsideContent,
+    /// Content spans existed and overlapped no chunk. Anomalous.
+    NoOverlap,
+    /// The parent has no chunks at all.
+    NoChunks,
 }
 
 /// Search diagnostics: detailed info about what happened internally.
@@ -508,6 +531,16 @@ pub struct SearchMeta {
     pub sparse_count: usize,
     pub fused_count: usize,
     pub search_time_ms: u64,
+    /// Honest warnings about this search, populated **regardless** of the
+    /// `diagnostics` flag: what lucivy reported before running the query
+    /// (QueryParser semantics and no highlights, regex without a literal, fuzzy
+    /// too loose...) plus our own chunk-attribution anomalies.
+    ///
+    /// `SearchDiagnostics::engine_warnings` carries the same engine lines, but
+    /// only when diagnostics are requested — and a warning nobody can see is
+    /// what cost us an afternoon.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub warnings: Vec<String>,
     /// Detailed diagnostics (only when SearchOptions.diagnostics == true).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<SearchDiagnostics>,
@@ -2086,6 +2119,9 @@ pub fn search_bm25_chunked(
     return_fields: &[String],
     result_mode: ResultMode,
     mut diagnostics: Option<&mut SearchDiagnostics>,
+    // Canal d'avertissements toujours actif, contrairement à `diagnostics` :
+    // ce que lucivy annonce avant la requête, plus nos anomalies d'attribution.
+    warnings: &mut Vec<String>,
     // `fts` : index Rust de la table parente s'il est ouvert. Absent → repli
     // sur l'extension C++, le temps que toutes les tables soient migrées.
     fts: Option<&lucivy_core::sharded_handle::ShardedHandle>,
@@ -2111,10 +2147,11 @@ pub fn search_bm25_chunked(
         // Avertissements honnêtes du moteur (littéral trop court, regex sans
         // littéral = full scan, fuzzy trop lâche...). Gratuit, et invisible
         // depuis le chemin C++.
-        if let Some(ref mut diag) = diagnostics {
-            for w in handle.query_warnings(&query_config) {
-                diag.engine_warnings.push(w);
+        for w in handle.query_warnings(&query_config) {
+            if let Some(ref mut diag) = diagnostics {
+                diag.engine_warnings.push(w.clone());
             }
+            warnings.push(w);
         }
 
         let hits: Vec<(u64, f64, String)> = raw
@@ -2135,7 +2172,7 @@ pub fn search_bm25_chunked(
             .collect();
 
         return finish_bm25_chunked(
-            conn, target, hits, return_fields, result_mode, diagnostics,
+            conn, target, hits, return_fields, result_mode, diagnostics, warnings,
         );
     }
 
@@ -2184,7 +2221,7 @@ pub fn search_bm25_chunked(
         return Ok(vec![]);
     }
 
-    finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics)
+    finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics, warnings)
 }
 
 
@@ -2202,6 +2239,7 @@ fn finish_bm25_chunked(
     return_fields: &[String],
     result_mode: ResultMode,
     mut diagnostics: Option<&mut SearchDiagnostics>,
+    warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     let entity = &target.parent_table;
     if hits.is_empty() {
@@ -2233,6 +2271,10 @@ fn finish_bm25_chunked(
         //   Match by chunk.parent_field, compare field-local offsets directly.
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
         let mut diag_overlaps: Vec<ChunkOverlapDiag> = Vec::new();
+        // Did any span actually get compared against a chunk? Without this we
+        // cannot tell "the engine produced no spans" (normal on the QueryParser
+        // branch) from "spans existed and matched nothing" (a chunking bug).
+        let mut content_spans_considered = false;
         for chunk in &parent.chunks {
             let mut overlap = 0usize;
             let chunk_start_global = chunk.content_offset + chunk.start_char;
@@ -2240,6 +2282,7 @@ fn finish_bm25_chunked(
 
             // KB mode: "_content" highlights use global offsets
             if let Some(hl_offsets) = highlights.get("_content") {
+                content_spans_considered |= !hl_offsets.is_empty();
                 for &(h_start, h_end) in hl_offsets {
                     let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
                     overlap += ov;
@@ -2248,6 +2291,7 @@ fn finish_bm25_chunked(
             // Simple entity mode: per-field highlights matched by parent_field
             if !chunk.parent_field.is_empty() {
                 if let Some(hl_offsets) = highlights.get(&chunk.parent_field) {
+                    content_spans_considered |= !hl_offsets.is_empty();
                     for &(h_start, h_end) in hl_offsets {
                         let ov = h_end.min(chunk.end_char).saturating_sub(h_start.max(chunk.start_char));
                         overlap += ov;
@@ -2270,6 +2314,31 @@ fn finish_bm25_chunked(
             }
         }
 
+        // Classify a miss before recording it. lucivy guarantees "absent, never
+        // wrong": the QueryParser branch leaves the sink untouched rather than
+        // emitting stale spans (their doc 16). So an empty map is expected, and
+        // only spans-that-match-nothing points at our own chunking.
+        let unattributed = if !matched_chunks.is_empty() {
+            None
+        } else if parent.chunks.is_empty() {
+            Some(ChunkAttributionMiss::NoChunks)
+        } else if highlights.is_empty() {
+            Some(ChunkAttributionMiss::NoHighlights)
+        } else if content_spans_considered {
+            Some(ChunkAttributionMiss::NoOverlap)
+        } else {
+            Some(ChunkAttributionMiss::HighlightsOutsideContent)
+        };
+
+        if unattributed == Some(ChunkAttributionMiss::NoOverlap) {
+            warnings.push(format!(
+                "chunk attribution: {} highlight span(s) on '{}' overlapped none of its {} chunk(s)                  — the document is returned whole; suspect chunk offsets",
+                highlights.values().map(|v| v.len()).sum::<usize>(),
+                parent.uuid,
+                parent.chunks.len(),
+            ));
+        }
+
         // Record BM25 hit diagnostic
         if let Some(ref mut diag) = diagnostics {
             diag.bm25_hits.push(BM25HitDiagnostic {
@@ -2280,6 +2349,7 @@ fn finish_bm25_chunked(
                 chunks_available: parent.chunks.len(),
                 chunks_matched: matched_chunks.len(),
                 chunk_overlaps: diag_overlaps,
+                unattributed,
             });
         }
 

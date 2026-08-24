@@ -250,3 +250,56 @@ fn symbol_matches_accented_text() {
     let mut catalog = setup();
     assert_eq!(titles(&mut catalog, "crème brûlée", BM25Mode::Symbol), vec!["accents"]);
 }
+
+// ─── parse × highlights (contrat lucivy, doc 16) ────────────────────────────
+
+/// lucivy's QueryParser branch never touches the highlight sink, so hits come
+/// back with **no** spans rather than stale ones. Our attribution must treat
+/// that as expected — return the whole document, warn, and *not* claim a
+/// chunking anomaly.
+#[test]
+#[ignore]
+fn parse_boolean_syntax_degrades_without_claiming_a_chunk_bug() {
+    let mut catalog = setup();
+
+    let response = catalog
+        .search("kb", "value AND foo", options(BM25Mode::Parse))
+        .unwrap();
+
+    eprintln!("[parse-bool] warnings = {:?}", response.meta.warnings);
+
+    assert!(
+        response.meta.warnings.iter().any(|w| w.contains("QueryParser")),
+        "the engine must announce the QueryParser branch, warnings={:?}",
+        response.meta.warnings
+    );
+    assert!(
+        !response.meta.warnings.iter().any(|w| w.contains("chunk attribution")),
+        "missing highlights is expected here, never a chunking anomaly: {:?}",
+        response.meta.warnings
+    );
+}
+
+/// The other branch of the same mode: a plain value keeps its highlights, so
+/// attribution works and nothing is warned about.
+#[test]
+#[ignore]
+fn parse_simple_value_keeps_highlights() {
+    let mut catalog = setup();
+
+    let response = catalog
+        .search("kb", "compiled", options(BM25Mode::Parse))
+        .unwrap();
+
+    eprintln!(
+        "[parse-simple] hits={} warnings={:?}",
+        response.results.len(),
+        response.meta.warnings
+    );
+    assert!(!response.results.is_empty(), "simple value should still match");
+    assert!(
+        !response.meta.warnings.iter().any(|w| w.contains("chunk attribution")),
+        "no attribution anomaly expected: {:?}",
+        response.meta.warnings
+    );
+}

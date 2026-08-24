@@ -262,6 +262,7 @@ impl Node for BM25SearchNode {
             .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .cloned();
 
+        let mut node_warnings: Vec<String> = Vec::new();
         let results = search_bm25_chunked(
             &*conn,
             &target,
@@ -274,6 +275,9 @@ impl Node for BM25SearchNode {
             &target.enrich_fields,
             self.result_mode,
             None,
+            // Ce nœud n'a pas encore de canal de sortie pour les avertissements ;
+            // ils sont collectés puis journalisés plutôt que perdus en silence.
+            &mut node_warnings,
             // Handle FTS de la table parente si le service l'expose ; sinon on
             // reste sur le chemin C++.
             fts_handles
@@ -282,6 +286,10 @@ impl Node for BM25SearchNode {
                 .map(|h| h.as_ref()),
         )
         .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
+
+        for w in &node_warnings {
+            ctx.warn(w);
+        }
 
         let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
         ctx.set_output("results", PortValue::new(unified));
