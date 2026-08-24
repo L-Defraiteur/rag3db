@@ -334,3 +334,59 @@ fn relaxed_finds_last_word_without_trailing_separator() {
     // And the short last word of the emoji snippet.
     assert!(titles(&mut catalog, "team", BM25Mode::Contains).contains(&"emoji".to_string()));
 }
+
+// ─── tiret ASCII vs tiret cadratin en relaxed (contrat lucivy, doc 22/23) ──
+
+/// lucivy's `is_content_char` treats every non-ASCII char as content, by
+/// design (accents, CJK, emoji without Unicode tables). Consequence in
+/// relaxed mode: `-` is a separator and is stripped, `—` is content and stays,
+/// so `foo bar` matches `foo-bar` but not `foo—bar`. In strict mode the bytes
+/// differ either way. This pins the current contract; changing it is a format
+/// change on their side, and this test is how we'd notice.
+#[test]
+#[ignore]
+fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
+    let mut catalog = setup();
+    for (title, body) in [
+        ("dash-ascii", "wrap-up: the foo-bar step is done"),
+        ("dash-em", "wrap-up: the foo—bar step is done"),
+    ] {
+        let mut data = BTreeMap::new();
+        data.insert("title".into(), CypherValue::String(title.to_string()));
+        data.insert("body".into(), CypherValue::String(body.to_string()));
+        catalog.create("Snippet", data).unwrap();
+    }
+    assert_eq!(catalog.drain().failed, 0);
+
+    // Relaxed, and fuzzy off so distance can't blur the separator question.
+    let relaxed_exact = SearchOptions {
+        bm25_mode: BM25Mode::Contains,
+        fuzzy_distance: 0,
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        ..Default::default()
+    };
+    let response = catalog.search("kb", "foo bar", relaxed_exact).unwrap();
+    let mut hits: Vec<String> = response
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("_title")?.as_str().map(str::to_string))
+        .collect();
+    hits.sort();
+    eprintln!("  Contains(d=0)  \"foo bar\" -> {hits:?}");
+
+    // The base corpus also has foo->bar, foo::bar, foo -> bar, foo_bar — all
+    // legitimately matched in relaxed mode. The contract is membership:
+    assert!(
+        hits.contains(&"dash-ascii".to_string()),
+        "relaxed: ASCII dash is a separator, foo-bar must match: {hits:?}"
+    );
+    assert!(
+        !hits.contains(&"dash-em".to_string()),
+        "relaxed: em dash is content, foo—bar must NOT match: {hits:?}"
+    );
+
+    // Strict never conflates either.
+    assert_eq!(titles(&mut catalog, "foo—bar", BM25Mode::Symbol), vec!["dash-em"]);
+    assert_eq!(titles(&mut catalog, "foo-bar", BM25Mode::Symbol), vec!["dash-ascii"]);
+}

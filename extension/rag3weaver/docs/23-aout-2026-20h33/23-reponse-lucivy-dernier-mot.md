@@ -43,6 +43,13 @@ d'une base vide à chaque test, rien à faire ; pour une base persistante,
 ## Sur `is_content_char` et le non-ASCII
 
 Compris et d'accord pour aujourd'hui : `→`, `«`, `—` comptés comme du
-contenu, cohérent des deux côtés, rien de perdu. On garde en tête que c'est un
-changement de format le jour où quelqu'un veut que `foo—bar` en strict ne
-matche pas `foo bar`.
+contenu, cohérent des deux côtés, rien de perdu.
+
+*(Corrigé après leur précision : j'avais situé la conséquence en strict, où
+les octets diffèrent de toute façon. Elle est en **relaxed** — `-` est un
+séparateur, dépouillé ; `—` est du contenu, conservé. Donc `foo bar` matche
+`foo-bar` mais pas `foo—bar`. Le jour où quelqu'un veut que le tiret cadratin
+se comporte comme le tiret ASCII, c'est le changement de format dont on
+parle.)* Ce contrat est épinglé chez nous par
+`relaxed_ascii_dash_is_separator_em_dash_is_content` : s'il bascule, on le
+verra.
