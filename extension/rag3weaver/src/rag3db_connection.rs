@@ -37,16 +37,36 @@ unsafe impl Sync for Rag3dbConnection {}
 impl Rag3dbConnection {
     /// Open (or create) a database at the given path.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, DbError> {
-        Self::with_config(path, rag3db::SystemConfig::default())
+        Self::with_config(path, Self::default_config())
     }
 
     /// Create an in-memory database.
     pub fn in_memory() -> Result<Self, DbError> {
         let db = Arc::new(
-            rag3db::Database::in_memory(rag3db::SystemConfig::default())
+            rag3db::Database::in_memory(Self::default_config())
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
         Self::connect(db)
+    }
+
+    /// `SystemConfig::default()`, with two knobs overridable from the
+    /// environment for tooling that constrains the address space:
+    ///
+    /// - `RAG3DB_MAX_DB_SIZE` (bytes) — the virtual region kuzu reserves up
+    ///   front. The stock reservation is 8 TiB, which valgrind refuses
+    ///   (`Mmap for size 8796093022208 failed`).
+    /// - `RAG3DB_BUFFER_POOL_SIZE` (bytes).
+    ///
+    /// Both are read only if set; production never sets them.
+    fn default_config() -> rag3db::SystemConfig {
+        let mut config = rag3db::SystemConfig::default();
+        if let Some(v) = std::env::var("RAG3DB_MAX_DB_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
+            config = config.max_db_size(v);
+        }
+        if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
+            config = config.buffer_pool_size(v);
+        }
+        config
     }
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
