@@ -108,4 +108,6 @@ Aucun n'était visible tant que ces suites ne compilaient pas.
 4 bis. **Briques génératives, même palier** : LLM, TTS, STT — l'objectif dit par Lucie : « tout avoir pour construire n'importe quel use case de workflow agentique / RAG ». Même doctrine que les embedders : modèles open source chargés par burn (burn-onnx / burnpack), candle ou ONNX Runtime en oracle. **Streaming** dès le premier jour (tokens LLM, audio TTS par chunks, STT sur flux), et une interface de streaming compatible avec des fournisseurs cloud (ElevenLabs, Gradium) pour que le nœud soit substituable. Pistes petites et embarquables : Whisper (STT, tiny/base), Kokoro 82M ou Piper (TTS), un LLM ≤ 1-3B quantisé pour le local ; à valider un par un, le LLM sur burn est le plus lourd (KV cache, décodage autorégressif, quantisation).
 5. **Se reposer la question** : passer aux use cases, ou le moteur a-t-il encore besoin de solidification ?
 
+Horizon qui donne le sens de cet ordre : doc 36 (agent = sous-graphe compilé en workflow ; agents qui construisent des agents).
+
 Reportés derrière ces cinq points : codeparsers (avec `project` dans le schéma dès le premier jour), composite booléen typé pour les agents, `boolean`+`filters` / `more_like_this` de lucivy, éval, Eager vs Lazy, bench corpus réel.

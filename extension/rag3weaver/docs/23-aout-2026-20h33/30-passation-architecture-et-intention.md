@@ -14,7 +14,10 @@ embedded) »** — ni Python, ni Docker, ni GPU d'une marque. C'est ce qui a fai
 refuser PyTorch, choisir burn/Vulkan plutôt que candle, garder le fork kuzu plutôt
 que Postgres, retirer BM42 (seule brique qui aurait exigé un export Python).
 
-Cible immédiate : **un agent de code exposé en MCP**, sur base embarquée. Le
+Cible immédiate : **un agent de code exposé en MCP**, sur base embarquée.
+Horizon (doc 36) : **l'agent comme sous-graphe qui se compile en workflow**,
+ses sessions et traces dans la même base, et des agents qui construisent des
+agents par RAG sur les agents existants. Le
 serveur MCP est le propriétaire unique de la base (kuzu verrouille au niveau
 processus) ; les agents parlent au serveur.
 
