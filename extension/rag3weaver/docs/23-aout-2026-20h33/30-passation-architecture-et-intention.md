@@ -51,7 +51,10 @@ cross-token avec séparateurs stricts ou relaxed, `parse` booléen traduit en
 
 **Catalog** (`catalog.rs`) — la seule surface publique voulue : `register_entity`,
 `register_kb`, `create`/`ingest_entities`, `drain`, `search`, `reindex`,
-`shutdown`. Deux modes d'entité : **KB** (`{KB}_Index` + `{KB}_Index_Chunk`,
+`shutdown`, et depuis le 24 août **`set_scope`/`scope`** (doc 37) : la cellule
+`(org, project)` courante — stampe l'ingestion, sélectionne les index (un par
+cellule), filtre la recherche ; `SearchOptions.scope`/`scopes` pour une autre
+cellule ou un fan-out. Deux modes d'entité : **KB** (`{KB}_Index` + `{KB}_Index_Chunk`,
 agrégation cross-entités, écrit par `KBUpdateNode`) et **simple** (`Entity` +
 `Entity_Chunk`, `InsertRecordNode`). `Drop` ferme les handles FTS et flushe le
 blob store — **jamais de panique qui s'échappe** (`catch_unwind`).

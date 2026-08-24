@@ -114,7 +114,12 @@ Le plan de contrôle cloud (bases ↔ clients), la fédération des `UsageEvent`
   3. **`ingest_entities` ne flushait pas le blob store** : les fichiers d'index
      d'une entité simple restaient dans le tampon jusqu'au drain suivant — ou
      au `Drop`. Frontière ajoutée (`flush_blob_store("ingest")`).
-- Reste : **E** (FFI : `set_scope`, `scope`/`scopes` dans les options par
-  serde) et **F** (docs 30/31, README). RBAC : pas maintenant ; la charnière
+- **E** livrée : `rag3weaver_catalog_set_scope(ctx, org, project)`,
+  `rag3weaver_catalog_get_scope(ctx)`, et `parse_search_options` lit `scope`,
+  `scopes`, `filterCondition`, `filters` (jamais lus depuis JS avant) ;
+  liaisons emscripten `setScope`/`getScope` (build WASM non revalidé ce soir).
+  Trouvé en chemin : les erreurs du FFI étaient interpolées sans échappement
+  JSON — `err_json` pour les nouvelles fonctions, le reste à reprendre.
+- **F** livrée : README §Multi-tenant, docs 30/31. RBAC : pas maintenant ; la charnière
   est `set_scope` + une future vue restreinte (`restrict_to(cells)`), les
   rôles seront des données du graphe avec le chantier MCP.

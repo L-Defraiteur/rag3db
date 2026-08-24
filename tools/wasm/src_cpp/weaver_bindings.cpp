@@ -22,6 +22,8 @@ extern "C" {
                             const char* rel_type, const char* props_json);
     const char* rag3weaver_drain(void* ctx);
     const char* rag3weaver_count(void* ctx, const char* entity_type);
+    const char* rag3weaver_catalog_set_scope(void* ctx, const char* org, const char* project);
+    const char* rag3weaver_catalog_get_scope(void* ctx);
     // Async drain: spawns on rayon pool, calls callback when done
     void rag3weaver_drain_async(const void* ctx, async_callback_t callback, uintptr_t user_data);
     // Async search: spawns on rayon pool, calls callback when done
@@ -138,6 +140,16 @@ public:
         return result ? std::string(result) : R"({"error":"null result"})";
     }
 
+    std::string setScope(const std::string& org, const std::string& project) {
+        const char* result = rag3weaver_catalog_set_scope(ctx_, org.c_str(), project.c_str());
+        return result ? std::string(result) : R"({"ok":false,"error":"null result"})";
+    }
+
+    std::string getScope() {
+        const char* result = rag3weaver_catalog_get_scope(ctx_);
+        return result ? std::string(result) : R"({"error":"null result"})";
+    }
+
     static std::string version() {
         const char* v = rag3weaver_version();
         return v ? std::string(v) : "unknown";
@@ -209,6 +221,8 @@ EMSCRIPTEN_BINDINGS(rag3weaver_wasm) {
         .class_function("asyncPoll", &Weaver::asyncPoll)
         .class_function("asyncResult", &Weaver::asyncResult)
         .function("count", &Weaver::count)
+        .function("setScope", &Weaver::setScope)
+        .function("getScope", &Weaver::getScope)
         .function("setEmbedder", &Weaver::setEmbedder)
         .class_function("version", &Weaver::version)
         .class_function("testThreads", &Weaver::testThreads)

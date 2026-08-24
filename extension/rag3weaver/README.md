@@ -280,6 +280,34 @@ Without DualEmbedder:                  With DualEmbedder:
 
 This optimization also applies at **search time**: when a query needs both dense and sparse vectors, the dual embedder computes both in one pass.
 
+## Multi-tenant — `org` × `project`
+
+Two orthogonal axes on every row (`_org`, `_project`), never a hierarchy: `org` is
+*who* (ownership, trust boundary), `project` is *what* (a partition of data and
+usage). Each `(org, project)` cell has **its own FTS and sparse indexes** — never
+shared, so BM25 statistics cannot leak between tenants and isolation is
+structural, not a `WHERE` to remember. Single-tenant embedded use pays nothing:
+the default cell is `default/default`.
+
+```rust
+use rag3weaver::scope::Scope;
+
+catalog.set_scope(Scope::new("acme", "search"))?;      // current cell: ingestion + search
+catalog.ingest_entities("Doc", rows)?;                 // rows stamped, indexed in this cell
+
+// search another cell without changing the current one
+catalog.search("Doc", "q", SearchOptions { scope: Some(Scope::new("acme", "billing")), ..Default::default() })?;
+// fan-out over several cells, rank fusion (RRF) — scores are not comparable across cells
+catalog.search("Doc", "q", SearchOptions { scopes: vec![a, b], ..Default::default() })?;
+```
+
+Ids: `[A-Za-z0-9_.-/]`, ≤ 128 chars; `/` gives a hierarchy by convention
+(`org = "acme/eu/team3"` + `starts_with` filters). `_Org` / `_Project` node tables
+hold names and metadata. Older databases get the columns on first open
+(`schema_version = 2`). Vector search is column-filtered inside the cell (kuzu's
+projected-graph filter is not honoured by `QUERY_VECTOR_INDEX` — see the canary
+in `tests/e2e_scope.rs`). Design: `docs/23-aout-2026-20h33/37-*.md`.
+
 ## Chunking
 
 Documents are automatically split into chunks at ingestion time:

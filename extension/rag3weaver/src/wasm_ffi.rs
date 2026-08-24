@@ -1292,6 +1292,32 @@ fn parse_search_options(json: &str) -> crate::search::SearchOptions {
             fusion.bm25.weight = f;
             opts.fusion = Some(fusion);
         }
+        // Multi-tenant (doc 37) et filtres : ces quatre-là ont la même forme
+        // JSON que côté Rust, serde suffit. Avant le 24 août, `filters` et
+        // `filterCondition` n'étaient pas lus du tout depuis JS.
+        if let Some(sc) = v.get("scope") {
+            if let Ok(scope) = serde_json::from_value::<crate::scope::Scope>(sc.clone()) {
+                opts.scope = Some(scope);
+            }
+        }
+        if let Some(scs) = v.get("scopes") {
+            if let Ok(scopes) = serde_json::from_value::<Vec<crate::scope::Scope>>(scs.clone()) {
+                opts.scopes = scopes;
+            }
+        }
+        if let Some(fc) = v.get("filterCondition").or_else(|| v.get("filter_condition")) {
+            if let Ok(cond) = serde_json::from_value::<crate::filter::FilterCondition>(fc.clone()) {
+                opts.filter_condition = Some(cond);
+            }
+        }
+        if let Some(f) = v.get("filters") {
+            if let Ok(filters) = serde_json::from_value::<
+                std::collections::HashMap<String, crate::filter::FilterValue>,
+            >(f.clone())
+            {
+                opts.filters = filters;
+            }
+        }
     }
     opts
 }
@@ -1626,5 +1652,90 @@ pub extern "C" fn rag3weaver_count(
     match catalog.count(&entity) {
         Ok(n) => return_string_to_c(format!(r#"{{"count":{n}}}"#)),
         Err(e) => return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
+    }
+}
+
+/// JSON `{"ok":false,"error":…}` correctement échappé — les messages portent
+/// des identifiants fournis par l'appelant.
+fn err_json(e: impl std::fmt::Display) -> String {
+    serde_json::json!({ "ok": false, "error": e.to_string() }).to_string()
+}
+
+/// Multi-tenant (doc 37) : fixe la cellule (org, project) courante du Catalog.
+/// Les ingestions suivantes sont estampillées avec, les recherches y sont
+/// limitées par défaut. Retourne `{"ok":true}` ou `{"ok":false,"error":…}`.
+#[no_mangle]
+pub extern "C" fn rag3weaver_catalog_set_scope(
+    ctx: *mut WeaverContext,
+    org: *const c_char,
+    project: *const c_char,
+) -> *const c_char {
+    if ctx.is_null() || org.is_null() || project.is_null() {
+        return return_string_to_c(err_json("null pointer"));
+    }
+    let ctx = unsafe { &*ctx };
+    let org = unsafe { CStr::from_ptr(org).to_string_lossy().into_owned() };
+    let project = unsafe { CStr::from_ptr(project).to_string_lossy().into_owned() };
+    let mut catalog = match ctx.catalog.lock() {
+        Ok(g) => g,
+        Err(e) => return return_string_to_c(err_json(format!("catalog lock poisoned: {e}"))),
+    };
+    match catalog.set_scope(crate::scope::Scope::new(org, project)) {
+        Ok(()) => return_string_to_c(r#"{"ok":true}"#.into()),
+        Err(e) => return_string_to_c(err_json(e)),
+    }
+}
+
+/// La cellule courante : `{"org":…,"project":…}`.
+#[no_mangle]
+pub extern "C" fn rag3weaver_catalog_get_scope(ctx: *mut WeaverContext) -> *const c_char {
+    if ctx.is_null() {
+        return return_string_to_c(err_json("null pointer"));
+    }
+    let ctx = unsafe { &*ctx };
+    let catalog = match ctx.catalog.lock() {
+        Ok(g) => g,
+        Err(e) => return return_string_to_c(err_json(format!("catalog lock poisoned: {e}"))),
+    };
+    return_string_to_c(
+        serde_json::to_string(catalog.scope()).unwrap_or_else(|e| err_json(e)),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scope::Scope;
+
+    #[test]
+    fn parse_search_options_reads_scope_and_scopes() {
+        let o = parse_search_options(r#"{"limit":3,"scope":{"org":"acme","project":"p1"}}"#);
+        assert_eq!(o.limit, 3);
+        assert_eq!(o.scope, Some(Scope::new("acme", "p1")));
+        let o = parse_search_options(r#"{"scopes":[{"org":"a","project":"x"},{"org":"a","project":"y"}]}"#);
+        assert_eq!(o.scopes.len(), 2);
+        assert_eq!(o.scopes[1], Scope::new("a", "y"));
+    }
+
+    #[test]
+    fn parse_search_options_reads_filter_condition_and_filters() {
+        let o = parse_search_options(r#"{"filterCondition":{"field":{"key":"name","value":"Pricey"}}}"#);
+        assert!(matches!(o.filter_condition, Some(crate::filter::FilterCondition::Field { .. })));
+        let o = parse_search_options(r#"{"filters":{"name":"Pricey"}}"#);
+        assert_eq!(o.filters.len(), 1);
+    }
+
+    #[test]
+    fn parse_search_options_ignores_malformed_scope() {
+        let o = parse_search_options(r#"{"scope":{"org":"acme"}}"#);
+        assert!(o.scope.is_none());
+    }
+
+    #[test]
+    fn err_json_escapes_quotes() {
+        let j = err_json("org 'a\"b' refusé");
+        let v: serde_json::Value = serde_json::from_str(&j).unwrap();
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains('"'));
     }
 }
