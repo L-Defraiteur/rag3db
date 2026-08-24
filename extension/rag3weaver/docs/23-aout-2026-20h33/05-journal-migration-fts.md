@@ -18,6 +18,12 @@ au `ShardedHandle` v3 de lucivy. 25 call sites au départ.
 
 - Le v3 vit sur la branche **`v3-recovery`** de `~/git_workspaces/lucivy`. Vérifier
   avec `git -C ~/git_workspaces/lucivy branch --show-current` avant de builder.
+- **Le submodule `extension/lucivy/ld-lucivy` est épinglé sur `f7dd5c2`** (v3).
+  Il pointait auparavant sur `a49aa231` (v2), dont le `lucivy_core/src/lib.rs`
+  déclarait `pub mod blob_store;` sans que le fichier existe — d'où l'échec
+  `E0583: file not found for module blob_store` qui empêchait de construire
+  l'extension C++ `lucivy_fts`, donc de mesurer la parité.
+  Après un `git pull`, faire `git submodule update --init --recursive`.
 - `lucivy-core` et `ld-lucivy` sont des **dépendances par chemin**, plus crates.io.
 - Un **`[patch.crates-io]`** dans `Cargo.toml` redirige `lucivy-core` vers le chemin
   local. **Sans lui, le build casse** : `sparse-vector` tire la 2.0.0 de crates.io,
