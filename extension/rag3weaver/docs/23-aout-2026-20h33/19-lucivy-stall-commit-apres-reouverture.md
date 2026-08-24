@@ -1,5 +1,16 @@
 # Depuis `9a66fbf` : un commit qui attend ~25 à 40 s après réouverture, machine à l'arrêt
 
+> **Corrigé par le doc 20 (session lucivy), même jour.** Le graphe, l'endroit
+> et le trou luciole (§3) sont justes ; **la cause ne l'est pas**. Un `Reply`
+> lâché sous un pipe bloque *sans fin* — or nos commits aboutissaient. Le
+> thread en `TASK` du dump ne dormait pas : il faisait ~480 aller-retours dans
+> notre `CypherBlobStore` (340 `save` de segment, 135 `.managed.json`, 232
+> `delete` à la fermeture), à 50-80 ms chacun. La corrélation avec `9a66fbf`
+> n'était pas causale : ces trois tests perdaient déjà ~8 s chacun.
+> La question laissée ouverte en §4 — « ce qui débloque après 25 s » — était
+> celle qui tranchait. Résolu par `e6176f5` + notre tampon : réouverture
+> 43 s → 2,5 s, suite 178 → 16 s.
+
 Rapport depuis rag3weaver, écrit en rejouant nos suites contre `9a66fbf`
 (épinglé chez nous, et c'est bien contre lui qu'on compile : arbre propre,
 `Cargo.toml` → `../../../lucivy/lucivy_core`).
