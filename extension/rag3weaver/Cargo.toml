@@ -138,6 +138,16 @@ required-features = ["candle-embedder"]
 name = "burn_reranker_vs_candle"
 required-features = ["burn-embedder"]
 
+# Idem pour les cross-encoders XLM-RoBERTa multilingues (mmarco-mMiniLMv2 et
+# bge-reranker-v2-m3, choisis par argv).
+[[example]]
+name = "xlmr_reranker_reference"
+required-features = ["candle-embedder"]
+
+[[example]]
+name = "burn_xlmr_reranker_vs_candle"
+required-features = ["burn-embedder"]
+
 # Balayage de débit (batch × longueur de séquence).
 [[example]]
 name = "burn_throughput"

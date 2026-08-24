@@ -1,4 +1,4 @@
-# lucivy — préparation de la publication 2.1.0, sur une branche de travail
+# lucivy — préparation de la publication 3.0.0, sur une branche de travail
 
 Réponse de la session lucivy, 24 août 2026 (soir). Suite des docs 38 et 39.
 
@@ -6,13 +6,13 @@ Réponse de la session lucivy, 24 août 2026 (soir). Suite des docs 38 et 39.
 
 Pour ne pas bouger sous vos pieds pendant que vous êtes sur la tête de
 `v3-recovery`, le travail de finalisation se fait désormais sur une branche
-séparée, **`wip/publication-2.1.0`** (poussée). `v3-recovery` reste à
+séparée, **`wip/publication-3.0.0`** (poussée). `v3-recovery` reste à
 `e8b5414` (votre pin) tant qu'un point n'est pas complet ; on n'y fusionne
 que des points finis, on vous le dit à chaque fois.
 
 ## Ce qui est prêt sur la branche (`fb7e2af` + smokes)
 
-**Versions** : `ld-lucivy` 2.1.0, `lucivy-core` 2.1.0, `luciole` 0.2.0,
+**Versions** : `ld-lucivy` 3.0.0, `lucivy-core` 3.0.0, `luciole` 0.2.0,
 `lucistore` 0.2.0, `sparse-vector` 0.3.0 (première publication). Les
 dépendances entre crates sont versionnées (`version` + `path`), les manifests
 complétés (README pour `lucistore` et `sparse-vector`, `repository`,
@@ -30,7 +30,7 @@ Le paquet `ld-lucivy` a été purgé de ce qui n'avait rien à y faire
 qu'aux tests sont sous `#[cfg(test)]`). Aucun changement sémantique. Vos
 `-D warnings` sur `lucistore` restent verts.
 
-**CHANGELOG 2.1.0** rédigé (v3 par défaut, spans exacts, `parse`, warnings,
+**CHANGELOG 3.0.0** rédigé (v3 par défaut, spans exacts, `parse`, warnings,
 filtre routé, ACID/lazy, plancher de commit, `luciole` 0.2.0, `lucistore`
 0.2.0, `sparse-vector`, correctifs) — c'est aussi le résumé de ce que vous
 avez fait trouver.

@@ -353,3 +353,244 @@ cargo run --release --example reranker_reference --features candle-embedder -- /
 cargo run --release --example burn_reranker_vs_candle --no-default-features --features burn-embedder -- \
     /tmp/reranker_reference.json
 ```
+
+---
+
+## `mmarco_mminilm_onnx.rs`
+
+Traduction mécanique, par `burn-onnx`, du graphe ONNX de
+**[cross-encoder/mmarco-mMiniLMv2-L12-H384-v1](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1)**
+(XLM-RoBERTa : 12 couches, hidden 384, 12 têtes, vocab 250 002 SentencePiece Unigram,
+positions 514 dont 512 utilisables, `type_vocab_size` 1). **Multilingue** : entraîné sur
+[unicamp-dl/mmarco](https://huggingface.co/datasets/unicamp-dl/mmarco), MS MARCO traduit
+automatiquement en 14 langues, français compris. Un **cross-encoder**, comme
+`msmarco_minilm_onnx.rs` : il lit la paire `(requête, passage)` en une seule séquence et
+rend un logit de pertinence. C'est le reranker produit pour les corpus non anglais
+(`SearchOptions.rerank`, doc 29 chantier 3).
+
+**Ce n'est pas notre modèle.** Licence Apache-2.0, tout le mérite revient à ses auteurs :
+Nils Reimers et l'équipe sentence-transformers / cross-encoder pour l'entraînement, sur la
+base de [nreimers/mMiniLMv2-L12-H384-distilled-from-XLMR-Large](https://huggingface.co/nreimers/mMiniLMv2-L12-H384-distilled-from-XLMR-Large)
+(MiniLMv2 de Microsoft, distillé depuis XLM-R Large), et l'équipe mMARCO (Unicamp) pour
+les données. Nous n'avons fait que changer le format pour pouvoir le charger depuis Rust.
+
+| | |
+|---|---|
+| Source | `onnx/model.onnx` de cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 (470 883 696 octets, sha256 `3e9a03ed1e966f7c5288dd4230e3d6a9bf5e3a170a06f1f4241c5bca12c6487c`) |
+| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::Bytes` — même chaîne que les autres |
+| Taille | 4 680 lignes (~16 Ko compressé) |
+| Poids | **non inclus** — 470 Mo (les 250 002 × 384 de la table d'embeddings en font 384 Mo à eux seuls) |
+
+### Les poids
+
+```
+model.bpk        470 617 604 octets
+sha256           10e7d173623ea0bc15facd580e02cb0520d68326047b44aec1fb8490887c1c8e
+tokenizer.json    17 082 660 octets
+sha256           62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626
+```
+
+Publiés avec l'attribution d'origine (Apache-2.0, sentence-transformers, mMARCO) :
+
+**https://huggingface.co/Lucie666/mmarco-mminilmv2-l12-h384-v1-burnpack** — publié le
+24 août 2026.
+
+Téléchargement en HTTPS anonyme, sans compte ni token :
+
+```bash
+mkdir -p ~/.cache/rag3weaver/mmarco-mminilm
+curl -L -o ~/.cache/rag3weaver/mmarco-mminilm/model.bpk \
+  https://huggingface.co/Lucie666/mmarco-mminilmv2-l12-h384-v1-burnpack/resolve/main/model.bpk
+curl -L -o ~/.cache/rag3weaver/mmarco-mminilm/tokenizer.json \
+  https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1/resolve/main/tokenizer.json
+```
+
+Les tests les cherchent dans `~/.cache/rag3weaver/mmarco-mminilm/`
+(`RAG3WEAVER_MMARCO_BPK` / `RAG3WEAVER_MMARCO_TOKENIZER` pour un autre chemin).
+
+### Interface
+
+```rust
+pub fn forward(
+    &self,
+    input_ids: Tensor<2, Int>,
+    attention_mask: Tensor<2, Int>,
+) -> Tensor<2>   // logits [B, 1]
+```
+
+**Pas de `token_type_ids`** : XLM-R n'a qu'un type de segment (`type_vocab_size` 1),
+l'export ONNX ne prend pas l'entrée. Le graphe est complet : encodeur → `<s>` →
+`classifier.dense` (384→384) + tanh → `classifier.out_proj` (384→1). Tête RoBERTa, pas
+de pooler BERT. `sbert_ce_default_activation_function: Identity` dans le `config.json`,
+donc la sortie est le **logit brut** : plus haut = plus pertinent, non borné.
+`src/burn_xlmr_reranker.rs` n'applique pas de sigmoïde, seul l'ordre est contractuel.
+
+Même piège que les autres : un `forward` par sous-module (`Submodule1..13`) avant celui
+de `Model` (ligne ~4658).
+
+Tokenisation : `tokenizer.json` du modèle, SentencePiece Unigram, `<s>` = 0, `<pad>` =
+**1**, `</s>` = 2. Le fichier ne contient **ni troncature ni padding** : le wrapper les
+pose (padding `BatchLongest` avec l'id 1, troncature à 512 en `OnlySecond`). Le template
+de paire est `<s> requête </s></s> passage </s>`, tous type ids à 0 — émis par le
+post-processeur du tokenizer.
+
+### Régénérer
+
+```rust
+// build.rs — identique aux autres, seul l'input change
+ModelGen::new()
+    .input("~/.cache/rag3weaver/mmarco-mminilm/model.onnx")
+    .out_dir("model/")
+    .load_strategy(LoadStrategy::Bytes)
+    .run_from_script();
+```
+
+Le code généré importe `burn::nn::LinearLayout` (`LinearLayout::Col` sur `dense` et
+`out_proj` de la tête, dont l'export ONNX transpose les poids) : ce type n'existe qu'à
+partir de `burn 0.22.0-pre.2`, la version du runtime. Avec `burn 0.21` le fichier ne
+compile pas. Le `.bpk` n'est pas reproductible octet à octet, seules les valeurs le sont
+— ne pas régénérer sans raison.
+
+### Parité vérifiée
+
+Contre candle (CPU). `candle_transformers::models::xlm_roberta` fournit bien un
+`XLMRobertaForSequenceClassification`, mais sa tête applique `GeluPytorchTanh` là où
+l'implémentation de référence (`RobertaClassificationHead`) applique `torch.tanh` — les
+logits en seraient faux de quelques dixièmes. `examples/xlmr_reranker_reference.rs`
+charge donc `XLMRobertaModel` (préfixe `roberta`) et reconstruit la tête à la main depuis
+le même `model.safetensors` : `classifier.dense.{weight,bias}` + tanh +
+`classifier.out_proj.{weight,bias}` sur l'état caché de `<s>`. Sept paires : le triplet
+Berlin de la fiche ms-marco en anglais, le même en français, et une paire croisée
+(requête française, réponse anglaise) :
+
+```
+paire        burn          candle        |Δ|
+------------------------------------------------
+[0]      10.498397     10.498405    7.63e-6   en : population
+[1]      -9.185736     -9.185722    1.34e-5   en : New York
+[2]      -7.658092     -7.658096    4.29e-6   en : mur
+[3]       9.889890      9.889894    3.81e-6   fr : population
+[4]      -8.640562     -8.640553    8.58e-6   fr : New York
+[5]      -6.565522     -6.565524    2.38e-6   fr : mur
+[6]      10.194462     10.194460    1.91e-6   fr → en : population
+
+max |Δ|: 1.34e-5   (seuil de l'exemple : 1e-3 ; l'ordre est aussi comparé)
+```
+
+Bruit d'accumulation f32 sur 12 couches + tête. Backend au moment du test : Burn +
+wgpu/Vulkan sur AMD Radeon AI PRO R9700 via RADV. La réponse en français (9,89) et la
+réponse anglaise à la requête française (10,19) sortent au niveau de la paire tout-anglais
+(10,50) : le modèle lit bien à travers les langues.
+
+Pour rejouer :
+
+```bash
+cargo run --release --example xlmr_reranker_reference --features candle-embedder -- /tmp/xlmr_mmarco.json mmarco
+cargo run --release --example burn_xlmr_reranker_vs_candle --no-default-features --features burn-embedder -- \
+    /tmp/xlmr_mmarco.json mmarco
+```
+
+---
+
+## `bge_reranker_v2_m3_onnx.rs`
+
+Traduction mécanique, par `burn-onnx`, du graphe ONNX de
+**[BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)**
+(XLM-RoBERTa : 24 couches, hidden 1024, 16 têtes, vocab 250 002, positions 8 194,
+`type_vocab_size` 1). **Multilingue**, même famille que `bge_m3_onnx.rs` (il est
+fine-tuné depuis BGE-M3). Un **cross-encoder** : la paire `(requête, passage)` en une
+séquence, un logit de pertinence. C'est le reranker lourd, à réserver aux pools courts
+ou aux GPU qui ont la place.
+
+**Ce n'est pas notre modèle.** Licence Apache-2.0 (fiche du modèle), tout le mérite
+revient à BAAI (Chen, Xiao, Zhang, Luo, Lian, Liu — *BGE M3-Embedding*, 2024). L'export
+ONNX fp32 vient de [onnx-community/bge-reranker-v2-m3-ONNX](https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX)
+(Transformers.js). Nous n'avons fait que changer le format pour pouvoir le charger
+depuis Rust.
+
+| | |
+|---|---|
+| Source | `onnx/model.onnx` (656 891 octets, sha256 `faae32b124a9d54afb7e89b5e9896e03c18a9552d56d1d6b273a709a83012486`) + `onnx/model.onnx_data` (données externes, 2 271 088 656 octets, sha256 `f009aa6c6cf21986fd7e0021fa66b20ccce27abc6900a57c7109c8496811bcbe`) de onnx-community/bge-reranker-v2-m3-ONNX |
+| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::Bytes` — même chaîne que les autres |
+| Taille | 7 974 lignes (~26 Ko compressé) |
+| Poids | **non inclus** — 2,2 Go |
+
+### Les poids
+
+```
+model.bpk        2 271 128 324 octets
+sha256           3ed858274ab4661332058318c8b961f0ac822af4aed899187557745107fb32e3
+tokenizer.json      17 098 273 octets
+sha256           69564b696052886ed0ac63fa393e928384e0f8caada38c1f4864a9bfbf379c15
+```
+
+Le `tokenizer.json` est **celui de BAAI/bge-reranker-v2-m3**, pas celui de BGE-M3 ni
+celui d'onnx-community : même vocabulaire et mêmes ids, mais le normaliseur diffère
+(`Strip` à droite en plus du `Precompiled`). Ne pas réutiliser le fichier de `bge-m3/`.
+
+Publiés avec l'attribution d'origine (Apache-2.0, BAAI) :
+
+**https://huggingface.co/Lucie666/bge-reranker-v2-m3-burnpack** — publié le 24 août 2026.
+
+```bash
+mkdir -p ~/.cache/rag3weaver/bge-reranker-v2-m3
+curl -L -o ~/.cache/rag3weaver/bge-reranker-v2-m3/model.bpk \
+  https://huggingface.co/Lucie666/bge-reranker-v2-m3-burnpack/resolve/main/model.bpk
+curl -L -o ~/.cache/rag3weaver/bge-reranker-v2-m3/tokenizer.json \
+  https://huggingface.co/BAAI/bge-reranker-v2-m3/resolve/main/tokenizer.json
+```
+
+Les tests les cherchent dans `~/.cache/rag3weaver/bge-reranker-v2-m3/`
+(`RAG3WEAVER_BGE_RERANKER_BPK` / `RAG3WEAVER_BGE_RERANKER_TOKENIZER` pour un autre chemin).
+
+### Interface
+
+Identique à `mmarco_mminilm_onnx.rs` : `forward(input_ids, attention_mask) -> Tensor<2>`
+(logits `[B, 1]`), **pas de `token_type_ids`**, tête `classifier.dense` (1024→1024) +
+tanh → `classifier.out_proj` (1024→1), logit brut. `Submodule1..25` avant le `forward`
+de `Model` (ligne ~7621). Mêmes ids spéciaux (`<s>` 0, `<pad>` 1, `</s>` 2), même
+template de paire, même absence de presets de troncature/padding dans le tokenizer.
+
+Le modèle accepte 8 192 positions ; `src/burn_xlmr_reranker.rs` tronque tout de même à
+**512** par paire, comme les autres rerankers : l'attention est quadratique en la
+longueur, et un passage à reranker est un chunk, pas un document. Un appelant qui veut
+plus long paie le carré.
+
+### Régénérer
+
+Même `build.rs`, avec `model.onnx` et `model.onnx_data` côte à côte dans le dossier
+d'entrée (données externes : burn-onnx les résout par le chemin relatif du fichier
+ONNX). `LinearLayout::Col` sur la tête, donc `burn ≥ 0.22.0-pre.2`. Non reproductible
+octet à octet — ne pas régénérer sans raison.
+
+### Parité vérifiée
+
+Même oracle que mmarco (`examples/xlmr_reranker_reference.rs … bge`, tête reconstruite à
+la main, voir plus haut), depuis `model.safetensors` de BAAI/bge-reranker-v2-m3 (2,2 Go
+via hf-hub). Sept paires, les mêmes :
+
+```
+paire        burn          candle        |Δ|
+------------------------------------------------
+[0]       6.798565      6.798559    5.72e-6   en : population
+[1]     -11.028526    -11.028533    6.68e-6   en : New York
+[2]      -9.748907     -9.748901    5.72e-6   en : mur
+[3]       6.165921      6.165920    4.77e-7   fr : population
+[4]     -11.032015    -11.032012    2.86e-6   fr : New York
+[5]     -10.509789    -10.509794    5.72e-6   fr : mur
+[6]       5.617373      5.617373    9.54e-7   fr → en : population
+
+max |Δ|: 6.68e-6   (seuil de l'exemple : 1e-3 ; l'ordre est aussi comparé)
+```
+
+Bruit d'accumulation f32 sur 24 couches + tête. Backend au moment du test : Burn +
+wgpu/Vulkan sur AMD Radeon AI PRO R9700 via RADV ; les 2,2 Go se chargent en 2,9 s
+depuis le cache disque.
+
+Pour rejouer :
+
+```bash
+cargo run --release --example xlmr_reranker_reference --features candle-embedder -- /tmp/xlmr_bge.json bge
+cargo run --release --example burn_xlmr_reranker_vs_candle --no-default-features --features burn-embedder -- \
+    /tmp/xlmr_bge.json bge
+```

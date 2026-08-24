@@ -17,6 +17,7 @@ pub mod burn {
     use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
     use rag3weaver::burn_minilm_embedder::BurnMiniLmEmbedder;
     use rag3weaver::burn_reranker::BurnMiniLmReranker;
+    use rag3weaver::burn_xlmr_reranker::{BurnBgeRerankerV2M3, BurnMMiniLmReranker};
     use rag3weaver::embedder::Embedder;
 
     fn artifact(env_var: &str, model_dir: &str, default_name: &str) -> PathBuf {
@@ -71,6 +72,32 @@ pub mod burn {
         eprintln!("▸ Loading ms-marco-MiniLM-L-6-v2 on burn (wgpu) from {}...", bpk.display());
         let r = BurnMiniLmReranker::from_files(&bpk, &tok, BurnDevice::default())
             .expect("build BurnMiniLmReranker");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(r)
+    });
+
+    /// cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 sur burn (XLM-RoBERTa, un logit
+    /// par paire, multilingue — français inclus). 470 Mo ; chargé une fois par binaire.
+    pub static MMARCO_RERANKER: LazyLock<Arc<BurnMMiniLmReranker>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_MMARCO_BPK", "mmarco-mminilm", "model.bpk");
+        let tok = artifact("RAG3WEAVER_MMARCO_TOKENIZER", "mmarco-mminilm", "tokenizer.json");
+        eprintln!("▸ Loading mmarco-mMiniLMv2-L12-H384-v1 on burn (wgpu) from {}...", bpk.display());
+        let r = BurnMMiniLmReranker::from_files(&bpk, &tok, BurnDevice::default())
+            .expect("build BurnMMiniLmReranker");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(r)
+    });
+
+    /// BAAI/bge-reranker-v2-m3 sur burn (XLM-RoBERTa 24 couches, multilingue).
+    /// 2,2 Go, quelques secondes d'I/O ; chargé une fois par binaire.
+    pub static BGE_RERANKER: LazyLock<Arc<BurnBgeRerankerV2M3>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_BGE_RERANKER_BPK", "bge-reranker-v2-m3", "model.bpk");
+        let tok = artifact("RAG3WEAVER_BGE_RERANKER_TOKENIZER", "bge-reranker-v2-m3", "tokenizer.json");
+        eprintln!("▸ Loading bge-reranker-v2-m3 on burn (wgpu) from {}...", bpk.display());
+        let r = BurnBgeRerankerV2M3::from_files(&bpk, &tok, BurnDevice::default())
+            .expect("build BurnBgeRerankerV2M3");
         eprintln!("  loaded in {:?}", t0.elapsed());
         Arc::new(r)
     });

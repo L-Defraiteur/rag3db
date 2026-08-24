@@ -40,6 +40,22 @@ pub mod msmarco_minilm_onnx;
 pub mod burn_reranker;
 #[cfg(feature = "burn-embedder")]
 pub use burn_reranker::BurnMiniLmReranker;
+/// cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 (XLM-RoBERTa, multilingue) généré par
+/// burn-onnx depuis l'ONNX du modèle — code machine, non édité. Voir `generated/README.md`.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/mmarco_mminilm_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod mmarco_mminilm_onnx;
+/// BAAI/bge-reranker-v2-m3 (XLM-RoBERTa, multilingue) généré par burn-onnx depuis
+/// l'ONNX d'onnx-community — code machine, non édité. Voir `generated/README.md`.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/bge_reranker_v2_m3_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod bge_reranker_v2_m3_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_xlmr_reranker;
+#[cfg(feature = "burn-embedder")]
+pub use burn_xlmr_reranker::{BurnBgeRerankerV2M3, BurnMMiniLmReranker};
 pub mod catalog;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;
