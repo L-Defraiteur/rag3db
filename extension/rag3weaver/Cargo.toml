@@ -64,7 +64,11 @@ bytes = { version = "1", optional = true }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [features]
-default = ["candle-embedder"]
+# Aucun embedder par défaut : la crate est un orchestrateur, `Catalog` prend un
+# `Box<dyn Embedder>`, et chaque provider se paie à l'activation. `burn-embedder`
+# est le chemin produit (AMD/NVIDIA/Apple/navigateur, un seul code) ; candle
+# reste l'oracle de parité, jamais une dépendance produit.
+default = []
 candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 candle-wasm = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers"]
 bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
@@ -109,6 +113,14 @@ required-features = ["bge-m3"]
 # Parité burn vs candle, via les traits publics.
 [[example]]
 name = "burn_vs_candle"
+required-features = ["burn-embedder"]
+
+[[example]]
+name = "minilm_reference"
+required-features = ["candle-embedder"]
+
+[[example]]
+name = "burn_minilm_vs_candle"
 required-features = ["burn-embedder"]
 
 # Balayage de débit (batch × longueur de séquence).

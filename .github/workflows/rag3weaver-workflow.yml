@@ -49,10 +49,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `default` est vide depuis le 24 août 2026 (aucun embedder) ; candle
+          # n'est donc plus couvert implicitement et a sa propre entrée.
           - label: default
             flags: ''
-          - label: no-default-features
-            flags: '--no-default-features'
+          - label: candle-embedder
+            flags: '--features candle-embedder'
           - label: bge-m3
             flags: '--features bge-m3'
           - label: candle-wasm

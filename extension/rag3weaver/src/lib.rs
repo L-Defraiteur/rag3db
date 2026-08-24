@@ -7,10 +7,11 @@
 // `BgeM3Embedder::from_local_dir` sans tirer le téléchargement runtime.
 #[cfg(any(feature = "bge-m3", feature = "candle-wasm"))]
 pub mod bge_m3_embedder;
-#[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
-pub mod bm42_model;
-#[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
-pub mod bm42_embedder;
+// Retiré le 24 août 2026 : `bm42_model` / `bm42_embedder` (sparse par poids
+// d'attention, « un hack » de l'aveu même des docs de février) et le
+// `CandleDualEmbedder` qui en dépendait. Zéro usage, et la seule brique qui
+// aurait exigé un export ONNX côté PyTorch pour passer sur burn. Le sparse
+// vient de BGE-M3 (tête apprise), sur candle ou sur burn.
 #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
 pub mod candle_embedder;
 /// Modèle BGE-M3 généré par burn-onnx depuis l'ONNX de BAAI — code machine, non édité.

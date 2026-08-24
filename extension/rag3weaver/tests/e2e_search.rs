@@ -9,13 +9,16 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
 use std::sync::Arc;
 
 use rag3weaver::config::{
     CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
 };
 use rag3weaver::connection::CypherValue;
-use rag3weaver::embedder::{Embedder, MockEmbedder};
+use rag3weaver::embedder::MockEmbedder;
+#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
+use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection, UpdateStatus};
 
@@ -24,6 +27,8 @@ use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
 
 #[cfg(feature = "bge-m3")]
 use rag3weaver::bge_m3_embedder::BgeM3Embedder;
+#[cfg(feature = "bge-m3")]
+use rag3weaver::embedder::SparseEmbedder;
 
 // ─── Cached embedders (loaded once across all tests) ────────────────────────
 
@@ -850,6 +855,7 @@ fn phase1_bm25_no_results() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Minimal config for vector search: 1 entity, 1 KB (semantic).
+#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
 fn make_vector_config(dim: usize) -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), text_title_for("kb"));
@@ -884,6 +890,7 @@ fn make_vector_config(dim: usize) -> CatalogConfig {
 }
 
 /// Insert 3 thematically distinct docs, drain, return catalog ready for search.
+#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
 fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
@@ -931,6 +938,7 @@ fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
 }
 
 /// Generic vector search test: query should return the expected doc as top result.
+#[cfg(any(feature = "candle-embedder", feature = "bge-m3"))]
 fn assert_vector_top_result(
     catalog: &mut Catalog,
     query: &str,

@@ -7,7 +7,7 @@
 //! The sparse representation is *learned* (unlike BM42's attention hack),
 //! providing higher quality lexical matching with implicit term expansion.
 //!
-//! Native only — too large (~2.2GB) for WASM. Use BM42 + MiniLM for WASM.
+//! Native only — too large (~2.2GB) for WASM. Use MiniLM on burn for the browser.
 //!
 //! # Example
 //!

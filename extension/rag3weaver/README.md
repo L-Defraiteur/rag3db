@@ -170,14 +170,19 @@ SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE  // All thre
 
 ### BM25 Full-Text
 
-Powered by rag3db's Lucivy extension. 4 query modes:
+Powered by lucivy v3, called directly from Rust (`ShardedHandle`, index persisted in the
+database through `BlobStore`). 5 query modes:
 
 | Mode | Behavior |
 |------|----------|
-| `Contains` | Trigram-accelerated substring, fuzzy-tolerant |
+| `Contains` | Substring across token boundaries, fuzzy-tolerant, separators relaxed (`foo bar` matches `foo-bar`, `foo::bar`) |
 | `ContainsSplit` | Auto-splits multi-word queries with boolean OR |
-| `Regex` | Trigram-accelerated regex matching |
-| `Parse` | Native Lucivy QueryParser (standard BM25) |
+| `Regex` | Regex, literal-accelerated when a literal can be extracted |
+| `Parse` | Plain value → OR of `Contains` per word with highlights; boolean syntax (`AND`/`OR`/`NOT`, quotes) → lucivy's QueryParser, no highlights |
+| `Symbol` | Exact, **separators included**, fuzzy off: `foo->bar` matches only `foo->bar`; for `c++`, `};`, `std::sync::Arc<Mutex<T>>`, emoji |
+
+Engine warnings (regex without a literal, fuzzy too loose, QueryParser branch…) come back
+in `SearchMeta.warnings` on every search, not only with diagnostics enabled.
 
 Multi-field highlights with per-field byte offsets. Chunk-level resolution maps BM25 hits to the correct chunk via `ChunkInfo`.
 
@@ -209,7 +214,18 @@ FusionConfig {
 
 ## Embedding Models
 
-### Built-in (via candle, feature-gated)
+### Built-in via burn (the product path — AMD, NVIDIA, Apple, browser, one implementation)
+
+| Model | Dims | Weights | Languages | Feature | Type |
+|-------|------|---------|-----------|---------|------|
+| all-MiniLM-L6-v2 (`BurnMiniLmEmbedder`) | 384 | 90 MB | EN | `burn-embedder` | dense |
+| BGE-M3 (`BurnBgeM3Embedder`) | 1024 | 2.2 GB | 100+ | `burn-embedder` | dense + learned sparse |
+
+Weights are not bundled; both are published as `burnpack` files with full upstream
+attribution (`Lucie666/all-minilm-l6-v2-burnpack`, `Lucie666/bge-m3-burnpack`). See
+`generated/README.md` for provenance, checksums and the parity checks against candle.
+
+### Built-in via candle (parity reference, not the product path)
 
 | Model | Dims | Size | Languages | Feature |
 |-------|------|------|-----------|---------|
@@ -218,9 +234,12 @@ FusionConfig {
 | paraphrase-multilingual-MiniLM-L12-v2 | 384 | ~471MB | 50+ | `candle-embedder` |
 | BGE-M3 (XLM-RoBERTa) | 1024 | ~2.2GB | 100+ | `bge-m3` |
 
-### BM42 Sparse
+candle has no ROCm backend and does not compile to WASM; it stays as the oracle the burn
+models are checked against (`examples/*_reference.rs`, `examples/burn_*_vs_candle.rs`).
 
-CLS attention weights extracted from any BERT-family model. Works with MiniLM, Multilingual-MiniLM, or any model loaded via `Bm42Model`.
+Sparse vectors come from BGE-M3's learned head. The former BM42 embedder (CLS attention
+weights) was removed on 2026-08-24: no usage, and it was the only piece that would have
+needed a PyTorch-side export to move to burn.
 
 ### Custom (via traits)
 
@@ -279,9 +298,13 @@ Chunks are stored as separate graph nodes (`Entity_Chunk`) linked to their paren
 
 ## Feature Flags
 
+No feature is enabled by default: the crate is an orchestrator and `Catalog` takes a
+`Box<dyn Embedder>`. Pick the provider you need.
+
 | Feature | Description |
 |---------|-------------|
-| `candle-embedder` | Local embeddings via candle (MiniLM, BgeBase, MultilingualMiniLM) |
+| `burn-embedder` | MiniLM and BGE-M3 on burn/wgpu (Vulkan, Metal, WebGPU) — the product path |
+| `candle-embedder` | Local embeddings via candle (MiniLM, BgeBase, MultilingualMiniLM) — parity reference |
 | `candle-wasm` | Candle for WASM (CPU-only, no CUDA) |
 | `bge-m3` | BGE-M3 dual embedder (native only, ~2.2GB) |
 | `cuda` | GPU acceleration for candle models |
@@ -313,8 +336,9 @@ src/
 ├── queue.rs                Operation queue with priority dispatch
 ├── embedder.rs             Embedder/SparseEmbedder/DualEmbedder traits
 ├── bge_m3_embedder.rs      BGE-M3: 1024d dense + learned sparse
-├── candle_embedder.rs      CandleEmbedder + CandleDualEmbedder
-├── bm42_embedder.rs        BM42: CLS attention sparse vectors
+├── candle_embedder.rs      CandleEmbedder (parity reference)
+├── burn_minilm_embedder.rs BurnMiniLmEmbedder (dense, 384d)
+├── burn_bge_m3_embedder.rs BurnBgeM3Embedder (dense + learned sparse)
 ├── bm42_model.rs           Modified BERT returning hidden_states + attn_probs
 ├── chunker.rs              Semantic/Markdown/Sentence/Fixed chunking
 ├── config.rs               Schema: EntityConfig, FieldType, KBConfig

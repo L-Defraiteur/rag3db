@@ -135,8 +135,15 @@ export RAG3DB_SHARED=1 \
        RAG3DB_LIBRARY_DIR="$B" RAG3DB_INCLUDE_DIR="$B" \
        RAG3DB_ROOT=/home/lucied/git_workspaces/rag3db \
        LD_LIBRARY_PATH="$B"
-cargo test --features rag3db-native --test e2e_search -- --ignored --test-threads=1
+cargo test --features rag3db-native,candle-embedder,bge-m3 --test e2e_search -- --ignored --test-threads=1
 ```
+
+**Nommer les features d'embedder est obligatoire depuis le 24 août** : `default = []`
+(aucun embedder par défaut). Avec `--features rag3db-native` seul, les tests gardés par
+`#[cfg(feature = "candle-embedder")]` (vrais modèles) disparaissent **silencieusement** de
+la passe — le compte passe de 20 à moins sans erreur. `run_e2e.sh` les passe déjà. Pour
+les suites burn (`e2e_burn_embedder`, `e2e_burn_minilm`) : `--features rag3db-native,burn-embedder`,
+avec les poids dans `~/.cache/rag3weaver/{bge-m3,minilm}/` (cf. `generated/README.md`).
 
 **`RAG3DB_SHARED=1` est indispensable.** Sans lui, les extensions sont liées à la
 lib **release** du cmake pendant que le test charge la lib **debug** de cargo :

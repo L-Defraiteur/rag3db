@@ -132,7 +132,7 @@ impl Embedder for CallbackEmbedder {
 /// Trait for embedding text into sparse vectors.
 ///
 /// Separate from [`Embedder`] to allow independent implementations.
-/// V2 will provide a candle-based BM42 implementation.
+/// BGE-M3 (`bge_m3_embedder`, `burn_bge_m3_embedder`) is the learned-sparse implementation.
 
 pub trait SparseEmbedder: Send + Sync {
     /// Embed a batch of texts into sparse vectors.
@@ -222,7 +222,7 @@ impl SparseEmbedder for CallbackSparseEmbedder {
 // ─── DualEmbedder ──────────────────────────────────────────────────────────
 
 /// Trait for models that produce both dense and sparse embeddings in a single
-/// forward pass (e.g. BGE-M3, MiniLM+BM42).
+/// forward pass (e.g. BGE-M3).
 ///
 /// Implementing this trait allows the pipeline to avoid redundant forward passes
 /// when both dense and sparse signals are active.

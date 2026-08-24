@@ -978,6 +978,19 @@ pub extern "C" fn rag3weaver_catalog_set_embedder(
     weights_ptr: *const u8,
     weights_len: usize,
 ) -> *const c_char {
+    // Le symbole existe toujours (exporté vers JS), mais son corps dépend d'un
+    // embedder compilé. `default = []` depuis le 24 août : sans `candle-wasm`,
+    // on répond une erreur nommée plutôt que de casser l'édition de liens.
+    #[cfg(not(any(feature = "candle-embedder", feature = "candle-wasm")))]
+    {
+        let _ = (ctx, config_ptr, config_len, tokenizer_ptr, tokenizer_len, weights_ptr, weights_len);
+        return return_string_to_c(
+            r#"{"ok":false,"error":"no embedder compiled in: build with the candle-wasm feature (burn on WebGPU is not wired for emscripten yet)"}"#.into(),
+        );
+    }
+
+    #[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
+    {
     use crate::candle_embedder::CandleEmbedder;
 
     if ctx.is_null() || config_ptr.is_null() || tokenizer_ptr.is_null() || weights_ptr.is_null() {
@@ -1005,6 +1018,7 @@ pub extern "C" fn rag3weaver_catalog_set_embedder(
 
     catalog.set_embedder(std::sync::Arc::new(embedder));
     return_string_to_c(r#"{"ok":true}"#.into())
+    }
 }
 
 /// Create an entity. Returns an opaque handle (>= 0) or -1 on error.
