@@ -4271,7 +4271,7 @@ dependencies = [
  "lockfree-object-pool",
  "log",
  "lru",
- "luciole 0.1.0",
+ "luciole",
  "lucivy-fst",
  "lz4_flex",
  "measure_time",
@@ -4561,15 +4561,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "luciole"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afe888832849f3fc64d7dc86cbbd50916eae5552a82462c0bc9c2d1825742a53"
-dependencies = [
- "flume",
-]
-
-[[package]]
 name = "lucistore"
 version = "0.1.0"
 dependencies = [
@@ -4582,7 +4573,7 @@ name = "lucivy-core"
 version = "2.0.0"
 dependencies = [
  "ld-lucivy",
- "luciole 0.1.0",
+ "luciole",
  "lucistore",
  "regex",
  "regex-syntax",
@@ -5788,7 +5779,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hf-hub",
  "ld-lucivy",
- "luciole 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "luciole",
  "lucivy-core",
  "postgres-types",
  "rag3db",

@@ -135,3 +135,7 @@ required-features = ["burn-embedder"]
 # À retirer dès la publication de la 2.1.0.
 [patch.crates-io]
 lucivy-core = { path = "../../../lucivy/lucivy_core" }
+# luciole : même raison. Sans ce patch, notre DAG (luciole_bridge) tourne sur la
+# 0.1.0 publiée pendant que lucivy-core utilise la copie locale — deux moteurs,
+# et le correctif du double free (3675c3d) absent du nôtre.
+luciole = { path = "../../../lucivy/luciole" }
