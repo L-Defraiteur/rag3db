@@ -1053,6 +1053,23 @@ impl Catalog {
                     );
                     let _ = self.conn.execute(&fts_ddl);
                 }
+
+                // An entity registered *after* the KB brings its own relation
+                // tables, which only the fresh-KB branch below used to create.
+                // Without them the aggregation drain died on
+                // `Table {Entity}_SOURCED_{KB} does not exist`. Both DDLs are
+                // IF NOT EXISTS, so replaying them for every member is free.
+                let in_ddl = crate::schema::generate_index_rel_ddl(&info.title_entity, kb_name)
+                    .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+                self.conn.execute(&in_ddl)
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+
+                for entity_name in &kb_entities {
+                    let source_ddl = crate::schema::generate_source_rel_ddl(entity_name, kb_name)
+                        .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+                    self.conn.execute(&source_ddl)
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                }
             } else {
                 // ── Fresh KB: create all tables + indexes ──
                 self.create_kb_tables(kb_name, &kb_config, info, &kb_entities)?;
@@ -1744,6 +1761,7 @@ impl Catalog {
             runtime.execute(&mut graph)
         };
 
+        let mut kb_failed = 0usize;
         match result {
             Ok(_output) => {
                 // If this entity participates in KBs, trigger the KB pipeline.
@@ -1775,12 +1793,17 @@ impl Catalog {
                             new_content_hash: String::new(),
                         });
                     }
-                    self.drain();
+                    kb_failed = self.drain().failed;
                 }
 
+                // The KB aggregation runs as a second drain, and its result used
+                // to be discarded while this returned `failed: 0` unconditionally.
+                // A cross-entity KB failing to aggregate was therefore invisible
+                // to the caller — Ok(..) with a clean count, and only a line on
+                // stderr to show for it.
                 Ok(FlushResult {
                     processed: record_count,
-                    failed: 0,
+                    failed: kb_failed,
                     ..Default::default()
                 })
             }

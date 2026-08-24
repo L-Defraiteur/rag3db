@@ -2071,3 +2071,97 @@ fn kb_incremental_ingest_across_sessions() {
 
     eprintln!("✓ incremental KB: ingest across 3 sessions + migration = all searchable");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 18b — Same as 18, but the SECOND entity sorts FIRST alphabetically
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Guard against a fix that only works by luck of the alphabet.
+///
+/// `resolve_kb_title_entities` still keeps a single title entity per KB and now
+/// picks it by sorted name. In test 18 that lands on `Book` — registered first,
+/// and the one whose layout the rest of the KB was built around. Here the second
+/// entity is named `Appendix`, so the sorted pick lands on the entity registered
+/// *last*. Any code path still trusting `kb_meta.title` gets the wrong entity.
+#[test]
+#[ignore]
+fn kb_title_entity_independent_of_alphabetical_order() {
+    let mut catalog = setup_catalog(4);
+
+    catalog.register_kb("shelf", KBConfig {
+        signals: SearchSignals::BM25,
+        ..Default::default()
+    }).unwrap();
+
+    // First entity: sorts LAST.
+    let mut zbook_fields = HashMap::new();
+    zbook_fields.insert("title".into(), SimpleFieldDef {
+        field_type: FieldType::String,
+        title_for: Some("shelf".to_string()),
+        ..Default::default()
+    });
+    zbook_fields.insert("content".into(), SimpleFieldDef {
+        field_type: FieldType::Text,
+        content_for: Some(vec!["shelf".to_string()]),
+        ..Default::default()
+    });
+    catalog.register_entity("Zbook", EntityConfig {
+        fields: zbook_fields,
+        signals: SearchSignals::BM25,
+        ..Default::default()
+    }).unwrap();
+
+    catalog.ingest_entities("Zbook", vec![{
+        let mut b = BTreeMap::new();
+        b.insert("title".into(), CypherValue::String("The Pragmatic Programmer".into()));
+        b.insert("content".into(), CypherValue::String("A guide to software craftsmanship and pragmatic techniques.".into()));
+        b
+    }]).unwrap();
+
+    // Second entity: sorts FIRST, so it wins the sorted title pick.
+    let mut appendix_fields = HashMap::new();
+    appendix_fields.insert("heading".into(), SimpleFieldDef {
+        field_type: FieldType::String,
+        title_for: Some("shelf".to_string()),
+        ..Default::default()
+    });
+    appendix_fields.insert("text".into(), SimpleFieldDef {
+        field_type: FieldType::Text,
+        content_for: Some(vec!["shelf".to_string()]),
+        ..Default::default()
+    });
+    catalog.register_entity("Appendix", EntityConfig {
+        fields: appendix_fields,
+        signals: SearchSignals::BM25,
+        ..Default::default()
+    }).unwrap();
+
+    let flush = catalog.ingest_entities("Appendix", vec![{
+        let mut c = BTreeMap::new();
+        c.insert("heading".into(), CypherValue::String("Error Handling Patterns".into()));
+        c.insert("text".into(), CypherValue::String("Comprehensive guide to exception handling and error propagation.".into()));
+        c
+    }]).unwrap();
+    // `ingest_entities` returns Ok even when the drain inside it failed, so the
+    // failure count is the only thing that catches it.
+    assert_eq!(
+        flush.failed, 0,
+        "drain must not fail when the late-registered entity sorts first by name"
+    );
+
+    let total_idx = catalog.execute_raw("MATCH (i:shelf_Index) RETURN count(i)").unwrap();
+    assert_eq!(
+        total_idx.rows[0][0].as_i64().unwrap(), 2,
+        "both entities must produce index entries regardless of name ordering"
+    );
+
+    let found = catalog.search("shelf", "error handling", SearchOptions {
+        consistency: Consistency::Strict,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::ContainsSplit,
+        ..Default::default()
+    }).unwrap();
+    assert!(!found.results.is_empty(), "KB should find the late-registered entity's content");
+
+    eprintln!("✓ KB title entity resolution is independent of alphabetical order");
+}

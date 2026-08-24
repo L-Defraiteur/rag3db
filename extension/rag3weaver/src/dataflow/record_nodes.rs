@@ -2097,7 +2097,31 @@ impl KBGatherNode {
         ops: &[&AggregateRecord],
     ) -> Result<(Vec<KBContentRecord>, usize, usize), String> {
         let index_table = format!("{kb_name}_Index");
-        let title_field_name = &kb_meta.title.field;
+
+        // `kb_meta.title` holds a single (entity, field) pair for the whole KB, but
+        // a cross-entity KB has one title field *per* source entity — Book.title and
+        // Chapter.heading both feeding `library_Index`. Using the KB-level field here
+        // emitted `MATCH (e:Chapter) RETURN e.title` and failed the drain with
+        // "Cannot find property title for e", intermittently: which entity won
+        // `kb_meta.title` depended on HashMap iteration order.
+        // We're batching one `title_entity` at a time, so resolve its own field.
+        let resolved_title_field: Option<String> = config
+            .entities
+            .get(title_entity)
+            .and_then(|e| {
+                let mut owned: Vec<&String> = e
+                    .fields
+                    .iter()
+                    .filter(|(_, f)| f.title_for.as_deref() == Some(kb_name))
+                    .map(|(name, _)| name)
+                    .collect();
+                owned.sort(); // an entity declaring two titles for one KB is a
+                              // misconfiguration; pick stably rather than at random
+                owned.first().map(|s| (*s).clone())
+            });
+        let title_field_name: &String = resolved_title_field
+            .as_ref()
+            .unwrap_or(&kb_meta.title.field);
         let mut n_queries: usize = 0;
 
         let title_content_fields: Vec<&String> = kb_meta
@@ -2178,11 +2202,26 @@ impl KBGatherNode {
         }
 
         // ── Step 2: UNWIND read linked content ──
+        //
+        // Satellites only. An entity that declares its own `title_for` on this KB
+        // owns its own index entries — its content belongs there, not folded into
+        // someone else's entry through a relation that was never created. Pulling
+        // it in produced `Table Appendix_SOURCED_shelf does not exist` and killed
+        // the drain; it only stayed hidden because `ingest_entities` discarded the
+        // aggregation result.
+        let owns_title_for_kb = |entity: &str| -> bool {
+            config.entities.get(entity).is_some_and(|e| {
+                e.fields
+                    .values()
+                    .any(|f| f.title_for.as_deref() == Some(kb_name))
+            })
+        };
+
         let other_content_entities: HashSet<&str> = kb_meta
             .content
             .iter()
             .map(|c| c.entity.as_str())
-            .filter(|e| *e != title_entity)
+            .filter(|e| *e != title_entity && !owns_title_for_kb(e))
             .collect();
 
         for content_entity_name in &other_content_entities {

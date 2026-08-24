@@ -135,16 +135,29 @@ pub struct KBSchemaInfo {
 /// Returns a map from KB name to the title entity name and field.
 pub fn resolve_kb_title_entities(config: &CatalogConfig) -> HashMap<String, KBSchemaInfo> {
     let mut result = HashMap::new();
-    for (entity_name, entity_def) in &config.entities {
-        for (field_name, field_def) in &entity_def.fields {
+
+    // Several entities may declare `title_for` on the same KB (a cross-entity KB
+    // where Book.title and Chapter.heading both feed `library_Index`). Only one
+    // fits in `KBSchemaInfo`, so the iteration order decided the winner — and
+    // `config.entities` is a HashMap, so that order changed between processes.
+    // Sorting makes the pick deterministic; consumers that need the *right*
+    // entity must resolve per-entity rather than trust this one (see
+    // `AggregateNode::gather_batch`).
+    let mut entity_names: Vec<&String> = config.entities.keys().collect();
+    entity_names.sort();
+
+    for entity_name in entity_names {
+        let entity_def = &config.entities[entity_name];
+        let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
+        field_names.sort();
+
+        for field_name in field_names {
+            let field_def = &entity_def.fields[field_name];
             if let Some(ref kb_name) = field_def.title_for {
-                result.insert(
-                    kb_name.clone(),
-                    KBSchemaInfo {
-                        title_entity: entity_name.clone(),
-                        title_field: field_name.clone(),
-                    },
-                );
+                result.entry(kb_name.clone()).or_insert(KBSchemaInfo {
+                    title_entity: entity_name.clone(),
+                    title_field: field_name.clone(),
+                });
             }
         }
     }
