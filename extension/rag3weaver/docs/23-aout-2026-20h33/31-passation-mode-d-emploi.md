@@ -25,6 +25,8 @@ cargo test --features rag3db-native,burn-embedder --test e2e_idempotent_registra
 cargo test --features rag3db-native,burn-embedder --test e2e_simple_entity -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_embedder -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_minilm   -- --ignored --test-threads=1
+cargo test --features rag3db-native,burn-embedder --test e2e_burn_reranker -- --ignored --test-threads=1   # cross-encoder (~/.cache/rag3weaver/msmarco-minilm/)
+cargo test --features rag3db-native --test e2e_rerank -- --ignored --test-threads=1                   # crochet de rerank, reranker mock
 # candle n'est PLUS une feature des E2E (depuis le 24 août au soir) : oracle de parité
 # seulement, via examples/*_reference.rs et examples/burn_*_vs_candle.rs
 # profil (drain par phase, moteur seul vs chaîne, N croissant)
@@ -90,6 +92,7 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 | Blob store | `src/cypher_blob_store.rs`, `src/buffered_blob_store.rs` |
 | Nœuds d'ingestion, KB, FlushNode | `src/dataflow/record_nodes.rs` (`gather_batch`, `KBUpdateNode`) |
 | Embedders burn | `src/burn_bge_m3_embedder.rs`, `src/burn_minilm_embedder.rs`, `generated/README.md` |
+| Reranking (cross-encoder) | `src/reranker.rs` (trait, mock, `passage_text`), `src/burn_reranker.rs`, crochet dans `Catalog::search` (avant la pagination), `examples/reranker_reference.rs` + `burn_reranker_vs_candle.rs` |
 | Enregistrement / migration d'entités et KB | `src/catalog.rs` (`register_entity`, `create_kb_tables`), `src/schema.rs` (`resolve_kb_title_entities`) |
 | Connexion native, config kuzu | `src/rag3db_connection.rs` |
 | Index sparse (WAND, 3 blobs par index) | crate `sparse-vector` dans le workspace **lucivy** (`~/git_workspaces/lucivy/sparse_vector`), ouvert dans `catalog.rs` (`SparseHandle::*_with_store`) |

@@ -16,6 +16,7 @@ pub mod burn {
 
     use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
     use rag3weaver::burn_minilm_embedder::BurnMiniLmEmbedder;
+    use rag3weaver::burn_reranker::BurnMiniLmReranker;
     use rag3weaver::embedder::Embedder;
 
     fn artifact(env_var: &str, model_dir: &str, default_name: &str) -> PathBuf {
@@ -59,5 +60,18 @@ pub mod burn {
             .expect("build BurnBgeM3Embedder");
         eprintln!("  loaded in {:?}", t0.elapsed());
         Arc::new(e)
+    });
+
+    /// cross-encoder/ms-marco-MiniLM-L-6-v2 sur burn (un logit par paire
+    /// requête/passage, anglais). 90 Mo ; chargé une fois par binaire.
+    pub static MSMARCO_RERANKER: LazyLock<Arc<BurnMiniLmReranker>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_MSMARCO_BPK", "msmarco-minilm", "model.bpk");
+        let tok = artifact("RAG3WEAVER_MSMARCO_TOKENIZER", "msmarco-minilm", "tokenizer.json");
+        eprintln!("▸ Loading ms-marco-MiniLM-L-6-v2 on burn (wgpu) from {}...", bpk.display());
+        let r = BurnMiniLmReranker::from_files(&bpk, &tok, BurnDevice::default())
+            .expect("build BurnMiniLmReranker");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(r)
     });
 }

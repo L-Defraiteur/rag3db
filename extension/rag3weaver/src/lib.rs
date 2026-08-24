@@ -30,6 +30,16 @@ pub mod burn_bge_m3_embedder;
 pub mod minilm_onnx;
 #[cfg(feature = "burn-embedder")]
 pub mod burn_minilm_embedder;
+/// cross-encoder/ms-marco-MiniLM-L-6-v2 généré par burn-onnx depuis l'ONNX du
+/// modèle — code machine, non édité. Voir `generated/README.md`.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/msmarco_minilm_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod msmarco_minilm_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_reranker;
+#[cfg(feature = "burn-embedder")]
+pub use burn_reranker::BurnMiniLmReranker;
 pub mod catalog;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;

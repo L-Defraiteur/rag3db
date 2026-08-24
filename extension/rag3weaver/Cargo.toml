@@ -129,6 +129,15 @@ required-features = ["candle-embedder"]
 name = "burn_minilm_vs_candle"
 required-features = ["burn-embedder"]
 
+# Logits de référence candle pour le cross-encoder, et la parité burn en face.
+[[example]]
+name = "reranker_reference"
+required-features = ["candle-embedder"]
+
+[[example]]
+name = "burn_reranker_vs_candle"
+required-features = ["burn-embedder"]
+
 # Balayage de débit (batch × longueur de séquence).
 [[example]]
 name = "burn_throughput"

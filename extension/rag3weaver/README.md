@@ -280,6 +280,29 @@ Without DualEmbedder:                  With DualEmbedder:
 
 This optimization also applies at **search time**: when a query needs both dense and sparse vectors, the dual embedder computes both in one pass.
 
+## Reranking — cross-encoder on burn
+
+After fusion and before pagination, the top candidates can be rescored by a
+cross-encoder that reads each (query, passage) pair. The product path is
+`cross-encoder/ms-marco-MiniLM-L-6-v2` on burn (`BurnMiniLmReranker`, ~90 MB,
+weights: `Lucie666/ms-marco-minilm-l6-v2-burnpack`), checked against candle to
+max |Δ| = 5.7e-6 on the logits.
+
+```rust
+use rag3weaver::{BurnMiniLmReranker, Reranker};
+use rag3weaver::search::RerankOptions;
+
+catalog.set_reranker(Arc::new(BurnMiniLmReranker::from_files(bpk, tokenizer, BurnDevice::default())?));
+let resp = catalog.search("Doc", "how many people live in berlin", SearchOptions {
+    rerank: Some(RerankOptions { candidates: 50 }),   // pool rescored, at least limit + offset
+    ..Default::default()
+})?;
+// resp.meta.reranked_count, resp.meta.diagnostics.rerank_ms
+```
+
+Any `Reranker` implementation works (`MockReranker`, `CallbackReranker`). Without a
+reranker set, `rerank` is a warning in `meta.warnings`, never an error.
+
 ## Multi-tenant — `org` × `project`
 
 Two orthogonal axes on every row (`_org`, `_project`), never a hierarchy: `org` is
