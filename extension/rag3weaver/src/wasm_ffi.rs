@@ -1004,7 +1004,7 @@ pub extern "C" fn rag3weaver_catalog_set_embedder(
     let embedder = match CandleEmbedder::from_bytes(config, tokenizer, weights) {
         Ok(e) => e,
         Err(e) => {
-            return return_string_to_c(format!(r#"{{"ok":false,"error":"embedder init: {e}"}}"#));
+            return return_string_to_c(err_json(format!("embedder init: {e}")));
         }
     };
 
@@ -1012,7 +1012,7 @@ pub extern "C" fn rag3weaver_catalog_set_embedder(
     let mut catalog = match ctx.catalog.lock() {
         Ok(g) => g,
         Err(e) => {
-            return return_string_to_c(format!(r#"{{"ok":false,"error":"lock: {e}"}}"#));
+            return return_string_to_c(err_json(format!("lock: {e}")));
         }
     };
 
@@ -1079,11 +1079,11 @@ pub extern "C" fn rag3weaver_get_uuid(
     }
 
     match refs[idx].uuid() {
-        Ok(uuid) => return_string_to_c(format!(r#"{{"uuid":"{uuid}"}}"#)),
+        Ok(uuid) => return_string_to_c(serde_json::json!({ "uuid": uuid }).to_string()),
         Err(crate::refs::RefError::Pending) => {
             return_string_to_c(r#"{"error":"pending"}"#.into())
         }
-        Err(e) => return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
+        Err(e) => return_string_to_c(error_only_json(e)),
     }
 }
 
@@ -1144,19 +1144,20 @@ fn build_drain_json(
     for (i, r) in refs.iter().enumerate() {
         if r.is_ready() {
             if let Ok(uuid) = r.uuid() {
-                resolved.push(format!(
-                    r#"{{"handle":{},"entity":"{}","uuid":"{}"}}"#,
-                    i,
-                    r.entity(),
-                    uuid
-                ));
+                resolved.push(serde_json::json!({
+                    "handle": i,
+                    "entity": r.entity(),
+                    "uuid": uuid,
+                }));
             }
         }
     }
-    format!(
-        r#"{{"processed":{},"failed":{},"resolved":[{}]}}"#,
-        result.processed, result.failed, resolved.join(",")
-    )
+    serde_json::json!({
+        "processed": result.processed,
+        "failed": result.failed,
+        "resolved": resolved,
+    })
+    .to_string()
 }
 
 /// Drain the operation queue (sync, blocks until complete).
@@ -1173,18 +1174,18 @@ pub extern "C" fn rag3weaver_drain(ctx: *mut WeaverContext) -> *const c_char {
     let _drain_guard = match ctx.drain_lock.lock() {
         Ok(g) => g,
         Err(e) => {
-            return return_string_to_c(format!(
-                r#"{{"error":"drain lock poisoned: {e}"}}"#
-            ))
+            return return_string_to_c(error_only_json(format!(
+                "drain lock poisoned: {e}"
+            )))
         }
     };
 
     let mut catalog = match ctx.catalog.lock() {
         Ok(g) => g,
         Err(e) => {
-            return return_string_to_c(format!(
-                r#"{{"error":"catalog lock poisoned: {e}"}}"#
-            ))
+            return return_string_to_c(error_only_json(format!(
+                "catalog lock poisoned: {e}"
+            )))
         }
     };
 
@@ -1227,7 +1228,7 @@ pub extern "C" fn rag3weaver_drain_async(
         let _drain_guard = match drain_lock.lock() {
             Ok(g) => g,
             Err(e) => {
-                let json = format!(r#"{{"error":"drain lock poisoned: {e}"}}"#);
+                let json = error_only_json(format!("drain lock poisoned: {e}"));
                 callback(return_string_to_c(json), user_data);
                 return;
             }
@@ -1236,7 +1237,7 @@ pub extern "C" fn rag3weaver_drain_async(
         let mut cat = match catalog.lock() {
             Ok(g) => g,
             Err(e) => {
-                let json = format!(r#"{{"error":"catalog lock poisoned: {e}"}}"#);
+                let json = error_only_json(format!("catalog lock poisoned: {e}"));
                 callback(return_string_to_c(json), user_data);
                 return;
             }
@@ -1355,7 +1356,7 @@ pub extern "C" fn rag3weaver_search_async(
         let mut cat = match catalog.lock() {
             Ok(g) => g,
             Err(e) => {
-                let json = format!(r#"{{"error":"catalog lock poisoned: {e}"}}"#);
+                let json = error_only_json(format!("catalog lock poisoned: {e}"));
                 callback(return_string_to_c(json), user_data);
                 return;
             }
@@ -1367,9 +1368,9 @@ pub extern "C" fn rag3weaver_search_async(
         let json = match result {
             Ok(response) => match serde_json::to_string(&response) {
                 Ok(j) => j,
-                Err(e) => format!(r#"{{"error":"serialize failed: {e}"}}"#),
+                Err(e) => error_only_json(format!("serialize failed: {e}")),
             },
-            Err(e) => format!(r#"{{"error":"{}"}}"#, e),
+            Err(e) => error_only_json(e),
         };
         callback(return_string_to_c(json), user_data);
     });
@@ -1411,10 +1412,16 @@ pub extern "C" fn rag3weaver_test_threads() -> *const c_char {
     let expected = num_threads * iterations;
     let ok = total == expected && join_errors == 0;
 
-    return_string_to_c(format!(
-        r#"{{"ok":{},"total":{},"expected":{},"threads":{},"joinErrors":{}}}"#,
-        ok, total, expected, num_threads, join_errors
-    ))
+    return_string_to_c(
+        serde_json::json!({
+            "ok": ok,
+            "total": total,
+            "expected": expected,
+            "threads": num_threads,
+            "joinErrors": join_errors,
+        })
+        .to_string(),
+    )
 }
 
 /// Test B: futures::executor::ThreadPool (async multi-thread without tokio/mio).
@@ -1432,7 +1439,7 @@ pub extern "C" fn rag3weaver_test_async_pool() -> *const c_char {
         {
             Ok(p) => p,
             Err(e) => {
-                return format!(r#"{{"ok":false,"error":"pool creation failed: {}"}}"#, e);
+                return err_json(format!("pool creation failed: {e}"));
             }
         };
 
@@ -1458,10 +1465,13 @@ pub extern "C" fn rag3weaver_test_async_pool() -> *const c_char {
         let expected = num_tasks;
         let ok = total == expected;
 
-        format!(
-            r#"{{"ok":{},"total":{},"expected":{},"poolSize":2}}"#,
-            ok, total, expected
-        )
+        serde_json::json!({
+            "ok": ok,
+            "total": total,
+            "expected": expected,
+            "poolSize": 2,
+        })
+        .to_string()
     });
 
     match result {
@@ -1494,10 +1504,13 @@ pub extern "C" fn rag3weaver_test_rayon() -> *const c_char {
 
         let ok = total == expected && chunk_total == expected;
 
-        format!(
-            r#"{{"ok":{},"total":{},"expected":{},"numChunks":{}}}"#,
-            ok, total, expected, num_chunks
-        )
+        serde_json::json!({
+            "ok": ok,
+            "total": total,
+            "expected": expected,
+            "numChunks": num_chunks,
+        })
+        .to_string()
     });
 
     match result {
@@ -1524,7 +1537,7 @@ pub extern "C" fn rag3weaver_test_tokio_mt() -> *const c_char {
         {
             Ok(rt) => rt,
             Err(e) => {
-                return format!(r#"{{"ok":false,"error":"runtime build failed: {}"}}"#, e);
+                return err_json(format!("runtime build failed: {e}"));
             }
         };
 
@@ -1552,10 +1565,13 @@ pub extern "C" fn rag3weaver_test_tokio_mt() -> *const c_char {
 
         let ok = total == num_tasks;
 
-        format!(
-            r#"{{"ok":{},"total":{},"expected":{},"runtime":"current_thread+std_threads"}}"#,
-            ok, total, num_tasks
-        )
+        serde_json::json!({
+            "ok": ok,
+            "total": total,
+            "expected": num_tasks,
+            "runtime": "current_thread+std_threads",
+        })
+        .to_string()
     });
 
     match result {
@@ -1596,7 +1612,7 @@ pub extern "C" fn rag3weaver_candle_embed(
 
         let embedder = match CandleEmbedder::from_bytes(config, tokenizer, weights) {
             Ok(e) => e,
-            Err(e) => return format!(r#"{{"ok":false,"error":"embedder init: {e}"}}"#),
+            Err(e) => return err_json(format!("embedder init: {e}")),
         };
 
         let texts = vec![text.into_owned()];
@@ -1605,17 +1621,19 @@ pub extern "C" fn rag3weaver_candle_embed(
                 let v = &vecs[0];
                 let dim = v.len();
                 let non_zero = v.iter().filter(|x| **x != 0.0).count();
-                let s0 = v.get(0).copied().unwrap_or(0.0);
-                let s1 = v.get(1).copied().unwrap_or(0.0);
-                let s2 = v.get(2).copied().unwrap_or(0.0);
+                let sample: Vec<f32> = (0..3).map(|i| v.get(i).copied().unwrap_or(0.0)).collect();
                 let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-                format!(
-                    r#"{{"ok":true,"dim":{},"nonZero":{},"norm":{:.6},"sample":[{:.6},{:.6},{:.6}]}}"#,
-                    dim, non_zero, norm, s0, s1, s2
-                )
+                serde_json::json!({
+                    "ok": true,
+                    "dim": dim,
+                    "nonZero": non_zero,
+                    "norm": norm,
+                    "sample": sample,
+                })
+                .to_string()
             }
             Ok(_) => r#"{"ok":false,"error":"empty result"}"#.to_string(),
-            Err(e) => format!(r#"{{"ok":false,"error":"embed: {e}"}}"#),
+            Err(e) => err_json(format!("embed: {e}")),
         }
     });
 
@@ -1643,15 +1661,15 @@ pub extern "C" fn rag3weaver_count(
     let catalog = match ctx.catalog.lock() {
         Ok(g) => g,
         Err(e) => {
-            return return_string_to_c(format!(
-                r#"{{"error":"catalog lock poisoned: {e}"}}"#
-            ))
+            return return_string_to_c(error_only_json(format!(
+                "catalog lock poisoned: {e}"
+            )))
         }
     };
 
     match catalog.count(&entity) {
-        Ok(n) => return_string_to_c(format!(r#"{{"count":{n}}}"#)),
-        Err(e) => return_string_to_c(format!(r#"{{"error":"{}"}}"#, e)),
+        Ok(n) => return_string_to_c(serde_json::json!({ "count": n }).to_string()),
+        Err(e) => return_string_to_c(error_only_json(e)),
     }
 }
 
@@ -1659,6 +1677,12 @@ pub extern "C" fn rag3weaver_count(
 /// des identifiants fournis par l'appelant.
 fn err_json(e: impl std::fmt::Display) -> String {
     serde_json::json!({ "ok": false, "error": e.to_string() }).to_string()
+}
+
+/// JSON `{"error":…}` correctement échappé — même précaution, forme sans `ok`
+/// (get_uuid, drain, search, count).
+fn error_only_json(e: impl std::fmt::Display) -> String {
+    serde_json::json!({ "error": e.to_string() }).to_string()
 }
 
 /// Multi-tenant (doc 37) : fixe la cellule (org, project) courante du Catalog.
@@ -1737,5 +1761,22 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&j).unwrap();
         assert_eq!(v["ok"], false);
         assert!(v["error"].as_str().unwrap().contains('"'));
+    }
+
+    const NASTY: &str = "quote \" backslash \\ newline\nend";
+
+    #[test]
+    fn err_json_round_trips_nasty_message() {
+        let v: serde_json::Value = serde_json::from_str(&err_json(NASTY)).unwrap();
+        assert_eq!(v.as_object().unwrap().len(), 2);
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"], NASTY);
+    }
+
+    #[test]
+    fn error_only_json_round_trips_nasty_message() {
+        let v: serde_json::Value = serde_json::from_str(&error_only_json(NASTY)).unwrap();
+        assert_eq!(v.as_object().unwrap().len(), 1);
+        assert_eq!(v["error"], NASTY);
     }
 }
