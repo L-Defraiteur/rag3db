@@ -233,3 +233,77 @@ fn profile_commit_floor() {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
+
+// ─── D. le drain : coût fixe ou coût par document ? ─────────────────────────
+
+/// The ~80 ms that remain in a 9-document drain after the engine and the store
+/// were fixed: fixed per drain, or per document? Same catalog, same KB, N
+/// varied. Per-document cost is what decides whether it matters at scale.
+#[test]
+#[ignore]
+fn profile_drain_scaling() {
+    let root = rag3db_root();
+
+    eprintln!("\n── D. drain en fonction de N (BM25 KB, MockEmbedder) ──");
+    eprintln!("  {:>5}  {:>9}  {:>9}  {:>9}  {:>9}  {:>8}", "N", "create", "drain", "search", "total", "ms/doc");
+
+    for n in [1usize, 9, 90, 900] {
+        let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+        let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+        for path in [
+            format!("{root}/extension/vector/build/libvector.rag3db_extension"),
+            format!("{root}/extension/lucivy_fts/build/liblucivy_fts.rag3db_extension"),
+            format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension"),
+        ] {
+            boxed.execute(&format!("LOAD EXTENSION '{path}'")).expect("load extension");
+        }
+        let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config());
+        catalog.initialize().unwrap();
+
+        let t = Instant::now();
+        for i in 0..n {
+            let mut data = BTreeMap::new();
+            data.insert("title".into(), CypherValue::String(format!("snippet {i}")));
+            // Varied text so lucivy has real tokens and the chunker real work.
+            data.insert(
+                "body".into(),
+                CypherValue::String(format!(
+                    "fn handler_{i}(req: &Request) -> Result<Response, Error> {{ \
+                     let value = store.get(\"key_{i}\")?; \
+                     if value.len() > {} {{ return Err(Error::TooLarge); }} \
+                     Ok(Response::json(value)) }}",
+                    i % 97
+                )),
+            );
+            catalog.create("Snippet", data).unwrap();
+        }
+        let create_ms = ms(t);
+
+        let t = Instant::now();
+        let drain = catalog.drain();
+        let drain_ms = ms(t);
+        assert_eq!(drain.failed, 0, "drain must not fail at N={n}");
+
+        let t = Instant::now();
+        let hits = catalog
+            .search(
+                "kb",
+                "Error::TooLarge",
+                SearchOptions {
+                    bm25_mode: BM25Mode::Symbol,
+                    consistency: Consistency::Immediate,
+                    signals: Some(SearchSignals::BM25),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let search_ms = ms(t);
+        assert!(!hits.results.is_empty(), "search must find results at N={n}");
+
+        let total = create_ms + drain_ms + search_ms;
+        eprintln!(
+            "  {n:>5}  {create_ms:>7.1}ms  {drain_ms:>7.1}ms  {search_ms:>7.1}ms  {total:>7.1}ms  {:>8.2}",
+            drain_ms / n as f64
+        );
+    }
+}
