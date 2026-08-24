@@ -93,6 +93,13 @@ impl Node for InsertRecordNode {
             .and_then(|bp| bp.take::<EntityRecord>())
             .ok_or("InsertRecordNode: missing 'entities' input")?;
 
+        // Multi-tenant (doc 37) : toute ligne écrite ici — entité, chunk, ligne
+        // d'index — porte la cellule courante. Un seul point de choc.
+        let scope = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
+        for rec in &mut items {
+            scope.stamp(&mut rec.data);
+        }
+
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("InsertRecordNode: 'conn' service not registered")?;
         let node_id_cache = ctx.service::<Arc<RwLock<NodeIdCache>>>("node_id_cache").cloned()
@@ -2505,6 +2512,7 @@ impl Node for KBUpdateNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let scope = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
         let items: Vec<KBContentRecord> = ctx.take_input("kb_content")
             .and_then(|pv| pv.take::<BatchPayload>())
             .and_then(|bp| bp.take::<KBContentRecord>())
@@ -2579,13 +2587,15 @@ impl Node for KBUpdateNode {
                         m.insert("_content_hash".into(), CypherValue::String(rec.new_hash.clone()));
                         m.insert("_source_entity".into(), CypherValue::String(rec.source_entity.clone()));
                         m.insert("_source_uuid".into(), CypherValue::String(rec.source_uuid.clone()));
+                        scope.stamp(&mut m);
                         CypherValue::Map(m)
                     }).collect()
                 );
 
                 let cypher = dialect.kb_upsert_index(
                     &index_table,
-                    &["_title", "_content", "_content_hash", "_source_entity", "_source_uuid"],
+                    &["_title", "_content", "_content_hash", "_source_entity", "_source_uuid",
+                      crate::scope::ORG_COLUMN, crate::scope::PROJECT_COLUMN],
                     &["_title", "_content", "_content_hash"],
                 );
 

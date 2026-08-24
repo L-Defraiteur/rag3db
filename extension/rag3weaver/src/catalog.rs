@@ -128,6 +128,9 @@ pub struct Catalog {
     kb_metadata: HashMap<String, KBMetadata>,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
     entity_configs: HashMap<String, crate::config::EntityConfig>,
+    /// La cellule (org, project) courante : stampe l'ingestion, sélectionne
+    /// les index, filtre la recherche par défaut (doc 37).
+    scope: crate::scope::Scope,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -187,6 +190,7 @@ impl Catalog {
             event_bus: EventBus::new(64),
             kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
+            scope: crate::scope::Scope::default(),
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
@@ -674,6 +678,14 @@ impl Catalog {
         self.load_entity_configs()?;
         self.load_relations()?;
         self.load_kb_configs()?;
+
+        // 10 bis. Multi-tenant (doc 37) : tables _Org/_Project, colonnes de scope
+        // sur les bases d'avant, nœuds de la cellule courante.
+        for ddl in crate::schema::generate_scope_tables_ddl(self.dialect.as_ref()) {
+            self.conn.execute(&ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        self.migrate_scope_columns()?;
+        self.ensure_scope_nodes()?;
 
         // 11. Initialize search backend (default: Rag3dbSearchBackend)
         if self.search_backend.is_none() {
@@ -1350,6 +1362,99 @@ impl Catalog {
         Ok(())
     }
 
+    /// Read a single `_catalog_meta` value.
+    fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self.conn.execute_with_params(
+            &stmt,
+            &[QueryParam::new("prefix", CypherValue::String(key.to_string()))],
+        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        for row in &result.rows {
+            if let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) {
+                if k == key {
+                    return Ok(Some(v.clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    // ── Multi-tenant : scope (doc 37) ────────────────────────────────────
+
+    /// La cellule (org, project) courante.
+    pub fn scope(&self) -> &crate::scope::Scope {
+        &self.scope
+    }
+
+    /// Change la cellule courante : les ingestions suivantes sont estampillées
+    /// avec, les recherches y sont limitées par défaut. Les nœuds `_Org` /
+    /// `_Project` sont créés s'ils manquent.
+    pub fn set_scope(&mut self, scope: crate::scope::Scope) -> Result<(), CatalogError> {
+        scope.validate().map_err(CatalogError::SchemaError)?;
+        self.scope = scope;
+        if self.initialized {
+            self.ensure_scope_nodes()?;
+        }
+        Ok(())
+    }
+
+    /// MERGE des nœuds `_Org {_uuid: org}` et `_Project {_uuid: project}`.
+    fn ensure_scope_nodes(&self) -> Result<(), CatalogError> {
+        for (table, id) in [
+            (crate::scope::ORG_TABLE, &self.scope.org),
+            (crate::scope::PROJECT_TABLE, &self.scope.project),
+        ] {
+            let stmt = format!(
+                "MERGE (n:{table} {{_uuid: $id}}) ON CREATE SET n.name = $id"
+            );
+            self.conn.execute_with_params(
+                &stmt,
+                &[QueryParam::new("id", CypherValue::String(id.clone()))],
+            ).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    /// Bases créées avant les colonnes de scope : `ALTER TABLE ADD _org/_project`
+    /// (défaut `"default"`) sur toutes les tables de données connues, une fois,
+    /// sous la clé méta `schema_version`.
+    fn migrate_scope_columns(&self) -> Result<(), CatalogError> {
+        use crate::scope::{SCHEMA_VERSION, SCHEMA_VERSION_KEY};
+        if self.read_meta_key(SCHEMA_VERSION_KEY)?.as_deref() == Some(SCHEMA_VERSION) {
+            return Ok(());
+        }
+        let mut tables: Vec<String> = Vec::new();
+        for entity in self.entity_configs.keys() {
+            tables.push(entity.clone());
+            tables.push(format!("{entity}_Chunk"));
+        }
+        for kb in self.kb_metadata.keys() {
+            tables.push(format!("{kb}_Index"));
+            tables.push(format!("{kb}_Index_Chunk"));
+        }
+        let default_literal = format!("'{}'", crate::scope::DEFAULT_ID);
+        let mut altered = 0usize;
+        for table in &tables {
+            for col in crate::scope::scope_columns() {
+                let ddl = self.dialect.alter_add_column_default(table, &col, &default_literal);
+                match self.conn.execute(&ddl) {
+                    Ok(_) => altered += 1,
+                    // Table absente (chunk d'entité KB-only) ou colonne déjà là.
+                    Err(e) => {
+                        let msg = e.to_string().to_lowercase();
+                        if !(msg.contains("exist") || msg.contains("already has") || msg.contains("not found") || msg.contains("does not")) {
+                            return Err(CatalogError::DbError(format!("migration scope {table}.{}: {e}", col.name)));
+                        }
+                    }
+                }
+            }
+        }
+        if altered > 0 {
+            eprintln!("[rag3weaver] schéma v{SCHEMA_VERSION}: colonnes de scope ajoutées ({altered} ALTER)");
+        }
+        self.persist_meta_key(SCHEMA_VERSION_KEY, SCHEMA_VERSION)
+    }
+
     /// Persist an entity config to `_catalog_meta`.
     fn persist_entity_config(
         &self,
@@ -1685,6 +1790,7 @@ impl Catalog {
                 .collect::<Vec<_>>()
                 .join("\n\n");
             data.insert("_content_hash".into(), CypherValue::String(content_hash(&content_text)));
+            self.scope.stamp(&mut data);
 
             let (entity_ref, resolver) = EntityRef::new(entity_name);
             entity_records.push(EntityRecord {
@@ -1739,6 +1845,7 @@ impl Catalog {
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
         services.register("embedding_dim", self.config.embedding_dim);
@@ -1858,6 +1965,7 @@ impl Catalog {
             "_content_hash".to_string(),
             CypherValue::String(hash),
         );
+        self.scope.stamp(&mut full_data);
 
         // Create entity ref pair
         let (entity_ref, resolver) = EntityRef::new(entity_name);
@@ -1917,6 +2025,7 @@ impl Catalog {
             index_data.insert("_content_hash".to_string(), CypherValue::String(String::new()));
             index_data.insert("_title".to_string(), CypherValue::String(title_text));
             index_data.insert("_content".to_string(), CypherValue::String(content_text));
+            self.scope.stamp(&mut index_data);
 
             // Index entity with resolver
             let (index_ref, index_resolver) = EntityRef::new(&index_table);
@@ -2385,6 +2494,7 @@ impl Catalog {
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
         services.register("embedding_dim", self.config.embedding_dim);
@@ -2547,6 +2657,7 @@ impl Catalog {
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
 
         let runtime = DataflowRuntime::with_services(5, services);
@@ -2639,6 +2750,7 @@ impl Catalog {
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
         services.register("embedding_dim", self.config.embedding_dim);

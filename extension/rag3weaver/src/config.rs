@@ -399,6 +399,9 @@ impl EntityConfig {
     /// Validate field definitions (mutual exclusivity of is_title/title_for, is_content/content_for).
     pub fn validate(&self) -> Result<(), String> {
         for (name, f) in &self.fields {
+            if crate::scope::is_scope_column(name) {
+                return Err(format!("Field '{name}': nom réservé au scope (org/project)"));
+            }
             if f.is_title && f.title_for.is_some() {
                 return Err(format!("Field '{name}': is_title and title_for are mutually exclusive"));
             }

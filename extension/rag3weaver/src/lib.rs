@@ -60,6 +60,7 @@ pub mod dataflow;
 pub mod query;
 pub mod refs;
 pub mod schema;
+pub mod scope;
 pub mod search;
 pub mod search_backend;
 pub mod search_strategy;

@@ -189,6 +189,7 @@ pub fn generate_node_table_ddl_with_dialect(
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
     ];
+    columns.extend(crate::scope::scope_columns());
 
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
     field_names.sort();
@@ -226,15 +227,16 @@ pub fn generate_index_table_ddl_with_dialect(
     validate_identifier(kb_name, "knowledge_base")?;
     let table_name = format!("{kb_name}_Index");
 
-    let columns = vec![
+    let mut columns = vec![
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_source_entity".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_source_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_content".into(), col_type: ColumnType::Text },
-        ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) },
     ];
+    columns.extend(crate::scope::scope_columns());
+    columns.push(ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) });
 
     Ok(dialect.create_table(&table_name, &columns))
 }
@@ -260,7 +262,7 @@ pub fn generate_index_chunk_table_ddl_with_dialect(
     validate_identifier(kb_name, "knowledge_base")?;
     let table_name = format!("{kb_name}_Index_Chunk");
 
-    let columns = vec![
+    let mut columns = vec![
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_parent_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_parent_field".into(), col_type: ColumnType::Text },
@@ -283,6 +285,7 @@ pub fn generate_index_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) },
     ];
+    columns.extend(crate::scope::scope_columns());
 
     Ok(dialect.create_table(&table_name, &columns))
 }
@@ -328,6 +331,7 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_core_end_line".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
     ];
+    columns.extend(crate::scope::scope_columns());
 
     if entity_config.signals.vector() {
         columns.push(ColumnDef { name: "embedding".into(), col_type: ColumnType::Vector(embedding_dim) });
@@ -489,6 +493,20 @@ pub fn generate_fts_index_ddl(table: &str, fields: &[&str], filter_fields: &[&st
 }
 
 /// Generate CREATE NODE TABLE for the `_catalog_meta` system table.
+/// Tables graphe des orgs et des projets connus (doc 37) : `_uuid` = id,
+/// `name` libre. Pas d'arête de contenance imposée entre les deux.
+pub fn generate_scope_tables_ddl(dialect: &dyn crate::dialect::SchemaDialect) -> Vec<String> {
+    use crate::dialect::{ColumnDef, ColumnType};
+    let cols = vec![
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "name".into(), col_type: ColumnType::Text },
+    ];
+    vec![
+        dialect.create_table(crate::scope::ORG_TABLE, &cols),
+        dialect.create_table(crate::scope::PROJECT_TABLE, &cols),
+    ]
+}
+
 pub fn generate_meta_table_ddl() -> String {
     "CREATE NODE TABLE IF NOT EXISTS _catalog_meta(\n    \
      _key STRING,\n    \

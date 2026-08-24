@@ -110,8 +110,14 @@ pub trait SchemaDialect: Send + Sync {
         props: &[ColumnDef],
     ) -> String;
 
-    /// ALTER TABLE ADD column with a default value.
-    fn alter_add_column(&self, table: &str, col: &ColumnDef) -> String;
+    /// ALTER TABLE ADD column with the type's default value.
+    fn alter_add_column(&self, table: &str, col: &ColumnDef) -> String {
+        let def = self.default_value(&col.col_type);
+        self.alter_add_column_default(table, col, &def)
+    }
+
+    /// ALTER TABLE ADD column with an explicit default literal (already quoted).
+    fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String;
 
     // ── Indexes ──────────────────────────────────────────────────────────
 
@@ -419,10 +425,9 @@ impl SchemaDialect for Rag3dbDialect {
         format!("CREATE REL TABLE IF NOT EXISTS {name}(FROM {from_table} TO {to_table}{prop_str})")
     }
 
-    fn alter_add_column(&self, table: &str, col: &ColumnDef) -> String {
+    fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
         let typ = self.type_name(&col.col_type);
-        let def = self.default_value(&col.col_type);
-        format!("ALTER TABLE {table} ADD {} {typ} DEFAULT {def}", col.name)
+        format!("ALTER TABLE {table} ADD {} {typ} DEFAULT {default_literal}", col.name)
     }
 
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String {
@@ -966,10 +971,9 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
-    fn alter_add_column(&self, table: &str, col: &ColumnDef) -> String {
+    fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
         let typ = self.type_name(&col.col_type);
-        let def = self.default_value(&col.col_type);
-        format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {} {typ} DEFAULT {def}", col.name)
+        format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {} {typ} DEFAULT {default_literal}", col.name)
     }
 
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String {
