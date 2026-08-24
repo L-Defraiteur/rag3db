@@ -1,4 +1,4 @@
-// Generated from ONNX "/home/lucied/.cache/rag3weaver/minilm/model.onnx" by burn-onnx
+// Generated from ONNX "sentence-transformers/all-MiniLM-L6-v2 onnx/model.onnx" by burn-onnx
 use burn::prelude::*;
 use burn::nn::Linear;
 use burn::nn::LinearConfig;
