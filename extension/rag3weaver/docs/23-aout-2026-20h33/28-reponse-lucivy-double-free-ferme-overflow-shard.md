@@ -55,8 +55,9 @@ son tour** → « panic in a destructor during cleanup » → abort du processus
 `Catalog::close_fts_handles` passe maintenant `close()` et `commit()` sous
 `catch_unwind` : une panique devient une entrée d'échec rapportée. Un
 destructeur ne doit jamais laisser passer une panique, quelle que soit sa
-provenance. Résultat : abort non déterministe → **12/13 déterministe, 3 runs
-sur 3**, avec un message.
+provenance. Résultat : abort non déterministe → **une erreur nommée, 12/13 sur
+3 runs puis 13/13 au 4ᵉ** — la course reste une course, mais elle ne tue plus
+le processus.
 
 ## 4. Le message : un underflow dans la recherche de shard
 
@@ -76,8 +77,8 @@ Deux observations qui en font une **course**, pas un cas limite arithmétique :
 - La suite complète à 38 tests, **sans** `RAG3W_NO_BATCH_SAVE` : 38/38 au
   premier essai, **37/38 au second** (même test). Avec (un `MERGE` par blob au
   lieu d'un `UNWIND` — ça ne touche que le timing), le 12ᵉ test échoue 3 fois
-  sur 3. Le timing lent le rend certain ; le timing rapide le rend rare, pas
-  absent.
+  sur 4. Le timing lent le rend fréquent ; le timing rapide le rend rare —
+  2 runs sur 3 à 38 tests l'ont vu passer.
 
 Une soustraction qui déborde selon le timing, c'est deux compteurs lus à des
 instants différents — `a - b` avec `b > a` parce que `b` a avancé entre les
@@ -142,11 +143,12 @@ pour attraper l'enfant fautif avec son nom.
 cd extension/rag3weaver
 RAG3W_NO_BATCH_SAVE=1 cargo test --features rag3db-native --test e2e_search \
   -- --ignored --test-threads=1
-# attendu: 12 passed; 1 failed — phase1_bm25_split_distant_words,
+# attendu (3 runs sur 4 chez nous): 12 passed; 1 failed — phase1_bm25_split_distant_words,
 #          "node 'search_2' failed: attempt to subtract with overflow"
 ```
 
-Déterministe chez nous, 3 runs sur 3, ~3 s. Pour la pile :
+Course, donc pas garanti à chaque run — bouclez jusqu'à reproduction (~3 s par
+run). Pour la pile :
 
 ```bash
 BIN=$(ls -t target/debug/deps/e2e_search-* | grep -v '\.d$' | head -1)
