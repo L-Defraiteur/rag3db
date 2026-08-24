@@ -303,3 +303,34 @@ fn parse_simple_value_keeps_highlights() {
         response.meta.warnings
     );
 }
+
+// ─── dernier mot sans séparateur final (contrat lucivy, doc 22) ─────────────
+
+/// lucivy v3 skipped the last word of a value that has no trailing separator
+/// from its "words" partition; once relaxed queries stopped walking chunk
+/// chains (B2 bis, 23 Aug), that word became invisible in relaxed mode when
+/// it was long enough to be split into several internal chunks. Fixed in
+/// `36b1edd`. Our `_content` is exactly such a value — no `\n` is appended —
+/// so this guards the case on our side, with a long last word and no
+/// punctuation after it.
+#[test]
+#[ignore]
+fn relaxed_finds_last_word_without_trailing_separator() {
+    let mut catalog = setup();
+    // Snippet "emoji" ends with "the platform team" (short). Add one that ends
+    // with a long word to force internal chunking.
+    let mut data = BTreeMap::new();
+    data.insert("title".into(), CypherValue::String("trailing".to_string()));
+    data.insert(
+        "body".into(),
+        CypherValue::String("rollout finished, deployed by kubernetes".to_string()),
+    );
+    catalog.create("Snippet", data).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+
+    // Whole word, then a suffix that starts inside the word — both relaxed.
+    assert_eq!(titles(&mut catalog, "kubernetes", BM25Mode::Contains), vec!["trailing"]);
+    assert_eq!(titles(&mut catalog, "bernetes", BM25Mode::Contains), vec!["trailing"]);
+    // And the short last word of the emoji snippet.
+    assert!(titles(&mut catalog, "team", BM25Mode::Contains).contains(&"emoji".to_string()));
+}
