@@ -1,6 +1,6 @@
 # rag3db
 
-Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (Lucivy), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
+Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (lucivy, in rag3weaver), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
 
 ## Cypher-Native Index Search
 
@@ -32,52 +32,15 @@ The table function API (`CALL QUERY_*`) remains available for advanced use cases
 
 ## Extensions
 
-### lucivy_fts — Full-Text Search
+### Full-Text Search — in rag3weaver, not a Cypher extension
 
-Full-text search via [ld-lucivy](https://github.com/L-Defraiteur/lucivy/) (fork of Lucivy v0.26.0, cxx bridge):
-
-```cypher
--- Create index (text fields + optional filter fields)
-CALL CREATE_LUCIVY_INDEX('docs', ['title', 'body'],
-     filter_fields := [('category', 'STRING'), ('year', 'INT64')])
-
--- Substring (trigram-accelerated, BM25, multi-field highlights)
-CALL QUERY_LUCIVY_INDEX('docs',
-     '{"type":"contains","field":"body","value":"programming"}', 10)
-RETURN node_id, score, highlights
-
--- Fuzzy (tolerates typos)
-CALL QUERY_LUCIVY_INDEX('docs',
-     '{"type":"contains","field":"body","value":"programing","distance":1}', 10)
-RETURN node_id, score, highlights
-
--- Regex (trigram-accelerated + regex check + BM25)
-CALL QUERY_LUCIVY_INDEX('docs',
-     '{"type":"contains","field":"body","value":"program[a-z]+","regex":true}', 10)
-RETURN node_id, score, highlights
-
--- Boolean multi-field
-CALL QUERY_LUCIVY_INDEX('docs',
-     '{"type":"boolean","should":[
-       {"type":"contains","field":"title","value":"rust"},
-       {"type":"contains","field":"body","value":"rust"}
-     ]}', 10)
-RETURN node_id, score, highlights
-
--- Filter by IDs
-CALL QUERY_LUCIVY_INDEX('docs', '...', 10, allowed_ids := [1, 5, 12])
-RETURN node_id, score, highlights
-
--- Drop index
-CALL DROP_LUCIVY_INDEX('docs')
-```
-
-8 query types: contains, fuzzy, regex, phrase, term, boolean, parse, regex+fuzzy hybrid.
-
-Multi-field highlights: each field in a boolean query produces its own byte offsets (`{"title":[[0,4]],"body":[[100,120]]}`).
-
-DELETE/UPDATE hooks: the index auto-updates on Cypher mutations. Lazy commit (dirty flag, commit+reload once before each QUERY).
-
+Full-text search (BM25, substring/fuzzy/regex `contains`, exact symbol search with
+separators, highlights aligned to chunks) is provided by
+[lucivy](https://github.com/L-Defraiteur/lucivy/) v3 compiled **into rag3weaver**
+(Rust, in-process, index stored as blobs in the database). There is no
+`CREATE_LUCIVY_INDEX` / `SEARCH` Cypher function anymore: the former `lucivy_fts`
+C++ extension was removed on 2026-08-24 — every document was being indexed twice.
+See `extension/rag3weaver/README.md` (BM25 modes) for the API.
 ### vector — HNSW Vector Search
 
 Kuzu's vector extension with DELETE and UPDATE support:
@@ -170,18 +133,18 @@ let response = catalog.search("main", "rust programming", &options).await?;
 
 | Target | Status | Tests |
 |--------|--------|-------|
-| Native (Linux x86_64) | OK | 15 GTest E2E + 1064 Rust tests (ld-lucivy) + 380 Rust tests (rag3weaver) |
+| Native (Linux x86_64) | OK | ~600 Rust unit tests + 12 E2E suites (rag3weaver, `run_e2e.sh`) |
 | Node.js native (NAPI) | OK | contains/fuzzy/regex/phrase/parse verified |
 | Browser WASM | OK | Playwright (FTS + vector + persistence IDBFS) |
 
-Statically linked extensions in WASM: lucivy_fts, vector, sparse_vector, json, algo.
+Statically linked extensions in WASM: vector, sparse_vector, json, algo (FTS is inside rag3weaver).
 
 ## Build
 
 See **[BUILD.md](BUILD.md)** for the full guide.
 
 ```bash
-# Quick build (all extensions: lucivy_fts, sparse_vector, vector, geo)
+# Quick build (all extensions: sparse_vector, vector, geo)
 ./build.sh
 
 # Build + run all extension tests
@@ -190,7 +153,7 @@ See **[BUILD.md](BUILD.md)** for the full guide.
 # Build + test a single extension
 ./build.sh sparse_vector
 
-# Manual cmake (extensions default to lucivy_fts;sparse_vector;vector;geo)
+# Manual cmake (extensions default to sparse_vector;vector;geo)
 mkdir -p build/release && cd build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
@@ -204,9 +167,8 @@ cd extension/rag3weaver && bash run_e2e.sh phase0
 
 ```
 rag3db (fork Kuzu v0.11.2.2)
-|-- extension/lucivy_fts/           C++ FTS extension (CREATE/QUERY/DROP)
-|-- extension/lucivy/ld-lucivy/    Submodule (fork Lucivy v0.26.0)
-|   +-- lucivy_fts/rust/            FFI crate (cxx bridge)
+|-- extension/lucivy/ld-lucivy/    Submodule lucivy (référence ; rag3weaver compile
+|                                    lucivy-core par chemin, voir extension/rag3weaver/Cargo.toml)
 |-- extension/vector/                HNSW extension (+ DELETE/UPDATE)
 |-- extension/sparse_vector/         Sparse vector extension
 |-- extension/geo/                   Spatial extension (R-tree + 19 geo functions)

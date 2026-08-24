@@ -135,7 +135,6 @@ fn profile_full_catalog_path() {
     let t = Instant::now();
     for (name, path) in [
         ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
-        ("lucivy_fts", format!("{root}/extension/lucivy_fts/build/liblucivy_fts.rag3db_extension")),
         ("sparse_vector", format!("{root}/extension/sparse_vector/build/libsparse_vector.rag3db_extension")),
     ] {
         boxed.execute(&format!("LOAD EXTENSION '{path}'"))
