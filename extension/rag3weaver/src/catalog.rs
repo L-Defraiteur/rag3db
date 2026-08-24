@@ -2716,6 +2716,12 @@ impl Catalog {
         self.conn.clone()
     }
 
+    /// Le dialecte de schéma courant, partagé (pour lier un nœud frais, cf.
+    /// `DeleteRecordNode::bind_services`).
+    pub fn dialect_arc(&self) -> Arc<dyn crate::dialect::SchemaDialect> {
+        self.dialect.clone()
+    }
+
     /// Execute raw Cypher (useful for debugging/tests).
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
@@ -2733,6 +2739,23 @@ impl Catalog {
     /// Populated automatically by InsertRecordNode on each INSERT.
     pub fn node_id_cache(&self) -> &Arc<RwLock<NodeIdCache>> {
         &self.node_id_cache
+    }
+
+    /// Les index FTS ouverts, par entité (pour lier un nœud frais avant un
+    /// `undo`, cf. `UpdateRecordNode::bind_fts`).
+    pub fn fts_handles(&self) -> &HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>> {
+        &self.fts_handles
+    }
+
+    /// Les index sparse ouverts, par entité (même usage : services d'un graphe
+    /// générique construit hors du `Catalog`).
+    pub fn sparse_handles(&self) -> &HashMap<String, Arc<sparse_vector::handle::SparseHandle>> {
+        &self.sparse_handles
+    }
+
+    /// Les configurations d'entités simples enregistrées.
+    pub fn entity_configs(&self) -> &HashMap<String, crate::config::EntityConfig> {
+        &self.entity_configs
     }
 
     // ── Schema queries ─────────────────────────────────────────────────
@@ -3421,6 +3444,20 @@ impl Catalog {
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
     ) -> Result<crate::search_strategy::SearchStrategyResponse, CatalogError> {
+        // Garde « max iterations » : les expansions sont déroulées dans le graphe
+        // (une règle = une passe), `max_rounds` borne ce déroulement.
+        if strategy.max_rounds == 0 {
+            return Err(CatalogError::DbError(
+                "search_with_strategy: max_rounds = 0 (max iterations guard) — must be ≥ 1".into(),
+            ));
+        }
+        if strategy.expansions.len() > strategy.max_rounds {
+            return Err(CatalogError::DbError(format!(
+                "search_with_strategy: {} expansions exceed max_rounds = {} (max iterations guard)",
+                strategy.expansions.len(),
+                strategy.max_rounds
+            )));
+        }
         let has_expansions = !strategy.expansions.is_empty();
         let (mut graph, services) =
             Self::build_dataflow_graph(catalog, kb_name, query, strategy);

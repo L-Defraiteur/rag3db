@@ -14,9 +14,11 @@ use rag3weaver::config::{
 };
 use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::{
-    DataflowEvent, DataflowRecorder, DataflowRuntime, ExecutionReport,
-    ExecutionStatus, PortValue, RecordSink, TapEvent,
+    DataflowRecorder, DataflowRuntime, ExecutionStatus, QueryPayload, RecordSink,
+    TapEvent,
 };
+use rag3weaver::search::SearchMeta;
+use rag3weaver::search_strategy::{ChildSummary, UnifiedResult};
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::search_strategy::{
@@ -235,7 +237,7 @@ fn strategy_no_expansion() -> SearchStrategy {
 #[ignore]
 fn observe_execute_with_report_simple() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -275,7 +277,7 @@ fn observe_execute_with_report_simple() {
 #[ignore]
 fn observe_execute_with_report_expansion() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -327,7 +329,7 @@ fn observe_execute_with_report_expansion() {
 #[ignore]
 fn observe_tap_all() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -350,11 +352,18 @@ fn observe_tap_all() {
     eprintln!("tap events: {}", tap_events.len());
     for ev in &tap_events {
         let summary = match &ev.value {
-            PortValue::Results(r) => format!("Results({})", r.len()),
-            PortValue::Children(c) => format!("Children({} parents)", c.len()),
-            PortValue::Meta(_) => "Meta".into(),
-            PortValue::Query { target_name, .. } => format!("Query({})", target_name),
-            _ => format!("{:?}", ev.value),
+            v if v.is::<Vec<UnifiedResult>>() => {
+                format!("Results({})", v.downcast::<Vec<UnifiedResult>>().unwrap().len())
+            }
+            v if v.is::<HashMap<String, Vec<ChildSummary>>>() => format!(
+                "Children({} parents)",
+                v.downcast::<HashMap<String, Vec<ChildSummary>>>().unwrap().len()
+            ),
+            v if v.is::<SearchMeta>() => "Meta".into(),
+            v if v.is::<QueryPayload>() => {
+                format!("Query({})", v.downcast::<QueryPayload>().unwrap().target_name)
+            }
+            v => format!("{v:?}"),
         };
         eprintln!(
             "  {}.{} → {}.{} : {}",
@@ -378,7 +387,7 @@ fn observe_tap_all() {
     );
     if let Some(ev) = query_tap {
         assert!(
-            matches!(&ev.value, PortValue::Query { .. }),
+            ev.value.is::<QueryPayload>(),
             "Query edge should carry PortValue::Query"
         );
     }
@@ -401,7 +410,7 @@ fn observe_tap_all() {
 #[ignore]
 fn observe_tap_specific_edge() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -428,7 +437,7 @@ fn observe_tap_specific_edge() {
     );
     assert_eq!(tap_events[0].from_node, "query_source");
     assert_eq!(tap_events[0].to_node, "primary_search");
-    assert!(matches!(&tap_events[0].value, PortValue::Query { .. }));
+    assert!(tap_events[0].value.is::<QueryPayload>());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -439,7 +448,7 @@ fn observe_tap_specific_edge() {
 #[ignore]
 fn observe_record_jsonl() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -484,7 +493,7 @@ fn observe_record_jsonl() {
 fn observe_record_database() {
     let catalog = setup_catalog();
     let conn = catalog.conn_arc();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),
@@ -549,7 +558,7 @@ fn observe_record_database() {
 #[ignore]
 fn observe_report_json_structure() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let (mut graph, services) = Catalog::build_dataflow_graph(
         catalog.clone(),

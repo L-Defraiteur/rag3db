@@ -14,6 +14,21 @@ use serde::{Deserialize, Serialize};
 // Re-export luciole's PortValue as the canonical runtime value type.
 pub use luciole::port::PortValue;
 
+/// Consomme un port : déplace la valeur si ce nœud en est le seul consommateur,
+/// la clone sinon. `PortValue::take()` de luciole panique en fan-out ; ici le
+/// fan-out est légitime — le port `query` d'une source alimente à la fois la
+/// recherche et la résolution, `results` plusieurs consommateurs — et il se
+/// paie d'un clone, comme quand `PortValue` était un enum cloné par valeur.
+pub fn take_or_clone<T: Clone + Send + Sync + 'static>(pv: PortValue) -> Option<T> {
+    match pv {
+        PortValue::Data(arc) => {
+            let typed = Arc::downcast::<T>(arc).ok()?;
+            Some(Arc::try_unwrap(typed).unwrap_or_else(|shared| (*shared).clone()))
+        }
+        _ => None,
+    }
+}
+
 use crate::search::{SearchOptions, SearchTarget};
 use crate::search_strategy::{ChildSummary, UnifiedResult};
 
@@ -90,8 +105,8 @@ pub fn merge_port_values(a: PortValue, b: PortValue) -> Result<PortValue, String
 
     // Try Children merge
     if a.is::<HashMap<String, Vec<ChildSummary>>>() && b.is::<HashMap<String, Vec<ChildSummary>>>() {
-        let mut map_a = a.take::<HashMap<String, Vec<ChildSummary>>>().unwrap();
-        let map_b = b.take::<HashMap<String, Vec<ChildSummary>>>().unwrap();
+        let mut map_a = take_or_clone::<HashMap<String, Vec<ChildSummary>>>(a).unwrap();
+        let map_b = take_or_clone::<HashMap<String, Vec<ChildSummary>>>(b).unwrap();
         for (key, mut children) in map_b {
             map_a.entry(key).or_default().append(&mut children);
         }
@@ -100,16 +115,16 @@ pub fn merge_port_values(a: PortValue, b: PortValue) -> Result<PortValue, String
 
     // Try Results merge
     if a.is::<Vec<UnifiedResult>>() && b.is::<Vec<UnifiedResult>>() {
-        let mut vec_a = a.take::<Vec<UnifiedResult>>().unwrap();
-        let vec_b = b.take::<Vec<UnifiedResult>>().unwrap();
+        let mut vec_a = take_or_clone::<Vec<UnifiedResult>>(a).unwrap();
+        let vec_b = take_or_clone::<Vec<UnifiedResult>>(b).unwrap();
         vec_a.extend(vec_b);
         return Ok(PortValue::new(vec_a));
     }
 
     // Try Uuids merge
     if a.is::<Vec<(String, String)>>() && b.is::<Vec<(String, String)>>() {
-        let mut vec_a = a.take::<Vec<(String, String)>>().unwrap();
-        let vec_b = b.take::<Vec<(String, String)>>().unwrap();
+        let mut vec_a = take_or_clone::<Vec<(String, String)>>(a).unwrap();
+        let vec_b = take_or_clone::<Vec<(String, String)>>(b).unwrap();
         vec_a.extend(vec_b);
         return Ok(PortValue::new(vec_a));
     }

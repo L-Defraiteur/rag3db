@@ -11,39 +11,25 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::{
-    BM25SearchNode, ConnService, DataflowGraph, DataflowRuntime, ExecutionStatus,
-    FuseResultsNode, ResolveParentNode, SearchSourceNode, ServiceRegistry,
-    SparseSearchNode, VectorSearchNode,
+    BM25SearchNode, ConnService, DataflowGraph, DataflowRuntime, ResolveParentNode,
+    SearchSourceNode, ServiceRegistry,
 };
+#[cfg(feature = "burn-embedder")]
+use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, SparseSearchNode, VectorSearchNode};
 use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
 use rag3weaver::search::{Consistency, SearchOptions, SearchResult, SearchSignals};
 use rag3weaver::search_strategy::UnifiedResult;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 
-#[cfg(feature = "candle-embedder")]
-use rag3weaver::candle_embedder::{CandleEmbedder, DefaultModel};
+mod common;
 
-#[cfg(feature = "bge-m3")]
-use rag3weaver::bge_m3_embedder::BgeM3Embedder;
-
-// ─── Cached embedders ────────────────────────────────────────────────────────
-
-#[cfg(feature = "candle-embedder")]
-static MINILM: std::sync::LazyLock<Arc<dyn Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading all-MiniLM-L6-v2...");
-    Arc::new(CandleEmbedder::new(DefaultModel::MiniLM).expect("load MiniLM"))
-});
-
-#[cfg(feature = "bge-m3")]
-static BGE_M3: std::sync::LazyLock<Arc<BgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading BGE-M3...");
-    Arc::new(BgeM3Embedder::new().expect("load BGE-M3"))
-});
+#[cfg(feature = "burn-embedder")]
+use common::burn::{BGE_M3, MINILM};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -168,9 +154,9 @@ fn extract_results(
     output: &rag3weaver::dataflow::DataflowOutput,
     node: &str,
 ) -> Vec<UnifiedResult> {
-    match output.get(node, "results") {
-        Some(rag3weaver::dataflow::PortValue::Results(r)) => r.clone(),
-        other => panic!("expected Results from '{node}', got: {other:?}"),
+    match output.get(node, "results").and_then(|v| v.downcast::<Vec<UnifiedResult>>()) {
+        Some(r) => r.clone(),
+        None => panic!("expected Vec<UnifiedResult> on '{node}.results', got: {:?}", output.get(node, "results")),
     }
 }
 
@@ -182,18 +168,25 @@ fn build_services(
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
 ) -> (ServiceRegistry, Arc<Mutex<Catalog>>) {
     let conn_arc = catalog.conn_arc();
+    let fts_handles = catalog.fts_handles().clone();
+    let sparse_handles = catalog.sparse_handles().clone();
     let catalog_arc = Arc::new(Mutex::new(catalog));
 
     let mut services = ServiceRegistry::new();
-    services.register::<Mutex<Catalog>>("catalog", catalog_arc.clone());
-    services.register("conn", Arc::new(ConnService(conn_arc)));
-    services.register::<Arc<dyn Embedder>>("embedder", Arc::new(embedder));
+    // Les nœuds lisent `ConnService` sous "conn" et `Arc<dyn …Embedder>` tels quels
+    // (le registre stocke la valeur sans l'envelopper).
+    services.register("catalog", catalog_arc.clone());
+    services.register("conn", ConnService(conn_arc));
+    // Les nœuds BM25/sparse cherchent dans les index Rust ouverts par le Catalog.
+    services.register("fts_handles", fts_handles);
+    services.register("sparse_handles", sparse_handles);
+    services.register::<Arc<dyn Embedder>>("embedder", embedder);
 
     if let Some(sparse) = sparse_embedder {
-        services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", Arc::new(sparse));
+        services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", sparse);
     }
     if let Some(dual) = dual_embedder {
-        services.register::<Arc<dyn DualEmbedder>>("dual_embedder", Arc::new(dual));
+        services.register::<Arc<dyn DualEmbedder>>("dual_embedder", dual);
     }
 
     (services, catalog_arc)
@@ -279,7 +272,7 @@ fn generic_bm25_pipeline_matches_catalog() {
 // Vector pipeline
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_vector_pipeline_matches_catalog() {
@@ -351,7 +344,7 @@ fn generic_vector_pipeline_matches_catalog() {
 // Hybrid pipeline (BM25 + Vector → Fuse)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_hybrid_pipeline_matches_catalog() {
@@ -426,7 +419,7 @@ fn generic_hybrid_pipeline_matches_catalog() {
 // Sparse pipeline (SparseSearchNode seul)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_sparse_pipeline_matches_catalog() {
@@ -507,7 +500,7 @@ fn generic_sparse_pipeline_matches_catalog() {
 // Full hybrid pipeline (BM25 + Vector + Sparse → Fuse)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_full_hybrid_pipeline_matches_catalog() {
@@ -630,7 +623,7 @@ fn generic_bm25_pipeline_no_results() {
     assert_eq!(pipe_results.len(), 0, "nonsense query should return 0 results");
 }
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_vector_pipeline_with_limit() {
@@ -674,7 +667,7 @@ fn generic_vector_pipeline_with_limit() {
 // Report verification
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "candle-embedder")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_hybrid_pipeline_with_report() {

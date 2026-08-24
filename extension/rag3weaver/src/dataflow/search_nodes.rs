@@ -17,7 +17,7 @@ use crate::search_strategy::{
 };
 
 use super::node::{Node, NodeContext};
-use super::port::{PortDef, PortType, PortValue, QueryPayload};
+use super::port::{take_or_clone, PortDef, PortType, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── KBQuerySourceNode ─────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ impl Node for KBSearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let qp = ctx.take_input("query")
-            .and_then(|pv| pv.take::<QueryPayload>())
+            .and_then(|pv| take_or_clone::<QueryPayload>(pv))
             .ok_or("KBSearchNode: missing 'query' input")?;
         let (target_name, query, options) = (qp.target_name, qp.query, qp.options);
 
@@ -225,7 +225,7 @@ impl Node for FetchRelatedNode {
             .0.clone();
 
         let results = match ctx.take_input("results") {
-            Some(pv) => pv.take::<Vec<UnifiedResult>>().ok_or("expected Vec<UnifiedResult>")?,
+            Some(pv) => take_or_clone::<Vec<UnifiedResult>>(pv).ok_or("expected Vec<UnifiedResult>")?,
             _ => return Err("FetchRelatedNode: missing 'results' input".into()),
         };
 
@@ -370,12 +370,12 @@ impl Node for ComposeNode {
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut results = match ctx.take_input("results") {
-            Some(pv) => pv.take::<Vec<UnifiedResult>>().ok_or("expected Vec<UnifiedResult>")?,
+            Some(pv) => take_or_clone::<Vec<UnifiedResult>>(pv).ok_or("expected Vec<UnifiedResult>")?,
             _ => return Err("ComposeNode: missing 'results' input".into()),
         };
 
         let children = match ctx.take_input("children") {
-            Some(pv) => pv.take::<HashMap<String, Vec<ChildSummary>>>().ok_or("expected Children")?,
+            Some(pv) => take_or_clone::<HashMap<String, Vec<ChildSummary>>>(pv).ok_or("expected Children")?,
             _ => HashMap::new(),
         };
 

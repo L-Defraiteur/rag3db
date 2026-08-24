@@ -13,7 +13,7 @@ use rag3weaver::config::{
     CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
 };
 use rag3weaver::connection::CypherValue;
-use rag3weaver::dataflow::{DataflowEvent, DataflowRuntime};
+use rag3weaver::dataflow::DataflowRuntime;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::search_strategy::{
@@ -38,16 +38,6 @@ fn text_content_for(kbs: &[&str]) -> FieldDef {
         field_type: FieldType::Text,
         title_for: None,
         content_for: Some(kbs.iter().map(|s| s.to_string()).collect()),
-        boost: None,
-        default_value: None,
-    }
-}
-
-fn text_title_and_content(title_kb: &str, content_kbs: &[&str]) -> FieldDef {
-    FieldDef {
-        field_type: FieldType::Text,
-        title_for: Some(title_kb.to_string()),
-        content_for: Some(content_kbs.iter().map(|s| s.to_string()).collect()),
         boost: None,
         default_value: None,
     }
@@ -228,7 +218,7 @@ fn setup_catalog() -> Catalog {
 #[ignore]
 fn strategy_no_expansion() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
         search: SearchOptions {
@@ -279,7 +269,7 @@ fn strategy_no_expansion() {
 #[ignore]
 fn strategy_expand_has_file() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
         search: SearchOptions {
@@ -316,10 +306,7 @@ fn strategy_expand_has_file() {
     // Get results from compose node (terminal after expansion)
     let results = output
         .get("compose", "results")
-        .and_then(|v| match v {
-            rag3weaver::dataflow::PortValue::Results(r) => Some(r),
-            _ => None,
-        })
+        .and_then(|v| v.downcast::<Vec<rag3weaver::search_strategy::UnifiedResult>>())
         .expect("compose node should have results output");
 
     eprintln!(
@@ -379,7 +366,7 @@ fn strategy_expand_has_file() {
 #[ignore]
 fn strategy_entity_filter() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     // Search "auth" — should match File(auth.ts) content, not Directory
     let strategy = SearchStrategy {
@@ -429,7 +416,7 @@ fn strategy_entity_filter() {
 #[ignore]
 fn strategy_child_data() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
         search: SearchOptions {
@@ -496,7 +483,7 @@ fn strategy_child_data() {
 #[ignore]
 fn strategy_max_rounds_guard() {
     let catalog = setup_catalog();
-    let catalog = Arc::new(tokio::sync::Mutex::new(catalog));
+    let catalog = Arc::new(std::sync::Mutex::new(catalog));
 
     let strategy = SearchStrategy {
         search: SearchOptions {

@@ -26,7 +26,7 @@ use crate::search::{
 use crate::search_strategy::UnifiedResult;
 
 use super::node::{Node, NodeContext};
-use super::port::{PortDef, PortType, PortValue, QueryPayload};
+use super::port::{take_or_clone, PortDef, PortType, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── SearchSourceNode ────────────────────────────────────────────────────────
@@ -556,12 +556,12 @@ impl Node for ResolveParentNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let results = ctx.take_input("results")
-            .and_then(|pv| pv.take::<Vec<UnifiedResult>>())
+            .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
             .ok_or("ResolveParentNode: missing 'results' input")?;
 
         // Get SearchTarget from query input
         let qp = ctx.take_input("query")
-            .and_then(|pv| pv.take::<QueryPayload>())
+            .and_then(|pv| take_or_clone::<QueryPayload>(pv))
             .ok_or("ResolveParentNode: no 'query' input with resolved SearchTarget")?;
         let target = qp.target
             .ok_or("ResolveParentNode: Query has no resolved SearchTarget")?;
@@ -606,7 +606,7 @@ fn extract_query_and_target(
     node_type: &str,
 ) -> Result<(String, SearchTarget), String> {
     let qp = ctx.take_input("query")
-        .and_then(|pv| pv.take::<QueryPayload>())
+        .and_then(|pv| take_or_clone::<QueryPayload>(pv))
         .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
     match qp.target {
         Some(t) => Ok((qp.query, t)),
@@ -617,7 +617,7 @@ fn extract_query_and_target(
 /// Take optional Results from a port, defaulting to empty vec.
 fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult> {
     ctx.take_input(port)
-        .and_then(|pv| pv.take::<Vec<UnifiedResult>>())
+        .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
         .unwrap_or_default()
 }
 

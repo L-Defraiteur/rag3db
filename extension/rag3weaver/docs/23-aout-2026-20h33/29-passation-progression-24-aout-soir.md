@@ -73,7 +73,21 @@ drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du mo
 |---|---|---|
 | ~~`e2e_search` 37/38 aléatoire~~ | **fermé le 24 au soir** : scorer fuzzy/regex non trié (`HashMap`) corrigé côté lucivy `8a91053`, `close()` tolérant `a37d330` (doc 32). Rejoué 13/13 ×3 + 38/38. | — |
 | ~~`simple_register_duplicate_fails`~~ | **supprimé** (obsolète depuis mai, `register_entity` idempotent) | — |
-| 4 fichiers E2E ne compilent pas | dérive luciole de mai (`e2e_dataflow_observe`, `e2e_generic_search`, `e2e_search_queue`, `e2e_undo`) | nous — hors périmètre depuis mai |
+| ~~4 fichiers E2E ne compilent pas~~ | **réparés le 24 au soir** (24 tests, 4 sujets que rien d'autre ne couvrait : undo, `search_with_strategy`, observabilité, nœuds génériques). Voir « Bugs trouvés en les remettant ». | — |
+
+## Bugs trouvés en remettant les 4 E2E (24 août, soir) — tous corrigés
+
+Aucun n'était visible tant que ces suites ne compilaient pas.
+
+| Bug | Où | Correctif |
+|---|---|---|
+| **Perte silencieuse dans l'index FTS sur mise à jour partielle** : `UpdateRecordNode` ré-indexait avec les seuls champs *modifiés* (`add_document` n'est pas un merge) → mettre à jour `description` seule effaçait `name`/`details` de l'index. Masqué parce que tous les tests mettaient tous les champs à jour. | `record_nodes.rs` | candidats = tous les champs de l'entité (`entity_indexed_fields`) ; test `simple_partial_update_keeps_other_fields_indexed`, **contre-épreuve faite** (échoue sans le correctif). |
+| **Undo d'update laissait l'index FTS périmé** : les colonnes étaient restaurées, pas le document indexé → la recherche renvoyait encore le contenu annulé. | `UpdateRecordNode::undo` | ré-indexation factorisée (`reindex_fts_rows`) partagée par `execute`/`undo` ; `bind_services` + `bind_fts` pour rejouer un undo sur un nœud frais (reprise après crash) ; `Catalog::{dialect_arc, fts_handles, sparse_handles, entity_configs}`. |
+| **Fan-out cassé sur les ports partagés** : depuis luciole, `PortValue::take()` panique si un port a plusieurs consommateurs ; or le port `query` d'une source alimente recherche *et* résolution, `results` plusieurs nœuds. Touchait `search_with_strategy` avec expansions (chemin produit). | `search_nodes.rs`, `generic_search_nodes.rs`, `port.rs` | `take_or_clone` : déplacement si seul consommateur, clone sinon. |
+| **Garde `max_rounds` disparue** de `search_with_strategy`. | `catalog.rs` | `max_rounds == 0` ou `expansions > max_rounds` → erreur « max iterations guard ». |
+| **Résumés d'arêtes vides** dans `ExecutionReport` : calculés après l'exécution sur des valeurs déjà déplacées. | `report.rs` | résumé depuis les instantanés `NodeStarted` (`summarize_snapshot`). |
+| **Deux copies de `luciole`** dans le graphe : crates.io 0.1.0 pour notre DAG (`luciole_bridge`), la copie locale pour `lucivy-core` — le correctif du double free (`3675c3d`) n'était **pas** dans la nôtre. | `Cargo.toml` | `[patch.crates-io] luciole = { path = "../../../lucivy/luciole" }`, une seule copie dans le lock. |
+| 10 tests unitaires `bge_m3_embedder.rs` en `#[tokio::test]` sur des fonctions synchrones (ne compilaient sous `bge-m3`, combinaison absente de la matrice `--lib`). | `bge_m3_embedder.rs` | `#[test]`. |
 
 ## Décisions prises aujourd'hui (ne pas rouvrir sans raison)
 
@@ -86,7 +100,7 @@ drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du mo
 
 ## Prochaines étapes, dans l'ordre fixé par Lucie (24 août, soir)
 
-1. **Finir la fiabilisation / tests.** ~~Épingler lucivy `832c503`, rejouer `e2e_search`~~ fait ; ~~supprimer `simple_register_duplicate_fails`~~ fait ; ~~E2E à vrai modèle sur burn~~ fait (`tests/common/mod.rs`, `e2e_search` 234 s → 23 s, candle ne reste que dans `examples/`) ; ~~supprimer l'extension C++ `lucivy_fts`~~ fait (cmake, `extension_entries.cpp`, 16 helpers de test, README/BUILD.md) — **le submodule `extension/lucivy/ld-lucivy` reste** (le retirer touche `.gitmodules`) ; **tranché par Lucie le 24 au soir : la path dep reste sur `~/git_workspaces/lucivy`, l'arbre vivant de la session lucivy** — la v3 n'est publiée nulle part, et c'est l'usage naïf de rag3weaver qui la valide (les gros benchs côté lucivy ne voient pas les « petits trucs à la con » comme le `HashMap` non trié). Ne pas « corriger » ça vers le submodule ; `sparse_vector` a la même anatomie (doc 33, question posée à lucivy) ; remettre les 4 E2E qui ne compilent plus (dérive luciole) ou les retirer explicitement.
+1. **Finir la fiabilisation / tests.** ~~Épingler lucivy `832c503`, rejouer `e2e_search`~~ fait ; ~~supprimer `simple_register_duplicate_fails`~~ fait ; ~~E2E à vrai modèle sur burn~~ fait (`tests/common/mod.rs`, `e2e_search` 234 s → 23 s, candle ne reste que dans `examples/`) ; ~~supprimer l'extension C++ `lucivy_fts`~~ fait (cmake, `extension_entries.cpp`, 16 helpers de test, README/BUILD.md) — **le submodule `extension/lucivy/ld-lucivy` reste** (le retirer touche `.gitmodules`) ; **tranché par Lucie le 24 au soir : la path dep reste sur `~/git_workspaces/lucivy`, l'arbre vivant de la session lucivy** — la v3 n'est publiée nulle part, et c'est l'usage naïf de rag3weaver qui la valide (les gros benchs côté lucivy ne voient pas les « petits trucs à la con » comme le `HashMap` non trié). Ne pas « corriger » ça vers le submodule ; `sparse_vector` a la même anatomie (doc 33, question posée à lucivy) ; ~~remettre les 4 E2E qui ne compilent plus~~ fait — **toutes les suites E2E compilent et passent sur burn** (chiffre en bas de section).
 2. **org id / project id.** Décision d'architecture d'abord (base par org vs colonne), puis `project` comme champ + filtre dans l'API de recherche.
 3. **Cross-encoder** (reranking) — sur burn, chemin produit, candle en oracle comme pour les embedders.
 4. **OCR en usage unitaire** : un petit nœud dataflow minimal, un modèle léger embarquable (PP-OCRv6 ONNX est la piste, cf. la note OCR de Lucie) — **pas** de markitdown ni de lib lourde, pas de use case « pipeline documents » à ce stade.

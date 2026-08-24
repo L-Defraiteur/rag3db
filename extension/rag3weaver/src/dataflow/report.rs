@@ -94,6 +94,28 @@ pub fn summarize_port_value(value: &PortValue) -> String {
     "Data(?)".into()
 }
 
+/// Même résumé que [`summarize_port_value`], depuis un instantané (valeur déjà
+/// consommée par son nœud).
+pub fn summarize_snapshot(snap: &PortSnapshot) -> String {
+    use super::port::PortType;
+    let n = snap.count.unwrap_or(0);
+    match snap.port_type {
+        PortType::Results => format!("Results({n})"),
+        PortType::Children => format!("Children({n} parents)"),
+        PortType::Uuids => format!("Uuids({n})"),
+        PortType::Meta => "Meta".into(),
+        PortType::Query => snap
+            .data_json
+            .as_deref()
+            .and_then(|j| serde_json::from_str::<serde_json::Value>(j).ok())
+            .and_then(|v| v.get("target_name").and_then(|t| t.as_str()).map(str::to_owned))
+            .map(|t| format!("Query({t})"))
+            .unwrap_or_else(|| "Query".into()),
+        PortType::Empty => "Trigger".into(),
+        ref other => format!("{other:?}({n})"),
+    }
+}
+
 impl ExecutionReport {
     /// Build a report from collected events and the final graph/output.
     pub fn build(
@@ -109,6 +131,10 @@ impl ExecutionReport {
         // Collect per-node data from Start/Log events before building reports
         let mut node_inputs: std::collections::HashMap<String, Vec<PortSnapshot>> =
             std::collections::HashMap::new();
+        // (nœud, port d'entrée) → instantané : les valeurs intermédiaires sont
+        // déplacées vers leur consommateur, `output` ne garde que les terminales.
+        let mut input_snapshots: std::collections::HashMap<(String, String), PortSnapshot> =
+            std::collections::HashMap::new();
         let mut node_types: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         let mut node_logs: std::collections::HashMap<String, Vec<NodeLogEntry>> =
@@ -119,6 +145,9 @@ impl ExecutionReport {
                 DataflowEvent::NodeStarted {
                     node, node_type, inputs,
                 } => {
+                    for snap in inputs {
+                        input_snapshots.insert((node.clone(), snap.name.clone()), snap.clone());
+                    }
                     node_inputs.insert(node.clone(), inputs.clone());
                     node_types.insert(node.clone(), node_type.clone());
                 }
@@ -204,6 +233,11 @@ impl ExecutionReport {
                 let value_summary = output
                     .get(&e.from_node, &e.from_port)
                     .map(summarize_port_value)
+                    .or_else(|| {
+                        input_snapshots
+                            .get(&(e.to_node.clone(), e.to_port.clone()))
+                            .map(summarize_snapshot)
+                    })
                     .unwrap_or_else(|| "—".into());
                 EdgeReport {
                     from_node: e.from_node.clone(),

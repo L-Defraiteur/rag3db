@@ -3157,6 +3157,18 @@ pub struct DeleteRecordNode {
 }
 
 impl DeleteRecordNode {
+    /// Lie une connexion et un dialecte à un nœud frais, pour rejouer `undo`
+    /// depuis un checkpoint sans passer par `execute()` (reprise après crash).
+    /// Pendant un `execute()`, les deux sont capturés depuis les services.
+    pub fn bind_services(
+        &mut self,
+        conn: Arc<dyn DbConnection>,
+        dialect: Arc<dyn crate::dialect::SchemaDialect>,
+    ) {
+        self.conn = Some(conn);
+        self.dialect = Some(dialect);
+    }
+
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into(), undo_data: None, conn: None, dialect: None }
     }
@@ -3537,11 +3549,42 @@ pub struct UpdateRecordNode {
     undo_data: Option<serde_json::Value>,
     conn: Option<Arc<dyn DbConnection>>,
     dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
+    /// Capturés à l'exécution (ou liés par `bind_fts`) : l'undo doit
+    /// ré-indexer les colonnes restaurées, sinon la recherche renvoie encore
+    /// le contenu annulé.
+    fts_handles: Option<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>,
+    node_id_cache: Option<Arc<RwLock<NodeIdCache>>>,
+    entity_configs: Option<HashMap<String, crate::config::EntityConfig>>,
 }
 
 impl UpdateRecordNode {
+    /// Lie une connexion et un dialecte à un nœud frais, pour rejouer `undo`
+    /// depuis un checkpoint sans passer par `execute()` (reprise après crash).
+    /// Pendant un `execute()`, les deux sont capturés depuis les services.
+    pub fn bind_services(
+        &mut self,
+        conn: Arc<dyn DbConnection>,
+        dialect: Arc<dyn crate::dialect::SchemaDialect>,
+    ) {
+        self.conn = Some(conn);
+        self.dialect = Some(dialect);
+    }
+
+    /// Lie les index FTS et le cache d'identifiants à un nœud frais (reprise),
+    /// pour que `undo` ré-indexe les lignes restaurées.
+    pub fn bind_fts(
+        &mut self,
+        fts_handles: HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>,
+        node_id_cache: Arc<RwLock<NodeIdCache>>,
+        entity_configs: HashMap<String, crate::config::EntityConfig>,
+    ) {
+        self.fts_handles = Some(fts_handles);
+        self.node_id_cache = Some(node_id_cache);
+        self.entity_configs = Some(entity_configs);
+    }
+
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
+        Self { name: name.into(), undo_data: None, conn: None, dialect: None, fts_handles: None, node_id_cache: None, entity_configs: None }
     }
 }
 
@@ -3722,55 +3765,27 @@ impl Node for UpdateRecordNode {
                 // disparaître silencieusement les champs texte inchangés.
                 if let Some(ref handles) = fts_handles {
                     if let Some(handle) = handles.get(entity_name) {
-                        let all: Vec<String> = field_keys.clone();
-                        let indexed = crate::fts_handle::indexed_text_fields(handle, &all);
                         // Si aucun champ modifié n'est indexé, l'index est déjà à jour.
-                        if !indexed.is_empty() {
-                            let schema_fields: Vec<String> =
-                                crate::fts_handle::indexed_text_fields(handle, &all);
-                            let mut cols: Vec<&str> = vec!["_uuid"];
-                            cols.extend(schema_fields.iter().map(|s| s.as_str()));
-                            let sel = dialect.select_by_uuids(entity_name, &cols);
+                        let touched = crate::fts_handle::indexed_text_fields(handle, field_keys);
+                        if !touched.is_empty() {
+                            // Candidats = TOUS les champs de l'entité, pas seulement les
+                            // modifiés : ré-indexer avec le sous-ensemble modifié effaçait
+                            // silencieusement les autres champs texte du document.
+                            let schema_fields =
+                                entity_indexed_fields(handle, &entity_configs, entity_name, field_keys);
                             let uuids: Vec<CypherValue> = indices
                                 .iter()
                                 .map(|&i| CypherValue::String(items[i].uuid.clone()))
                                 .collect();
-                            let rows = conn
-                                .execute_with_params(
-                                    &sel,
-                                    &[QueryParam {
-                                        name: "uuids".into(),
-                                        value: CypherValue::List(uuids),
-                                    }],
-                                )
-                                .map_err(|e| e.to_string())?;
-
-                            for row in &rows.rows {
-                                let Some(uuid) = row.first().and_then(|v| v.as_str()) else {
-                                    continue;
-                                };
-                                let Some(offset) = node_id_cache
-                                    .read()
-                                    .ok()
-                                    .and_then(|c| c.get(uuid))
-                                    .map(|id| id.offset)
-                                else {
-                                    continue;
-                                };
-                                let values: Vec<(String, String)> = schema_fields
-                                    .iter()
-                                    .enumerate()
-                                    .filter_map(|(i, name)| {
-                                        row.get(i + 1)
-                                            .and_then(|v| v.as_str())
-                                            .map(|s| (name.clone(), s.to_string()))
-                                    })
-                                    .collect();
-                                crate::fts_handle::reindex_document(handle, &values, offset)
-                                    .map_err(|e| {
-                                        format!("ré-indexation FTS de {entity_name}: {e}")
-                                    })?;
-                            }
+                            reindex_fts_rows(
+                                conn.as_ref(),
+                                dialect.as_ref(),
+                                handle,
+                                &node_id_cache,
+                                entity_name,
+                                uuids,
+                                &schema_fields,
+                            )?;
                         }
                     }
                 }
@@ -3944,6 +3959,9 @@ impl Node for UpdateRecordNode {
 
         // Store services for undo
         self.conn = Some(conn.clone());
+        self.fts_handles = fts_handles.clone();
+        self.node_id_cache = Some(node_id_cache.clone());
+        self.entity_configs = Some(entity_configs.clone());
         let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("UpdateRecordNode: 'dialect' service not registered")?;
         self.dialect = Some(dialect.clone());
@@ -3995,9 +4013,102 @@ impl Node for UpdateRecordNode {
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
             ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
+
+            // L'index FTS doit suivre les colonnes restaurées.
+            if let (Some(handles), Some(cache)) = (self.fts_handles.as_ref(), self.node_id_cache.as_ref()) {
+                if let Some(handle) = handles.get(entity_name) {
+                    let restored: Vec<String> = other_cols.iter().map(|c| c.to_string()).collect();
+                    let touched = crate::fts_handle::indexed_text_fields(handle, &restored);
+                    if !touched.is_empty() {
+                        let schema_fields = match self.entity_configs.as_ref() {
+                            Some(cfgs) => entity_indexed_fields(handle, cfgs, entity_name, &restored),
+                            None => touched,
+                        };
+                        let uuids: Vec<CypherValue> = items
+                            .iter()
+                            .filter_map(|m| m.get("_uuid").cloned())
+                            .collect();
+                        reindex_fts_rows(
+                            conn.as_ref(),
+                            dialect.as_ref(),
+                            handle,
+                            cache,
+                            entity_name,
+                            uuids,
+                            &schema_fields,
+                        )?;
+                    }
+                }
+            }
         }
         Ok(())
     }
+}
+
+/// Les champs indexés d'une entité, en partant de sa configuration complète
+/// (repli sur `fallback` si l'entité n'est pas configurée).
+fn entity_indexed_fields(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    entity_configs: &HashMap<String, crate::config::EntityConfig>,
+    entity_name: &str,
+    fallback: &[String],
+) -> Vec<String> {
+    let mut all: Vec<String> = match entity_configs.get(entity_name) {
+        Some(cfg) => cfg.fields.keys().cloned().collect(),
+        None => fallback.to_vec(),
+    };
+    all.sort();
+    crate::fts_handle::indexed_text_fields(handle, &all)
+}
+
+/// Ré-indexe dans lucivy les documents `uuids` d'`entity_name` en relisant la
+/// ligne entière (`add_document` n'est pas un merge : ré-indexer un sous-ensemble
+/// ferait disparaître les champs texte inchangés). Partagé par `execute()` et
+/// `undo()` d'`UpdateRecordNode`.
+fn reindex_fts_rows(
+    conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    node_id_cache: &Arc<RwLock<NodeIdCache>>,
+    entity_name: &str,
+    uuids: Vec<CypherValue>,
+    schema_fields: &[String],
+) -> Result<(), String> {
+    let mut cols: Vec<&str> = vec!["_uuid"];
+    cols.extend(schema_fields.iter().map(|s| s.as_str()));
+    let sel = dialect.select_by_uuids(entity_name, &cols);
+    let rows = conn
+        .execute_with_params(
+            &sel,
+            &[QueryParam { name: "uuids".into(), value: CypherValue::List(uuids) }],
+        )
+        .map_err(|e| e.to_string())?;
+
+    for row in &rows.rows {
+        let Some(uuid) = row.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(offset) = node_id_cache
+            .read()
+            .ok()
+            .and_then(|c| c.get(uuid))
+            .map(|id| id.offset)
+        else {
+            continue;
+        };
+        let values: Vec<(String, String)> = schema_fields
+            .iter()
+            .enumerate()
+            .filter_map(|(i, name)| {
+                row.get(i + 1)
+                    .and_then(|v| v.as_str())
+                    .map(|s| (name.clone(), s.to_string()))
+            })
+            .collect();
+        crate::fts_handle::reindex_document(handle, &values, offset)
+            .map_err(|e| format!("ré-indexation FTS de {entity_name}: {e}"))?;
+    }
+    Ok(())
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

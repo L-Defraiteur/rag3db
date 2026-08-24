@@ -1024,6 +1024,57 @@ fn simple_update_refreshes_chunks() {
     );
 }
 
+/// Régression : une mise à jour partielle (un seul champ) ne doit pas faire
+/// disparaître les autres champs texte de l'index FTS — `add_document` n'est
+/// pas un merge, la ré-indexation doit relire la ligne entière.
+#[test]
+#[ignore]
+fn simple_partial_update_keeps_other_fields_indexed() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![make_product(
+                "Rust Book",
+                "A comprehensive guide to Rust programming language",
+                "Covers ownership, lifetimes, and concurrency patterns",
+                49.99,
+            )],
+        )
+        .unwrap();
+    let uuid = get_product_uuids(&catalog).remove(0);
+
+    fn bm25(catalog: &mut Catalog, q: &str) -> usize {
+        catalog
+            .search("Product", q, SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            })
+            .unwrap()
+            .results
+            .len()
+    }
+    assert!(bm25(&mut catalog, "lifetimes") > 0, "`details` indexé avant la mise à jour");
+
+    // Ne touche que `description`.
+    let mut partial = BTreeMap::new();
+    partial.insert(
+        "description".to_string(),
+        CypherValue::String("Recipes for mastering Python data science".into()),
+    );
+    catalog.update("Product", &uuid, partial).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "drain: {} échec(s)", flush.failed);
+
+    assert!(bm25(&mut catalog, "Python") > 0, "la nouvelle description est indexée");
+    assert_eq!(bm25(&mut catalog, "comprehensive"), 0, "l'ancienne description ne l'est plus");
+    assert!(
+        bm25(&mut catalog, "lifetimes") > 0,
+        "`details`, non modifié, doit rester dans l'index après une mise à jour partielle"
+    );
+}
+
 #[test]
 #[ignore]
 fn simple_update_unchanged_no_rechunk() {

@@ -8,24 +8,25 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+#[cfg(feature = "burn-embedder")]
 use std::sync::Arc;
 
-use rag3weaver::config::{EntityDef, FieldDef, FieldType, KBConfig};
-use rag3weaver::connection::{CypherValue, DbConnection};
+use rag3weaver::config::FieldType;
+#[cfg(feature = "burn-embedder")]
+use rag3weaver::config::{EntityDef, FieldDef, KBConfig};
+use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::record_nodes::{DeleteRecordNode, UpdateRecordNode};
-use rag3weaver::dataflow::{CheckpointStore, CypherCheckpointStore, Node, NodeContext, ServiceRegistry};
-use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
+use rag3weaver::dataflow::{CheckpointStore, CypherCheckpointStore, Node};
+use rag3weaver::embedder::MockEmbedder;
+#[cfg(feature = "burn-embedder")]
+use rag3weaver::embedder::DualEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 
-#[cfg(feature = "bge-m3")]
-use rag3weaver::bge_m3_embedder::BgeM3Embedder;
+mod common;
 
-#[cfg(feature = "bge-m3")]
-static BGE_M3: std::sync::LazyLock<Arc<BgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    eprintln!("▸ Loading BGE-M3...");
-    Arc::new(BgeM3Embedder::new().expect("load BGE-M3"))
-});
+#[cfg(feature = "burn-embedder")]
+use common::burn::BGE_M3;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -178,12 +179,10 @@ fn load_undo_context(catalog: &Catalog, exec_id: &str, node_name: &str) -> serde
         .unwrap_or_else(|| panic!("node '{node_name}' should have undo context"))
 }
 
-/// Call undo() on a node with just the conn service.
-fn call_undo(catalog: &Catalog, node: &mut dyn Node, undo_ctx: serde_json::Value) {
-    let mut services = ServiceRegistry::new();
-    services.register::<Arc<dyn DbConnection>>("conn", Arc::new(catalog.conn_arc()));
-    let mut ctx = NodeContext::with_services(Arc::new(services));
-    node.undo(&mut ctx, undo_ctx).unwrap();
+/// Rejoue `undo()` sur un nœud frais : le contexte vient du checkpoint, la
+/// connexion et le dialecte sont liés explicitement (cas d'une reprise).
+fn run_undo(node: &mut dyn Node, undo_ctx: serde_json::Value) {
+    node.undo(Box::new(undo_ctx)).unwrap();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -236,7 +235,8 @@ fn undo_delete_simple_entity() {
     eprintln!("undo context loaded for 'deletes' node");
 
     let mut delete_node = DeleteRecordNode::new("deletes");
-    call_undo(&catalog, &mut delete_node, undo_ctx);
+    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — entities should be restored");
 
     // 6. Verify entities are restored with correct data
@@ -317,7 +317,13 @@ fn undo_update_simple_entity() {
     eprintln!("undo context loaded for 'updates' node");
 
     let mut update_node = UpdateRecordNode::new("updates");
-    call_undo(&catalog, &mut update_node, undo_ctx);
+    update_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    update_node.bind_fts(
+        catalog.fts_handles().clone(),
+        catalog.node_id_cache().clone(),
+        catalog.entity_configs().clone(),
+    );
+    run_undo(&mut update_node, undo_ctx);
     eprintln!("undo() called — old values should be restored");
 
     // 6. Verify old values restored
@@ -349,7 +355,7 @@ fn undo_update_simple_entity() {
 // BGE-M3 full-signal tests (BM25 + Vector + Sparse)
 // ═════════════════════════════════════════════════════════════════════════════
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn make_kb_config() -> CatalogConfig {
     let mut fields = HashMap::new();
     fields.insert("title".into(), FieldDef {
@@ -386,7 +392,7 @@ fn make_kb_config() -> CatalogConfig {
     }
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn setup_bgem3_kb() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
@@ -400,7 +406,7 @@ fn setup_bgem3_kb() -> Catalog {
     catalog
 }
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn setup_bgem3_simple() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
@@ -439,7 +445,7 @@ fn setup_bgem3_simple() -> Catalog {
 }
 
 /// Search helper: runs search with all 3 signals + diagnostics, returns (results, meta).
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn search_all_signals(
     catalog: &mut Catalog,
     target: &str,
@@ -457,7 +463,7 @@ fn search_all_signals(
 }
 
 /// Assert all 3 signal counts are > 0 + BM25 highlights resolved to chunks.
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 fn assert_all_signals(resp: &rag3weaver::search::SearchResponse, context: &str) {
     assert!(resp.meta.bm25_count > 0, "{context}: BM25 should contribute (got 0)");
     assert!(resp.meta.vector_count > 0, "{context}: vector should contribute (got 0)");
@@ -481,7 +487,7 @@ fn assert_all_signals(resp: &rag3weaver::search::SearchResponse, context: &str) 
 
 // ─── KB: delete → undo → drain → search (all 3 signals) ─────────────────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn undo_delete_kb_bgem3() {
@@ -549,7 +555,8 @@ fn undo_delete_kb_bgem3() {
     let exec_id = last_execution_id(&catalog);
     let undo_ctx = load_undo_context(&catalog, &exec_id, "deletes");
     let mut delete_node = DeleteRecordNode::new("deletes");
-    call_undo(&catalog, &mut delete_node, undo_ctx);
+    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — Rust doc restored");
 
     assert!(entity_exists(&catalog, "Document", rust_uuid), "Rust doc should exist again");
@@ -606,7 +613,7 @@ fn undo_delete_kb_bgem3() {
 
 // ─── Simple entity: delete → undo → drain → search (all 3 signals) ──────────
 
-#[cfg(feature = "bge-m3")]
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn undo_delete_simple_entity_bgem3() {
@@ -678,7 +685,8 @@ fn undo_delete_simple_entity_bgem3() {
     let exec_id = last_execution_id(&catalog);
     let undo_ctx = load_undo_context(&catalog, &exec_id, "deletes");
     let mut delete_node = DeleteRecordNode::new("deletes");
-    call_undo(&catalog, &mut delete_node, undo_ctx);
+    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — Rust Book restored");
 
     assert!(entity_exists(&catalog, "Product", rust_uuid));

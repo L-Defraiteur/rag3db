@@ -32,7 +32,7 @@ cargo test --features rag3db-native --test e2e_profile_overhead -- --ignored --n
 ```
 
 `RAG3DB_SHARED=1` est indispensable (sinon `undefined symbol: IndexAuxInfo`).
-Les 12 suites vertes (hors `simple_entity` 12/13 obsolète) font ~90 s.
+Toutes les suites E2E (`tests/e2e_*.rs`) compilent et passent sur burn — passe complète : voir doc 29 (chiffre du 24 au soir).
 `run_e2e.sh` passe `rag3db-native,burn-embedder` (`--no-cuda` accepté, sans effet). Les embedders partagés des E2E sont dans `tests/common/mod.rs`.
 
 ## Matrice de features — une combinaison par appel, jamais `--all-features`
@@ -104,6 +104,15 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 - **`default = []` fait disparaître des tests en silence** si on oublie les features.
 - **Un destructeur ne laisse jamais passer une panique** (abort pendant un déroulement). Idem pour `close()` de toute lib.
 - **Un doc de rapport doit dire ce qu'il ne sait pas** ; les docs 19 et 25 ont affirmé des causes fausses, corrigées par erratum. Un « déterministe » vérifié sur 3 runs en était à 3/4.
+
+## Contrats à connaître avant de toucher au dataflow
+
+- **Ports partagés** : `PortValue::take()` (luciole) panique en fan-out. Dans un nœud, consommer avec `take_or_clone::<T>(pv)` (`dataflow/port.rs`) — déplacement si seul consommateur, clone sinon. Le runtime déplace la valeur vers le *dernier* consommateur et clone pour les autres.
+- **Undo depuis un checkpoint sur un nœud frais** : `DeleteRecordNode`/`UpdateRecordNode::bind_services(conn, dialect)`, plus `UpdateRecordNode::bind_fts(fts_handles, node_id_cache, entity_configs)` — sinon `undo` répond « 'conn' not stored ». Accesseurs : `Catalog::{conn_arc, dialect_arc, fts_handles, sparse_handles, node_id_cache, entity_configs}`.
+- **Ré-indexation FTS** : toujours relire la ligne entière avec *tous* les champs indexés de l'entité (`entity_indexed_fields` → `reindex_fts_rows`), jamais le sous-ensemble modifié.
+- **Graphe générique construit hors du `Catalog`** (BM25/Vector/Sparse/Resolve nodes) : enregistrer `conn` en `ConnService`, `embedder`/`sparse_embedder`/`dual_embedder` en `Arc<dyn …>` tels quels, et **`fts_handles` + `sparse_handles`** (les nœuds cherchent dans les index Rust). Modèle : `build_services` dans `tests/e2e_generic_search.rs`.
+- **Services `conn`** : deux conventions coexistent — `ConnService(Arc<dyn DbConnection>)` pour les nœuds de recherche, `Arc<dyn DbConnection>` nu pour les nœuds d'enregistrement/migration. Ne pas les confondre.
+- **`luciole`** vient de la copie locale de lucivy via `[patch.crates-io]` (comme `lucivy-core`). Une seule entrée `luciole` doit exister dans `Cargo.lock`.
 
 ## Hygiène
 
