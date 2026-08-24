@@ -245,10 +245,56 @@ variantes `PortValue::{Results,Children,Meta,Query}` disparues (PortValue est
 devenu Any-based), `Arc<dyn Trait>` qui n'implémente plus le trait. Fichiers :
 `e2e_dataflow_observe`, `e2e_generic_search`, `e2e_search_queue`, `e2e_undo`.
 
-### ⬜ Étape 5 — parité puis débranchement
+### ✅ Étape 5 — E2E vert : **20/20 sur `e2e_search`**
 
-Mêmes requêtes via C++ et via Rust sur un même corpus, puis retrait des hooks C++.
-Enterre au passage le bug `_ngram`/`_raw` qui casse le mode Contains côté extension.
+Le chemin Rust est actif et fonctionne, KB compris. Quatre correctifs ont été
+nécessaires, chacun masquant le suivant :
+
+**1. Hook KB manquant (le vrai trou).** L'indexation n'était accrochée qu'à
+`InsertRecordNode`, or le pipeline KB écrit ses lignes `{KB}_Index` directement
+via le dialect dans `KBUpdateNode` — il ne passe jamais par `InsertRecordNode`.
+Le handle restait donc vide et la recherche rendait 0, **en silence** (une table
+sans handle est simplement sautée). Hook ajouté dans `KBUpdateNode`, avec
+`dialect.embed_get_offset` pour relire les offsets que `kb_upsert_index` ne rend pas.
+
+**2. Les KB se résolvent par leur nom de KB, pas par celui de leurs entités
+sources.** `build_ingestion_graph` n'itérait que sur `pending.entities`, donc
+`resolve_search_target("Document")` échouait et aucun handle n'était ouvert.
+Corrigé en balayant aussi `kb_metadata.keys()`.
+
+**3. `parse` multi-champs.** v3 route « parse + valeur » vers `contains`, qui
+exige un `field` **singulier** : un `fields` pluriel échoue sur
+« query requires 'field' ». Développé en booléen `should` d'un parse par champ.
+
+**4. Sémantique de `parse` changée en v3.** Routé vers `contains`, il cherche la
+sous-chaîne littérale : « Rust safety » ne matchait plus un document contenant
+« Rust » et « safety » séparément, là où l'ancien parse passait par le QueryParser
+en OU. Rétabli en développant en OU par mot **quand la requête ne porte aucun
+opérateur booléen** ; avec opérateurs (`AND`, `OR`, `NOT`, guillemets) on laisse
+passer tel quel, v3 conservant alors le vrai parse.
+
+#### Ce qui a rendu les E2E exécutables
+
+- **`RAG3DB_SHARED=1` + `RAG3DB_LIBRARY_DIR`/`INCLUDE_DIR` vers
+  `build/native-test/src`** — sans ça les extensions sont liées à la lib release
+  du cmake pendant que le test charge la lib debug de cargo :
+  `undefined symbol: IndexAuxInfo`. Le header `rag3db.hpp` est produit par la
+  cible `single_file_header`, dans ce même répertoire.
+- **Dépendances cxx manquantes** : `bridge.rs.h` est généré par la cible Rust,
+  mais les 4 cibles OBJECT de chaque extension ne déclaraient pas la dépendance.
+  Échec **intermittent** selon l'ordonnancement de `make -j`.
+- **`stemmer`** retiré du JSON de schéma émis par le C++ (v3 rejette les clés
+  inconnues et n'a plus ce champ).
+
+#### Reste : le débranchement des hooks C++
+
+Non fait, et volontairement : le chemin C++ sert encore de repli quand aucun
+handle n'est ouvert. À retirer quand la confiance sera établie sur du corpus réel.
+
+⚠️ **La « parité » au sens strict n'est plus mesurable** : le C++ ne peut plus
+servir de référence, puisqu'il tourne désormais contre le v3 (submodule épinglé)
+alors qu'il a été écrit pour le v2. Les 20/20 valident le câblage Rust, pas une
+équivalence avec le comportement historique.
 
 ### ✅ Ouverture paresseuse câblée
 

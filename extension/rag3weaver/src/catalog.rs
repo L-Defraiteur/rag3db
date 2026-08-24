@@ -1977,12 +1977,18 @@ impl Catalog {
         // `bm25_fields` que la recherche — toute divergence entre les champs
         // indexés et les champs cherchés casserait l'appariement des highlights.
         {
-            let entities: std::collections::HashSet<String> = pending
+            // Les KB se résolvent par leur **nom de KB**, pas par celui de leurs
+            // entités sources : `resolve_search_target("Document")` échoue quand
+            // Document alimente le KB "main". Il faut donc balayer les deux, sinon
+            // le handle du KB n'est jamais ouvert et sa recherche BM25 rend 0 —
+            // en silence, une table sans handle étant simplement sautée.
+            let mut names: std::collections::HashSet<String> = pending
                 .entities
                 .iter()
                 .map(|r| r.entity_name.clone())
                 .collect();
-            for name in entities {
+            names.extend(self.kb_metadata.keys().cloned());
+            for name in names {
                 if let Ok(target) = self.resolve_search_target(&name) {
                     if target.default_signals.bm25() {
                         let table = target.parent_table.clone();

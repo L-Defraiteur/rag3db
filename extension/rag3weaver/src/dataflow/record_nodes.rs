@@ -2473,6 +2473,9 @@ impl Node for KBUpdateNode {
 
         let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
             .ok_or("KBUpdateNode: 'conn' service not registered")?;
+        let fts_handles = ctx
+            .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
+            .cloned();
         let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("KBUpdateNode: 'dialect' service not registered")?;
 
@@ -2552,6 +2555,60 @@ impl Node for KBUpdateNode {
                     &[QueryParam { name: "items".into(), value: items_param }],
                 ).map_err(|e| e.to_string())?;
                 total_updated += indices.len();
+
+                // Indexation FTS des lignes de {KB}_Index.
+                //
+                // Ce hook est indispensable et distinct de celui d'InsertRecordNode :
+                // le pipeline KB écrit ses lignes d'index directement via le dialect,
+                // sans passer par InsertRecordNode. Sans lui, le handle FTS d'un KB
+                // reste vide et toute recherche BM25 rend 0 résultat — silencieusement,
+                // puisqu'une table sans handle est simplement sautée.
+                //
+                // kb_upsert_index ne rend pas les offsets, on les relit donc via
+                // embed_get_offset (uuid -> offset, sans effet de bord).
+                if let Some(ref handles) = fts_handles {
+                    if let Some(handle) = handles.get(&index_table) {
+                        let uuid_items = CypherValue::List(
+                            indices.iter().map(|&i| {
+                                let mut m = BTreeMap::new();
+                                m.insert("uuid".into(),
+                                    CypherValue::String(items[i].index_entry_uuid.clone()));
+                                CypherValue::Map(m)
+                            }).collect()
+                        );
+                        let off_q = dialect.embed_get_offset(&index_table);
+                        let offs = conn.execute_with_params(
+                            &off_q,
+                            &[QueryParam { name: "items".into(), value: uuid_items }],
+                        ).map_err(|e| e.to_string())?;
+
+                        let mut uuid_to_offset: HashMap<String, u64> = HashMap::new();
+                        for row in &offs.rows {
+                            if let (Some(u), Some(o)) = (
+                                row.first().and_then(|v| v.as_str()),
+                                row.get(1).and_then(|v| v.as_i64()),
+                            ) {
+                                uuid_to_offset.insert(u.to_string(), o as u64);
+                            }
+                        }
+
+                        for &i in indices {
+                            let rec = &items[i];
+                            let Some(&offset) = uuid_to_offset.get(&rec.index_entry_uuid) else {
+                                continue;
+                            };
+                            // Mêmes valeurs que celles écrites en base, donc celles
+                            // que le chunker verra : c'est ce qui garantit que les
+                            // offsets de highlight s'alignent sur les spans de chunk.
+                            let fields = vec![
+                                ("_title".to_string(), rec.title_text.clone()),
+                                ("_content".to_string(), rec.content_text.clone()),
+                            ];
+                            crate::fts_handle::reindex_document(handle, &fields, offset)
+                                .map_err(|e| format!("indexation FTS de {index_table}: {e}"))?;
+                        }
+                    }
+                }
             }
 
             // Step 5b: MERGE {Entity}_IN_{KB} relations for newly created indexes
