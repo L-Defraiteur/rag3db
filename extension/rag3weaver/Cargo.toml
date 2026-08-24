@@ -40,8 +40,12 @@ lucivy-core = { path = "../../../lucivy/lucivy_core" }
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
 ld-lucivy = { path = "../../../lucivy", default-features = false, features = ["stopwords", "lz4-compression"] }
 
-# luciole (DAG execution engine, actor runtime)
-luciole = "0.1.0"
+# luciole (DAG execution engine, actor runtime) — même arbre vivant que
+# lucivy-core. En `[patch.crates-io]` jusqu'au 24 août au soir ; quand la copie
+# locale est passée en 0.2.0, le patch ne satisfaisait plus "0.1.0" et cargo
+# retombait sur crates.io : deux luciole dans le graphe, sans le correctif du
+# double free. Une dep par chemin ne peut pas dériver.
+luciole = { path = "../../../lucivy/luciole" }
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant, voir
 # son NOTICE), persistance via lucistore. Vit dans le workspace lucivy depuis le
@@ -130,8 +134,3 @@ required-features = ["burn-embedder"]
 name = "burn_throughput"
 required-features = ["burn-embedder"]
 
-[patch.crates-io]
-# luciole : même raison. Sans ce patch, notre DAG (luciole_bridge) tourne sur la
-# 0.1.0 publiée pendant que lucivy-core utilise la copie locale — deux moteurs,
-# et le correctif du double free (3675c3d) absent du nôtre.
-luciole = { path = "../../../lucivy/luciole" }

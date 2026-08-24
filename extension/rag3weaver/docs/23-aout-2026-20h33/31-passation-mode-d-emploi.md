@@ -128,7 +128,7 @@ catalog.search("Doc", "q", SearchOptions { scopes: vec![a, b], ..Default::defaul
 - **Ré-indexation FTS** : toujours relire la ligne entière avec *tous* les champs indexés de l'entité (`entity_indexed_fields` → `reindex_fts_rows`), jamais le sous-ensemble modifié.
 - **Graphe générique construit hors du `Catalog`** (BM25/Vector/Sparse/Resolve nodes) : enregistrer `conn` en `ConnService`, `embedder`/`sparse_embedder`/`dual_embedder` en `Arc<dyn …>` tels quels, et **`fts_handles` + `sparse_handles`** (les nœuds cherchent dans les index Rust). Modèle : `build_services` dans `tests/e2e_generic_search.rs`.
 - **Services `conn`** : deux conventions coexistent — `ConnService(Arc<dyn DbConnection>)` pour les nœuds de recherche, `Arc<dyn DbConnection>` nu pour les nœuds d'enregistrement/migration. Ne pas les confondre.
-- **`luciole`** vient de la copie locale de lucivy via `[patch.crates-io]` (comme `lucivy-core`). Une seule entrée `luciole` doit exister dans `Cargo.lock`.
+- **`luciole`** est une dépendance **par chemin** (`../../../lucivy/luciole`), comme `lucivy-core` et `sparse-vector` — plus de `[patch.crates-io]` : quand lucivy a bumpé 0.1.0 → 0.2.0, le patch ne satisfaisait plus la contrainte et cargo retombait silencieusement sur crates.io. **Une seule entrée `luciole` doit exister dans `Cargo.lock`** — à vérifier après chaque épinglage (`grep -c 'name = "luciole"' Cargo.lock`).
 
 ## Hygiène
 
