@@ -241,6 +241,15 @@ pub enum BM25Mode {
     /// Native Lucivy QueryParser — standard BM25 term-by-term search.
     /// Each word is tokenized independently, docs matching more terms score higher.
     Parse,
+    /// Exact symbol search: the query matches **separators included**, byte for byte.
+    ///
+    /// `foo->bar` matches only `foo->bar` — never `foo_bar`, `foo::bar` or `foo bar`,
+    /// which every other mode conflates. Fuzzy is forced off: typo tolerance and
+    /// separator strictness are mutually exclusive in lucivy (`distance > 0` always
+    /// falls back to relaxed matching), so `fuzzy_distance` is ignored here.
+    ///
+    /// This is the mode for code: `->`, `};`, `std::sync::Arc<Mutex<T>>`, `c++`.
+    Symbol,
 }
 
 impl Default for BM25Mode {
@@ -1678,12 +1687,12 @@ pub fn build_bm25_query(
             let words: Vec<&str> = query.split_whitespace().collect();
             if words.len() <= 1 {
                 // Single word: same as Contains
-                build_contains_clauses(query, fields, distance, false)
+                build_contains_clauses(query, fields, distance, false, false)
             } else {
                 // Multi-word: boolean should of per-word contains across all fields
                 let word_clauses: Vec<serde_json::Value> = words
                     .iter()
-                    .map(|word| build_contains_clauses(word, fields, distance, false))
+                    .map(|word| build_contains_clauses(word, fields, distance, false, false))
                     .collect();
                 serde_json::json!({
                     "type": "boolean",
@@ -1691,8 +1700,11 @@ pub fn build_bm25_query(
                 })
             }
         }
-        BM25Mode::Contains => build_contains_clauses(query, fields, distance, false),
-        BM25Mode::Regex => build_contains_clauses(query, fields, distance, true),
+        BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
+        BM25Mode::Regex => build_contains_clauses(query, fields, distance, true, false),
+        // distance is forced to 0: lucivy treats any distance > 0 as relaxed,
+        // which would silently defeat strict_separators.
+        BM25Mode::Symbol => build_contains_clauses(query, fields, 0, false, true),
     };
 
     obj.to_string()
@@ -1705,6 +1717,7 @@ fn build_contains_clauses(
     fields: &[String],
     distance: u8,
     regex: bool,
+    strict_separators: bool,
 ) -> serde_json::Value {
     let make_clause = |field: &str| -> serde_json::Value {
         let mut obj = serde_json::json!({
@@ -1715,6 +1728,9 @@ fn build_contains_clauses(
         });
         if regex {
             obj["regex"] = serde_json::json!(true);
+        }
+        if strict_separators {
+            obj["strict_separators"] = serde_json::json!(true);
         }
         obj
     };
@@ -3063,6 +3079,50 @@ mod tests {
         assert_eq!(parsed["value"], "programming");
         assert_eq!(parsed["distance"], 1);
         assert!(parsed.get("regex").is_none());
+    }
+
+    #[test]
+    fn build_bm25_query_symbol_is_strict_and_never_fuzzy() {
+        let fields = vec!["body".to_string()];
+        // fuzzy_distance is deliberately non-zero to prove Symbol overrides it:
+        // lucivy treats distance > 0 as relaxed, which would defeat strictness.
+        let json = build_bm25_query("foo->bar", &fields, BM25Mode::Symbol, 2);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["type"], "contains");
+        assert_eq!(parsed["value"], "foo->bar");
+        assert_eq!(parsed["strict_separators"], true);
+        assert_eq!(parsed["distance"], 0, "Symbol must force fuzzy off");
+        assert!(parsed.get("regex").is_none());
+    }
+
+    #[test]
+    fn build_bm25_query_symbol_multi_field_keeps_strictness() {
+        let fields = vec!["title".to_string(), "body".to_string()];
+        let json = build_bm25_query("};", &fields, BM25Mode::Symbol, 1);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["type"], "boolean");
+        let clauses = parsed["should"].as_array().expect("should clauses");
+        assert_eq!(clauses.len(), 2);
+        for clause in clauses {
+            assert_eq!(clause["strict_separators"], true);
+            assert_eq!(clause["distance"], 0);
+            assert_eq!(clause["value"], "};");
+        }
+    }
+
+    #[test]
+    fn build_bm25_query_other_modes_stay_relaxed() {
+        let fields = vec!["body".to_string()];
+        for mode in [BM25Mode::Contains, BM25Mode::ContainsSplit, BM25Mode::Regex] {
+            let json = build_bm25_query("foo->bar", &fields, mode, 1);
+            let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert!(
+                parsed.get("strict_separators").is_none(),
+                "{mode:?} must not opt into strict separators"
+            );
+        }
     }
 
     #[test]

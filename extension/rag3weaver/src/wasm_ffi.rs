@@ -1260,8 +1260,15 @@ fn parse_search_options(json: &str) -> crate::search::SearchOptions {
             opts.fuzzy_distance = n as u8;
         }
         if let Some(s) = v.get("bm25Mode").and_then(|v| v.as_str()) {
-            if s == "regex" {
-                opts.bm25_mode = crate::search::BM25Mode::Regex;
+            // Previously only "regex" was honoured, so the other modes were
+            // unreachable from JS.
+            match s {
+                "regex" => opts.bm25_mode = crate::search::BM25Mode::Regex,
+                "contains" => opts.bm25_mode = crate::search::BM25Mode::Contains,
+                "containsSplit" => opts.bm25_mode = crate::search::BM25Mode::ContainsSplit,
+                "parse" => opts.bm25_mode = crate::search::BM25Mode::Parse,
+                "symbol" => opts.bm25_mode = crate::search::BM25Mode::Symbol,
+                _ => {}
             }
         }
         // `keyword_weight` a disparu de SearchOptions lors du refactoring fusion :

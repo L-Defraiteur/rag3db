@@ -503,8 +503,17 @@ dû entrer dans le trait backend « dès le design » ; il touchera maintenant l
 (reranking, chunking, poids de fusion) ne peut être validé — il faudrait donc
 l'éval **avant** le reranking, contrairement à l'ordre de la roadmap de mars.
 
-**3. Le problème fondateur n'est pas résolu.** Chercher `->`, `};`, `foo->bar` —
-la validation des séparateurs, l'obsession de février — reste le trou ouvert de
-lucivy v3. C'est le différenciateur d'origine, celui qui justifie de posséder le
-moteur plutôt que d'utiliser tantivy ou GIN. Tant qu'il est ouvert, le
-« contrôle total » du fork n'est pas encore payé.
+**3. Le problème fondateur est résolu — reste à en tirer parti.** Chercher `->`,
+`};`, `foo->bar` séparateurs inclus était l'obsession de février et la
+justification de posséder le moteur plutôt que d'utiliser tantivy ou GIN.
+**lucivy v3 le couvre.** La piste « sidecar byte-n-gram » évoquée en doc 12 §7
+est donc caduque.
+
+Ce qui reste n'est plus un trou moteur mais un travail d'exposition côté
+rag3weaver : quels modes de requête publier, lesquels retirer (`BM25Mode::Parse`
+notamment, cf. doc 07), et comment documenter la capacité pour qu'elle soit
+utilisée. Un différenciateur que l'API n'expose pas n'existe pas pour
+l'utilisateur.
+
+*(Corrigé le 24 août : la première version de ce paragraphe décrivait le trou
+séparateurs comme encore ouvert. Il l'était en v2, plus en v3.)*
