@@ -219,10 +219,11 @@ FusionConfig {
 | Model | Dims | Weights | Languages | Feature | Type |
 |-------|------|---------|-----------|---------|------|
 | all-MiniLM-L6-v2 (`BurnMiniLmEmbedder`) | 384 | 90 MB | EN | `burn-embedder` | dense |
+| paraphrase-multilingual-MiniLM-L12-v2 (`BurnMultilingualMiniLmEmbedder`) | 384 | 470 MB | 50+ | `burn-embedder` | dense |
 | BGE-M3 (`BurnBgeM3Embedder`) | 1024 | 2.2 GB | 100+ | `burn-embedder` | dense + learned sparse |
 
-Weights are not bundled; both are published as `burnpack` files with full upstream
-attribution (`Lucie666/all-minilm-l6-v2-burnpack`, `Lucie666/bge-m3-burnpack`). See
+Weights are not bundled; all are published as `burnpack` files with full upstream
+attribution (`Lucie666/all-minilm-l6-v2-burnpack`, `Lucie666/paraphrase-multilingual-minilm-l12-v2-burnpack`, `Lucie666/bge-m3-burnpack`). See
 `generated/README.md` for provenance, checksums and the parity checks against candle.
 
 ### Built-in via candle (parity reference, not the product path)
