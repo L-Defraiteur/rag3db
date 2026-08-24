@@ -399,14 +399,25 @@ impl Catalog {
         // 1. Close lucivy FTS indexes (release writer locks).
         let mut fts_closed: usize = 0;
         let mut fts_failed: Vec<String> = Vec::new();
-        for table in &fts_tables {
-            let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
-            match self.conn.execute(&query) {
+        // Handles Rust d'abord : `close()` draine les merges puis persiste dans
+        // le BlobStore. Sans lui, l'index n'est pas complet au disque et une
+        // réouverture repart d'un état partiel — les tests de persistance
+        // inter-sessions échouent alors sur « search should work after reopen ».
+        for (table, handle) in self.fts_handles.drain() {
+            match handle.close() {
                 Ok(_) => fts_closed += 1,
                 Err(e) => {
-                    eprintln!("[rag3weaver] shutdown: failed to close lucivy index on {table}: {e}");
+                    eprintln!("[rag3weaver] shutdown: échec de close FTS sur {table}: {e}");
                     fts_failed.push(format!("{table}: {e}"));
                 }
+            }
+        }
+
+        // Puis le chemin C++, pour les tables qui n'ont pas de handle Rust.
+        for table in &fts_tables {
+            let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
+            if self.conn.execute(&query).is_ok() {
+                fts_closed += 1;
             }
         }
 
@@ -523,13 +534,27 @@ impl Catalog {
 
         // 8. Initialize blob store for lucivy/sparse index persistence
         //    Must be before ensure_sparse_handle() which needs blob_store.
-        if let Some(ref sync_conn) = self.sync_conn {
+        if self.blob_store.is_none() {
             let blob_ddl = self.dialect.create_blob_table();
             self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
-            self.blob_store = Some(Arc::new(CypherBlobStore::from_sync_connection(sync_conn.clone())));
-        } else if self.blob_store.is_none() {
-            // Fallback: in-memory blob store for tests / in-memory DBs (no persistence needed)
-            self.blob_store = Some(Arc::new(sparse_vector::blob_store::MemBlobStore::new()));
+
+            // `sync_conn` est un vestige de l'époque async : depuis la migration
+            // sync, `self.conn` EST une connexion synchrone, et
+            // `from_sync_connection` prend justement un `Arc<dyn DbConnection>`.
+            //
+            // On l'utilise donc directement. Le repli MemBlobStore rendait le
+            // store **volatile** dès que `set_sync_connection` n'était pas
+            // appelé — ce que ne font ni les tests ni le chemin nominal. Les
+            // index FTS et sparse vivant dans le BlobStore, ils ne survivaient
+            // alors pas à une réouverture de la base.
+            // `sync_conn` est typé Arc<dyn SyncDbConnection> et `conn`
+            // Arc<dyn DbConnection> : deux objets-traits distincts, sans upcast
+            // automatique. On construit donc le store depuis l'un ou l'autre.
+            let store = match self.sync_conn.clone() {
+                Some(sc) => CypherBlobStore::from_sync_connection(sc),
+                None => CypherBlobStore::from_sync_connection(self.conn.clone()),
+            };
+            self.blob_store = Some(Arc::new(store));
         }
 
         // 9. Create sparse vector handles for KBs that have sparse=true.
@@ -1422,6 +1447,11 @@ impl Catalog {
             return Ok(FlushResult::default());
         }
 
+        // Même contrat que `drain()` : sans handle ouvert, l'indexation FTS est
+        // sautée en silence. `ingest_entities` a son propre graphe, il faut donc
+        // l'ouvrir ici aussi.
+        self.open_fts_handles_for(&[entity_name.to_string()]);
+
         // Ensure chunker is cached for this entity's config
         let chunker_key = ChunkerConfig {
             max_size: entity_config.chunking.max_size,
@@ -1958,6 +1988,29 @@ impl Catalog {
     ///
     /// No KBChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
     /// No KBEmbedNode on raw entities (only KB_Index_Chunk are searched).
+    /// Ouvre les index FTS des tables concernées, avant construction du graphe.
+    ///
+    /// À appeler depuis **chaque** point d'entrée d'ingestion : sans handle
+    /// ouvert, `InsertRecordNode` et `KBUpdateNode` sautent l'indexation en
+    /// silence, et la recherche rend 0 sans que rien ne le signale.
+    ///
+    /// Les KB se résolvent par leur **nom de KB**, pas par celui de leurs
+    /// entités sources — d'où le balayage des deux.
+    fn open_fts_handles_for(&mut self, entity_names: &[String]) {
+        let mut names: std::collections::HashSet<String> =
+            entity_names.iter().cloned().collect();
+        names.extend(self.kb_metadata.keys().cloned());
+        for name in names {
+            if let Ok(target) = self.resolve_search_target(&name) {
+                if target.default_signals.bm25() {
+                    let table = target.parent_table.clone();
+                    let fields = target.bm25_fields.clone();
+                    self.ensure_fts_handle(&table, &fields, &[]);
+                }
+            }
+        }
+    }
+
     fn build_ingestion_graph(&mut self) -> (
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
@@ -1971,32 +2024,11 @@ impl Catalog {
             return empty_results();
         }
 
-        // Ouverture paresseuse des index FTS des tables touchées par ce drain.
-        // Sans ça, InsertRecordNode ne trouve aucun handle et n'indexe rien.
-        // On passe par resolve_search_target pour prendre exactement les mêmes
-        // `bm25_fields` que la recherche — toute divergence entre les champs
-        // indexés et les champs cherchés casserait l'appariement des highlights.
+        // Ouverture des index FTS des tables touchées par ce drain.
         {
-            // Les KB se résolvent par leur **nom de KB**, pas par celui de leurs
-            // entités sources : `resolve_search_target("Document")` échoue quand
-            // Document alimente le KB "main". Il faut donc balayer les deux, sinon
-            // le handle du KB n'est jamais ouvert et sa recherche BM25 rend 0 —
-            // en silence, une table sans handle étant simplement sautée.
-            let mut names: std::collections::HashSet<String> = pending
-                .entities
-                .iter()
-                .map(|r| r.entity_name.clone())
-                .collect();
-            names.extend(self.kb_metadata.keys().cloned());
-            for name in names {
-                if let Ok(target) = self.resolve_search_target(&name) {
-                    if target.default_signals.bm25() {
-                        let table = target.parent_table.clone();
-                        let fields = target.bm25_fields.clone();
-                        self.ensure_fts_handle(&table, &fields, &[]);
-                    }
-                }
-            }
+            let names: Vec<String> =
+                pending.entities.iter().map(|r| r.entity_name.clone()).collect();
+            self.open_fts_handles_for(&names);
         }
 
         // ─── Conflict resolution: delete wins over update for same UUID ───
@@ -2333,6 +2365,12 @@ impl Catalog {
     /// (nodes + edges), then calls `execute_with_checkpoint()` which skips
     /// already-completed nodes and resumes from the failure point.
     pub fn drain_resume(&mut self, execution_id: &str) -> Result<FlushResult, CatalogError> {
+        // Reprise après crash : le graphe est reconstruit, donc les handles FTS
+        // doivent l'être aussi. On ne connaît pas ici les entités concernées,
+        // on ouvre donc tout ce qui est enregistré et porte le signal BM25.
+        let known: Vec<String> = self.entity_configs.keys().cloned().collect();
+        self.open_fts_handles_for(&known);
+
         let store = self
             .checkpoint_store
             .clone()

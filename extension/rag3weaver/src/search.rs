@@ -1652,51 +1652,25 @@ pub fn build_bm25_query(
 ) -> String {
     let obj = match mode {
         BM25Mode::Parse => {
-            // lucivy v3 route « parse + valeur simple » vers contains, qui
-            // cherche la sous-chaîne littérale : « Rust safety » ne matche donc
-            // plus un document contenant « Rust » et « safety » séparément.
-            // L'ancien parse passait par le QueryParser, en OU entre termes.
+            // lucivy v3 choisit lui-même la branche selon la valeur (0d70904) :
+            // syntaxe booléenne (AND/OR/NOT, guillemets, +/-) -> vrai QueryParser,
+            // termes entiers, multi-`fields`, sans highlights ; valeur simple ->
+            // OU de contains par mot et par champ, avec highlights.
             //
-            // Quand la requête ne porte aucun opérateur booléen, on rétablit
-            // cette intention en développant en OU par mot et par champ. Avec
-            // opérateurs, on laisse passer tel quel : v3 conserve alors le vrai
-            // parse.
-            let has_operators = query.contains(" AND ")
-                || query.contains(" OR ")
-                || query.contains(" NOT ")
-                || query.contains('"');
-            let words: Vec<&str> = query.split_whitespace().collect();
-            if !has_operators && words.len() > 1 {
-                let clauses: Vec<serde_json::Value> = words
-                    .iter()
-                    .map(|w| build_contains_clauses(w, fields, distance, false))
-                    .collect();
-                serde_json::json!({ "type": "boolean", "should": clauses })
-            } else if fields.len() == 1 {
+            // On lui passe donc le JSON tel quel, `fields` pluriel compris. Le
+            // contournement qu'on avait écrit ici (expansion manuelle en OU) est
+            // devenu redondant et a été retiré.
+            if fields.len() == 1 {
                 serde_json::json!({
                     "type": "parse",
                     "field": &fields[0],
                     "value": query,
                 })
             } else {
-                // lucivy v3 route « parse + value » vers contains, qui exige un
-                // `field` SINGULIER : un `fields` pluriel échoue sur
-                // « query requires 'field' ». On développe donc en booléen
-                // should d'un parse par champ — même sémantique (match dans
-                // l'un quelconque des champs), exprimée dans ce que v3 accepte.
-                let per_field: Vec<serde_json::Value> = fields
-                    .iter()
-                    .map(|f| {
-                        serde_json::json!({
-                            "type": "parse",
-                            "field": f,
-                            "value": query,
-                        })
-                    })
-                    .collect();
                 serde_json::json!({
-                    "type": "boolean",
-                    "should": per_field,
+                    "type": "parse",
+                    "fields": fields,
+                    "value": query,
                 })
             }
         }
