@@ -14,6 +14,7 @@ contredisent.
 | `master` | `962ce9dc2`, intact — fusionner est la décision de Lucie, pas la mienne |
 | `.gitmodules` | modifié localement par Lucie (routage SSH) — **ne pas commiter** |
 | Submodule `ld-lucivy` | épinglé `34ec432` ; référence seulement (plus aucun build C++ ne l'utilise) |
+| Publication lucivy 2.1.0 | préparée sur `wip/publication-2.1.0` (doc 40) ; à la publication, nos path deps deviennent `lucivy-core = "2.1"`, `sparse-vector = "0.3"`, `luciole = "0.2"` — attend le go de Lucie |
 | lucivy compilé par rag3weaver | `~/git_workspaces/lucivy` (path deps `lucivy-core`, `luciole`, `sparse-vector` → `lucistore`), arbre de la session lucivy, à `34ec432` en fin de soirée |
 
 ## Ce qui a été livré aujourd'hui, dans l'ordre
