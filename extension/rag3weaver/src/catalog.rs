@@ -2483,16 +2483,18 @@ impl Catalog {
     /// silently report a drain as durable when its index isn't.
     fn flush_blob_store(&self, context: &str) {
         let Some(ref buffer) = self.blob_buffer else { return };
+        let t0 = std::time::Instant::now();
         match buffer.flush() {
             Ok(stats) => {
                 if stats.saves_pushed > 0 && std::env::var_os("RAG3W_BLOB_TRACE").is_some() {
                     eprintln!(
                         "[rag3weaver] blob flush ({context}): {} save(s) received → {} pushed, \
-                         {} round-trip(s) saved, {} bytes",
+                         {} round-trip(s) saved, {} bytes, {:.1} ms",
                         stats.saves_received,
                         stats.saves_pushed,
                         stats.round_trips_saved(),
                         stats.bytes_pushed,
+                        t0.elapsed().as_secs_f64() * 1000.0,
                     );
                 }
             }
