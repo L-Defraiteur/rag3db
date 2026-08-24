@@ -24,6 +24,7 @@ use crate::schema::{generate_full_schema_with_dialect, resolve_entity_kbs};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
+use crate::buffered_blob_store::BufferedBlobStore;
 use crate::cypher_blob_store::CypherBlobStore;
 use sparse_vector::blob_store::BlobStore;
 use crate::dataflow::checkpoint::CheckpointStore;
@@ -139,6 +140,9 @@ pub struct Catalog {
     /// BlobStore backed by rag3db for lucivy/sparse index persistence.
     /// CypherBlobStore when sync_conn is set, MemBlobStore fallback for in-memory DBs.
     blob_store: Option<Arc<dyn BlobStore>>,
+    /// The same store, typed: the handles see it as `dyn BlobStore`, the
+    /// `Catalog` needs the concrete type to call `flush()` at drain boundaries.
+    blob_buffer: Option<Arc<BufferedBlobStore<CypherBlobStore>>>,
     /// Sparse vector index handles, keyed by table name (e.g. "Product_Chunk").
     sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
     /// Index FTS lucivy v3, un par table. Ouverture **paresseuse** : ouvrir un
@@ -189,6 +193,7 @@ impl Catalog {
             chunker_cache: HashMap::new(),
             checkpoint_store: None,
             blob_store: None,
+            blob_buffer: None,
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
             fts_storage: Default::default(),
@@ -507,6 +512,10 @@ impl Catalog {
             }
         }
 
+        // 3. Everything above committed into the buffer; this is the last
+        //    boundary before the connection goes away.
+        self.flush_blob_store("shutdown");
+
         self.event_bus.emit(CatalogEvent::ShutdownCompleted {
             fts_closed,
             fts_failed,
@@ -627,7 +636,13 @@ impl Catalog {
                 Some(sc) => CypherBlobStore::from_sync_connection(sc),
                 None => CypherBlobStore::from_sync_connection(self.conn.clone()),
             };
-            self.blob_store = Some(Arc::new(store));
+            // Write-back buffer: lucivy rewrites `.managed.json` once per
+            // registered file during a commit, and every write-through was a
+            // MERGE round-trip. The buffer collapses them; `flush_blob_store`
+            // pushes the survivors at the end of each drain.
+            let buffer = Arc::new(BufferedBlobStore::new(store));
+            self.blob_buffer = Some(buffer.clone());
+            self.blob_store = Some(buffer);
         }
 
         // 9. Create sparse vector handles for KBs that have sparse=true.
@@ -1289,6 +1304,10 @@ impl Catalog {
                 }
             }
         }
+
+        // The per-table commits above wrote into the buffer; make them durable
+        // before declaring the reindex done.
+        self.flush_blob_store("reindex");
 
         // Clear the needs_reindex flag
         self.persist_meta_key(
@@ -2419,7 +2438,7 @@ impl Catalog {
             runtime.execute(&mut graph)
         };
 
-        match result {
+        let outcome = match result {
             Ok(_output) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
@@ -2446,6 +2465,43 @@ impl Catalog {
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
                 FlushResult { processed: 0, failed: op_count, ..Default::default() }
+            }
+        };
+
+        // Both branches: on failure the graph may still have committed some
+        // index files before dying, and pushing them is what the write-through
+        // store did anyway. What's not flushed here is retried at the next
+        // boundary, never dropped.
+        self.flush_blob_store("drain");
+        outcome
+    }
+
+    /// Push buffered index blobs to the database, at a commit boundary.
+    ///
+    /// Failure is loud but not fatal here: the buffer keeps the unpushed
+    /// entries, so shutdown/drop gets another go. What we refuse to do is
+    /// silently report a drain as durable when its index isn't.
+    fn flush_blob_store(&self, context: &str) {
+        let Some(ref buffer) = self.blob_buffer else { return };
+        match buffer.flush() {
+            Ok(stats) => {
+                if stats.saves_pushed > 0 && std::env::var_os("RAG3W_BLOB_TRACE").is_some() {
+                    eprintln!(
+                        "[rag3weaver] blob flush ({context}): {} save(s) received → {} pushed, \
+                         {} round-trip(s) saved, {} bytes",
+                        stats.saves_received,
+                        stats.saves_pushed,
+                        stats.round_trips_saved(),
+                        stats.bytes_pushed,
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("[rag3weaver] blob flush ({context}) FAILED: {e} — retained for retry");
+                self.event_bus.emit(CatalogEvent::Error {
+                    context: format!("blob_flush:{context}"),
+                    message: format!("index blobs not persisted: {e}"),
+                });
             }
         }
     }
@@ -4715,5 +4771,7 @@ impl Drop for Catalog {
                 eprintln!("[rag3weaver] drop: fermeture FTS incomplète — {f}");
             }
         }
+        // `conn` is the last field to drop, so the backend is still reachable.
+        self.flush_blob_store("drop");
     }
 }

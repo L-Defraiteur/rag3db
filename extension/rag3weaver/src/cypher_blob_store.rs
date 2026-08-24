@@ -195,6 +195,52 @@ impl BlobStore for CypherBlobStore {
     }
 }
 
+impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
+    /// One `UNWIND` statement per batch instead of one `MERGE` per blob.
+    ///
+    /// Measured on the 9-document profile: the buffer alone brought 1518 saves
+    /// down to 225 distinct keys; those 225 were still 225 round-trips. Batches
+    /// are capped by payload size so a large segment set doesn't become one
+    /// giant parameter.
+    fn save_many(&self, items: Vec<(String, String, Vec<u8>)>) -> io::Result<()> {
+        const MAX_BATCH_BYTES: usize = 32 * 1024 * 1024;
+        const MAX_BATCH_ITEMS: usize = 256;
+
+        let mut batch: Vec<CypherValue> = Vec::new();
+        let mut batch_bytes = 0usize;
+
+        let flush_batch = |batch: &mut Vec<CypherValue>| -> io::Result<()> {
+            if batch.is_empty() {
+                return Ok(());
+            }
+            let items = CypherValue::List(std::mem::take(batch));
+            self.execute(
+                "UNWIND $items AS item \
+                 MERGE (b:_index_blobs {_key: item.key}) \
+                 SET b._data = item.data",
+                &[QueryParam::new("items", items)],
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            Ok(())
+        };
+
+        for (index_name, file_name, data) in items {
+            if !batch.is_empty()
+                && (batch.len() >= MAX_BATCH_ITEMS || batch_bytes + data.len() > MAX_BATCH_BYTES)
+            {
+                flush_batch(&mut batch)?;
+                batch_bytes = 0;
+            }
+            batch_bytes += data.len();
+            let mut item = std::collections::BTreeMap::new();
+            item.insert("key".to_string(), CypherValue::String(Self::make_key(&index_name, &file_name)));
+            item.insert("data".to_string(), CypherValue::Blob(data));
+            batch.push(CypherValue::Map(item));
+        }
+        flush_batch(&mut batch)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,7 +270,23 @@ mod tests {
                 .and_then(|p| p.value.as_str())
                 .map(|s| s.to_string());
 
-            if cypher.contains("MERGE") {
+            if cypher.contains("UNWIND") {
+                // save_many: `$items` is a list of {key, data} maps
+                let items = params
+                    .iter()
+                    .find(|p| p.name == "items")
+                    .map(|p| &p.value)
+                    .ok_or("missing items")?;
+                let CypherValue::List(items) = items else { return Err("items not a list".into()) };
+                let mut guard = store.write().unwrap();
+                for item in items {
+                    let CypherValue::Map(m) = item else { return Err("item not a map".into()) };
+                    let k = m.get("key").and_then(|v| v.as_str()).ok_or("item missing key")?;
+                    let d = m.get("data").and_then(|v| v.as_blob()).ok_or("item missing data")?;
+                    guard.insert(k.to_string(), d.to_vec());
+                }
+                Ok(QueryResult::default())
+            } else if cypher.contains("MERGE") {
                 // save
                 let key = key.ok_or("missing key")?;
                 let data = params
@@ -303,6 +365,56 @@ mod tests {
         bs.delete("idx1", "file.bin").unwrap();
         assert!(!bs.exists("idx1", "file.bin").unwrap());
         assert!(bs.load("idx1", "file.bin").is_err());
+    }
+
+    #[test]
+    fn save_many_goes_through_one_unwind_statement() {
+        use crate::buffered_blob_store::BatchSave;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // Wrap the mock to count statements, not blobs.
+        let (inner_qf, store) = mock_query_fn();
+        let statements = Arc::new(AtomicUsize::new(0));
+        let counter = statements.clone();
+        let qf: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            inner_qf(cypher, params)
+        });
+        let bs = CypherBlobStore::new(qf);
+
+        let items: Vec<(String, String, Vec<u8>)> = (0..40)
+            .map(|i| ("idx".to_string(), format!("f{i}.bin"), vec![i as u8; 3]))
+            .collect();
+        bs.save_many(items).unwrap();
+
+        assert_eq!(statements.load(Ordering::SeqCst), 1, "40 blobs, one round-trip");
+        let guard = store.read().unwrap();
+        assert_eq!(guard.len(), 40);
+        assert_eq!(guard.get("idx/f7.bin").unwrap(), &vec![7u8; 3]);
+    }
+
+    #[test]
+    fn save_many_splits_oversized_batches() {
+        use crate::buffered_blob_store::BatchSave;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let (inner_qf, store) = mock_query_fn();
+        let statements = Arc::new(AtomicUsize::new(0));
+        let counter = statements.clone();
+        let qf: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            inner_qf(cypher, params)
+        });
+        let bs = CypherBlobStore::new(qf);
+
+        // 300 items > MAX_BATCH_ITEMS (256) → exactly two statements.
+        let items: Vec<(String, String, Vec<u8>)> = (0..300)
+            .map(|i| ("idx".to_string(), format!("f{i}.bin"), vec![1u8]))
+            .collect();
+        bs.save_many(items).unwrap();
+
+        assert_eq!(statements.load(Ordering::SeqCst), 2);
+        assert_eq!(store.read().unwrap().len(), 300);
     }
 
     #[test]

@@ -23,6 +23,7 @@ pub mod bge_m3_onnx;
 pub mod burn_bge_m3_embedder;
 pub mod catalog;
 pub mod cypher_blob_store;
+pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
 pub mod rag3db_search_backend;
