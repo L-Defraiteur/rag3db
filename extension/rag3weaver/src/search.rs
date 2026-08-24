@@ -1779,12 +1779,13 @@ fn build_contains_clauses(
     }
 }
 
-/// BM25 keyword search via QUERY_LUCIVY_INDEX.
+/// BM25 keyword search on a non-chunked target, straight through the Rust index.
 ///
-/// Uses NgramContainsQuery (fuzzy or regex mode) with BM25 scoring.
-/// The query is sent as a JSON QueryConfig to the lucivy_fts extension.
+/// Same engine and same query JSON as [`search_bm25_chunked`], minus the chunk
+/// attribution: offsets resolve directly to entities.
 ///
-/// Pre-filtering: `allowed_ids` are pre-resolved node offsets (from Kuzu), passed to QUERY_LUCIVY_INDEX.
+/// Pre-filtering: `allowed_ids` are pre-resolved node offsets.
+#[allow(clippy::too_many_arguments)]
 pub fn search_bm25(
     conn: &dyn DbConnection,
     entity: &str,
@@ -1795,50 +1796,31 @@ pub fn search_bm25(
     limit: usize,
     allowed_ids: Option<&[u64]>,
     return_fields: &[String],
+    fts: Option<&lucivy_core::sharded_handle::ShardedHandle>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     if fields.is_empty() {
         return Ok(vec![]);
     }
 
     let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
-    let escaped_json = json_query.replace('\'', "''");
 
-    let cypher = if let Some(ids) = allowed_ids {
-        let ids_str = ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
-             allowed_ids := [{ids_str}]) \
-             RETURN node_id, score"
-        )
-    } else {
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
-             RETURN node_id, score"
-        )
-    };
+    let handle = fts.ok_or_else(|| {
+        CatalogError::DbError(format!(
+            "aucun index FTS ouvert pour '{entity}' — le repli C++ est débranché. \
+             Le handle s'ouvre au démarrage du Catalog (`open_fts_handles_for`)."
+        ))
+    })?;
 
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+    let query_config: lucivy_core::query::QueryConfig =
+        serde_json::from_str(&json_query)
+            .map_err(|e| CatalogError::DbError(format!("QueryConfig invalide: {e}")))?;
 
-    if result.rows.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Extract (offset, score) pairs from CALL result
-    let offsets_scores: Vec<(u64, f64)> = result
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
-            let score = row.get(1).and_then(|v| v.as_f64())?;
-            Some((offset, score))
-        })
-        .collect();
+    let offsets_scores: Vec<(u64, f64)> =
+        crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
+            .map_err(CatalogError::DbError)?
+            .into_iter()
+            .map(|(offset, score, _highlights)| (offset, score))
+            .collect();
 
     if offsets_scores.is_empty() {
         return Ok(vec![]);
@@ -1846,110 +1828,6 @@ pub fn search_bm25(
 
     // Resolve offsets → UUIDs + fetch entity data in one query
     resolve_and_enrich(conn, entity, &offsets_scores, return_fields)
-}
-
-/// BM25 result with per-field highlight byte offsets.
-pub struct BM25Hit {
-    uuid: String,
-    score: f64,
-    /// field_name → [(start_byte, end_byte)]
-    highlights: HashMap<String, Vec<(usize, usize)>>,
-}
-
-/// Like `search_bm25` but returns raw hits with per-field highlight offsets.
-///
-/// Uses `RETURN node_id, score, highlights` (3rd column = JSON).
-pub fn search_bm25_raw(
-    conn: &dyn DbConnection,
-    entity: &str,
-    query: &str,
-    fields: &[String],
-    mode: BM25Mode,
-    fuzzy_distance: u8,
-    limit: usize,
-    allowed_ids: Option<&[u64]>,
-) -> Result<Vec<BM25Hit>, CatalogError> {
-    if fields.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
-    let escaped_json = json_query.replace('\'', "''");
-
-    let cypher = if let Some(ids) = allowed_ids {
-        let ids_str = ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
-             allowed_ids := [{ids_str}]) \
-             RETURN node_id, score, highlights"
-        )
-    } else {
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
-             RETURN node_id, score, highlights"
-        )
-    };
-
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    if result.rows.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Collect (offset, score, highlights_json)
-    let offsets: Vec<(u64, f64, String)> = result
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
-            let score = row.get(1).and_then(|v| v.as_f64())?;
-            let hl_json = row.get(2).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
-            Some((offset, score, hl_json))
-        })
-        .collect();
-
-    if offsets.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Resolve offsets → UUIDs
-    let offset_list = offsets
-        .iter()
-        .map(|(o, _, _)| o.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let resolve_cypher = format!(
-        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
-         RETURN OFFSET(id(n)), n._uuid"
-    );
-    let resolve_result = conn
-        .execute(&resolve_cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    let mut offset_to_uuid: HashMap<u64, String> = HashMap::new();
-    for row in &resolve_result.rows {
-        if let (Some(oid), Some(uuid)) = (
-            row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64),
-            row.get(1).and_then(|v| v.as_str()),
-        ) {
-            offset_to_uuid.insert(oid, uuid.to_string());
-        }
-    }
-
-    Ok(offsets
-        .into_iter()
-        .filter_map(|(offset, score, hl_json)| {
-            let uuid = offset_to_uuid.get(&offset)?.clone();
-            let highlights = parse_highlights_json(&hl_json);
-            Some(BM25Hit { uuid, score, highlights })
-        })
-        .collect())
 }
 
 /// Parse highlights JSON: `{"body":[[100,200]],"title":[[5,15]]}` → HashMap
@@ -1977,135 +1855,11 @@ fn parse_highlights_json(json: &str) -> HashMap<String, Vec<(usize, usize)>> {
     result
 }
 
-/// Resolve BM25 parent-level hits to chunk-level results using highlight offsets.
-///
-/// For each hit, returns one result per chunk that intersects any highlight range.
-/// Chunks are sorted by descending overlap. When no chunk intersects (e.g. match
-/// in a non-chunked field like title), returns a single result with `chunk: None`.
-pub fn resolve_bm25_to_chunks(
-    conn: &dyn DbConnection,
-    chunk_entity: &str,
-    parent_entity: &str,
-    hits: Vec<BM25Hit>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if hits.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 1. Collect parent UUIDs
-    let parent_uuids: Vec<&str> = hits.iter().map(|h| h.uuid.as_str()).collect();
-    let uuid_list = parent_uuids
-        .iter()
-        .map(|u| format!("'{}'", u.replace('\'', "''")))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    // 2. Batch fetch chunks for these parents
-    let cypher = format!(
-        "MATCH (p:{parent_entity})-[:{parent_entity}_HAS_CHUNK]->(c:{chunk_entity}) \
-         WHERE p._uuid IN [{uuid_list}] \
-         RETURN p._uuid, c._uuid, c._text, c._index, c._parent_field, \
-         c._start_char, c._end_char, c._start_line, c._end_line, c._content_offset"
-    );
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    // 3. Build parent → chunks map
-    struct ChunkRecord {
-        uuid: String,
-        text: String,
-        index: usize,
-        start_char: usize,
-        end_char: usize,
-        start_line: usize,
-        end_line: usize,
-        content_offset: usize,
-    }
-
-    let mut parent_chunks: HashMap<String, Vec<ChunkRecord>> = HashMap::new();
-    for row in &result.rows {
-        let p_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let c_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let _parent_field = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let start_char = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let end_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let start_line = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let end_line = row.get(8).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let content_offset = row.get(9).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        parent_chunks.entry(p_uuid).or_default().push(ChunkRecord {
-            uuid: c_uuid, text, index, start_char, end_char, start_line, end_line, content_offset,
-        });
-    }
-
-    // 4. For each BM25Hit, collect all chunks that intersect any highlight
-    let mut results: Vec<SearchResult> = Vec::new();
-    for hit in hits {
-        let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
-
-        if let Some(chunks) = parent_chunks.get(&hit.uuid) {
-            for chunk in chunks {
-                let mut overlap = 0usize;
-                let chunk_start_global = chunk.content_offset + chunk.start_char;
-                let chunk_end_global = chunk.content_offset + chunk.end_char;
-                if let Some(offsets) = hit.highlights.get("_content") {
-                    for &(h_start, h_end) in offsets {
-                        let ov = h_end.min(chunk_end_global).saturating_sub(h_start.max(chunk_start_global));
-                        overlap += ov;
-                    }
-                }
-                if overlap > 0 {
-                    matched_chunks.push((overlap, chunk));
-                }
-            }
-        }
-
-        if matched_chunks.is_empty() {
-            // No chunk intersection (e.g. match in title only)
-            results.push(SearchResult {
-                uuid: hit.uuid,
-                score: hit.score,
-                entity: Some(parent_entity.to_string()),
-                data: None,
-                chunk: None,
-                chunks: None,
-            });
-        } else {
-            // Sort by descending overlap
-            matched_chunks.sort_by(|a, b| b.0.cmp(&a.0));
-            for (_, c) in matched_chunks {
-                results.push(SearchResult {
-                    uuid: hit.uuid.clone(),
-                    score: hit.score,
-                    entity: Some(parent_entity.to_string()),
-                    data: None,
-                    chunk: Some(ChunkInfo {
-                        uuid: c.uuid.clone(),
-                        text: c.text.clone(),
-                        index: c.index,
-                        score: hit.score,
-                        start_line: c.start_line,
-                        end_line: c.end_line,
-                        start_char: c.start_char,
-                        end_char: c.end_char,
-                    }),
-                    chunks: None,
-                });
-            }
-        }
-    }
-
-    Ok(results)
-}
-
 /// BM25 chunked search: CALL + resolve/chunks/enrich in 2 queries instead of 3.
 ///
-/// Replaces the pattern `search_bm25_raw()` → `resolve_bm25_to_chunks()` by merging
-/// offset resolution, chunk fetching, and data enrichment into one Cypher query.
-///
-/// Prefer `search_bm25_chunked()` for chunked BM25 searches (Level 1+).
+/// Merges offset resolution, chunk fetching and data enrichment into one query.
+/// The `search_bm25_raw()` → `resolve_bm25_to_chunks()` pair it replaced was
+/// removed with the C++ fallback — it had no callers left.
 #[allow(clippy::too_many_arguments)]
 pub fn search_bm25_chunked(
     conn: &dyn DbConnection,
@@ -2122,8 +1876,9 @@ pub fn search_bm25_chunked(
     // Canal d'avertissements toujours actif, contrairement à `diagnostics` :
     // ce que lucivy annonce avant la requête, plus nos anomalies d'attribution.
     warnings: &mut Vec<String>,
-    // `fts` : index Rust de la table parente s'il est ouvert. Absent → repli
-    // sur l'extension C++, le temps que toutes les tables soient migrées.
+    // `fts` : index Rust de la table parente. L'`Option` ne survit que pour les
+    // appelants qui n'ont pas de handle sous la main ; son absence est une
+    // erreur, plus un repli. Voir le corps.
     fts: Option<&lucivy_core::sharded_handle::ShardedHandle>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     let entity = &target.parent_table;
@@ -2133,87 +1888,54 @@ pub fn search_bm25_chunked(
 
     let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
 
-    // Chemin Rust direct : même triplet (offset, score, highlights) que le
-    // CALL Cypher, donc toute l'attribution aux chunks en aval est inchangée.
-    if let Some(handle) = fts {
-        let query_config: lucivy_core::query::QueryConfig =
-            serde_json::from_str(&json_query).map_err(|e| {
-                CatalogError::DbError(format!("QueryConfig invalide: {e}"))
-            })?;
+    // Chemin Rust direct — le seul depuis le débranchement du repli C++.
+    //
+    // Il existait ici une retombée sur `CALL QUERY_LUCIVY_INDEX` quand aucun
+    // handle n'était ouvert. Elle était juste pendant la migration, mais elle
+    // rendait un handle manquant *indiscernable d'un succès* : la recherche
+    // marchait, sur un autre index, entretenu par d'autres hooks. Trois bugs
+    // d'ouverture de handle ont survécu à l'abri de ce filet.
+    //
+    // Un handle absent est désormais une erreur nommée.
+    let handle = fts.ok_or_else(|| {
+        CatalogError::DbError(format!(
+            "aucun index FTS ouvert pour '{entity}' — le repli C++ est débranché. \
+             Le handle s'ouvre au démarrage du Catalog (`open_fts_handles_for`) ; \
+             s'il manque ici, l'entité n'a pas été enregistrée ou le BlobStore n'est pas prêt."
+        ))
+    })?;
 
-        let raw = crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
-            .map_err(CatalogError::DbError)?;
+    let query_config: lucivy_core::query::QueryConfig =
+        serde_json::from_str(&json_query)
+            .map_err(|e| CatalogError::DbError(format!("QueryConfig invalide: {e}")))?;
 
-        // Avertissements honnêtes du moteur (littéral trop court, regex sans
-        // littéral = full scan, fuzzy trop lâche...). Gratuit, et invisible
-        // depuis le chemin C++.
-        for w in handle.query_warnings(&query_config) {
-            if let Some(ref mut diag) = diagnostics {
-                diag.engine_warnings.push(w.clone());
-            }
-            warnings.push(w);
+    let raw = crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
+        .map_err(CatalogError::DbError)?;
+
+    // Avertissements honnêtes du moteur (littéral trop court, regex sans
+    // littéral = full scan, fuzzy trop lâche...). Le chemin C++ ne les exposait
+    // pas — c'est une des choses qu'on gagne en le retirant.
+    for w in handle.query_warnings(&query_config) {
+        if let Some(ref mut diag) = diagnostics {
+            diag.engine_warnings.push(w.clone());
         }
-
-        let hits: Vec<(u64, f64, String)> = raw
-            .into_iter()
-            .map(|(offset, score, hl)| {
-                let obj: serde_json::Map<String, serde_json::Value> = hl
-                    .into_iter()
-                    .map(|(f, spans)| {
-                        let arr: Vec<serde_json::Value> = spans
-                            .into_iter()
-                            .map(|(a, b)| serde_json::json!([a, b]))
-                            .collect();
-                        (f, serde_json::Value::Array(arr))
-                    })
-                    .collect();
-                (offset, score, serde_json::Value::Object(obj).to_string())
-            })
-            .collect();
-
-        return finish_bm25_chunked(
-            conn, target, hits, return_fields, result_mode, diagnostics, warnings,
-        );
+        warnings.push(w);
     }
 
-    // Repli : extension C++.
-    let escaped_json = json_query.replace('\'', "''");
-
-    let cypher = if let Some(ids) = allowed_ids {
-        let ids_str = ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}, \
-             allowed_ids := [{ids_str}]) \
-             RETURN node_id, score, highlights"
-        )
-    } else {
-        format!(
-            "CALL QUERY_LUCIVY_INDEX('{entity}', '{escaped_json}', {limit}) \
-             RETURN node_id, score, highlights"
-        )
-    };
-
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    if result.rows.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Extract (offset, score, highlights_json)
-    let hits: Vec<(u64, f64, String)> = result
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let offset = row.get(0).and_then(|v| v.as_i64()).map(|i| i as u64)?;
-            let score = row.get(1).and_then(|v| v.as_f64())?;
-            let hl_json = row.get(2).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
-            Some((offset, score, hl_json))
+    let hits: Vec<(u64, f64, String)> = raw
+        .into_iter()
+        .map(|(offset, score, hl)| {
+            let obj: serde_json::Map<String, serde_json::Value> = hl
+                .into_iter()
+                .map(|(f, spans)| {
+                    let arr: Vec<serde_json::Value> = spans
+                        .into_iter()
+                        .map(|(a, b)| serde_json::json!([a, b]))
+                        .collect();
+                    (f, serde_json::Value::Array(arr))
+                })
+                .collect();
+            (offset, score, serde_json::Value::Object(obj).to_string())
         })
         .collect();
 
@@ -3107,12 +2829,15 @@ mod tests {
         assert!(results.is_empty());
     }
 
+    /// Without an open FTS handle the search now errors instead of quietly
+    /// falling back to the C++ index — a missing handle used to look exactly
+    /// like "no results".
     #[test]
-    fn search_bm25_empty() {
+    fn search_bm25_without_handle_is_an_error() {
         let conn = MockConnection::new();
         let fields = vec!["title".to_string(), "body".to_string()];
 
-        let results = search_bm25(
+        let err = search_bm25(
             &conn,
             "Document",
             "test query",
@@ -3122,17 +2847,25 @@ mod tests {
             10,
             None,
             &[],
+            None,
         )
-        .unwrap();
-        assert!(results.is_empty());
+        .expect_err("a missing handle must surface");
+        assert!(
+            err.to_string().contains("aucun index FTS ouvert"),
+            "error should name the cause, got: {err}"
+        );
     }
 
+    /// No fields to search is not an error — it short-circuits before the index
+    /// is ever needed.
     #[test]
     fn search_bm25_empty_fields() {
         let conn = MockConnection::new();
 
-        let results = search_bm25(&conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, &[])
-            .unwrap();
+        let results = search_bm25(
+            &conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, &[], None,
+        )
+        .unwrap();
         assert!(results.is_empty());
     }
 

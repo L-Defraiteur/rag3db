@@ -491,13 +491,8 @@ impl Catalog {
         }
         fts_failed.extend(failed);
 
-        // Puis le chemin C++, pour les tables qui n'ont pas de handle Rust.
-        for table in &fts_tables {
-            let query = format!("CALL CLOSE_LUCIVY_INDEX('{table}')");
-            if self.conn.execute(&query).is_ok() {
-                fts_closed += 1;
-            }
-        }
+        // Le chemin C++ (`CALL CLOSE_LUCIVY_INDEX`) est retiré : plus aucun index
+        // C++ n'est créé, donc il n'y a rien à fermer de ce côté.
 
         // 2. Commit and drop sparse handles (release writer locks).
         let mut sparse_committed: usize = 0;
@@ -801,10 +796,11 @@ impl Catalog {
         self.conn.execute(&rel_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-        // 4. FTS index on entity content fields
-        let fts_fields: Vec<&str> = config.content_fields();
-        let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
-        let _ = self.conn.execute(&fts_ddl); // ignore if already exists
+        // 4. Pas d'index FTS C++ : depuis le débranchement du repli, la recherche
+        //    passe exclusivement par `ShardedHandle`. En créer un ici revenait à
+        //    indexer chaque document deux fois pour ne jamais lire le second —
+        //    ~60 % du temps des suites E2E (32,1 s -> 12,3 s sur e2e_symbol_search,
+        //    80,9 s -> 34,1 s sur e2e_idempotent_registration).
 
         // 5. Vector index on chunk table
         if config.signals.vector() {
@@ -893,14 +889,8 @@ impl Catalog {
                 // TODO: migrate to Rust LucivyHandle when FTS migration is done (doc 02).
                 // For now, FTS rebuild is rag3db-only (lucivy extension C++).
                 // On PostgreSQL, FTS will be managed by lucivy handles directly.
-                if self.dialect.name() == "rag3db" {
-                    let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{entity_name}')");
-                    let _ = self.conn.execute(&drop_fts);
-
-                    let fts_fields: Vec<&str> = new_config.content_fields();
-                    let fts_ddl = crate::schema::generate_fts_index_ddl(entity_name, &fts_fields, &[]);
-                    let _ = self.conn.execute(&fts_ddl);
-                }
+                // L'index FTS n'est plus tenu côté C++ ; le handle Rust est
+                // reconstruit par `reindex()`, que le drapeau ci-dessous demande.
             }
 
             // Flag needs_reindex (for both simple and KB pipelines)
@@ -1043,16 +1033,13 @@ impl Catalog {
                 let new_content: HashSet<_> = content_refs.iter()
                     .map(|r| (r.entity.as_str(), r.field.as_str()))
                     .collect();
-                if old_content != new_content {
-                    // Rebuild FTS on {KB}_Index to include new content fields
-                    let index_table = format!("{kb_name}_Index");
-                    let drop_fts = format!("CALL DROP_LUCIVY_INDEX('{index_table}')");
-                    let _ = self.conn.execute(&drop_fts);
-                    let fts_ddl = crate::schema::generate_fts_index_ddl(
-                        &index_table, &["_title", "_content"], &["_source_entity"],
-                    );
-                    let _ = self.conn.execute(&fts_ddl);
-                }
+                // Les champs de contenu ont pu changer. L'ancien code droppait puis
+                // recréait l'index C++ ici, en laissant le handle Rust intact.
+                // Ne rien faire est désormais correct : `reindex()` droppe l'index
+                // avant de tout réécrire, et c'est lui que le drapeau
+                // `needs_reindex` posé plus bas réclame. Dropper ici sans recréer
+                // laissait la KB sans index jusqu'au prochain reindex.
+                let _ = (&old_content, &new_content);
 
                 // An entity registered *after* the KB brings its own relation
                 // tables, which only the fresh-KB branch below used to create.
@@ -1155,12 +1142,7 @@ impl Catalog {
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
-        // 6. FTS index on {KB}_Index
-        let index_table = format!("{kb_name}_Index");
-        let fts_ddl = crate::schema::generate_fts_index_ddl(
-            &index_table, &["_title", "_content"], &["_source_entity"],
-        );
-        let _ = self.conn.execute(&fts_ddl);
+        // 6. Idem pour {KB}_Index : l'index FTS est celui du `ShardedHandle`.
 
         // 7. Vector index on {KB}_Index_Chunk
         if kb_config.signals.vector() {
@@ -2922,6 +2904,7 @@ impl Catalog {
                     self.conn.as_ref(), entity, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields,
+                    self.fts_handles.get(entity).map(|h| h.as_ref()),
                 )?
             }
         } else {

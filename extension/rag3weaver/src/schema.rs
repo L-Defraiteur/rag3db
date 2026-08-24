@@ -591,13 +591,10 @@ pub fn generate_full_schema_with_dialect(
             }
         }
 
-        // FTS index on {KB}_Index (_title, _content) with _source_entity as filter
-        let index_table = format!("{kb_name}_Index");
-        indexes.push(generate_fts_index_ddl(
-            &index_table,
-            &["_title", "_content"],
-            &["_source_entity"],
-        ));
+        // Pas d'index FTS C++ sur {KB}_Index : la recherche passe par le
+        // `ShardedHandle` Rust. `generate_fts_index_ddl` reste exposée pour qui
+        // veut encore un index interrogeable en Cypher natif (`SEARCH()` dans le
+        // WHERE), mais le catalogue ne l'émet plus.
 
         // Vector index on {KB}_Index_Chunk (via dialect)
         let chunk_table = format!("{kb_name}_Index_Chunk");
@@ -1081,22 +1078,30 @@ mod tests {
             schema.indexes.iter().any(|s| s.contains("CREATE_VECTOR_INDEX") && s.contains("main_Index_Chunk")),
             "vector index on chunks: {:?}", schema.indexes
         );
+        // Plus d'index FTS C++ : la recherche full-text passe par le handle Rust.
         assert!(
-            schema.indexes.iter().any(|s| s.contains("CREATE_LUCIVY_INDEX") && s.contains("main_Index")),
-            "FTS index on index table: {:?}", schema.indexes
+            !schema.indexes.iter().any(|s| s.contains("CREATE_LUCIVY_INDEX")),
+            "le schéma ne doit plus émettre d'index FTS C++: {:?}", schema.indexes
         );
     }
 
+    /// `generate_fts_index_ddl` reste disponible pour qui veut un index
+    /// interrogeable en Cypher natif, mais le schéma généré ne l'utilise plus :
+    /// le maintenir doublait l'indexation pour un index jamais relu.
     #[test]
-    fn full_schema_fts_on_kb_index() {
+    fn full_schema_emits_no_cpp_fts_index() {
         let config = make_full_config();
         let schema = generate_full_schema(&config).unwrap();
 
-        let fts = schema
-            .indexes
-            .iter()
-            .find(|s| s.contains("CREATE_LUCIVY_INDEX"))
-            .expect("should have FTS index");
+        assert!(
+            !schema.indexes.iter().any(|s| s.contains("LUCIVY")),
+            "aucun index lucivy C++ attendu: {:?}", schema.indexes
+        );
+
+        // La fonction, elle, produit toujours le bon DDL si on l'appelle.
+        let fts = generate_fts_index_ddl(
+            "main_Index", &["_title", "_content"], &["_source_entity"],
+        );
 
         // FTS is on {KB}_Index with _title + _content, and _source_entity as filter
         assert!(fts.contains("main_Index"), "FTS on main_Index: {fts}");
@@ -1196,10 +1201,10 @@ mod tests {
             "File_SOURCED_TreeKB rel"
         );
 
-        // FTS on TreeKB_Index
+        // Plus d'index FTS C++ sur TreeKB_Index (handle Rust à la place).
         assert!(
-            schema.indexes.iter().any(|s| s.contains("TreeKB_Index") && s.contains("CREATE_LUCIVY_INDEX")),
-            "FTS on TreeKB_Index"
+            !schema.indexes.iter().any(|s| s.contains("CREATE_LUCIVY_INDEX")),
+            "aucun index FTS C++ attendu: {:?}", schema.indexes
         );
 
         // Vector on TreeKB_Index_Chunk
@@ -1284,8 +1289,8 @@ mod tests {
         let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
         assert!(!doc_ddl.contains("embedding"));
 
-        // main_Index has FTS
-        assert!(schema.indexes.iter().any(|s| s.contains("main_Index") && s.contains("LUCIVY")));
+        // main_Index n'a plus d'index FTS C++.
+        assert!(!schema.indexes.iter().any(|s| s.contains("LUCIVY")));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

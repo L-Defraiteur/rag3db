@@ -2867,12 +2867,14 @@ pub struct FlushNode {
     name: String,
     tables: Vec<String>,
     undo_data: Option<serde_json::Value>,
-    conn: Option<Arc<dyn DbConnection>>,
+    // Les handles Rust, comme le fait déjà `SparseCommitNode`. Auparavant ce
+    // nœud gardait la connexion pour rejouer `CALL FLUSH_LUCIVY_INDEX` à l'undo.
+    fts_handles: Option<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>,
 }
 
 impl FlushNode {
     pub fn new(name: impl Into<String>, tables: Vec<String>) -> Self {
-        Self { name: name.into(), tables, undo_data: None, conn: None }
+        Self { name: name.into(), tables, undo_data: None, fts_handles: None }
     }
 }
 
@@ -2898,43 +2900,30 @@ impl Node for FlushNode {
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
-            .ok_or("FlushNode: 'conn' service not registered")?;
-
-        // Commit des index FTS Rust quand ils existent ; repli sur l'extension
-        // C++ tant que toutes les tables ne sont pas migrées.
+        // Commit des index FTS Rust. Le repli `CALL FLUSH_LUCIVY_INDEX` est
+        // débranché : il rendait un commit manqué indiscernable d'un succès,
+        // puisqu'il flushait l'index C++ pendant que le nôtre restait sale.
         let fts_handles = ctx
             .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .cloned();
 
         let mut flushed: usize = 0;
         for table in &self.tables {
-            let handled_in_rust = fts_handles
-                .as_ref()
-                .and_then(|h| h.get(table))
-                .map(|handle| {
-                    // `commit()` est idempotent : il flush et recharge la lecture.
-                    // Les merges partent en tâche de fond selon la policy.
-                    match handle.commit() {
-                        Ok(()) => true,
-                        Err(e) => {
-                            ctx.info(&format!("commit FTS {table} échoué: {e}"));
-                            false
-                        }
-                    }
-                })
-                .unwrap_or(false);
-
-            if handled_in_rust {
-                flushed += 1;
-            } else if conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')")).is_ok() {
-                flushed += 1;
+            let Some(handle) = fts_handles.as_ref().and_then(|h| h.get(table)) else {
+                // Une table sans handle n'a pas d'index FTS : rien à committer.
+                continue;
+            };
+            // `commit()` est idempotent : il flush et recharge la lecture.
+            // Les merges partent en tâche de fond selon la policy.
+            match handle.commit() {
+                Ok(()) => flushed += 1,
+                Err(e) => return Err(format!("FlushNode: commit FTS '{table}' échoué: {e}")),
             }
         }
 
         // Capture tables for undo (re-flush)
         self.undo_data = Some(serde_json::json!(self.tables));
-        self.conn = Some(conn.clone());
+        self.fts_handles = fts_handles;
 
         ctx.metric("table_count", self.tables.len() as f64);
         ctx.metric("flushed", flushed as f64);
@@ -2950,16 +2939,17 @@ impl Node for FlushNode {
 
     fn undo(&mut self, undo_ctx: Box<dyn Any + Send>) -> Result<(), String> {
         let undo_ctx = *undo_ctx.downcast::<serde_json::Value>().map_err(|_| "bad undo ctx")?;
-        let conn = self.conn.as_ref()
-            .ok_or("FlushNode undo: 'conn' not stored")?;
+        let handles = self.fts_handles.as_ref()
+            .ok_or("FlushNode undo: 'fts_handles' not stored")?;
 
         let tables = undo_ctx.as_array()
             .ok_or("FlushNode undo: expected array of table names")?;
 
+        // Un commit est idempotent : le rejouer est le seul « undo » qui ait un
+        // sens ici (on ne dé-commite pas un index). Best-effort, comme avant.
         for t in tables {
-            if let Some(table) = t.as_str() {
-                conn.execute(&format!("CALL FLUSH_LUCIVY_INDEX('{table}')"))
-                    .ok(); // Best-effort
+            if let Some(handle) = t.as_str().and_then(|table| handles.get(table)) {
+                let _ = handle.commit();
             }
         }
         Ok(())
