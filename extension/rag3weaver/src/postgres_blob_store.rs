@@ -56,6 +56,68 @@ impl BlobStore for PostgresBlobStore {
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("blob not found: {index_name}/{file_name}")))
     }
 
+    /// Taille d'un blob sans le charger (voir `CypherBlobStore::blob_len`).
+    fn blob_len(&self, index_name: &str, file_name: &str) -> io::Result<Option<u64>> {
+        let key = format!("{index_name}/{file_name}");
+        let params = vec![crate::connection::QueryParam::new(
+            "key",
+            crate::connection::CypherValue::String(key),
+        )];
+        let result = self
+            .conn
+            .execute_with_params(
+                "SELECT LENGTH(_data) FROM rag3weaver._index_blobs WHERE _key = $key",
+                &params,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("blob_len: {e}")))?;
+        Ok(result
+            .rows
+            .first()
+            .and_then(|r| r.first())
+            .and_then(|v| v.as_i64())
+            .map(|n| n as u64))
+    }
+
+    /// Lecture d'une plage d'octets. `SUBSTRING ... FROM` est **1-indexé** en
+    /// SQL, d'où le `+1` — une erreur d'un octet décalerait tout l'index.
+    fn load_range(
+        &self,
+        index_name: &str,
+        file_name: &str,
+        range: std::ops::Range<u64>,
+    ) -> io::Result<Option<Vec<u8>>> {
+        if range.end <= range.start {
+            return Ok(Some(Vec::new()));
+        }
+        let key = format!("{index_name}/{file_name}");
+        let params = vec![
+            crate::connection::QueryParam::new(
+                "key",
+                crate::connection::CypherValue::String(key),
+            ),
+            crate::connection::QueryParam::new(
+                "from",
+                crate::connection::CypherValue::Int(range.start as i64 + 1),
+            ),
+            crate::connection::QueryParam::new(
+                "len",
+                crate::connection::CypherValue::Int((range.end - range.start) as i64),
+            ),
+        ];
+        let result = self
+            .conn
+            .execute_with_params(
+                "SELECT SUBSTRING(_data FROM $from FOR $len) \
+                 FROM rag3weaver._index_blobs WHERE _key = $key",
+                &params,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("load_range: {e}")))?;
+        Ok(match result.rows.first().and_then(|r| r.first()) {
+            Some(crate::connection::CypherValue::Blob(d)) => Some(d.clone()),
+            _ => None,
+        })
+    }
+
     fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
         let key = format!("{index_name}/{file_name}");
         let params = vec![

@@ -118,6 +118,17 @@ Test clé : `index_search_and_resolve_offsets_end_to_end` — index en mémoire
 exactement `[41, 1337]`. Offsets non contigus délibérément : un code confondant
 l'indice de boucle et l'offset échouerait.
 
+**Lazy loading disponible (24 août)** : `FtsStorage::BlobBacked { lazy }`.
+`blob_len` et `load_range` sont implémentés sur **les deux stores** —
+`CypherBlobStore` (`SIZE`/`SUBSTRING` Cypher) et `PostgresBlobStore`
+(`LENGTH`/`SUBSTRING ... FROM ... FOR` SQL). Attention : **`SUBSTRING` est
+1-indexé** des deux côtés, d'où le `+1` sur le début ; une erreur d'un octet
+décalerait silencieusement tout l'index.
+
+**Eager reste le défaut** : c'est le mode validé, et la passation recommande de
+mesurer Eager contre Lazy sur de vrais index avant de basculer — le gain dépend
+de la taille et du motif d'accès. Le mesurer fait partie de ce qui reste à faire.
+
 **Décision d'archi actée** : topologie **(a) `BlobBacked`**. Le blob store fait foi,
 le cache mmap est jetable. Coût assumé : `BlobDirectory::new` (`blob_directory.rs:67-83`)
 efface son cache `{pid}/{seq}` et **rematérialise tout l'index à chaque ouverture** ;

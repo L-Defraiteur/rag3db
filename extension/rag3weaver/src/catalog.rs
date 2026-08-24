@@ -322,13 +322,19 @@ impl Catalog {
 
         let storage = || -> Option<Box<dyn ShardStorage>> {
             match &self.fts_storage {
-                crate::fts_handle::FtsStorage::BlobBacked => Some(Box::new(
-                    BlobShardStorage::new(
+                crate::fts_handle::FtsStorage::BlobBacked { lazy } => {
+                    let mut st = BlobShardStorage::new(
                         Arc::new(blob_store.clone()),
                         index_name.clone(),
                         &self.cache_base,
-                    ),
-                )),
+                    );
+                    if *lazy {
+                        st = st.with_load_mode(
+                            lucivy_core::blob_directory::BlobLoadMode::Lazy,
+                        );
+                    }
+                    Some(Box::new(st))
+                }
                 crate::fts_handle::FtsStorage::LocalFs { base_path } => {
                     let dir = std::path::Path::new(base_path).join(&index_name);
                     match FsShardStorage::new(&dir.to_string_lossy()) {

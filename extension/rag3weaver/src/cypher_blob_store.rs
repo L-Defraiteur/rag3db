@@ -98,6 +98,57 @@ impl BlobStore for CypherBlobStore {
         }
     }
 
+    /// Taille d'un blob sans le charger. Permet à lucivy d'ouvrir un index en
+    /// mode paresseux : il n'a besoin que des tailles pour cartographier les
+    /// fichiers, puis lit des plages à la demande via [`Self::load_range`].
+    fn blob_len(&self, index_name: &str, file_name: &str) -> io::Result<Option<u64>> {
+        let key = Self::make_key(index_name, file_name);
+        let result = self
+            .execute(
+                "MATCH (b:_index_blobs {_key: $key}) RETURN SIZE(b._data)",
+                &[QueryParam::new("key", CypherValue::String(key))],
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(result
+            .rows
+            .first()
+            .and_then(|r| r.first())
+            .and_then(|v| v.as_i64())
+            .map(|n| n as u64))
+    }
+
+    /// Lecture d'une plage d'octets sans charger le blob entier.
+    ///
+    /// `SUBSTRING` de Cypher est **1-indexé**, d'où le `+1` sur le début — une
+    /// erreur d'un octet ici décalerait silencieusement tout l'index.
+    fn load_range(
+        &self,
+        index_name: &str,
+        file_name: &str,
+        range: std::ops::Range<u64>,
+    ) -> io::Result<Option<Vec<u8>>> {
+        if range.end <= range.start {
+            return Ok(Some(Vec::new()));
+        }
+        let key = Self::make_key(index_name, file_name);
+        let len = (range.end - range.start) as i64;
+        let result = self
+            .execute(
+                "MATCH (b:_index_blobs {_key: $key}) \
+                 RETURN SUBSTRING(b._data, $from, $len)",
+                &[
+                    QueryParam::new("key", CypherValue::String(key)),
+                    QueryParam::new("from", CypherValue::Int(range.start as i64 + 1)),
+                    QueryParam::new("len", CypherValue::Int(len)),
+                ],
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(match result.rows.first().and_then(|r| r.first()) {
+            Some(CypherValue::Blob(data)) => Some(data.clone()),
+            _ => None,
+        })
+    }
+
     fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
         let key = Self::make_key(index_name, file_name);
         self.execute(

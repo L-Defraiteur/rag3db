@@ -196,7 +196,16 @@ pub enum FtsStorage {
     /// **rematérialise l'intégralité de l'index à chaque ouverture** ; le `Drop`
     /// le supprime. Acceptable pour un serveur long-vécu (une fois au premier
     /// usage), rédhibitoire pour un navigateur qui rouvre à chaque chargement.
-    BlobBacked,
+    BlobBacked {
+        /// Chargement paresseux : lucivy ne lit que les plages dont il a besoin,
+        /// via `blob_len`/`load_range` (implémentés sur nos deux stores), au lieu
+        /// de rematérialiser tout l'index à l'ouverture.
+        ///
+        /// **Eager par défaut** : c'est le mode validé, et la passation lucivy
+        /// recommande de mesurer Eager contre Lazy sur de vrais index avant de
+        /// basculer — le gain dépend de la taille et du motif d'accès.
+        lazy: bool,
+    },
 
     /// **(b)** Copie locale durable, tenue à jour par deltas LUCIDS.
     ///
@@ -214,7 +223,7 @@ impl Default for FtsStorage {
     /// (a) par défaut : c'est ce que prescrit la passation lucivy, et le seul
     /// mode validé de bout en bout à ce jour (`test_acid_blob_v3.rs`).
     fn default() -> Self {
-        FtsStorage::BlobBacked
+        FtsStorage::BlobBacked { lazy: false }
     }
 }
 
