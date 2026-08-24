@@ -251,33 +251,83 @@ fn symbol_matches_accented_text() {
     assert_eq!(titles(&mut catalog, "crème brûlée", BM25Mode::Symbol), vec!["accents"]);
 }
 
-// ─── parse × highlights (contrat lucivy, doc 16) ────────────────────────────
+// ─── parse × highlights (contrat lucivy, docs 16 → 24) ───────────────────────
 
-/// lucivy's QueryParser branch never touches the highlight sink, so hits come
-/// back with **no** spans rather than stale ones. Our attribution must treat
-/// that as expected — return the whole document, warn, and *not* claim a
-/// chunking anomaly.
+/// Since lucivy `8f14edc`, boolean syntax in `parse` (`AND`/`OR`/`NOT`, quotes,
+/// `+`/`-`) is lowered to a `boolean` composite of `contains` instead of going
+/// to the QueryParser. Consequence: **highlights on every shape of `parse`**,
+/// one substring semantics for both shapes, and our highlight↔chunk attribution
+/// holds everywhere — there is no "map absent" case left on this path.
 #[test]
 #[ignore]
-fn parse_boolean_syntax_degrades_without_claiming_a_chunk_bug() {
-    let mut catalog = setup();
+fn parse_boolean_syntax_keeps_highlights_and_attributes_chunks() {
+    use rag3weaver::search::ChunkAttributionMiss;
 
+    let mut catalog = setup();
     let response = catalog
-        .search("kb", "value AND foo", options(BM25Mode::Parse))
+        .search(
+            "kb",
+            "value AND foo",
+            SearchOptions {
+                bm25_mode: BM25Mode::Parse,
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                diagnostics: true,
+                ..Default::default()
+            },
+        )
         .unwrap();
 
-    eprintln!("[parse-bool] warnings = {:?}", response.meta.warnings);
+    let mut hits: Vec<String> = response
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("_title")?.as_str().map(str::to_string))
+        .collect();
+    hits.sort();
+    hits.dedup();
+    eprintln!("[parse-bool] {hits:?} warnings={:?}", response.meta.warnings);
 
-    assert!(
-        response.meta.warnings.iter().any(|w| w.contains("QueryParser")),
-        "the engine must announce the QueryParser branch, warnings={:?}",
-        response.meta.warnings
-    );
+    // Semantics: both words required. The four foo…bar snippets have "value" and
+    // "foo"; brace/cpp/generic/emoji/accents don't.
+    assert_eq!(hits, vec!["arrow", "colons", "spaced", "underscore"]);
+
+    // Highlights present on every hit: no hit may be unattributed for lack of
+    // spans, and no chunk-attribution anomaly may be raised.
+    let diag = response.meta.diagnostics.as_ref().expect("diagnostics requested");
+    assert!(!diag.bm25_hits.is_empty());
+    for h in &diag.bm25_hits {
+        assert!(
+            !h.highlights_parsed.is_empty(),
+            "boolean parse must carry highlights now (lucivy 8f14edc): {}",
+            h.parent_uuid
+        );
+        assert_ne!(h.unattributed, Some(ChunkAttributionMiss::NoHighlights));
+    }
     assert!(
         !response.meta.warnings.iter().any(|w| w.contains("chunk attribution")),
-        "missing highlights is expected here, never a chunking anomaly: {:?}",
+        "no attribution anomaly expected: {:?}",
         response.meta.warnings
     );
+}
+
+/// Malformed boolean syntax is refused with a named error, never an empty
+/// result. lucivy's messages are surfaced as-is.
+#[test]
+#[ignore]
+fn parse_malformed_boolean_is_refused_explicitly() {
+    let mut catalog = setup();
+    for (query, expected) in [
+        ("NOT value", "only a negation"),
+        ("value AND", "expected a term"),
+        ("(value AND foo", "unbalanced"),
+    ] {
+        let err = catalog
+            .search("kb", query, options(BM25Mode::Parse))
+            .expect_err(&format!("{query:?} must be refused"));
+        let msg = err.to_string();
+        eprintln!("[parse-refuse] {query:?} -> {msg}");
+        assert!(msg.contains(expected), "{query:?}: expected {expected:?} in {msg:?}");
+    }
 }
 
 /// The other branch of the same mode: a plain value keeps its highlights, so

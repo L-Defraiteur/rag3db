@@ -203,6 +203,14 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
     /// are capped by payload size so a large segment set doesn't become one
     /// giant parameter.
     fn save_many(&self, items: Vec<(String, String, Vec<u8>)>) -> io::Result<()> {
+        // Escape hatch to isolate the batched UNWIND path when chasing memory
+        // corruption in the FFI: one MERGE per blob instead.
+        if std::env::var_os("RAG3W_NO_BATCH_SAVE").is_some() {
+            for (index_name, file_name, data) in items {
+                self.save(&index_name, &file_name, &data)?;
+            }
+            return Ok(());
+        }
         const MAX_BATCH_BYTES: usize = 32 * 1024 * 1024;
         const MAX_BATCH_ITEMS: usize = 256;
 

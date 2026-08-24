@@ -397,8 +397,10 @@ pub struct ChunkOverlapDiag {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChunkAttributionMiss {
-    /// No highlight spans at all — expected on lucivy's QueryParser branch
-    /// (boolean syntax), which never touches the sink.
+    /// No highlight spans at all. Since lucivy `8f14edc` every `parse` shape
+    /// carries highlights (boolean syntax is lowered to `contains`), so this
+    /// no longer has an expected producer on the BM25 path — kept because the
+    /// classification must still name the case if an engine change reopens it.
     NoHighlights,
     /// Highlights existed, but only on non-content fields (title-only match).
     HighlightsOutsideContent,
