@@ -82,14 +82,16 @@ drain(N) ≈ 85 ms fixes + 0,95 ms/doc   (pas un problème : sous le coût du mo
 - BM42 retiré ; le sparse vient de BGE-M3 (tête apprise). MiniLM = dense seul, défaut navigateur, `LoadStrategy::Bytes`.
 - `BM25Mode::Parse` gardé **opt-in** (boîte de recherche humaine), jamais défaut. Pour les agents : exposer un composite booléen **typé** (`must`/`should`/`must_not` de feuilles `Symbol`/relaxed) — pas fait.
 - Le repli C++ ne revient pas. L'extension `lucivy_fts` C++ et son submodule sont du code mort à supprimer.
-- org/project : pas un chantier. Embarqué = une base par org ; `project` = un champ + `FilterCondition`. La seule obligation : mettre `project` dans le schéma code **dès le premier jour** de codeparsers.
+- org/project : **révisé le 24 août au soir** — Lucie en fait un chantier à part entière, placé juste après la fiabilisation (voir l'ordre ci-dessous). Piste à froid : une base par org (isolation par fichier) + `project` en champ filtré ; à trancher au démarrage du chantier.
 - Corpus réel (kernel) : bench `#[ignore]` manuel, jamais dans la passe récurrente.
 
-## Prochaines étapes, dans l'ordre validé par Lucie
+## Prochaines étapes, dans l'ordre fixé par Lucie (24 août, soir)
 
-1. Attendre le correctif lucivy de la course (`buffered_union.rs:72`) ; épingler ; rejouer `e2e_search` 3× ; retirer `RAG3W_NO_BATCH_SAVE` si plus utile (le garder comme outil est acceptable).
-2. Supprimer `simple_register_duplicate_fails` ; supprimer l'extension C++ `lucivy_fts` + submodule (vérifier que `run_e2e.sh` / cmake n'en dépendent plus — `load_extensions` charge encore `liblucivy_fts.rag3db_extension` dans les tests, à retirer en même temps).
-3. **codeparsers** (24 555 lignes, 10 langages, référencé nulle part) — la marche produit. Schéma File/Scope/Library avec `project`, KBs, ingestion par le `Catalog`. C'est là que l'agent de code MCP prend corps.
-4. Composite booléen typé pour la recherche (agents/MCP), `boolean`+`filters` et `more_like_this` de lucivy exposés.
-5. Éval (doc 12/14) avant tout réglage de fusion ou reranking.
-6. Eager vs Lazy jamais mesuré ; corpus réel en bench manuel.
+1. **Finir la fiabilisation / tests.** Épingler lucivy `832c503` (underflow du scorer fuzzy/regex corrigé — doc 32 — et `close()` tolérant), rejouer `e2e_search` 3× ; supprimer `simple_register_duplicate_fails` ; supprimer l'extension C++ `lucivy_fts` + submodule (retirer aussi son `LOAD EXTENSION` dans `load_extensions` des tests, vérifier `run_e2e.sh` / cmake) ; remettre les 4 E2E qui ne compilent plus (dérive luciole) ou les retirer explicitement.
+2. **org id / project id.** Décision d'architecture d'abord (base par org vs colonne), puis `project` comme champ + filtre dans l'API de recherche.
+3. **Cross-encoder** (reranking) — sur burn, chemin produit, candle en oracle comme pour les embedders.
+4. **OCR en usage unitaire** : un petit nœud dataflow minimal, un modèle léger embarquable (PP-OCRv6 ONNX est la piste, cf. la note OCR de Lucie) — **pas** de markitdown ni de lib lourde, pas de use case « pipeline documents » à ce stade.
+4 bis. **Briques génératives, même palier** : LLM, TTS, STT — l'objectif dit par Lucie : « tout avoir pour construire n'importe quel use case de workflow agentique / RAG ». Même doctrine que les embedders : modèles open source chargés par burn (burn-onnx / burnpack), candle ou ONNX Runtime en oracle. **Streaming** dès le premier jour (tokens LLM, audio TTS par chunks, STT sur flux), et une interface de streaming compatible avec des fournisseurs cloud (ElevenLabs, Gradium) pour que le nœud soit substituable. Pistes petites et embarquables : Whisper (STT, tiny/base), Kokoro 82M ou Piper (TTS), un LLM ≤ 1-3B quantisé pour le local ; à valider un par un, le LLM sur burn est le plus lourd (KV cache, décodage autorégressif, quantisation).
+5. **Se reposer la question** : passer aux use cases, ou le moteur a-t-il encore besoin de solidification ?
+
+Reportés derrière ces cinq points : codeparsers (avec `project` dans le schéma dès le premier jour), composite booléen typé pour les agents, `boolean`+`filters` / `more_like_this` de lucivy, éval, Eager vs Lazy, bench corpus réel.
