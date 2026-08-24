@@ -25,17 +25,18 @@ use rag3weaver::{Catalog, Rag3dbConnection, UpdateStatus};
 mod common;
 
 #[cfg(feature = "burn-embedder")]
-use common::burn::{BGE_M3, MINILM};
+use common::burn::{BGE_M3, MINILM, MULTILINGUAL_MINILM};
 #[cfg(feature = "burn-embedder")]
 use rag3weaver::embedder::SparseEmbedder;
 
 // ─── Embedders (burn, chargés une fois par binaire — voir tests/common) ─────
 
-/// Les tests « multilingual » tournaient sur multilingual-MiniLM-L12-v2 (candle),
-/// qui n'est pas porté sur burn. BGE-M3 est multilingue : même contrat, dense seul.
+/// Les tests « multilingual » tournent sur paraphrase-multilingual-MiniLM-L12-v2,
+/// porté sur burn le 24 août 2026 (384 d, dense seul) — le même modèle qu'à l'époque
+/// candle, plus l'alias BGE-M3 qui servait de bouche-trou.
 #[cfg(feature = "burn-embedder")]
 static MULTILINGUAL: std::sync::LazyLock<Arc<dyn Embedder>> =
-    std::sync::LazyLock::new(|| BGE_M3.clone());
+    std::sync::LazyLock::new(|| MULTILINGUAL_MINILM.clone());
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

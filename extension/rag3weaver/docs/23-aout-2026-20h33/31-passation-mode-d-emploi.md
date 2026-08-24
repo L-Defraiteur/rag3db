@@ -25,6 +25,7 @@ cargo test --features rag3db-native,burn-embedder --test e2e_idempotent_registra
 cargo test --features rag3db-native,burn-embedder --test e2e_simple_entity -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_embedder -- --ignored --test-threads=1
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_minilm   -- --ignored --test-threads=1
+cargo test --features rag3db-native,burn-embedder --test e2e_burn_multilingual_minilm -- --ignored --test-threads=1   # dense multilingue (~/.cache/rag3weaver/multilingual-minilm/)
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_reranker -- --ignored --test-threads=1   # cross-encoder (~/.cache/rag3weaver/msmarco-minilm/)
 cargo test --features rag3db-native,burn-embedder --test e2e_burn_xlmr_reranker -- --ignored --test-threads=1   # mmarco-mMiniLMv2 + bge-reranker-v2-m3 (~/.cache/rag3weaver/{mmarco-minilm,bge-reranker-v2-m3}/)
 cargo test --features rag3db-native --test e2e_rerank -- --ignored --test-threads=1                   # crochet de rerank, reranker mock
@@ -92,7 +93,7 @@ Le crate est en `[lints.rust] warnings = "deny"` : un import mort casse une comb
 | Requêtes BM25, modes, warnings, attribution chunks | `src/search.rs` (`build_bm25_query`, `search_bm25_chunked`, `finish_bm25_chunked`, `ChunkAttributionMiss`) |
 | Blob store | `src/cypher_blob_store.rs`, `src/buffered_blob_store.rs` |
 | Nœuds d'ingestion, KB, FlushNode | `src/dataflow/record_nodes.rs` (`gather_batch`, `KBUpdateNode`) |
-| Embedders burn | `src/burn_bge_m3_embedder.rs`, `src/burn_minilm_embedder.rs`, `generated/README.md` |
+| Embedders burn | `src/burn_bge_m3_embedder.rs`, `src/burn_minilm_embedder.rs`, `src/burn_multilingual_minilm_embedder.rs`, `generated/README.md` (provenance, empreintes, parité de chaque modèle) |
 | Reranking (cross-encoder) | `src/reranker.rs` (trait, mock, `passage_text`), `src/burn_reranker.rs` (MiniLM EN), `src/burn_xlmr_reranker.rs` (mMiniLMv2 + bge-reranker-v2-m3, XLM-R : pad 1, pas de token_type_ids), crochet dans `Catalog::search` (avant la pagination), `examples/{reranker,xlmr_reranker}_reference.rs` + `burn_*_vs_candle.rs` |
 | Enregistrement / migration d'entités et KB | `src/catalog.rs` (`register_entity`, `create_kb_tables`), `src/schema.rs` (`resolve_kb_title_entities`) |
 | Connexion native, config kuzu | `src/rag3db_connection.rs` |

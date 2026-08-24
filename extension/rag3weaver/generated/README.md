@@ -232,6 +232,139 @@ cargo run --release --example burn_minilm_vs_candle --no-default-features --feat
 
 ---
 
+## `multilingual_minilm_onnx.rs`
+
+Traduction mécanique, par `burn-onnx`, du graphe ONNX de
+**[sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)**
+(`model_type: bert` : 12 couches, hidden 384, 12 têtes, positions 512, `type_vocab_size` 2,
+vocab 250 037 — soit le vocabulaire XLM-R sur un corps BERT). **Multilingue**, 50+ langues,
+français compris : c'est le petit embedder dense multilingue, 470 Mo là où BGE-M3 en fait
+2,2 Go, 384 d comme `minilm_onnx.rs` dont il est le jumeau multilingue. Le même modèle que
+`DefaultModel::MultilingualMiniLM` côté candle, porté sur burn le 24 août 2026.
+
+**Ce n'est pas notre modèle.** Licence Apache-2.0, tout le mérite revient à ses auteurs :
+Nils Reimers et l'équipe sentence-transformers, qui l'ont obtenu par distillation
+multilingue de `paraphrase-MiniLM-L12-v2` (l'anglais comme professeur, l'élève apprend à
+placer la traduction au même endroit — [Reimers & Gurevych, *Making Monolingual Sentence
+Embeddings Multilingual using Knowledge Distillation*, EMNLP 2020](https://arxiv.org/abs/2004.09813)),
+sur la base du MiniLM de Microsoft et du vocabulaire SentencePiece de XLM-R (Conneau et
+al.). Nous n'avons fait que changer le format pour pouvoir le charger depuis Rust.
+
+| | |
+|---|---|
+| Source | `onnx/model.onnx` de sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (470 301 610 octets) |
+| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::Bytes` — même chaîne que les autres |
+| Taille | 4 544 lignes (~16 Ko compressé) |
+| Poids | **non inclus** — 470 Mo (les 250 037 × 384 de la table d'embeddings en font 384 Mo à eux seuls) |
+
+### Les poids
+
+```
+model.bpk        470 075 648 octets
+sha256           8f46e22cdc7751e7e66388267d0e9169c41b050d88c372a2e3d49bc8c8069a7a
+tokenizer.json     9 081 518 octets
+sha256           2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8
+```
+
+Publiés avec l'attribution d'origine (Apache-2.0, sentence-transformers) :
+
+**https://huggingface.co/Lucie666/paraphrase-multilingual-minilm-l12-v2-burnpack** — publié
+le 24 août 2026.
+
+Téléchargement en HTTPS anonyme, sans compte ni token :
+
+```bash
+mkdir -p ~/.cache/rag3weaver/multilingual-minilm
+curl -L -o ~/.cache/rag3weaver/multilingual-minilm/model.bpk \
+  https://huggingface.co/Lucie666/paraphrase-multilingual-minilm-l12-v2-burnpack/resolve/main/model.bpk
+curl -L -o ~/.cache/rag3weaver/multilingual-minilm/tokenizer.json \
+  https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main/tokenizer.json
+```
+
+Les tests les cherchent dans `~/.cache/rag3weaver/multilingual-minilm/`
+(`RAG3WEAVER_MULTILINGUAL_MINILM_BPK` / `RAG3WEAVER_MULTILINGUAL_MINILM_TOKENIZER` pour un
+autre chemin). Les trois tests `phase2_vector_multilingual_*` de `tests/e2e_search.rs`
+tournent dessus (ils passaient par BGE-M3 en attendant ce portage).
+
+### Interface
+
+```rust
+pub fn forward(
+    &self,
+    input_ids: Tensor<2, Int>,
+    attention_mask: Tensor<2, Int>,
+    token_type_ids: Tensor<2, Int>,
+) -> Tensor<3>   // last_hidden_state [B, S, 384]
+```
+
+Comme `minilm_onnx.rs`, le graphe **ne poole pas** : seul `last_hidden_state` sort. Le
+mean pooling sous masque est fait dans `src/burn_multilingual_minilm_embedder.rs`, avec
+exactement l'arithmétique de `CandleEmbedder`. En amont il n'y a **pas de module de
+normalisation** (`modules.json` : Transformer + Pooling, c'est tout) ; on normalise en L2
+quand même, comme le chemin candle, pour que cosinus et produit scalaire coïncident dans
+l'index vectoriel.
+
+Même piège que les autres : un `forward` par sous-module (`Submodule1..12`) avant celui
+de `Model` (ligne ~4522).
+
+Tokenisation : `tokenizer.json` du modèle, **SentencePiece Unigram avec le vocabulaire
+XLM-R** (250 002 entrées) sur un corps BERT — d'où `<s>` = 0, `<pad>` = **1**, `</s>` = 2,
+`<unk>` = 3 (le `pad_token_id: 0` du `config.json` est trompeur, c'est `<s>` dans ce
+vocabulaire ; le masque d'attention cache les positions de padding de toute façon). Séquence
+simple `<s> texte </s>`, tous type ids à 0 — le corps prend quand même `token_type_ids`
+(`type_vocab_size` 2), on lui passe des zéros. Le fichier **contient ses presets** :
+padding `BatchLongest` avec l'id 1, troncature à **128** en `LongestFirst` — c'est le
+`max_seq_length` de sentence-transformers pour ce modèle, celui sur lequel il a été
+entraîné et évalué. Le wrapper garde ces 128 (sortie identique à l'amont et à l'oracle
+candle) ; `with_max_length(n)` (n ≤ 512, les positions du corps) est proposé pour qui veut
+des entrées plus longues, documenté comme un écart vis-à-vis de l'amont.
+
+### Régénérer
+
+```rust
+// build.rs — identique aux autres, seul l'input change
+ModelGen::new()
+    .input("~/.cache/rag3weaver/multilingual-minilm/model.onnx")
+    .out_dir("model/")
+    .load_strategy(LoadStrategy::Bytes)
+    .run_from_script();
+```
+
+Le modèle tient sous les 2 Go du protobuf ONNX, donc pas d'external data. Le `.bpk` n'est
+pas reproductible octet à octet, seules les valeurs le sont — ne pas régénérer sans raison.
+
+### Parité vérifiée
+
+Contre `CandleEmbedder` (`DefaultModel::MultilingualMiniLM`, `candle_transformers` BERT,
+CPU), six phrases : la même phrase en français, anglais, allemand et espagnol, une phrase
+technique en français, et une ligne de code (`let value = foo->bar;`) :
+
+```
+phrase        cosinus       max|Δ|       moy|Δ|
+------------------------------------------------
+[0]        1.00000024     1.04e-7     2.44e-8   fr : Le chat dort sur le canapé
+[1]        1.00000012     9.83e-8     2.47e-8   en : The cat is sleeping on the sofa
+[2]        1.00000012     9.31e-8     2.26e-8   de : Die Katze schläft auf dem Sofa
+[3]        1.00000024     8.20e-8     2.42e-8   es : El gato duerme en el sofá
+[4]        0.99999988     1.42e-7     3.50e-8   fr : compilation incrémentale en Rust
+[5]        0.99999994     1.19e-7     3.25e-8   code
+
+worst cosine: 0.99999988   max |Δ|: 1.42e-7   (seuil de l'exemple : 0.9999)
+```
+
+Bruit d'accumulation f32 sur 12 couches. Backend au moment du test : Burn + wgpu/Vulkan
+sur AMD Radeon AI PRO R9700 via RADV. Chargement du burnpack : ~0,7 s.
+
+Pour rejouer :
+
+```bash
+cargo run --release --example multilingual_minilm_reference --features candle-embedder -- /tmp/multilingual_minilm_reference.json
+cargo run --release --example burn_multilingual_minilm_vs_candle --no-default-features --features burn-embedder -- \
+    /tmp/multilingual_minilm_reference.json
+```
+
+---
+
 ## `msmarco_minilm_onnx.rs`
 
 Traduction mécanique, par `burn-onnx`, du graphe ONNX de

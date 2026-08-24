@@ -30,6 +30,17 @@ pub mod burn_bge_m3_embedder;
 pub mod minilm_onnx;
 #[cfg(feature = "burn-embedder")]
 pub mod burn_minilm_embedder;
+/// paraphrase-multilingual-MiniLM-L12-v2 (BERT 12 couches sur le vocabulaire XLM-R,
+/// multilingue) généré par burn-onnx depuis l'ONNX de sentence-transformers — code
+/// machine, non édité. Voir `generated/README.md`.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/multilingual_minilm_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod multilingual_minilm_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_multilingual_minilm_embedder;
+#[cfg(feature = "burn-embedder")]
+pub use burn_multilingual_minilm_embedder::BurnMultilingualMiniLmEmbedder;
 /// cross-encoder/ms-marco-MiniLM-L-6-v2 généré par burn-onnx depuis l'ONNX du
 /// modèle — code machine, non édité. Voir `generated/README.md`.
 #[cfg(feature = "burn-embedder")]

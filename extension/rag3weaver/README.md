@@ -283,10 +283,14 @@ This optimization also applies at **search time**: when a query needs both dense
 ## Reranking — cross-encoder on burn
 
 After fusion and before pagination, the top candidates can be rescored by a
-cross-encoder that reads each (query, passage) pair. The product path is
-`cross-encoder/ms-marco-MiniLM-L-6-v2` on burn (`BurnMiniLmReranker`, ~90 MB,
-weights: `Lucie666/ms-marco-minilm-l6-v2-burnpack`), checked against candle to
-max |Δ| = 5.7e-6 on the logits.
+cross-encoder that reads each (query, passage) pair. Three rerankers on burn, all
+checked against candle to max |Δ| ≤ 1.3e-5 on the logits, weights on HF (`Lucie666/*-burnpack`):
+
+| model | size | languages | struct |
+|---|---|---|---|
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | 90 MB | English | `BurnMiniLmReranker` — browser, default light |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | 470 MB | 14 (FR included) | `BurnMMiniLmReranker` — multilingual default |
+| `BAAI/bge-reranker-v2-m3` | 2.2 GB | ~100 | `BurnBgeRerankerV2M3` — quality first, server |
 
 ```rust
 use rag3weaver::{BurnMiniLmReranker, Reranker};

@@ -1,9 +1,10 @@
 //! Embedders partagés par les suites E2E.
 //!
 //! Chemin produit = burn (wgpu). Les poids ne sont jamais dans git : ils se
-//! chargent depuis `~/.cache/rag3weaver/{bge-m3,minilm}/` ou depuis les
-//! variables `RAG3WEAVER_BGE_M3_BPK` / `_TOKENIZER`, `RAG3WEAVER_MINILM_BPK` /
-//! `_TOKENIZER` (voir `generated/README.md` pour les récupérer depuis HF).
+//! chargent depuis `~/.cache/rag3weaver/{bge-m3,minilm,multilingual-minilm}/` ou
+//! depuis les variables `RAG3WEAVER_BGE_M3_BPK` / `_TOKENIZER`, `RAG3WEAVER_MINILM_BPK` /
+//! `_TOKENIZER`, `RAG3WEAVER_MULTILINGUAL_MINILM_BPK` / `_TOKENIZER` (voir
+//! `generated/README.md` pour les récupérer depuis HF).
 //!
 //! candle n'apparaît plus dans les E2E : il reste l'oracle de parité, dans
 //! `examples/*_reference.rs` et `examples/burn_*_vs_candle.rs`.
@@ -16,6 +17,7 @@ pub mod burn {
 
     use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
     use rag3weaver::burn_minilm_embedder::BurnMiniLmEmbedder;
+    use rag3weaver::burn_multilingual_minilm_embedder::BurnMultilingualMiniLmEmbedder;
     use rag3weaver::burn_reranker::BurnMiniLmReranker;
     use rag3weaver::burn_xlmr_reranker::{BurnBgeRerankerV2M3, BurnMMiniLmReranker};
     use rag3weaver::embedder::Embedder;
@@ -45,6 +47,19 @@ pub mod burn {
         eprintln!("▸ Loading all-MiniLM-L6-v2 on burn (wgpu) from {}...", bpk.display());
         let e = BurnMiniLmEmbedder::from_files(&bpk, &tok, BurnDevice::default())
             .expect("build BurnMiniLmEmbedder");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(e)
+    });
+
+    /// paraphrase-multilingual-MiniLM-L12-v2 sur burn (384 d, dense, multilingue —
+    /// vocabulaire XLM-R sur un corps BERT 12 couches). 470 Mo ; chargé une fois par binaire.
+    pub static MULTILINGUAL_MINILM: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_MULTILINGUAL_MINILM_BPK", "multilingual-minilm", "model.bpk");
+        let tok = artifact("RAG3WEAVER_MULTILINGUAL_MINILM_TOKENIZER", "multilingual-minilm", "tokenizer.json");
+        eprintln!("▸ Loading paraphrase-multilingual-MiniLM-L12-v2 on burn (wgpu) from {}...", bpk.display());
+        let e = BurnMultilingualMiniLmEmbedder::from_files(&bpk, &tok, BurnDevice::default())
+            .expect("build BurnMultilingualMiniLmEmbedder");
         eprintln!("  loaded in {:?}", t0.elapsed());
         Arc::new(e)
     });

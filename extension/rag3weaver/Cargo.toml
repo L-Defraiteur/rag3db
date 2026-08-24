@@ -129,6 +129,15 @@ required-features = ["candle-embedder"]
 name = "burn_minilm_vs_candle"
 required-features = ["burn-embedder"]
 
+# Idem pour paraphrase-multilingual-MiniLM-L12-v2 (dense multilingue, 384 d).
+[[example]]
+name = "multilingual_minilm_reference"
+required-features = ["candle-embedder"]
+
+[[example]]
+name = "burn_multilingual_minilm_vs_candle"
+required-features = ["burn-embedder"]
+
 # Logits de référence candle pour le cross-encoder, et la parité burn en face.
 [[example]]
 name = "reranker_reference"
