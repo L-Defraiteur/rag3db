@@ -7,34 +7,30 @@
 //! Voir `docs/23-aout-2026-20h33/04-migration-fts-lucivy-v3-rust.md` pour la
 //! passation depuis la session lucivy.
 
-use std::io;
 use std::sync::Arc;
 
-use lucivy_core::blob_store::BlobStore;
-
-/// Adaptateur `Arc<dyn BlobStore>` → `impl BlobStore`.
+/// Indexe une entité, en ne retenant que les champs présents au schéma.
 ///
-/// `BlobShardStorage<S>` exige `S: BlobStore + Sized`, alors que le Catalog
-/// détient un `Arc<dyn BlobStore>` (le backend est choisi au runtime : Cypher
-/// ou Postgres). Ce newtype fait le pont, sans copie : il ne clone que l'Arc.
-pub struct DynBlobStore(pub Arc<dyn BlobStore>);
-
-impl BlobStore for DynBlobStore {
-    fn load(&self, index_name: &str, file_name: &str) -> io::Result<Vec<u8>> {
-        self.0.load(index_name, file_name)
-    }
-    fn save(&self, index_name: &str, file_name: &str, data: &[u8]) -> io::Result<()> {
-        self.0.save(index_name, file_name, data)
-    }
-    fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
-        self.0.delete(index_name, file_name)
-    }
-    fn exists(&self, index_name: &str, file_name: &str) -> io::Result<bool> {
-        self.0.exists(index_name, file_name)
-    }
-    fn list(&self, index_name: &str) -> io::Result<Vec<String>> {
-        self.0.list(index_name)
-    }
+/// Le filtrage est **nécessaire** : `add_document_json` échoue sur un nom de
+/// champ inconnu (à dessein — c'est un bug appelant). Or on lui passe toutes
+/// les valeurs texte du record, parce que le schéma doit rester l'unique source
+/// de vérité sur ce qui est indexé, plutôt qu'une seconde liste à tenir
+/// synchronisée avec `bm25_fields`.
+///
+/// `_node_id` n'est plus écrit à la main : `add_document*` l'estampille
+/// lui-même avec l'offset passé, et refuse un document portant un id différent
+/// (lucivy `ce03ac6`).
+pub fn index_document(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    fields: &[(String, String)],
+    offset: u64,
+) -> Result<(), String> {
+    let obj: serde_json::Map<String, serde_json::Value> = fields
+        .iter()
+        .filter(|(name, _)| handle.field(name).is_some())
+        .map(|(name, value)| (name.clone(), serde_json::Value::String(value.clone())))
+        .collect();
+    handle.add_document_json(offset, &serde_json::Value::Object(obj))
 }
 
 /// Préfixe des clés de blob d'un index FTS, pour ne pas collisionner avec les
@@ -182,8 +178,7 @@ pub fn reindex_document(
     offset: u64,
 ) -> Result<(), String> {
     handle.delete_by_node_id(offset)?;
-    let doc = build_document(handle, fields, offset)?;
-    handle.add_document(doc, offset)
+    index_document(handle, fields, offset)
 }
 
 /// Topologie de stockage d'un index FTS.
@@ -221,38 +216,6 @@ impl Default for FtsStorage {
     fn default() -> Self {
         FtsStorage::BlobBacked
     }
-}
-
-/// Construit un document lucivy pour une entité, prêt à être indexé.
-///
-/// `offset` est l'offset interne rag3db (celui que porte [`crate::node_id_cache`]) :
-/// c'est la clé qui permettra de résoudre les résultats de recherche en entités.
-///
-/// **Piège payé par la session lucivy** : le champ `_node_id` doit être écrit
-/// *dans le document*. Le second argument d'`add_document` ne nourrit que le
-/// routeur de shards — sans le champ, les résultats ne se résolvent pas.
-///
-/// Les champs absents du schéma sont ignorés silencieusement : le schéma est
-/// figé à la création de l'index, alors que les entités peuvent gagner des
-/// champs par la suite.
-pub fn build_document(
-    handle: &lucivy_core::sharded_handle::ShardedHandle,
-    fields: &[(String, String)],
-    offset: u64,
-) -> Result<ld_lucivy::LucivyDocument, String> {
-    let nid_field = handle
-        .field(lucivy_core::handle::NODE_ID_FIELD)
-        .ok_or_else(|| format!("champ {} absent du schéma", lucivy_core::handle::NODE_ID_FIELD))?;
-
-    let mut doc = ld_lucivy::LucivyDocument::new();
-    doc.add_u64(nid_field, offset);
-
-    for (name, value) in fields {
-        if let Some(f) = handle.field(name) {
-            doc.add_text(f, value);
-        }
-    }
-    Ok(doc)
 }
 
 /// Nombre de shards par défaut d'un nouvel index.
@@ -342,9 +305,8 @@ mod tests {
             (1337_u64, "kmalloc est appelé dans le chemin d'allocation"),
         ];
         for (offset, text) in &corpus {
-            let doc = build_document(&handle, &[("content".to_string(), text.to_string())], *offset)
-                .expect("document");
-            handle.add_document(doc, *offset).expect("indexation");
+            index_document(&handle, &[("content".to_string(), text.to_string())], *offset)
+                .expect("indexation");
         }
         handle.commit().expect("commit");
 
@@ -391,9 +353,7 @@ mod tests {
             (20_u64, "kmalloc alloue puis spin_lock_init verrouille"),
             (30_u64, "aucun rapport avec le noyau"),
         ] {
-            let doc =
-                build_document(&handle, &[("content".into(), text.to_string())], offset).unwrap();
-            handle.add_document(doc, offset).unwrap();
+            index_document(&handle, &[("content".into(), text.to_string())], offset).unwrap();
         }
         handle.commit().unwrap();
 
@@ -470,8 +430,7 @@ mod tests {
             vec![("titre".to_string(), t.to_string()), ("corps".to_string(), c.to_string())]
         };
 
-        let doc = build_document(&handle, &fields("Noyau", "verrou spinlock"), 7).unwrap();
-        handle.add_document(doc, 7).unwrap();
+        index_document(&handle, &fields("Noyau", "verrou spinlock"), 7).unwrap();
         handle.commit().unwrap();
         assert_eq!(find("spinlock"), vec![7]);
 

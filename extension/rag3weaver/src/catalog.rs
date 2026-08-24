@@ -324,7 +324,7 @@ impl Catalog {
             match &self.fts_storage {
                 crate::fts_handle::FtsStorage::BlobBacked => Some(Box::new(
                     BlobShardStorage::new(
-                        Arc::new(crate::fts_handle::DynBlobStore(blob_store.clone())),
+                        Arc::new(blob_store.clone()),
                         index_name.clone(),
                         &self.cache_base,
                     ),

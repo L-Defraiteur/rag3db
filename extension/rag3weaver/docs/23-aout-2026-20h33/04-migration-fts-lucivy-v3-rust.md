@@ -9,8 +9,16 @@ lucivy. Référence détaillée côté moteur :
 ## Partage des responsabilités
 
 **Reste côté lucivy (ne pas faire ici, signaler si bloquant) :**
-1. Chargement paresseux par fichier de `BlobDirectory` (aujourd'hui l'ouverture
-   matérialise tous les blobs d'un index ; palliatif ci-dessous).
+1. ~~Chargement paresseux~~ **FAIT (24 août), optionnel** :
+   `.with_load_mode(BlobLoadMode::Lazy)` sur `BlobShardStorage` — rien de
+   téléchargé à l'ouverture, lectures de footer servies par plage, fichier
+   matérialisé en mmap à la 4e lecture. Défaut inchangé (Eager). Pour le
+   plein effet, implémenter sur vos stores les deux méthodes à défaut du
+   trait `BlobStore` :
+   `blob_len` (`SELECT LENGTH(_data)` / `RETURN SIZE(b._data)`) et
+   `load_range` (`SUBSTRING(_data FROM $1+1 FOR $2)`). Sans elles, le lazy
+   retombe sur « téléchargement complet au premier accès du fichier » —
+   correct mais sans gain. Benchmarker Eager vs Lazy sur vos vrais index.
 2. Publication crates.io (`lucivy-core` 2.1.0 + `ld-lucivy`, `luciole`,
    `lucistore`) — en attendant, dépendance par chemin (ci-dessous).
 3. API « drop index » propre (palliatif : `store.list(prefix)` + `delete`).
@@ -63,7 +71,7 @@ let handle = ShardedHandle::create_with_storage(Box::new(storage), &config)?;
 | Aujourd'hui | Demain |
 |---|---|
 | `CREATE_LUCIVY_INDEX` | `create_with_storage` (ci-dessus) |
-| hooks C++ insert | `add_document(doc, offset)` — **ajouter `doc.add_u64(nid_field, offset)` soi-même** (comme sparse ; le 2e argument ne nourrit que le routeur) |
+| hooks C++ insert | `add_document_json(offset, &json!({"_title": t, "_content": c}))` — champs par nom, types vérifiés par le schéma, erreurs explicites ; ou `add_document(doc, offset)` (le `_node_id` est estampillé automatiquement depuis le 24 août, un id contradictoire dans le doc est refusé) |
 | delete implicite | `delete_by_node_id(offset)` |
 | `FLUSH_LUCIVY_INDEX` | `handle.commit()` (idempotent ; merges par policy en tâche de fond) |
 | `CLOSE_LUCIVY_INDEX` | `handle.close()` (draine les merges) |
@@ -77,15 +85,16 @@ trop lâche, segments v2) — à remonter dans les diagnostics de recherche.
 
 ## Pièges connus (appris en les payant)
 
-- `_node_id` **dans le document** (u64, FAST+INDEXED+STORED auto) sinon les
-  résultats ne se résolvent pas en offsets.
+- ~~`_node_id` dans le document~~ réglé le 24 août : `add_document` l'estampille
+  lui-même ; un doc portant un autre id est refusé avec un message clair.
 - Après `commit()`, la lecture est rechargée par le handle ; mais une copie
   brute des fichiers (snapshot maison) doit attendre les merges :
   `shard.writer.lock().unwrap().as_ref().unwrap().drain_merges()`.
 - `Consistency::Strict` → `commit()` suffit (il flush + reload).
-- Chargement : l'ouverture d'un index Blob télécharge tout l'index. Palliatif
-  recommandé : ouvrir le handle d'une entité **à sa première requête** (lazy au
-  niveau index), garder la map `entity → handle` comme `sparse_handles`.
+- Chargement : en Eager (défaut), l'ouverture télécharge tout l'index ; en
+  Lazy (option ci-dessus), quasi rien. Dans les deux cas, garder la map
+  `entity → handle` ouverte paresseusement comme `sparse_handles` reste une
+  bonne idée (un handle ouvert = writer lock + scheduler).
 - Sémantique v3 utile : les séparateurs (`_`, `:`, …) sont des frontières de
   mots ; `term`/`startsWith` s'ancrent sur ces mots ; le mode relaxed les
   ignore (`__init` cherche `init`). Fuzzy toujours relaxed.

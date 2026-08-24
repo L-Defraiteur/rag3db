@@ -188,7 +188,7 @@ impl Node for InsertRecordNode {
                         // Indexation FTS par offset, à l'identique du sparse.
                         //
                         // On passe TOUTES les valeurs texte du record :
-                        // `build_document` ne retient que les champs présents au
+                        // `index_document` ne retient que les champs présents au
                         // schéma, qui est donc l'unique source de vérité sur ce
                         // qui est indexé. Et c'est exactement la valeur écrite en
                         // base, donc celle que le chunker verra — condition
@@ -203,14 +203,12 @@ impl Node for InsertRecordNode {
                                         v.as_str().map(|s| (k.clone(), s.to_string()))
                                     })
                                     .collect();
-                                let doc = crate::fts_handle::build_document(
+                                crate::fts_handle::index_document(
                                     handle,
                                     &text_fields,
                                     node_id.offset,
-                                )?;
-                                handle
-                                    .add_document(doc, node_id.offset)
-                                    .map_err(|e| format!("indexation FTS de {entity_name}: {e}"))?;
+                                )
+                                .map_err(|e| format!("indexation FTS de {entity_name}: {e}"))?;
                             }
                         }
                     }

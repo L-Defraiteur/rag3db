@@ -84,15 +84,34 @@ parité de l'étape 5 ininterprétable. Décision à prendre après, consciemmen
 
 ## Avancement
 
-### ✅ Étape 0 — socle (`src/fts_handle.rs`, 5 tests)
+### ✅ Étape 0 — socle (`src/fts_handle.rs`, 7 tests)
 
 | Élément | Rôle |
 |---|---|
-| `DynBlobStore` | pont `Arc<dyn BlobStore>` → `impl BlobStore` (`BlobShardStorage<S>` exige `S: Sized`) |
 | `build_schema_config` | DDL rag3db → `SchemaConfig` v3, `sfx_version: 3` explicite |
-| `build_document` | document + **`_node_id` dans le document** (piège de la passation) |
+| `index_document` | indexe via `add_document_json`, filtré sur le schéma |
 | `node_id_of` | hit de recherche → offset rag3db |
+| `indexed_text_fields` / `reindex_document` | ré-indexation (voir étape 4) |
+| `search_hits` | `(offset, score, highlights)` (voir étape 3) |
 | `FtsStorage` | topologie (a) `BlobBacked` / (b) `LocalFs` |
+
+**Simplifié le 24 août** d'après [`06-lucivy-nouveautes-24-aout.md`](06-lucivy-nouveautes-24-aout.md) :
+
+- `DynBlobStore` **supprimé** — `lucistore` fournit désormais
+  `impl<T: BlobStore + ?Sized> BlobStore for Arc<T>` (`f7dd5c2`), donc
+  `Arc<dyn BlobStore>` marche directement.
+- `build_document` **remplacé** par `index_document`, qui passe par
+  `add_document_json` (champs par nom, types vérifiés par le schéma).
+- **`_node_id` n'est plus écrit à la main** : `add_document*` l'estampille avec
+  l'offset passé et refuse un document portant un id différent (`ce03ac6`). Ce
+  n'est donc plus un invariant à maintenir — le test bout-en-bout le relit sans
+  qu'on l'écrive, ce qui le prouve.
+- ⚠️ Le filtrage sur le schéma devient **nécessaire** et non plus cosmétique :
+  `add_document_json` échoue sur un nom inconnu (à dessein). On lui passe toutes
+  les valeurs texte du record, donc il faut filtrer avant.
+- La strictesse ajoutée sur `SchemaConfig` (`32ca1dc` : clés inconnues rejetées)
+  ne casse rien ici — les 7 tests passent tels quels, ce qui valide les clés
+  employées par `build_schema_config`.
 
 Test clé : `index_search_and_resolve_offsets_end_to_end` — index en mémoire
 (`MemBlobStore`), 3 docs aux offsets **41, 77, 1337**, recherche `kmalloc`, attend
