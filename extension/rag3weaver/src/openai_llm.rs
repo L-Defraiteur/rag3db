@@ -74,6 +74,11 @@ pub struct OpenAiLlm {
     auth: Auth,
     context_len: usize,
     agent: ureq::Agent,
+    /// Les extensions `extra_body.google.*` ne partent que vers Google.
+    /// Vertex ignore en silence les paramètres qu'il ne connaît pas, mais un
+    /// serveur strict (llama.cpp, Ollama, Mistral) peut répondre 400 — et
+    /// notre argument est justement qu'un seul client parle à tous.
+    google_extras: bool,
 }
 
 impl std::fmt::Debug for OpenAiLlm {
@@ -96,6 +101,7 @@ impl OpenAiLlm {
             base_url: base_url.into(),
             model: model.into(),
             auth: Auth::None,
+            google_extras: false,
             context_len: 128_000,
             agent: ureq::Agent::new_with_defaults(),
         }
@@ -112,6 +118,7 @@ impl OpenAiLlm {
     /// ```
     pub fn ai_studio(api_key: impl Into<String>, model: impl Into<String>) -> Self {
         Self::new("https://generativelanguage.googleapis.com/v1beta/openai", model)
+            .with_google_extras()
             .with_auth(Auth::Bearer(api_key.into()))
             .with_context_len(1_000_000)
     }
@@ -141,12 +148,21 @@ impl OpenAiLlm {
             "{host}/v1/projects/{project}/locations/{location}/endpoints/openapi"
         );
         Self::new(base, model)
+            .with_google_extras()
             .with_auth(Auth::Bearer(access_token.into()))
             .with_context_len(1_000_000)
     }
 
     /// Repointe l'endpoint sans toucher au reste — sert surtout à faire viser
     /// un serveur de test à un constructeur de fournisseur.
+    /// Active les extensions propres à Google (`extra_body.google.*`).
+    /// Posé par [`Self::vertex`] et [`Self::ai_studio`] ; à ne pas activer
+    /// pour un fournisseur générique, qui peut rejeter le champ.
+    pub fn with_google_extras(mut self) -> Self {
+        self.google_extras = true;
+        self
+    }
+
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into();
         self
@@ -202,10 +218,12 @@ impl OpenAiLlm {
             // Vertex ne fragmente les arguments d'un appel d'outil que si on
             // le demande ; sans ça ils arrivent d'un bloc (ce que le parseur
             // gère aussi, mais on perd le fil au fil de l'eau).
-            body.insert(
-                "extra_body".into(),
-                json!({ "google": { "stream_function_call_arguments": true } }),
-            );
+            if self.google_extras {
+                body.insert(
+                    "extra_body".into(),
+                    json!({ "google": { "stream_function_call_arguments": true } }),
+                );
+            }
         }
         Value::Object(body)
     }
@@ -325,8 +343,14 @@ impl Llm for OpenAiLlm {
         if status != 200 {
             // Le corps d'erreur d'un fournisseur ne contient pas le secret
             // envoyé, mais on le tronque : il peut être très long.
-            let mut msg = resp.body_mut().read_to_string().unwrap_or_default();
+            let mut msg = resp
+                .body_mut()
+                .read_to_string()
+                .unwrap_or_else(|e| format!("(corps d'erreur illisible : {e})"));
             msg.truncate(512);
+            if msg.trim().is_empty() {
+                msg = "(corps d'erreur vide)".into();
+            }
             if msg.contains("context length") || msg.contains("maximum context") {
                 return Err(LlmError::ContextOverflow { max: self.context_len, got: 0 });
             }
@@ -814,11 +838,42 @@ mod tests {
         assert_eq!(body["tools"][0]["type"], "function");
         assert_eq!(body["tools"][0]["function"]["parameters"]["type"], "object");
         assert_eq!(body["tool_choice"], "auto");
-        // Le drapeau Vertex qui fragmente les arguments d'outil.
-        assert_eq!(
-            body["extra_body"]["google"]["stream_function_call_arguments"],
-            true
+        // Rien de propre à Google ici : ce constructeur est générique.
+        // Le drapeau Vertex a son propre test, juste en dessous.
+        assert!(body.get("extra_body").is_none());
+    }
+
+    /// Le drapeau propre à Google ne doit jamais partir vers un fournisseur
+    /// générique : llama.cpp, Ollama ou Mistral peuvent répondre 400 sur un
+    /// champ inconnu, alors que Vertex l'ignore en silence.
+    #[test]
+    fn google_extras_never_leak_to_a_generic_provider() {
+        let generic = OpenAiLlm::new("http://localhost:8080/v1", "un-modele-local");
+        let defs = {
+            let mut r = crate::dataflow::node_registry::NodeRegistry::new();
+            crate::dataflow::register_builtins(&mut r);
+            crate::tools::tool_defs(&r)
+        };
+        let opts = GenOptions::default().with_max_tokens(64).with_tools(defs);
+        let body = generic.request_body(&hello(), &opts);
+        assert!(body["tools"].is_array(), "les outils partent bien");
+        assert!(
+            body.get("extra_body").is_none(),
+            "extra_body ne doit pas exister hors Google, trouvé : {}",
+            body["extra_body"]
         );
+
+        // ...mais les deux constructeurs Google l'activent.
+        for llm in [
+            OpenAiLlm::ai_studio("cle", "google/gemini-2.5-flash"),
+            OpenAiLlm::vertex("jeton", "projet", "global", "google/gemini-2.5-flash"),
+        ] {
+            let body = llm.request_body(&hello(), &opts);
+            assert_eq!(
+                body["extra_body"]["google"]["stream_function_call_arguments"],
+                true
+            );
+        }
     }
 
     #[test]
