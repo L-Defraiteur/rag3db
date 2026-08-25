@@ -107,6 +107,11 @@ else
   done
 fi
 
+# Une suite en échec n'arrête pas les autres : sans ça, cargo s'arrête au
+# premier binaire de test qui échoue, et le résumé affiche un total partiel
+# qui ressemble à un total complet (25 août 2026 : « 89 passed » pour 17
+# suites sur 28).
+CARGO_ARGS+=(--no-fail-fast)
 CARGO_ARGS+=(-- --ignored --nocapture)
 
 if [ -n "$TEST_FILTER" ]; then
@@ -168,11 +173,30 @@ if [ "$SUMMARY" = true ]; then
     fi
   done
 
+  # Les suites demandées qui n'ont pas rendu de résultat (compilation en
+  # échec, abandon) : le total n'est pas un total.
+  NOT_RUN=0
+  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
+    if [ "${CARGO_ARGS[$i]}" = "--test" ]; then
+      expected="${CARGO_ARGS[$((i + 1))]}"
+      found=false
+      for s in "${SUITE_NAMES[@]}"; do [ "$s" = "$expected" ] && found=true && break; done
+      if [ "$found" = false ]; then
+        printf "  %-30s NOT RUN\n" "$expected"
+        NOT_RUN=$((NOT_RUN + 1))
+      fi
+    fi
+  done
+
   echo "───────────────────────────────────────────────"
   if [ "$TOTAL_FAILED" -eq 0 ]; then
     printf "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
   else
     printf "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
+  fi
+  if [ "$NOT_RUN" -gt 0 ]; then
+    printf "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
   echo "═══════════════════════════════════════════════"
   exit "$EXIT_CODE"
