@@ -132,6 +132,11 @@ pub use llm::{
     CallbackLlm, ChannelSink, CountingSink, Finish, Flow, GenOptions, Llm, LlmError, LlmOutput,
     MockLlm, StringSink, TokenSink, Turn, Usage,
 };
+/// La boucle d'agent : générer, exécuter les outils, réinjecter, recommencer.
+pub mod agent;
+pub use agent::{
+    Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
+};
 pub mod search;
 pub mod search_backend;
 pub mod search_strategy;
