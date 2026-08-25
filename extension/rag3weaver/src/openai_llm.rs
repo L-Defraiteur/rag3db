@@ -29,7 +29,7 @@ use std::time::Instant;
 
 use serde_json::{json, Map, Value};
 
-use crate::llm::{Finish, Flow, GenOptions, Llm, LlmError, TokenSink, Turn};
+use crate::llm::{Finish, Flow, GenOptions, Llm, LlmError, TokenSink, ToolCall, Turn};
 use crate::tools::ToolDef;
 
 /// Comment on prouve son identité à l'endpoint. Ne dérive **pas** `Debug` :
@@ -181,10 +181,7 @@ impl OpenAiLlm {
     /// Corps de la requête. Public pour qu'un test puisse l'inspecter sans
     /// ouvrir de socket — il ne contient aucun secret (l'auth est un en-tête).
     pub fn request_body(&self, turns: &[Turn], opts: &GenOptions) -> Value {
-        let messages: Vec<Value> = turns
-            .iter()
-            .map(|t| json!({ "role": t.role, "content": t.content }))
-            .collect();
+        let messages: Vec<Value> = turns.iter().map(message_json).collect();
 
         let mut body = Map::new();
         body.insert("model".into(), json!(self.model));
@@ -199,7 +196,7 @@ impl OpenAiLlm {
         body.insert("temperature".into(), json!(opts.temperature));
         body.insert("top_p".into(), json!(opts.top_p));
         // `opts.stop` n'est **délibérément pas** envoyé. Ne pas « corriger »
-        // ceci : le fournisseur écrase `Finish::Stop(seq)` et `Finish::Eos` en
+        // ceci : le fournisseur écrase `Finish::stop(seq)` et `Finish::eos()` en
         // un seul `finish_reason: "stop"`, si bien qu'on ne saurait plus dire
         // quelle séquence a coupé — ni même s'il y en a eu une. On les détecte
         // donc nous-mêmes sur le flux (cf. `first_stop`/`holdback` dans
@@ -239,13 +236,58 @@ struct ToolAcc {
 }
 
 impl ToolAcc {
-    fn payload(tools: &[ToolAcc]) -> String {
-        json!(tools
+    /// Les appels reconstitués, dans l'ordre d'annonce du modèle.
+    fn collect(tools: &[ToolAcc]) -> Vec<ToolCall> {
+        tools
             .iter()
-            .map(|t| json!({ "id": t.id, "name": t.name, "arguments": t.arguments }))
-            .collect::<Vec<_>>())
-        .to_string()
+            .map(|t| ToolCall::new(&t.id, &t.name, &t.arguments))
+            .collect()
     }
+}
+
+/// Un tour, dans la forme attendue par `/chat/completions`. Trois formes
+/// réelles, et elles ne se sérialisent pas pareil.
+fn message_json(t: &Turn) -> Value {
+    let mut m = Map::new();
+    m.insert("role".into(), json!(t.role));
+    if let Some(id) = &t.tool_call_id {
+        // Résultat d'outil. `tool_call_id` doit reprendre mot pour mot l'`id`
+        // annoncé : c'est là-dessus que le fournisseur apparie, et un appel
+        // laissé sans résultat fait échouer toute la requête.
+        m.insert("tool_call_id".into(), json!(id));
+        if let Some(n) = &t.tool_name {
+            m.insert("name".into(), json!(n));
+        }
+        m.insert("content".into(), json!(t.content));
+    } else if !t.tool_calls.is_empty() {
+        // Assistant qui annonce des appels. `content` est `null` — jamais la
+        // chaîne vide — quand le modèle n'a rien dit. Ce n'est pas du style :
+        // le schéma d'OpenAI rend `content` facultatif dès qu'il y a des
+        // `tool_calls`, mais **Gemini répond 400 sur `""`**. `null` est la
+        // seule forme que les deux acceptent.
+        m.insert(
+            "content".into(),
+            if t.content.is_empty() { Value::Null } else { json!(t.content) },
+        );
+        m.insert(
+            "tool_calls".into(),
+            json!(t
+                .tool_calls
+                .iter()
+                .map(|c| json!({
+                    "id": c.id,
+                    "type": "function",
+                    // `arguments` est une **chaîne** contenant du JSON, pas un
+                    // objet : c'est le format du protocole, et le renvoyer
+                    // autrement fait échouer l'appariement.
+                    "function": { "name": c.name, "arguments": c.arguments },
+                }))
+                .collect::<Vec<_>>()),
+        );
+    } else {
+        m.insert("content".into(), json!(t.content));
+    }
+    Value::Object(m)
 }
 
 /// Première séquence d'arrêt présente dans `text` : celle qui apparaît le plus
@@ -473,7 +515,10 @@ fn read_sse(
                     }
                     // Rendre ici ferme la socket chez l'appelant : c'est le
                     // point d'annulation du contrat, il va jusqu'au réseau.
-                    return Ok((Finish::Cancelled, usage));
+                    return Ok((
+                        Finish::cancelled().with_tool_calls(ToolAcc::collect(&tools)),
+                        usage,
+                    ));
                 }
                 continue;
             }
@@ -487,8 +532,14 @@ fn read_sse(
                 if usage.completion_tokens == 0 {
                     usage.completion_tokens = emitted;
                 }
+                // Même sur une coupure : un appel déjà annoncé repart avec.
+                let calls = ToolAcc::collect(&tools);
                 return Ok((
-                    if cancelled { Finish::Cancelled } else { Finish::Stop(seq) },
+                    if cancelled {
+                        Finish::cancelled().with_tool_calls(calls)
+                    } else {
+                        Finish::stop(seq).with_tool_calls(calls)
+                    },
                     usage,
                 ));
             }
@@ -503,7 +554,10 @@ fn read_sse(
                     if usage.completion_tokens == 0 {
                         usage.completion_tokens = emitted;
                     }
-                    return Ok((Finish::Cancelled, usage));
+                    return Ok((
+                        Finish::cancelled().with_tool_calls(ToolAcc::collect(&tools)),
+                        usage,
+                    ));
                 }
             }
         }
@@ -516,22 +570,26 @@ fn read_sse(
         if usage.completion_tokens == 0 {
             usage.completion_tokens = emitted;
         }
-        return Ok((Finish::Cancelled, usage));
+        return Ok((Finish::cancelled().with_tool_calls(ToolAcc::collect(&tools)), usage));
     }
 
     let finish = match reason.as_deref() {
-        Some("length") => Finish::MaxTokens,
-        Some("tool_calls") | Some("function_call") => Finish::ToolCall(ToolAcc::payload(&tools)),
+        // Un appel tronqué par `max_tokens` a des `arguments` incomplets —
+        // mais son `id` est bon, et il doit être refermé comme les autres.
+        Some("length") => Finish::max_tokens().with_tool_calls(ToolAcc::collect(&tools)),
+        Some("tool_calls") | Some("function_call") => {
+            Finish::tool_call(ToolAcc::collect(&tools))
+        }
         Some("content_filter") => {
             return Err(LlmError::Model("content_filter".into()));
         }
         // Certains fournisseurs oublient `finish_reason` quand il n'y a que
         // des appels d'outils : la présence d'un accumulateur fait foi.
-        _ if !tools.is_empty() => Finish::ToolCall(ToolAcc::payload(&tools)),
+        _ if !tools.is_empty() => Finish::tool_call(ToolAcc::collect(&tools)),
         // `finish_reason: "stop"` ne dit pas si c'est l'EOS du modèle ou une
         // séquence de `stop` — le cas `Finish::Stop` est traité plus haut,
         // quand la séquence apparaît vraiment dans le flux.
-        _ => Finish::Eos,
+        _ => Finish::eos(),
     };
     if usage.completion_tokens == 0 {
         usage.completion_tokens = emitted;
@@ -542,7 +600,7 @@ fn read_sse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{CountingSink, StringSink};
+    use crate::llm::{CountingSink, FinishReason, StringSink};
 
     fn hello() -> Vec<Turn> {
         vec![Turn::system("tu es utile"), Turn::user("bonjour")]
@@ -569,7 +627,7 @@ mod tests {
         let mut sink = StringSink::default();
         let (finish, usage) = replay(TEXT, &GenOptions::default(), &mut sink);
         assert_eq!(sink.text, "Bonjour le monde");
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert!(finish.is_complete());
         assert_eq!(usage.prompt_tokens, 11);
         assert_eq!(usage.completion_tokens, 3, "compté par le fournisseur, pas par nous");
@@ -579,7 +637,7 @@ mod tests {
     fn flow_stop_aborts_immediately() {
         let mut sink = CountingSink::stopping_after(2);
         let (finish, usage) = replay(TEXT, &GenOptions::default(), &mut sink);
-        assert_eq!(finish, Finish::Cancelled);
+        assert_eq!(finish, Finish::cancelled());
         assert!(!finish.is_complete());
         assert_eq!(sink.tokens, 2, "pas un fragment de plus");
         assert_eq!(usage.completion_tokens, 2);
@@ -608,7 +666,7 @@ mod tests {
     #[test]
     fn stop_sequence_cuts_and_is_never_emitted() {
         let (finish, text, _) = replay_frags(&["réponse ici ", "FIN et la suite"], &["FIN"]);
-        assert_eq!(finish, Finish::Stop("FIN".into()));
+        assert_eq!(finish, Finish::stop("FIN"));
         assert!(finish.is_complete(), "l'appelant avait demandé ce stop");
         // Le préfixe est verbatim : l'espace avant `FIN` est conservé.
         assert_eq!(text, "réponse ici ");
@@ -621,14 +679,14 @@ mod tests {
         // première — d'où la rétention.
         let (finish, text, _) =
             replay_frags(&["Je pense. ", "Obser", "vation: la suite"], &["Observation:"]);
-        assert_eq!(finish, Finish::Stop("Observation:".into()));
+        assert_eq!(finish, Finish::stop("Observation:"));
         assert_eq!(text, "Je pense. ");
     }
 
     #[test]
     fn stop_sequence_split_across_three_frames() {
         let (finish, text, _) = replay_frags(&["a", "O", "b", "s", "ervation:x"], &["Observation:"]);
-        assert_eq!(finish, Finish::Stop("Observation:".into()));
+        assert_eq!(finish, Finish::stop("Observation:"));
         assert_eq!(text, "a");
     }
 
@@ -638,7 +696,7 @@ mod tests {
         // texte retenu doit ressortir intact, une seule fois.
         let (finish, text, _) =
             replay_frags(&["Obs", "curité totale"], &["Observation:"]);
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert_eq!(text, "Obscurité totale");
     }
 
@@ -646,7 +704,7 @@ mod tests {
     fn a_false_start_at_the_very_end_of_the_stream_is_flushed() {
         // Le flux se termine alors qu'on retenait encore un préfixe : il sort.
         let (finish, text, _) = replay_frags(&["fin de texte : Obs"], &["Observation:"]);
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert_eq!(text, "fin de texte : Obs");
     }
 
@@ -655,12 +713,12 @@ mod tests {
         // La plus précoce gagne, même déclarée en second.
         let (finish, text, _) =
             replay_frags(&["réponse ici et la suite"], &["suite", "ici"]);
-        assert_eq!(finish, Finish::Stop("ici".into()));
+        assert_eq!(finish, Finish::stop("ici"));
         assert_eq!(text, "réponse ");
 
         // À position égale, la plus longue gagne.
         let (finish, text, _) = replay_frags(&["avant STOPNET après"], &["STOP", "STOPNET"]);
-        assert_eq!(finish, Finish::Stop("STOPNET".into()));
+        assert_eq!(finish, Finish::stop("STOPNET"));
         assert_eq!(text, "avant ");
     }
 
@@ -668,7 +726,7 @@ mod tests {
     fn holdback_never_splits_a_multibyte_character() {
         // `é` fait deux octets : une rétention naïve couperait dedans.
         let (finish, text, _) = replay_frags(&["café", "é FIN"], &["éé"]);
-        assert_eq!(finish, Finish::Stop("éé".into()));
+        assert_eq!(finish, Finish::stop("éé"));
         assert_eq!(text, "caf");
     }
 
@@ -677,7 +735,7 @@ mod tests {
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
         let (finish, _) = replay(TEXT, &opts, &mut sink);
-        assert_eq!(finish, Finish::Eos, "aucune séquence dans le flux");
+        assert_eq!(finish, Finish::eos(), "aucune séquence dans le flux");
         assert!(finish.is_complete());
         assert_eq!(sink.text, "Bonjour le monde", "rien n'est retenu à tort");
     }
@@ -687,7 +745,7 @@ mod tests {
         let opts = GenOptions::default().with_stop(vec![String::new()]);
         let mut sink = StringSink::default();
         let (finish, _) = replay(TEXT, &opts, &mut sink);
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert_eq!(sink.text, "Bonjour le monde");
     }
 
@@ -700,7 +758,7 @@ mod tests {
         let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
         let mut sink = CountingSink::stopping_after(1);
         let (finish, _) = replay(&frames, &opts, &mut sink);
-        assert_eq!(finish, Finish::Cancelled);
+        assert_eq!(finish, Finish::cancelled());
         assert!(!finish.is_complete());
     }
 
@@ -714,7 +772,7 @@ mod tests {
         let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
         let mut sink = StringSink::default();
         let (finish, usage) = replay(&frames, &opts, &mut sink);
-        assert_eq!(finish, Finish::Stop("FIN".into()));
+        assert_eq!(finish, Finish::stop("FIN"));
         assert_eq!(sink.text, "un deux ");
         // Deux fragments poussés : la trame `"FIN reste"` a un préfixe vide,
         // qui n'est pas un fragment.
@@ -751,12 +809,13 @@ mod tests {
         let mut sink = StringSink::default();
         let (finish, usage) = replay(frames, &GenOptions::default(), &mut sink);
         assert_eq!(sink.text, "", "un appel d'outil ne pousse aucun jeton de texte");
-        let Finish::ToolCall(payload) = &finish else { panic!("attendu ToolCall, eu {finish:?}") };
-        let calls: Value = serde_json::from_str(payload).unwrap();
-        assert_eq!(calls[0]["id"], "call_a1");
-        assert_eq!(calls[0]["name"], "KBQuerySourceNode");
+        assert_eq!(finish.reason, FinishReason::ToolCall, "eu {finish:?}");
+        let calls = &finish.tool_calls;
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call_a1");
+        assert_eq!(calls[0].name, "KBQuerySourceNode");
         // Les fragments recollés forment un JSON valide.
-        let args: Value = serde_json::from_str(calls[0]["arguments"].as_str().unwrap()).unwrap();
+        let args: Value = serde_json::from_str(&calls[0].arguments).unwrap();
         assert_eq!(args["kb_name"], "docs");
         assert_eq!(args["query"], "luciole");
         assert!(finish.is_complete());
@@ -776,12 +835,12 @@ mod tests {
         ];
         let mut sink = StringSink::default();
         let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
-        let Finish::ToolCall(payload) = &finish else { panic!("attendu ToolCall") };
-        let calls: Value = serde_json::from_str(payload).unwrap();
-        assert_eq!(calls[0]["name"], "f_a");
-        assert_eq!(calls[0]["arguments"], "{\"x\":1}");
-        assert_eq!(calls[1]["name"], "f_b");
-        assert_eq!(calls[1]["arguments"], "{\"y\":2}");
+        assert_eq!(finish.reason, FinishReason::ToolCall);
+        let calls = &finish.tool_calls;
+        assert_eq!(calls[0].name, "f_a");
+        assert_eq!(calls[0].arguments, "{\"x\":1}");
+        assert_eq!(calls[1].name, "f_b");
+        assert_eq!(calls[1].arguments, "{\"y\":2}");
     }
 
     #[test]
@@ -792,7 +851,7 @@ mod tests {
         ];
         let mut sink = StringSink::default();
         let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
-        assert_eq!(finish, Finish::MaxTokens);
+        assert_eq!(finish, Finish::max_tokens());
         assert!(!finish.is_complete());
         assert_eq!(sink.text, "tronq");
     }
@@ -804,7 +863,7 @@ mod tests {
         let mut sink = StringSink::default();
         let (finish, _) = read_sse(&mut r, &GenOptions::default(), &mut sink).unwrap();
         assert_eq!(sink.text, "ok");
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
     }
 
     #[test]
@@ -905,6 +964,205 @@ mod tests {
         assert_eq!(a.base_url, "https://generativelanguage.googleapis.com/v1beta/openai");
         assert_eq!(a.name(), "gemini-2.5-flash");
         assert_eq!(a.context_len(), 1_000_000);
+    }
+
+    // ─── Aller-retour d'un historique avec outils ───────────────────────────
+
+    /// Relit un corps de requête en tours — l'inverse de `message_json`.
+    /// C'est ce qui permet de prouver l'aller-retour plutôt que de l'affirmer.
+    fn turns_from_body(body: &Value) -> Vec<Turn> {
+        body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| {
+                let role = m["role"].as_str().unwrap();
+                let content = m["content"].as_str().unwrap_or("").to_string();
+                if let Some(id) = m["tool_call_id"].as_str() {
+                    Turn::tool_result(id, m["name"].as_str().unwrap_or(""), content)
+                } else if let Some(calls) = m["tool_calls"].as_array() {
+                    Turn::assistant_with_calls(
+                        content,
+                        calls
+                            .iter()
+                            .map(|c| {
+                                ToolCall::new(
+                                    c["id"].as_str().unwrap(),
+                                    c["function"]["name"].as_str().unwrap(),
+                                    c["function"]["arguments"].as_str().unwrap(),
+                                )
+                            })
+                            .collect(),
+                    )
+                } else {
+                    Turn::new(role, content)
+                }
+            })
+            .collect()
+    }
+
+    fn history_with_two_parallel_calls() -> (Vec<Turn>, Vec<ToolCall>) {
+        let calls = vec![
+            ToolCall::new("call_a1", "KBQuerySourceNode", r#"{"kb_name":"docs","query":"a"}"#),
+            ToolCall::new("call_b2", "ComposeNode", r#"{"template":"b"}"#),
+        ];
+        let turns = vec![
+            Turn::system("tu es utile"),
+            Turn::user("fais les deux"),
+            Turn::assistant_with_calls("", calls.clone()),
+            Turn::tool_result("call_a1", "KBQuerySourceNode", "12 résultats"),
+            Turn::tool_result("call_b2", "ComposeNode", "assemblé"),
+            Turn::user("et maintenant ?"),
+        ];
+        (turns, calls)
+    }
+
+    #[test]
+    fn round_trip_preserves_tool_call_ids_and_their_order() {
+        // Le cœur de la demande : sérialiser un historique à deux appels
+        // parallèles, le relire, et retrouver les mêmes identifiants dans le
+        // même ordre.
+        let (turns, calls) = history_with_two_parallel_calls();
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let back = turns_from_body(&body);
+
+        assert_eq!(back, turns, "l'aller-retour doit être exact");
+
+        let ids: Vec<&str> =
+            back.iter().flat_map(|t| t.tool_calls.iter()).map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, ["call_a1", "call_b2"], "identifiants et ordre conservés");
+        let answered: Vec<&str> =
+            back.iter().filter_map(|t| t.tool_call_id.as_deref()).collect();
+        assert_eq!(answered, ["call_a1", "call_b2"]);
+        // Les arguments restent des chaînes de JSON, pas des objets.
+        for c in &calls {
+            assert!(serde_json::from_str::<Value>(&c.arguments).is_ok());
+        }
+        // Et l'historique est bien formé au sens du fournisseur.
+        assert!(crate::llm::orphan_tool_calls(&back).is_empty());
+        assert!(crate::llm::dangling_tool_results(&back).is_empty());
+    }
+
+    #[test]
+    fn assistant_with_calls_serializes_the_protocol_shape() {
+        let (turns, _) = history_with_two_parallel_calls();
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let asst = &body["messages"][2];
+        assert_eq!(asst["role"], "assistant");
+        // `content: null` explicite quand le modèle n'a rien dit.
+        assert!(asst["content"].is_null());
+        assert_eq!(asst["tool_calls"][0]["id"], "call_a1");
+        assert_eq!(asst["tool_calls"][0]["type"], "function");
+        assert_eq!(asst["tool_calls"][0]["function"]["name"], "KBQuerySourceNode");
+        // `arguments` est une CHAÎNE contenant du JSON.
+        assert!(asst["tool_calls"][0]["function"]["arguments"].is_string());
+
+        let res = &body["messages"][3];
+        assert_eq!(res["role"], "tool");
+        assert_eq!(res["tool_call_id"], "call_a1");
+        assert_eq!(res["name"], "KBQuerySourceNode");
+        assert!(res["content"].is_string());
+        assert!(res.get("tool_calls").is_none(), "un résultat n'annonce rien");
+
+        // Un assistant qui a parlé ET appelé garde son texte.
+        let t = Turn::assistant_with_calls("je regarde", vec![ToolCall::new("i", "n", "{}")]);
+        let body = llm.request_body(&[t], &GenOptions::default());
+        assert_eq!(body["messages"][0]["content"], "je regarde");
+    }
+
+    #[test]
+    fn an_assistant_with_calls_never_serializes_an_empty_string_content() {
+        // Gemini rejette `"content": ""` sur un assistant qui annonce des
+        // appels. On doit émettre `null`, et pour toutes les variantes de
+        // construction.
+        let call = ToolCall::new("call_A", "f", "{}");
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        for t in [
+            Turn::assistant_with_calls("", vec![call.clone()]),
+            Turn { tool_calls: vec![call], ..Turn::assistant("") },
+        ] {
+            let body = llm.request_body(&[t], &GenOptions::default());
+            let c = &body["messages"][0]["content"];
+            assert!(c.is_null(), "attendu null, eu {c}");
+            assert_ne!(c.as_str(), Some(""), "la chaîne vide fait 400 chez Gemini");
+        }
+    }
+
+    #[test]
+    fn an_interrupted_call_is_closed_and_the_body_becomes_well_formed() {
+        // Le modèle annonce `call_X`, le puits coupe en plein flux.
+        let frames = &[
+            r#"{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_X","type":"function","function":{"name":"KBQuerySourceNode","arguments":"{\"kb_"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"content":"je cherche"},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"content":" encore"},"finish_reason":null}]}"#,
+        ];
+        let mut sink = CountingSink::stopping_after(1);
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert!(!finish.is_complete());
+        // L'identifiant annoncé a survécu à l'annulation.
+        assert_eq!(finish.tool_calls.len(), 1);
+        assert_eq!(finish.tool_calls[0].id, "call_X");
+        assert_eq!(finish.tool_calls[0].name, "KBQuerySourceNode");
+        // Les arguments sont tronqués — donc invalides — mais c'est l'`id`
+        // qui compte pour refermer.
+        assert!(serde_json::from_str::<Value>(&finish.tool_calls[0].arguments).is_err());
+
+        // On reprend : le tour d'assistant est reconstruit, l'appel refermé.
+        let mut turns = vec![
+            Turn::user("cherche"),
+            Turn::assistant_with_calls("", finish.tool_calls.clone()),
+        ];
+        assert_eq!(crate::llm::orphan_tool_calls(&turns).len(), 1, "malformé tel quel");
+        crate::llm::close_orphan_tool_calls(&mut turns, crate::llm::INTERRUPTED_TOOL_RESULT);
+
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let back = turns_from_body(&body);
+        assert!(crate::llm::orphan_tool_calls(&back).is_empty(), "chaque appel a son résultat");
+        assert_eq!(body["messages"][2]["tool_call_id"], "call_X");
+    }
+
+    #[test]
+    fn partially_executed_parallel_calls_all_get_a_result() {
+        // Trois appels annoncés, deux exécutés avant l'interruption : les
+        // trois doivent repartir avec un résultat, sinon 400.
+        let frames = &[
+            // Une trame SSE tient sur UNE ligne : pas de retour à la ligne ici.
+            r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"f1","arguments":"{}"}},{"index":1,"id":"call_2","function":{"name":"f2","arguments":"{}"}},{"index":2,"id":"call_3","function":{"name":"f3","arguments":"{}"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"content":"a"},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"content":"b"},"finish_reason":null}]}"#,
+        ];
+        let mut sink = CountingSink::stopping_after(1);
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert_eq!(finish.tool_calls.len(), 3, "les trois identifiants survivent");
+
+        let mut turns = vec![
+            Turn::user("fais trois choses"),
+            Turn::assistant_with_calls("", finish.tool_calls.clone()),
+            Turn::tool_result("call_1", "f1", "ok 1"),
+            Turn::tool_result("call_2", "f2", "ok 2"),
+        ];
+        assert_eq!(crate::llm::orphan_tool_calls(&turns).len(), 1);
+        assert_eq!(
+            crate::llm::close_orphan_tool_calls(&mut turns, crate::llm::INTERRUPTED_TOOL_RESULT),
+            1
+        );
+
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let back = turns_from_body(&body);
+        assert!(crate::llm::orphan_tool_calls(&back).is_empty());
+        let answered: Vec<&str> =
+            back.iter().filter_map(|t| t.tool_call_id.as_deref()).collect();
+        assert_eq!(answered, ["call_1", "call_2", "call_3"]);
+        // Les deux exécutés gardent leur vrai résultat.
+        assert_eq!(body["messages"][2]["content"], "ok 1");
+        assert_eq!(body["messages"][4]["content"], crate::llm::INTERRUPTED_TOOL_RESULT);
     }
 
     #[test]

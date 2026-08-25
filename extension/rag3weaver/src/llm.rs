@@ -47,9 +47,71 @@ pub enum Flow {
     Stop,
 }
 
+/// Un appel d'outil annoncé par le modèle.
+///
+/// `id` est **l'identité de l'appel pour le fournisseur** : OpenAI et Vertex
+/// exigent qu'un message de résultat le reprenne mot pour mot, et refusent la
+/// requête (400) si un appel reste sans réponse. C'est pourquoi ce type
+/// remplace la chaîne JSON d'avant : on accumulait la structure pour la jeter
+/// à la frontière, et un `id` perdu rend la conversation **irrejouable**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolCall {
+    /// Identifiant opaque. Vient du fournisseur (`call_…`), ou de
+    /// [`ToolCall::local_id`] pour un modèle local qui n'en a pas.
+    pub id: String,
+    /// Nom de l'outil, c'est-à-dire le `node_type` d'un [`crate::tools::ToolDef`].
+    pub name: String,
+    /// Arguments **bruts**, tels que le modèle les a émis : une chaîne qui
+    /// contient du JSON. On ne la parse pas ici — un appel tronqué par
+    /// `max_tokens` produit du JSON invalide, et il faut quand même pouvoir
+    /// le refermer.
+    pub arguments: String,
+}
+
+impl ToolCall {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
+        Self { id: id.into(), name: name.into(), arguments: arguments.into() }
+    }
+
+    /// Identifiant pour un modèle **local**, qui n'en reçoit pas du
+    /// fournisseur (`MockLlm`, et le modèle burn à venir).
+    ///
+    /// C'est un condensat blake3 de ce qui identifie l'appel dans sa
+    /// conversation : le contexte (typiquement les tours déjà joués), le rang
+    /// de l'appel dans le tour, le nom de l'outil et ses arguments. Deux
+    /// propriétés, et ce sont les deux qu'on veut :
+    ///
+    /// - **déterministe** — rejouer la même conversation regénère exactement
+    ///   les mêmes `id`, ce qui est précisément l'invariant à tenir (et ce qui
+    ///   rend les tests reproductibles, sans horloge ni compteur global) ;
+    /// - **sans collision en pratique** — deux appels différents, même dans un
+    ///   long historique, ne partagent pas d'identifiant, donc l'appariement
+    ///   par `id` reste sans ambiguïté.
+    ///
+    /// Le préfixe `call_` suit la convention d'OpenAI ; aucun fournisseur
+    /// n'impose de format, mais s'en écarter n'apporterait rien.
+    pub fn local_id(context: &str, index: usize, name: &str, arguments: &str) -> String {
+        let mut h = blake3::Hasher::new();
+        h.update(context.as_bytes());
+        h.update(&(index as u64).to_le_bytes());
+        h.update(name.as_bytes());
+        h.update(arguments.as_bytes());
+        format!("call_local_{}", &h.finalize().to_hex()[..16])
+    }
+
+    /// Le même, mais qui construit l'appel complet.
+    pub fn local(context: &str, index: usize, name: &str, arguments: &str) -> Self {
+        Self::new(Self::local_id(context, index, name, arguments), name, arguments)
+    }
+}
+
 /// Pourquoi la génération s'est terminée.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Finish {
+pub enum FinishReason {
     /// Le modèle a émis son jeton de fin : réponse complète.
     Eos,
     /// `max_tokens` atteint : réponse tronquée par notre plafond.
@@ -58,18 +120,69 @@ pub enum Finish {
     /// complète du point de vue de l'appelant, qui l'avait demandée.
     Stop(String),
     /// Le puits a répondu [`Flow::Stop`] : réponse **incomplète**. Distinct
-    /// de [`Finish::Stop`] parce qu'une interface doit savoir si elle
+    /// de [`FinishReason::Stop`] parce qu'une interface doit savoir si elle
     /// affiche une réponse finie ou un fragment abandonné.
     Cancelled,
-    /// Le modèle demande un outil ; charge utile brute, parsée à l'étape 6.
-    ToolCall(String),
+    /// Le modèle demande un ou plusieurs outils.
+    ToolCall,
+}
+
+/// Comment la génération s'est terminée, **et** ce que le modèle avait déjà
+/// annoncé à cet instant.
+///
+/// `tool_calls` est un champ et non le contenu d'une variante : c'est ce qui
+/// fait tenir l'invariant *par le type*. Un appel annoncé puis interrompu
+/// (`Cancelled`) ou tronqué (`MaxTokens`) doit rester récupérable — sinon son
+/// `id` est perdu, l'appel reste orphelin, et la requête suivante part en 400.
+/// Mettre le vecteur dans les seules variantes « concernées » laisserait la
+/// prochaine variante ajoutée le réintroduire, ce bogue-là.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finish {
+    pub reason: FinishReason,
+    /// Appels annoncés par le modèle, **quelle que soit** `reason`. Dans
+    /// l'ordre où le modèle les a annoncés.
+    pub tool_calls: Vec<ToolCall>,
 }
 
 impl Finish {
+    pub fn new(reason: FinishReason, tool_calls: Vec<ToolCall>) -> Self {
+        Self { reason, tool_calls }
+    }
+    pub fn eos() -> Self {
+        Self::new(FinishReason::Eos, Vec::new())
+    }
+    pub fn max_tokens() -> Self {
+        Self::new(FinishReason::MaxTokens, Vec::new())
+    }
+    pub fn stop(seq: impl Into<String>) -> Self {
+        Self::new(FinishReason::Stop(seq.into()), Vec::new())
+    }
+    pub fn cancelled() -> Self {
+        Self::new(FinishReason::Cancelled, Vec::new())
+    }
+    /// Fin normale sur demande d'outils.
+    pub fn tool_call(calls: Vec<ToolCall>) -> Self {
+        Self::new(FinishReason::ToolCall, calls)
+    }
+    /// Attache des appels à une fin qui n'en portait pas — c'est par là que
+    /// `Cancelled` et `MaxTokens` gardent ce que le modèle avait annoncé.
+    pub fn with_tool_calls(mut self, calls: Vec<ToolCall>) -> Self {
+        self.tool_calls = calls;
+        self
+    }
+
     /// Vrai si la réponse est exploitable telle quelle (rien ne manque du
     /// point de vue de l'appelant).
     pub fn is_complete(&self) -> bool {
-        matches!(self, Finish::Eos | Finish::Stop(_) | Finish::ToolCall(_))
+        matches!(
+            self.reason,
+            FinishReason::Eos | FinishReason::Stop(_) | FinishReason::ToolCall
+        )
+    }
+
+    /// Vrai s'il reste des appels à refermer — vrai même après une annulation.
+    pub fn has_tool_calls(&self) -> bool {
+        !self.tool_calls.is_empty()
     }
 }
 
@@ -154,15 +267,25 @@ impl TokenSink for CountingSink {
 /// exactement ce que les chat templates itèrent (`system`, `user`,
 /// `assistant`, et `tool` à l'étape 6), et un modèle inconnu peut en
 /// inventer un sans qu'on ait à recompiler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Turn {
     pub role: String,
     pub content: String,
+    /// Pour un tour `assistant` : les appels d'outils qu'il annonce. Vide
+    /// partout ailleurs. C'est la moitié manquante d'une conversation avec
+    /// outils — sans elle, un historique ne peut pas être rejoué.
+    pub tool_calls: Vec<ToolCall>,
+    /// Pour un tour `tool` : l'appel auquel ce résultat répond. C'est ce que
+    /// le fournisseur apparie avec les `tool_calls` du tour d'assistant.
+    pub tool_call_id: Option<String>,
+    /// Pour un tour `tool` : le nom de l'outil. Facultatif chez OpenAI, mais
+    /// certains fournisseurs le lisent, et il rend un historique lisible.
+    pub tool_name: Option<String>,
 }
 
 impl Turn {
     pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: role.into(), content: content.into() }
+        Self { role: role.into(), content: content.into(), ..Default::default() }
     }
     pub fn system(content: impl Into<String>) -> Self {
         Self::new("system", content)
@@ -173,6 +296,136 @@ impl Turn {
     pub fn assistant(content: impl Into<String>) -> Self {
         Self::new("assistant", content)
     }
+
+    /// Tour d'assistant qui **annonce des appels d'outils**. `content` est
+    /// souvent vide : un modèle qui appelle un outil ne dit en général rien.
+    pub fn assistant_with_calls(content: impl Into<String>, tool_calls: Vec<ToolCall>) -> Self {
+        Self { tool_calls, ..Self::new("assistant", content) }
+    }
+
+    /// Tour qui porte le **résultat** d'un appel. `id` doit être exactement
+    /// celui annoncé par le modèle.
+    pub fn tool_result(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
+        let name = name.into();
+        Self {
+            tool_call_id: Some(id.into()),
+            tool_name: if name.is_empty() { None } else { Some(name) },
+            ..Self::new("tool", content)
+        }
+    }
+
+    /// Vrai si ce tour est un résultat d'outil.
+    pub fn is_tool_result(&self) -> bool {
+        self.tool_call_id.is_some()
+    }
+}
+
+/// Contenu posé dans un résultat d'outil fabriqué pour refermer un appel qui
+/// n'a jamais été exécuté. Une chaîne JSON : l'agent la relit sans casser sur
+/// du texte libre, et le modèle comprend que l'outil n'a pas tourné.
+pub const INTERRUPTED_TOOL_RESULT: &str = r#"{"error":"interrupted","detail":"l'appel n'a pas été exécuté"}"#;
+
+/// Les appels d'outils d'un historique qui n'ont **pas** de résultat.
+///
+/// C'est le garde-fou qui évite le 400.
+///
+/// État réel de ce qu'on sait, sans embellir :
+///
+/// - **OpenAI** rejette en 400 : *"An assistant message with 'tool_calls' must
+///   be followed by tool messages responding to each 'tool_call_id'. The
+///   following tool_call_ids did not have response messages: …"*. Attention :
+///   c'est une **validation serveur observée et reproduite**, elle n'est
+///   documentée nulle part — ni dans le guide, ni dans le schéma OpenAPI (où
+///   `content` et `tool_calls` sont de simples champs sans contrainte
+///   croisée). Ne pas s'attendre à la trouver dans la doc.
+/// - **Google ne documente rien** sur ce point, ni pour Vertex ni pour AI
+///   Studio. Mais l'API Gemini **native**, vers laquelle la couche de
+///   compatibilité traduit, rejette tout déséquilibre : *"Please ensure that
+///   the number of function response parts is equal to the number of function
+///   call parts"*. Il faut donc tabler sur **au moins autant de sévérité que
+///   chez OpenAI**, avec un message d'erreur de style Google.
+///
+/// Rend les appels dans leur ordre d'apparition.
+pub fn orphan_tool_calls(turns: &[Turn]) -> Vec<&ToolCall> {
+    let answered: std::collections::HashSet<&str> = turns
+        .iter()
+        .filter_map(|t| t.tool_call_id.as_deref())
+        .collect();
+    turns
+        .iter()
+        .flat_map(|t| t.tool_calls.iter())
+        .filter(|c| !answered.contains(c.id.as_str()))
+        .collect()
+}
+
+/// L'inverse : les résultats qui ne répondent à aucun appel annoncé.
+///
+/// OpenAI les refuse aussi, en 400 : *"Invalid parameter: messages with role
+/// 'tool' must be a response to a preceeding message with 'tool_calls'"* (la
+/// faute d'orthographe est dans le message du serveur ; observée, pas
+/// documentée). C'est le symptôme d'un historique tronqué par le début —
+/// typiquement une fenêtre glissante qui a coupé le tour d'assistant en
+/// gardant ses résultats.
+pub fn dangling_tool_results(turns: &[Turn]) -> Vec<&str> {
+    let announced: std::collections::HashSet<&str> = turns
+        .iter()
+        .flat_map(|t| t.tool_calls.iter())
+        .map(|c| c.id.as_str())
+        .collect();
+    turns
+        .iter()
+        .filter_map(|t| t.tool_call_id.as_deref())
+        .filter(|id| !announced.contains(id))
+        .collect()
+}
+
+/// Referme tous les appels orphelins en insérant un résultat par appel
+/// manquant. Rend le nombre d'appels comblés.
+///
+/// À appeler avant d'envoyer un historique repris après une interruption :
+/// c'est ce qui transforme une conversation malformée en conversation
+/// rejouable.
+///
+/// Chaque résultat est inséré **juste après le tour d'assistant qui l'a
+/// annoncé** (à la suite des résultats déjà présents pour ce tour), et non à
+/// la fin de l'historique. Ce n'est pas de l'esthétique : le bloc de messages
+/// `tool` doit suivre *immédiatement* son message assistant, sans qu'aucun
+/// message `user`, `system` ou `assistant` ne s'intercale — insérer à la fin
+/// casserait tout historique où l'utilisateur a repris la parole après
+/// l'interruption, ce qui est exactement le scénario visé.
+pub fn close_orphan_tool_calls(turns: &mut Vec<Turn>, content: &str) -> usize {
+    let answered: std::collections::HashSet<String> =
+        turns.iter().filter_map(|t| t.tool_call_id.clone()).collect();
+    let mut inserted = 0usize;
+    // À rebours : une insertion ne décale alors aucun index restant à traiter.
+    for i in (0..turns.len()).rev() {
+        if turns[i].tool_calls.is_empty() {
+            continue;
+        }
+        let missing: Vec<(String, String)> = turns[i]
+            .tool_calls
+            .iter()
+            .filter(|c| !answered.contains(&c.id))
+            .map(|c| (c.id.clone(), c.name.clone()))
+            .collect();
+        if missing.is_empty() {
+            continue;
+        }
+        // Fin du bloc de résultats qui suit déjà ce tour d'assistant.
+        let mut at = i + 1;
+        while at < turns.len() && turns[at].is_tool_result() {
+            at += 1;
+        }
+        for (k, (id, name)) in missing.into_iter().enumerate() {
+            turns.insert(at + k, Turn::tool_result(id, name, content));
+            inserted += 1;
+        }
+    }
+    inserted
 }
 
 /// Réglages d'un appel. `tools` porte les [`ToolDef`] *typées* — on ne
@@ -388,6 +641,12 @@ pub struct MockLlm {
     pub reply: String,
     /// Fenêtre annoncée par [`Llm::context_len`].
     pub context_len: usize,
+    /// Appels d'outils à annoncer, en `(nom, arguments)`. Les identifiants
+    /// sont dérivés de la conversation par [`ToolCall::local_id`] : un modèle
+    /// local n'en reçoit pas du fournisseur, il doit les fabriquer — et les
+    /// fabriquer **de façon déterministe**, sinon un rejeu présenterait des
+    /// identifiants différents et casserait l'appariement.
+    pub tool_calls: Vec<(String, String)>,
 }
 
 impl Default for MockLlm {
@@ -398,13 +657,57 @@ impl Default for MockLlm {
 
 impl MockLlm {
     pub fn new(reply: impl Into<String>) -> Self {
-        Self { reply: reply.into(), context_len: 4096 }
+        Self { reply: reply.into(), context_len: 4096, tool_calls: Vec::new() }
     }
 
     pub fn with_context_len(mut self, n: usize) -> Self {
         self.context_len = n;
         self
     }
+
+    /// Fait annoncer des appels d'outils, en `(nom, arguments JSON)`.
+    pub fn with_tool_calls(
+        mut self,
+        calls: Vec<(impl Into<String>, impl Into<String>)>,
+    ) -> Self {
+        self.tool_calls =
+            calls.into_iter().map(|(n, a)| (n.into(), a.into())).collect();
+        self
+    }
+
+    /// Les appels que cette conversation ferait annoncer. Publique parce que
+    /// c'est ce qui permet à un test de connaître les identifiants attendus
+    /// sans les copier à la main.
+    pub fn announced_calls(&self, turns: &[Turn]) -> Vec<ToolCall> {
+        let context = mock_context(turns);
+        self.tool_calls
+            .iter()
+            .enumerate()
+            .map(|(i, (n, a))| ToolCall::local(&context, i, n, a))
+            .collect()
+    }
+}
+
+/// Le contexte qui sert de graine aux identifiants locaux : les tours déjà
+/// joués, aplatis. Deux conversations différentes donnent des identifiants
+/// différents ; la même conversation redonne les mêmes.
+fn mock_context(turns: &[Turn]) -> String {
+    let mut out = String::new();
+    for t in turns {
+        out.push_str(&t.role);
+        out.push('\u{1}');
+        out.push_str(&t.content);
+        out.push('\u{1}');
+        for c in &t.tool_calls {
+            out.push_str(&c.id);
+            out.push('\u{1}');
+        }
+        if let Some(id) = &t.tool_call_id {
+            out.push_str(id);
+            out.push('\u{1}');
+        }
+    }
+    out
 }
 
 impl Llm for MockLlm {
@@ -428,11 +731,17 @@ impl Llm for MockLlm {
         let started = Instant::now();
         let mut acc = String::new();
         let mut emitted = 0usize;
-        let mut finish = Finish::Eos;
+        let mut finish = Finish::eos();
+
+        // Les appels sont **annoncés d'emblée**, avant le texte : c'est ce que
+        // fait un vrai flux SSE (l'`id` et le nom arrivent en premier, les
+        // arguments par fragments). Ils sont donc déjà connus si le puits
+        // annule au milieu — et c'est exactement le cas qu'il faut survivre.
+        let announced = self.announced_calls(turns);
 
         for frag in fragments(&self.reply) {
             if emitted >= opts.max_tokens {
-                finish = Finish::MaxTokens;
+                finish = Finish::max_tokens();
                 break;
             }
             if let Some((keep, seq)) = stop_hit(&acc, &frag, &opts.stop) {
@@ -441,18 +750,28 @@ impl Llm for MockLlm {
                     let head = &frag[..keep];
                     acc.push_str(head);
                     if sink.on_token(head) == Flow::Stop {
-                        finish = Finish::Cancelled;
+                        finish = Finish::cancelled();
                         break;
                     }
                 }
-                finish = Finish::Stop(seq);
+                finish = Finish::stop(seq);
                 break;
             }
             acc.push_str(&frag);
             emitted += 1;
             if sink.on_token(&frag) == Flow::Stop {
-                finish = Finish::Cancelled;
+                finish = Finish::cancelled();
                 break;
+            }
+        }
+
+        // Quelle que soit la raison de fin, les appels annoncés repartent
+        // avec elle. C'est l'invariant : aucun identifiant n'est perdu.
+        if !announced.is_empty() {
+            if finish.reason == FinishReason::Eos {
+                finish = Finish::tool_call(announced);
+            } else {
+                finish = finish.with_tool_calls(announced);
             }
         }
 
@@ -544,7 +863,7 @@ mod tests {
         let mut sink = StringSink::default();
         let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
         assert_eq!(sink.text, "Bonjour le monde");
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert!(finish.is_complete());
         assert_eq!(usage.completion_tokens, 3);
         assert_eq!(usage.prompt_tokens, 4); // "tu es utile" (3) + "bonjour" (1)
@@ -559,7 +878,7 @@ mod tests {
         let opts = GenOptions::default().with_max_tokens(2);
         let (finish, usage) = llm.generate(&hello(), &opts, &mut sink).unwrap();
         assert_eq!(sink.text, "un deux");
-        assert_eq!(finish, Finish::MaxTokens);
+        assert_eq!(finish, Finish::max_tokens());
         assert!(!finish.is_complete(), "tronqué par notre plafond, pas fini");
         assert_eq!(usage.completion_tokens, 2);
 
@@ -568,7 +887,7 @@ mod tests {
         let opts = GenOptions::default().with_max_tokens(0);
         let (finish, _) = llm.generate(&hello(), &opts, &mut sink).unwrap();
         assert_eq!(sink.text, "");
-        assert_eq!(finish, Finish::MaxTokens);
+        assert_eq!(finish, Finish::max_tokens());
     }
 
     #[test]
@@ -579,21 +898,21 @@ mod tests {
         let (finish, _) = llm.generate(&hello(), &opts, &mut sink).unwrap();
         // Préfixe verbatim : l'espace qui précède "FIN" est conservé.
         assert_eq!(sink.text, "réponse ici ");
-        assert_eq!(finish, Finish::Stop("FIN".into()));
+        assert_eq!(finish, Finish::stop("FIN"));
         assert!(finish.is_complete(), "l'appelant a demandé ce stop");
 
         // La séquence la plus précoce gagne, même déclarée en second.
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_stop(vec!["suite".into(), "ici".into()]);
         let (finish, _) = llm.generate(&hello(), &opts, &mut sink).unwrap();
-        assert_eq!(finish, Finish::Stop("ici".into()));
+        assert_eq!(finish, Finish::stop("ici"));
         assert_eq!(sink.text, "réponse ");
 
         // Un stop vide est ignoré (sinon il couperait à l'octet 0).
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_stop(vec![String::new()]);
         let (finish, _) = llm.generate(&hello(), &opts, &mut sink).unwrap();
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert_eq!(sink.text, "réponse ici FIN et la suite");
     }
 
@@ -605,7 +924,7 @@ mod tests {
         let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
         let (finish, usage) = llm.generate(&hello(), &opts, &mut sink).unwrap();
         assert_eq!(sink.text, "réponse ici");
-        assert_eq!(finish, Finish::Stop("FIN".into()));
+        assert_eq!(finish, Finish::stop("FIN"));
         assert_eq!(usage.completion_tokens, 2);
     }
 
@@ -614,11 +933,11 @@ mod tests {
         let llm = MockLlm::new("un deux trois quatre cinq");
         let mut sink = CountingSink::stopping_after(2);
         let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
-        assert_eq!(finish, Finish::Cancelled);
+        assert_eq!(finish, Finish::cancelled());
         assert!(!finish.is_complete(), "annulé : la réponse est incomplète");
         assert_eq!(sink.tokens, 2, "le générateur s'arrête net, il n'en pousse pas un de plus");
         assert_eq!(usage.completion_tokens, 2);
-        assert_eq!(sink.finished, Some(Finish::Cancelled), "on_finish est appelé même annulé");
+        assert_eq!(sink.finished, Some(Finish::cancelled()), "on_finish est appelé même annulé");
     }
 
     #[test]
@@ -635,7 +954,7 @@ mod tests {
         drop(rx);
         let mut sink = ChannelSink(tx);
         let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
-        assert_eq!(finish, Finish::Cancelled);
+        assert_eq!(finish, Finish::cancelled());
         assert_eq!(usage.completion_tokens, 1, "un seul essai avant de voir le canal fermé");
     }
 
@@ -675,7 +994,7 @@ mod tests {
         let llm = MockLlm::new("un deux");
         let out = generate_to_string(&llm, &hello(), &GenOptions::default()).unwrap();
         assert_eq!(out.text, "un deux");
-        assert_eq!(out.finish, Finish::Eos);
+        assert_eq!(out.finish, Finish::eos());
         assert_eq!(out.usage.completion_tokens, 2);
     }
 
@@ -699,20 +1018,269 @@ mod tests {
             let text = format!("{} tours, max {}", turns.len(), opts.max_tokens);
             for f in fragments(&text) {
                 if sink.on_token(&f) == Flow::Stop {
-                    return Ok((Finish::Cancelled, Usage::default()));
+                    return Ok((Finish::cancelled(), Usage::default()));
                 }
             }
-            sink.on_finish(&Finish::Eos);
-            Ok((Finish::Eos, Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0 }))
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
         let (finish, usage) = llm.generate(&hello(), &opts, &mut sink).unwrap();
         assert_eq!(sink.text, "2 tours, max 7");
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
         assert_eq!(usage.completion_tokens, 4);
         assert_eq!(llm.name(), "cb");
         assert_eq!(llm.context_len(), 128);
+    }
+
+    // ─── Appels d'outils : identité, survie, appariement ────────────────────
+
+    #[test]
+    fn local_ids_are_deterministic_stable_and_distinct() {
+        let turns = vec![Turn::user("cherche luciole")];
+        let ctx = mock_context(&turns);
+        let a = ToolCall::local_id(&ctx, 0, "KBQuerySourceNode", r#"{"q":1}"#);
+        // Déterministe : même entrée, même identifiant. C'est ce qui rend un
+        // rejeu identique — l'invariant demandé.
+        assert_eq!(a, ToolCall::local_id(&ctx, 0, "KBQuerySourceNode", r#"{"q":1}"#));
+        // Distinct dès qu'un seul élément change.
+        assert_ne!(a, ToolCall::local_id(&ctx, 1, "KBQuerySourceNode", r#"{"q":1}"#));
+        assert_ne!(a, ToolCall::local_id(&ctx, 0, "AutreNode", r#"{"q":1}"#));
+        assert_ne!(a, ToolCall::local_id(&ctx, 0, "KBQuerySourceNode", r#"{"q":2}"#));
+        let other = mock_context(&[Turn::user("autre chose")]);
+        assert_ne!(a, ToolCall::local_id(&other, 0, "KBQuerySourceNode", r#"{"q":1}"#));
+        // Forme : préfixe conventionnel, et seulement [a-z0-9_] — aucun
+        // fournisseur n'impose de format, mais celui-ci passe partout.
+        assert!(a.starts_with("call_local_"), "{a}");
+        assert_eq!(a.len(), "call_local_".len() + 16);
+        assert!(a.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'), "{a}");
+    }
+
+    #[test]
+    fn turn_carries_the_three_real_shapes() {
+        let plain = Turn::user("bonjour");
+        assert!(plain.tool_calls.is_empty() && !plain.is_tool_result());
+
+        let call = ToolCall::new("call_A", "KBQuerySourceNode", r#"{"kb_name":"docs"}"#);
+        let asst = Turn::assistant_with_calls("", vec![call.clone()]);
+        assert_eq!(asst.role, "assistant");
+        assert_eq!(asst.tool_calls, vec![call]);
+        assert!(!asst.is_tool_result());
+
+        let res = Turn::tool_result("call_A", "KBQuerySourceNode", "12 résultats");
+        assert_eq!(res.role, "tool");
+        assert_eq!(res.tool_call_id.as_deref(), Some("call_A"));
+        assert_eq!(res.tool_name.as_deref(), Some("KBQuerySourceNode"));
+        assert!(res.is_tool_result());
+        // Un nom vide ne devient pas `Some("")` : le champ est facultatif.
+        assert_eq!(Turn::tool_result("call_A", "", "x").tool_name, None);
+    }
+
+    #[test]
+    fn orphan_tool_calls_spots_what_would_make_a_400() {
+        let a = ToolCall::new("call_A", "f_a", "{}");
+        let b = ToolCall::new("call_B", "f_b", "{}");
+        let mut turns = vec![
+            Turn::user("fais deux choses"),
+            Turn::assistant_with_calls("", vec![a.clone(), b.clone()]),
+            Turn::tool_result("call_A", "f_a", "ok"),
+        ];
+        // `call_B` n'a pas de résultat : c'est exactement ce que le
+        // fournisseur refuse.
+        let orphans = orphan_tool_calls(&turns);
+        assert_eq!(orphans.len(), 1);
+        assert_eq!(orphans[0].id, "call_B");
+        assert!(dangling_tool_results(&turns).is_empty());
+
+        assert_eq!(close_orphan_tool_calls(&mut turns, INTERRUPTED_TOOL_RESULT), 1);
+        assert!(orphan_tool_calls(&turns).is_empty(), "plus rien d'orphelin");
+        // Le résultat fabriqué garde le nom de l'outil, et son contenu est du
+        // JSON lisible par l'agent.
+        let last = turns.last().unwrap();
+        assert_eq!(last.tool_call_id.as_deref(), Some("call_B"));
+        assert_eq!(last.tool_name.as_deref(), Some("f_b"));
+        assert!(serde_json::from_str::<serde_json::Value>(&last.content).is_ok());
+        // Idempotent : rien à combler la seconde fois.
+        assert_eq!(close_orphan_tool_calls(&mut turns, INTERRUPTED_TOOL_RESULT), 0);
+    }
+
+    #[test]
+    fn close_inserts_results_next_to_their_assistant_turn() {
+        // Le scénario qui casse une insertion en fin d'historique :
+        // l'utilisateur a repris la parole après l'interruption. Le résultat
+        // manquant doit se glisser AVANT ce tour d'utilisateur, sinon un
+        // message `user` s'intercale entre l'assistant et ses résultats — ce
+        // que le fournisseur refuse.
+        let a = ToolCall::new("call_A", "f_a", "{}");
+        let b = ToolCall::new("call_B", "f_b", "{}");
+        let mut turns = vec![
+            Turn::user("fais deux choses"),
+            Turn::assistant_with_calls("", vec![a, b]),
+            Turn::tool_result("call_A", "f_a", "ok"),
+            Turn::user("laisse tomber, autre chose"),
+        ];
+        assert_eq!(close_orphan_tool_calls(&mut turns, INTERRUPTED_TOOL_RESULT), 1);
+
+        let roles: Vec<&str> = turns.iter().map(|t| t.role.as_str()).collect();
+        assert_eq!(roles, ["user", "assistant", "tool", "tool", "user"]);
+        assert_eq!(turns[3].tool_call_id.as_deref(), Some("call_B"));
+        assert!(orphan_tool_calls(&turns).is_empty());
+
+        // Aucun message étranger ne s'intercale dans le bloc de résultats.
+        let asst = roles.iter().position(|r| *r == "assistant").unwrap();
+        let mut k = asst + 1;
+        while k < turns.len() && turns[k].is_tool_result() {
+            k += 1;
+        }
+        let announced = turns[asst].tool_calls.len();
+        assert_eq!(k - asst - 1, announced, "les {announced} résultats suivent l'assistant");
+    }
+
+    #[test]
+    fn close_handles_several_assistant_turns_independently() {
+        let mut turns = vec![
+            Turn::user("un"),
+            Turn::assistant_with_calls("", vec![ToolCall::new("call_1", "f", "{}")]),
+            Turn::user("deux"),
+            Turn::assistant_with_calls("", vec![ToolCall::new("call_2", "g", "{}")]),
+            Turn::user("trois"),
+        ];
+        assert_eq!(close_orphan_tool_calls(&mut turns, INTERRUPTED_TOOL_RESULT), 2);
+        let roles: Vec<&str> = turns.iter().map(|t| t.role.as_str()).collect();
+        assert_eq!(roles, ["user", "assistant", "tool", "user", "assistant", "tool", "user"]);
+        assert_eq!(turns[2].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(turns[5].tool_call_id.as_deref(), Some("call_2"));
+        assert!(orphan_tool_calls(&turns).is_empty());
+    }
+
+    #[test]
+    fn local_ids_fit_the_provider_length_limit() {
+        // OpenAI valide la longueur des `tool_calls[].id` : *"Expected a string
+        // with maximum length 40"*. Nos identifiants locaux doivent y tenir.
+        let id = ToolCall::local_id("un contexte de conversation assez long", 7, "UnNode", "{}");
+        assert!(id.len() <= 40, "identifiant de {} caractères : {id}", id.len());
+        assert_eq!(id.len(), 27);
+    }
+
+    #[test]
+    fn dangling_tool_results_spot_the_reverse_error() {
+        // Un résultat sans appel correspondant : symptôme d'un historique
+        // tronqué par le début, refusé tout autant par le fournisseur.
+        let turns = vec![Turn::user("x"), Turn::tool_result("call_Z", "f", "ok")];
+        assert_eq!(dangling_tool_results(&turns), vec!["call_Z"]);
+        assert!(orphan_tool_calls(&turns).is_empty());
+    }
+
+    #[test]
+    fn announced_calls_survive_a_cancellation() {
+        // LE scénario : le modèle annonce un appel, l'utilisateur interrompt.
+        // L'identifiant ne doit pas disparaître avec l'annulation.
+        let llm = MockLlm::new("je cherche un peu")
+            .with_tool_calls(vec![("KBQuerySourceNode", r#"{"kb_name":"docs"}"#)]);
+        let turns = vec![Turn::user("cherche")];
+        let expected = llm.announced_calls(&turns);
+
+        let mut sink = CountingSink::stopping_after(1);
+        let (finish, _) = llm.generate(&turns, &GenOptions::default(), &mut sink).unwrap();
+
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert!(!finish.is_complete());
+        assert!(finish.has_tool_calls(), "les appels annoncés doivent survivre");
+        assert_eq!(finish.tool_calls, expected);
+        // Et le puits les voit aussi, par `on_finish`.
+        assert_eq!(sink.finished.unwrap().tool_calls, expected);
+    }
+
+    #[test]
+    fn announced_calls_survive_max_tokens() {
+        let llm = MockLlm::new("un deux trois quatre")
+            .with_tool_calls(vec![("f", "{}")]);
+        let turns = vec![Turn::user("x")];
+        let opts = GenOptions::default().with_max_tokens(2);
+        let mut sink = StringSink::default();
+        let (finish, _) = llm.generate(&turns, &opts, &mut sink).unwrap();
+        assert_eq!(finish.reason, FinishReason::MaxTokens);
+        assert_eq!(finish.tool_calls, llm.announced_calls(&turns));
+    }
+
+    #[test]
+    fn a_normal_finish_with_calls_is_a_tool_call_finish() {
+        let llm = MockLlm::new("").with_tool_calls(vec![("f", "{}"), ("g", "{}")]);
+        let turns = vec![Turn::user("x")];
+        let mut sink = StringSink::default();
+        let (finish, _) = llm.generate(&turns, &GenOptions::default(), &mut sink).unwrap();
+        assert_eq!(finish.reason, FinishReason::ToolCall);
+        assert!(finish.is_complete());
+        assert_eq!(finish.tool_calls.len(), 2);
+        // Deux appels dans le même tour ont des identifiants distincts.
+        assert_ne!(finish.tool_calls[0].id, finish.tool_calls[1].id);
+    }
+
+    #[test]
+    fn replaying_a_conversation_regenerates_the_same_ids() {
+        // L'invariant, sur le chemin local : rejouer le même historique
+        // représente au fournisseur exactement les mêmes identifiants.
+        let llm = MockLlm::new("").with_tool_calls(vec![("f", r#"{"a":1}"#)]);
+        let turns = vec![Turn::system("sys"), Turn::user("cherche")];
+        let mut s1 = StringSink::default();
+        let (f1, _) = llm.generate(&turns, &GenOptions::default(), &mut s1).unwrap();
+        let mut s2 = StringSink::default();
+        let (f2, _) = llm.generate(&turns, &GenOptions::default(), &mut s2).unwrap();
+        assert_eq!(f1.tool_calls, f2.tool_calls);
+
+        // Un historique différent donne d'autres identifiants — sinon deux
+        // appels distincts d'une même conversation se confondraient.
+        let longer = vec![Turn::system("sys"), Turn::user("cherche"), Turn::user("encore")];
+        let mut s3 = StringSink::default();
+        let (f3, _) = llm.generate(&longer, &GenOptions::default(), &mut s3).unwrap();
+        assert_ne!(f1.tool_calls[0].id, f3.tool_calls[0].id);
+    }
+
+    #[test]
+    fn the_interruption_cycle_closes_cleanly() {
+        // Bout en bout : annonce → interruption → on referme → l'historique
+        // est de nouveau bien formé et rejouable.
+        let llm = MockLlm::new("je réfléchis longuement ici")
+            .with_tool_calls(vec![("f_a", "{}"), ("f_b", "{}"), ("f_c", "{}")]);
+        let mut turns = vec![Turn::user("fais trois choses")];
+
+        let mut sink = CountingSink::stopping_after(1);
+        let (finish, _) = llm.generate(&turns, &GenOptions::default(), &mut sink).unwrap();
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert_eq!(finish.tool_calls.len(), 3);
+
+        // L'appelant reconstruit le tour d'assistant à partir de ce qu'il a
+        // reçu — rien n'a été perdu.
+        turns.push(Turn::assistant_with_calls("", finish.tool_calls.clone()));
+        // Deux des trois ont eu le temps de tourner.
+        turns.push(Turn::tool_result(&finish.tool_calls[0].id, "f_a", "ok a"));
+        turns.push(Turn::tool_result(&finish.tool_calls[1].id, "f_b", "ok b"));
+        assert_eq!(orphan_tool_calls(&turns).len(), 1, "le troisième est orphelin");
+
+        assert_eq!(close_orphan_tool_calls(&mut turns, INTERRUPTED_TOOL_RESULT), 1);
+        assert!(orphan_tool_calls(&turns).is_empty());
+        assert!(dangling_tool_results(&turns).is_empty());
+        // Les trois appels ont chacun leur résultat, et les identifiants sont
+        // ceux qu'avait annoncés le modèle.
+        let answered: Vec<&str> =
+            turns.iter().filter_map(|t| t.tool_call_id.as_deref()).collect();
+        for c in &finish.tool_calls {
+            assert!(answered.contains(&c.id.as_str()), "{} sans résultat", c.id);
+        }
+    }
+
+    #[test]
+    fn finish_helpers() {
+        assert!(Finish::eos().is_complete());
+        assert!(Finish::stop("x").is_complete());
+        assert!(Finish::tool_call(vec![]).is_complete());
+        assert!(!Finish::cancelled().is_complete());
+        assert!(!Finish::max_tokens().is_complete());
+        assert!(!Finish::eos().has_tool_calls());
+        let c = vec![ToolCall::new("i", "n", "{}")];
+        assert!(Finish::cancelled().with_tool_calls(c.clone()).has_tool_calls());
+        assert_eq!(Finish::new(FinishReason::Eos, c.clone()).tool_calls, c);
     }
 
     #[test]

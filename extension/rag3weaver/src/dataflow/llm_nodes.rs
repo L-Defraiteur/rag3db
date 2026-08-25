@@ -286,7 +286,7 @@ mod tests {
         let text = outputs.remove("text").and_then(take_or_clone::<String>).unwrap();
         assert_eq!(text, "La réponse est 42");
         let out = outputs.remove("llm").and_then(take_or_clone::<LlmOutput>).unwrap();
-        assert_eq!(out.finish, Finish::Eos);
+        assert_eq!(out.finish, Finish::eos());
         assert_eq!(out.usage.completion_tokens, 4);
 
         let metrics = ctx.drain_metrics();
@@ -319,7 +319,7 @@ mod tests {
         node.execute(&mut ctx).unwrap();
         let out = ctx.drain_outputs().remove("llm").and_then(take_or_clone::<LlmOutput>).unwrap();
         assert_eq!(out.text, "La réponse");
-        assert_eq!(out.finish, Finish::MaxTokens);
+        assert_eq!(out.finish, Finish::max_tokens());
 
         let opts = GenOptions::default().with_stop(vec!["est".into()]);
         let mut node = LlmNode::new("llm").with_options(opts);
@@ -328,7 +328,7 @@ mod tests {
         node.execute(&mut ctx).unwrap();
         let out = ctx.drain_outputs().remove("llm").and_then(take_or_clone::<LlmOutput>).unwrap();
         assert_eq!(out.text, "La réponse ", "préfixe verbatim avant le stop");
-        assert_eq!(out.finish, Finish::Stop("est".into()));
+        assert_eq!(out.finish, Finish::stop("est"));
     }
 
     #[test]
@@ -340,8 +340,8 @@ mod tests {
             for f in crate::llm::fragments(&text) {
                 sink.on_token(&f);
             }
-            sink.on_finish(&Finish::Eos);
-            Ok((Finish::Eos, crate::llm::Usage::default()))
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), crate::llm::Usage::default()))
         }));
         let mut node = LlmNode::new("llm").with_tools(true);
         let mut ctx = NodeContext::with_services(Arc::new(services_with_registry(seen)));
@@ -457,7 +457,7 @@ mod tests {
         let text = output.get("llm", "text").cloned().and_then(take_or_clone::<String>).unwrap();
         assert_eq!(text, "La réponse est 42");
         let out = output.get("llm", "llm").cloned().and_then(take_or_clone::<LlmOutput>).unwrap();
-        assert_eq!(out.finish, Finish::Eos);
+        assert_eq!(out.finish, Finish::eos());
         assert_eq!(out.usage.completion_tokens, 4);
     }
 

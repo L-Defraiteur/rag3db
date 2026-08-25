@@ -9,7 +9,9 @@ mod common;
 use std::sync::atomic::Ordering;
 
 use common::fake_sse::*;
-use rag3weaver::llm::{CountingSink, Finish, GenOptions, Llm, LlmError, StringSink, Turn};
+use rag3weaver::llm::{
+    CountingSink, Finish, FinishReason, GenOptions, Llm, LlmError, StringSink, Turn,
+};
 use rag3weaver::openai_llm::OpenAiLlm;
 use serde_json::Value;
 
@@ -24,7 +26,7 @@ fn streams_over_a_real_socket() {
     let mut sink = StringSink::default();
     let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
     assert_eq!(sink.text, "Bonjour le monde");
-    assert_eq!(finish, Finish::Eos);
+    assert_eq!(finish, Finish::eos());
     assert_eq!(usage.prompt_tokens, 11);
     assert_eq!(usage.completion_tokens, 3);
     assert_eq!(llm.name(), "google/gemini-2.5-flash");
@@ -53,10 +55,10 @@ fn flow_stop_closes_the_connection() {
     let mut sink = CountingSink::stopping_after(2);
     let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
 
-    assert_eq!(finish, Finish::Cancelled);
+    assert_eq!(finish, Finish::cancelled());
     assert!(!finish.is_complete(), "annulé : réponse incomplète");
     assert_eq!(sink.tokens, 2, "le générateur s'arrête net");
-    assert_eq!(sink.finished, Some(Finish::Cancelled), "on_finish appelé quand même");
+    assert_eq!(sink.finished, Some(Finish::cancelled()), "on_finish appelé quand même");
     assert_eq!(usage.completion_tokens, 2);
 
     let written = srv.written.load(Ordering::SeqCst);
@@ -70,11 +72,11 @@ fn tool_call_is_accumulated_across_deltas() {
     let mut sink = StringSink::default();
     let (finish, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
     assert_eq!(sink.text, "");
-    let Finish::ToolCall(payload) = &finish else { panic!("attendu ToolCall, eu {finish:?}") };
-    let calls: Value = serde_json::from_str(payload).unwrap();
-    assert_eq!(calls[0]["id"], "call_a1");
-    assert_eq!(calls[0]["name"], "KBQuerySourceNode");
-    let args: Value = serde_json::from_str(calls[0]["arguments"].as_str().unwrap()).unwrap();
+    assert_eq!(finish.reason, FinishReason::ToolCall, "eu {finish:?}");
+    let calls = &finish.tool_calls;
+    assert_eq!(calls[0].id, "call_a1");
+    assert_eq!(calls[0].name, "KBQuerySourceNode");
+    let args: Value = serde_json::from_str(&calls[0].arguments).unwrap();
     assert_eq!(args["kb_name"], "docs");
     assert_eq!(args["query"], "luciole");
     assert_eq!(usage.completion_tokens, 24);
@@ -93,7 +95,7 @@ fn a_client_side_stop_sequence_closes_the_socket() {
     let mut sink = StringSink::default();
     let (finish, usage) = llm.generate(&hello(), &opts, &mut sink).unwrap();
 
-    assert_eq!(finish, Finish::Stop("Observation:".into()));
+    assert_eq!(finish, Finish::stop("Observation:"));
     assert!(finish.is_complete(), "l'appelant avait demandé ce stop");
     assert_eq!(sink.text, "pensée utile ", "préfixe verbatim, séquence non émise");
     // Le chunk final `usage` n'arrive jamais : on rend nos propres fragments.

@@ -118,12 +118,12 @@ fn task_pipe_to_runs_on_the_pool_and_blocks_no_caller() {
         &consumer,
         "llm_generate",
         // Le vrai `Finish` est déjà passé par le puits, au fil de l'eau.
-        |_res| TokenMsg::Finish(Finish::Eos),
+        |_res| TokenMsg::Finish(Finish::eos()),
     );
 
     let (tokens, finish) = rx.recv_timeout(TIMEOUT).unwrap();
     assert_eq!(tokens.concat(), "Bonjour le monde");
-    assert_eq!(finish, Some(Finish::Eos));
+    assert_eq!(finish, Some(Finish::eos()));
     assert_eq!(on_pool.load(Ordering::SeqCst), 1, "la tâche doit tourner sur un thread du pool");
 }
 
@@ -147,7 +147,7 @@ fn a_consumer_that_stops_closes_the_socket() {
 
     // `wait` depuis un thread externe : attente bloquante, autorisée.
     let (finish, usage) = global_scheduler().wait(result, "llm_cancel").unwrap();
-    assert_eq!(finish, Finish::Cancelled);
+    assert_eq!(finish, Finish::cancelled());
     assert!(!finish.is_complete());
     assert!(usage.completion_tokens >= 2);
 
@@ -174,7 +174,7 @@ fn four_concurrent_generations_all_complete() {
     for rx in rxs {
         let (text, finish) = global_scheduler().wait(rx, "llm_par").unwrap();
         assert_eq!(text, "Bonjour le monde");
-        assert_eq!(finish, Finish::Eos);
+        assert_eq!(finish, Finish::eos());
     }
 }
 
