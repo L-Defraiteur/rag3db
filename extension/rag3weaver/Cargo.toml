@@ -60,6 +60,22 @@ burn = { version = "0.22.0-pre.2", optional = true, default-features = false, fe
 burn-store = { version = "0.22.0-pre.2", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
+# ─── Fournisseurs LLM distants (feature `openai-llm`) ────────────────────────
+# Client HTTP **bloquant**. Pourquoi ureq et pas reqwest/genai/rig : le trait
+# `Llm` est synchrone parce que `Node::execute` l'est, et luciole n'y change
+# rien — son `AsyncScope` est un *exécuteur* (il poll des futures dans
+# `poll_idle`), pas un *réacteur* : il n'a aucune registration d'I/O, donc il
+# ne peut pas porter une socket. Tout client async (reqwest, et donc genai,
+# rig-core, async-openai…) exige le réacteur de tokio ; l'adopter voudrait dire
+# un runtime tokio bloquant en plus du pool luciole. ureq lit le SSE avec
+# `BufRead::read_line` sur un thread du pool, et coûte 3 lignes de Cargo.lock.
+# Ne PAS « simplifier » ceci en réintroduisant reqwest.
+ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
+# Déjà dans l'arbre via ureq (rustls→ring) : déclarés pour que `gcp_auth`
+# puisse signer un JWT RS256 sans ajouter le moindre crate.
+ring = { version = "0.17", optional = true }
+base64 = { version = "0.22", optional = true }
+
 # PostgreSQL/Supabase backend (feature flag)
 tokio-postgres = { version = "0.7", optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
@@ -94,6 +110,11 @@ ocr = ["dep:image"]
 # Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
 # poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).
 burn-ocr = ["ocr", "dep:burn", "dep:burn-store"]
+# LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
+# (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
+# llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
+# `gcp_auth` (JWT RS256 + OAuth2, pour Vertex) est inclus : zéro crate de plus.
+openai-llm = ["dep:ureq", "dep:ring", "dep:base64"]
 wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]
@@ -109,6 +130,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
 tempfile = "3"
+# Déjà dans l'arbre via luciole : sert au test de la règle d'interblocage
+# (`try_send` + `run_one_step` contre `send`).
+flume = "0.11"
 
 [[example]]
 name = "tei_reqwest"
@@ -176,3 +200,8 @@ required-features = ["burn-embedder"]
 name = "burn_ppocr_vs_onnxruntime"
 required-features = ["burn-ocr"]
 
+
+# Premier appel réel à un fournisseur distant (clé lue dans l'environnement).
+[[example]]
+name = "openai_llm_stream"
+required-features = ["openai-llm"]

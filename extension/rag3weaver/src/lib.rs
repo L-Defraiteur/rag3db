@@ -105,6 +105,12 @@ pub mod config;
 pub mod connection;
 pub mod dialect;
 pub mod embedder;
+// Fournisseur LLM distant (endpoint compatible OpenAI) et l'authentification
+// Google qui va avec. Le trait `Llm` de `llm.rs` existe sans cette feature.
+#[cfg(feature = "openai-llm")]
+pub mod gcp_auth;
+#[cfg(feature = "openai-llm")]
+pub mod openai_llm;
 pub mod events;
 pub mod filter;
 pub mod fts_handle;

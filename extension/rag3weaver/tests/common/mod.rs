@@ -10,6 +10,11 @@
 //! `examples/*_reference.rs` et `examples/burn_*_vs_candle.rs`.
 #![allow(dead_code)]
 
+/// Serveur SSE local (std pur) pour les suites `openai_llm_*` : aucun réseau,
+/// aucun secret. Sous la feature qui l'utilise, pour ne rien compiler ailleurs.
+#[cfg(feature = "openai-llm")]
+pub mod fake_sse;
+
 #[cfg(feature = "burn-embedder")]
 pub mod burn {
     use std::path::PathBuf;
