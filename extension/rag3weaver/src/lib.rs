@@ -118,6 +118,7 @@ pub mod query;
 pub mod refs;
 pub mod schema;
 pub mod scope;
+pub mod tools;
 pub mod reranker;
 pub use reranker::{CallbackReranker, MockReranker, Reranker};
 pub mod search;
