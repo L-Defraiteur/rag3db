@@ -25,7 +25,11 @@ feature par brique, et les **poids téléchargés à la première utilisation da
 
 ### Côté documents et code
 
-1. **`codeparsers` intégré.** 24 555 lignes, 78 fichiers, 12 langages, un crate
+1. **`codeparsers` intégré** — *première étape faite le 25 août au soir*
+   (`25-aout-2026-18h58/03`) : crate réparé, `File` / `Scope` / `Library`
+   avec `hashsafe`, `ParseCodeNode → CodeIngestNode`, notre propre
+   `src/dataflow/` navigué. Reste la résolution des relations contre la base
+   et `FileSource`. Le texte qui suit est l'état d'avant. 24 555 lignes, 78 fichiers, 12 langages, un crate
    à part **jamais référencé**. Le plus gros actif dormant du dépôt. Ce qui
    compte n'est pas le parsing mais `import_resolution`,
    `relationship_resolution` et `scope_extraction` : **ils produisent les
@@ -91,6 +95,12 @@ d'embedding à l'ingestion) ; un E2E de fusion inter-KB.
 ## 4. Dettes nommées
 
 **Bloquantes pour une brique entière :**
+
+- **L'UPDATE de l'index HNSW segfaute au-delà de ~512 lignes** — chemin du
+  fork (`98e35566a`, février), celui de toute notre ingestion (`INSERT` puis
+  `SET`) et le seul possible pour une ré-ingestion. Le chemin d'insertion
+  amont tient à 4 096. Sonde `e2e_hnsw_scale` (`RAG3DB_PROBE_HNSW=1`),
+  `25-aout-2026-18h58/03` §3. **À corriger avant toute ingestion réelle.**
 
 - **Le Zipformer produit des valeurs fausses sur wgpu** (corr 0,47 contre
   1,000000 sur ndarray). Seul candidat STT à streaming natif. Bug amont,
