@@ -79,9 +79,11 @@ parité burn/candle                       MiniLM 2e-7 · multilingual 1.4e-7 · 
    trait `Ocr`, PP-OCRv6 tiny sur burn (6,2 Mo, feature `burn-ocr`),
    e2e_burn_ocr 4/4, parité onnxruntime. Reste : le go pour publier
    `Lucie666/ppocrv6-tiny-burnpack` (fiche prête dans le scratchpad).
-4. Puis **4 bis** : LLM / TTS / STT sur burn en streaming (ports en flux =
-   boîte aux lettres luciole), interface substituable par un fournisseur
-   cloud (ElevenLabs, Gradium).
+4. **4 bis en cours (doc 47)** : repérage fait et étape 1 livrée (trait `Llm`
+   par puits, `MockLlm`, `LlmNode`, outils depuis les `NodeSchema`).
+   burn-onnx **sait** faire un décodeur à cache KV (Qwen2.5-0.5B à 25 j/s,
+   `Luciole-1B` francophone réexporté et vérifié) ; Zipformer fr et Kokoro
+   passent aussi. Reste les étapes 2 à 6, 11 à 14 j-h.
 5. Puis **bilan** : use cases, ou encore de la solidification ?
 
 ## Dettes nommées (ne pas les oublier, ne pas les rouvrir sans raison)
