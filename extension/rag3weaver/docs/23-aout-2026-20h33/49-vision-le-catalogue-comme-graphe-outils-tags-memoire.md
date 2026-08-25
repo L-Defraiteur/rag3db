@@ -172,27 +172,51 @@ Chercher coûte moins cher que composer : la politique tombe toute seule —
 **chercher, composer si besoin, garder ce qui a marché**. Le système devient
 moins cher à mesure qu'il sert.
 
-## 7. Questions ouvertes (à trancher avant d'écrire)
+## 7. Décisions de Lucie (25 août)
 
-1. **Un agent est-il une ligne de `GraphTool` ou une entité distincte ?** Le
-   doc 36 dit qu'un agent *est* un sous-graphe — donc la même table, avec un
-   statut. Élégant, et c'est ce qui permet à un agent d'en appeler un autre
-   comme un outil ordinaire. Mais ça mêle « ce que le système sait faire » et
-   « qui le fait ». *Léger penchant pour une seule table.*
-2. **Les tags sont-ils par cellule ou partagés ?** Par cellule est cohérent avec
-   le doc 37, mais un vocabulaire commun (les `NodeType`, par exemple) gagnerait
-   à être partagé. Peut-être deux espaces : vocabulaire du produit / ontologie
-   du locataire.
-3. **Qui a le droit de promouvoir ?** L'agent seul sur preuve, ou validation
+**1. Un agent est un outil.** Une seule table : un agent *est* un sous-graphe
+(doc 36), donc une ligne de `GraphTool` avec un statut différent. C'est ce qui
+permet qu'un agent en appelle un autre comme un outil ordinaire, sans mécanisme
+particulier.
+
+**2. Deux espaces de tags, dont un temporel.** Le vocabulaire du produit (les
+`NodeType`, les concepts stables) est partagé ; l'ontologie du locataire est par
+cellule. Et l'un des deux porte une **dimension temporelle** — un concept a une
+période de pertinence, une mémoire vieillit, un tag peut avoir été vrai à une
+époque. Reste à concevoir : est-ce une propriété du tag, du lien `TAGGED`, ou
+une entité `Epoch` ? (Le lien porte déjà `score` ; y ajouter `from`/`to` est la
+piste la plus légère.)
+
+**3. Aucun accès Cypher pour les agents — et ce n'est pas une question de
+sûreté.** C'est une question d'**agnosticité de backend**. Tout doit passer par
+l'abstraction `Catalog` et le graphe. Exposer `CypherNode` à un agent rendrait
+**chaque outil composé spécifique à kuzu** : le dialecte Postgres, ou tout
+backend futur, ne saurait pas les exécuter. Or c'est précisément le catalogue —
+le savoir accumulé — qui doit rester portable ; c'est ce qu'on aurait de plus
+coûteux à perdre.
+
+> **Si une capacité manque par rapport à Cypher, on l'ajoute à l'abstraction —
+> on ne régresse pas vers du Cypher qui nous enchaînerait à cette base pour
+> toujours.**
+
+Corollaire utile : ce qu'un agent **n'arrive pas à faire** sans Cypher devient
+la **feuille de route** du dataflow. Ses échecs sont un signal, pas une gêne.
+`NodeTypePolicy` (livré, `76a566b58`) est le crochet ; pour les graphes composés
+par un modèle, la politique exclut `CypherNode` **par nature**, pas par
+prudence.
+
+## 8. Questions encore ouvertes
+
+1. **Qui a le droit de promouvoir ?** L'agent seul sur preuve, ou validation
    humaine ? Décision de produit : elle décide si le catalogue reste propre.
-4. **La frontière de capacités** : quels `NodeType` un graphe **composé par un
-   modèle** peut-il instancier ? `CypherNode` exécute du Cypher arbitraire,
-   `DeleteRecordNode` détruit. Lecture seule par défaut — c'est le
-   `restrict_to` du doc 37 appliqué aux nœuds.
-5. **Le seuil de rerank** pour fusionner deux tags : réglé à la main, appris sur
+2. **Le seuil de rerank** pour fusionner deux tags : réglé à la main, appris sur
    les décisions humaines, ou par accord de plusieurs modèles ?
+3. **La forme du temporel** (§7.2) : propriété, lien daté, ou entité `Epoch`.
+4. **Que fait-on d'un `NodeType` non portable ?** Certains nœuds sont
+   intrinsèquement liés à un backend. Faut-il un drapeau `portable` sur
+   `NodeType`, dont la politique de composition se sert automatiquement ?
 
-## 8. Risques nommés
+## 9. Risques nommés
 
 - **Dérive sémantique d'un tag** : son sens glisse à mesure que des choses s'y
   accrochent. Il faudra une notion de *santé* — un tag à mille membres est trop
@@ -203,4 +227,8 @@ moins cher à mesure qu'il sert.
 - **La projection des `NodeType`** qui dériverait du registre (§3).
 - **L'explosion du catalogue** si la promotion est trop facile — d'où §7.3.
 - **Une base qui contient ses propres outils est une base qui peut se
-  saborder** : la frontière de capacités (§7.4) n'est pas une option.
+  saborder** : la frontière de capacités (§7.3) n'est pas une option — et sa
+  raison première est la portabilité, la sûreté venant par-dessus.
+- **La fuite de l'abstraction** : chaque capacité ajoutée au dataflow plutôt
+  qu'empruntée à Cypher coûte du travail. C'est le prix de l'agnosticité, et il
+  se paie à chaque manque. Le nommer évite de le redécouvrir comme une surprise.
