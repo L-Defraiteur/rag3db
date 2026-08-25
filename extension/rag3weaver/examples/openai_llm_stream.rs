@@ -40,11 +40,23 @@
 //! # avec une clé : export OPENAI_API_KEY=… (et OPENAI_MODEL pour le modèle)
 //! ```
 //!
+//! # L'effort de raisonnement, et pourquoi il est réglé ici
+//!
+//! `REASONING_EFFORT` (`minimal|low|medium|high`) borne la réflexion du
+//! modèle. Sur Gemini 3.x, **ne rien régler n'est pas neutre** : la réflexion
+//! s'étend jusqu'à saturer `max_tokens` et tronque la vraie réponse. Mesuré
+//! sur Vertex avec 34 375 jetons d'entrée : sans réglage, 90 s, 11 520 jetons
+//! de réflexion, réponse **tronquée**, ~0,050 $ ; avec `low`, 9 s, réponse
+//! complète, 0,0149 $. D'où le défaut `low` sur les cibles Google.
+//!
+//! Pour un fournisseur générique, rien n'est envoyé par défaut : on ne change
+//! pas le comportement de qui ne connaît pas ce réglage.
+//!
 //! Aucune clé n'est jamais écrite en dur ni affichée.
 
 use std::io::Write;
 
-use rag3weaver::llm::{Finish, Flow, GenOptions, Llm, TokenSink, Turn};
+use rag3weaver::llm::{Finish, Flow, GenOptions, Llm, ReasoningEffort, TokenSink, Turn};
 use rag3weaver::openai_llm::{secret_from_env, Auth, OpenAiLlm};
 
 /// Écrit chaque fragment tout de suite : c'est le point de l'exercice.
@@ -59,9 +71,12 @@ impl TokenSink for StdoutSink {
         self.chars += delta.chars().count();
         Flow::Continue
     }
-    fn on_finish(&mut self, reason: &Finish) {
+    fn on_finish(&mut self, finish: &Finish) {
         println!();
-        eprintln!("── fin : {reason:?}");
+        eprintln!("── fin : {:?}", finish.reason);
+        for c in &finish.tool_calls {
+            eprintln!("── outil demandé : {} {} ({})", c.id, c.name, c.arguments);
+        }
     }
 }
 
@@ -69,7 +84,26 @@ fn env_or(var: &str, default: &str) -> String {
     std::env::var(var).ok().filter(|v| !v.trim().is_empty()).unwrap_or_else(|| default.into())
 }
 
-fn build(target: &str) -> Result<OpenAiLlm, String> {
+/// Lit `REASONING_EFFORT`. `google` porte le défaut : `low` pour Gemini (voir
+/// l'en-tête), rien pour un fournisseur générique.
+fn reasoning(google: bool) -> Result<Option<ReasoningEffort>, String> {
+    match std::env::var("REASONING_EFFORT").ok().filter(|v| !v.trim().is_empty()) {
+        None => Ok(google.then_some(ReasoningEffort::Low)),
+        Some(v) => match v.trim() {
+            "minimal" => Ok(Some(ReasoningEffort::Minimal)),
+            "low" => Ok(Some(ReasoningEffort::Low)),
+            "medium" => Ok(Some(ReasoningEffort::Medium)),
+            "high" => Ok(Some(ReasoningEffort::High)),
+            "none" | "off" => Ok(None),
+            other => Err(format!(
+                "REASONING_EFFORT={other:?} inconnu.\n  \
+                 Attendu : minimal, low, medium, high — ou `none` pour ne rien envoyer."
+            )),
+        },
+    }
+}
+
+fn build(target: &str) -> Result<(OpenAiLlm, bool), String> {
     match target {
         "ai-studio" | "gemini" => {
             let key = secret_from_env("GEMINI_API_KEY").map_err(|_| {
@@ -78,7 +112,7 @@ fn build(target: &str) -> Result<OpenAiLlm, String> {
                  puis : export GEMINI_API_KEY=…"
                     .to_string()
             })?;
-            Ok(OpenAiLlm::ai_studio(key, env_or("GEMINI_MODEL", "gemini-2.5-flash")))
+            Ok((OpenAiLlm::ai_studio(key, env_or("GEMINI_MODEL", "gemini-3.5-flash")), true))
         }
         "vertex" => {
             let project = std::env::var("GOOGLE_CLOUD_PROJECT").map_err(|_| {
@@ -96,20 +130,26 @@ fn build(target: &str) -> Result<OpenAiLlm, String> {
                 )
             })?;
             let token = source.token().map_err(|e| e.to_string())?;
-            Ok(OpenAiLlm::vertex(
-                &project,
-                &env_or("GOOGLE_CLOUD_LOCATION", "global"),
-                token,
-                env_or("VERTEX_MODEL", "google/gemini-2.5-flash"),
+            Ok((
+                OpenAiLlm::vertex(
+                    &project,
+                    &env_or("GOOGLE_CLOUD_LOCATION", "global"),
+                    token,
+                    env_or("VERTEX_MODEL", "google/gemini-3.5-flash"),
+                ),
+                true,
             ))
         }
         url if url.starts_with("http://") || url.starts_with("https://") => {
             let llm = OpenAiLlm::new(url, env_or("OPENAI_MODEL", "gpt-4o-mini"));
             // Une clé est facultative : un llama.cpp local n'en veut pas.
-            Ok(match secret_from_env("OPENAI_API_KEY") {
-                Ok(k) => llm.with_auth(Auth::Bearer(k)),
-                Err(_) => llm,
-            })
+            Ok((
+                match secret_from_env("OPENAI_API_KEY") {
+                    Ok(k) => llm.with_auth(Auth::Bearer(k)),
+                    Err(_) => llm,
+                },
+                false,
+            ))
         }
         other => Err(format!(
             "cible inconnue : {other:?}\n  \
@@ -136,7 +176,18 @@ fn main() {
         prompt
     };
 
-    let llm = match build(&target) {
+    // Validé AVANT de construire le client : une faute de frappe dans la
+    // configuration doit se voir même sans identifiants.
+    let google = matches!(target.as_str(), "ai-studio" | "gemini" | "vertex");
+    let effort = match reasoning(google) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
+
+    let (llm, _) = match build(&target) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("{e}");
@@ -145,13 +196,20 @@ fn main() {
     };
 
     eprintln!("── modèle : {} (contexte {})", llm.name(), llm.context_len());
+    match effort {
+        Some(e) => eprintln!("── raisonnement : {e}"),
+        None => eprintln!("── raisonnement : réglage non envoyé"),
+    }
     eprintln!("── prompt : {prompt}\n");
 
     let turns = vec![
         Turn::system("Tu réponds en français, brièvement et sans fioritures."),
         Turn::user(prompt),
     ];
-    let opts = GenOptions::default().with_max_tokens(512);
+    let mut opts = GenOptions::default().with_max_tokens(512);
+    if let Some(e) = effort {
+        opts = opts.with_reasoning(e);
+    }
     let mut sink = StdoutSink { chars: 0 };
 
     match llm.generate(&turns, &opts, &mut sink) {

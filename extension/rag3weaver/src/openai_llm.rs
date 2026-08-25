@@ -181,7 +181,8 @@ impl OpenAiLlm {
     /// Corps de la requête. Public pour qu'un test puisse l'inspecter sans
     /// ouvrir de socket — il ne contient aucun secret (l'auth est un en-tête).
     pub fn request_body(&self, turns: &[Turn], opts: &GenOptions) -> Value {
-        let messages: Vec<Value> = turns.iter().map(message_json).collect();
+        let messages: Vec<Value> =
+            turns.iter().map(|t| message_json(t, self.google_extras)).collect();
 
         let mut body = Map::new();
         body.insert("model".into(), json!(self.model));
@@ -195,6 +196,17 @@ impl OpenAiLlm {
         body.insert("max_tokens".into(), json!(opts.max_tokens));
         body.insert("temperature".into(), json!(opts.temperature));
         body.insert("top_p".into(), json!(opts.top_p));
+        // Paramètre de premier plan, pas une extension : il part vers TOUS les
+        // fournisseurs, y compris OpenAI. Absent par défaut, donc rien ne
+        // change pour qui ne le connaît pas. On n'utilise **pas**
+        // `extra_body.google.thinking_config` : c'est une extension
+        // propriétaire, donc soumise à « un paramètre inconnu est ignoré » —
+        // elle est avalée en silence, mesures à l'appui dans
+        // `ReasoningEffort`. `reasoning_effort`, lui, est validé : une valeur
+        // invalide répond 400 en nommant celles qu'il accepte.
+        if let Some(effort) = opts.reasoning {
+            body.insert("reasoning_effort".into(), json!(effort.as_str()));
+        }
         // `opts.stop` n'est **délibérément pas** envoyé. Ne pas « corriger »
         // ceci : le fournisseur écrase `Finish::stop(seq)` et `Finish::eos()` en
         // un seul `finish_reason: "stop"`, si bien qu'on ne saurait plus dire
@@ -226,6 +238,35 @@ impl OpenAiLlm {
     }
 }
 
+/// La signature de contournement, dans la forme que Gemini attend.
+///
+/// **Dernier recours, pas un défaut confortable.** Gemini 3.x refuse en 400
+/// tout appel d'outil rejoué sans `thought_signature`. Or nos appels d'origine
+/// locale (`MockLlm`, le modèle burn à venir) n'en ont aucune : ils portent nos
+/// identifiants blake3 et rien d'autre. Sans ce pont, une conversation née sur
+/// le modèle embarqué et reprise sur Gemini partirait en 400 — ce qui viderait
+/// de son sens l'idée d'un trait [`crate::llm::Llm`] unique.
+///
+/// Google documente cette échappatoire pour exactement ce cas (appels
+/// fabriqués côté client, traces importées d'un autre modèle) en prévenant
+/// qu'elle **dégrade les performances du modèle**. On ne l'émet donc que vers
+/// un fournisseur Google, et seulement quand le tour n'a **aucune** signature
+/// d'origine à rejouer.
+///
+/// Cette dernière condition est ce qui protège le cas des appels parallèles :
+/// Gemini ne signe que le **premier** d'un lot, les suivants sont légitimement
+/// nus, et leur fabriquer une signature serait une régression. Un tour qui
+/// porte au moins une signature est donc laissé tel quel.
+///
+/// Reste un cas qu'on ne sait pas trancher : une réponse Gemini **2.5**, non
+/// signée par nature, est indiscernable d'un appel fabriqué chez nous. On y
+/// met alors l'échappatoire. C'est délibéré : ne rien mettre risque un **400
+/// dur** sur 3.x, la mettre risque une **dégradation douce** sur 2.5 — entre
+/// un échec franc et une baisse de qualité, on choisit la baisse de qualité.
+fn skip_validator() -> Value {
+    json!({ "google": { "thought_signature": crate::llm::SKIP_THOUGHT_SIGNATURE_VALIDATOR } })
+}
+
 /// Un appel d'outil en cours de reconstitution : `id` et `name` n'arrivent
 /// qu'une fois, `arguments` est un flux de fragments à concaténer.
 #[derive(Default)]
@@ -233,6 +274,9 @@ struct ToolAcc {
     id: String,
     name: String,
     arguments: String,
+    /// `extra_content` de cet appel, capté tel quel. Voir
+    /// [`crate::llm::ToolCall::provider_extra`] : on ne l'interprète pas.
+    extra: Option<Value>,
 }
 
 impl ToolAcc {
@@ -240,14 +284,22 @@ impl ToolAcc {
     fn collect(tools: &[ToolAcc]) -> Vec<ToolCall> {
         tools
             .iter()
-            .map(|t| ToolCall::new(&t.id, &t.name, &t.arguments))
+            .map(|t| {
+                let call = ToolCall::new(&t.id, &t.name, &t.arguments);
+                match &t.extra {
+                    Some(e) => call.with_provider_extra(e.clone()),
+                    None => call,
+                }
+            })
             .collect()
     }
 }
 
 /// Un tour, dans la forme attendue par `/chat/completions`. Trois formes
 /// réelles, et elles ne se sérialisent pas pareil.
-fn message_json(t: &Turn) -> Value {
+///
+/// `google` active le pont de signatures décrit dans [`skip_validator`].
+fn message_json(t: &Turn, google: bool) -> Value {
     let mut m = Map::new();
     m.insert("role".into(), json!(t.role));
     if let Some(id) = &t.tool_call_id {
@@ -260,6 +312,13 @@ fn message_json(t: &Turn) -> Value {
         }
         m.insert("content".into(), json!(t.content));
     } else if !t.tool_calls.is_empty() {
+        // Un tour issu de Gemini porte **au moins une** signature : celle du
+        // premier appel. Si aucun appel du tour n'en a, le tour ne vient pas
+        // de Gemini — il est né chez nous (modèle local) ou chez un autre
+        // fournisseur. C'est ce qui distingue « absence légitime » (2ᵉ appel
+        // parallèle, que Google ne signe pas et n'attend pas signé) de
+        // « absence à combler ».
+        let turn_is_signed = t.tool_calls.iter().any(|c| c.provider_extra.is_some());
         // Assistant qui annonce des appels. `content` est `null` — jamais la
         // chaîne vide — quand le modèle n'a rien dit. Ce n'est pas du style :
         // le schéma d'OpenAI rend `content` facultatif dès qu'il y a des
@@ -274,14 +333,31 @@ fn message_json(t: &Turn) -> Value {
             json!(t
                 .tool_calls
                 .iter()
-                .map(|c| json!({
-                    "id": c.id,
-                    "type": "function",
+                .map(|c| {
+                    let mut call = Map::new();
+                    call.insert("id".into(), json!(c.id));
+                    call.insert("type".into(), json!("function"));
                     // `arguments` est une **chaîne** contenant du JSON, pas un
                     // objet : c'est le format du protocole, et le renvoyer
                     // autrement fait échouer l'appariement.
-                    "function": { "name": c.name, "arguments": c.arguments },
-                }))
+                    call.insert(
+                        "function".into(),
+                        json!({ "name": c.name, "arguments": c.arguments }),
+                    );
+                    // Rejeu à l'identique de ce que le fournisseur avait
+                    // attaché (`thought_signature` chez Gemini 3.x).
+                    if let Some(extra) = &c.provider_extra {
+                        call.insert("extra_content".into(), extra.clone());
+                    } else if google && !turn_is_signed {
+                        // Appel fabriqué chez nous, envoyé à Google : voir
+                        // `skip_validator`.
+                        call.insert("extra_content".into(), skip_validator());
+                    }
+                    // Sinon : rien du tout. Surtout pas une clé vide ou
+                    // `null` — un appel parallèle non signé est parfaitement
+                    // légitime, et Google ne l'attend pas.
+                    Value::Object(call)
+                })
                 .collect::<Vec<_>>()),
         );
     } else {
@@ -396,6 +472,19 @@ impl Llm for OpenAiLlm {
             if msg.contains("context length") || msg.contains("maximum context") {
                 return Err(LlmError::ContextOverflow { max: self.context_len, got: 0 });
             }
+            // Gemini refuse un appel d'outil rejoué sans sa signature. Le
+            // libellé varie (« Function call FC1 in the 1. content block is
+            // missing a thought_signature. » / « ... in functionCall parts
+            // ... »), donc on ne compare **jamais** une chaîne exacte : la
+            // présence du mot suffit à donner un conseil utile.
+            if msg.contains("thought_signature") {
+                return Err(LlmError::Model(format!(
+                    "HTTP {status}: {} — un appel d'outil a été rejoué sans sa \
+                     `thought_signature`. Les `ToolCall` doivent conserver leur \
+                     `provider_extra` d'un tour à l'autre.",
+                    msg.trim()
+                )));
+            }
             return Err(LlmError::Model(format!("HTTP {status}: {}", msg.trim())));
         }
 
@@ -431,6 +520,8 @@ fn read_sse(
     let mut tools: Vec<ToolAcc> = Vec::new();
     let mut by_id: HashMap<String, usize> = HashMap::new();
     let mut by_index: HashMap<usize, usize> = HashMap::new();
+    // Dernier appel touché, pour les deltas sans `id` ni `index`.
+    let mut last_slot: Option<usize> = None;
     let mut usage = crate::llm::Usage::default();
     // Texte reçu mais pas encore poussé : il pourrait amorcer une séquence
     // d'arrêt. Vide dès qu'on sait qu'il n'en est rien.
@@ -475,33 +566,71 @@ fn read_sse(
 
         if let Some(calls) = delta["tool_calls"].as_array() {
             for c in calls {
-                let idx = c["index"].as_u64().unwrap_or(0) as usize;
-                // ⚠ L'`index` de Vertex n'est pas fiable : ses propres
-                // exemples font passer un même appel de `index: 1` à
-                // `index: 0`. Un parseur qui indexe par `index` recolle les
-                // arguments de deux outils différents. On route par `id` dès
-                // qu'il est présent, et on ne retombe sur `index` que pour les
-                // deltas anonymes (la forme d'OpenAI).
-                let slot = match c["id"].as_str() {
-                    Some(id) => {
-                        let s = *by_id.entry(id.to_string()).or_insert_with(|| {
-                            tools.push(ToolAcc { id: id.to_string(), ..Default::default() });
-                            tools.len() - 1
-                        });
-                        by_index.insert(idx, s);
+                // ⚠ Deux défauts de l'`index` côté Google, et ils se
+                // cumulent. Il n'est pas fiable — les exemples de Vertex font
+                // passer un même appel de `index: 1` à `index: 0` — et en
+                // streaming il est carrément **absent** (Google envoie
+                // l'appel entier dans une seule trame et omet le champ que la
+                // spec OpenAI impose, ce qui casse les validateurs stricts).
+                // On route donc par `id` dès qu'il est là ; `index` ne sert
+                // qu'aux deltas anonymes, la forme d'OpenAI. Et on ne
+                // l'enregistre que s'il est réellement présent : le supposer
+                // à 0 ferait converger tous les appels d'une même trame vers
+                // la même case.
+                let idx = c["index"].as_u64().map(|v| v as usize);
+                let fresh = |tools: &mut Vec<ToolAcc>, id: Option<&str>| {
+                    tools.push(ToolAcc {
+                        id: id.unwrap_or_default().to_string(),
+                        ..Default::default()
+                    });
+                    tools.len() - 1
+                };
+                let slot = match (c["id"].as_str(), idx) {
+                    (Some(id), _) => {
+                        let s = match by_id.get(id) {
+                            Some(s) => *s,
+                            None => {
+                                let s = fresh(&mut tools, Some(id));
+                                by_id.insert(id.to_string(), s);
+                                s
+                            }
+                        };
+                        if let Some(i) = idx {
+                            by_index.insert(i, s);
+                        }
                         s
                     }
-                    None => *by_index.entry(idx).or_insert_with(|| {
-                        tools.push(ToolAcc::default());
-                        tools.len() - 1
-                    }),
+                    (None, Some(i)) => match by_index.get(&i) {
+                        Some(s) => *s,
+                        None => {
+                            let s = fresh(&mut tools, None);
+                            by_index.insert(i, s);
+                            s
+                        }
+                    },
+                    // Ni `id` ni `index` : le seul rattachement raisonnable
+                    // est le dernier appel touché.
+                    (None, None) => match last_slot {
+                        Some(s) => s,
+                        None => fresh(&mut tools, None),
+                    },
                 };
+                last_slot = Some(slot);
                 let acc = &mut tools[slot];
                 if let Some(n) = c["function"]["name"].as_str() {
                     acc.name = n.to_string();
                 }
                 if let Some(a) = c["function"]["arguments"].as_str() {
                     acc.arguments.push_str(a);
+                }
+                // `extra_content` porte le `thought_signature` de Gemini 3.x,
+                // que le fournisseur exige de revoir à l'identique au tour
+                // suivant sous peine de 400. On le capte **opaque** : ni lu,
+                // ni validé, ni interprété — juste transporté. Il peut arriver
+                // sur n'importe quelle trame de l'appel, d'où la mise à jour
+                // à chaque fois qu'il est présent.
+                if let Some(e) = c.get("extra_content").filter(|v| !v.is_null()) {
+                    acc.extra = Some(e.clone());
                 }
             }
         }
@@ -600,7 +729,7 @@ fn read_sse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{CountingSink, FinishReason, StringSink};
+    use crate::llm::{CountingSink, FinishReason, ReasoningEffort, StringSink};
 
     fn hello() -> Vec<Turn> {
         vec![Turn::system("tu es utile"), Turn::user("bonjour")]
@@ -986,11 +1115,15 @@ mod tests {
                         calls
                             .iter()
                             .map(|c| {
-                                ToolCall::new(
+                                let call = ToolCall::new(
                                     c["id"].as_str().unwrap(),
                                     c["function"]["name"].as_str().unwrap(),
                                     c["function"]["arguments"].as_str().unwrap(),
-                                )
+                                );
+                                match c.get("extra_content") {
+                                    Some(e) => call.with_provider_extra(e.clone()),
+                                    None => call,
+                                }
                             })
                             .collect(),
                     )
@@ -1163,6 +1296,288 @@ mod tests {
         // Les deux exécutés gardent leur vrai résultat.
         assert_eq!(body["messages"][2]["content"], "ok 1");
         assert_eq!(body["messages"][4]["content"], crate::llm::INTERRUPTED_TOOL_RESULT);
+    }
+
+    // ─── reasoning_effort ───────────────────────────────────────────────────
+
+    #[test]
+    fn reasoning_effort_is_absent_by_default() {
+        // Ne rien envoyer = ne rien changer pour un fournisseur qui ne connaît
+        // pas le réglage.
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&hello(), &GenOptions::default());
+        assert!(body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn reasoning_effort_serializes_the_four_accepted_values() {
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        for (effort, expected) in [
+            (ReasoningEffort::Minimal, "minimal"),
+            (ReasoningEffort::Low, "low"),
+            (ReasoningEffort::Medium, "medium"),
+            (ReasoningEffort::High, "high"),
+        ] {
+            let opts = GenOptions::default().with_reasoning(effort);
+            let body = llm.request_body(&hello(), &opts);
+            assert_eq!(body["reasoning_effort"], expected);
+            assert_eq!(effort.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn reasoning_effort_goes_to_every_provider_and_thinking_config_is_never_used() {
+        // C'est un paramètre de premier plan, pas une extension Google : il
+        // part même vers un fournisseur générique. Et on n'émet JAMAIS
+        // `thinking_config`, qui serait avalé en silence.
+        let opts = GenOptions::default().with_reasoning(ReasoningEffort::Low);
+        for llm in [
+            OpenAiLlm::new("http://x/v1", "m"),
+            OpenAiLlm::ai_studio("k", "gemini-3.5-flash"),
+            OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash"),
+        ] {
+            let body = llm.request_body(&hello(), &opts);
+            assert_eq!(body["reasoning_effort"], "low");
+            let dump = body.to_string();
+            assert!(!dump.contains("thinking_config"), "thinking_config émis : {dump}");
+            assert!(!dump.contains("thinking_budget"));
+        }
+    }
+
+    #[test]
+    fn without_reasoning_clears_it() {
+        let opts = GenOptions::default()
+            .with_reasoning(ReasoningEffort::High)
+            .without_reasoning();
+        assert!(opts.reasoning.is_none());
+    }
+
+    // ─── thought_signature (opaque) ─────────────────────────────────────────
+
+    /// Trames d'un appel d'outil Gemini 3.x, signature comprise.
+    const SIGNED: &[&str] = &[
+        r#"{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_X","type":"function","function":{"name":"KBQuerySourceNode","arguments":"{\"kb_"}}]},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_X","function":{"arguments":"name\":\"docs\"}"},"extra_content":{"google":{"thought_signature":"Cq4BAdHtim9sig=="}}}]},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#,
+    ];
+
+    #[test]
+    fn thought_signature_is_captured_opaquely() {
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(SIGNED, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::ToolCall);
+        let extra = finish.tool_calls[0].provider_extra.as_ref().expect("signature captée");
+        // Capté tel quel, sans que `llm.rs` sache ce que c'est.
+        assert_eq!(extra["google"]["thought_signature"], "Cq4BAdHtim9sig==");
+    }
+
+    #[test]
+    fn thought_signature_survives_a_full_round_trip_identically() {
+        // Le tour 1 produit la signature ; le tour 2 doit la représenter au
+        // fournisseur **à l'identique**, sinon 400 sur Gemini 3.x.
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(SIGNED, &GenOptions::default(), &mut sink);
+        let original = finish.tool_calls[0].provider_extra.clone().unwrap();
+
+        let mut turns = vec![
+            Turn::user("cherche"),
+            Turn::assistant_with_calls("", finish.tool_calls.clone()),
+        ];
+        crate::llm::close_orphan_tool_calls(&mut turns, crate::llm::INTERRUPTED_TOOL_RESULT);
+
+        let llm = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        // Présente dans le corps, au bon endroit, à l'identique.
+        assert_eq!(body["messages"][1]["tool_calls"][0]["extra_content"], original);
+        assert_eq!(
+            body["messages"][1]["tool_calls"][0]["extra_content"]["google"]["thought_signature"],
+            "Cq4BAdHtim9sig=="
+        );
+        // Et l'aller-retour complet la rend bit pour bit.
+        let back = turns_from_body(&body);
+        assert_eq!(back[1].tool_calls[0].provider_extra.as_ref(), Some(&original));
+        assert_eq!(back[1].tool_calls, turns[1].tool_calls);
+    }
+
+    #[test]
+    fn thought_signature_survives_a_cancellation() {
+        // L'invariant couvre aussi l'opaque : une interruption ne doit pas
+        // plus perdre la signature qu'elle ne perd l'identifiant.
+        let mut sink = CountingSink::stopping_after(1);
+        let frames = &[
+            SIGNED[0],
+            SIGNED[1],
+            r#"{"choices":[{"index":0,"delta":{"content":"je cherche"},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"content":" encore"},"finish_reason":null}]}"#,
+        ];
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert_eq!(finish.tool_calls[0].id, "call_X");
+        assert_eq!(
+            finish.tool_calls[0].provider_extra.as_ref().unwrap()["google"]
+                ["thought_signature"],
+            "Cq4BAdHtim9sig=="
+        );
+    }
+
+    #[test]
+    fn parallel_calls_only_the_first_is_signed_and_that_is_preserved() {
+        // Forme réelle de Gemini en appels parallèles : UNE signature, sur le
+        // premier appel. Les suivants n'en ont pas et n'en attendent pas — il
+        // ne faut donc surtout pas leur en fabriquer une.
+        let frames = &[
+            r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"f1","arguments":"{}"},"extra_content":{"google":{"thought_signature":"SIG1"}}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"f2","arguments":"{}"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ];
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.tool_calls.len(), 2, "les deux appels malgré l'absence d'`index`");
+        assert_eq!(finish.tool_calls[0].id, "call_1");
+        assert_eq!(finish.tool_calls[1].id, "call_2");
+        assert!(finish.tool_calls[0].provider_extra.is_some());
+        assert!(finish.tool_calls[1].provider_extra.is_none(), "absence légitime");
+
+        // Au rejeu : la signature du premier repart, le second reste nu — pas
+        // d'échappatoire fabriquée, le tour est déjà d'origine Google.
+        let turns = vec![Turn::assistant_with_calls("", finish.tool_calls.clone())];
+        let llm = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let calls = &body["messages"][0]["tool_calls"];
+        assert_eq!(calls[0]["extra_content"]["google"]["thought_signature"], "SIG1");
+        assert!(calls[1].get("extra_content").is_none(), "rien à fabriquer ici : {}", calls[1]);
+    }
+
+    #[test]
+    fn sequential_calls_keep_one_signature_each() {
+        let calls = vec![
+            ToolCall::new("c1", "f1", "{}")
+                .with_provider_extra(json!({"google":{"thought_signature":"S1"}})),
+            ToolCall::new("c2", "f2", "{}")
+                .with_provider_extra(json!({"google":{"thought_signature":"S2"}})),
+        ];
+        let turns = vec![Turn::assistant_with_calls("", calls)];
+        let llm = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let c = &body["messages"][0]["tool_calls"];
+        assert_eq!(c[0]["extra_content"]["google"]["thought_signature"], "S1");
+        assert_eq!(c[1]["extra_content"]["google"]["thought_signature"], "S2");
+        // Aller-retour : chacune revient sur son propre appel.
+        let back = turns_from_body(&body);
+        assert_eq!(back[0].tool_calls[0].provider_extra, turns[0].tool_calls[0].provider_extra);
+        assert_eq!(back[0].tool_calls[1].provider_extra, turns[0].tool_calls[1].provider_extra);
+    }
+
+    #[test]
+    fn a_locally_born_call_gets_the_escape_hatch_only_towards_google() {
+        // Le pont entre les deux mondes : une conversation née sur le modèle
+        // local doit rester rejouable vers Gemini 3.x.
+        let call = ToolCall::local("ctx", 0, "KBQuerySourceNode", r#"{"kb_name":"docs"}"#);
+        assert!(call.provider_extra.is_none());
+        let turns = vec![Turn::assistant_with_calls("", vec![call])];
+
+        for llm in [
+            OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash"),
+            OpenAiLlm::ai_studio("k", "gemini-3.5-flash"),
+        ] {
+            let body = llm.request_body(&turns, &GenOptions::default());
+            assert_eq!(
+                body["messages"][0]["tool_calls"][0]["extra_content"]["google"]
+                    ["thought_signature"],
+                crate::llm::SKIP_THOUGHT_SIGNATURE_VALIDATOR,
+                "sans ce pont, Gemini 3.x répondrait 400"
+            );
+        }
+
+        // Mais jamais vers un fournisseur non-Google : ce serait un champ
+        // inconnu qu'un serveur strict pourrait refuser.
+        let generic = OpenAiLlm::new("http://x/v1", "m");
+        let body = generic.request_body(&turns, &GenOptions::default());
+        assert!(!body.to_string().contains("extra_content"));
+        assert!(!body.to_string().contains("skip_thought_signature_validator"));
+    }
+
+    #[test]
+    fn closing_orphans_keeps_all_calls_before_all_results() {
+        // Ordre imposé par Google en appels parallèles : FC1, FC2, FC3, puis
+        // FR1, FR2, FR3. Entrelacer donne un 400. Trois appels, deux
+        // orphelins : le comblement ne doit pas casser cet ordre.
+        let calls: Vec<ToolCall> = (1..=3)
+            .map(|i| ToolCall::new(format!("call_{i}"), format!("f{i}"), "{}"))
+            .collect();
+        let mut turns = vec![
+            Turn::user("fais trois choses"),
+            Turn::assistant_with_calls("", calls),
+            Turn::tool_result("call_1", "f1", "ok 1"),
+        ];
+        assert_eq!(
+            crate::llm::close_orphan_tool_calls(&mut turns, crate::llm::INTERRUPTED_TOOL_RESULT),
+            2
+        );
+
+        let llm = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let msgs = body["messages"].as_array().unwrap();
+        let roles: Vec<&str> = msgs.iter().map(|m| m["role"].as_str().unwrap()).collect();
+        assert_eq!(roles, ["user", "assistant", "tool", "tool", "tool"]);
+        // Les trois appels sont dans UN message assistant, avant tout résultat.
+        assert_eq!(msgs[1]["tool_calls"].as_array().unwrap().len(), 3);
+        let answered: Vec<&str> =
+            msgs.iter().filter_map(|m| m["tool_call_id"].as_str()).collect();
+        assert_eq!(answered, ["call_1", "call_2", "call_3"], "ordre d'annonce conservé");
+        assert!(crate::llm::orphan_tool_calls(&turns).is_empty());
+    }
+
+    #[test]
+    fn a_provider_call_without_signature_is_fine() {
+        // Absence légitime : Gemini 2.5, ou modèle sans réflexion. Rien ne
+        // doit casser à la lecture.
+        let frames = &[
+            r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_Y","type":"function","function":{"name":"f","arguments":"{}"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ];
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::ToolCall);
+        assert!(finish.tool_calls[0].provider_extra.is_none());
+
+        // Au rejeu vers Google, un tour SANS aucune signature reçoit
+        // l'échappatoire — voir `skip_validator`. C'est un arbitrage assumé :
+        // on ne sait pas distinguer « réponse Gemini 2.5, non signée par
+        // nature » de « appel fabriqué chez nous ». Ne rien mettre risque un
+        // **400 dur** sur Gemini 3.x ; mettre l'échappatoire risque une
+        // **dégradation douce** sur 2.5. On préfère l'échec doux.
+        let turns = vec![Turn::assistant_with_calls("", finish.tool_calls.clone())];
+        let llm = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        assert_eq!(
+            body["messages"][0]["tool_calls"][0]["extra_content"]["google"]
+                ["thought_signature"],
+            crate::llm::SKIP_THOUGHT_SIGNATURE_VALIDATOR
+        );
+        // Vers un fournisseur générique, en revanche, rien n'est ajouté.
+        let generic = OpenAiLlm::new("http://x/v1", "m");
+        assert!(!generic
+            .request_body(&turns, &GenOptions::default())
+            .to_string()
+            .contains("extra_content"));
+    }
+
+    #[test]
+    fn a_local_tool_call_serializes_no_extra_content() {
+        // Chemin local : rien à rejouer, donc la clé ne doit pas apparaître —
+        // pas même en `null`, qu'il faudrait espérer voir toléré.
+        let call = ToolCall::local("ctx", 0, "KBQuerySourceNode", r#"{"kb_name":"docs"}"#);
+        assert!(call.provider_extra.is_none());
+        let turns = vec![Turn::assistant_with_calls("", vec![call])];
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let serialized = &body["messages"][0]["tool_calls"][0];
+        assert!(serialized.get("extra_content").is_none(), "clé superflue : {serialized}");
+        assert!(!body.to_string().contains("extra_content"));
+        // Le reste de la forme est intact.
+        assert_eq!(serialized["type"], "function");
+        assert!(serialized["function"]["arguments"].is_string());
     }
 
     #[test]

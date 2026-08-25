@@ -66,6 +66,21 @@ pub struct ToolCall {
     /// `max_tokens` produit du JSON invalide, et il faut quand même pouvoir
     /// le refermer.
     pub arguments: String,
+    /// Données que le fournisseur attache à **cet appel** et qu'il exige de
+    /// revoir, à l'identique, au tour suivant. **Opaque** : `llm.rs` ne sait
+    /// pas ce qu'il y a dedans, ne le lit pas, ne le valide pas — il le
+    /// transporte.
+    ///
+    /// C'est ce qui porte le `thought_signature` de Gemini 3.x. Un champ
+    /// `thought_signature: Option<String>` aurait fait entrer le vocabulaire
+    /// d'un fournisseur dans le type générique que voient le modèle local et
+    /// les 28 nœuds ; ici, seul [`crate::openai_llm`] sait le remplir et le
+    /// relire, et le prochain fournisseur qui inventera son propre jeton de
+    /// continuité n'imposera pas un champ de plus.
+    ///
+    /// `None` sur le chemin local (`MockLlm`, burn) : il n'y a rien à rejouer,
+    /// et **rien de superflu ne doit être sérialisé**.
+    pub provider_extra: Option<serde_json::Value>,
 }
 
 impl ToolCall {
@@ -74,7 +89,18 @@ impl ToolCall {
         name: impl Into<String>,
         arguments: impl Into<String>,
     ) -> Self {
-        Self { id: id.into(), name: name.into(), arguments: arguments.into() }
+        Self {
+            id: id.into(),
+            name: name.into(),
+            arguments: arguments.into(),
+            provider_extra: None,
+        }
+    }
+
+    /// Attache les données opaques du fournisseur. Voir [`Self::provider_extra`].
+    pub fn with_provider_extra(mut self, extra: serde_json::Value) -> Self {
+        self.provider_extra = Some(extra);
+        self
     }
 
     /// Identifiant pour un modèle **local**, qui n'en reçoit pas du
@@ -105,6 +131,7 @@ impl ToolCall {
 
     /// Le même, mais qui construit l'appel complet.
     pub fn local(context: &str, index: usize, name: &str, arguments: &str) -> Self {
+        // Pas de `provider_extra` : un modèle local n'a rien à rejouer.
         Self::new(Self::local_id(context, index, name, arguments), name, arguments)
     }
 }
@@ -324,6 +351,16 @@ impl Turn {
     }
 }
 
+/// Signature factice que Google documente pour les historiques qui n'en ont
+/// pas — trace importée d'un autre modèle, appels fabriqués côté client, ou
+/// conversation démarrée sur notre modèle local puis reprise sur Gemini 3.x.
+///
+/// **Dernier recours, jamais automatique.** Google prévient : « it will
+/// negatively impact model performance ». On l'expose parce que le cas
+/// hybride est réel, pas parce qu'il est recommandé ; c'est à l'appelant de
+/// décider, avec [`ToolCall::with_provider_extra`].
+pub const SKIP_THOUGHT_SIGNATURE_VALIDATOR: &str = "skip_thought_signature_validator";
+
 /// Contenu posé dans un résultat d'outil fabriqué pour refermer un appel qui
 /// n'a jamais été exécuté. Une chaîne JSON : l'agent la relit sans casser sur
 /// du texte libre, et le modèle comprend que l'outil n'a pas tourné.
@@ -446,6 +483,11 @@ pub struct GenOptions {
     pub stop: Vec<String>,
     /// Outils exposés au modèle, en général `crate::tools::tool_defs()`.
     pub tools: Vec<ToolDef>,
+    /// Combien le modèle a le droit de « réfléchir » avant de répondre.
+    /// `None` = on n'envoie rien, donc rien ne change pour un fournisseur qui
+    /// ne connaît pas ce réglage. Voir [`ReasoningEffort`] : ce n'est pas un
+    /// réglage cosmétique, c'est **le** levier de coût et de latence.
+    pub reasoning: Option<ReasoningEffort>,
 }
 
 impl Default for GenOptions {
@@ -456,6 +498,7 @@ impl Default for GenOptions {
             top_p: 1.0,
             stop: Vec::new(),
             tools: Vec::new(),
+            reasoning: None,
         }
     }
 }
@@ -480,6 +523,101 @@ impl GenOptions {
     pub fn with_tools(mut self, tools: Vec<ToolDef>) -> Self {
         self.tools = tools;
         self
+    }
+    /// Borne la réflexion du modèle. Voir [`ReasoningEffort`] pour les mesures.
+    pub fn with_reasoning(mut self, effort: ReasoningEffort) -> Self {
+        self.reasoning = Some(effort);
+        self
+    }
+    /// Ne rien envoyer : le fournisseur décide (et, sur Gemini 3.x, il décide
+    /// de réfléchir jusqu'à saturer `max_tokens`).
+    pub fn without_reasoning(mut self) -> Self {
+        self.reasoning = None;
+        self
+    }
+}
+
+/// Budget de réflexion, sérialisé en `reasoning_effort`.
+///
+/// **Type fermé, et volontairement.** Une faute de frappe doit être une erreur
+/// de compilation : le fournisseur, lui, répond 400 en énumérant les valeurs
+/// qu'il accepte — trop tard, et en production.
+///
+/// ## Pourquoi ça compte (mesuré sur Vertex, `gemini-3.5-flash`, 34 375 jetons
+/// d'entrée)
+///
+/// | réglage | temps | jetons de réflexion | issue | coût |
+/// |---|---|---|---|---|
+/// | aucun | 90 s | 11 520 | **tronqué** | ~0,050 $ |
+/// | `thinking_budget: 5600` | 66 s | **15 361** (ignoré) | **tronqué** | ~0,050 $ |
+/// | [`ReasoningEffort::Low`] | **9 s** | 0 | complet | **0,0149 $** |
+/// | [`ReasoningEffort::Minimal`] | 12 s | 0 | complet | 0,0145 $ |
+///
+/// Première chose à retenir : la réflexion **s'étend jusqu'à remplir
+/// `max_tokens`** si on ne la borne pas (11 520 sur 12 000 ; 15 361 sur
+/// 16 000), ce qui tronque la vraie réponse.
+///
+/// ## Pourquoi `reasoning_effort` et pas `thinking_config`
+///
+/// La mesure ci-dessus montre `thinking_budget: 5600` sans effet. La doc de
+/// Google en donne la raison, et elle n'est pas « l'extension est ignorée » :
+/// `extra_body.google.thinking_config` **est officiellement supporté**. Mais
+/// sur Gemini 3.x, le budget **en jetons** n'a plus d'effet fin — c'est
+/// `thinking_level` (une énumération) qui pilote, `thinking_budget` ne
+/// subsistant que pour les modèles 2.5. On avait donc réglé le mauvais bouton,
+/// pas un bouton débranché.
+///
+/// Deux raisons de s'en tenir à `reasoning_effort` :
+///
+/// - les deux sont **mutuellement exclusifs** — « only one of
+///   `reasoning_effort` or `extra_body.google.thinking_config` may be
+///   specified ». En envoyer deux est une erreur, pas une priorité
+///   silencieuse. Si quelqu'un ajoute `thinking_config` un jour, il **doit**
+///   retirer `reasoning_effort` ;
+/// - `reasoning_effort` est un paramètre standard, donc portable : il vaut
+///   aussi pour OpenAI, alors que `thinking_config` ne parle qu'à Google.
+///
+/// ## Pourquoi ces quatre valeurs, et pas cinq
+///
+/// `none` est délibérément absent : OpenAI l'accepte, **Gemini 3.x le
+/// refuse** (« Reasoning cannot be turned off for Gemini 2.5 Pro or 3
+/// models »). L'exposer inviterait à écrire du code qui marche sur un
+/// fournisseur et casse sur l'autre. Symétriquement, `xhigh` et `max`
+/// existent chez OpenAI seulement. Ces quatre-là sont l'intersection utile ;
+/// `low`, `medium` et `high` sont les trois qui n'ont jamais posé problème
+/// nulle part.
+///
+/// Correspondance documentée par Google : `minimal`/`low` → 1 024 jetons de
+/// réflexion sur 2.5, `medium` → 8 192, `high` → 24 576. Sur Gemini 3.5 Flash
+/// le défaut du modèle est `medium`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReasoningEffort {
+    /// Le moins possible. Mesuré : 12 s, 0 jeton de réflexion. Google avait
+    /// un bogue qui le refusait sur Gemini 3 Flash (400 énumérant les valeurs
+    /// valides) ; corrigé depuis, mais `Low` reste le choix sûr.
+    Minimal,
+    /// Le meilleur compromis mesuré : 9 s, réponse complète, 0,0149 $.
+    Low,
+    Medium,
+    High,
+}
+
+impl ReasoningEffort {
+    /// La valeur du protocole. Ce sont les quatre que Google accepte ; OpenAI
+    /// les accepte aussi.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReasoningEffort::Minimal => "minimal",
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+        }
+    }
+}
+
+impl fmt::Display for ReasoningEffort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
