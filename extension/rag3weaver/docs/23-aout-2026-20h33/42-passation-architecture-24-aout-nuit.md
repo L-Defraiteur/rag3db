@@ -100,6 +100,7 @@ poids en burnpack sur HF `Lucie666/*-burnpack`, jamais dans git :
 | reranker EN | ms-marco-MiniLM-L-6-v2 | `BurnMiniLmReranker` | 90 Mo |
 | reranker multilingue (défaut) | mmarco-mMiniLMv2-L12-H384-v1 | `BurnMMiniLmReranker` | 470 Mo |
 | reranker qualité | bge-reranker-v2-m3 | `BurnBgeRerankerV2M3` | 2,2 Go |
+| OCR (feature `burn-ocr`) | PP-OCRv6 tiny det + rec | `BurnPpOcr` (doc 46) | 6,2 Mo |
 
 Recette figée : ONNX fp32 → build.rs jetable `ModelGen … LoadStrategy::Bytes` →
 `generated/<m>_onnx.rs` (en-tête scrubbé) + `.bpk` → exemple `*_reference.rs`
@@ -109,6 +110,10 @@ dernier ; `LinearLayout::Col` impose burn ≥ 0.22.0-pre.2 ; `.bpk` non
 reproductible octet à octet ; XLM-R = pad **1**, pas de `token_type_ids`,
 paire `<s> q </s></s> p </s>` ; le MiniLM multilingue = corps BERT à
 vocabulaire XLM-R, `token_type_ids` à zéro, troncature 128 héritée.
+
+**OCR** (`ocr.rs`, `dataflow/ocr_nodes.rs`, `burn_ppocr.rs`, doc 46) — trait
+`Ocr` en service `"ocr"`, `OcrNode` (image → `text` + `ocr`), post-DB et CTC
+en Rust pur, `PortType::{Image, Text, Ocr}`.
 
 **FFI** (`wasm_ffi.rs`, C ABI) — `create`, `search_async`, `drain*`, `count`,
 `set_embedder`, `set_scope`/`get_scope` ; options JSON par

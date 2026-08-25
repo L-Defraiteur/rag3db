@@ -69,16 +69,16 @@ parité burn/candle                       MiniLM 2e-7 · multilingual 1.4e-7 · 
 
 ## À faire dans l'immédiat
 
-1. **Passe complète** après les rerankers (`bash …/sweep.sh`-like, voir doc 43)
-   — chaque suite a été vérifiée seule, la passe globale n'a pas été rejouée
-   depuis l'ajout des quatre dernières suites.
+1. ~~Passe complète après les rerankers~~ — **faite le 25 au matin : 23 suites,
+   206/206**.
 2. **Le go de Lucie pour lucivy 3.0.0** (`cargo publish`, irréversible) ; à la
    publication, remplacer nos path deps par `lucivy-core = "3"`,
    `sparse-vector = "0.3"`, `luciole = "0.2"` — et vérifier qu'il n'y a
    **qu'une** entrée `luciole` dans `Cargo.lock`.
-3. **OCR en usage unitaire** (chantier 4 de l'ordre de Lucie) : un nœud
-   dataflow minimal, un modèle léger embarquable (PP-OCRv6 ONNX est la
-   piste, cf. la note OCR), pas de markitdown ni de lib lourde.
+3. ~~OCR en usage unitaire~~ — **livré le 25 au matin (doc 46)** : `OcrNode`,
+   trait `Ocr`, PP-OCRv6 tiny sur burn (6,2 Mo, feature `burn-ocr`),
+   e2e_burn_ocr 4/4, parité onnxruntime. Reste : le go pour publier
+   `Lucie666/ppocrv6-tiny-burnpack` (fiche prête dans le scratchpad).
 4. Puis **4 bis** : LLM / TTS / STT sur burn en streaming (ports en flux =
    boîte aux lettres luciole), interface substituable par un fournisseur
    cloud (ElevenLabs, Gradium).

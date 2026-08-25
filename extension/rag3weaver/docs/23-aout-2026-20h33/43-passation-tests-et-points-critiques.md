@@ -30,6 +30,7 @@ avant tout commit**.
 | `e2e_burn_reranker` | 5 | + `burn-embedder` | ms-marco-MiniLM (Berlin, déterminisme, lots, Catalog) |
 | `e2e_burn_xlmr_reranker` | 8 | + `burn-embedder` | mmarco-mMiniLMv2 + bge-reranker-v2-m3, EN/FR/croisé |
 | `e2e_burn_minilm` / `e2e_burn_multilingual_minilm` / `e2e_burn_embedder` | 3 / 5 / 4 | + `burn-embedder` | embedders burn (EN, multilingue FR→EN, BGE-M3 trois signaux) |
+| `e2e_burn_ocr` | 4 | `burn-ocr` (sans rag3db-native) | PP-OCRv6 tiny sur `tests/fixtures/ocr/hello.png`, `OcrNode` avec le vrai modèle |
 | `e2e_symbol_search` | 12 | `rag3db-native` | `BM25Mode::Symbol`, séparateurs, emoji, `parse` booléen |
 | `e2e_idempotent_registration` | 22 | `rag3db-native` | enregistrement KB/entités dans tous les ordres, réouverture |
 | `e2e_simple_entity` | 15 | `rag3db-native` | pipeline simple, update partiel (**régression FTS**), delete |
@@ -47,6 +48,7 @@ for f in tests/e2e_*.rs; do t=$(basename $f .rs);
 ```
 
 Poids attendus dans `~/.cache/rag3weaver/{minilm,multilingual-minilm,bge-m3,msmarco-minilm,mmarco-minilm,bge-reranker-v2-m3}/{model.bpk,tokenizer.json}`
+et `~/.cache/rag3weaver/ppocrv6-tiny/{det.bpk,rec.bpk,dict.txt}` (`RAG3WEAVER_PPOCR_DIR`)
 (ou `RAG3WEAVER_<MODEL>_BPK` / `_TOKENIZER`) — `generated/README.md` dit d'où
 les télécharger (HF `Lucie666/*-burnpack` + tokenizer amont).
 
@@ -57,6 +59,7 @@ chk() { local l="$1"; shift; cargo check -q --lib "$@" && echo "✓ $l" || echo 
 chk default; chk burn --features burn-embedder; chk candle --features candle-embedder
 chk bge-m3 --features bge-m3; chk candle-wasm --no-default-features --features candle-wasm
 chk wasm --features wasm-emscripten; chk postgres --features postgres; chk native --features rag3db-native
+chk ocr --features ocr; chk burn-ocr --features burn-ocr; chk both --features burn-embedder,burn-ocr
 cargo test --lib; cargo test --lib --features burn-embedder; cargo test --lib --features wasm-emscripten wasm_ffi
 cargo test --lib --no-run --features wasm-emscripten,candle-wasm    # le trou bouché ce soir
 cargo check --examples --features burn-embedder; cargo check --examples --features candle-embedder
