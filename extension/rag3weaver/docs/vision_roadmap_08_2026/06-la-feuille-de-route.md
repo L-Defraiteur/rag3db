@@ -42,6 +42,21 @@ feature par brique, et les **poids téléchargés à la première utilisation da
 3. **Lecture des documents** — pdf, docx, pptx, html, csv. Sans lib lourde : les
    formats Office sont du ZIP + XML. L'OCR livré couvre les PDF scannés.
 
+### Côté recherche — fait le 25 août au soir
+
+La relecture du graphe de recherche (doc 52 de `../23-aout-2026-20h33/`) a
+montré que tout ce qui pèse était figé dans le code ou la config. Livré :
+**signaux étiquetés**, **fusion N-aire** avec port `signals` en fan-in et poids
+par nom, `BM25SearchNode(fields=…)`, **`RerankNode`** (remplace après la
+fusion, module en `boost` dedans), vecteur via `SearchBackend`, `result_mode`
+sur les nœuds de signal, gabarit `weighted_search.mmd`. Le « boost de titre »
+est une topologie. La KB **garde l'index et perd la recette**.
+
+Reste, dans l'ordre : **`Catalog::search` devient un gabarit** (le monolithe de
+450 lignes, deux chemins à maintenir tant que ce n'est pas fait) ; le titre
+d'une entité simple indexé en BM25 ; `column=` sur le vecteur (seconde colonne
+d'embedding à l'ingestion) ; un E2E de fusion inter-KB.
+
 ### Côté catalogues
 
 4. **Le graphe de normalisation de tableurs** — la porte d'entrée de toute la
@@ -99,12 +114,14 @@ feature par brique, et les **poids téléchargés à la première utilisation da
   `ToolDef` comme schéma de sortie structurée.
 - **`special_ops`, `title_boost`, `content_boost` et le `boost` par champ**
   sont désérialisés et **jamais lus** — vérifié le 25 août
-  ([05](05-ce-qui-a-tenu-depuis-fevrier.md) §8). Les deux boosts sont copiés
-  dans `KBMetadata` puis oubliés ; lucivy n'a **aucune pondération par champ**,
-  donc les brancher est une fonctionnalité (côté lucivy ou par rescorage
-  après coup), pas une correction. Ils sont annotés « accepté mais non
-  appliqué » dans `config.rs` et gardés pour la compatibilité des configs.
-  `special_ops` est l'emplacement prévu pour `grep` / `read` (§2.2).
+  ([05](05-ce-qui-a-tenu-depuis-fevrier.md) §8). lucivy n'a **aucune
+  pondération par champ** ; leur remplacement est désormais **une topologie**
+  (une branche BM25 par champ, pesée à la fusion — doc 52). Ils sont annotés
+  « accepté mais non appliqué » dans `config.rs` et partiront avec le
+  monolithe. `special_ops` est l'emplacement prévu pour `grep` / `read` (§2.2).
+- **`fusion.rs` est mort et public** (`boost_fuse`, `weighted_fuse`,
+  `rrf_fuse` : zéro appelant hors tests ; la vraie fusion est
+  `search::fuse_signals`). À retirer avec le monolithe.
 - **La troncature d'embedding** : un chunker qui ignore la fenêtre du modèle
   tronque en silence — le MiniLM multilingue hérite d'une troncature à 128.
 
@@ -119,7 +136,9 @@ feature par brique, et les **poids téléchargés à la première utilisation da
   août, inexpliqué.
 - L'export **fp16 d'onnx-community est numériquement cassé** — canaris en place
   pour qu'on ne s'y refasse pas prendre.
-- Le reranker **remplace** le score de fusion (un mélange serait possible).
+- ~~Le reranker **remplace** le score de fusion (un mélange serait possible).~~
+  Clos le 25 août : `RerankNode` en `boost` dans un `FuseResultsNode` module
+  au lieu de remplacer — par topologie, sans mode.
 - RBAC : pas maintenant. Charnière = `set_scope` + une future vue restreinte.
 - L'éval : on ne mesure pas la pertinence. Un **cas travaillé complet** dort
   dans les documents de février ([05](05-ce-qui-a-tenu-depuis-fevrier.md) §4.5).

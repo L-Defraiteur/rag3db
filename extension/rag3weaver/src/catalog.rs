@@ -3105,7 +3105,7 @@ impl Catalog {
         let Some(mut first) = per_cell.first().cloned() else {
             return Err(CatalogError::ValidationFailed("scopes: aucune cellule".into()));
         };
-        const K: f64 = 60.0;
+        const K: f64 = search::DEFAULT_RRF_K;
         let mut fused: Vec<(f64, search::SearchResult)> = Vec::new();
         let mut index: HashMap<String, usize> = HashMap::new();
         let (mut meta_vector, mut meta_bm25, mut meta_sparse, mut time_ms) = (0usize, 0usize, 0usize, 0u64);
@@ -3615,7 +3615,7 @@ impl Catalog {
     /// Reads `_source_entity` and `_source_uuid` from each result's data,
     /// batch-fetches the source entities, and replaces uuid/entity/data.
     /// Deduplicates by source UUID, keeping the highest score.
-    fn resolve_to_source_entities(
+    pub(crate) fn resolve_to_source_entities(
         &self,
         results: &mut Vec<search::SearchResult>,
     ) -> Result<(), CatalogError> {
@@ -3872,6 +3872,11 @@ impl Catalog {
         let conn = catalog.lock().unwrap().conn_arc();
         services.register("catalog", catalog.clone());
         services.register("conn", ConnService(conn));
+        // Un graphe composé peut contenir un RerankNode : il trouve le
+        // cross-encoder du catalogue sous la clé par défaut.
+        if let Some(reranker) = catalog.lock().unwrap().reranker.clone() {
+            services.register::<Arc<dyn crate::reranker::Reranker>>("reranker", reranker);
+        }
 
         // Source node
         graph

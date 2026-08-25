@@ -270,6 +270,7 @@ mod tests {
     fn summarize_results() {
         let val = PortValue::new(vec![
             UnifiedResult {
+                signal: None,
                 uuid: "u1".into(),
                 score: 1.0,
                 entity: None,
@@ -282,6 +283,7 @@ mod tests {
                 graph: None,
             },
             UnifiedResult {
+                signal: None,
                 uuid: "u2".into(),
                 score: 0.5,
                 entity: None,

@@ -20,7 +20,9 @@ use rag3weaver::dataflow::{
     SearchSourceNode, ServiceRegistry,
 };
 #[cfg(feature = "burn-embedder")]
-use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, SparseSearchNode, VectorSearchNode};
+use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, SparseSearchNode, VectorSearchNode};
+use rag3weaver::reranker::Reranker;
+use rag3weaver::search::BM25Mode;
 use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
 use rag3weaver::search::{Consistency, SearchOptions, SearchResult, SearchSignals};
 use rag3weaver::search_strategy::UnifiedResult;
@@ -728,4 +730,220 @@ fn generic_hybrid_pipeline_with_report() {
     // Verify results exist
     let pipe_results = extract_results(&output, "resolve");
     assert!(!pipe_results.is_empty(), "pipeline should produce results");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Fusion N-aire étiquetée : deux branches BM25 sur deux champs, port `signals`
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Deux branches BM25 (`description` et `details`) en fan-in sur `fuse.signals`.
+/// La requête « Rust pandas » (mode split) fait matcher le Rust Book sur la
+/// description et le Python Cookbook sur les détails : les poids décident de
+/// l'ordre. C'est le « boost de champ » sans pondération dans le moteur.
+fn run_two_field_fusion(weights: &[(&str, f64)]) -> Vec<UnifiedResult> {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (services, _cat) = build_services(catalog, embedder, None, None);
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Rust pandas",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(
+        BM25SearchNode::new("desc", 10).with_fields(vec!["description".into()]).with_mode(BM25Mode::ContainsSplit),
+    )).unwrap();
+    graph.add_node(Box::new(
+        BM25SearchNode::new("det", 10).with_fields(vec!["details".into()]).with_mode(BM25Mode::ContainsSplit),
+    )).unwrap();
+    let mut fuse = FuseResultsNode::new("fuse");
+    for (label, w) in weights {
+        fuse = fuse.with_weight(*label, *w);
+    }
+    graph.add_node(Box::new(fuse)).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "desc", "query").unwrap();
+    graph.connect("source", "query", "det", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("desc", "results", "fuse", "signals").unwrap();
+    graph.connect("det", "results", "fuse", "signals").unwrap();
+    graph.connect("fuse", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    let results = extract_results(&output, "resolve");
+    for (i, r) in results.iter().enumerate() {
+        let name = r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).unwrap_or("?");
+        eprintln!("  [{i}] {name} score={:.4} signal={:?}", r.score, r.signal);
+    }
+    results
+}
+
+fn name_of(r: &UnifiedResult) -> String {
+    r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).unwrap_or("?").to_string()
+}
+
+#[test]
+#[ignore]
+fn generic_two_field_branches_weights_decide_order() {
+    eprintln!("[desc:1 det:0]");
+    let desc_first = run_two_field_fusion(&[("desc", 1.0), ("det", 0.0)]);
+    eprintln!("[desc:0 det:1]");
+    let det_first = run_two_field_fusion(&[("desc", 0.0), ("det", 1.0)]);
+
+    assert_eq!(desc_first.len(), 2, "one hit per branch");
+    assert_eq!(name_of(&desc_first[0]), "Rust Book", "description branch wins");
+    assert_eq!(name_of(&det_first[0]), "Python Cookbook", "details branch wins");
+    assert!(desc_first.iter().all(|r| r.signal.as_deref() == Some("fuse")));
+}
+
+/// `fields` doit nommer un champ indexé : l'erreur est explicite, pas un
+/// résultat vide silencieux.
+#[test]
+#[ignore]
+fn generic_bm25_unknown_field_is_an_error() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (services, _cat) = build_services(catalog, embedder, None, None);
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Rust",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10).with_fields(vec!["price".into()]))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let err = runtime.execute(&mut graph).unwrap_err();
+    assert!(err.contains("'price' is not indexed"), "{err}");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RerankNode : remplacement (après fusion) et mélange (en boost dans la fusion)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Graphe BM25 (split) → [rerank] → resolve, sur « Rust Python French » qui
+/// retrouve les trois produits. `reranker` = None donne l'ordre BM25 de
+/// référence ; sinon un reranker à préférence contrôlée.
+fn run_bm25_then_rerank(reranker: Option<Arc<dyn Reranker>>, candidates: usize) -> Vec<UnifiedResult> {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (mut services, _cat) = build_services(catalog, embedder, None, None);
+    if let Some(rk) = reranker {
+        services.register::<Arc<dyn Reranker>>("reranker", rk);
+    }
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Rust Python French",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10).with_mode(BM25Mode::ContainsSplit))).unwrap();
+    graph.add_node(Box::new(RerankNode::new("rerank").with_candidates(candidates))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+    graph.connect("source", "query", "rerank", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("bm25", "results", "rerank", "results").unwrap();
+    graph.connect("rerank", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    extract_results(&output, "resolve")
+}
+
+/// Reranker qui ne veut qu'une chose : `favourite` en tête.
+fn prefers(favourite: &str) -> Arc<dyn Reranker> {
+    let fav = favourite.to_lowercase();
+    Arc::new(rag3weaver::reranker::CallbackReranker::new("prefers", move |_q, passages| {
+        Ok(passages.iter().map(|p| if p.to_lowercase().contains(&fav) { 1.0 } else { 0.0 }).collect())
+    }))
+}
+
+/// Mot du passage qui identifie chaque produit (le chunk retrouvé porte la
+/// description ou les détails, pas le nom).
+fn passage_key(name: &str) -> &'static str {
+    match name {
+        "Rust Book" => "rust",
+        "Python Cookbook" => "python",
+        "French Chef Knife" => "french",
+        other => panic!("unexpected product {other}"),
+    }
+}
+
+#[test]
+#[ignore]
+fn generic_rerank_replaces_head_and_keeps_tail() {
+    // Sans reranker : avertissement, ordre BM25 conservé — c'est la référence.
+    let reference = run_bm25_then_rerank(None, 2);
+    let ref_names: Vec<String> = reference.iter().map(name_of).collect();
+    eprintln!("[bm25 order] {ref_names:?}");
+    assert_eq!(reference.len(), 3, "each word matches one product");
+
+    // Le reranker préfère le DEUXIÈME de la référence : dans un pool de 2 il
+    // passe premier ; le troisième, hors pool, ne bouge pas même si on le
+    // préférait.
+    let reranked = run_bm25_then_rerank(Some(prefers(passage_key(&ref_names[1]))), 2);
+    let names: Vec<String> = reranked.iter().map(name_of).collect();
+    eprintln!("[reranked]   {names:?}");
+    assert_eq!(names[0], ref_names[1], "preferred candidate moves to the top");
+    assert_eq!(names[1], ref_names[0]);
+    assert_eq!(names[2], ref_names[2], "tail untouched");
+    assert!((reranked[0].score - 1.0).abs() < 1e-6 && reranked[1].score.abs() < 1e-6, "head scores are the reranker's");
+    assert!(reranked.iter().all(|r| r.signal.as_deref() == Some("rerank")));
+
+    // Préférer le troisième ne change rien : il est hors pool.
+    let untouched = run_bm25_then_rerank(Some(prefers(passage_key(&ref_names[2]))), 2);
+    assert_eq!(untouched.iter().map(name_of).collect::<Vec<_>>(), ref_names, "out-of-pool preference is ignored");
+}
+
+/// Le même reranker branché en `boost` dans une fusion : il **module** l'ordre
+/// BM25 au lieu de le remplacer. Le dernier de la référence, boosté, passe
+/// devant ; les scores restent ceux de la fusion, modulés.
+#[test]
+#[ignore]
+fn generic_rerank_as_boost_signal_inside_fusion() {
+    let reference = run_bm25_then_rerank(None, 3);
+    let ref_names: Vec<String> = reference.iter().map(name_of).collect();
+    let favourite = passage_key(&ref_names[2]);
+
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (mut services, _cat) = build_services(catalog, embedder, None, None);
+    services.register::<Arc<dyn Reranker>>("reranker", prefers(favourite));
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Rust Python French",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10).with_mode(BM25Mode::ContainsSplit))).unwrap();
+    graph.add_node(Box::new(RerankNode::new("rerank").with_candidates(3))).unwrap();
+    // Un seul signal de fusion (bm25, scores bruts) + le rerank en boost.
+    graph.add_node(Box::new(FuseResultsNode::new("fuse").with_boost("rerank").with_weight("rerank", 5.0))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+    graph.connect("source", "query", "rerank", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("bm25", "results", "rerank", "results").unwrap();
+    graph.connect("bm25", "results", "fuse", "bm25").unwrap();
+    graph.connect("rerank", "results", "fuse", "signals").unwrap();
+    graph.connect("fuse", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    let fused = extract_results(&output, "resolve");
+    let names: Vec<String> = fused.iter().map(name_of).collect();
+    eprintln!("[bm25 order] {ref_names:?}\n[boosted]    {names:?}");
+    assert_eq!(fused.len(), 3);
+    assert_eq!(names[0], ref_names[2], "boosted last-of-reference comes first");
+    // Les deux autres gardent l'ordre BM25 : le boost ne les a pas touchés
+    // (score × (1 + 5 × 0)).
+    assert_eq!(&names[1..], &ref_names[..2]);
+    assert!(fused.iter().all(|r| r.signal.as_deref() == Some("fuse")));
 }

@@ -26,7 +26,8 @@ explicitement ouverts, et signalés comme tels.
 Livré et mesuré : recherche hybride (BM25 lucivy, vecteur HNSW, sparse WAND,
 fusion RRF, rerank), multi-tenant org × project, six modèles sur burn
 (embedders, rerankers, OCR PP-OCRv6), un dataflow de 28 nœuds avec undo et
-checkpoints, les outils comme graphes, une boucle d'agent, un client cloud
+checkpoints, une recherche composable (signaux étiquetés, fusion N-aire,
+rerank comme nœud), les outils comme graphes, une boucle d'agent, un client cloud
 (Vertex, AI Studio, tout endpoint compatible OpenAI) et **un agent qui tourne
 hors ligne** sur un modèle de 996 Mo.
 

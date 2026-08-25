@@ -348,8 +348,8 @@ mod tests {
         ctx.set_input("prompt", PortValue::new("q".to_string()));
         node.execute(&mut ctx).unwrap();
         let text = ctx.drain_outputs().remove("text").and_then(take_or_clone::<String>).unwrap();
-        // 28 nœuds enregistrés, triés : le premier est BM25SearchNode.
-        assert_eq!(text, "28 outils, premier=BM25SearchNode");
+        // 29 nœuds enregistrés, triés : le premier est BM25SearchNode.
+        assert_eq!(text, "29 outils, premier=BM25SearchNode");
     }
 
     #[test]

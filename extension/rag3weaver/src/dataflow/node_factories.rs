@@ -15,7 +15,7 @@ use super::search_nodes::{
 };
 use super::generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,
-    SparseSearchNode, FuseResultsNode, ResolveParentNode,
+    SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode,
 };
 use super::record_nodes::{
     ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
@@ -663,7 +663,69 @@ impl NodeFactory for SearchSourceNodeFactory {
     }
 }
 
-/// Factory for VectorSearchNode (config: limit).
+// ─── Paramètres communs aux nœuds de signal ─────────────────────────────────
+
+fn parse_result_mode(config: &serde_json::Value, node: &str) -> Result<crate::search::ResultMode, String> {
+    use crate::search::ResultMode;
+    Ok(match config.get("result_mode").and_then(|v| v.as_str()) {
+        None | Some("Aggregated") | Some("aggregated") => ResultMode::Aggregated,
+        Some("Detailed") | Some("detailed") => ResultMode::Detailed,
+        Some("SourceResolved") | Some("source_resolved") => ResultMode::SourceResolved,
+        Some(other) => return Err(format!("{node}: unknown result_mode '{other}' (aggregated | detailed | source_resolved)")),
+    })
+}
+
+/// Liste de chaînes, soit un tableau JSON, soit `"a,b,c"`.
+fn parse_str_list(v: &serde_json::Value, node: &str, key: &str) -> Result<Vec<String>, String> {
+    match v {
+        serde_json::Value::Array(a) => a
+            .iter()
+            .map(|x| x.as_str().map(String::from).ok_or_else(|| format!("{node}: '{key}' items must be strings")))
+            .collect(),
+        serde_json::Value::String(s) => Ok(s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()),
+        _ => Err(format!("{node}: '{key}' must be a JSON array or a comma-separated string")),
+    }
+}
+
+fn signal_param() -> ConfigParam {
+    ConfigParam {
+        name: "signal",
+        param_type: ConfigParamType::String,
+        required: false,
+        default: None,
+        description: "Étiquette des résultats (défaut : nom du nœud) ; sert à la fusion par le port 'signals'",
+    }
+}
+
+fn result_mode_param() -> ConfigParam {
+    ConfigParam {
+        name: "result_mode",
+        param_type: ConfigParamType::String,
+        required: false,
+        default: Some(serde_json::json!("aggregated")),
+        description: "aggregated | detailed | source_resolved (KB → entité source, pour fusionner plusieurs KB)",
+    }
+}
+
+fn limit_param() -> ConfigParam {
+    ConfigParam {
+        name: "limit",
+        param_type: ConfigParamType::Int,
+        required: false,
+        default: Some(serde_json::json!(10)),
+        description: "Max results to return",
+    }
+}
+
+fn query_in() -> PortDef {
+    PortDef { name: "query", port_type: PortType::Query, required: true }
+}
+
+fn results_out() -> PortDef {
+    PortDef { name: "results", port_type: PortType::Results, required: false }
+}
+
+/// Factory for VectorSearchNode (config: limit, result_mode, signal).
 pub struct VectorSearchNodeFactory;
 
 impl NodeFactory for VectorSearchNodeFactory {
@@ -672,11 +734,13 @@ impl NodeFactory for VectorSearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
-        Ok(Box::new(VectorSearchNode::new(name, limit)))
+        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+        let mut node = VectorSearchNode::new(name, limit)
+            .with_result_mode(parse_result_mode(config, "VectorSearchNode")?);
+        if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(sig);
+        }
+        Ok(Box::new(node))
     }
 
     fn node_type(&self) -> &'static str {
@@ -687,28 +751,14 @@ impl NodeFactory for VectorSearchNodeFactory {
         NodeSchema {
             node_type: "VectorSearchNode",
             description: "Vector similarity search on chunk embeddings",
-            inputs: vec![PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: true,
-            }],
-            outputs: vec![PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            }],
-            config_params: vec![ConfigParam {
-                name: "limit",
-                param_type: ConfigParamType::Int,
-                required: false,
-                default: Some(serde_json::json!(10)),
-                description: "Max results to return",
-            }],
+            inputs: vec![query_in()],
+            outputs: vec![results_out()],
+            config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }
 }
 
-/// Factory for BM25SearchNode (config: limit, fuzzy_distance, result_mode).
+/// Factory for BM25SearchNode (config: limit, fuzzy_distance, result_mode, mode, fields, signal).
 pub struct BM25SearchNodeFactory;
 
 impl NodeFactory for BM25SearchNodeFactory {
@@ -717,25 +767,26 @@ impl NodeFactory for BM25SearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
-        let fuzzy_distance = config
-            .get("fuzzy_distance")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u8;
-        let result_mode = match config
-            .get("result_mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Aggregated")
-        {
-            "Detailed" => crate::search::ResultMode::Detailed,
-            "SourceResolved" => crate::search::ResultMode::SourceResolved,
-            _ => crate::search::ResultMode::Aggregated,
-        };
-        let mut node = BM25SearchNode::new(name, limit);
-        node = node.with_fuzzy(fuzzy_distance).with_result_mode(result_mode);
+        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+        let fuzzy_distance = config.get("fuzzy_distance").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+        let mut node = BM25SearchNode::new(name, limit)
+            .with_fuzzy(fuzzy_distance)
+            .with_result_mode(parse_result_mode(config, "BM25SearchNode")?);
+        if let Some(mode) = config.get("mode") {
+            let mode: crate::search::BM25Mode = serde_json::from_value(mode.clone())
+                .map_err(|e| format!("BM25SearchNode: invalid 'mode': {e}"))?;
+            node = node.with_mode(mode);
+        }
+        if let Some(fields) = config.get("fields") {
+            let fields = parse_str_list(fields, "BM25SearchNode", "fields")?;
+            if fields.is_empty() {
+                return Err("BM25SearchNode: 'fields' must name at least one field".into());
+            }
+            node = node.with_fields(fields);
+        }
+        if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(sig);
+        }
         Ok(Box::new(node))
     }
 
@@ -747,44 +798,39 @@ impl NodeFactory for BM25SearchNodeFactory {
         NodeSchema {
             node_type: "BM25SearchNode",
             description: "BM25 full-text search with highlight→chunk resolution",
-            inputs: vec![PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: true,
-            }],
-            outputs: vec![PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            }],
+            inputs: vec![query_in()],
+            outputs: vec![results_out()],
             config_params: vec![
-                ConfigParam {
-                    name: "limit",
-                    param_type: ConfigParamType::Int,
-                    required: false,
-                    default: Some(serde_json::json!(10)),
-                    description: "Max results to return",
-                },
+                limit_param(),
                 ConfigParam {
                     name: "fuzzy_distance",
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(0)),
-                    description: "Levenshtein distance for fuzzy matching",
+                    description: "Levenshtein distance for fuzzy matching (0 = exact)",
                 },
                 ConfigParam {
-                    name: "result_mode",
+                    name: "mode",
                     param_type: ConfigParamType::String,
                     required: false,
-                    default: Some(serde_json::json!("Aggregated")),
-                    description: "Result mode: Aggregated, Detailed, or SourceResolved",
+                    default: Some(serde_json::json!("contains")),
+                    description: "contains | contains_split | regex | parse",
                 },
+                ConfigParam {
+                    name: "fields",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Champs indexés à interroger, 'a,b' (défaut : tous ceux de la cible) — une branche par champ pour les peser à la fusion",
+                },
+                result_mode_param(),
+                signal_param(),
             ],
         }
     }
 }
 
-/// Factory for SparseSearchNode (config: limit).
+/// Factory for SparseSearchNode (config: limit, result_mode, signal).
 pub struct SparseSearchNodeFactory;
 
 impl NodeFactory for SparseSearchNodeFactory {
@@ -793,11 +839,13 @@ impl NodeFactory for SparseSearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
-        Ok(Box::new(SparseSearchNode::new(name, limit)))
+        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+        let mut node = SparseSearchNode::new(name, limit)
+            .with_result_mode(parse_result_mode(config, "SparseSearchNode")?);
+        if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(sig);
+        }
+        Ok(Box::new(node))
     }
 
     fn node_type(&self) -> &'static str {
@@ -808,37 +856,70 @@ impl NodeFactory for SparseSearchNodeFactory {
         NodeSchema {
             node_type: "SparseSearchNode",
             description: "Sparse vector search (SPLADE/BGE-M3)",
-            inputs: vec![PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: true,
-            }],
-            outputs: vec![PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            }],
-            config_params: vec![ConfigParam {
-                name: "limit",
-                param_type: ConfigParamType::Int,
-                required: false,
-                default: Some(serde_json::json!(10)),
-                description: "Max results to return",
-            }],
+            inputs: vec![query_in()],
+            outputs: vec![results_out()],
+            config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }
 }
 
-/// Factory for FuseResultsNode (no config).
+/// Factory for FuseResultsNode (config: strategy, rrf_k, weights, boost, top_k, signal).
 pub struct FuseResultsNodeFactory;
 
 impl NodeFactory for FuseResultsNodeFactory {
     fn create(
         &self,
         name: &str,
-        _config: &serde_json::Value,
+        config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        Ok(Box::new(FuseResultsNode::new(name)))
+        let mut node = FuseResultsNode::new(name);
+        if let Some(strategy) = config.get("strategy") {
+            let strategy: crate::search::FusionStrategy = serde_json::from_value(strategy.clone())
+                .map_err(|e| format!("FuseResultsNode: invalid 'strategy': {e}"))?;
+            node = node.with_strategy(strategy);
+        }
+        if let Some(k) = config.get("rrf_k") {
+            let k = k.as_f64().ok_or("FuseResultsNode: 'rrf_k' must be a number")?;
+            if k <= 0.0 {
+                return Err("FuseResultsNode: 'rrf_k' must be positive".into());
+            }
+            node = node.with_rrf_k(k);
+        }
+        // `weights` : objet JSON {"label": w} ou chaîne "label:w,label:w".
+        if let Some(w) = config.get("weights") {
+            match w {
+                serde_json::Value::Object(m) => {
+                    for (label, v) in m {
+                        let v = v.as_f64().ok_or_else(|| format!("FuseResultsNode: weight of '{label}' must be a number"))?;
+                        node = node.with_weight(label.clone(), v);
+                    }
+                }
+                serde_json::Value::String(s) => {
+                    for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+                        let (label, v) = part
+                            .split_once(':')
+                            .ok_or_else(|| format!("FuseResultsNode: weights entry '{part}' must be 'label:weight'"))?;
+                        let v: f64 = v.trim().parse()
+                            .map_err(|_| format!("FuseResultsNode: weight of '{label}' must be a number"))?;
+                        node = node.with_weight(label.trim(), v);
+                    }
+                }
+                _ => return Err("FuseResultsNode: 'weights' must be an object or 'label:weight,…'".into()),
+            }
+        }
+        if let Some(b) = config.get("boost") {
+            for label in parse_str_list(b, "FuseResultsNode", "boost")? {
+                node = node.with_boost(label);
+            }
+        }
+        if let Some(k) = config.get("top_k") {
+            let k = k.as_u64().ok_or("FuseResultsNode: 'top_k' must be an integer")? as usize;
+            node = node.with_top_k(k);
+        }
+        if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(sig);
+        }
+        Ok(Box::new(node))
     }
 
     fn node_type(&self) -> &'static str {
@@ -848,18 +929,112 @@ impl NodeFactory for FuseResultsNodeFactory {
     fn schema(&self) -> NodeSchema {
         NodeSchema {
             node_type: "FuseResultsNode",
-            description: "RRF fusion of multi-signal search results",
+            description: "Fusion N-aire de signaux étiquetés (RRF ou pondérée) ; ports nommés + port 'signals' en fan-in",
             inputs: vec![
                 PortDef { name: "vector", port_type: PortType::Results, required: false },
                 PortDef { name: "bm25", port_type: PortType::Results, required: false },
                 PortDef { name: "sparse", port_type: PortType::Results, required: false },
+                PortDef { name: "signals", port_type: PortType::Results, required: false },
             ],
-            outputs: vec![PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            }],
-            config_params: vec![],
+            outputs: vec![results_out()],
+            config_params: vec![
+                ConfigParam {
+                    name: "strategy",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("rrf")),
+                    description: "rrf | weighted",
+                },
+                ConfigParam {
+                    name: "rrf_k",
+                    param_type: ConfigParamType::Float,
+                    required: false,
+                    default: Some(serde_json::json!(crate::search::DEFAULT_RRF_K)),
+                    description: "Constante RRF",
+                },
+                ConfigParam {
+                    name: "weights",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Poids par étiquette, 'label:w,label:w' (défauts : vector 0.7, bm25 0.3, sparse 0.2, autres 1.0)",
+                },
+                ConfigParam {
+                    name: "boost",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Étiquettes en rôle boost, 'a,b' : elles modulent le score fusionné au lieu d'y entrer",
+                },
+                ConfigParam {
+                    name: "top_k",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: None,
+                    description: "Troncature de chaque liste avant fusion",
+                },
+                signal_param(),
+            ],
+        }
+    }
+}
+
+/// Factory for RerankNode (config: candidates, service, signal).
+pub struct RerankNodeFactory;
+
+impl NodeFactory for RerankNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let mut node = RerankNode::new(name);
+        if let Some(n) = config.get("candidates") {
+            let n = n.as_u64().ok_or("RerankNode: 'candidates' must be an integer")? as usize;
+            if n == 0 {
+                return Err("RerankNode: 'candidates' must be at least 1".into());
+            }
+            node = node.with_candidates(n);
+        }
+        if let Some(svc) = config.get("service").and_then(|v| v.as_str()) {
+            node = node.with_service(svc);
+        }
+        if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(sig);
+        }
+        Ok(Box::new(node))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "RerankNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "RerankNode",
+            description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée",
+            inputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: true },
+                query_in(),
+            ],
+            outputs: vec![results_out()],
+            config_params: vec![
+                ConfigParam {
+                    name: "candidates",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(serde_json::json!(RerankNode::DEFAULT_CANDIDATES)),
+                    description: "Taille du pool re-scoré",
+                },
+                ConfigParam {
+                    name: "service",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("reranker")),
+                    description: "Clé du service Arc<dyn Reranker> (plusieurs cross-encoders possibles dans un graphe)",
+                },
+                signal_param(),
+            ],
         }
     }
 }
@@ -927,6 +1102,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(BM25SearchNodeFactory));
     registry.register(Box::new(SparseSearchNodeFactory));
     registry.register(Box::new(FuseResultsNodeFactory));
+    registry.register(Box::new(RerankNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
@@ -965,9 +1141,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_28_types() {
+    fn register_builtins_has_all_29_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 28);
+        assert_eq!(registry.types().len(), 29);
     }
 
     #[test]

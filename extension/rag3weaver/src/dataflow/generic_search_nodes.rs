@@ -8,20 +8,33 @@
 //! - [`VectorSearchNode`] — vector similarity search on chunk embeddings
 //! - [`BM25SearchNode`] — full-text BM25 search with highlight→chunk resolution
 //! - [`SparseSearchNode`] — sparse vector search (SPLADE/BGE-M3)
-//! - [`FuseResultsNode`] — RRF fusion of multi-signal results
+//! - [`FuseResultsNode`] — fusion N-aire de signaux étiquetés (RRF ou pondérée)
+//! - [`RerankNode`] — cross-encoder sur la tête des résultats
 //! - [`ResolveParentNode`] — resolve chunks → parent entities with data enrichment
+//!
+//! # Signaux étiquetés
+//!
+//! Chaque nœud de recherche étiquette ses résultats (`UnifiedResult::signal`)
+//! avec son nom, ou la config `signal`. `FuseResultsNode` accepte en plus de
+//! ses trois ports historiques (`vector`, `bm25`, `sparse`) un port `signals`
+//! en fan-in : N branches y arrivent concaténées, et sont retrouvées par leur
+//! étiquette. La pondération est alors une topologie et des poids nommés —
+//! deux BM25 sur deux champs, un vecteur, un reranker en `boost` — au lieu
+//! d'un réglage figé dans la configuration du catalogue.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use std::sync::Mutex;
 
 use crate::catalog::Catalog;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
+use crate::reranker::{passage_text, Reranker};
 use crate::search::{
-    embed_query, enrich_results_with_data, fuse_results, resolve_vector_chunks,
-    search_bm25_chunked, search_sparse, search_vector, BM25Mode, FusionConfig,
-    ResultMode, SearchOptions, SearchResult, SearchTarget,
+    embed_query, enrich_results_with_data, fuse_signals, resolve_vector_chunks,
+    search_bm25_chunked, search_sparse, search_vector, search_vector_via_backend, BM25Mode,
+    FusionConfig, FusionStrategy, ResultMode, SearchOptions, SearchResult, SearchTarget,
+    SignalConfig, SignalRole, DEFAULT_RRF_K,
 };
 use crate::search_strategy::UnifiedResult;
 
@@ -107,10 +120,15 @@ impl Node for SearchSourceNode {
 
 /// Vector similarity search on chunk embeddings.
 ///
-/// Embeds the query string, then calls `search_vector()` on the chunk table.
+/// Embeds the query string, then searches the chunk table. Passe par le
+/// `SearchBackend` du catalogue quand le service `catalog` en expose un
+/// (même chemin que `Catalog::search`, agnostique du moteur) ; sans catalogue,
+/// retombe sur le chemin Cypher direct.
 pub struct VectorSearchNode {
     node_name: String,
     limit: usize,
+    result_mode: ResultMode,
+    signal: Option<String>,
 }
 
 impl VectorSearchNode {
@@ -118,7 +136,20 @@ impl VectorSearchNode {
         Self {
             node_name: name.to_string(),
             limit,
+            result_mode: ResultMode::Aggregated,
+            signal: None,
         }
+    }
+
+    pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
+        self.result_mode = mode;
+        self
+    }
+
+    /// Étiquette des résultats (défaut : le nom du nœud).
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = Some(signal.into());
+        self
     }
 }
 
@@ -131,7 +162,11 @@ impl Node for VectorSearchNode {
         "VectorSearchNode"
     }
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
-        Some(Box::new(serde_json::json!({ "limit": self.limit })))
+        Some(Box::new(serde_json::json!({
+            "limit": self.limit,
+            "result_mode": self.result_mode,
+            "signal": self.signal,
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -162,16 +197,30 @@ impl Node for VectorSearchNode {
         let embedding = embed_query(&*embedder, &query_str, &mut cache)
             .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?;
 
-        let chunk_results = search_vector(
-            &*conn,
-            &target.chunk_table,
-            &target.name,
-            &embedding,
-            self.limit,
-            None,
-            &[],
-            None,
-        )
+        let backend = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog")
+            .and_then(|c| c.lock().unwrap().search_backend());
+        let chunk_results = match backend {
+            Some(backend) => search_vector_via_backend(
+                backend.as_ref(),
+                &target.chunk_table,
+                &embedding,
+                self.limit,
+                None,
+                &[],
+                None,
+            ),
+            None => search_vector(
+                &*conn,
+                &target.chunk_table,
+                &target.name,
+                &embedding,
+                self.limit,
+                None,
+                &[],
+                None,
+            ),
+        }
         .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
@@ -180,11 +229,12 @@ impl Node for VectorSearchNode {
             &target,
             chunk_results,
             &target.enrich_fields,
-            ResultMode::Aggregated,
+            self.result_mode,
         )
         .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
 
-        let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode, &label)?;
         ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
@@ -193,11 +243,19 @@ impl Node for VectorSearchNode {
 // ─── BM25SearchNode ──────────────────────────────────────────────────────────
 
 /// BM25 full-text search with highlight→chunk resolution.
+///
+/// `fields` restreint la recherche à certains champs de l'index (par défaut
+/// tous ceux de la cible). C'est ce qui permet deux branches BM25 sur `_title`
+/// et `_content`, pesées séparément à la fusion — le « boost de titre » sans
+/// pondération par champ dans le moteur.
 pub struct BM25SearchNode {
     node_name: String,
     limit: usize,
     fuzzy_distance: u8,
     result_mode: ResultMode,
+    mode: BM25Mode,
+    fields: Option<Vec<String>>,
+    signal: Option<String>,
 }
 
 impl BM25SearchNode {
@@ -207,6 +265,9 @@ impl BM25SearchNode {
             limit,
             fuzzy_distance: 0,
             result_mode: ResultMode::Aggregated,
+            mode: BM25Mode::Contains,
+            fields: None,
+            signal: None,
         }
     }
 
@@ -217,6 +278,23 @@ impl BM25SearchNode {
 
     pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
         self.result_mode = mode;
+        self
+    }
+
+    pub fn with_mode(mut self, mode: BM25Mode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Champs interrogés, à la place de ceux de la cible.
+    pub fn with_fields(mut self, fields: Vec<String>) -> Self {
+        self.fields = Some(fields);
+        self
+    }
+
+    /// Étiquette des résultats (défaut : le nom du nœud).
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = Some(signal.into());
         self
     }
 }
@@ -233,7 +311,10 @@ impl Node for BM25SearchNode {
         Some(Box::new(serde_json::json!({
             "limit": self.limit,
             "fuzzy_distance": self.fuzzy_distance,
-            "result_mode": format!("{:?}", self.result_mode),
+            "result_mode": self.result_mode,
+            "mode": self.mode,
+            "fields": self.fields,
+            "signal": self.signal,
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
@@ -262,13 +343,26 @@ impl Node for BM25SearchNode {
             .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .cloned();
 
+        let fields: &[String] = match &self.fields {
+            Some(f) => {
+                if let Some(unknown) = f.iter().find(|x| !target.bm25_fields.contains(x)) {
+                    return Err(format!(
+                        "BM25SearchNode: field '{unknown}' is not indexed on '{}' (indexed: {:?})",
+                        target.name, target.bm25_fields
+                    ));
+                }
+                f
+            }
+            None => &target.bm25_fields,
+        };
+
         let mut node_warnings: Vec<String> = Vec::new();
         let results = search_bm25_chunked(
             &*conn,
             &target,
             &query_str,
-            &target.bm25_fields,
-            BM25Mode::Contains,
+            fields,
+            self.mode,
             self.fuzzy_distance,
             self.limit,
             None,
@@ -291,7 +385,8 @@ impl Node for BM25SearchNode {
             ctx.warn(w);
         }
 
-        let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode, &label)?;
         ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
@@ -303,6 +398,8 @@ impl Node for BM25SearchNode {
 pub struct SparseSearchNode {
     node_name: String,
     limit: usize,
+    result_mode: ResultMode,
+    signal: Option<String>,
 }
 
 impl SparseSearchNode {
@@ -310,7 +407,20 @@ impl SparseSearchNode {
         Self {
             node_name: name.to_string(),
             limit,
+            result_mode: ResultMode::Aggregated,
+            signal: None,
         }
+    }
+
+    pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
+        self.result_mode = mode;
+        self
+    }
+
+    /// Étiquette des résultats (défaut : le nom du nœud).
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = Some(signal.into());
+        self
     }
 }
 
@@ -323,7 +433,11 @@ impl Node for SparseSearchNode {
         "SparseSearchNode"
     }
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
-        Some(Box::new(serde_json::json!({ "limit": self.limit })))
+        Some(Box::new(serde_json::json!({
+            "limit": self.limit,
+            "result_mode": self.result_mode,
+            "signal": self.signal,
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![PortDef {
@@ -387,11 +501,12 @@ impl Node for SparseSearchNode {
             &target,
             chunk_results,
             &target.enrich_fields,
-            ResultMode::Aggregated,
+            self.result_mode,
         )
         .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
 
-        let unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode, &label)?;
         ctx.set_output("results", PortValue::new(unified));
         Ok(())
     }
@@ -399,19 +514,88 @@ impl Node for SparseSearchNode {
 
 // ─── FuseResultsNode ─────────────────────────────────────────────────────────
 
-/// RRF (Reciprocal Rank Fusion) of multi-signal search results.
+/// Fusion N-aire de signaux étiquetés.
 ///
-/// Takes up to 3 named inputs (`vector`, `bm25`, `sparse`) and fuses them.
-/// Missing inputs are treated as empty result sets.
+/// Entrées : les trois ports historiques `vector`, `bm25`, `sparse` (une liste
+/// chacun, étiquetée par le nom du port), et le port `signals` en **fan-in** :
+/// tout ce qui y arrive est regroupé par `UnifiedResult::signal`, dans l'ordre
+/// de première apparition. Une étiquette présente des deux côtés est fusionnée
+/// en une seule liste.
+///
+/// Poids : `weights` par étiquette ; sans entrée, `vector`/`bm25`/`sparse`
+/// gardent les défauts de [`FusionConfig`] (0,7 / 0,3 / 0,2) et toute autre
+/// étiquette vaut 1,0. `boost` nomme les étiquettes en rôle `Boost` : elles ne
+/// participent pas à la fusion mais modulent le score fusionné — c'est ainsi
+/// qu'un [`RerankNode`] se **mélange** au lieu de remplacer.
 pub struct FuseResultsNode {
     node_name: String,
+    strategy: FusionStrategy,
+    rrf_k: f64,
+    weights: HashMap<String, f64>,
+    boost: HashSet<String>,
+    top_k: Option<usize>,
+    signal: Option<String>,
 }
 
 impl FuseResultsNode {
     pub fn new(name: &str) -> Self {
         Self {
             node_name: name.to_string(),
+            strategy: FusionStrategy::Rrf,
+            rrf_k: DEFAULT_RRF_K,
+            weights: HashMap::new(),
+            boost: HashSet::new(),
+            top_k: None,
+            signal: None,
         }
+    }
+
+    pub fn with_strategy(mut self, strategy: FusionStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    pub fn with_rrf_k(mut self, k: f64) -> Self {
+        self.rrf_k = k;
+        self
+    }
+
+    /// Poids d'une étiquette.
+    pub fn with_weight(mut self, label: impl Into<String>, weight: f64) -> Self {
+        self.weights.insert(label.into(), weight);
+        self
+    }
+
+    /// Étiquette en rôle `Boost` (module le score fusionné au lieu d'y entrer).
+    pub fn with_boost(mut self, label: impl Into<String>) -> Self {
+        self.boost.insert(label.into());
+        self
+    }
+
+    /// Troncature de chaque liste avant fusion.
+    pub fn with_top_k(mut self, k: usize) -> Self {
+        self.top_k = Some(k);
+        self
+    }
+
+    /// Étiquette des résultats fusionnés (défaut : le nom du nœud).
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = Some(signal.into());
+        self
+    }
+
+    fn signal_config(&self, label: &str) -> SignalConfig {
+        let mut cfg = FusionConfig::default().signal_config(label);
+        if let Some(w) = self.weights.get(label) {
+            cfg.weight = *w;
+        }
+        if self.boost.contains(label) {
+            cfg.role = SignalRole::Boost;
+        }
+        if self.top_k.is_some() {
+            cfg.top_k = self.top_k;
+        }
+        cfg
     }
 }
 
@@ -422,6 +606,18 @@ impl Node for FuseResultsNode {
     }
     fn node_type(&self) -> &'static str {
         "FuseResultsNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        let mut boost: Vec<&String> = self.boost.iter().collect();
+        boost.sort();
+        Some(Box::new(serde_json::json!({
+            "strategy": self.strategy,
+            "rrf_k": self.rrf_k,
+            "weights": self.weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
+            "boost": boost,
+            "top_k": self.top_k,
+            "signal": self.signal,
+        })))
     }
     fn inputs(&self) -> Vec<PortDef> {
         vec![
@@ -440,6 +636,11 @@ impl Node for FuseResultsNode {
                 port_type: PortType::Results,
                 required: false,
             },
+            PortDef {
+                name: "signals",
+                port_type: PortType::Results,
+                required: false,
+            },
         ]
     }
     fn outputs(&self) -> Vec<PortDef> {
@@ -450,29 +651,51 @@ impl Node for FuseResultsNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let vector_u = take_results(ctx, "vector");
-        let bm25_u = take_results(ctx, "bm25");
-        let sparse_u = take_results(ctx, "sparse");
+        // Listes étiquetées, dans l'ordre : ports nommés, puis fan-in par
+        // étiquette (ordre de première apparition).
+        let mut groups: Vec<(String, Vec<UnifiedResult>)> = Vec::new();
+        fn push(groups: &mut Vec<(String, Vec<UnifiedResult>)>, label: String, r: UnifiedResult) {
+            match groups.iter_mut().find(|(l, _)| *l == label) {
+                Some((_, v)) => v.push(r),
+                None => groups.push((label, vec![r])),
+            }
+        }
+        for port in ["vector", "bm25", "sparse"] {
+            for r in take_results(ctx, port) {
+                push(&mut groups, port.to_string(), r);
+            }
+        }
+        for r in take_results(ctx, "signals") {
+            let label = r.signal.clone().unwrap_or_else(|| "signals".to_string());
+            push(&mut groups, label, r);
+        }
 
-        // Convert UnifiedResult → SearchResult for fuse_results()
-        let vector_sr: Vec<SearchResult> =
-            vector_u.iter().cloned().map(SearchResult::from).collect();
-        let bm25_sr: Vec<SearchResult> =
-            bm25_u.iter().cloned().map(SearchResult::from).collect();
-        let sparse_sr: Vec<SearchResult> =
-            sparse_u.iter().cloned().map(SearchResult::from).collect();
+        let label_out = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
 
-        let config = FusionConfig::default();
-        let fused_sr = fuse_results(&vector_sr, &bm25_sr, &sparse_sr, &config);
+        // Convert UnifiedResult → SearchResult for fuse_signals()
+        let lists: Vec<(Vec<SearchResult>, SignalConfig)> = groups
+            .iter()
+            .map(|(label, v)| {
+                (
+                    v.iter().cloned().map(SearchResult::from).collect(),
+                    self.signal_config(label),
+                )
+            })
+            .collect();
+        let borrowed: Vec<(&[SearchResult], SignalConfig)> =
+            lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
+        let fused_sr = fuse_signals(&borrowed, self.strategy, self.rrf_k);
+
+        for (label, v) in &groups {
+            ctx.metric(&format!("signal.{label}"), v.len() as f64);
+        }
 
         // Build a lookup from all input results to preserve rich data
         let mut all_by_uuid: HashMap<String, UnifiedResult> = HashMap::new();
-        for r in vector_u
-            .into_iter()
-            .chain(bm25_u.into_iter())
-            .chain(sparse_u.into_iter())
-        {
-            all_by_uuid.entry(r.uuid.clone()).or_insert(r);
+        for (_, v) in groups {
+            for r in v {
+                all_by_uuid.entry(r.uuid.clone()).or_insert(r);
+            }
         }
 
         // Reconstruct UnifiedResult with fused scores
@@ -484,11 +707,177 @@ impl Node for FuseResultsNode {
                     .cloned()
                     .unwrap_or_else(|| UnifiedResult::from(sr.clone()));
                 u.score = sr.score;
+                u.signal = Some(label_out.clone());
                 u
             })
             .collect();
 
         ctx.set_output("results", PortValue::new(fused));
+        Ok(())
+    }
+}
+
+// ─── RerankNode ──────────────────────────────────────────────────────────────
+
+/// Cross-encoder sur la tête des résultats.
+///
+/// Re-score les `candidates` premiers résultats avec le service `service`
+/// (`Arc<dyn Reranker>`, `"reranker"` par défaut) et laisse passer la queue
+/// inchangée. Sa sortie est un signal comme un autre : placé après la fusion il
+/// **remplace** l'ordre ; branché sur le port `signals` d'un `FuseResultsNode`
+/// avec `boost='<son étiquette>'`, il **module** l'ordre fusionné.
+///
+/// Il a besoin du texte des passages (chunk retrouvé, ou `_content` enrichi) :
+/// s'il n'y en a aucun, ou si aucun reranker n'est configuré, il avertit et
+/// laisse passer — comme `Catalog::search`.
+pub struct RerankNode {
+    node_name: String,
+    candidates: usize,
+    service: String,
+    signal: Option<String>,
+}
+
+impl RerankNode {
+    pub const DEFAULT_CANDIDATES: usize = 20;
+
+    pub fn new(name: &str) -> Self {
+        Self {
+            node_name: name.to_string(),
+            candidates: Self::DEFAULT_CANDIDATES,
+            service: "reranker".to_string(),
+            signal: None,
+        }
+    }
+
+    /// Taille du pool re-scoré (le reste passe inchangé).
+    pub fn with_candidates(mut self, n: usize) -> Self {
+        self.candidates = n;
+        self
+    }
+
+    /// Clé du service `Arc<dyn Reranker>` à utiliser.
+    pub fn with_service(mut self, key: impl Into<String>) -> Self {
+        self.service = key.into();
+        self
+    }
+
+    /// Étiquette des résultats (défaut : le nom du nœud).
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = Some(signal.into());
+        self
+    }
+}
+
+impl Node for RerankNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "RerankNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({
+            "candidates": self.candidates,
+            "service": self.service,
+            "signal": self.signal,
+        })))
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![
+            PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: true,
+            },
+            PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: true,
+            },
+        ]
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef {
+            name: "results",
+            port_type: PortType::Results,
+            required: false,
+        }]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let mut results = ctx.take_input("results")
+            .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
+            .ok_or("RerankNode: missing 'results' input")?;
+        let qp = ctx.take_input("query")
+            .and_then(|pv| take_or_clone::<QueryPayload>(pv))
+            .ok_or("RerankNode: missing 'query' input")?;
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+
+        let reranker = ctx.service::<Arc<dyn Reranker>>(&self.service).cloned();
+        let Some(reranker) = reranker else {
+            ctx.warn(&format!(
+                "RerankNode: aucun service '{}' — ordre d'entrée conservé",
+                self.service
+            ));
+            retag(&mut results, &label);
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        };
+
+        let pool = self.candidates.min(results.len());
+        let tail = results.split_off(pool);
+        let passages: Vec<String> = results
+            .iter()
+            .map(|u| passage_text(&SearchResult::from(u.clone())))
+            .collect();
+
+        if !passages.is_empty() && passages.iter().all(|p| p.is_empty()) {
+            ctx.warn("RerankNode: aucun texte de passage disponible (ni chunk, ni _content) — ordre d'entrée conservé");
+            results.extend(tail);
+            retag(&mut results, &label);
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        }
+
+        match reranker.rerank(&qp.query, &passages) {
+            Ok(scores) if scores.len() == results.len() => {
+                let mut idx: Vec<usize> = (0..results.len()).collect();
+                idx.sort_by(|&a, &b| {
+                    scores[b]
+                        .partial_cmp(&scores[a])
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then(a.cmp(&b))
+                });
+                let mut reordered: Vec<UnifiedResult> = idx
+                    .into_iter()
+                    .map(|i| {
+                        let mut r = results[i].clone();
+                        r.score = scores[i] as f64;
+                        r
+                    })
+                    .collect();
+                ctx.metric("reranked", reordered.len() as f64);
+                reordered.extend(tail);
+                results = reordered;
+            }
+            Ok(scores) => {
+                ctx.warn(&format!(
+                    "RerankNode ({}): {} scores pour {} passages — ordre d'entrée conservé",
+                    reranker.name(),
+                    scores.len(),
+                    results.len()
+                ));
+                results.extend(tail);
+            }
+            Err(e) => {
+                ctx.warn(&format!(
+                    "RerankNode ({}): {e} — ordre d'entrée conservé",
+                    reranker.name()
+                ));
+                results.extend(tail);
+            }
+        }
+        retag(&mut results, &label);
+        ctx.set_output("results", PortValue::new(results));
         Ok(())
     }
 }
@@ -583,15 +972,24 @@ impl Node for ResolveParentNode {
         };
 
         // Results are already parent-level (resolved by upstream nodes).
-        // Enrich with data fields via UUID-based lookup.
+        // Enrich with data fields via UUID-based lookup. L'étiquette de signal
+        // ne survit pas au passage par `SearchResult` : on la garde à part.
+        let signals: Vec<Option<String>> = results.iter().map(|r| r.signal.clone()).collect();
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
         enrich_results_with_data(&*conn, &target.name, return_fields, &mut search_results)
             .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
-        let enriched: Vec<UnifiedResult> =
-            search_results.into_iter().map(UnifiedResult::from).collect();
+        let enriched: Vec<UnifiedResult> = search_results
+            .into_iter()
+            .zip(signals)
+            .map(|(r, signal)| {
+                let mut u = UnifiedResult::from(r);
+                u.signal = signal;
+                u
+            })
+            .collect();
 
         ctx.set_output("results", PortValue::new(enriched));
         Ok(())
@@ -619,6 +1017,39 @@ fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult> {
     ctx.take_input(port)
         .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
         .unwrap_or_default()
+}
+
+/// Finition commune des nœuds de signal : résolution vers l'entité source si
+/// `SourceResolved` sur une cible qui a des références source (KB), puis
+/// étiquetage. C'est la résolution vers la source qui rend deux KB fusionnables
+/// — leurs lignes d'index diffèrent, leurs entités sont les mêmes.
+fn finish_signal(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    mut results: Vec<SearchResult>,
+    result_mode: ResultMode,
+    label: &str,
+) -> Result<Vec<UnifiedResult>, String> {
+    if result_mode == ResultMode::SourceResolved && target.has_source_refs {
+        let catalog = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
+            .ok_or_else(|| format!("{node_type}: result_mode=source_resolved needs the 'catalog' service"))?;
+        catalog
+            .lock()
+            .unwrap()
+            .resolve_to_source_entities(&mut results)
+            .map_err(|e| format!("{node_type}: source resolution failed: {e}"))?;
+    }
+    let mut unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
+    retag(&mut unified, label);
+    Ok(unified)
+}
+
+fn retag(results: &mut [UnifiedResult], label: &str) {
+    for r in results {
+        r.signal = Some(label.to_string());
+    }
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -675,13 +1106,12 @@ mod tests {
     #[test]
     fn fuse_results_node_ports() {
         let node = FuseResultsNode::new("fuse");
-        assert_eq!(node.inputs().len(), 3);
+        assert_eq!(node.inputs().len(), 4);
         assert_eq!(node.inputs()[0].name, "vector");
         assert_eq!(node.inputs()[1].name, "bm25");
         assert_eq!(node.inputs()[2].name, "sparse");
-        assert!(!node.inputs()[0].required);
-        assert!(!node.inputs()[1].required);
-        assert!(!node.inputs()[2].required);
+        assert_eq!(node.inputs()[3].name, "signals");
+        assert!(node.inputs().iter().all(|p| !p.required));
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0].name, "results");
         assert_eq!(node.node_type(), "FuseResultsNode");
@@ -704,6 +1134,7 @@ mod tests {
 
     fn make_unified_result(uuid: &str, score: f64) -> UnifiedResult {
         UnifiedResult {
+            signal: None,
             uuid: uuid.into(),
             score,
             entity: Some("TestEntity".into()),
@@ -790,6 +1221,124 @@ mod tests {
         assert!(results.len() >= 2);
         // "a" should be first (appears in both signals)
         assert_eq!(results[0].uuid, "a");
+    }
+
+    fn tagged(uuid: &str, score: f64, signal: &str) -> UnifiedResult {
+        let mut r = make_unified_result(uuid, score);
+        r.signal = Some(signal.into());
+        r
+    }
+
+    fn results_of(ctx: &mut NodeContext) -> Vec<UnifiedResult> {
+        ctx.drain_outputs()
+            .get("results")
+            .and_then(|pv| pv.downcast::<Vec<UnifiedResult>>())
+            .expect("expected Results output")
+            .clone()
+    }
+
+    /// Le port `signals` regroupe par étiquette : deux branches BM25 arrivent
+    /// concaténées et sont pesées séparément. Poids 0 sur une branche = elle
+    /// ne compte plus.
+    #[test]
+    fn fuse_signals_port_groups_by_label_and_weights_apply() {
+        let mut ctx = NodeContext::new();
+        // Fan-in simulé : `title` puis `body`, concaténés sur un seul port.
+        let mut fanned = vec![tagged("a", 0.9, "title"), tagged("b", 0.8, "title")];
+        fanned.extend([tagged("c", 0.9, "body"), tagged("d", 0.8, "body")]);
+        ctx.set_input("signals", PortValue::new(fanned));
+
+        let mut node = FuseResultsNode::new("fuse")
+            .with_weight("title", 1.0)
+            .with_weight("body", 0.0);
+        node.execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+
+        assert_eq!(out.len(), 4);
+        assert_eq!(out[0].uuid, "a");
+        assert_eq!(out[1].uuid, "b");
+        assert!(out[2].score == 0.0 && out[3].score == 0.0, "body branch weighs nothing");
+        assert!(out.iter().all(|r| r.signal.as_deref() == Some("fuse")), "output is retagged");
+    }
+
+    /// Une étiquette en `boost` ne participe pas à la fusion : elle module.
+    /// Ici un « reranker » qui préfère `b` fait passer `b` devant `a`.
+    #[test]
+    fn fuse_boost_label_modulates_instead_of_fusing() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("a", 0.9, "bm25"), tagged("b", 0.5, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("a", 0.9, "vector"), tagged("b", 0.5, "vector")]));
+        ctx.set_input("signals", PortValue::new(vec![tagged("b", 1.0, "rerank"), tagged("a", 0.0, "rerank")]));
+
+        let mut node = FuseResultsNode::new("fuse").with_boost("rerank").with_weight("rerank", 5.0);
+        node.execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+        assert_eq!(out[0].uuid, "b", "boosted b overtakes a: {:?}", out.iter().map(|r| (&r.uuid, r.score)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn rerank_node_ports() {
+        let node = RerankNode::new("rerank");
+        assert_eq!(node.inputs().len(), 2);
+        assert_eq!(node.inputs()[0].name, "results");
+        assert!(node.inputs()[0].required);
+        assert_eq!(node.inputs()[1].name, "query");
+        assert_eq!(node.outputs()[0].name, "results");
+        assert_eq!(node.node_type(), "RerankNode");
+    }
+
+    fn with_text(uuid: &str, score: f64, text: &str) -> UnifiedResult {
+        let mut r = make_unified_result(uuid, score);
+        r.chunk = Some(crate::search::ChunkInfo {
+            uuid: format!("{uuid}-chunk"),
+            text: text.into(),
+            index: 0,
+            score,
+            start_line: 0,
+            end_line: 0,
+            start_char: 0,
+            end_char: 0,
+        });
+        r
+    }
+
+    fn query_payload(q: &str) -> QueryPayload {
+        QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None }
+    }
+
+    /// Le reranker re-score la tête (`candidates`) et laisse la queue en place.
+    #[test]
+    fn rerank_node_rescores_head_keeps_tail() {
+        let mut services = super::super::services::ServiceRegistry::new();
+        services.register::<Arc<dyn Reranker>>("reranker", Arc::new(crate::reranker::MockReranker));
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        ctx.set_input("results", PortValue::new(vec![
+            with_text("a", 0.9, "nothing relevant"),
+            with_text("b", 0.8, "rust memory safety"),
+            with_text("c", 0.7, "rust"),
+            with_text("d", 0.1, "rust memory safety too"), // hors pool
+        ]));
+        ctx.set_input("query", PortValue::new(query_payload("rust memory safety")));
+
+        let mut node = RerankNode::new("rerank").with_candidates(3);
+        node.execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+        let order: Vec<&str> = out.iter().map(|r| r.uuid.as_str()).collect();
+        assert_eq!(order, vec!["b", "c", "a", "d"], "head reordered, d stays last");
+        assert!((out[0].score - 1.0).abs() < 1e-6, "score replaced by the reranker's");
+        assert_eq!(out[0].signal.as_deref(), Some("rerank"));
+    }
+
+    /// Sans service reranker : avertissement, ordre conservé, jamais d'échec.
+    #[test]
+    fn rerank_node_without_service_passes_through() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("results", PortValue::new(vec![with_text("a", 0.9, "x"), with_text("b", 0.8, "y")]));
+        ctx.set_input("query", PortValue::new(query_payload("q")));
+        let mut node = RerankNode::new("rerank");
+        node.execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+        assert_eq!(out.iter().map(|r| r.uuid.as_str()).collect::<Vec<_>>(), vec!["a", "b"]);
     }
 
     #[test]

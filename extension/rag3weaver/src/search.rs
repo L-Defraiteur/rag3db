@@ -144,6 +144,20 @@ impl Default for FusionConfig {
     }
 }
 
+impl FusionConfig {
+    /// Configuration du signal portant cette étiquette : `vector`, `bm25` et
+    /// `sparse` ont la leur ; toute autre étiquette (une branche nommée par
+    /// l'auteur d'un graphe) reçoit le défaut, poids 1.0.
+    pub fn signal_config(&self, label: &str) -> SignalConfig {
+        match label {
+            "vector" => self.vector,
+            "bm25" => self.bm25,
+            "sparse" => self.sparse,
+            _ => SignalConfig::default(),
+        }
+    }
+}
+
 /// Binary flags selecting which search signals to activate.
 ///
 /// Combine with `|`: `SearchSignals::BM25 | SearchSignals::SPARSE`.
@@ -652,7 +666,7 @@ pub struct ExploreResult {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_RRF_K: f64 = 60.0;
+pub const DEFAULT_RRF_K: f64 = 60.0;
 pub(crate) const EMBEDDING_CACHE_MAX: usize = 100;
 
 // ─── Free functions ──────────────────────────────────────────────────────────
@@ -2256,32 +2270,62 @@ pub fn search_sparse_via_backend(
 /// Each signal has a role (Fuse or Boost), a weight, and optional normalization.
 /// Fuse signals are combined first (via RRF or Weighted), then Boost signals
 /// re-rank the fused results.
+///
+/// Forme à trois listes conservée pour `Catalog::search` ; le cœur est
+/// [`fuse_signals`], N-aire.
 pub fn fuse_results(
     vector_results: &[SearchResult],
     bm25_results: &[SearchResult],
     sparse_results: &[SearchResult],
     config: &FusionConfig,
 ) -> Vec<SearchResult> {
-    let lists: [&[SearchResult]; 3] = [vector_results, bm25_results, sparse_results];
-    let non_empty_count = lists.iter().filter(|l| !l.is_empty()).count();
+    fuse_signals(
+        &[
+            (vector_results, config.vector),
+            (bm25_results, config.bm25),
+            (sparse_results, config.sparse),
+        ],
+        config.strategy,
+        config.rrf_k,
+    )
+}
 
-    if non_empty_count == 0 {
+/// Fusion N-aire : une liste de résultats et sa configuration par signal, dans
+/// n'importe quel nombre. C'est ce que consomme `FuseResultsNode` quand ses
+/// branches arrivent étiquetées — deux BM25 sur deux champs, un vecteur, un
+/// reranker en rôle `boost`… — sans que la fusion sache ce qu'est chaque
+/// branche.
+///
+/// Règles, identiques à la forme à trois listes :
+/// - une seule liste non vide → rendue telle quelle (scores bruts) ;
+/// - `top_k` tronque chaque liste avant fusion ;
+/// - les signaux `Fuse` sont combinés (RRF pondéré ou somme pondérée de scores
+///   normalisés) ; un seul signal `Fuse` garde ses scores bruts ;
+/// - les signaux `Boost` modulent ensuite (additif ou multiplicatif) ;
+/// - si aucun signal n'est `Fuse`, tous sont traités comme `Fuse` ;
+/// - chunk, chunks détaillés et données sont ré-attachés depuis les entrées
+///   (meilleur chunk par uuid).
+pub fn fuse_signals(
+    signals: &[(&[SearchResult], SignalConfig)],
+    strategy: FusionStrategy,
+    rrf_k: f64,
+) -> Vec<SearchResult> {
+    let non_empty: Vec<&(&[SearchResult], SignalConfig)> =
+        signals.iter().filter(|(l, _)| !l.is_empty()).collect();
+
+    if non_empty.is_empty() {
         return vec![];
     }
     // Single source — return directly (preserves chunk/data as-is)
-    if non_empty_count == 1 {
-        for l in &lists {
-            if !l.is_empty() {
-                return l.to_vec();
-            }
-        }
+    if non_empty.len() == 1 {
+        return non_empty[0].0.to_vec();
     }
 
     // Build chunk + data + detailed chunks lookups from all inputs
     let mut chunk_map: HashMap<String, ChunkInfo> = HashMap::new();
     let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
     let mut chunks_map: HashMap<String, Vec<AttributedChunk>> = HashMap::new();
-    for list in &lists {
+    for (list, _) in signals {
         for r in list.iter() {
             if let Some(ref chunk) = r.chunk {
                 let entry = chunk_map.entry(r.uuid.clone());
@@ -2316,21 +2360,20 @@ pub fn fuse_results(
     }
 
     // Apply top_k per signal
-    let configs = [&config.vector, &config.bm25, &config.sparse];
-    let truncated: Vec<Vec<SearchResult>> = lists.iter().zip(configs.iter()).map(|(list, cfg)| {
-        if let Some(k) = cfg.top_k {
-            list.iter().take(k).cloned().collect()
-        } else {
-            list.to_vec()
-        }
-    }).collect();
-    let vector_r = &truncated[0];
-    let bm25_r = &truncated[1];
-    let sparse_r = &truncated[2];
+    let truncated: Vec<(Vec<SearchResult>, SignalConfig)> = signals
+        .iter()
+        .map(|(list, cfg)| {
+            let l = match cfg.top_k {
+                Some(k) => list.iter().take(k).cloned().collect(),
+                None => list.to_vec(),
+            };
+            (l, *cfg)
+        })
+        .collect();
 
     // Collect entity map
     let mut entity_map: HashMap<String, String> = HashMap::new();
-    for list in &[vector_r, bm25_r, sparse_r] {
+    for (list, _) in &truncated {
         for r in list.iter() {
             if let Some(ref e) = r.entity {
                 entity_map.entry(r.uuid.clone()).or_insert_with(|| e.clone());
@@ -2339,18 +2382,20 @@ pub fn fuse_results(
     }
 
     // Separate fuse vs boost signals: (results, config)
-    let all_signals: [(&[SearchResult], &SignalConfig); 3] = [
-        (vector_r.as_slice(), &config.vector),
-        (bm25_r.as_slice(), &config.bm25),
-        (sparse_r.as_slice(), &config.sparse),
-    ];
+    let all_signals: Vec<(&[SearchResult], &SignalConfig)> = truncated
+        .iter()
+        .filter(|(r, _)| !r.is_empty())
+        .map(|(r, c)| (r.as_slice(), c))
+        .collect();
 
-    let fuse_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
-        .filter(|(r, c)| !r.is_empty() && c.role == SignalRole::Fuse)
+    let fuse_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals
+        .iter()
+        .filter(|(_, c)| c.role == SignalRole::Fuse)
         .copied()
         .collect();
-    let boost_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
-        .filter(|(r, c)| !r.is_empty() && c.role == SignalRole::Boost)
+    let boost_signals: Vec<(&[SearchResult], &SignalConfig)> = all_signals
+        .iter()
+        .filter(|(_, c)| c.role == SignalRole::Boost)
         .copied()
         .collect();
 
@@ -2360,11 +2405,7 @@ pub fn fuse_results(
     if fuse_signals.is_empty() {
         // All active signals are boost — no base to boost from.
         // Treat them all as fuse instead.
-        let fallback: Vec<(&[SearchResult], &SignalConfig)> = all_signals.iter()
-            .filter(|(r, _)| !r.is_empty())
-            .copied()
-            .collect();
-        fuse_by_strategy(&fallback, config, &mut scores);
+        fuse_by_strategy(&all_signals, strategy, rrf_k, &mut scores);
     } else if fuse_signals.len() == 1 {
         // Single fuse signal — use raw scores
         let (results, _cfg) = fuse_signals[0];
@@ -2372,7 +2413,7 @@ pub fn fuse_results(
             scores.insert(r.uuid.clone(), r.score);
         }
     } else {
-        fuse_by_strategy(&fuse_signals, config, &mut scores);
+        fuse_by_strategy(&fuse_signals, strategy, rrf_k, &mut scores);
     }
 
     // Step 2: Apply boost signals
@@ -2436,15 +2477,16 @@ pub fn fuse_results(
 
 fn fuse_by_strategy(
     signals: &[(&[SearchResult], &SignalConfig)],
-    config: &FusionConfig,
+    strategy: FusionStrategy,
+    rrf_k: f64,
     scores: &mut HashMap<String, f64>,
 ) {
-    match config.strategy {
+    match strategy {
         FusionStrategy::Rrf => {
             for (results, cfg) in signals {
                 for (rank, r) in results.iter().enumerate() {
                     *scores.entry(r.uuid.clone()).or_default() +=
-                        cfg.weight / (config.rrf_k + rank as f64 + 1.0);
+                        cfg.weight / (rrf_k + rank as f64 + 1.0);
                 }
             }
         }

@@ -1442,13 +1442,13 @@ mod tests {
     }
 
     #[test]
-    fn the_model_sees_tools_not_the_28_raw_nodes() {
+    fn the_model_sees_tools_not_the_29_raw_nodes() {
         let (nodes, tools) = builtin_graph_tools().unwrap();
         let exposed = crate::tools::graph_tool_defs(&tools);
         let names: Vec<&str> = exposed.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, vec!["search", "search_expand"], "ordre stable");
         // Le registre de nœuds reste introspectable, lui.
-        assert_eq!(crate::tools::tool_defs(&nodes).len(), 29, "28 nœuds + SearchTool");
+        assert_eq!(crate::tools::tool_defs(&nodes).len(), 30, "29 nœuds + SearchTool");
         let openai = crate::tools::graph_tool_defs_openai(&tools);
         assert_eq!(openai.len(), 2);
         assert_eq!(openai[0]["function"]["name"], "search");
@@ -1861,6 +1861,7 @@ mod tests {
     fn results_render_as_json() {
         use crate::search_strategy::UnifiedResult;
         let r = UnifiedResult {
+            signal: None,
             uuid: "abc".into(),
             score: 1.5,
             entity: Some("Product".into()),

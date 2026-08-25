@@ -235,6 +235,7 @@ mod tests {
 
     fn test_result(uuid: &str) -> UnifiedResult {
         UnifiedResult {
+            signal: None,
             uuid: uuid.into(),
             score: 1.0,
             entity: None,

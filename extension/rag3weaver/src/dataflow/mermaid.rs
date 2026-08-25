@@ -709,6 +709,35 @@ graph LR
         assert_eq!(order[1], "ps");
     }
 
+    /// Le gabarit pondéré : trois branches en fan-in sur `fuse.signals`,
+    /// poids nommés substitués dans une chaîne, rerank sur la tête.
+    #[test]
+    fn template_weighted_search_parses_and_builds() {
+        let mmd = include_str!("../../templates/weighted_search.mmd");
+        let mut vars = HashMap::new();
+        for (k, v) in [
+            ("target", "Product"), ("query", "hello"), ("limit", "10"),
+            ("title_field", "name"), ("content_field", "description"),
+            ("title_weight", "2.0"), ("content_weight", "1.0"), ("vector_weight", "0.7"),
+            ("rrf_k", "60"), ("candidates", "20"),
+        ] {
+            vars.insert(k.into(), v.into());
+        }
+        let def = parse_mermaid_template(mmd, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 7);
+        let fuse = def.nodes.iter().find(|n| n.name == "fuse").unwrap();
+        assert_eq!(fuse.config["weights"], "title:2.0,content:1.0,vector:0.7");
+        assert_eq!(fuse.config["rrf_k"].as_f64(), Some(60.0));
+        assert_eq!(def.edges.iter().filter(|e| e.to_node == "fuse" && e.to_port == "signals").count(), 3);
+
+        let registry = builtin_registry();
+        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
+        graph.validate().unwrap();
+        let order = graph.topological_sort().unwrap();
+        let pos = |n: &str| order.iter().position(|x| x == n).unwrap();
+        assert!(pos("fuse") < pos("rerank") && pos("rerank") < pos("resolve"));
+    }
+
     #[test]
     fn template_ingestion_parses_and_builds() {
         let mmd = include_str!("../../templates/ingestion.mmd");

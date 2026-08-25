@@ -1,0 +1,26 @@
+%% Recherche pondérée : deux branches BM25 sur deux champs, un vecteur, une
+%% fusion à poids nommés, un cross-encoder sur la tête.
+%% Variables: $target, $query, $limit, $title_field, $content_field,
+%%            $title_weight, $content_weight, $vector_weight, $rrf_k, $candidates
+%%
+%% Le « boost de titre » n'est pas un réglage : c'est la branche `title` avec un
+%% poids plus fort que la branche `content`. Le port `signals` de la fusion
+%% regroupe ce qui y arrive par étiquette (le nom du nœud, par défaut).
+graph LR
+    source["SearchSourceNode(target_name='$target', query='$query')"]
+    title["BM25SearchNode(fields='$title_field', mode='contains_split', limit=$limit)"]
+    content["BM25SearchNode(fields='$content_field', mode='contains_split', limit=$limit)"]
+    vector["VectorSearchNode(limit=$limit)"]
+    fuse["FuseResultsNode(rrf_k=$rrf_k, weights='title:$title_weight,content:$content_weight,vector:$vector_weight')"]
+    rerank["RerankNode(candidates=$candidates)"]
+    resolve["ResolveParentNode"]
+    source -->|query| title
+    source -->|query| content
+    source -->|query| vector
+    source -->|query:query| rerank
+    source -->|query:query| resolve
+    title -->|results:signals| fuse
+    content -->|results:signals| fuse
+    vector -->|results:signals| fuse
+    fuse -->|results| rerank
+    rerank -->|results| resolve

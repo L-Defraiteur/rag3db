@@ -43,6 +43,12 @@ pub struct UnifiedResult {
     /// Graph exploration sub-result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph: Option<ExploreGraph>,
+    /// Étiquette du signal qui a produit ce résultat (nom du nœud de recherche
+    /// par défaut). C'est ce qui permet à `FuseResultsNode` de retrouver les
+    /// listes d'origine après un fan-in sur son port `signals`, et de peser
+    /// chaque branche par son nom.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal: Option<String>,
 }
 
 impl From<SearchResult> for UnifiedResult {
@@ -58,6 +64,7 @@ impl From<SearchResult> for UnifiedResult {
             matched_children: None,
             other_children: None,
             graph: None,
+            signal: None,
         }
     }
 }
@@ -201,6 +208,7 @@ mod tests {
     #[test]
     fn search_result_from_unified() {
         let ur = UnifiedResult {
+            signal: None,
             uuid: "u1".into(),
             score: 0.8,
             entity: Some("File".into()),
@@ -230,6 +238,7 @@ mod tests {
             CypherValue::String("dir-uuid-123".into()),
         );
         let ur = UnifiedResult {
+            signal: None,
             uuid: "index-entry-uuid".into(),
             score: 0.7,
             entity: Some("TreeKB_Index".into()),
@@ -249,6 +258,7 @@ mod tests {
     #[test]
     fn source_info_source_resolved() {
         let ur = UnifiedResult {
+            signal: None,
             uuid: "dir-uuid-123".into(),
             score: 0.7,
             entity: Some("Directory".into()),
@@ -268,6 +278,7 @@ mod tests {
     #[test]
     fn source_info_no_data() {
         let ur = UnifiedResult {
+            signal: None,
             uuid: "x".into(),
             score: 0.0,
             entity: Some("SomeKB_Index".into()),

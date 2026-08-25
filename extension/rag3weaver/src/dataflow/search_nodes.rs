@@ -401,6 +401,7 @@ mod tests {
 
     fn make_result(uuid: &str, entity: &str) -> UnifiedResult {
         UnifiedResult {
+            signal: None,
             uuid: uuid.into(),
             score: 0.9,
             entity: Some(entity.into()),
@@ -430,6 +431,7 @@ mod tests {
             CypherValue::String(source_uuid.into()),
         );
         UnifiedResult {
+            signal: None,
             uuid: uuid.into(),
             score: 0.8,
             entity: Some("TestKB_Index".into()),
