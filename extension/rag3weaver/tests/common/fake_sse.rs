@@ -157,6 +157,17 @@ pub fn tool_frames() -> Vec<String> {
     ]
 }
 
+/// Contenu, puis une trame qui porte une séquence d'arrêt. Utilisé avec
+/// `repeat_last = true` : le serveur réémet cette trame à l'infini, donc si le
+/// client ne coupait pas de lui-même, il ne s'arrêterait jamais.
+pub fn stop_frames() -> Vec<String> {
+    vec![
+        r#"{"choices":[{"index":0,"delta":{"content":"pensée "},"finish_reason":null}]}"#.into(),
+        r#"{"choices":[{"index":0,"delta":{"content":"utile "},"finish_reason":null}]}"#.into(),
+        r#"{"choices":[{"index":0,"delta":{"content":"Observation: du bruit "},"finish_reason":null}]}"#.into(),
+    ]
+}
+
 pub fn length_frames() -> Vec<String> {
     vec![
         r#"{"choices":[{"index":0,"delta":{"content":"tronq"},"finish_reason":null}]}"#.into(),

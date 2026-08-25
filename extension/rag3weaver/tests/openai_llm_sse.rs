@@ -81,6 +81,31 @@ fn tool_call_is_accumulated_across_deltas() {
 }
 
 #[test]
+fn a_client_side_stop_sequence_closes_the_socket() {
+    // C'est ce qui justifie de ne plus envoyer `stop` au fournisseur : on
+    // coupe nous-mêmes, et la socket se ferme immédiatement — seuls les
+    // fragments déjà en vol sont facturés, pas la fin de la génération.
+    // Le serveur réémet la dernière trame 100 000 fois : sans coupure réelle,
+    // ce test ne se terminerait pas.
+    let srv = FakeServer::start(stop_frames(), true);
+    let llm = OpenAiLlm::new(&srv.url, "m");
+    let opts = GenOptions::default().with_stop(vec!["Observation:".into()]);
+    let mut sink = StringSink::default();
+    let (finish, usage) = llm.generate(&hello(), &opts, &mut sink).unwrap();
+
+    assert_eq!(finish, Finish::Stop("Observation:".into()));
+    assert!(finish.is_complete(), "l'appelant avait demandé ce stop");
+    assert_eq!(sink.text, "pensée utile ", "préfixe verbatim, séquence non émise");
+    // Le chunk final `usage` n'arrive jamais : on rend nos propres fragments.
+    assert_eq!(usage.completion_tokens, 2);
+    assert_eq!(usage.prompt_tokens, 0, "inconnu, non inventé");
+
+    let written = srv.written.load(Ordering::SeqCst);
+    assert!(written < 10_000, "{written} trames écrites : la socket n'a pas été coupée");
+    eprintln!("[preuve] {written} trames écrites par le serveur avant coupure (sur 100 000)");
+}
+
+#[test]
 fn an_http_error_becomes_a_model_error_without_the_secret() {
     let srv = FakeServer::start_error(401, r#"{"error":{"message":"API key not valid"}}"#);
     let llm = OpenAiLlm::ai_studio("SECRET-DE-LUCIE", "m").with_base_url(&srv.url);

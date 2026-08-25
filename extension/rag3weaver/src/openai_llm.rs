@@ -182,9 +182,14 @@ impl OpenAiLlm {
         body.insert("max_tokens".into(), json!(opts.max_tokens));
         body.insert("temperature".into(), json!(opts.temperature));
         body.insert("top_p".into(), json!(opts.top_p));
-        if !opts.stop.is_empty() {
-            body.insert("stop".into(), json!(opts.stop));
-        }
+        // `opts.stop` n'est **délibérément pas** envoyé. Ne pas « corriger »
+        // ceci : le fournisseur écrase `Finish::Stop(seq)` et `Finish::Eos` en
+        // un seul `finish_reason: "stop"`, si bien qu'on ne saurait plus dire
+        // quelle séquence a coupé — ni même s'il y en a eu une. On les détecte
+        // donc nous-mêmes sur le flux (cf. `first_stop`/`holdback` dans
+        // `read_sse`). L'économie perdue est négligeable : on ferme la socket
+        // dès la correspondance, donc seuls les quelques fragments déjà en vol
+        // sont facturés, pas la fin de la génération.
         if !opts.tools.is_empty() {
             // `ToolDef::to_openai_json` tel quel. ⚠ Vertex documente attendre
             // ici une **spec OpenAPI**, pas un JSON Schema : le sous-ensemble
@@ -225,21 +230,64 @@ impl ToolAcc {
     }
 }
 
-/// Cherche la première séquence de `stops` dans `acc + frag`. Rend le nombre
-/// d'octets de `frag` à conserver et la séquence trouvée. Même règle que le
-/// `MockLlm` de [`crate::llm`] : le préfixe est gardé **verbatim**.
-fn stop_hit(acc: &str, frag: &str, stops: &[String]) -> Option<(usize, String)> {
-    let combined = format!("{acc}{frag}");
+/// Première séquence d'arrêt présente dans `text` : celle qui apparaît le plus
+/// tôt, et à position égale la plus longue. Rend son décalage en octets et la
+/// séquence. Le texte qui la précède est gardé **verbatim** par l'appelant,
+/// espaces compris — même règle que le `MockLlm` de [`crate::llm`].
+fn first_stop(text: &str, stops: &[String]) -> Option<(usize, String)> {
     let mut best: Option<(usize, &String)> = None;
     for s in stops.iter().filter(|s| !s.is_empty()) {
-        if let Some(pos) = combined.find(s.as_str()) {
-            if best.is_none_or(|(p, _)| pos < p) {
+        if let Some(pos) = text.find(s.as_str()) {
+            let better = match best {
+                None => true,
+                Some((p, b)) => pos < p || (pos == p && s.len() > b.len()),
+            };
+            if better {
                 best = Some((pos, s));
             }
         }
     }
-    let (pos, seq) = best?;
-    Some((pos.saturating_sub(acc.len()).min(frag.len()), seq.clone()))
+    best.map(|(p, s)| (p, s.clone()))
+}
+
+/// Combien d'octets retenir à la fin de `pending` parce qu'ils pourraient être
+/// le début d'une séquence d'arrêt coupée entre deux trames SSE (`"Obser"`
+/// puis `"vation:"`).
+///
+/// C'est le plus long suffixe de `pending` qui soit un préfixe **strict** d'une
+/// séquence — un préfixe complet aurait déjà été vu par [`first_stop`]. Sans
+/// cette rétention, on pousserait dans le puits du texte qu'il aurait fallu
+/// couper : irrattrapable, puisque le puits *pousse*.
+fn holdback(pending: &str, stops: &[String]) -> usize {
+    let mut best = 0usize;
+    for s in stops.iter().filter(|s| !s.is_empty()) {
+        let max = (s.len() - 1).min(pending.len());
+        for k in (best + 1..=max).rev() {
+            let at = pending.len() - k;
+            // Ne jamais couper au milieu d'un caractère multi-octet.
+            if !pending.is_char_boundary(at) {
+                continue;
+            }
+            if pending.as_bytes()[at..] == s.as_bytes()[..k] {
+                best = k;
+                break;
+            }
+        }
+    }
+    best
+}
+
+/// Pousse un fragment dans le puits. `Err(())` = le puits demande l'arrêt.
+fn emit(sink: &mut dyn TokenSink, emitted: &mut usize, frag: &str) -> Result<(), ()> {
+    if frag.is_empty() {
+        return Ok(());
+    }
+    *emitted += 1;
+    if sink.on_token(frag) == Flow::Stop {
+        Err(())
+    } else {
+        Ok(())
+    }
 }
 
 impl Llm for OpenAiLlm {
@@ -318,7 +366,9 @@ fn read_sse(
     let mut by_id: HashMap<String, usize> = HashMap::new();
     let mut by_index: HashMap<usize, usize> = HashMap::new();
     let mut usage = crate::llm::Usage::default();
-    let mut acc = String::new();
+    // Texte reçu mais pas encore poussé : il pourrait amorcer une séquence
+    // d'arrêt. Vide dès qu'on sait qu'il n'en est rien.
+    let mut pending = String::new();
     let mut emitted = 0usize;
     let mut reason: Option<String> = None;
 
@@ -391,39 +441,58 @@ fn read_sse(
         }
 
         if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty()) {
-            // Détection locale des séquences d'arrêt. Le fournisseur les
-            // applique déjà (on les lui envoie), et alors il tronque sans les
-            // émettre : ce filet ne sert que pour ceux qui les recrachent —
-            // mais lui seul peut rendre `Finish::Stop(seq)`, que
-            // `finish_reason: "stop"` ne distingue pas d'un EOS.
-            if let Some((keep, seq)) = stop_hit(&acc, text, &opts.stop) {
-                if keep > 0 {
-                    let head = &text[..keep];
-                    acc.push_str(head);
-                    emitted += 1;
-                    if sink.on_token(head) == Flow::Stop {
-                        if usage.completion_tokens == 0 {
-                            usage.completion_tokens = emitted;
-                        }
-                        return Ok((Finish::Cancelled, usage));
+            if opts.stop.is_empty() {
+                // Rien à surveiller : chemin direct, aucune rétention.
+                if emit(sink, &mut emitted, text).is_err() {
+                    if usage.completion_tokens == 0 {
+                        usage.completion_tokens = emitted;
                     }
+                    // Rendre ici ferme la socket chez l'appelant : c'est le
+                    // point d'annulation du contrat, il va jusqu'au réseau.
+                    return Ok((Finish::Cancelled, usage));
                 }
-                if usage.completion_tokens == 0 {
-                    usage.completion_tokens = emitted;
-                }
-                return Ok((Finish::Stop(seq), usage));
+                continue;
             }
-            acc.push_str(text);
-            emitted += 1;
-            if sink.on_token(text) == Flow::Stop {
+
+            pending.push_str(text);
+            // Une séquence complète est là : on émet ce qui la précède, tel
+            // quel, et on coupe. La séquence elle-même n'est jamais poussée.
+            if let Some((pos, seq)) = first_stop(&pending, &opts.stop) {
+                let head = pending[..pos].to_string();
+                let cancelled = emit(sink, &mut emitted, &head).is_err();
                 if usage.completion_tokens == 0 {
                     usage.completion_tokens = emitted;
                 }
-                // Rendre ici ferme la socket chez l'appelant : c'est le point
-                // d'annulation du contrat, il remonte jusqu'au réseau.
-                return Ok((Finish::Cancelled, usage));
+                return Ok((
+                    if cancelled { Finish::Cancelled } else { Finish::Stop(seq) },
+                    usage,
+                ));
+            }
+            // Sinon on ne pousse que ce qui ne peut plus rien amorcer, et on
+            // garde la queue pour la trame suivante.
+            let keep = holdback(&pending, &opts.stop);
+            let cut = pending.len() - keep;
+            if cut > 0 {
+                let head = pending[..cut].to_string();
+                pending.drain(..cut);
+                if emit(sink, &mut emitted, &head).is_err() {
+                    if usage.completion_tokens == 0 {
+                        usage.completion_tokens = emitted;
+                    }
+                    return Ok((Finish::Cancelled, usage));
+                }
             }
         }
+    }
+
+    // Fin de flux : ce qui restait retenu n'était pas une séquence d'arrêt
+    // (faux départ, p. ex. `"Obs"` suivi de `"curité"`). Il doit sortir — sans
+    // perte ni duplication.
+    if !pending.is_empty() && emit(sink, &mut emitted, &pending).is_err() {
+        if usage.completion_tokens == 0 {
+            usage.completion_tokens = emitted;
+        }
+        return Ok((Finish::Cancelled, usage));
     }
 
     let finish = match reason.as_deref() {
@@ -492,54 +561,157 @@ mod tests {
         assert_eq!(usage.completion_tokens, 2);
     }
 
-    #[test]
-    fn stop_sequence_is_recovered_client_side() {
-        // Le fournisseur a recraché la séquence : on rend `Finish::Stop`,
-        // et le préfixe garde son espace final, verbatim.
-        let frames = &[
-            r#"{"choices":[{"index":0,"delta":{"content":"réponse ici "},"finish_reason":null}]}"#,
-            r#"{"choices":[{"index":0,"delta":{"content":"FIN et la suite"},"finish_reason":null}]}"#,
-            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
-        ];
-        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
+    /// Fabrique une trame de contenu.
+    fn frag(t: &str) -> String {
+        format!(
+            r#"{{"choices":[{{"index":0,"delta":{{"content":{}}},"finish_reason":null}}]}}"#,
+            Value::String(t.to_string())
+        )
+    }
+
+    fn replay_frags(parts: &[&str], stops: &[&str]) -> (Finish, String, usize) {
+        let owned: Vec<String> = parts.iter().map(|p| frag(p)).collect();
+        let mut frames: Vec<&str> = owned.iter().map(String::as_str).collect();
+        let tail = r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#;
+        frames.push(tail);
+        let opts = GenOptions::default()
+            .with_stop(stops.iter().map(|s| s.to_string()).collect());
         let mut sink = StringSink::default();
-        let (finish, _) = replay(frames, &opts, &mut sink);
+        let (finish, usage) = replay(&frames, &opts, &mut sink);
+        (finish, sink.text, usage.completion_tokens)
+    }
+
+    #[test]
+    fn stop_sequence_cuts_and_is_never_emitted() {
+        let (finish, text, _) = replay_frags(&["réponse ici ", "FIN et la suite"], &["FIN"]);
         assert_eq!(finish, Finish::Stop("FIN".into()));
         assert!(finish.is_complete(), "l'appelant avait demandé ce stop");
-        assert_eq!(sink.text, "réponse ici ");
+        // Le préfixe est verbatim : l'espace avant `FIN` est conservé.
+        assert_eq!(text, "réponse ici ");
     }
 
     #[test]
-    fn stop_sequence_cut_mid_fragment_keeps_the_head() {
-        let frames = &[
-            r#"{"choices":[{"index":0,"delta":{"content":"réponse iciFIN et la suite"},"finish_reason":null}]}"#,
-        ];
-        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
-        let mut sink = StringSink::default();
-        let (finish, _) = replay(frames, &opts, &mut sink);
-        assert_eq!(sink.text, "réponse ici");
-        assert_eq!(finish, Finish::Stop("FIN".into()));
+    fn stop_sequence_split_across_two_frames_is_still_caught() {
+        // Le piège du SSE : la séquence arrive à cheval sur deux trames. Rien
+        // de `"Observation:"` ne doit sortir, pas même le `"Obser"` de la
+        // première — d'où la rétention.
+        let (finish, text, _) =
+            replay_frags(&["Je pense. ", "Obser", "vation: la suite"], &["Observation:"]);
+        assert_eq!(finish, Finish::Stop("Observation:".into()));
+        assert_eq!(text, "Je pense. ");
     }
 
     #[test]
-    fn provider_truncated_the_stop_sequence_so_we_report_eos() {
-        // Le cas courant : on a envoyé `stop`, le fournisseur a coupé sans
-        // émettre la séquence. On ne peut pas la deviner — et on ne l'invente
-        // pas. `is_complete()` reste vrai, donc rien ne casse en aval.
-        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
-        let mut sink = StringSink::default();
-        let (finish, _) = replay(TEXT, &opts, &mut sink);
+    fn stop_sequence_split_across_three_frames() {
+        let (finish, text, _) = replay_frags(&["a", "O", "b", "s", "ervation:x"], &["Observation:"]);
+        assert_eq!(finish, Finish::Stop("Observation:".into()));
+        assert_eq!(text, "a");
+    }
+
+    #[test]
+    fn a_false_start_is_released_without_loss_or_duplication() {
+        // `"Obs"` amorce `"Observation:"`, mais la suite ne confirme pas : le
+        // texte retenu doit ressortir intact, une seule fois.
+        let (finish, text, _) =
+            replay_frags(&["Obs", "curité totale"], &["Observation:"]);
         assert_eq!(finish, Finish::Eos);
-        assert!(finish.is_complete());
+        assert_eq!(text, "Obscurité totale");
     }
 
     #[test]
-    fn empty_stop_sequence_is_ignored() {
+    fn a_false_start_at_the_very_end_of_the_stream_is_flushed() {
+        // Le flux se termine alors qu'on retenait encore un préfixe : il sort.
+        let (finish, text, _) = replay_frags(&["fin de texte : Obs"], &["Observation:"]);
+        assert_eq!(finish, Finish::Eos);
+        assert_eq!(text, "fin de texte : Obs");
+    }
+
+    #[test]
+    fn earliest_stop_wins_then_the_longest() {
+        // La plus précoce gagne, même déclarée en second.
+        let (finish, text, _) =
+            replay_frags(&["réponse ici et la suite"], &["suite", "ici"]);
+        assert_eq!(finish, Finish::Stop("ici".into()));
+        assert_eq!(text, "réponse ");
+
+        // À position égale, la plus longue gagne.
+        let (finish, text, _) = replay_frags(&["avant STOPNET après"], &["STOP", "STOPNET"]);
+        assert_eq!(finish, Finish::Stop("STOPNET".into()));
+        assert_eq!(text, "avant ");
+    }
+
+    #[test]
+    fn holdback_never_splits_a_multibyte_character() {
+        // `é` fait deux octets : une rétention naïve couperait dedans.
+        let (finish, text, _) = replay_frags(&["café", "é FIN"], &["éé"]);
+        assert_eq!(finish, Finish::Stop("éé".into()));
+        assert_eq!(text, "caf");
+    }
+
+    #[test]
+    fn eos_without_any_stop_sequence_reports_eos() {
+        let mut sink = StringSink::default();
+        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
+        let (finish, _) = replay(TEXT, &opts, &mut sink);
+        assert_eq!(finish, Finish::Eos, "aucune séquence dans le flux");
+        assert!(finish.is_complete());
+        assert_eq!(sink.text, "Bonjour le monde", "rien n'est retenu à tort");
+    }
+
+    #[test]
+    fn empty_stop_sequence_is_ignored_and_nothing_is_held_back() {
         let opts = GenOptions::default().with_stop(vec![String::new()]);
         let mut sink = StringSink::default();
         let (finish, _) = replay(TEXT, &opts, &mut sink);
         assert_eq!(finish, Finish::Eos);
         assert_eq!(sink.text, "Bonjour le monde");
+    }
+
+    #[test]
+    fn flow_stop_wins_over_a_stop_sequence_in_the_same_frame() {
+        // Le puits annule en recevant le préfixe : l'annulation prime, parce
+        // que la réponse est incomplète du point de vue de l'appelant.
+        let owned = [frag("tête "), frag("FIN")];
+        let frames: Vec<&str> = owned.iter().map(String::as_str).collect();
+        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
+        let mut sink = CountingSink::stopping_after(1);
+        let (finish, _) = replay(&frames, &opts, &mut sink);
+        assert_eq!(finish, Finish::Cancelled);
+        assert!(!finish.is_complete());
+    }
+
+    #[test]
+    fn usage_after_a_client_side_cut_counts_our_fragments() {
+        // On coupe avant le chunk final `usage` : le comptage du fournisseur
+        // n'arrivera jamais. On rend ce qu'on sait — le nombre de fragments
+        // poussés — et surtout on n'invente pas `prompt_tokens`.
+        let owned = [frag("un "), frag("deux "), frag("FIN reste")];
+        let frames: Vec<&str> = owned.iter().map(String::as_str).collect();
+        let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
+        let mut sink = StringSink::default();
+        let (finish, usage) = replay(&frames, &opts, &mut sink);
+        assert_eq!(finish, Finish::Stop("FIN".into()));
+        assert_eq!(sink.text, "un deux ");
+        // Deux fragments poussés : la trame `"FIN reste"` a un préfixe vide,
+        // qui n'est pas un fragment.
+        assert_eq!(usage.completion_tokens, 2, "nos fragments, pas les jetons du modèle");
+        assert_eq!(usage.prompt_tokens, 0, "inconnu : non renseigné plutôt qu'inventé");
+    }
+
+    #[test]
+    fn first_stop_and_holdback_units() {
+        let stops = vec!["Observation:".to_string()];
+        assert_eq!(first_stop("abObservation:cd", &stops), Some((2, "Observation:".into())));
+        assert_eq!(first_stop("ab", &stops), None);
+        // Suffixe qui amorce la séquence → retenu.
+        assert_eq!(holdback("blabla Obser", &stops), 5);
+        assert_eq!(holdback("blabla O", &stops), 1);
+        // Rien qui amorce → rien de retenu.
+        assert_eq!(holdback("blabla xyz", &stops), 0);
+        // Une séquence complète n'est jamais « retenue » : c'est `first_stop`.
+        assert_eq!(holdback("Observation:", &stops), 0);
+        // Un stop vide n'entraîne aucune rétention.
+        assert_eq!(holdback("quoi que ce soit", &[String::new()]), 0);
     }
 
     #[test]
@@ -650,10 +822,13 @@ mod tests {
     }
 
     #[test]
-    fn stop_is_forwarded_and_absent_when_empty() {
+    fn stop_is_never_sent_to_the_provider() {
+        // Volontaire : le fournisseur rendrait `finish_reason: "stop"` sans
+        // dire quelle séquence a coupé, ni même s'il y en a eu une. On coupe
+        // nous-mêmes. Ne pas « corriger » en rajoutant la clé.
         let llm = OpenAiLlm::new("http://x/v1", "m");
         let opts = GenOptions::default().with_stop(vec!["FIN".into()]);
-        assert_eq!(llm.request_body(&hello(), &opts)["stop"][0], "FIN");
+        assert!(llm.request_body(&hello(), &opts).get("stop").is_none());
         let body = llm.request_body(&hello(), &GenOptions::default());
         assert!(body.get("stop").is_none());
         assert!(body.get("tools").is_none(), "pas d'outils = pas de clé `tools`");
