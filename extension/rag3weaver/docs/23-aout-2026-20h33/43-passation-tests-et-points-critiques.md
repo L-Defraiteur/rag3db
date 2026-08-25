@@ -31,6 +31,7 @@ avant tout commit**.
 | `e2e_burn_xlmr_reranker` | 8 | + `burn-embedder` | mmarco-mMiniLMv2 + bge-reranker-v2-m3, EN/FR/croisé |
 | `e2e_burn_minilm` / `e2e_burn_multilingual_minilm` / `e2e_burn_embedder` | 3 / 5 / 4 | + `burn-embedder` | embedders burn (EN, multilingue FR→EN, BGE-M3 trois signaux) |
 | `e2e_burn_ocr` | 4 | `burn-ocr` (sans rag3db-native) | PP-OCRv6 tiny sur `tests/fixtures/ocr/hello.png`, `OcrNode` avec le vrai modèle |
+| `openai_llm_sse` / `openai_llm_luciole` | 6 / 3 (+1 `#[ignore]`) | `openai-llm` | client SSE sur socket réelle (serveur factice local), tool calls en deltas, `Flow::Stop` qui coupe, non-fuite du secret ; règle d'interblocage luciole |
 | `e2e_symbol_search` | 12 | `rag3db-native` | `BM25Mode::Symbol`, séparateurs, emoji, `parse` booléen |
 | `e2e_idempotent_registration` | 22 | `rag3db-native` | enregistrement KB/entités dans tous les ordres, réouverture |
 | `e2e_simple_entity` | 15 | `rag3db-native` | pipeline simple, update partiel (**régression FTS**), delete |
@@ -68,6 +69,16 @@ cargo check --tests --features rag3db-native,burn-embedder; cargo check --tests 
 
 `[lints.rust] warnings = "deny"` : un import mort casse une combinaison ; les
 imports utilisés seulement par des tests gatés vont sous le même `cfg`.
+
+**Piège de méthode, payé le 25 :** pour compter *nos* diagnostics dans le bruit
+de lucivy, `grep -c "rag3weaver/src/"` **ne trouve jamais rien** — cargo affiche
+les chemins du paquet local en **relatif** (`--> src/foo.rs`) et ne met en
+absolu que les dépendances par chemin. Une vérification écrite comme ça rend
+« 0 » même avec de vraies erreurs. Le bon filtre :
+
+```bash
+cargo check ... 2>&1 | grep -cE '^\s+--> (src|tests|examples)/'
+```
 
 ## 4. Parité burn / candle (à rejouer après toute régénération)
 

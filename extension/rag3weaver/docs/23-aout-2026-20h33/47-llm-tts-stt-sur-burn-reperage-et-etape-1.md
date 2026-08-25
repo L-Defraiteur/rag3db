@@ -363,7 +363,7 @@ Le **fournisseur devient le chemin normal**, le modèle local devient le cas
 | Étape | Livrable | j-h |
 |---|---|---|
 | ~~1~~ | ~~trait, mock, `LlmNode`, service~~ **fait** (`ad7db7f92`) | ~~2-3~~ |
-| **2** | **Fournisseurs cloud** derrière le même trait : client SSE, Vertex AI / Gemini d'abord (Lucie a des crédits startup), tool calls normalisés, `Usage`. | 2-3 |
+| ~~2~~ | ~~Fournisseurs cloud derrière le même trait~~ **fait** (`3ac47c8ca`) : `OpenAiLlm` sur ureq 3 (**+2 paquets**), constructeurs Vertex et AI Studio, `gcp_auth` (JWT RS256 + OAuth2, **0 paquet**), lib 674. | ~~2-3~~ |
 | 3 | `BurnLlm` paramétré : ONNX fp16 past-KV, tokenizer, chat template, sampling, boucle + EOS. **Génération locale réelle** — cible **Qwen2.5-0.5B fp16 (996 Mo)**, pas Luciole. | 3-4 |
 | 4 | Streaming réel : mailbox luciole en port de flux, `ChannelSink`. | 2 |
 | 5 | FFI wasm : `AsyncCallback` rappelable N fois, `PendingAsync` en file. **Jetons dans le navigateur.** | 2-3 |
@@ -399,6 +399,52 @@ fonction + `user_data`), mais il faut **changer le contrat** : callback
 rappelable N fois avec code de retour (0 = continue, ≠0 = annule — ce qui fait
 remonter `Flow::Stop` du JavaScript jusqu'au GPU), file côté C++, et une
 allocation par message.
+
+## 6 bis. Le fournisseur cloud, livré (`3ac47c8ca`)
+
+**Vertex expose un endpoint compatible OpenAI complet** — streaming SSE, tool
+calls, `usage`. Un seul client couvre Gemini (Vertex *et* AI Studio), Mistral,
+vLLM, llama.cpp, Ollama, OpenRouter. (Claude sur Vertex reste au format
+Anthropic, hors de cet endpoint.)
+
+**Pourquoi une couche maison et pas un crate.** `AsyncScope` de luciole est un
+**exécuteur, pas un réacteur** (`async_executor.rs:143-158` : il scrute, sans
+epoll ni enregistrement d'I/O), donc il ne peut pas porter une socket. Or
+`genai` (140 paquets), `rig-core` (141), `async-openai` (94), `llm` (360, tokio
+**et** actix) atteignent tous le réseau par `reqwest → hyper-util` en
+`TokioExecutor` : les poller depuis `AsyncScope` panique en *« there is no
+reactor running »*. `ureq` 3 en `default-features = false, features =
+["rustls"]` coûte **2 paquets** — le reste de son arbre était déjà résolu — et
+parle nativement la forme « push » que `TokenSink` attend.
+
+**Le piège Vertex qui nous aurait coûté une journée** : ses exemples officiels
+**mélangent l'`index`** des tool calls (`index:1` puis `index:0` pour le même
+appel). On route par `id`, et un test rejoue ce cas.
+
+**Concurrence par luciole**, avec la règle prouvée expérimentalement (pool d'un
+thread, mailbox bornée à 1 : `send` → jamais fini en 3 s ; `try_send` →
+0,01 s) :
+
+> Sur un thread de scheduler, l'I/O bloquante doit être **la seule** chose qui
+> bloque : un appel LLM part par `Scheduler::task_pipe_to(Priority::Idle, …)`,
+> jamais depuis un `Actor::handle`. Le puits ne doit **jamais** dormir —
+> `try_send` puis `run_one_step()` si la mailbox est pleine, jamais `send`, et
+> **`on_finish` compte autant que `on_token`**.
+
+**Coût d'entrée Google.** AI Studio : < 2 min, une clé, mais compte *Prepay*
+(défaut depuis mars 2026) — il faut un solde prépayé positif en permanence,
+sinon **aucun crédit startup ne se consomme et les clés s'arrêtent d'un coup**.
+Vertex : 15-30 min, facturation obligatoire, **mais c'est la voie propre pour
+brûler les crédits startup** (le crédit de bienvenue de 300 $ est exclu du
+Gemini API depuis mars, et reste valable sur Vertex). Les deux constructeurs
+sont livrés, le client est le même.
+
+**Contrat partiellement perdu** : `Finish::Stop(seq)` n'est pas restituable à
+distance — OpenAI comme Vertex rendent `finish_reason: "stop"` que la coupure
+vienne de l'EOS ou d'une séquence. On détecte la séquence côté client quand le
+fournisseur la recrache, sinon on rend `Finish::Eos`. `is_complete()` reste vrai
+dans les deux cas. Un test nommé `provider_truncated_the_stop_sequence_so_we_report_eos`
+rend le comportement explicite.
 
 ## 7. Dettes nommées
 
