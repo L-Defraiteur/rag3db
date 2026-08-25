@@ -8,8 +8,8 @@
 
 graph LR
     source["SearchSourceNode(target_name='$target', query='$query')"]
-    vector["VectorSearchNode(limit='$limit')"]
-    bm25["BM25SearchNode(limit='$limit')"]
+    vector["VectorSearchNode(limit=$limit)"]
+    bm25["BM25SearchNode(limit=$limit)"]
     fuse["FuseResultsNode"]
     resolve["ResolveParentNode"]
 

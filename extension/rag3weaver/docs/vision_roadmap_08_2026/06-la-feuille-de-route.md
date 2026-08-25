@@ -88,16 +88,23 @@ feature par brique, et les **poids téléchargés à la première utilisation da
 
 **Silencieuses, donc dangereuses :**
 
-- **`parse_mermaid_template` rend toujours une chaîne** : les trois gabarits
-  `templates/simple_*.mmd` écrivent `limit='$limit'`, le nœud reçoit `"10"`,
-  `as_u64()` rend `None`, et **la limite n'a jamais été respectée**. Le chemin
-  des graphes-outils substitue par valeur typée et n'a pas le problème.
+- ~~**`parse_mermaid_template` rend toujours une chaîne**~~ — **corrigé le
+  25 août** (commit suivant ce document). Le bug était plus large que noté :
+  il touchait aussi `gpu_batch_size=$gpu_batch_size` dans `ingestion.mmd` et
+  `kb_pipeline.mmd` — six gabarits sur sept, `limit` **et** la taille de lot
+  GPU jamais respectés. Règle désormais : un `$var` **nu** est typé par
+  inférence comme un littéral, un `'$var'` **quoté** reste une chaîne.
 - **`params_object_schema` ne passe pas le mode strict** — 15 de nos 28 nœuds
   échouent. Sans effet sur les appels d'outils, bloque la réutilisation d'un
   `ToolDef` comme schéma de sortie structurée.
-- **`special_ops` et peut-être `title_boost`/`content_boost`** sont
-  désérialisés et **potentiellement jamais lus**
-  ([05](05-ce-qui-a-tenu-depuis-fevrier.md) §8). Dix minutes de vérification.
+- **`special_ops`, `title_boost`, `content_boost` et le `boost` par champ**
+  sont désérialisés et **jamais lus** — vérifié le 25 août
+  ([05](05-ce-qui-a-tenu-depuis-fevrier.md) §8). Les deux boosts sont copiés
+  dans `KBMetadata` puis oubliés ; lucivy n'a **aucune pondération par champ**,
+  donc les brancher est une fonctionnalité (côté lucivy ou par rescorage
+  après coup), pas une correction. Ils sont annotés « accepté mais non
+  appliqué » dans `config.rs` et gardés pour la compatibilité des configs.
+  `special_ops` est l'emplacement prévu pour `grep` / `read` (§2.2).
 - **La troncature d'embedding** : un chunker qui ignore la fenêtre du modèle
   tronque en silence — le MiniLM multilingue hérite d'une troncature à 128.
 

@@ -62,6 +62,9 @@ pub struct FieldDef {
     )]
     pub content_for: Option<Vec<String>>,
 
+    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : aucun chemin
+    /// de recherche ne lit ce champ — lucivy n'a pas de pondération par
+    /// champ. Conservé pour la compatibilité des configs existantes.
     #[serde(default)]
     pub boost: Option<f64>,
 
@@ -229,14 +232,20 @@ pub struct KBConfig {
     #[serde(alias = "keyword_weight")]
     pub keyword_weight: f64,
 
+    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : copié dans
+    /// `KBMetadata`, jamais lu ensuite. Voir `docs/vision_roadmap_08_2026/06`.
     #[serde(alias = "title_boost")]
     pub title_boost: f64,
 
+    /// **Accepté mais non appliqué** — même statut que `title_boost`.
     #[serde(alias = "content_boost")]
     pub content_boost: f64,
 
     pub chunking: ChunkingConfig,
 
+    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : désérialisé
+    /// et jamais lu. Emplacement prévu pour `grep` / `read` (feuille de route
+    /// `docs/vision_roadmap_08_2026/06` §2.2).
     #[serde(default, alias = "special_ops")]
     pub special_ops: Option<HashMap<String, serde_json::Value>>,
 

@@ -228,36 +228,43 @@ fn parse_value(
         return Ok(serde_json::Value::String(resolved));
     }
 
-    // Bare $variable
+    // Bare $variable — typed by inference, exactly like a bare literal would be.
+    //
+    // Before the 25 August 2026 fix this always produced a JSON string, so
+    // `limit=$limit` with `limit = "10"` gave `{"limit": "10"}`, every consumer
+    // doing `.as_u64()` got `None`, and the default silently applied: the
+    // `limit` and `gpu_batch_size` of every shipped template were never
+    // honoured. A *quoted* `'$var'` still yields a string — the quotes are the
+    // author saying "this is text", and a query that happens to be `42` must
+    // stay `"42"`.
     if raw.starts_with('$') {
         let var_name = &raw[1..];
         let val = vars.get(var_name).ok_or_else(|| MermaidError::UnknownVariable {
             line: line_num,
             var: var_name.to_string(),
         })?;
-        return Ok(serde_json::Value::String(val.clone()));
+        return Ok(infer_scalar(val));
     }
 
-    // Boolean
+    Ok(infer_scalar(raw))
+}
+
+/// Type a bare token the way Mermaid config literals are typed:
+/// `true`/`false` → bool, integer → i64, float → f64, anything else → string.
+fn infer_scalar(raw: &str) -> serde_json::Value {
     if raw == "true" {
-        return Ok(serde_json::Value::Bool(true));
+        return serde_json::Value::Bool(true);
     }
     if raw == "false" {
-        return Ok(serde_json::Value::Bool(false));
+        return serde_json::Value::Bool(false);
     }
-
-    // Integer
     if let Ok(n) = raw.parse::<i64>() {
-        return Ok(serde_json::json!(n));
+        return serde_json::json!(n);
     }
-
-    // Float
     if let Ok(n) = raw.parse::<f64>() {
-        return Ok(serde_json::json!(n));
+        return serde_json::json!(n);
     }
-
-    // Fallback: treat as string
-    Ok(serde_json::Value::String(raw.to_string()))
+    serde_json::Value::String(raw.to_string())
 }
 
 /// Replace `$var` occurrences inside a string.
@@ -514,6 +521,29 @@ graph LR
         assert_eq!(def.nodes[0].config["query"], "hello world");
     }
 
+    /// Un `$var` nu est typé par inférence ; un `'$var'` quoté reste une chaîne.
+    /// Régression du 25 août 2026 : `limit=$limit` rendait `"10"`, jamais `10`.
+    #[test]
+    fn parse_template_bare_var_is_typed_quoted_var_is_string() {
+        let mut vars = HashMap::new();
+        vars.insert("limit".to_string(), "10".to_string());
+        vars.insert("ratio".to_string(), "0.5".to_string());
+        vars.insert("flag".to_string(), "true".to_string());
+        vars.insert("q".to_string(), "42".to_string());
+
+        let input = r#"
+graph LR
+    n["FetchRelatedNode(limit=$limit, ratio=$ratio, flag=$flag, query='$q', label=$q)"]
+"#;
+        let cfg = &parse_mermaid_template(input, &vars).unwrap().nodes[0].config;
+        assert_eq!(cfg["limit"], 10);
+        assert_eq!(cfg["limit"].as_u64(), Some(10));
+        assert_eq!(cfg["ratio"], 0.5);
+        assert_eq!(cfg["flag"], true);
+        assert_eq!(cfg["query"], "42", "quoted stays a string");
+        assert_eq!(cfg["label"], 42, "bare is inferred");
+    }
+
     #[test]
     fn parse_template_unknown_var_errors() {
         let input = "graph LR\n    qs[\"KBQuerySourceNode(kb_name='$missing')\"]";
@@ -667,6 +697,8 @@ graph LR
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         assert_eq!(def.nodes.len(), 4);
         assert_eq!(def.edges.len(), 4);
+        let fetch = def.nodes.iter().find(|n| n.name == "fetch_0").unwrap();
+        assert_eq!(fetch.config["limit"].as_u64(), Some(10), "limit must reach the node typed");
 
         let registry = builtin_registry();
         let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
@@ -686,6 +718,8 @@ graph LR
 
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         assert_eq!(def.nodes.len(), 10);
+        let embeds = def.nodes.iter().find(|n| n.name == "embeds").unwrap();
+        assert_eq!(embeds.config["gpu_batch_size"].as_u64(), Some(32));
 
         let registry = builtin_registry();
         let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();

@@ -7,7 +7,7 @@
 
 graph LR
     source["SearchSourceNode(target_name='$target', query='$query')"]
-    bm25["BM25SearchNode(limit='$limit')"]
+    bm25["BM25SearchNode(limit=$limit)"]
     resolve["ResolveParentNode"]
 
     source -->|query| bm25
