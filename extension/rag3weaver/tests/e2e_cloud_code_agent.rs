@@ -257,7 +257,9 @@ fn a_cloud_model_edits_a_copy_of_our_code() {
         let (file, old_symbol) = if mi == 0 { ("services.rs", None) } else { ("generic_search_nodes.rs", Some("take_results(")) };
         let content = source.read(file).unwrap().unwrap();
         let text_ok = content.contains(expect);
-        let leftovers = old_symbol.map(|o| content.matches(o).count() - content.matches("take_results_from(").count());
+        // `take_results(` ne matche pas `take_results_from(` : le compte est
+        // directement celui des appels non renommés.
+        let leftovers = old_symbol.map(|o| content.matches(o).count());
         let cat = catalog.lock().unwrap();
         let g = rag3weaver::code_tools::grep_files(source.as_ref(), Some(&cat), &regex_escape(expect), &Default::default()).unwrap();
         let graph_ok = g.matches.iter().any(|m| m.path == file && m.stale == Some(false) && m.scope.is_some());

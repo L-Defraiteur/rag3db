@@ -87,3 +87,46 @@ Une question = 8 000 à 33 000 jetons (le contexte est renvoyé à chaque
 tour). C'est le prix du « lire avant de répondre » ; c'est aussi l'argument
 pour que les outils rendent **peu et juste** — le tableau markdown de `grep`
 plutôt que du JSON, les scopes de la fenêtre plutôt que le fichier.
+
+## 6. Modifier, pas seulement lire — deux missions sur une copie jetable (minuit)
+
+Avec `edit` et `list` ([05](05-read-et-grep-sur-une-source-de-fichiers.md) §5),
+sur une **copie temporaire** de `src/dataflow` (l'agent édite de vrais
+fichiers sur disque, pas les nôtres) :
+
+| | appels | résultat |
+|---|---|---|
+| **M1** — ajouter `pub fn len(&self) -> usize` à `ServiceRegistry`, après `keys`, dans le style du fichier | 5 : `list`, `list`, `read`, `edit`, `read` | **fait** — `list("src")` vide, `list("")` (vingt-cinq fichiers, tous `✓indexed`), `read services.rs`, un `edit` avec `old` copié exact, relecture. Le graphe : `method len (65-67)`, index à jour |
+| **M2** — renommer `take_results` en `take_results_from` et tous ses appels dans le fichier | 11 : `list`, `grep`, `read` ×2, `edit`, `read`, `edit`, `read` ×2, `grep` ×2 | **fait** — définition puis le site d'appel (deux `edit`), **zéro reste** de l'ancien nom, `function take_results_from (1016-1020)` indexé, l'ancien scope supprimé (« 1 removed ») |
+
+Le rapport d'`edit` — *« edited — 1360 → 1360 lines, first change at line 1016
+(read with offset=1013 to check). Index updated: 105 scopes upserted, 1
+removed, 410 relations »* — est repris tel quel par le modèle pour relire au
+bon endroit.
+
+### Ce que ça a coûté de faire marcher
+
+**Première tentative : HTTP 400, « Expected a valid JSON object in the
+request ».** Sept variantes de schémas d'outils envoyées à Vertex
+(`e2e_cloud_schema_probe`) — toutes acceptées : ce n'étaient pas les
+schémas. Un dump SSE brut (`RAG3WEAVER_SSE_DUMP`) a montré la vraie cause :
+avec `extra_body.google.stream_function_call_arguments`, Vertex fragmente les
+arguments de l'appel `edit` en morceaux qui portent les **retours à la ligne
+non échappés** — du JSON invalide par construction dès qu'une valeur est
+multi-ligne — puis **coupe le flux sur un `499 CANCELLED`** écrit hors
+`data:`, au milieu de la valeur. Chez nous : le parseur refusait l'appel,
+l'historique renvoyait ces arguments tels quels, et Vertex refusait toute la
+requête suivante. Quatre correctifs (`390ef76c5`) : réparation des
+caractères de contrôle bruts avant de parser, arguments **toujours** un
+objet valide sur le fil (`{}` pour un appel tronqué), objet d'erreur hors
+`data:` rendu comme erreur, fragmentation en opt-in.
+
+**Deuxième tentative : M2 en `MaxIterations` sans réponse, mission pourtant
+accomplie** — les cinq derniers tours à re-vérifier (relectures, `grep`
+avec bornes de mot). D'où le **dernier pas** (`AgentLimits::final_nudge`) :
+au dernier appel autorisé, un tour utilisateur dit au modèle que c'en est
+un, et les outils lui sont retirés (`ToolChoice::None`). Troisième
+tentative : M2 conclut en douze tours exactement, avec son rapport.
+
+Coût : 14 600 jetons pour M1, 40 000 pour M2 — l'historique est renvoyé à
+chaque tour, et les `read` de vérification s'additionnent.

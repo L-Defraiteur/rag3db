@@ -191,7 +191,19 @@ pub struct AgentLimits {
     /// Contenu posé dans les résultats fabriqués pour refermer les appels
     /// qu'une interruption a laissés orphelins.
     pub interrupted_tool_result: String,
+
+    /// Au **dernier** appel autorisé, un tour utilisateur qui dit au modèle
+    /// que c'est le dernier — et les outils lui sont retirés
+    /// (`ToolChoice::None`). Sans ça, un modèle consciencieux passe ses
+    /// derniers tours à re-vérifier et la boucle s'arrête sur
+    /// `MaxIterations` sans réponse, mission pourtant accomplie (25 août
+    /// 2026, Gemini renommant une fonction). `None` désactive.
+    pub final_nudge: Option<String>,
 }
+
+/// Le texte du dernier tour, par défaut.
+pub const FINAL_NUDGE: &str = "This is your last step: no more tool calls are possible. \
+Answer now with what you have — what you did, what you found, what remains uncertain.";
 
 impl Default for AgentLimits {
     fn default() -> Self {
@@ -200,6 +212,7 @@ impl Default for AgentLimits {
             token_budget: None,
             stop_on_repeated_error: true,
             interrupted_tool_result: INTERRUPTED_TOOL_RESULT.to_string(),
+            final_nudge: Some(FINAL_NUDGE.to_string()),
         }
     }
 }
@@ -385,8 +398,19 @@ impl<'a> Agent<'a> {
                 break;
             }
 
+            // Dernier appel autorisé : le dire, et retirer les outils.
+            let last_call = run.iterations + 1 >= self.limits.max_iterations;
+            let mut opts = self.opts.clone();
+            if last_call && run.iterations > 0 {
+                if let Some(nudge) = &self.limits.final_nudge {
+                    if !turns.last().is_some_and(|t| t.role == "user" && t.content == *nudge) {
+                        turns.push(Turn::user(nudge.clone()));
+                    }
+                    opts.tool_choice = crate::llm::ToolChoice::None;
+                }
+            }
             let mut tee = TeeSink { inner: sink, text: String::new() };
-            let generated = self.llm.generate(turns, &self.opts, &mut tee);
+            let generated = self.llm.generate(turns, &opts, &mut tee);
             let text = std::mem::take(&mut tee.text);
             let (finish, usage) = match generated {
                 Ok(ok) => ok,
@@ -539,6 +563,32 @@ mod tests {
                 .map(|(_, r)| r.clone())
                 .unwrap_or_else(|| r#"{"error":"unknown_tool","detail":"inconnu"}"#.into())
         })
+    }
+
+    /// Au dernier appel autorisé, le modèle reçoit le tour « dernier pas »
+    /// et `ToolChoice::None` ; avant, ni l'un ni l'autre.
+    #[test]
+    fn the_last_call_gets_the_nudge_and_no_tools() {
+        use std::sync::Arc;
+        let seen: Arc<Mutex<Vec<(bool, crate::llm::ToolChoice)>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen2 = seen.clone();
+        let llm = CallbackLlm::new("always-calls", 4096, move |turns, opts, sink| {
+            let nudged = turns.last().is_some_and(|t| t.role == "user" && t.content == FINAL_NUDGE);
+            seen2.lock().unwrap().push((nudged, opts.tool_choice.clone()));
+            MockLlm::new("").with_tool_calls(vec![("search", "{}")]).generate(turns, opts, sink)
+        });
+        let toolbox = toolbox(vec![("search", "[]")]);
+        let agent = Agent::new(&llm, &toolbox).with_limits(AgentLimits { max_iterations: 3, ..Default::default() });
+        let mut turns = start();
+        let run = agent.run(&mut turns, &mut StringSink::default()).unwrap();
+        assert_eq!(run.stop, StopReason::MaxIterations);
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[0], (false, crate::llm::ToolChoice::Auto));
+        assert_eq!(seen[1], (false, crate::llm::ToolChoice::Auto));
+        assert_eq!(seen[2], (true, crate::llm::ToolChoice::None), "last call: nudged, no tools");
+        // Le tour de relance est dans l'historique, une seule fois.
+        assert_eq!(turns.iter().filter(|t| t.content == FINAL_NUDGE).count(), 1);
     }
 
     fn start() -> Vec<Turn> {
