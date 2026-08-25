@@ -8,7 +8,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use rag3weaver::code::{default_scope_chunking, read_sources, register_code_schema, FILE, SCOPE};
+use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, FILE, SCOPE};
+use rag3weaver::code_tools::{grep_files, read_file, FileSource, GrepOptions, Snapshot, FILE_SOURCE_SERVICE};
+use rag3weaver::dataflow::graph_tool::builtin_graph_tools;
+use rag3weaver::llm::ToolCall;
 use rag3weaver::dataflow::{CodeIngestNode, DataflowGraph, DataflowRuntime, ParseCodeNode, ServiceRegistry};
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
@@ -154,4 +157,108 @@ fn reingest_is_idempotent() {
     assert_eq!(first.scopes, second.scopes);
     assert_eq!(before, after, "no duplicated rows");
     assert_eq!(second.failed, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// read / grep : sur une source virtuelle, annotés par le graphe, péremption
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Un instantané de deux de nos fichiers, ingéré comme un dépôt distant
+/// (chemins virtuels, pas de disque), puis lu et grep-é à travers le graphe.
+#[test]
+#[ignore]
+fn read_and_grep_annotate_from_the_graph_and_detect_staleness() {
+    let root = dataflow_dir();
+    let all = read_sources(&root).unwrap();
+    let pick = |name: &str| all.iter().find(|(p, _)| p == name).cloned().expect(name);
+    let mut snapshot = Snapshot::new("remote-demo", [pick("generic_search_nodes.rs"), pick("services.rs")]);
+
+    let catalog = setup();
+    let analysis = analyze_source(&snapshot).unwrap();
+    assert!(analysis.files.iter().all(|f| f.cursor == "snapshot:remote-demo" && f.absolute_path.is_empty()), "virtual source: cursor set, no absolute path");
+    catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+
+    // ── read : fenêtre, scopes, index à jour ─────────────────────────────
+    let cat = catalog.lock().unwrap();
+    let r = read_file(&snapshot, Some(&cat), "generic_search_nodes.rs", 1, 40).unwrap();
+    eprintln!("{}", r.to_markdown().lines().take(6).collect::<Vec<_>>().join("\n"));
+    assert_eq!(r.stale, Some(false), "fresh index");
+    assert_eq!(r.lines_read, 40);
+    assert!(r.text.starts_with("00001| //! Generic search nodes"), "{}", &r.text[..60]);
+    assert!(r.has_more);
+
+    // ── grep : chaque ligne trouvée porte son scope ──────────────────────
+    let g = grep_files(&snapshot, Some(&cat), "fn take_results", &GrepOptions::default()).unwrap();
+    eprintln!("{}", g.to_markdown());
+    assert_eq!(g.total_found, 1);
+    let m = &g.matches[0];
+    assert_eq!(m.path, "generic_search_nodes.rs");
+    let scope = m.scope.as_ref().expect("annotated with a scope");
+    assert_eq!(scope.name, "take_results");
+    assert_eq!(scope.scope_type, "function");
+    assert!(scope.start_line <= m.line && m.line <= scope.end_line);
+    assert_eq!(m.stale, Some(false));
+
+    // Un appel dans le corps d'une méthode est rapproché de la MÉTHODE, pas de l'impl.
+    let g2 = grep_files(&snapshot, Some(&cat), r#"take_results\(ctx, "signals"\)"#, &GrepOptions::default()).unwrap();
+    assert_eq!(g2.total_found, 1, "{}", g2.to_markdown());
+    assert_eq!(g2.matches[0].scope.as_ref().map(|s| s.name.as_str()), Some("execute"));
+
+    // Un fichier connu de la source mais pas du catalogue : pas de verdict.
+    drop(cat);
+    snapshot.insert("NOTES.md", "grep me: take_results\n");
+    let cat = catalog.lock().unwrap();
+    let g3 = grep_files(&snapshot, Some(&cat), "take_results", &GrepOptions { extension: Some("md".into()), ..Default::default() }).unwrap();
+    assert_eq!(g3.total_found, 1);
+    assert!(g3.matches[0].stale.is_none() && g3.matches[0].scope.is_none());
+
+    // ── péremption : le fichier change dans la source, pas dans l'index ─
+    drop(cat);
+    let (_, original) = pick("services.rs");
+    snapshot.insert("services.rs", format!("{original}\n// edited after indexing\n"));
+    let cat = catalog.lock().unwrap();
+    let r2 = read_file(&snapshot, Some(&cat), "services.rs", 1, 5).unwrap();
+    assert_eq!(r2.stale, Some(true), "the index is stale and says so");
+    assert!(r2.to_markdown().contains("INDEX STALE"));
+    let g4 = grep_files(&snapshot, Some(&cat), "edited after indexing", &GrepOptions::default()).unwrap();
+    assert_eq!(g4.matches[0].stale, Some(true));
+    assert!(g4.to_markdown().contains("⚠stale"));
+}
+
+/// Les mêmes, comme graphes-outils appelés par un modèle : `read` et `grep`
+/// rendent du markdown nu (pas une chaîne JSON échappée).
+#[test]
+#[ignore]
+fn read_and_grep_as_graph_tools() {
+    let root = dataflow_dir();
+    let all = read_sources(&root).unwrap();
+    let snapshot: Arc<dyn FileSource> = Arc::new(Snapshot::new("remote-demo", all.into_iter().filter(|(p, _)| p == "port.rs")));
+    let catalog = setup();
+    let analysis = analyze_source(snapshot.as_ref()).unwrap();
+    catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+
+    let (nodes, tools) = builtin_graph_tools().unwrap();
+    let defs = rag3weaver::tools::graph_tool_defs(&tools);
+    let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, vec!["grep", "read", "search", "search_expand"]);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
+    let services = Arc::new(services);
+
+    let call = |name: &str, args: serde_json::Value| -> String {
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        tools.call(&tc, &nodes, services.clone()).content.clone()
+    };
+    let grep = call("grep", serde_json::json!({"pattern": "pub fn merge_port_values", "extension": "rs"}));
+    eprintln!("[grep tool]\n{grep}");
+    assert!(grep.starts_with("**Pattern:**"), "raw markdown, not a JSON string: {grep}");
+    assert!(grep.contains("| port.rs |") && grep.contains("`merge_port_values`"), "{grep}");
+
+    let read = call("read", serde_json::json!({"path": "port.rs", "offset": 1, "limit": 5}));
+    eprintln!("[read tool]\n{read}");
+    assert!(read.contains("00001| ") && read.contains("Use offset=6 to continue"), "{read}");
+
+    let bad = call("read", serde_json::json!({"path": "nope.rs"}));
+    assert!(bad.contains("error"), "an unknown file is a tool error the model can read: {bad}");
 }

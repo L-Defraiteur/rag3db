@@ -2280,6 +2280,26 @@ impl Catalog {
         Ok(Some(self.row_to_map(&result.columns, &result.rows[0])))
     }
 
+    /// Les lignes de `entity_name` dont `field` vaut `value`, avec `fields`.
+    /// Point d'accès sans recherche — ce dont `read` / `grep` ont besoin pour
+    /// retrouver les scopes d'un fichier (`Scope.file_path = …`).
+    pub fn find_by_field(
+        &self,
+        entity_name: &str,
+        field: &str,
+        value: CypherValue,
+        fields: &[&str],
+    ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
+        self.check_initialized()?;
+        self.check_entity(entity_name)?;
+        let cypher = self.dialect.select_by_field(entity_name, field, fields);
+        let result = self
+            .conn
+            .execute_with_params(&cypher, &[QueryParam::new("value", value)])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        Ok(result.rows.iter().map(|row| self.row_to_map(&result.columns, row)).collect())
+    }
+
     pub fn get_many(
         &self,
         entity_name: &str,

@@ -157,7 +157,7 @@ fn the_agent_really_calls_the_search_graph_tool() {
 
     // Les deux graphes-outils sont bien ceux qu'on annoncerait au modèle.
     let announced: Vec<String> = toolbox.tool_defs().iter().map(|d| d.name.clone()).collect();
-    assert_eq!(announced, vec!["search", "search_expand"]);
+    assert_eq!(announced, rag3weaver::dataflow::graph_tool::BUILTIN_TOOL_NAMES.to_vec());
 
     let llm = scripted(vec![
         MockLlm::new("").with_tool_calls(vec![(

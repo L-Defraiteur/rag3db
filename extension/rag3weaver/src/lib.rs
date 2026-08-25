@@ -99,6 +99,9 @@ pub mod burn_ppocr;
 /// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
 #[cfg(feature = "code")]
 pub mod code;
+/// `read` et `grep` sur une `FileSource`, annotés par le graphe.
+#[cfg(feature = "code")]
+pub mod code_tools;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;

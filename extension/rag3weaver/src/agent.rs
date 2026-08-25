@@ -973,7 +973,7 @@ mod tests {
 
         let names: Vec<&str> =
             agent.gen_options().tools.iter().map(|d| d.name.as_str()).collect();
-        assert_eq!(names, vec!["search", "search_expand"]);
+        assert_eq!(names, crate::dataflow::graph_tool::BUILTIN_TOOL_NAMES);
         assert_eq!(agent.limits().max_iterations, 8);
         assert_eq!(agent.limits().token_budget, None);
     }

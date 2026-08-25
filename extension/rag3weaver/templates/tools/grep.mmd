@@ -1,0 +1,11 @@
+%% tool: grep
+%% description: Cherche une expression régulière dans les fichiers du projet ; chaque ligne trouvée est rapprochée du scope (fonction, classe…) qui la contient.
+%% param: pattern string! -- Expression régulière (syntaxe Rust regex).
+%% param: path_prefix string = "" -- Ne chercher que sous ce préfixe de chemin (ex. 'src/').
+%% param: extension string = "" -- Ne chercher que cette extension, sans le point (ex. 'rs').
+%% param: max_results int = 50 -- Lignes rendues (plafond 500) ; toutes sont comptées.
+%% param: context_lines int = 0 -- Lignes de contexte avant et après (plafond 5).
+%% result: grep.result
+
+graph LR
+    grep["GrepNode(pattern=$pattern, path_prefix=$path_prefix, extension=$extension, max_results=$max_results, context_lines=$context_lines)"]

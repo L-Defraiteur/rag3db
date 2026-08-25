@@ -235,6 +235,9 @@ pub trait SchemaDialect: Send + Sync {
     /// `order_by`: optional column to ORDER BY (ascending).
     fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String;
 
+    /// Select rows whose `field` equals `$value`, returning `fields`.
+    fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String;
+
     /// Check if an entity exists by UUID. Expects `$uuid` param.
     fn exists_by_uuid(&self, table: &str) -> String;
 
@@ -661,6 +664,14 @@ impl SchemaDialect for Rag3dbDialect {
             Some(col) => format!("MATCH (n:{table}) RETURN {returns} ORDER BY n.{col}"),
             None => format!("MATCH (n:{table}) RETURN {returns}"),
         }
+    }
+
+    fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String {
+        let returns = fields.iter()
+            .map(|f| format!("n.{f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("MATCH (n:{table}) WHERE n.{field} = $value RETURN {returns}")
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {
@@ -1201,6 +1212,11 @@ impl SchemaDialect for PostgresDialect {
             Some(col) => format!("SELECT {cols} FROM {table} ORDER BY {col}"),
             None => format!("SELECT {cols} FROM {table}"),
         }
+    }
+
+    fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String {
+        let cols = fields.join(", ");
+        format!("SELECT {cols} FROM {table} WHERE {field} = $value")
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {

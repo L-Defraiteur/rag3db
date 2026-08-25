@@ -133,11 +133,17 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileRecord {
     pub path: String,
+    /// Vide pour une source virtuelle (instantané, dépôt distant).
     pub absolute_path: String,
     pub language: String,
     pub lines_of_code: usize,
     pub size_bytes: usize,
     pub content_hash: String,
+    /// Identité de la source (`worktree:…`, `snapshot:…`) — voir
+    /// [`crate::code_tools::FileSource::cursor`]. Vide par [`analyze`],
+    /// rempli par [`analyze_source`].
+    #[serde(default)]
+    pub cursor: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -254,6 +260,7 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
             lines_of_code: fa.total_lines,
             size_bytes: sizes.get(abs).copied().unwrap_or(0),
             content_hash: fa.content_hash.clone().unwrap_or_default(),
+            cursor: String::new(),
         });
     }
     analysis.files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -447,6 +454,34 @@ fn relative(root: &str, abs: &str) -> String {
         .unwrap_or_else(|_| abs.to_string())
 }
 
+/// [`analyze`] sur tout ce qu'une [`crate::code_tools::FileSource`] contient
+/// de parsable, avec `File.cursor` = l'identité de la source et
+/// `absolute_path` vide pour une source virtuelle.
+pub fn analyze_source(source: &dyn crate::code_tools::FileSource) -> Result<CodeAnalysis, String> {
+    let (root, virtual_source) = match source.cursor().strip_prefix("worktree:") {
+        Some(root) => (root.to_string(), false),
+        None => ("/".to_string(), true),
+    };
+    let mut sources = Vec::new();
+    for path in source.list()? {
+        if !is_code_parser_supported(&path) {
+            continue;
+        }
+        if let Some(content) = source.read(&path)? {
+            sources.push((path, content));
+        }
+    }
+    let mut analysis = analyze(&root, sources);
+    let cursor = source.cursor();
+    for f in &mut analysis.files {
+        f.cursor = cursor.clone();
+        if virtual_source {
+            f.absolute_path.clear();
+        }
+    }
+    Ok(analysis)
+}
+
 /// Lit les sources d'un répertoire : extensions supportées, [`SKIPPED_DIRS`]
 /// ignorés, fichiers non-UTF-8 écartés. Chemins relatifs à `root`, triés.
 pub fn read_sources(root: &str) -> std::io::Result<Vec<(String, String)>> {
@@ -503,7 +538,7 @@ impl FileRecord {
             ("lines_of_code".into(), i(self.lines_of_code)),
             ("size_bytes".into(), i(self.size_bytes)),
             ("content_hash".into(), s(&self.content_hash)),
-            ("cursor".into(), s("")),
+            ("cursor".into(), s(&self.cursor)),
         ])
     }
 }

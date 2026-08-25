@@ -926,7 +926,12 @@ impl GraphTool {
 fn render_port_value(value: &PortValue) -> Result<String, String> {
     let cpv = port_value_to_checkpoint(value)?;
     match cpv.data_json {
-        Some(json) => Ok(json),
+        // Une chaîne JSON nue est du texte pour le modèle (markdown de
+        // `read` / `grep`) : rendue sans guillemets ni échappements.
+        Some(json) => Ok(match serde_json::from_str::<serde_json::Value>(&json) {
+            Ok(serde_json::Value::String(text)) => text,
+            _ => json,
+        }),
         None if cpv.port_type == PortType::Empty => Ok(r#"{"ok":true}"#.to_string()),
         None => Err(format!("type de port {:?} non sérialisable", cpv.port_type)),
     }
@@ -1168,6 +1173,19 @@ pub const SEARCH_TOOL_MERMAID: &str = include_str!("../../templates/tools/search
 
 /// `search_expand` — `search` **contenu** dans un graphe qui étend chaque
 /// résultat par une relation. La preuve que la composition tient.
+/// `read` et `grep` (feature `code`) : sur la `file_source`, annotés par le graphe.
+#[cfg(feature = "code")]
+pub const READ_TOOL_MERMAID: &str = include_str!("../../templates/tools/read.mmd");
+#[cfg(feature = "code")]
+pub const GREP_TOOL_MERMAID: &str = include_str!("../../templates/tools/grep.mmd");
+
+/// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
+/// (trié — le cache de préfixe en dépend).
+#[cfg(feature = "code")]
+pub const BUILTIN_TOOL_NAMES: [&str; 4] = ["grep", "read", "search", "search_expand"];
+#[cfg(not(feature = "code"))]
+pub const BUILTIN_TOOL_NAMES: [&str; 2] = ["search", "search_expand"];
+
 pub const SEARCH_EXPAND_TOOL_MERMAID: &str =
     include_str!("../../templates/tools/search_expand.mmd");
 
@@ -1198,6 +1216,11 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
 
     let mut tools = GraphToolRegistry::new();
     tools.register(search)?;
+    #[cfg(feature = "code")]
+    {
+        tools.register(GraphTool::from_mermaid(READ_TOOL_MERMAID)?)?;
+        tools.register(GraphTool::from_mermaid(GREP_TOOL_MERMAID)?)?;
+    }
     tools.register(expand)?;
     Ok((nodes, tools))
 }
@@ -1446,12 +1469,12 @@ mod tests {
         let (nodes, tools) = builtin_graph_tools().unwrap();
         let exposed = crate::tools::graph_tool_defs(&tools);
         let names: Vec<&str> = exposed.iter().map(|d| d.name.as_str()).collect();
-        assert_eq!(names, vec!["search", "search_expand"], "ordre stable");
+        assert_eq!(names, BUILTIN_TOOL_NAMES, "ordre stable");
         // Le registre de nœuds reste introspectable, lui.
         assert_eq!(crate::tools::tool_defs(&nodes).len(), crate::dataflow::node_factories::BUILTIN_NODE_COUNT + 1, "nœuds + SearchTool");
         let openai = crate::tools::graph_tool_defs_openai(&tools);
-        assert_eq!(openai.len(), 2);
-        assert_eq!(openai[0]["function"]["name"], "search");
+        assert_eq!(openai.len(), BUILTIN_TOOL_NAMES.len());
+        assert_eq!(openai[0]["function"]["name"], BUILTIN_TOOL_NAMES[0]);
     }
 
     #[test]

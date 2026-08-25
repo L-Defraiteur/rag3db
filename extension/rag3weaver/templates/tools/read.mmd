@@ -1,0 +1,9 @@
+%% tool: read
+%% description: Lit un fichier du projet par tranche de lignes numérotées ; dit les scopes de la fenêtre et si l'index est périmé.
+%% param: path string! -- Chemin relatif au projet, tel que rendu par grep ou search (ex. 'src/dataflow/port.rs').
+%% param: offset int = 1 -- Première ligne à lire (1-based).
+%% param: limit int = 200 -- Nombre maximum de lignes (plafond 2000) ; le pied de page dit comment continuer.
+%% result: read.result
+
+graph LR
+    read["ReadFileNode(path=$path, offset=$offset, limit=$limit)"]

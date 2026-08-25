@@ -41,9 +41,11 @@ feature par brique, et les **poids téléchargés à la première utilisation da
    `codeparsersToEntities()`, `codeparsersRelationships()` et un `CODE_SCHEMA`
    (`File`, `Scope`, `Scope_Chunk` ; `DEFINED_IN`, `CONSUMES`, `PARENT_OF`).
    Avec `project` dès le premier jour.
-2. **`grep` et `read`** — voir [05](05-ce-qui-a-tenu-depuis-fevrier.md) §4.2. Les
-   deux outils qu'un agent de code utilise le plus, les briques existent dans
-   lucivy, et **le champ `special_ops` attend toujours dans notre config**.
+2. ~~**`grep` et `read`**~~ — faits le 25 août au soir
+   (`25-aout-2026-18h58/05`) : sur une `FileSource` (chemins virtuels,
+   `WorkingTree` / `Snapshot`), annotés par le graphe (scope le plus étroit),
+   péremption par hash. Le modèle voit `grep`, `read`, `search`,
+   `search_expand`. Reste `edit`, `list`, `GitRef`, et retirer `special_ops`.
 3. **Lecture des documents** — pdf, docx, pptx, html, csv. Sans lib lourde : les
    formats Office sont du ZIP + XML. L'OCR livré couvre les PDF scannés.
 
