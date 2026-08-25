@@ -122,6 +122,8 @@ pub struct Catalog {
     reranker: Option<Arc<dyn crate::reranker::Reranker>>,
     /// OCR (chantier 4) : exposé aux graphes comme service `"ocr"`.
     ocr: Option<Arc<dyn crate::ocr::Ocr>>,
+    /// LLM décodeur (étape 1) : exposé aux graphes comme service `"llm"`.
+    llm: Option<Arc<dyn crate::llm::Llm>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
@@ -198,6 +200,7 @@ impl Catalog {
             sparse_embedder: None,
             reranker: None,
             ocr: None,
+            llm: None,
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
@@ -255,6 +258,18 @@ impl Catalog {
 
     pub fn ocr(&self) -> Option<Arc<dyn crate::ocr::Ocr>> {
         self.ocr.clone()
+    }
+
+    /// Branche un LLM ; les graphes exécutés par le catalogue le voient
+    /// comme service `"llm"` (`LlmNode`). Le registre de nœuds part avec
+    /// lui, sous `"node_registry"` : c'est ce qui alimente `with_tools`,
+    /// puisque le catalogue d'outils *est* le registre (`crate::tools`).
+    pub fn set_llm(&mut self, llm: Arc<dyn crate::llm::Llm>) {
+        self.llm = Some(llm);
+    }
+
+    pub fn llm(&self) -> Option<Arc<dyn crate::llm::Llm>> {
+        self.llm.clone()
     }
 
     pub fn set_embedder(&mut self, embedder: Arc<dyn Embedder>) {
@@ -1945,6 +1960,12 @@ impl Catalog {
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
         }
+        if let Some(ref llm) = self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
+            let mut tool_registry = NodeRegistry::new();
+            register_builtins(&mut tool_registry);
+            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
+        }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("entity_configs", self.entity_configs.clone());
@@ -2601,6 +2622,12 @@ impl Catalog {
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
         }
+        if let Some(ref llm) = self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
+            let mut tool_registry = NodeRegistry::new();
+            register_builtins(&mut tool_registry);
+            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
+        }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());
@@ -2859,6 +2886,12 @@ impl Catalog {
         services.register("embedder", self.embedder.clone());
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
+        }
+        if let Some(ref llm) = self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
+            let mut tool_registry = NodeRegistry::new();
+            register_builtins(&mut tool_registry);
+            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
         }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());

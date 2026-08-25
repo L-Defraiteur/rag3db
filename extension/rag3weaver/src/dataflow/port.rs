@@ -61,6 +61,8 @@ pub enum PortType {
     Text,
     /// `crate::ocr::OcrOutput` — lignes, boîtes, confiances.
     Ocr,
+    /// `crate::llm::LlmOutput` — texte généré, raison de fin, comptage.
+    Llm,
 }
 
 impl PortType {

@@ -121,6 +121,11 @@ pub mod scope;
 pub mod tools;
 pub mod reranker;
 pub use reranker::{CallbackReranker, MockReranker, Reranker};
+pub mod llm;
+pub use llm::{
+    CallbackLlm, ChannelSink, CountingSink, Finish, Flow, GenOptions, Llm, LlmError, LlmOutput,
+    MockLlm, StringSink, TokenSink, Turn, Usage,
+};
 pub mod search;
 pub mod search_backend;
 pub mod search_strategy;

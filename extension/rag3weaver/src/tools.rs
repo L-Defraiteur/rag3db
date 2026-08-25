@@ -131,7 +131,7 @@ mod tests {
     #[test]
     fn every_builtin_node_becomes_a_tool() {
         let defs = tool_defs(&registry());
-        assert_eq!(defs.len(), 27);
+        assert_eq!(defs.len(), 28);
         for d in &defs {
             assert!(!d.name.is_empty());
             assert!(!d.description.is_empty(), "{} has no description", d.name);
@@ -219,7 +219,7 @@ mod tests {
         assert_eq!(v["function"]["parameters"]["type"], "object");
         // Sérialisable tel quel : c'est ce qui part dans le prompt.
         assert!(serde_json::to_string(&v).is_ok());
-        assert_eq!(tool_defs_openai(&r).len(), 27);
+        assert_eq!(tool_defs_openai(&r).len(), 28);
     }
 
     #[test]

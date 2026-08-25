@@ -2,7 +2,7 @@
 //!
 //! - Macro-generated factories for simple/named nodes
 //! - Manual factories for nodes with config params
-//! - `register_builtins()` populates a registry with all 25 node types
+//! - `register_builtins()` populates a registry with all 28 node types
 
 use crate::named_factory;
 
@@ -914,7 +914,7 @@ impl NodeFactory for ResolveParentNodeFactory {
 
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 27 built-in node types.
+/// Populate a NodeRegistry with all 28 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
@@ -948,6 +948,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(ValidateNodeFactory));
     // Média
     registry.register(Box::new(super::ocr_nodes::OcrNodeFactory));
+    // Génération
+    registry.register(Box::new(super::llm_nodes::LlmNodeFactory));
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -963,9 +965,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_27_types() {
+    fn register_builtins_has_all_28_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 27);
+        assert_eq!(registry.types().len(), 28);
     }
 
     #[test]
