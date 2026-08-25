@@ -230,7 +230,20 @@ fn a_cloud_model_edits_a_copy_of_our_code() {
         let mut turns = vec![Turn::system(EDIT_SYSTEM), Turn::user(*mission)];
         let mut sink = StringSink::default();
         let t = Instant::now();
-        let run = agent.run(&mut turns, &mut sink).unwrap();
+        let run = match agent.run(&mut turns, &mut sink) {
+            Ok(run) => run,
+            Err(e) => {
+                eprintln!("[cloud-agent] M{} ERREUR après {:?} : {e}", mi + 1, t.elapsed());
+                dump(&turns);
+                for (i, turn) in turns.iter().enumerate() {
+                    for c in &turn.tool_calls {
+                        let valid = serde_json::from_str::<serde_json::Value>(&c.arguments).map(|v| v.is_object()).unwrap_or(false);
+                        eprintln!("  [{i}] tool_call {} id={} args valid JSON object = {valid} ({} chars){}", c.name, c.id, c.arguments.len(), if valid { String::new() } else { format!("\n      ARGS: {}", c.arguments.chars().take(600).collect::<String>()) });
+                    }
+                }
+                panic!("agent run failed: {e}");
+            }
+        };
         eprintln!(
             "[cloud-agent] M{} {:?} en {:?} — itérations={} appels={} erreurs={} jetons={}",
             mi + 1, run.stop, t.elapsed(), run.iterations, run.tool_calls, run.tool_errors, run.total_tokens()

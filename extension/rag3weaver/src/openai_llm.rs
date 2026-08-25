@@ -81,6 +81,8 @@ pub struct OpenAiLlm {
     /// serveur strict (llama.cpp, Ollama, Mistral) peut répondre 400 — et
     /// notre argument est justement qu'un seul client parle à tous.
     google_extras: bool,
+    /// `extra_body.google.stream_function_call_arguments` — voir `request_body`.
+    stream_tool_arguments: bool,
     /// `tool_choice: "validated"` — voir [`OpenAiLlm::with_validated_tool_choice`].
     google_validated_tool_choice: bool,
     retry: RetryPolicy,
@@ -110,6 +112,7 @@ impl OpenAiLlm {
             model: model.into(),
             auth: Auth::None,
             google_extras: false,
+            stream_tool_arguments: false,
             google_validated_tool_choice: false,
             retry: RetryPolicy::default(),
             clock: std::sync::Arc::new(SystemClock),
@@ -310,6 +313,13 @@ impl OpenAiLlm {
     /// Active les extensions propres à Google (`extra_body.google.*`).
     /// Posé par [`Self::vertex`] et [`Self::ai_studio`] ; à ne pas activer
     /// pour un fournisseur générique, qui peut rejeter le champ.
+    /// Demander à Vertex de fragmenter les arguments d'appel d'outil au fil
+    /// de l'eau. Défectueux sur les valeurs multi-lignes (voir `request_body`).
+    pub fn with_streamed_tool_arguments(mut self) -> Self {
+        self.stream_tool_arguments = true;
+        self
+    }
+
     pub fn with_google_extras(mut self) -> Self {
         self.google_extras = true;
         self
@@ -413,9 +423,12 @@ impl OpenAiLlm {
             };
             body.insert("tool_choice".into(), choice);
             // Vertex ne fragmente les arguments d'un appel d'outil que si on
-            // le demande ; sans ça ils arrivent d'un bloc (ce que le parseur
-            // gère aussi, mais on perd le fil au fil de l'eau).
-            if self.google_extras {
+            // le demande ; sans ça ils arrivent d'un bloc. **Désactivé par
+            // défaut** depuis le 25 août 2026 : fragmentés, les arguments
+            // multi-lignes arrivent avec des retours à la ligne non échappés,
+            // et le flux se termine sur un `499 CANCELLED` au milieu de la
+            // valeur (dump SSE, appel `edit`). Opt-in : `with_streamed_tool_arguments()`.
+            if self.google_extras && self.stream_tool_arguments {
                 body.insert(
                     "extra_body".into(),
                     json!({ "google": { "stream_function_call_arguments": true } }),
@@ -973,9 +986,12 @@ fn message_json(t: &Turn, google: bool) -> Value {
                     // `arguments` est une **chaîne** contenant du JSON, pas un
                     // objet : c'est le format du protocole, et le renvoyer
                     // autrement fait échouer l'appariement.
+                    // … et un objet **valide** : Google valide l'historique et
+                    // refuse toute la requête sinon. Un appel tronqué par le
+                    // flux repart en `{}` plutôt que de bloquer la conversation.
                     call.insert(
                         "function".into(),
-                        json!({ "name": c.name, "arguments": c.arguments }),
+                        json!({ "name": c.name, "arguments": crate::llm::arguments_for_wire(&c.arguments) }),
                     );
                     // Rejeu à l'identique de ce que le fournisseur avait
                     // attaché (`thought_signature` chez Gemini 3.x).
@@ -1213,6 +1229,19 @@ impl Llm for OpenAiLlm {
 /// Le cœur : la boucle SSE. Une trame par ligne `data: {json}`,
 /// `data: [DONE]` termine. Séparé de `generate` pour être testable sur
 /// n'importe quel `BufRead` — donc sans socket.
+/// Un objet d'erreur (ou un tableau d'un objet d'erreur) écrit hors `data:`.
+fn stray_error(stray: &str) -> Option<String> {
+    let t = stray.trim();
+    if t.is_empty() {
+        return None;
+    }
+    let v: Value = serde_json::from_str(t).ok()?;
+    let err = v.get("error").or_else(|| v.as_array()?.first()?.get("error"))?;
+    let mut m = format!("stream error: {err}");
+    m.truncate(512);
+    Some(m)
+}
+
 fn read_sse(
     reader: &mut impl BufRead,
     opts: &GenOptions,
@@ -1230,17 +1259,48 @@ fn read_sse(
     let mut pending = String::new();
     let mut emitted = 0usize;
     let mut reason: Option<String> = None;
+    // Lignes hors protocole SSE (voir plus bas).
+    let mut stray = String::new();
 
     loop {
         line.clear();
         match reader.read_line(&mut line) {
-            Ok(0) => break, // flux fermé par le serveur
+            Ok(0) => {
+                // Flux fermé par le serveur. Une erreur écrite hors `data:`
+                // prime sur tout ce qu'on a accumulé : un appel d'outil
+                // tronqué par un 499 n'est pas un appel.
+                if let Some(msg) = stray_error(&stray) {
+                    return Err(LlmError::Model(msg));
+                }
+                break;
+            }
             Ok(_) => {}
             Err(e) => return Err(LlmError::Model(e.to_string())),
         }
         // Tout le reste est du bruit SSE légitime : ligne vide de séparation,
         // `event:`, `:` de keep-alive.
+        // `RAG3WEAVER_SSE_DUMP=<fichier>` : chaque ligne brute du flux y est
+        // ajoutée — pour voir ce qu'un fournisseur envoie vraiment quand un
+        // appel d'outil arrive tronqué ou mal formé.
+        if let Ok(path) = std::env::var("RAG3WEAVER_SSE_DUMP") {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                let _ = f.write_all(line.as_bytes());
+                if !line.ends_with('\n') {
+                    let _ = f.write_all(b"\n");
+                }
+            }
+        }
+        // Un objet d'erreur JSON que Vertex écrit **sans** `data:`, sur
+        // plusieurs lignes, quand il coupe un flux (`499 CANCELLED` au milieu
+        // d'un appel d'outil, 25 août 2026) : on l'accumule, et à la
+        // fermeture du flux, s'il se lit, c'est l'erreur.
         let Some(data) = line.trim_end_matches(['\r', '\n']).strip_prefix("data:") else {
+            let t = line.trim();
+            if !t.is_empty() && !t.starts_with(':') && !t.starts_with("event:") && !t.starts_with("id:") && !t.starts_with("retry:") {
+                stray.push_str(t);
+                stray.push('\n');
+            }
             continue;
         };
         let data = data.trim_start();
@@ -1708,6 +1768,61 @@ mod tests {
         assert!(matches!(err, LlmError::Model(m) if m.contains("boom")), "eu autre chose");
     }
 
+    /// Les fiches `edit` / `list` (feature `code`) ont des paramètres à
+    /// défaut `""` : le corps envoyé doit rester du JSON valide — Vertex a
+    /// répondu « Expected a valid JSON object in the request » (25 août 2026).
+    #[cfg(feature = "code")]
+    #[test]
+    fn request_body_with_code_tools_is_valid_json() {
+        let llm = OpenAiLlm::new("http://localhost:1/v1", "m");
+        let (_, tools) = crate::dataflow::graph_tool::builtin_graph_tools().unwrap();
+        let defs = crate::tools::graph_tool_defs(&tools);
+        let opts = GenOptions::default().with_max_tokens(64).with_tools(defs);
+        let body = llm.request_body(&hello(), &opts);
+        let text = serde_json::to_string(&body).unwrap();
+        let back: serde_json::Value = serde_json::from_str(&text).expect("the request body must round-trip as JSON");
+        let names: Vec<&str> = back["tools"].as_array().unwrap().iter().map(|t| t["function"]["name"].as_str().unwrap()).collect();
+        assert_eq!(names, crate::dataflow::graph_tool::BUILTIN_TOOL_NAMES);
+        let edit = &back["tools"][0]["function"]["parameters"];
+        eprintln!("{}", serde_json::to_string_pretty(edit).unwrap());
+        assert_eq!(edit["properties"]["old"]["default"], "");
+    }
+
+    /// Un flux coupé par Vertex : les fragments d'un appel, puis un objet
+    /// d'erreur multi-ligne sans `data:`. Ce n'est pas un appel tronqué à
+    /// exécuter, c'est une erreur.
+    #[test]
+    fn a_stray_error_object_after_the_stream_is_an_error() {
+        let body = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"z\",\"function\":{\"name\":\"edit\",\"arguments\":\"{\\\"new\\\":\\\"a\"}}]},\"finish_reason\":null}]}\n\n",
+            "[{\n  \"error\": {\n    \"code\": 499,\n    \"message\": \"The operation was cancelled.\",\n    \"status\": \"CANCELLED\"\n  }\n}\n]\n"
+        );
+        let mut reader = std::io::Cursor::new(body);
+        let mut sink = StringSink::default();
+        let err = read_sse(&mut reader, &GenOptions::default(), &mut sink).unwrap_err();
+        assert!(err.to_string().contains("499"), "{err}");
+    }
+
+    /// Ce qu'on renvoie au fournisseur est toujours un objet JSON valide.
+    #[test]
+    fn resent_tool_call_arguments_are_valid_objects() {
+        let llm = OpenAiLlm::new("http://localhost:1/v1", "m");
+        let raw_newline = ToolCall::local("t", 0, "edit", "{\"new\":\"a\nb\"}");
+        let truncated = ToolCall::local("t", 1, "edit", "{\"new\":\"pub fn len(");
+        let turns = vec![
+            Turn::user("q"),
+            Turn::assistant_with_calls("", vec![raw_newline, truncated]),
+            Turn::tool_result("t-0", "edit", "ok"),
+            Turn::tool_result("t-1", "edit", "ok"),
+        ];
+        let body = llm.request_body(&turns, &GenOptions::default());
+        let calls = body["messages"][1]["tool_calls"].as_array().unwrap();
+        let a0 = calls[0]["function"]["arguments"].as_str().unwrap();
+        let a1 = calls[1]["function"]["arguments"].as_str().unwrap();
+        assert_eq!(serde_json::from_str::<Value>(a0).unwrap()["new"], "a\nb");
+        assert_eq!(a1, "{}");
+    }
+
     #[test]
     fn request_body_is_the_openai_shape() {
         let llm = OpenAiLlm::new("http://x/v1", "gpt-x");
@@ -1755,16 +1870,17 @@ mod tests {
             body["extra_body"]
         );
 
-        // ...mais les deux constructeurs Google l'activent.
+        // ...et les deux constructeurs Google ne l'écrivent que si on leur
+        // demande la fragmentation des arguments (défectueuse sur les
+        // valeurs multi-lignes, 25 août 2026).
         for llm in [
             OpenAiLlm::ai_studio("cle", "google/gemini-2.5-flash"),
             OpenAiLlm::vertex("jeton", "projet", "global", "google/gemini-2.5-flash"),
         ] {
             let body = llm.request_body(&hello(), &opts);
-            assert_eq!(
-                body["extra_body"]["google"]["stream_function_call_arguments"],
-                true
-            );
+            assert!(body["extra_body"].is_null(), "off by default: {}", body["extra_body"]);
+            let body = llm.with_streamed_tool_arguments().request_body(&hello(), &opts);
+            assert_eq!(body["extra_body"]["google"]["stream_function_call_arguments"], true);
         }
     }
 
@@ -2400,9 +2516,13 @@ mod tests {
                 json!({"type":"function","function":{"name":"f"}})
             );
         }
-        // L'extension Google reste dans `extra_body`, séparée.
+        // L'extension Google reste dans `extra_body`, séparée — et seulement
+        // sur demande (défectueuse sur les arguments multi-lignes).
         let vertex = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
         let body = vertex.request_body(&hello(), &opts);
+        assert!(body["extra_body"].is_null(), "off by default: {}", body["extra_body"]);
+        let streamed = vertex.with_streamed_tool_arguments();
+        let body = streamed.request_body(&hello(), &opts);
         assert_eq!(body["extra_body"]["google"]["stream_function_call_arguments"], true);
     }
 

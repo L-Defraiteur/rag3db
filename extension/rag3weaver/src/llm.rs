@@ -1685,3 +1685,93 @@ mod tests {
         assert_eq!(Turn::new("tool", "t").content, "t");
     }
 }
+
+// ─── Arguments d'appel d'outil : réparation et mise sur le fil ──────────────
+
+/// Échappe les caractères de contrôle **bruts** à l'intérieur des chaînes
+/// JSON de `raw` (`\n` réel → `\\n`, etc.), sans toucher au reste.
+///
+/// Vertex, avec `stream_function_call_arguments`, fragmente les arguments en
+/// morceaux qui portent les retours à la ligne **non échappés** — du JSON
+/// invalide par construction pour toute valeur multi-ligne (25 août 2026,
+/// un appel `edit`). Un modèle local peut faire pareil. Réparer avant de
+/// parser évite de refuser un appel qui ne pèche que par là.
+pub fn repair_arguments_json(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 16);
+    let mut in_string = false;
+    let mut escaped = false;
+    for c in raw.chars() {
+        if in_string {
+            if escaped {
+                out.push(c);
+                escaped = false;
+                continue;
+            }
+            match c {
+                '\\' => {
+                    out.push(c);
+                    escaped = true;
+                }
+                '"' => {
+                    out.push(c);
+                    in_string = false;
+                }
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                c => out.push(c),
+            }
+        } else {
+            if c == '"' {
+                in_string = true;
+            }
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Les arguments tels qu'on les **renvoie** à un fournisseur : un objet JSON
+/// valide, ou `{}`. Google valide les arguments de l'historique et refuse
+/// toute la requête sinon (« Expected a valid JSON object in the request ») ;
+/// un appel tronqué par le flux ne doit pas rendre la conversation
+/// irrécupérable. Le texte brut reste dans notre historique, lui.
+pub fn arguments_for_wire(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return "{}".to_string();
+    }
+    let repaired = repair_arguments_json(trimmed);
+    match serde_json::from_str::<serde_json::Value>(&repaired) {
+        Ok(serde_json::Value::Object(_)) => repaired,
+        _ => "{}".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod arguments_tests {
+    use super::*;
+
+    #[test]
+    fn raw_newlines_inside_strings_are_escaped_and_nothing_else() {
+        let raw = "{\"new\":\"    /// a\n    pub fn b() {}\",\"n\":1}";
+        let fixed = repair_arguments_json(raw);
+        let v: serde_json::Value = serde_json::from_str(&fixed).expect("valid after repair");
+        assert_eq!(v["new"], "    /// a\n    pub fn b() {}");
+        assert_eq!(v["n"], 1);
+        // Un échappement déjà présent n'est pas doublé.
+        assert_eq!(repair_arguments_json("{\"a\":\"x\\ny\"}"), "{\"a\":\"x\\ny\"}");
+        // Hors chaîne, rien ne bouge (le retour à la ligne de mise en forme est légal).
+        assert_eq!(repair_arguments_json("{\n\"a\": 1\n}"), "{\n\"a\": 1\n}");
+    }
+
+    #[test]
+    fn wire_arguments_are_always_an_object() {
+        assert_eq!(arguments_for_wire(""), "{}");
+        assert_eq!(arguments_for_wire("{\"a\":\"b\nc\"}"), "{\"a\":\"b\\nc\"}");
+        // Tronqué : irréparable → objet vide plutôt qu'une requête refusée.
+        assert_eq!(arguments_for_wire("{\"new\":\"    pub fn len("), "{}");
+        assert_eq!(arguments_for_wire("[1,2]"), "{}");
+    }
+}

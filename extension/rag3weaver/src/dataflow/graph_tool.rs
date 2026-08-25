@@ -1152,7 +1152,10 @@ impl GraphToolRegistry {
         let args: Value = if raw.is_empty() {
             Value::Object(Map::new())
         } else {
-            match serde_json::from_str(raw) {
+            // Réparation d'abord : des retours à la ligne bruts dans une
+            // chaîne (Vertex fragmenté, modèle local) ne doivent pas suffire
+            // à refuser l'appel.
+            match serde_json::from_str(&crate::llm::repair_arguments_json(raw)) {
                 Ok(v) => v,
                 Err(e) => return GraphToolError::BadArgumentsJson(e.to_string()).to_tool_json(),
             }
