@@ -159,20 +159,66 @@ architecture reste la bonne (35 tenseurs d'état explicites, décodeur k2
 stateless de 9 nœuds, donc pas de cache KV) — c'est un bug amont à isoler, pas
 un travail d'intégration.
 
-### L'écart Kokoro est un bug unique, et il est localisé
+### L'écart Kokoro : hypothèse retirée, cause encore ouverte
 
-Décalage de phase **réfuté** (corrélation croisée maximale à lag 0). Corrélation
-log-mel 0,996 — l'enveloppe spectrale est quasi identique, la voix serait
-reconnaissable — mais **SNR de l'erreur 10,7 dB** et **−15 % de RMS** : c'est
-audible, comme un voile de bruit. Suspect, pas cassé.
+**Correction.** Une première passe avait désigné le `ConvTranspose1d` de l'iSTFT
+finale comme coupable. **C'est faux et c'est retiré** : douze cas minimaux — dont
+la configuration exacte du nœud (`kernel 20`, `stride 5`, **22** canaux → 1, aux
+deux longueurs réelles), plus recouvrement nul, recouvrement maximal, sorties
+multi-canaux — donnent tous **corr 1,000000** sur ndarray *et* wgpu. Le
+`ConvTranspose1d` de burn est correct. L'hypothèse « normalisation de
+recouvrement manquante » est réfutée par la mesure : le ratio burn/ORT point à
+point a un écart-type de **0,326**, ce qu'un gain constant ne produirait pas.
 
-Bissection par sondes des deux côtés : les **6 LSTM sont exacts** (1,000000), le
-**STFT est exact** (burn-onnx le lowerise en matmul DFT en f64 puis cast, c'est
-propre), la source sinusoïdale est exacte. La divergence naît **exactement** au
-`ConvTranspose1d` de l'iSTFT de sortie (`kernel 20`, `stride 5`, recouvrement
-4:1) : la corrélation à ce nœud (0,966245) **est** la corrélation finale, et le
-déficit de RMS y apparaît d'un coup. Identique sur wgpu et ndarray → **code
-partagé**. Testable en une vingtaine de lignes hors de Kokoro.
+Ce qui diverge, c'est **son entrée**. Sondes plus haut dans HiFi-GAN :
+
+| sonde | corr burn vs ORT |
+|---|---|
+| `ups.0/ConvTranspose` (nœud 1854) | **1,000000** |
+| **`ups.1/ConvTranspose` (nœud 2145)** | **0,997574** |
+| `Exp` (magnitude) | 0,952435 |
+| `Concat` (entrée iSTFT) | 0,913352 |
+
+La cause primaire est **entre les nœuds 1854 et 2145** (`resblocks.0..2` et
+`noise_res`) ; l'exponentielle en aval magnifie ensuite une erreur relative, ce
+qui est cohérent avec une cause unique. Innocentés eux aussi par cas minimaux :
+`Conv1d` dilatée (9 configurations), `Pow(x,2)` sur valeurs négatives,
+l'activation Snake `x + sin(αx)²`, l'AdaIN manuelle. Toutes à 1,000000.
+
+**Pas de contournement, et la corrélation reste 0,966** — l'annoncer autrement
+serait inventer un chiffre.
+
+### Le blocage de fond : aucune traçabilité ONNX → code généré
+
+Les deux bugs numériques (Kokoro et Zipformer) butent sur **la même chose** :
+il n'existe aucun lien entre les noms de nœuds ONNX et les variables du code
+que burn-onnx génère. Vérifié : `conv1d50_out1` comparé aux **neuf** candidats
+`resblocks.{0,1,2}/convs1.{0,1,2}/Conv` donne des corrélations de **−0,039 à
++0,043** — l'heuristique par ordre d'index est fausse. La bissection s'arrête
+donc au grain qu'on peut apparier de façon fiable. **Émettre le nom du nœud
+ONNX en commentaire du code généré débloquerait les deux** — c'est la demande
+de fonctionnalité S8 du rapport amont.
+
+### Le sifflement entendu à l'écoute : deux phénomènes, pas un
+
+Lucie a signalé des sifflements dans **les deux** moteurs, plus marqués sur
+burn. Il y a donc (A) un artefact de base présent jusque dans la référence
+onnxruntime, et (B) le surcroît de burn.
+
+**(B) est mesuré** : 3,65 % d'énergie au-dessus de 8 kHz contre 1,48 % pour la
+référence sur la même phrase — **2,5×**, cohérent avec le SNR d'erreur de
+10,7 dB.
+
+**(A) n'est probablement pas dans notre pipeline.** Écartés par mesure : aucune
+raie tonale dans aucun fichier ; F0 plausible (médiane 208 Hz, voix féminine) ;
+l'index du vecteur de style n'est pas critique (les lignes `n−3` à `n` donnent
+la même chose) ; l'écriture du WAV est correcte (`clip` puis ×32767, pics à
+0,49 et 0,90). Le point décisif : **la référence anglaise connue-bonne
+(`af_heart`) a *plus* d'énergie haute fréquence (4,44 %) que toutes nos sorties
+françaises.** Explication plausible : l'iSTFTNet de Kokoro travaille à
+`n_fft = 20` / hop 5, soit **11 bins pour couvrir 12 kHz** — une résolution très
+grossière qui laisse un fond haute fréquence. Tranché à l'écoute par Lucie sur
+un échantillon anglais de référence.
 
 ### Classement révisé
 
@@ -197,11 +243,56 @@ Mais la qualité linguistique ne suit pas : **les nombres sont purement
 supprimés** (« 21 h 30 » ne produit rien), un bug de table rend `y_vowel` en
 toutes lettres au lieu du symbole `y` (une ligne à corriger), les consonnes
 finales muettes sont prononcées (`vɛ̃ɡ` pour « vingt »), et **le mot « liaison »
-n'apparaît pas une seule fois** dans `french.rs`. Le crate étant MIT, corriger
-`french.rs` en amont est probablement la meilleure voie — plutôt qu'un G2P
-maison. (L'oracle espeak-ng n'a jamais pu être mis en route : le paquet pip
-ignore le chemin de données passé ; la référence est une transcription manuelle,
-les écarts majeurs restent non discutables.)
+n'apparaît pas une seule fois** dans `french.rs`.
+
+### Les lexiques de prononciation : le dilemme est net
+
+**Aucun lexique français permissif ne porte les catégories grammaticales** — or
+elles sont indispensables aux liaisons (« les‿enfants » obligatoire, « et »
+jamais, et « un savant‿anglais » ne dit pas la même chose que « un savant
+anglais »). Licences vérifiées sur les fichiers `LICENSE`, pas sur des README :
+
+| source | licence | entrées | catégories |
+|---|---|---|---|
+| `ipa-dict` fr_FR | **MIT** | 245 972 | ❌ |
+| MFA `french_mfa` v3 | **CC BY 4.0** | 105 730 | ❌ |
+| **Lexique 4.00** | CC BY-SA 4.0 | 189 863 | ✅ `Cgram`, genre, nombre, temps, lemme, **`Phono_IPA`** |
+| GLÀFF | CC BY-SA 3.0 (la fiche HF disant `cc-by-3.0` est **erronée**) | 1,25 M formes | ✅ tags GRACE |
+| Morphalou 3.1 | LGPL-LR — sa §5 impose que la ressource reste **remplaçable par l'utilisateur**, donc incompatible avec un `include_bytes!` | — | ✅ |
+| espeak-ng, `phonemizer` | GPL-3.0 | — | inutilisable |
+| MFA `french_prosodylab` | — | données corrompues (`vingt → v cinq`) | inutilisable |
+
+Réserve honnête sur `ipa-dict` : la provenance des données françaises n'est
+documentée nulle part et le README crédite Aspell (dont la version FR est GPL) ;
+le risque porte sur la liste de mots, pas sur les transcriptions.
+
+**Festvox : la réponse est négative, et c'était le piège pressenti.** Festival,
+Festvox, Speech Tools et Flite sont bien sous licences X11/BSD autorisant
+explicitement la vente — **mais aucun lexique français n'y est distribué**. Le
+français de Festival vient de **LLiaPhon, qui est GPL**, et le lexique OALD est
+restreint au non-commercial. « Festival est permissif » n'implique donc en rien
+« le français dans Festival est permissif ». Reste l'outillage LTS
+(`festvox/src/lts`, arbres CART via Wagon) — utilisable comme **outil de build
+hors ligne**, mais il ne fournit aucune donnée.
+
+**Blanchir une licence en entraînant des règles dessus : non.** Creative Commons
+ne tranche pas (note officielle sur l'entraînement d'IA, mai 2025), mais
+CC BY-SA 4.0 §4(b) dit explicitement qu'une base intégrant la ressource est du
+« matériel adapté » au titre des droits *sui generis*. La voie propre est
+d'apprendre depuis des données permissives.
+
+**Chemin recommandé, en deux étages** — le premier ne dépend d'aucune donnée
+externe et corrige le défaut le plus visible :
+
+1. **Verbalisation des nombres, dates, heures et unités en Rust pur** — code
+   original, MIT, aucune donnée tierce. 1 à 2 jours. C'est « 21 h 30 » qui
+   redevient prononçable.
+2. Puis, **au choix de Lucie sur critère juridique** : `ipa-dict` (MIT) plus une
+   liste écrite à la main des ~200 mots-outils qui déclenchent 90 % des liaisons
+   réelles — binaire **100 % permissif**, 1 à 2 semaines ; ou **Lexique 4.00**
+   pour une qualité nettement supérieure en quelques jours, au prix de publier
+   **la table dérivée** sous CC BY-SA avec attribution. Le code Rust, lui, n'est
+   pas contaminé dans les deux cas.
 
 **f16 : hors de portée** de burn-onnx 0.22.0-pre.1 — `half` non déclaré, puis 15
 erreurs de type f16/f32 dans `interpolate` et `Conv1d`. Le `.bpk` fp16 ferait
