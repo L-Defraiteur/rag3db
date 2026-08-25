@@ -119,6 +119,14 @@ pub struct RelationshipResolverOptions {
     pub resolve_cross_file: Option<bool>,
     pub ts_config_path: Option<String>,
     pub debug: Option<bool>,
+    /// Attribuer à CHAQUE scope d'un fichier les références de niveau
+    /// fichier (imports, `use`) — historique : `true`. À `false`, elles ne
+    /// sont portées que par le scope de fichier lui-même.
+    pub include_file_level_refs: Option<bool>,
+    /// Attribuer à une classe les références de ses méthodes — historique :
+    /// `true`. À `false`, chaque référence n'est portée que par le scope le
+    /// plus interne qui la contient.
+    pub include_child_refs: Option<bool>,
 }
 
 /// Référence non résolue (pour debug/amélioration)

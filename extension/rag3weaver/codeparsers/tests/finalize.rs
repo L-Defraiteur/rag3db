@@ -21,6 +21,7 @@ fn parse(files: &[(&str, &str)]) -> codeparsers::parallel::project_parser::Proje
         files: file_paths,
         content_map: Some(content_map),
         resolve_relationships: Some(true),
+        resolver_options: None,
     })
 }
 

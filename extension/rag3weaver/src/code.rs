@@ -26,7 +26,7 @@ use codeparsers::parallel::project_parser::{
     detect_language_from_path, is_code_parser_supported, ParseProjectOptions, ProjectParser,
     ProjectParserOptions,
 };
-use codeparsers::relationship_resolution::types::RelationshipType;
+use codeparsers::relationship_resolution::types::{RelationshipResolverOptions, RelationshipType};
 use codeparsers::scope_extraction::types::ScopeInfoType;
 
 use crate::catalog::{Catalog, CatalogError};
@@ -221,6 +221,16 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
         files,
         content_map: Some(content_map),
         resolve_relationships: Some(true),
+        // Une référence n'est portée que par le scope le plus interne qui la
+        // contient : ni les références de niveau fichier attribuées à chaque
+        // scope, ni celles des méthodes remontées à la classe. Sans ça, sur
+        // notre propre code, 47 relations par scope — `PortType` « consommé »
+        // par 1 347 scopes (doc 04 du 25 août).
+        resolver_options: Some(RelationshipResolverOptions {
+            include_file_level_refs: Some(false),
+            include_child_refs: Some(false),
+            ..Default::default()
+        }),
     });
     for e in &result.errors {
         skipped.push((relative(root, &e.file), e.error.clone()));
@@ -324,7 +334,76 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
             to_key: to.1.clone(),
         });
     }
+    fold_lambdas(&mut analysis);
+    dedupe_relations(&mut analysis);
     analysis
+}
+
+/// Une fermeture n'est pas une entité qu'on cherche par son nom : ses
+/// références sont attribuées au scope nommé qui l'englobe, et elle disparaît
+/// des entités. Sur notre propre code : 244 « Closure » sur 1 402 scopes, et
+/// 10 648 relations CONSUMES portées par elles.
+fn fold_lambdas(a: &mut CodeAnalysis) {
+    let mut to_parent: HashMap<String, String> = HashMap::new();
+    for l in a.scopes.iter().filter(|s| s.scope_type == "lambda") {
+        // Le scope nommé le plus étroit du même fichier qui contient la fermeture.
+        let parent = a
+            .scopes
+            .iter()
+            .filter(|p| {
+                p.scope_type != "lambda"
+                    && p.file_path == l.file_path
+                    && p.start_line <= l.start_line
+                    && p.end_line >= l.end_line
+            })
+            .min_by_key(|p| p.end_line - p.start_line);
+        if let Some(p) = parent {
+            to_parent.insert(l.key.clone(), p.key.clone());
+        }
+    }
+    if to_parent.is_empty() {
+        return;
+    }
+    // Résolution transitive (fermeture dans une fermeture).
+    let resolve = |k: &str| -> String {
+        let mut cur = k.to_string();
+        for _ in 0..8 {
+            match to_parent.get(&cur) {
+                Some(p) => cur = p.clone(),
+                None => break,
+            }
+        }
+        cur
+    };
+    a.scopes.retain(|s| !to_parent.contains_key(&s.key));
+    let mut kept = Vec::with_capacity(a.relations.len());
+    for mut r in a.relations.drain(..) {
+        let from_is_lambda = to_parent.contains_key(&r.from_key);
+        let to_is_lambda = r.to_entity == SCOPE && to_parent.contains_key(&r.to_key);
+        if (from_is_lambda || to_is_lambda)
+            && matches!(r.rel.as_str(), "PARENT_OF" | "HAS_PARENT" | "DEFINED_IN")
+        {
+            continue; // la hiérarchie de la fermeture n'a plus de sens
+        }
+        if from_is_lambda {
+            r.from_key = resolve(&r.from_key);
+        }
+        if to_is_lambda {
+            r.to_key = resolve(&r.to_key);
+        }
+        if r.from_entity == r.to_entity && r.from_key == r.to_key {
+            continue;
+        }
+        kept.push(r);
+    }
+    a.relations = kept;
+}
+
+fn dedupe_relations(a: &mut CodeAnalysis) {
+    let mut seen: std::collections::HashSet<(String, String, String, String, String)> = Default::default();
+    a.relations.retain(|r| {
+        seen.insert((r.rel.clone(), r.from_entity.clone(), r.from_key.clone(), r.to_entity.clone(), r.to_key.clone()))
+    });
 }
 
 /// Les noms que le résolveur de `codeparsers` met dans `ScopeMappingEntry.type`
@@ -568,5 +647,41 @@ mod own_source_tests {
         eprintln!("  {} files, {} scopes, {} relations ({} dropped), {} skipped, parse {} ms, relations {} ms",
             a.files.len(), a.scopes.len(), a.relations.len(), a.relations_dropped, a.skipped.len(), a.parse_ms, a.relation_ms);
         assert!(a.relations.len() > 200);
+        // Histogramme : par type, puis les cibles les plus reliées.
+        let mut by_type: std::collections::BTreeMap<&str, usize> = Default::default();
+        let mut by_target: std::collections::HashMap<String, usize> = Default::default();
+        let name_of = |e: &str, k: &str| -> String {
+            if e == super::SCOPE { a.scopes.iter().find(|s| s.key == k).map(|s| format!("{}:{}", s.scope_type, s.name)).unwrap_or_else(|| k.to_string()) } else { format!("{e}:{k}") }
+        };
+        for r in &a.relations {
+            *by_type.entry(r.rel.as_str()).or_default() += 1;
+            if r.rel == "CONSUMES" { *by_target.entry(name_of(&r.to_entity, &r.to_key)).or_default() += 1; }
+        }
+        eprintln!("by type: {by_type:?}");
+        let mut top: Vec<_> = by_target.into_iter().collect();
+        top.sort_by(|x, y| y.1.cmp(&x.1));
+        eprintln!("top CONSUMES targets: {:?}", &top[..top.len().min(25)]);
+        let distinct_targets = a.relations.iter().filter(|r| r.rel == "CONSUMES").map(|r| &r.to_key).collect::<std::collections::HashSet<_>>().len();
+        eprintln!("CONSUMES: {} edges → {} distinct targets", by_type.get("CONSUMES").copied().unwrap_or(0), distinct_targets);
+        let mut by_source_type: std::collections::BTreeMap<String, usize> = Default::default();
+        let mut dup_through_nesting = 0usize;
+        let scope_of = |k: &str| a.scopes.iter().find(|s| s.key == k);
+        for r in a.relations.iter().filter(|r| r.rel == "CONSUMES") {
+            if let Some(src) = scope_of(&r.from_key) {
+                *by_source_type.entry(src.scope_type.clone()).or_default() += 1;
+                // même cible depuis un scope enfant du même fichier ?
+                if a.relations.iter().any(|o| o.rel == "CONSUMES" && o.to_key == r.to_key && o.from_key != r.from_key
+                    && scope_of(&o.from_key).map_or(false, |c| c.file_path == src.file_path && c.start_line >= src.start_line && c.end_line <= src.end_line && (c.start_line, c.end_line) != (src.start_line, src.end_line))) {
+                    dup_through_nesting += 1;
+                }
+            }
+        }
+        let mut by_scope_type: std::collections::BTreeMap<String, usize> = Default::default();
+        for sc in &a.scopes { *by_scope_type.entry(sc.scope_type.clone()).or_default() += 1; }
+        eprintln!("scopes by type: {by_scope_type:?}");
+        let lambdas: Vec<String> = a.scopes.iter().filter(|s| s.scope_type == "lambda").take(6).map(|s| format!("{}@{}:{} parent={}", s.name, s.file_path, s.start_line, s.parent_name)).collect();
+        eprintln!("lambda samples: {lambdas:?}");
+        eprintln!("CONSUMES by source type: {by_source_type:?}");
+        eprintln!("CONSUMES also emitted by an enclosed child scope (nesting duplicates): {dup_through_nesting}");
     }
 }

@@ -67,6 +67,8 @@ pub struct ParseProjectOptions {
     pub files: Vec<String>,
     pub content_map: Option<HashMap<String, String>>,
     pub resolve_relationships: Option<bool>,
+    /// Options du résolveur ; `project_root` y est toujours écrasé par `root`.
+    pub resolver_options: Option<crate::relationship_resolution::types::RelationshipResolverOptions>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -193,10 +195,9 @@ impl ProjectParser {
 
         if resolve && !parsed_files.is_empty() {
             let rel_start = Instant::now();
-            let mut resolver = RelationshipResolver::new(RelationshipResolverOptions {
-                project_root: options.root.clone(),
-                ..Default::default()
-            });
+            let mut resolver_options = options.resolver_options.clone().unwrap_or_default();
+            resolver_options.project_root = options.root.clone();
+            let mut resolver = RelationshipResolver::new(resolver_options);
             let result = resolver.resolve_relationships(&parsed_files);
             relationship_time_ms = Some(rel_start.elapsed().as_millis());
 

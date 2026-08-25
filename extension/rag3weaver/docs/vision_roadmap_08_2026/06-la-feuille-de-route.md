@@ -28,8 +28,9 @@ feature par brique, et les **poids téléchargés à la première utilisation da
 1. **`codeparsers` intégré** — *première étape faite le 25 août au soir*
    (`25-aout-2026-18h58/03`) : crate réparé, `File` / `Scope` / `Library`
    avec `hashsafe`, `ParseCodeNode → CodeIngestNode`, notre propre
-   `src/dataflow/` navigué. Reste la résolution des relations contre la base
-   et `FileSource`. Le texte qui suit est l'état d'avant. 24 555 lignes, 78 fichiers, 12 langages, un crate
+   `src/dataflow/` navigué, références attribuées au scope le plus interne
+   (9 645 relations au lieu de 66 771, `25-aout-2026-18h58/04`). Reste
+   l'incrémentalité de la résolution et `FileSource`. Le texte qui suit est l'état d'avant. 24 555 lignes, 78 fichiers, 12 langages, un crate
    à part **jamais référencé**. Le plus gros actif dormant du dépôt. Ce qui
    compte n'est pas le parsing mais `import_resolution`,
    `relationship_resolution` et `scope_extraction` : **ils produisent les

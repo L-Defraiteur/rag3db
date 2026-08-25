@@ -17,6 +17,7 @@ fn main() {
     let parser = ProjectParser::new(ProjectParserOptions { verbose: false });
     let result = parser.parse_project(ParseProjectOptions {
         root: root.to_string(), files, content_map: None, resolve_relationships: Some(true),
+        resolver_options: None,
     });
 
     // Dump signatures for scopes involved in direction differences

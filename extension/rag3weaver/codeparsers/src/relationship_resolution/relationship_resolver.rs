@@ -367,7 +367,7 @@ impl RelationshipResolver {
 
         // For non-module scopes, also include file-level identifier references
         if let Some(analysis) = file_analysis {
-            if scope.r#type != ScopeInfoType::Module {
+            if scope.r#type != ScopeInfoType::Module && self.options.include_file_level_refs.unwrap_or(true) {
                 if let Some(file_scope) = analysis.scopes.iter().find(|s| {
                     s.r#type == ScopeInfoType::Module || s.name.starts_with("file_scope")
                 }) {
@@ -376,7 +376,7 @@ impl RelationshipResolver {
             }
 
             // For class scopes, also include child method/constructor references
-            if scope.r#type == ScopeInfoType::Class {
+            if scope.r#type == ScopeInfoType::Class && self.options.include_child_refs.unwrap_or(true) {
                 for child in analysis.scopes.iter().filter(|s| {
                     s.parent.as_deref() == Some(&scope.name)
                         && (s.r#type == ScopeInfoType::Method || s.r#type == ScopeInfoType::Function)
@@ -503,7 +503,7 @@ impl RelationshipResolver {
 
         // For class scopes, also include child method/constructor references
         if let Some(analysis) = file_analysis {
-            if scope.r#type == ScopeInfoType::Class {
+            if scope.r#type == ScopeInfoType::Class && self.options.include_child_refs.unwrap_or(true) {
                 for child in analysis.scopes.iter().filter(|s| {
                     s.parent.as_deref() == Some(&scope.name)
                         && (s.r#type == ScopeInfoType::Method || s.r#type == ScopeInfoType::Function)

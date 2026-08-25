@@ -52,6 +52,7 @@ fn main() {
         files: files.clone(),
         content_map: None,
         resolve_relationships: Some(true),
+        resolver_options: None,
     });
 
     // Output summary to stderr

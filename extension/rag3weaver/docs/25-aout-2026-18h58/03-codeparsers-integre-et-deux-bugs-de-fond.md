@@ -52,7 +52,9 @@ chaque fichier qui en a. Sept troncatures par index d'octet remplacées par
 nom global » du résolveur relie tout `execute` à tous les `execute`. Ce n'est
 pas faux au sens du parseur, c'est du bruit — et c'est exactement ce que la
 résolution **contre la base** ([02](02-fichiers-en-temps-reel-deux-modes-git-et-histoire.md) §4)
-devra filtrer (par fichier, par import, par type). Dette nommée.
+devra filtrer (par fichier, par import, par type). Dette nommée — **et réglée
+pour la précision le soir même** : 9 645 relations, 8 par scope, mêmes cibles
+([04](04-attribution-des-references-le-graphe-divise-par-sept.md)).
 
 ## 3. Bug 1 — l'UPDATE de l'index HNSW segfaute au-delà de ~512 lignes
 
@@ -110,8 +112,10 @@ suites `search` 38, `idempotent_registration` 22, `generic_search` 12,
 ## 5. Ce qui reste
 
 1. ~~**Le bug HNSW UPDATE**~~ — corrigé (`docs/25-aout-2026-20h30/01`).
-2. **La résolution contre la base** — remplacer le repli par nom global ;
-   c'est aussi ce qui rend l'ingestion incrémentale.
+2. **La résolution contre la base** — la précision est faite
+   ([04](04-attribution-des-references-le-graphe-divise-par-sept.md)) ;
+   reste l'incrémentalité : le mapping global en mémoire à remplacer par
+   la base.
 3. `FileSource` (`GitRef`, `WorkingTree`), `CodeSyncNode`, le curseur de
    `File`.
 4. Le résumé « conteneur » de février (signature + membres) n'est pas porté ;

@@ -39,6 +39,7 @@ fn parse_rels(files: &[(&str, &str)]) -> Vec<Rel> {
         files: file_paths,
         content_map: Some(content_map),
         resolve_relationships: Some(true),
+        resolver_options: None,
     });
 
     result.relationships.map_or_else(Vec::new, |r| {
@@ -609,6 +610,7 @@ fn parse_scopes(files: &[(&str, &str)]) -> Vec<ScopeInfo> {
         files: file_paths,
         content_map: Some(content_map),
         resolve_relationships: Some(false),
+        resolver_options: None,
     });
 
     result.files.values().flat_map(|f| f.scopes.clone()).collect()
