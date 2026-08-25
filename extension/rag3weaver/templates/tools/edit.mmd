@@ -1,0 +1,10 @@
+%% tool: edit
+%% description: Modifie un fichier du projet puis met l'index à jour. Soit remplacer un passage unique (old → new, copié exactement depuis read, préfixes de lignes tolérés), soit écrire le fichier entier (content).
+%% param: path string! -- Chemin relatif au projet.
+%% param: old string = "" -- Texte à remplacer, exact et présent une seule fois dans le fichier.
+%% param: new string = "" -- Texte de remplacement.
+%% param: content string = "" -- Contenu entier du fichier ; crée le fichier s'il n'existe pas. Exclusif avec old/new.
+%% result: edit.result
+
+graph LR
+    edit["EditFileNode(path=$path, old=$old, new=$new, content=$content)"]

@@ -44,8 +44,10 @@ feature par brique, et les **poids téléchargés à la première utilisation da
 2. ~~**`grep` et `read`**~~ — faits le 25 août au soir
    (`25-aout-2026-18h58/05`) : sur une `FileSource` (chemins virtuels,
    `WorkingTree` / `Snapshot`), annotés par le graphe (scope le plus étroit),
-   péremption par hash. Le modèle voit `grep`, `read`, `search`,
-   `search_expand`. Reste `edit`, `list`, `GitRef`, et retirer `special_ops`.
+   péremption par hash ; puis `edit` (remplacement unique, préfixes de
+   `read` tolérés, ré-ingestion du fichier) et `list`. Le modèle voit `edit`,
+   `grep`, `list`, `read`, `search`, `search_expand`. Reste `GitRef` et
+   retirer `special_ops`.
 3. **Lecture des documents** — pdf, docx, pptx, html, csv. Sans lib lourde : les
    formats Office sont du ZIP + XML. L'OCR livré couvre les PDF scannés.
 

@@ -94,14 +94,37 @@ frais ; `grep "fn take_results"` → `function take_results` ;
 rendent du markdown nu ; un fichier inconnu rend une erreur lisible par le
 modèle. Unitaires : 726 avec la feature, 720 sans.
 
-## 5. Ce qui reste
+## 5. `edit` et `list` (23h30)
 
-- **`edit`** — l'inverse de `00042| ` (retirer les préfixes d'un texte
-  recopié) était le détail d'ergonomie le plus payant de l'ancienne version ;
-  à faire avec l'écriture.
+**`edit(path, old, new | content)`** : remplace un passage qui doit être
+**exactement unique** (0 occurrence → *not found, copy it exactly from
+read* ; 2 → *appears 2 times; include more context*), ou écrit le fichier
+entier. Les préfixes `00042| ` d'un texte recopié depuis `read` sont retirés
+— seulement si **toutes** les lignes non vides en portent un, pour ne pas
+abîmer un code qui contiendrait la forme. `FileSource::write` : atomique
+sur `WorkingTree` (temporaire puis renommage), en mémoire sur `Snapshot`.
+
+Puis **le fichier est ré-ingéré** si un catalogue est là : ses scopes
+réécrits (identités `hashsafe` stables), ceux qui ont **disparu supprimés**,
+ses relations locales et `DEFINED_IN` refaites. Le rapport dit tout :
+*« edited — 230 → 230 lines, first change at line 109 (read with offset=106
+to check). Index updated: 24 scopes upserted, 1 removed, 85 relations »*.
+Un `read` juste après ne voit plus de péremption. Dette nommée : les
+relations **inter-fichiers** vers le fichier ne sont pas recalculées — c'est
+la résolution contre la base ([02](02-fichiers-en-temps-reel-deux-modes-git-et-histoire.md) §4).
+
+**`list(path_prefix, limit)`** : les fichiers de la source avec lignes et
+état — `✓indexed`, `⚠stale`, `(not indexed)` — pour s'orienter avant `grep`.
+
+Le modèle voit désormais **`edit`, `grep`, `list`, `read`, `search`,
+`search_expand`** ; 35 types de nœuds avec la feature. `e2e_code` 5/5 : le
+renommage de `merge_port_values` sur un instantané indexé supprime l'ancien
+scope, le nouveau est trouvé avec son scope, `list` rend les trois états.
+
+## 6. Ce qui reste
+
 - **`GitRef`** comme troisième source, avec l'histoire ([02](02-fichiers-en-temps-reel-deux-modes-git-et-histoire.md) §5).
-- **La ré-ingestion d'un fichier périmé** déclenchée par `read` — aujourd'hui
-  on le dit, on ne le fait pas.
+- La ré-ingestion d'un fichier périmé déclenchée par `read` (on le dit, on
+  ne le fait pas — `edit` le fait).
 - Retirer `special_ops` de `config.rs`.
-- `list` (les fichiers d'une source, avec leur état d'indexation) — petit,
-  utile au modèle pour s'orienter avant de grep.
+- Relancer l'agent cloud avec `edit` et `list` ([06](06-lacher-lagent-sur-notre-code.md)).

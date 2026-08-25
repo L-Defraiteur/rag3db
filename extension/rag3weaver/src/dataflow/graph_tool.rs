@@ -1178,11 +1178,15 @@ pub const SEARCH_TOOL_MERMAID: &str = include_str!("../../templates/tools/search
 pub const READ_TOOL_MERMAID: &str = include_str!("../../templates/tools/read.mmd");
 #[cfg(feature = "code")]
 pub const GREP_TOOL_MERMAID: &str = include_str!("../../templates/tools/grep.mmd");
+#[cfg(feature = "code")]
+pub const LIST_TOOL_MERMAID: &str = include_str!("../../templates/tools/list.mmd");
+#[cfg(feature = "code")]
+pub const EDIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/edit.mmd");
 
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 4] = ["grep", "read", "search", "search_expand"];
+pub const BUILTIN_TOOL_NAMES: [&str; 6] = ["edit", "grep", "list", "read", "search", "search_expand"];
 #[cfg(not(feature = "code"))]
 pub const BUILTIN_TOOL_NAMES: [&str; 2] = ["search", "search_expand"];
 
@@ -1220,6 +1224,8 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
     {
         tools.register(GraphTool::from_mermaid(READ_TOOL_MERMAID)?)?;
         tools.register(GraphTool::from_mermaid(GREP_TOOL_MERMAID)?)?;
+        tools.register(GraphTool::from_mermaid(LIST_TOOL_MERMAID)?)?;
+        tools.register(GraphTool::from_mermaid(EDIT_TOOL_MERMAID)?)?;
     }
     tools.register(expand)?;
     Ok((nodes, tools))

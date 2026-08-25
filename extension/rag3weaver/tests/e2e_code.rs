@@ -9,7 +9,7 @@
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, FILE, SCOPE};
-use rag3weaver::code_tools::{grep_files, read_file, FileSource, GrepOptions, Snapshot, FILE_SOURCE_SERVICE};
+use rag3weaver::code_tools::{edit_file, grep_files, list_files, read_file, EditOp, FileSource, GrepOptions, Snapshot, FILE_SOURCE_SERVICE};
 use rag3weaver::dataflow::graph_tool::builtin_graph_tools;
 use rag3weaver::llm::ToolCall;
 use rag3weaver::dataflow::{CodeIngestNode, DataflowGraph, DataflowRuntime, ParseCodeNode, ServiceRegistry};
@@ -171,7 +171,7 @@ fn read_and_grep_annotate_from_the_graph_and_detect_staleness() {
     let root = dataflow_dir();
     let all = read_sources(&root).unwrap();
     let pick = |name: &str| all.iter().find(|(p, _)| p == name).cloned().expect(name);
-    let mut snapshot = Snapshot::new("remote-demo", [pick("generic_search_nodes.rs"), pick("services.rs")]);
+    let snapshot = Snapshot::new("remote-demo", [pick("generic_search_nodes.rs"), pick("services.rs")]);
 
     let catalog = setup();
     let analysis = analyze_source(&snapshot).unwrap();
@@ -240,7 +240,7 @@ fn read_and_grep_as_graph_tools() {
     let (nodes, tools) = builtin_graph_tools().unwrap();
     let defs = rag3weaver::tools::graph_tool_defs(&tools);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-    assert_eq!(names, vec!["grep", "read", "search", "search_expand"]);
+    assert_eq!(names, vec!["edit", "grep", "list", "read", "search", "search_expand"]);
     let mut services = ServiceRegistry::new();
     services.register("catalog", catalog.clone());
     services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
@@ -261,4 +261,61 @@ fn read_and_grep_as_graph_tools() {
 
     let bad = call("read", serde_json::json!({"path": "nope.rs"}));
     assert!(bad.contains("error"), "an unknown file is a tool error the model can read: {bad}");
+}
+
+/// `edit` sur un instantané indexé : le fichier est réécrit, ré-ingéré —
+/// le scope renommé disparaît, le nouveau est trouvé avec son scope, et
+/// `read` ne voit plus de péremption. Puis `list` dit l'état de chaque fichier.
+#[test]
+#[ignore]
+fn edit_reingests_the_file_and_list_reports_state() {
+    let root = dataflow_dir();
+    let all = read_sources(&root).unwrap();
+    let pick = |name: &str| all.iter().find(|(p, _)| p == name).cloned().expect(name);
+    let snapshot = Snapshot::new("remote-demo", [pick("services.rs"), pick("port.rs")]);
+    let catalog = setup();
+    let analysis = analyze_source(&snapshot).unwrap();
+    catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+
+    // Un fichier non indexé, pour que `list` ait les trois états.
+    snapshot.insert("NOTES.md", "notes\n");
+
+    let mut cat = catalog.lock().unwrap();
+    // Renommer une fonction : `merge_port_values` → `merge_two_port_values`.
+    let before = grep_files(&snapshot, Some(&cat), "fn merge_port_values", &GrepOptions::default()).unwrap();
+    assert_eq!(before.total_found, 1);
+    let r = edit_file(
+        &snapshot,
+        Some(&mut cat),
+        "port.rs",
+        &EditOp::Replace { old: "pub fn merge_port_values(".into(), new: "pub fn merge_two_port_values(".into() },
+    )
+    .unwrap();
+    eprintln!("{}", r.to_markdown());
+    let reingest = r.reingest.as_ref().expect("catalogue → ré-ingestion");
+    assert_eq!(reingest.scopes_deleted, 1, "the old scope key is gone");
+    assert!(reingest.scopes_upserted > 10);
+    assert_eq!(reingest.failed, 0);
+
+    // L'index est à jour : plus de péremption, et le nouveau nom porte son scope.
+    let read = read_file(&snapshot, Some(&cat), "port.rs", r.first_changed_line.unwrap(), 3).unwrap();
+    assert_eq!(read.stale, Some(false), "re-ingested → fresh");
+    assert!(read.text.contains("merge_two_port_values"));
+    let after = grep_files(&snapshot, Some(&cat), "fn merge_two_port_values", &GrepOptions::default()).unwrap();
+    assert_eq!(after.total_found, 1);
+    assert_eq!(after.matches[0].scope.as_ref().map(|s| s.name.as_str()), Some("merge_two_port_values"));
+    assert_eq!(after.matches[0].stale, Some(false));
+    let gone = cat.find_by_field(SCOPE, "name", rag3weaver::connection::CypherValue::String("merge_port_values".into()), &["key"]).unwrap();
+    assert!(gone.is_empty(), "the renamed scope must not survive: {gone:?}");
+
+    // `list` : indexé, périmé, non indexé.
+    snapshot.insert("services.rs", format!("{}\n// touched\n", pick("services.rs").1));
+    let l = list_files(&snapshot, Some(&cat), None, 0, true).unwrap();
+    eprintln!("{}", l.to_markdown());
+    let state = |p: &str| l.entries.iter().find(|e| e.path == p).map(|e| (e.indexed, e.stale)).unwrap();
+    assert_eq!(state("port.rs"), (Some(true), Some(false)));
+    assert_eq!(state("services.rs"), (Some(true), Some(true)));
+    assert_eq!(state("NOTES.md"), (Some(false), None));
+    let md = l.to_markdown();
+    assert!(md.contains("`port.rs`") && md.contains("✓indexed") && md.contains("⚠stale") && md.contains("(not indexed)"), "{md}");
 }

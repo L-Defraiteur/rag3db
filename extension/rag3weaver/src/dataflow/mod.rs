@@ -65,7 +65,10 @@ pub use mermaid::{parse_mermaid, parse_mermaid_template, to_mermaid, MermaidErro
 pub use node_factories::register_builtins;
 pub use ocr_nodes::{OcrNode, OcrNodeFactory, OCR_SERVICE};
 #[cfg(feature = "code")]
-pub use code_nodes::{CodeIngestNode, CodeIngestNodeFactory, GrepNode, GrepNodeFactory, ParseCodeNode, ParseCodeNodeFactory, ReadFileNode, ReadFileNodeFactory};
+pub use code_nodes::{
+    CodeIngestNode, CodeIngestNodeFactory, EditFileNode, EditFileNodeFactory, GrepNode, GrepNodeFactory,
+    ListFilesNode, ListFilesNodeFactory, ParseCodeNode, ParseCodeNodeFactory, ReadFileNode, ReadFileNodeFactory,
+};
 pub use llm_nodes::{LlmNode, LlmNodeFactory, LLM_SERVICE, NODE_REGISTRY_SERVICE};
 pub use checkpoint::{
     CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,

@@ -11,7 +11,10 @@ use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema
 use super::port::{take_or_clone, PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code::{analyze, analyze_source, read_sources, CodeAnalysis};
-use crate::code_tools::{grep_files, read_file, source_service, GrepOptions, ToolFormat, DEFAULT_GREP_LIMIT, DEFAULT_READ_LIMIT};
+use crate::code_tools::{
+    edit_file, grep_files, list_files, read_file, source_service, EditOp, GrepOptions, ToolFormat,
+    DEFAULT_GREP_LIMIT, DEFAULT_LIST_LIMIT, DEFAULT_READ_LIMIT,
+};
 
 /// **Input** (optionnel) : `sources` — `Vec<(String, String)>`, chemins
 /// relatifs + contenus (PortType::Code). Sans entrée, le nœud lit `root` sur
@@ -290,6 +293,133 @@ impl Node for GrepNode {
     }
 }
 
+// ─── ListFilesNode ───────────────────────────────────────────────────────────
+
+/// `list` : les fichiers de la `file_source` sous un préfixe, avec leur état
+/// d'indexation si `with_state`. **Output** `result` (PortType::Map).
+pub struct ListFilesNode {
+    node_name: String,
+    path_prefix: Option<String>,
+    limit: usize,
+    with_state: bool,
+    format: ToolFormat,
+}
+
+impl ListFilesNode {
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string(), path_prefix: None, limit: DEFAULT_LIST_LIMIT, with_state: true, format: ToolFormat::Markdown }
+    }
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.path_prefix = Some(prefix.into());
+        self
+    }
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+    pub fn with_state(mut self, with_state: bool) -> Self {
+        self.with_state = with_state;
+        self
+    }
+    pub fn with_format(mut self, format: ToolFormat) -> Self {
+        self.format = format;
+        self
+    }
+}
+
+impl Node for ListFilesNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "ListFilesNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({ "path_prefix": self.path_prefix, "limit": self.limit, "with_state": self.with_state })))
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let source = source_service(ctx).ok_or("ListFilesNode: 'file_source' service not found")?;
+        let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
+        let result = {
+            let guard = catalog.as_ref().map(|c| c.lock().unwrap());
+            list_files(source.as_ref(), guard.as_deref(), self.path_prefix.as_deref(), self.limit, self.with_state)
+                .map_err(|e| format!("ListFilesNode: {e}"))?
+        };
+        ctx.metric("total", result.total as f64);
+        ctx.metric("returned", result.returned as f64);
+        let value = match self.format {
+            ToolFormat::Markdown => serde_json::Value::String(result.to_markdown()),
+            ToolFormat::Json => serde_json::to_value(&result).map_err(|e| e.to_string())?,
+        };
+        ctx.set_output("result", PortValue::new(value));
+        Ok(())
+    }
+}
+
+// ─── EditFileNode ────────────────────────────────────────────────────────────
+
+/// `edit` : remplace un texte unique (`old` → `new`) ou écrit tout le fichier
+/// (`content`), dans la `file_source` ; puis ré-ingère le fichier si le
+/// catalogue est là. Les préfixes `00042| ` recopiés depuis `read` sont
+/// retirés. **Output** `result` (PortType::Map).
+pub struct EditFileNode {
+    node_name: String,
+    path: String,
+    op: EditOp,
+    format: ToolFormat,
+}
+
+impl EditFileNode {
+    pub fn new(name: &str, path: impl Into<String>, op: EditOp) -> Self {
+        Self { node_name: name.to_string(), path: path.into(), op, format: ToolFormat::Markdown }
+    }
+    pub fn with_format(mut self, format: ToolFormat) -> Self {
+        self.format = format;
+        self
+    }
+}
+
+impl Node for EditFileNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "EditFileNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        let op = match &self.op {
+            EditOp::Replace { old, new } => serde_json::json!({ "replace": { "old_len": old.len(), "new_len": new.len() } }),
+            EditOp::Write { content } => serde_json::json!({ "write": { "len": content.len() } }),
+        };
+        Some(Box::new(serde_json::json!({ "path": self.path, "op": op })))
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let source = source_service(ctx).ok_or("EditFileNode: 'file_source' service not found")?;
+        let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
+        let result = {
+            let mut guard = catalog.as_ref().map(|c| c.lock().unwrap());
+            edit_file(source.as_ref(), guard.as_deref_mut(), &self.path, &self.op).map_err(|e| format!("EditFileNode: {e}"))?
+        };
+        ctx.metric("lines_after", result.lines_after as f64);
+        if let Some(r) = &result.reingest {
+            ctx.metric("scopes_upserted", r.scopes_upserted as f64);
+            ctx.metric("scopes_deleted", r.scopes_deleted as f64);
+        }
+        let value = match self.format {
+            ToolFormat::Markdown => serde_json::Value::String(result.to_markdown()),
+            ToolFormat::Json => serde_json::to_value(&result).map_err(|e| e.to_string())?,
+        };
+        ctx.set_output("result", PortValue::new(value));
+        Ok(())
+    }
+}
+
 // ─── Factories ───────────────────────────────────────────────────────────────
 
 fn format_param() -> ConfigParam {
@@ -427,6 +557,81 @@ impl NodeFactory for CodeIngestNodeFactory {
             inputs: vec![PortDef { name: "code", port_type: PortType::Code, required: true }],
             outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
             config_params: vec![],
+        }
+    }
+}
+
+pub struct ListFilesNodeFactory;
+
+impl NodeFactory for ListFilesNodeFactory {
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let mut node = ListFilesNode::new(name);
+        if let Some(p) = config.get("path_prefix").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            node = node.with_prefix(p);
+        }
+        if let Some(l) = usize_param(config, "limit", "ListFilesNode")? {
+            node = node.with_limit(l);
+        }
+        if let Some(w) = config.get("with_state").and_then(|v| v.as_bool()) {
+            node = node.with_state(w);
+        }
+        if let Some(f) = config.get("format").and_then(|v| v.as_str()) {
+            node = node.with_format(ToolFormat::parse(f).map_err(|e| format!("ListFilesNode: {e}"))?);
+        }
+        Ok(Box::new(node))
+    }
+    fn node_type(&self) -> &'static str {
+        "ListFilesNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "ListFilesNode",
+            description: "Lists the files of the file source under a path prefix, with line counts and index state (indexed / stale)",
+            inputs: vec![],
+            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            config_params: vec![
+                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe" },
+                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés" },
+                ConfigParam { name: "with_state", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(true)), description: "Lire chaque fichier pour compter ses lignes et comparer au catalogue" },
+                format_param(),
+            ],
+        }
+    }
+}
+
+pub struct EditFileNodeFactory;
+
+impl NodeFactory for EditFileNodeFactory {
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let path = config.get("path").and_then(|v| v.as_str()).ok_or("EditFileNode: missing 'path' config")?;
+        let get = |k: &str| config.get(k).and_then(|v| v.as_str()).map(String::from);
+        let op = match (get("content"), get("old"), get("new")) {
+            (Some(content), None, None) if !content.is_empty() => EditOp::Write { content },
+            (None | Some(_), Some(old), Some(new)) if !old.is_empty() => EditOp::Replace { old, new },
+            _ => return Err("EditFileNode: give either 'old' + 'new' (replace one occurrence) or 'content' (write the whole file)".into()),
+        };
+        let mut node = EditFileNode::new(name, path, op);
+        if let Some(f) = config.get("format").and_then(|v| v.as_str()) {
+            node = node.with_format(ToolFormat::parse(f).map_err(|e| format!("EditFileNode: {e}"))?);
+        }
+        Ok(Box::new(node))
+    }
+    fn node_type(&self) -> &'static str {
+        "EditFileNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "EditFileNode",
+            description: "Edits a file of the file source — replace one unique occurrence (old → new) or write the whole content — then re-indexes it",
+            inputs: vec![],
+            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            config_params: vec![
+                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source" },
+                ConfigParam { name: "old", param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)" },
+                ConfigParam { name: "new", param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement" },
+                ConfigParam { name: "content", param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)" },
+                format_param(),
+            ],
         }
     }
 }

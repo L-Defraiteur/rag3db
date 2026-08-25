@@ -48,6 +48,17 @@ pub trait FileSource: Send + Sync {
     fn list(&self) -> Result<Vec<String>, String>;
     /// `None` si le chemin n'existe pas dans la source.
     fn read(&self, path: &str) -> Result<Option<String>, String>;
+    /// Écrit (crée ou remplace). Une source en lecture seule rend `Err`.
+    fn write(&self, _path: &str, _content: &str) -> Result<(), String> {
+        Err(format!("{} is read-only", self.cursor()))
+    }
+}
+
+fn check_relative(path: &str) -> Result<(), String> {
+    if path.is_empty() || Path::new(path).is_absolute() || path.split('/').any(|c| c == "..") {
+        return Err(format!("path must be relative to the source and without '..': {path}"));
+    }
+    Ok(())
 }
 
 /// L'arbre de travail : le disque, sous une racine.
@@ -91,9 +102,7 @@ impl FileSource for WorkingTree {
         Ok(out)
     }
     fn read(&self, path: &str) -> Result<Option<String>, String> {
-        if Path::new(path).is_absolute() || path.split('/').any(|c| c == "..") {
-            return Err(format!("path must be relative to the source and without '..': {path}"));
-        }
+        check_relative(path)?;
         let full = self.root.join(path);
         match std::fs::read(&full) {
             Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
@@ -101,21 +110,33 @@ impl FileSource for WorkingTree {
             Err(e) => Err(format!("{}: {e}", full.display())),
         }
     }
+    /// Écriture atomique : fichier temporaire à côté, puis renommage — un
+    /// lecteur concurrent voit l'ancien ou le nouveau, jamais un mélange.
+    fn write(&self, path: &str, content: &str) -> Result<(), String> {
+        check_relative(path)?;
+        let full = self.root.join(path);
+        if let Some(parent) = full.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        let tmp = full.with_extension(format!("{}.rag3weaver-tmp", full.extension().and_then(|e| e.to_str()).unwrap_or("")));
+        std::fs::write(&tmp, content).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, &full).map_err(|e| format!("{}: {e}", full.display()))
+    }
 }
 
 /// Des contenus déjà récupérés — un dépôt distant après téléchargement, une
 /// fixture de test. Aucun disque.
 pub struct Snapshot {
     label: String,
-    files: BTreeMap<String, String>,
+    files: std::sync::RwLock<BTreeMap<String, String>>,
 }
 
 impl Snapshot {
     pub fn new(label: impl Into<String>, files: impl IntoIterator<Item = (String, String)>) -> Self {
-        Self { label: label.into(), files: files.into_iter().collect() }
+        Self { label: label.into(), files: std::sync::RwLock::new(files.into_iter().collect()) }
     }
-    pub fn insert(&mut self, path: impl Into<String>, content: impl Into<String>) {
-        self.files.insert(path.into(), content.into());
+    pub fn insert(&self, path: impl Into<String>, content: impl Into<String>) {
+        self.files.write().unwrap().insert(path.into(), content.into());
     }
 }
 
@@ -124,10 +145,17 @@ impl FileSource for Snapshot {
         format!("snapshot:{}", self.label)
     }
     fn list(&self) -> Result<Vec<String>, String> {
-        Ok(self.files.keys().cloned().collect())
+        Ok(self.files.read().unwrap().keys().cloned().collect())
     }
     fn read(&self, path: &str) -> Result<Option<String>, String> {
-        Ok(self.files.get(path).cloned())
+        Ok(self.files.read().unwrap().get(path).cloned())
+    }
+    /// Un instantané s'édite en mémoire — c'est ce qu'un dépôt distant
+    /// modifié localement avant d'être poussé est.
+    fn write(&self, path: &str, content: &str) -> Result<(), String> {
+        check_relative(path)?;
+        self.files.write().unwrap().insert(path.to_string(), content.to_string());
+        Ok(())
     }
 }
 
@@ -495,6 +523,256 @@ pub fn grep_files(
     })
 }
 
+// ─── list ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListEntry {
+    pub path: String,
+    /// `None` : pas lu (`with_state = false`).
+    pub lines: Option<usize>,
+    /// `Some(true)` : connu du catalogue.
+    pub indexed: Option<bool>,
+    /// `Some(true)` : connu et modifié depuis.
+    pub stale: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListResult {
+    pub cursor: String,
+    pub path_prefix: Option<String>,
+    pub total: usize,
+    pub returned: usize,
+    pub entries: Vec<ListEntry>,
+}
+
+pub const DEFAULT_LIST_LIMIT: usize = 200;
+pub const MAX_LIST_LIMIT: usize = 2000;
+
+impl ListResult {
+    pub fn to_markdown(&self) -> String {
+        let mut out = format!(
+            "**Files:** {} under `{}`{}",
+            self.total,
+            self.path_prefix.as_deref().unwrap_or(""),
+            if self.returned < self.total { format!(" — **showing {}**; narrow with path_prefix", self.returned) } else { String::new() }
+        );
+        out.push('\n');
+        for e in &self.entries {
+            let state = match (e.indexed, e.stale) {
+                (Some(true), Some(true)) => " ⚠stale",
+                (Some(true), _) => " ✓indexed",
+                (Some(false), _) => " (not indexed)",
+                _ => "",
+            };
+            match e.lines {
+                Some(n) => out.push_str(&format!("- `{}` ({n} lines){state}\n", e.path)),
+                None => out.push_str(&format!("- `{}`{state}\n", e.path)),
+            }
+        }
+        out
+    }
+}
+
+/// Les fichiers de la source sous un préfixe. Avec `with_state`, chaque
+/// fichier est lu pour compter ses lignes et comparer son hash à l'index.
+pub fn list_files(
+    source: &dyn FileSource,
+    catalog: Option<&Catalog>,
+    path_prefix: Option<&str>,
+    limit: usize,
+    with_state: bool,
+) -> Result<ListResult, String> {
+    let limit = if limit == 0 { DEFAULT_LIST_LIMIT } else { limit.min(MAX_LIST_LIMIT) };
+    let all: Vec<String> = source
+        .list()?
+        .into_iter()
+        .filter(|p| path_prefix.map_or(true, |pre| p.starts_with(pre)))
+        .collect();
+    let total = all.len();
+    let mut entries = Vec::new();
+    for path in all.into_iter().take(limit) {
+        let (lines, indexed, stale) = if with_state {
+            let content = source.read(&path)?.unwrap_or_default();
+            let indexed = indexed_hash(catalog, &path)?;
+            let stale = indexed.as_ref().map(|h| *h != crate::hash::content_hash(&content));
+            (Some(content.lines().count()), catalog.map(|_| indexed.is_some()), stale)
+        } else {
+            (None, None, None)
+        };
+        entries.push(ListEntry { path, lines, indexed, stale });
+    }
+    Ok(ListResult { cursor: source.cursor(), path_prefix: path_prefix.map(String::from), total, returned: entries.len(), entries })
+}
+
+// ─── edit ────────────────────────────────────────────────────────────────────
+
+/// Ce qu'on fait au fichier.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EditOp {
+    /// Remplace `old` (qui doit apparaître **exactement une fois**) par `new`.
+    Replace { old: String, new: String },
+    /// Remplace tout le contenu (crée le fichier s'il n'existe pas).
+    Write { content: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditResult {
+    pub path: String,
+    pub cursor: String,
+    pub created: bool,
+    pub lines_before: usize,
+    pub lines_after: usize,
+    /// Première ligne touchée (1-based), pour relire autour.
+    pub first_changed_line: Option<usize>,
+    pub content_hash: String,
+    /// Ce que la ré-ingestion du fichier a fait, s'il y avait un catalogue.
+    pub reingest: Option<ReingestReport>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReingestReport {
+    pub scopes_upserted: usize,
+    pub scopes_deleted: usize,
+    pub relations: usize,
+    pub failed: usize,
+}
+
+impl EditResult {
+    pub fn to_markdown(&self) -> String {
+        let mut out = format!(
+            "**{}** {} — {} → {} lines, hash `{}`",
+            self.path,
+            if self.created { "created" } else { "edited" },
+            self.lines_before,
+            self.lines_after,
+            &self.content_hash[..12]
+        );
+        if let Some(l) = self.first_changed_line {
+            out.push_str(&format!(" — first change at line {l} (read with offset={} to check)", l.saturating_sub(3).max(1)));
+        }
+        match &self.reingest {
+            Some(r) => out.push_str(&format!(
+                "\nIndex updated: {} scopes upserted, {} removed, {} relations{}",
+                r.scopes_upserted,
+                r.scopes_deleted,
+                r.relations,
+                if r.failed > 0 { format!(", {} failed", r.failed) } else { String::new() }
+            )),
+            None => out.push_str("\n(no catalogue: index not updated)"),
+        }
+        out.push('\n');
+        out
+    }
+}
+
+/// Retire les préfixes `00042| ` d'un texte recopié depuis `read` — le
+/// détail d'ergonomie le plus payant de l'ancienne version : le modèle peut
+/// coller ce qu'il a lu.
+pub fn strip_line_prefixes(text: &str) -> String {
+    let re = regex::Regex::new(r"(?m)^\d{5}\| ").unwrap();
+    // Seulement si TOUTES les lignes non vides portent le préfixe : sinon un
+    // code qui contiendrait la forme `00001| ` serait abîmé.
+    let all = text.lines().filter(|l| !l.trim().is_empty()).all(|l| re.is_match(l));
+    if all && text.lines().any(|l| !l.trim().is_empty()) {
+        re.replace_all(text, "").into_owned()
+    } else {
+        text.to_string()
+    }
+}
+
+/// Applique `op` à `path` dans la source, puis ré-ingère le fichier si un
+/// catalogue est là : ses scopes sont réécrits (identités `hashsafe` stables),
+/// ceux qui ont disparu sont supprimés. Les relations inter-fichiers vers ce
+/// fichier ne sont pas recalculées — dette nommée.
+pub fn edit_file(
+    source: &dyn FileSource,
+    catalog: Option<&mut Catalog>,
+    path: &str,
+    op: &EditOp,
+) -> Result<EditResult, String> {
+    let before = source.read(path)?;
+    let created = before.is_none();
+    let before_text = before.unwrap_or_default();
+    let after_text = match op {
+        EditOp::Replace { old, new } => {
+            if created {
+                return Err(format!("no such file in {}: {path} (use a full write to create it)", source.cursor()));
+            }
+            let old = strip_line_prefixes(old);
+            let new = strip_line_prefixes(new);
+            let n = before_text.matches(old.as_str()).count();
+            if n == 0 {
+                return Err(format!("old text not found in {path} (copy it exactly from read; line-number prefixes are stripped)"));
+            }
+            if n > 1 {
+                return Err(format!("old text appears {n} times in {path}; include more context to make it unique"));
+            }
+            before_text.replacen(old.as_str(), &new, 1)
+        }
+        EditOp::Write { content } => strip_line_prefixes(content),
+    };
+    let first_changed_line = before_text
+        .lines()
+        .zip(after_text.lines())
+        .position(|(a, b)| a != b)
+        .map(|i| i + 1)
+        .or_else(|| if before_text != after_text { Some(before_text.lines().count().min(after_text.lines().count()) + 1) } else { None });
+    source.write(path, &after_text)?;
+    let content_hash = crate::hash::content_hash(&after_text);
+    let reingest = match catalog {
+        Some(catalog) => Some(reingest_file(catalog, source, path, &after_text)?),
+        None => None,
+    };
+    Ok(EditResult {
+        path: path.to_string(),
+        cursor: source.cursor(),
+        created,
+        lines_before: before_text.lines().count(),
+        lines_after: after_text.lines().count(),
+        first_changed_line,
+        content_hash,
+        reingest,
+    })
+}
+
+/// Ré-ingère un seul fichier : analyse seule (références locales et
+/// `DEFINED_IN` ; l'inter-fichiers attend la résolution contre la base),
+/// suppression des scopes disparus, upsert du reste.
+pub fn reingest_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, content: &str) -> Result<ReingestReport, String> {
+    use crate::code::{analyze, FILE, SCOPE};
+    let cursor = source.cursor();
+    let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
+        Some(root) => (root.to_string(), false),
+        None => ("/".to_string(), true),
+    };
+    let mut analysis = analyze(&root, vec![(path.to_string(), content.to_string())]);
+    for f in &mut analysis.files {
+        f.cursor = cursor.clone();
+        if virtual_source {
+            f.absolute_path.clear();
+        }
+    }
+    // Scopes connus du fichier, moins ceux que l'analyse produit encore.
+    let known = catalog
+        .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["key"])
+        .map_err(|e| e.to_string())?;
+    let new_keys: std::collections::HashSet<&str> = analysis.scopes.iter().map(|s| s.key.as_str()).collect();
+    let mut deleted = 0usize;
+    for row in &known {
+        let Some(key) = col(row, "key").and_then(|v| v.as_str()) else { continue };
+        if !new_keys.contains(key) {
+            let uuid = catalog
+                .entity_uuid(SCOPE, &BTreeMap::from([("key".to_string(), CypherValue::String(key.to_string()))]))
+                .map_err(|e| e.to_string())?;
+            catalog.delete(SCOPE, &uuid).map_err(|e| e.to_string())?;
+            deleted += 1;
+        }
+    }
+    let _ = FILE;
+    let report = catalog.ingest_code(&analysis).map_err(|e| e.to_string())?;
+    Ok(ReingestReport { scopes_upserted: report.scopes, scopes_deleted: deleted, relations: report.relations, failed: report.failed })
+}
+
 /// Ce que les nœuds mettent sur leur port : JSON structuré, ou markdown
 /// (rendu tel quel au modèle — `render_port_value` rend une chaîne JSON nue).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -581,7 +859,7 @@ mod tests {
 
     #[test]
     fn grep_context_is_capped_and_markdown_escapes_pipes() {
-        let mut s = snapshot();
+        let s = snapshot();
         s.insert("c.txt", "a|b\nneedle `x`\nafter\n");
         let r = grep_files(&s, None, "needle", &GrepOptions { context_lines: 99, ..Default::default() }).unwrap();
         let m = &r.matches[0];
@@ -590,6 +868,50 @@ mod tests {
         let md = r.to_markdown();
         assert!(md.contains("a\\|b"), "{md}");
         assert!(md.contains("\\`x\\`"), "{md}");
+    }
+
+    #[test]
+    fn list_counts_and_filters() {
+        let s = snapshot();
+        let r = list_files(&s, None, Some("src/"), 0, true).unwrap();
+        assert_eq!(r.total, 2);
+        assert_eq!(r.entries[0].path, "src/a.rs");
+        assert_eq!(r.entries[1].lines, Some(300));
+        assert!(r.entries.iter().all(|e| e.indexed.is_none()), "no catalogue → no verdict");
+        let bounded = list_files(&s, None, None, 1, false).unwrap();
+        assert_eq!((bounded.total, bounded.returned), (3, 1));
+        assert!(bounded.to_markdown().contains("**showing 1**"));
+    }
+
+    #[test]
+    fn edit_replace_is_unique_and_strips_read_prefixes() {
+        let s = snapshot();
+        // Texte recopié depuis `read`, préfixes compris.
+        let op = EditOp::Replace { old: "00002|     beta();".into(), new: "00002|     beta(); // twice\n00003|     beta();".into() };
+        let r = edit_file(&s, None, "src/a.rs", &op).unwrap();
+        assert!(!r.created);
+        assert_eq!((r.lines_before, r.lines_after), (5, 6));
+        assert_eq!(r.first_changed_line, Some(2));
+        assert!(r.reingest.is_none());
+        let after = s.read("src/a.rs").unwrap().unwrap();
+        assert!(after.contains("    beta(); // twice\n    beta();\n"), "{after}");
+        // Ambigu : `beta();` apparaît maintenant deux fois.
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "beta();".into(), new: "x".into() }).unwrap_err();
+        assert!(err.contains("appears 2 times"), "{err}");
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "gamma();".into(), new: "x".into() }).unwrap_err();
+        assert!(err.contains("not found"), "{err}");
+        let err = edit_file(&s, None, "new.rs", &EditOp::Replace { old: "a".into(), new: "b".into() }).unwrap_err();
+        assert!(err.contains("full write"), "{err}");
+        let w = edit_file(&s, None, "new.rs", &EditOp::Write { content: "fn fresh() {}\n".into() }).unwrap();
+        assert!(w.created && w.lines_after == 1);
+        assert_eq!(s.read("new.rs").unwrap().unwrap(), "fn fresh() {}\n");
+    }
+
+    #[test]
+    fn prefixes_are_stripped_only_when_every_line_has_one() {
+        assert_eq!(strip_line_prefixes("00001| a\n00002| b\n"), "a\nb\n");
+        assert_eq!(strip_line_prefixes("00001| a\nb\n"), "00001| a\nb\n");
+        assert_eq!(strip_line_prefixes("plain"), "plain");
     }
 
     #[test]

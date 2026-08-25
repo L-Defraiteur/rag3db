@@ -1,0 +1,8 @@
+%% tool: list
+%% description: Liste les fichiers du projet sous un préfixe de chemin, avec leur nombre de lignes et leur état d'indexation (indexé, périmé, non indexé). Pour s'orienter avant grep ou read.
+%% param: path_prefix string = "" -- Ne lister que sous ce préfixe (ex. 'src/').
+%% param: limit int = 200 -- Fichiers rendus (plafond 2000) ; tous sont comptés.
+%% result: list.result
+
+graph LR
+    list["ListFilesNode(path_prefix=$path_prefix, limit=$limit)"]
