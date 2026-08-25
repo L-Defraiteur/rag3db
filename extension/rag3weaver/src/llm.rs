@@ -223,6 +223,55 @@ pub trait TokenSink: Send {
 
     /// Appelé une seule fois, à la toute fin, quelle que soit la raison.
     fn on_finish(&mut self, _reason: &Finish) {}
+
+    /// Appelé **avant** puis **pendant** chaque attente de réessai. Rendre
+    /// [`Flow::Stop`] interrompt l'attente et abandonne l'appel.
+    ///
+    /// C'est le seul point d'annulation d'une attente : le reste du contrat
+    /// suppose qu'un appel pousse des jetons, or ici il n'en pousse aucun
+    /// pendant des dizaines de secondes. Le défaut — continuer sans rien
+    /// faire — préserve tous les puits existants.
+    ///
+    /// Voir [`RetryPhase`] : un puits qui journalise ne réagit qu'à
+    /// [`RetryPhase::Scheduled`] ; [`RetryPhase::Waiting`] revient plusieurs
+    /// fois par seconde et sert à rendre l'attente interruptible.
+    fn on_retry(&mut self, _event: &RetryEvent<'_>) -> Flow {
+        Flow::Continue
+    }
+}
+
+/// À quel moment de l'attente le puits est appelé.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetryPhase {
+    /// Le réessai vient d'être décidé. `wait` est l'attente **complète**.
+    /// Appelé **une seule fois** par tentative : c'est là qu'on journalise.
+    Scheduled,
+    /// Pendant l'attente, plusieurs fois par seconde. `wait` est ce qu'il
+    /// **reste**. Ne pas journaliser ici, sauf à vouloir des centaines de
+    /// lignes ; c'est le point où une annulation devient visible.
+    Waiting,
+}
+
+/// Ce que le puits apprend d'un réessai. Aucune allocation : il est construit
+/// à chaque tranche d'attente.
+#[derive(Debug, Clone)]
+pub struct RetryEvent<'a> {
+    pub phase: RetryPhase,
+    /// Numéro du réessai à venir : 1 pour le premier.
+    pub attempt: u32,
+    /// Plafond de tentatives, celle d'origine comprise.
+    pub max_attempts: u32,
+    /// Attente complète ([`RetryPhase::Scheduled`]) ou restante
+    /// ([`RetryPhase::Waiting`]).
+    pub wait: std::time::Duration,
+    /// Temps écoulé depuis le début de l'appel, réessais compris.
+    pub elapsed: std::time::Duration,
+    /// Pourquoi on réessaie — `"HTTP 429"`, `"HTTP 503"`, un message de
+    /// transport. Destiné à l'humain, jamais analysé.
+    pub reason: &'a str,
+    /// Vrai si l'attente vient d'un `Retry-After` du fournisseur plutôt que
+    /// de notre calcul. Utile pour comprendre une attente longue.
+    pub from_server: bool,
 }
 
 /// Puits qui accumule tout : pour un nœud non streamant, ou un test de
@@ -733,7 +782,15 @@ impl fmt::Display for ReasoningEffort {
 pub struct Usage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
+    /// Durée totale de l'appel, **attentes de réessai comprises**.
     pub ms: u64,
+    /// Nombre de réessais effectués. `0` en temps normal.
+    ///
+    /// Redondant avec [`TokenSink::on_retry`], et c'est voulu : le rappel sert
+    /// à *agir* (journaliser, annuler), ce compteur à ne jamais être muet.
+    /// Un appelant qui n'a rien implémenté voit quand même, après coup, qu'un
+    /// appel de 63 s en a passé 60 à attendre.
+    pub retries: u32,
 }
 
 impl Usage {
@@ -1026,6 +1083,8 @@ impl Llm for MockLlm {
                 prompt_tokens,
                 completion_tokens: emitted,
                 ms: started.elapsed().as_millis() as u64,
+                // Un modèle local ne réessaie rien.
+                retries: 0,
             },
         ))
     }
@@ -1266,7 +1325,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0 }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1530,7 +1589,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000 };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 

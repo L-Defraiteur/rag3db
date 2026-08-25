@@ -25,7 +25,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 
@@ -81,6 +81,10 @@ pub struct OpenAiLlm {
     google_extras: bool,
     /// `tool_choice: "validated"` — voir [`OpenAiLlm::with_validated_tool_choice`].
     google_validated_tool_choice: bool,
+    retry: RetryPolicy,
+    clock: std::sync::Arc<dyn Clock>,
+    /// État du générateur de gigue. `with_jitter_seed` le fixe pour les tests.
+    jitter_state: std::sync::atomic::AtomicU64,
 }
 
 impl std::fmt::Debug for OpenAiLlm {
@@ -105,8 +109,25 @@ impl OpenAiLlm {
             auth: Auth::None,
             google_extras: false,
             google_validated_tool_choice: false,
+            retry: RetryPolicy::default(),
+            clock: std::sync::Arc::new(SystemClock),
+            jitter_state: std::sync::atomic::AtomicU64::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.subsec_nanos() as u64 | 1)
+                    .unwrap_or(0x2545_F491_4F6C_DD1D),
+            ),
             context_len: 128_000,
-            agent: ureq::Agent::new_with_defaults(),
+            // `http_status_as_error(false)` est **indispensable** : par défaut,
+            // ureq rend `Err` pour tout statut hors 2xx, si bien qu'on ne voit
+            // jamais la réponse — ni son corps (le message du fournisseur, la
+            // détection du dépassement de contexte, celle de la signature
+            // manquante), ni ses en-têtes (`Retry-After`), ni même le code
+            // exact autrement que dans une chaîne. Sans cette ligne, tout
+            // 4xx/5xx devient un échec de transport indistinct.
+            agent: ureq::Agent::new_with_config(
+                ureq::Agent::config_builder().http_status_as_error(false).build(),
+            ),
         }
     }
 
@@ -158,6 +179,113 @@ impl OpenAiLlm {
 
     /// Repointe l'endpoint sans toucher au reste — sert surtout à faire viser
     /// un serveur de test à un constructeur de fournisseur.
+    /// Règle le réessai. Voir [`RetryPolicy`].
+    pub fn with_retry(mut self, policy: RetryPolicy) -> Self {
+        self.retry = policy;
+        self
+    }
+
+    /// Désactive tout réessai — équivaut à [`RetryPolicy::none`].
+    pub fn without_retry(mut self) -> Self {
+        self.retry = RetryPolicy::none();
+        self
+    }
+
+    /// Remplace l'horloge. Réservé aux tests : sans ça, vérifier le plafond
+    /// total prendrait cinq minutes.
+    pub fn with_clock(mut self, clock: std::sync::Arc<dyn Clock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// Fixe la graine de la gigue, pour des attentes reproductibles en test.
+    pub fn with_jitter_seed(self, seed: u64) -> Self {
+        self.jitter_state.store(seed | 1, std::sync::atomic::Ordering::Relaxed);
+        self
+    }
+
+    /// Applique la gigue. `xorshift64` : pas de dépendance, et déterministe
+    /// dès que la graine l'est.
+    fn jittered(&self, d: Duration) -> Duration {
+        use std::sync::atomic::Ordering::Relaxed;
+        if self.retry.jitter <= 0.0 {
+            return d;
+        }
+        let mut x = self.jitter_state.load(Relaxed);
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.jitter_state.store(x, Relaxed);
+        let unit = (x >> 11) as f64 / (1u64 << 53) as f64; // [0, 1)
+        let factor = 1.0 + self.retry.jitter * (unit * 2.0 - 1.0);
+        Duration::from_secs_f64((d.as_secs_f64() * factor).max(0.0))
+    }
+
+    /// Gigue **additive** : rend `d` augmenté de 0 à `jitter × d`, jamais
+    /// diminué. Pour un délai imposé par le fournisseur, qui est un plancher.
+    fn jitter_up(&self, d: Duration) -> Duration {
+        if self.retry.jitter <= 0.0 {
+            return d;
+        }
+        let extra = self.jittered(d).saturating_sub(d);
+        d + extra.min(Duration::from_secs_f64(d.as_secs_f64() * self.retry.jitter))
+    }
+
+    /// Attend `total`, **par tranches**, en restant annulable et sans
+    /// immobiliser un thread du pool luciole.
+    ///
+    /// C'est le cœur du sujet, pas la formule de backoff. Un
+    /// `thread::sleep(60s)` dans une tâche luciole immobilise un thread une
+    /// minute entière ; quatre threads et quatre agents limités, et le
+    /// scheduler gèle — c'est l'interblocage du doc 48 §4 sous un autre
+    /// déguisement, l'attente prenant la place du puits bloquant.
+    ///
+    /// Deux garanties :
+    /// - **sur un thread de scheduler**, on exécute du travail prêt
+    ///   (`run_one_step`) au lieu de dormir, exactement comme
+    ///   `merge_permits::acquire` ;
+    /// - **l'attente est interruptible** : le puits est consulté à chaque
+    ///   tranche, donc une annulation est vue en moins d'une seconde.
+    #[allow(clippy::too_many_arguments)]
+    fn cooperative_wait(
+        &self,
+        total: Duration,
+        started: Instant,
+        attempt: u32,
+        reason: &str,
+        from_server: bool,
+        sink: &mut dyn TokenSink,
+    ) -> Flow {
+        const SLICE: Duration = Duration::from_millis(200);
+        let deadline = self.clock.now() + total;
+        let on_pool = luciole::scheduler::is_scheduler_thread();
+
+        loop {
+            let now = self.clock.now();
+            if now >= deadline {
+                return Flow::Continue;
+            }
+            let remaining = deadline.saturating_duration_since(now);
+            let event = crate::llm::RetryEvent {
+                phase: crate::llm::RetryPhase::Waiting,
+                attempt,
+                max_attempts: self.retry.max_attempts,
+                wait: remaining,
+                elapsed: now.saturating_duration_since(started),
+                reason,
+                from_server,
+            };
+            if sink.on_retry(&event) == Flow::Stop {
+                return Flow::Stop;
+            }
+            if on_pool && luciole::scheduler::global_scheduler().run_one_step() {
+                // On a été utile plutôt que de dormir : on ne dort pas.
+                continue;
+            }
+            self.clock.sleep(SLICE.min(remaining));
+        }
+    }
+
     /// Active `tool_choice: "validated"`, **propre à Google** — d'où sa place
     /// ici plutôt que dans [`crate::llm::ToolChoice`], qui reste l'intersection
     /// des fournisseurs.
@@ -296,6 +424,249 @@ impl OpenAiLlm {
     }
 }
 
+// ─── Réessai ────────────────────────────────────────────────────────────────
+
+/// Horloge, pour que les tests n'attendent pas vraiment.
+///
+/// Sans cette indirection, un test du plafond total dormirait cinq minutes.
+/// `SystemClock` en production, une horloge virtuelle en test.
+pub trait Clock: Send + Sync {
+    fn now(&self) -> Instant;
+    /// Dort **au plus** `d`. Une implémentation de test avance son temps
+    /// virtuel sans dormir.
+    fn sleep(&self, d: Duration);
+}
+
+/// L'horloge réelle.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+    fn sleep(&self, d: Duration) {
+        std::thread::sleep(d);
+    }
+}
+
+/// Quand et combien de temps réessayer.
+///
+/// ⚠ **Le réessai n'est pas la réponse au débit.** Il rattrape un incident ;
+/// il ne rattrape pas une charge soutenue — quatre agents qui saturent le
+/// quota se retrouveront à attendre en chœur, et le backoff ne fera que
+/// répartir la douleur. La vraie prévention est de **borner les appels
+/// concurrents** en amont, avec un sémaphore d'admission (la généralisation du
+/// `merge_permits` de lucivy, cf. doc 48). Si ce filet se met à mordre
+/// souvent, ce n'est pas lui qu'il faut régler.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetryPolicy {
+    /// Tentatives au total, **celle d'origine comprise**. `1` = aucun
+    /// réessai. Défaut 4 : trois attentes, ce qui couvre un pic de quota
+    /// sans transformer une panne durable en attente interminable.
+    pub max_attempts: u32,
+    /// Plafond de temps passé dans l'appel, attentes comprises. Défaut
+    /// 5 minutes — au-delà, un agent qui attend en silence est indiscernable
+    /// d'un agent bloqué.
+    pub max_total: Duration,
+    /// Première attente après un 429. Défaut 60 s : les quotas de Vertex se
+    /// comptent par minute, réessayer plus tôt ne fait que consommer une
+    /// tentative.
+    pub base_429: Duration,
+    /// Première attente après un 5xx ou une erreur de transport. Défaut 1 s :
+    /// une panne passagère se dissipe en secondes, pas en minutes.
+    pub base_5xx: Duration,
+    /// Facteur de croissance entre deux attentes. Défaut 2.
+    pub factor: f64,
+    /// Plafond d'une attente. Défaut 120 s.
+    pub max_backoff: Duration,
+    /// Amplitude de la gigue, en fraction. Défaut 0.2 = ±20 %.
+    ///
+    /// **Obligatoire, pas cosmétique** : sans elle, N appels refusés au même
+    /// instant réessaient au même instant et reproduisent la rafale qui a
+    /// causé le 429.
+    pub jitter: f64,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_attempts: 4,
+            max_total: Duration::from_secs(300),
+            base_429: Duration::from_secs(60),
+            base_5xx: Duration::from_secs(1),
+            factor: 2.0,
+            max_backoff: Duration::from_secs(120),
+            jitter: 0.2,
+        }
+    }
+}
+
+impl RetryPolicy {
+    /// Aucun réessai.
+    pub fn none() -> Self {
+        Self { max_attempts: 1, ..Self::default() }
+    }
+
+    /// Attente pour le `n`-ième réessai (1 = le premier), avant gigue.
+    fn backoff(&self, base: Duration, attempt: u32) -> Duration {
+        let grown = base.as_secs_f64() * self.factor.powi(attempt.saturating_sub(1) as i32);
+        Duration::from_secs_f64(grown.min(self.max_backoff.as_secs_f64()))
+    }
+}
+
+/// Ce qu'on décide de faire d'un échec.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    /// Réessayable, avec cette base d'attente.
+    Retry(RetryBase),
+    /// Jamais : réessayer masquerait le problème au lieu de le résoudre.
+    Fatal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetryBase {
+    Throttled,
+    Transient,
+}
+
+/// Classe un échec à partir de son statut **et de son corps**.
+///
+/// La règle qui compte est la négative : **un 4xx autre que 408/409/429 n'est
+/// jamais réessayé**. Un 400 (schéma invalide), un 401 (jeton périmé), un 403
+/// (droit manquant) ne guérissent pas en attendant ; les réessayer ne fait que
+/// retarder de plusieurs minutes un message d'erreur qui était déjà juste.
+///
+/// Le corps est nécessaire parce que **tous les 429 ne se valent pas**, et
+/// c'est la trouvaille la moins évidente de ce chantier :
+///
+/// - un quota **par minute** se dissipe, il faut attendre ;
+/// - un quota **par jour** (Gemini : `quotaId` contenant `PerDay`, remis à
+///   zéro à minuit heure du Pacifique) ou une **limite de dépense** (OpenAI :
+///   solde épuisé, plafond de projet atteint) ne se dissipe pas. Attendre
+///   quatre fois soixante secondes ne fait que retarder de quatre minutes le
+///   même message.
+///
+/// Les SDK officiels ne font pas cette distinction ; c'est peu cher et ça
+/// évite exactement le genre d'attente qui donne l'impression d'un gel.
+fn classify(status: u16, body: &str) -> Verdict {
+    match status {
+        429 if is_permanent_quota(body) => Verdict::Fatal,
+        // 408 (timeout) et 409 (conflit) sont réessayés par les SDK d'OpenAI
+        // comme par celui de Google.
+        408 | 409 | 429 => Verdict::Retry(RetryBase::Throttled),
+        s if (500..600).contains(&s) => Verdict::Retry(RetryBase::Transient),
+        _ => Verdict::Fatal,
+    }
+}
+
+/// Vrai si ce 429 ne guérira pas en attendant.
+fn is_permanent_quota(body: &str) -> bool {
+    // Gemini : le `quotaId` d'un `QuotaFailure` nomme sa fenêtre.
+    if body.contains("PerDay") {
+        return true;
+    }
+    // OpenAI : ce ne sont pas des limites de débit mais des limites d'argent.
+    let low = body.to_ascii_lowercase();
+    ["credit balance", "spend limit", "usage limit", "billing_hard_limit"]
+        .iter()
+        .any(|m| low.contains(m))
+}
+
+/// Lit le délai imposé par le fournisseur, s'il y en a un. Il **gagne** sur
+/// tout calcul : lui seul connaît l'état de son quota.
+///
+/// Trois formes, dans l'ordre de préférence :
+/// 1. `retry-after-ms` — en millisecondes ;
+/// 2. `retry-after` — en secondes entières, ou en date HTTP ;
+/// 3. `details[].retryDelay` dans le corps, forme Google (`"27s"`).
+fn server_retry_after(headers: &ureq::http::HeaderMap, body: &str) -> Option<Duration> {
+    let get = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+
+    if let Some(ms) = get("retry-after-ms").and_then(|v| v.trim().parse::<u64>().ok()) {
+        return Some(Duration::from_millis(ms));
+    }
+    if let Some(raw) = get("retry-after") {
+        let raw = raw.trim();
+        if let Ok(secs) = raw.parse::<u64>() {
+            return Some(Duration::from_secs(secs));
+        }
+        if let Some(d) = http_date_delay(raw) {
+            return Some(d);
+        }
+    }
+    body_retry_delay(body)
+}
+
+/// `"27s"`, `"1.5s"` → durée. Forme de `google.rpc.RetryInfo`, que Google met
+/// dans le corps plutôt que dans un en-tête.
+fn parse_google_duration(v: &str) -> Option<Duration> {
+    let secs = v.trim().strip_suffix('s')?.parse::<f64>().ok()?;
+    (secs.is_finite() && secs >= 0.0).then(|| Duration::from_secs_f64(secs))
+}
+
+/// Cherche `retryDelay` n'importe où dans le corps d'erreur : Google le place
+/// sous `error.details[]`, mais la profondeur exacte a déjà changé.
+fn body_retry_delay(body: &str) -> Option<Duration> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    fn find(v: &Value) -> Option<Duration> {
+        match v {
+            Value::Object(m) => {
+                if let Some(d) = m.get("retryDelay").and_then(Value::as_str) {
+                    if let Some(d) = parse_google_duration(d) {
+                        return Some(d);
+                    }
+                }
+                m.values().find_map(find)
+            }
+            Value::Array(a) => a.iter().find_map(find),
+            _ => None,
+        }
+    }
+    find(&v)
+}
+
+/// Convertit une date HTTP (`"Wed, 21 Oct 2015 07:28:00 GMT"`) en délai à
+/// partir de maintenant. Rend `None` si la date est passée ou illisible.
+fn http_date_delay(raw: &str) -> Option<Duration> {
+    // `Jour, JJ Mois AAAA HH:MM:SS GMT` — seule forme que la spec impose de
+    // produire ; on ne gère pas les deux formats obsolètes.
+    let p: Vec<&str> = raw.split_whitespace().collect();
+    if p.len() != 6 {
+        return None;
+    }
+    let day: i64 = p[1].parse().ok()?;
+    let month = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    .iter()
+    .position(|m| *m == p[2])? as i64
+        + 1;
+    let year: i64 = p[3].parse().ok()?;
+    let hms: Vec<&str> = p[4].split(':').collect();
+    if hms.len() != 3 {
+        return None;
+    }
+    let (h, mi, sec): (i64, i64, i64) =
+        (hms[0].parse().ok()?, hms[1].parse().ok()?, hms[2].parse().ok()?);
+
+    // Jours depuis l'époque (algorithme « days_from_civil » de Howard Hinnant).
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = (month + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    let target = days * 86_400 + h * 3_600 + mi * 60 + sec;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs() as i64;
+    (target > now).then(|| Duration::from_secs((target - now) as u64))
+}
+
 /// Profondeur d'imbrication maximale acceptée par le mode strict.
 const MAX_SCHEMA_DEPTH: usize = 10;
 /// Nombre total de propriétés acceptées.
@@ -344,6 +715,12 @@ const FORBIDDEN_KEYWORDS: &[&str] =
 /// Ce qui **passe** en strict : `$ref` et `$defs`, **récursivité comprise**
 /// (`{"$ref": "#"}`), `anyOf`, `pattern`, `format`, les bornes numériques,
 /// `minItems`/`maxItems`. Ce qui est **refusé** : voir [`FORBIDDEN_KEYWORDS`].
+///
+/// Le « Fully recursive schemas are not supported » de Vertex vise bien la
+/// récursion **racine**, pas `$ref` en général : un `$ref` non récursif vers
+/// `$defs` a été vérifié le 25 août 2026 sur Vertex (HTTP 200, sortie
+/// conforme au schéma). D'où le fait qu'on ne le refuse pas. La récursion
+/// racine, elle, n'a pas pu être mesurée — un 429 est tombé pendant l'essai.
 /// `oneOf` n'apparaît dans aucune liste de support : on le signale, avec
 /// `anyOf` comme remplaçant.
 pub fn check_strict_schema(schema: &Value) -> Result<(), String> {
@@ -729,63 +1106,157 @@ impl Llm for OpenAiLlm {
             }
         }
 
-        let started = Instant::now();
+        let started = self.clock.now();
         let body = serde_json::to_string(&self.request_body(turns, opts))
             .map_err(|e| LlmError::Prompt(e.to_string()))?;
-
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-        let mut req = self
-            .agent
-            .post(&url)
-            .header("content-type", "application/json")
-            .header("accept", "text/event-stream");
-        req = match &self.auth {
-            Auth::None => req,
-            Auth::Bearer(t) => req.header("authorization", &format!("Bearer {t}")),
-            Auth::Header(k, v) => req.header(k.as_str(), v.as_str()),
-        };
 
-        let mut resp = req.send(body).map_err(|e| LlmError::Model(e.to_string()))?;
-        let status = resp.status().as_u16();
-        if status != 200 {
-            // Le corps d'erreur d'un fournisseur ne contient pas le secret
-            // envoyé, mais on le tronque : il peut être très long.
-            let mut msg = resp
-                .body_mut()
-                .read_to_string()
-                .unwrap_or_else(|e| format!("(corps d'erreur illisible : {e})"));
-            msg.truncate(512);
-            if msg.trim().is_empty() {
-                msg = "(corps d'erreur vide)".into();
+        // Nombre de réessais déjà effectués. `attempt + 1` tentatives faites.
+        let mut retries: u32 = 0;
+        loop {
+            let mut req = self
+                .agent
+                .post(&url)
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream");
+            req = match &self.auth {
+                Auth::None => req,
+                Auth::Bearer(t) => req.header("authorization", &format!("Bearer {t}")),
+                Auth::Header(k, v) => req.header(k.as_str(), v.as_str()),
+            };
+
+            // Ce que cette tentative a produit : soit on rend, soit on décide
+            // de réessayer.
+            let (err, verdict, server_delay) = match req.send(body.clone()) {
+                Ok(mut resp) if resp.status().as_u16() == 200 => {
+                    // ─────────────────── LA FRONTIÈRE ───────────────────
+                    // À partir d'ici, **plus aucun réessai**. Le flux est
+                    // ouvert : `read_sse` peut avoir poussé des jetons dans le
+                    // puits, et rejouer la requête les dupliquerait — un
+                    // consommateur verrait deux fois le début de la réponse,
+                    // sans aucun moyen de le savoir. On préfère rendre une
+                    // erreur franche.
+                    //
+                    // Un 200 suivi d'une coupure immédiate, avant la moindre
+                    // trame, serait sûr à rejouer ; on ne le fait pas non plus,
+                    // parce que distinguer « rien poussé » de « quelque chose
+                    // poussé » demanderait à `read_sse` de le rapporter jusque
+                    // dans son type d'erreur, pour un gain marginal.
+                    let mut reader = BufReader::new(resp.body_mut().as_reader());
+                    let (finish, mut usage) = read_sse(&mut reader, opts, sink)?;
+                    // Fermer la socket : `ureq` ne rend une connexion au pool
+                    // que si son corps a été lu jusqu'au bout.
+                    drop(reader);
+
+                    usage.ms = self
+                        .clock
+                        .now()
+                        .saturating_duration_since(started)
+                        .as_millis() as u64;
+                    usage.retries = retries;
+                    sink.on_finish(&finish);
+                    return Ok((finish, usage));
+                }
+                Ok(mut resp) => {
+                    let status = resp.status().as_u16();
+                    // Les en-têtes avant le corps : lire le corps emprunte
+                    // `resp` de façon exclusive.
+                    let headers = resp.headers().clone();
+                    let mut msg = resp
+                        .body_mut()
+                        .read_to_string()
+                        .unwrap_or_else(|e| format!("(corps d'erreur illisible : {e})"));
+                    msg.truncate(512);
+                    if msg.trim().is_empty() {
+                        msg = "(corps d'erreur vide)".into();
+                    }
+                    // Deux erreurs qu'on sait typer, et qu'on rend telles
+                    // quelles : ni l'une ni l'autre n'est réessayable.
+                    if msg.contains("context length") || msg.contains("maximum context") {
+                        return Err(LlmError::ContextOverflow { max: self.context_len, got: 0 });
+                    }
+                    // Gemini refuse un appel d'outil rejoué sans sa signature.
+                    // Le libellé varie (« Function call FC1 in the 1. content
+                    // block is missing a thought_signature. » / « ... in
+                    // functionCall parts ... »), donc on ne compare **jamais**
+                    // une chaîne exacte : la présence du mot suffit.
+                    if msg.contains("thought_signature") {
+                        return Err(LlmError::Model(format!(
+                            "HTTP {status}: {} — un appel d'outil a été rejoué sans sa \
+                             `thought_signature`. Les `ToolCall` doivent conserver leur \
+                             `provider_extra` d'un tour à l'autre.",
+                            msg.trim()
+                        )));
+                    }
+                    let delay = server_retry_after(&headers, &msg);
+                    (
+                        LlmError::Model(format!("HTTP {status}: {}", msg.trim())),
+                        classify(status, &msg),
+                        delay,
+                    )
+                }
+                Err(e) => (
+                    LlmError::Model(e.to_string()),
+                    // Socket coupée **avant** la première trame : rien n'a été
+                    // poussé, rejouer est sûr.
+                    Verdict::Retry(RetryBase::Transient),
+                    None,
+                ),
+            };
+
+            let Verdict::Retry(base_kind) = verdict else {
+                return Err(err);
+            };
+            if retries + 1 >= self.retry.max_attempts {
+                return Err(err);
             }
-            if msg.contains("context length") || msg.contains("maximum context") {
-                return Err(LlmError::ContextOverflow { max: self.context_len, got: 0 });
+
+            retries += 1;
+            let base = match base_kind {
+                RetryBase::Throttled => self.retry.base_429,
+                RetryBase::Transient => self.retry.base_5xx,
+            };
+            // Le délai du fournisseur **gagne** sur tout calcul : lui seul sait
+            // où en est son quota. On lui applique quand même le plafond, pour
+            // qu'un `Retry-After: 3600` ne fasse pas attendre une heure.
+            let from_server = server_delay.is_some();
+            let wait = match server_delay {
+                // Le délai du fournisseur est un **plancher**, pas une
+                // estimation : OpenAI demande explicitement de « treat this
+                // value as a minimum and add a small random delay ». La gigue
+                // est donc additive ici — jamais soustractive, sinon on
+                // réessaierait avant l'heure dite. Et on plafonne quand même,
+                // pour qu'un `Retry-After: 3600` ne fasse pas attendre une
+                // heure (le SDK d'OpenAI coupe pareillement à 120 s).
+                Some(d) => self.jitter_up(d.min(self.retry.max_backoff)),
+                None => self.jittered(self.retry.backoff(base, retries)),
+            };
+
+            // Plafond total : mieux vaut rendre l'erreur que dépasser.
+            let elapsed = self.clock.now().saturating_duration_since(started);
+            if elapsed + wait > self.retry.max_total {
+                return Err(err);
             }
-            // Gemini refuse un appel d'outil rejoué sans sa signature. Le
-            // libellé varie (« Function call FC1 in the 1. content block is
-            // missing a thought_signature. » / « ... in functionCall parts
-            // ... »), donc on ne compare **jamais** une chaîne exacte : la
-            // présence du mot suffit à donner un conseil utile.
-            if msg.contains("thought_signature") {
-                return Err(LlmError::Model(format!(
-                    "HTTP {status}: {} — un appel d'outil a été rejoué sans sa \
-                     `thought_signature`. Les `ToolCall` doivent conserver leur \
-                     `provider_extra` d'un tour à l'autre.",
-                    msg.trim()
-                )));
+
+            let reason = err.to_string();
+            let announce = crate::llm::RetryEvent {
+                phase: crate::llm::RetryPhase::Scheduled,
+                attempt: retries,
+                max_attempts: self.retry.max_attempts,
+                wait,
+                elapsed,
+                reason: &reason,
+                from_server,
+            };
+            if sink.on_retry(&announce) == Flow::Stop {
+                return Err(err);
             }
-            return Err(LlmError::Model(format!("HTTP {status}: {}", msg.trim())));
+            if self.cooperative_wait(wait, started, retries, &reason, from_server, sink)
+                == Flow::Stop
+            {
+                return Err(err);
+            }
         }
-
-        let mut reader = BufReader::new(resp.body_mut().as_reader());
-        let (finish, mut usage) = read_sse(&mut reader, opts, sink)?;
-        // Fermer la socket : `ureq` ne rend une connexion au pool que si son
-        // corps a été lu jusqu'au bout, donc un abandon la coupe bien.
-        drop(reader);
-
-        usage.ms = started.elapsed().as_millis() as u64;
-        sink.on_finish(&finish);
-        Ok((finish, usage))
     }
 
     fn context_len(&self) -> usize {
@@ -1918,11 +2389,14 @@ mod tests {
         // 1. **OpenAI, outil nommé.** Attesté par un membre du staff, puis
         //    reproduit (openai-node #305, openai-dotnet #64). Aujourd'hui ni
         //    documenté ni garanti — donc à tolérer, jamais à supposer.
-        // 2. **Google, en streaming.** Sur l'endpoint compatible OpenAI, le
-        //    même appel rend `"tool_calls"` en non-streamé et **`"stop"` en
-        //    streamé**. Signalé le 20 décembre 2025, toujours reproductible
-        //    en août 2026, sans correctif. **Nous streamons toujours**, donc
-        //    ce cas nous concerne directement.
+        // 2. **Google, en streaming.** Signalé le 20 décembre 2025 : sur
+        //    l'endpoint compatible OpenAI, le même appel rendrait
+        //    `"tool_calls"` en non-streamé et `"stop"` en streamé. **Non
+        //    reproduit chez nous au 25 août 2026** — nos mesures sur
+        //    `gemini-3.5-flash` et `gemini-3.7-flash`, en streaming, rendent
+        //    bien `"tool_calls"`. Gardé par précaution : trois signalements
+        //    indépendants existent, le défaut peut dépendre du modèle, et le
+        //    filet ne coûte rien.
         // 3. Les passerelles compatibles OpenAI qui recopient mal le champ.
         //
         // La mesure du 25 août 2026 sur `gemini-3.5-flash` (quatre formes de

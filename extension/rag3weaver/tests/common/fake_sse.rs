@@ -18,10 +18,85 @@ pub struct FakeServer {
     /// Nombre de trames que le serveur a réussi à écrire avant que le client
     /// ne ferme la socket — c'est la preuve que `Flow::Stop` coupe vraiment.
     pub written: Arc<AtomicUsize>,
+    /// Nombre de connexions acceptées — le compte de tentatives, vu du serveur.
+    pub connections: Arc<AtomicUsize>,
     _handle: std::thread::JoinHandle<()>,
 }
 
 impl FakeServer {
+    /// Sert une **suite** de réponses, une par connexion : c'est ce qui permet
+    /// de tester le réessai (un 429 puis un flux, par exemple). Le compteur
+    /// `connections` dit combien de fois le client s'est reconnecté.
+    pub fn start_sequence(responses: Vec<Reply>) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = mpsc::channel();
+        let written = Arc::new(AtomicUsize::new(0));
+        let connections = Arc::new(AtomicUsize::new(0));
+        let (w, conns) = (Arc::clone(&written), Arc::clone(&connections));
+
+        let handle = std::thread::spawn(move || {
+            for reply in responses {
+                let Ok((mut sock, _)) = listener.accept() else { return };
+                conns.fetch_add(1, Ordering::SeqCst);
+                let _ = tx.send(read_request(&mut sock));
+                match reply {
+                    Reply::Status { code, body, retry_after } => {
+                        let extra = match retry_after {
+                            Some(v) => format!("Retry-After: {v}\r\n"),
+                            None => String::new(),
+                        };
+                        let _ = sock.write_all(
+                            format!(
+                                "HTTP/1.1 {code} Error\r\nContent-Type: application/json\r\n\
+                                 {extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                                body.len()
+                            )
+                            .as_bytes(),
+                        );
+                        let _ = sock.flush();
+                    }
+                    Reply::Sse { frames } => {
+                        let _ = sock.write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                              Connection: close\r\n\r\n",
+                        );
+                        for f in &frames {
+                            if sock.write_all(format!("data: {f}\n\n").as_bytes()).is_err() {
+                                break;
+                            }
+                            w.fetch_add(1, Ordering::SeqCst);
+                        }
+                        let _ = sock.write_all(b"data: [DONE]\n\n");
+                        let _ = sock.flush();
+                    }
+                    Reply::CutMidStream { frames } => {
+                        // 200, quelques trames, puis la socket se ferme sans
+                        // `[DONE]` : le cas qu'il ne faut surtout PAS rejouer.
+                        let _ = sock.write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                              Connection: close\r\n\r\n",
+                        );
+                        for f in &frames {
+                            let _ = sock.write_all(format!("data: {f}\n\n").as_bytes());
+                            w.fetch_add(1, Ordering::SeqCst);
+                        }
+                        let _ = sock.flush();
+                        drop(sock);
+                    }
+                }
+            }
+        });
+
+        Self {
+            url: format!("http://127.0.0.1:{port}/v1"),
+            request: rx,
+            written,
+            connections,
+            _handle: handle,
+        }
+    }
+
     /// Répond une erreur HTTP au lieu d'un flux — pour vérifier le mapping
     /// vers `LlmError` et qu'aucun secret ne fuite dans le message.
     pub fn start_error(status: u16, body: &str) -> Self {
@@ -44,7 +119,13 @@ impl FakeServer {
             );
             let _ = sock.flush();
         });
-        Self { url: format!("http://127.0.0.1:{port}/v1"), request: rx, written, _handle: handle }
+        Self {
+            url: format!("http://127.0.0.1:{port}/v1"),
+            request: rx,
+            written,
+            connections: Arc::new(AtomicUsize::new(1)),
+            _handle: handle,
+        }
     }
 
     /// `frames` : les lignes `data: ...` à émettre, dans l'ordre.
@@ -100,6 +181,7 @@ impl FakeServer {
             url: format!("http://127.0.0.1:{port}/v1"),
             request: rx,
             written,
+            connections: Arc::new(AtomicUsize::new(1)),
             // Détaché : ne JAMAIS joindre — si aucun client ne se connecte,
             // le thread dort dans `accept()` et le join pendrait pour
             // toujours (c'est exactement ce qui est arrivé au premier jet).
@@ -128,6 +210,35 @@ fn read_request(sock: &mut TcpStream) -> String {
     let mut buf = vec![0u8; len];
     let _ = r.read_exact(&mut buf);
     String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// Ce que le faux serveur rend à une connexion.
+pub enum Reply {
+    /// Une erreur HTTP, avec un `Retry-After` optionnel.
+    Status { code: u16, body: String, retry_after: Option<String> },
+    /// Un flux SSE complet, terminé par `[DONE]`.
+    Sse { frames: Vec<String> },
+    /// Un flux **coupé en plein milieu**, sans `[DONE]`.
+    CutMidStream { frames: Vec<String> },
+}
+
+impl Reply {
+    pub fn status(code: u16) -> Self {
+        Reply::Status { code, body: r#"{"error":{"message":"boom"}}"#.into(), retry_after: None }
+    }
+    pub fn status_after(code: u16, retry_after: &str) -> Self {
+        Reply::Status {
+            code,
+            body: r#"{"error":{"message":"slow down"}}"#.into(),
+            retry_after: Some(retry_after.to_string()),
+        }
+    }
+    pub fn body(code: u16, body: &str) -> Self {
+        Reply::Status { code, body: body.to_string(), retry_after: None }
+    }
+    pub fn sse() -> Self {
+        Reply::Sse { frames: text_frames() }
+    }
 }
 
 // ── Trames enregistrées (forme OpenAI / Vertex openapi / AI Studio) ─────
