@@ -1,0 +1,24 @@
+%% tool: search_expand
+%% description: Cherche, puis étend chaque résultat en suivant une relation du graphe et attache les voisins trouvés.
+%% param: target string! -- Nom de l'entité ou de la base de connaissances où chercher.
+%% param: query string! -- Texte de la requête, en langue naturelle.
+%% param: limit int = 10 -- Nombre maximum de résultats de la recherche.
+%% param: relation string! -- Type de relation à suivre depuis chaque résultat (ex. 'HAS_VARIANT').
+%% param: direction string = "Outgoing" -- Sens de parcours : Outgoing ou Incoming.
+%% param: expand_limit int = 5 -- Nombre maximum de voisins par résultat (0 = illimité).
+%% result: compose.results
+%%
+%% La composition : `inner` n'est pas un nœud de base, c'est le graphe-outil
+%% `search` enregistré comme type de nœud (`SearchTool`). Ses paramètres sont
+%% ceux de sa propre fiche, et ils reçoivent ici les paramètres de celle-ci —
+%% la substitution traverse les deux niveaux. Son port libre `resolve.results`
+%% est celui du `ResolveParentNode` qui vit à l'intérieur.
+
+graph LR
+    inner["SearchTool(target=$target, query=$query, limit=$limit)"]
+    fetch["FetchRelatedNode(relation=$relation, direction=$direction, limit=$expand_limit)"]
+    compose["ComposeNode"]
+
+    inner -->|resolve.results:results| fetch
+    inner -->|resolve.results:results| compose
+    fetch -->|children| compose

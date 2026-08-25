@@ -71,14 +71,18 @@ pub fn param_schema(param: &ConfigParam) -> Value {
     Value::Object(schema)
 }
 
-/// Convertit un schéma de nœud en définition d'outil.
+/// JSON Schema de l'objet d'arguments décrit par une liste de [`ConfigParam`].
 ///
 /// `additionalProperties: false` est volontaire : sans lui, une grammaire
 /// compilée depuis ce schéma laisse le modèle inventer des clés à l'infini.
-pub fn tool_def(schema: &NodeSchema) -> ToolDef {
+///
+/// Partagé par les deux surfaces : les 28 nœuds bruts ([`tool_def`], pour
+/// l'introspection) et les **graphes-outils** ([`crate::dataflow::GraphTool`],
+/// la surface destinée au modèle). Le même vocabulaire des deux côtés.
+pub fn params_object_schema(params: &[ConfigParam]) -> Value {
     let mut properties = Map::new();
     let mut required = Vec::new();
-    for param in &schema.config_params {
+    for param in params {
         properties.insert(param.name.to_string(), param_schema(param));
         if param.required {
             required.push(json!(param.name));
@@ -92,11 +96,15 @@ pub fn tool_def(schema: &NodeSchema) -> ToolDef {
         parameters.insert("required".into(), Value::Array(required));
     }
     parameters.insert("additionalProperties".into(), json!(false));
+    Value::Object(parameters)
+}
 
+/// Convertit un schéma de nœud en définition d'outil.
+pub fn tool_def(schema: &NodeSchema) -> ToolDef {
     ToolDef {
         name: schema.node_type.to_string(),
         description: schema.description.to_string(),
-        parameters: Value::Object(parameters),
+        parameters: params_object_schema(&schema.config_params),
     }
 }
 
@@ -115,6 +123,26 @@ pub fn tool_defs(registry: &NodeRegistry) -> Vec<ToolDef> {
 /// Les mêmes, prêts à être envoyés (`tools` d'une API compatible OpenAI).
 pub fn tool_defs_openai(registry: &NodeRegistry) -> Vec<Value> {
     tool_defs(registry).iter().map(ToolDef::to_openai_json).collect()
+}
+
+// ─── La surface destinée au modèle : les graphes-outils ──────────────────────
+
+/// Les **graphes-outils** d'un registre en définitions d'outils.
+///
+/// C'est *cette* liste qu'on envoie au modèle, pas [`tool_defs`] : un nœud
+/// brut comme `FlushNode` ou `SparseCommitNode` n'est pas une action qu'un
+/// agent peut vouloir, c'est de la plomberie. Un graphe-outil, lui, est une
+/// action complète (`search`) dont la plomberie est cachée derrière la fiche.
+///
+/// L'ordre est celui du registre, une `BTreeMap` : stable par construction,
+/// donc le préfixe du prompt reste identique d'une exécution à l'autre.
+pub fn graph_tool_defs(registry: &crate::dataflow::GraphToolRegistry) -> Vec<ToolDef> {
+    registry.tools().map(|t| t.tool_def()).collect()
+}
+
+/// Les mêmes, prêts à être envoyés (`tools` d'une API compatible OpenAI).
+pub fn graph_tool_defs_openai(registry: &crate::dataflow::GraphToolRegistry) -> Vec<Value> {
+    graph_tool_defs(registry).iter().map(ToolDef::to_openai_json).collect()
 }
 
 #[cfg(test)]

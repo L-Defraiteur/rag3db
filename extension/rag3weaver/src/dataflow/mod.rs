@@ -21,6 +21,7 @@ pub mod record_nodes;
 pub mod report;
 pub mod runtime;
 pub mod graph_node;
+pub mod graph_tool;
 pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;
@@ -50,6 +51,12 @@ pub use generic_search_nodes::{
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
 pub use graph_node::{GraphNode, GraphNodeFactory};
+pub use graph_tool::{
+    build_definition, builtin_graph_tools, execute_definition, param_type_name, resolve_params,
+    run_definition_as_tool_content, substitute_definition, template_vars, validate_node_types,
+    GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_EXPAND_TOOL_MERMAID,
+    SEARCH_TOOL_MERMAID, SEARCH_TOOL_NODE_TYPE,
+};
 pub use migration_nodes::{CypherNode, CypherNodeFactory, ValidateNode, ValidateNodeFactory, Assertion};
 pub use migrations::{MigrationRunner, MigrationFile, MigrationStatus, MigrationState, MigrationResult, MigrationError};
 pub use mermaid::{parse_mermaid, parse_mermaid_template, to_mermaid, MermaidError};

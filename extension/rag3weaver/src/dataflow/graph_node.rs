@@ -245,14 +245,38 @@ pub struct GraphNodeFactory {
 }
 
 impl GraphNodeFactory {
-    /// Create a factory for a named sub-graph template.
+    /// Create a factory for a named sub-graph template, with no config params.
     pub fn new(
         type_name: &str,
         description: &str,
         definition: GraphDefinition,
         registry: Arc<NodeRegistry>,
     ) -> Result<Self, String> {
-        // Build a temporary GraphNode to extract port schemas
+        Self::templated(type_name, description, definition, vec![], registry)
+    }
+
+    /// Une fabrique de sous-graphe **paramétrée**.
+    ///
+    /// `config_params: vec![]` était le trou : un sous-graphe enregistré
+    /// n'avait aucune façon de recevoir quoi que ce soit, donc aucune façon
+    /// d'être réutilisé autrement qu'à l'identique. Ici les paramètres sont
+    /// publiés dans le [`NodeSchema`] — donc visibles à l'introspection comme
+    /// n'importe quel nœud — et la configuration reçue est **substituée dans
+    /// le gabarit** (les `$param`) avant que le sous-graphe soit matérialisé.
+    ///
+    /// C'est ce qui rend un [`crate::dataflow::GraphTool`] *contenable* : un
+    /// graphe-outil devient un type de nœud que d'autres graphes-outils
+    /// utilisent, avec sa propre fiche pour configuration.
+    pub fn templated(
+        type_name: &str,
+        description: &str,
+        definition: GraphDefinition,
+        config_params: Vec<crate::dataflow::node_registry::ConfigParam>,
+        registry: Arc<NodeRegistry>,
+    ) -> Result<Self, String> {
+        // Build a temporary GraphNode to extract port schemas. Les `$param`
+        // qui traînent dans les configurations ne gênent pas : la sonde ne lit
+        // que les schémas de types, jamais les valeurs.
         let temp = GraphNode::from_definition("__schema_probe", definition.clone(), registry.clone())?;
 
         // Leak type_name for &'static str
@@ -264,7 +288,7 @@ impl GraphNodeFactory {
             description: leaked_desc,
             inputs: temp.inputs.clone(),
             outputs: temp.outputs.clone(),
-            config_params: vec![],
+            config_params,
         };
 
         Ok(Self {
@@ -276,8 +300,18 @@ impl GraphNodeFactory {
 }
 
 impl NodeFactory for GraphNodeFactory {
-    fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-        let node = GraphNode::from_definition(name, self.definition.clone(), self.registry.clone())?;
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let definition = if self.schema.config_params.is_empty() {
+            self.definition.clone()
+        } else {
+            // Mêmes règles que pour un appel d'outil : argument manquant, en
+            // trop ou du mauvais type est une erreur, jamais un sous-graphe
+            // lancé à moitié.
+            let args = super::graph_tool::resolve_params(&self.schema.config_params, config)
+                .map_err(|e| format!("{}: {e}", self.schema.node_type))?;
+            super::graph_tool::substitute_definition(&self.definition, &args)
+        };
+        let node = GraphNode::from_definition(name, definition, self.registry.clone())?;
         Ok(Box::new(node))
     }
 
