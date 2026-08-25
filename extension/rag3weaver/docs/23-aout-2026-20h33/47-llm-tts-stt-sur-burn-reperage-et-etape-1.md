@@ -207,14 +207,41 @@ Trois décisions prises en écrivant, et assumées :
 
 ## 6. La suite — 13 à 17 jours-homme
 
+**Ordre revu le 25 après-midi, sur décision de Lucie** : « on devrait en avoir
+un minimal dispo en local, mais bien se dire que les gens auront pas mes 64 Go
+de VRAM — et **surtout** se faire un framework pour appeler des providers ».
+Le **fournisseur devient le chemin normal**, le modèle local devient le cas
+« zéro configuration, hors ligne ». Les fournisseurs passent donc devant.
+
 | Étape | Livrable | j-h |
 |---|---|---|
 | ~~1~~ | ~~trait, mock, `LlmNode`, service~~ **fait** (`ad7db7f92`) | ~~2-3~~ |
-| 2 | `BurnLlm` paramétré : ONNX fp16 past-KV, tokenizer, chat template, sampling, boucle + EOS. **Génération réelle sur GPU.** | 3-4 |
-| 3 | Streaming réel : mailbox luciole en port de flux, `ChannelSink`. | 2 |
-| 4 | FFI wasm : `AsyncCallback` rappelable N fois, `PendingAsync` en file. **Jetons dans le navigateur.** | 2-3 |
-| 5 | `OpenAiLlm` (SSE) derrière le même trait — puis ElevenLabs / Gradium. | 2 |
+| **2** | **Fournisseurs cloud** derrière le même trait : client SSE, Vertex AI / Gemini d'abord (Lucie a des crédits startup), tool calls normalisés, `Usage`. | 2-3 |
+| 3 | `BurnLlm` paramétré : ONNX fp16 past-KV, tokenizer, chat template, sampling, boucle + EOS. **Génération locale réelle** — cible **Qwen2.5-0.5B fp16 (996 Mo)**, pas Luciole. | 3-4 |
+| 4 | Streaming réel : mailbox luciole en port de flux, `ChannelSink`. | 2 |
+| 5 | FFI wasm : `AsyncCallback` rappelable N fois, `PendingAsync` en file. **Jetons dans le navigateur.** | 2-3 |
 | 6 | `llguidance` + tool calls : grammaire depuis `tools.rs`, `ToolNode`, boucle d'agent. | 2-3 |
+
+### Le budget mémoire de l'utilisateur, pas le nôtre
+
+La machine de dev a 32 Go de VRAM ; le produit ne peut pas en supposer autant.
+
+| | poids | + cache 8k | rôle |
+|---|---|---|---|
+| **Qwen2.5-0.5B fp16** | **996 Mo** | ≈ 1,1 Go | **le local minimal** — tient sur un iGPU de portable |
+| Luciole-1B fp16 | 2,46 Go | +384 Mio | option souveraine, *quand le fp16 marchera* |
+| Luciole-1B fp32 | 6,33 Go | +384 Mio | ce qui tourne aujourd'hui — **pas un défaut acceptable** |
+
+**Plancher dur** : en dessous de 0,5 Md, les modèles n'ont **pas de tool calls**
+dans leur chat template (vérifié sur SmolLM2-360M, EuroMoE-2.6B, Baguettotron,
+Ouro-1.4B, Motif-2.6B, Phi-tiny-MoE, ERNIE-4.5-0.3B). 0,5 B *est* le minimum
+utile, ce n'est pas un choix de confort. La quantification q4 est ce qui
+déplacerait ce plancher — et elle manque des deux côtés (§7).
+
+Le trait livré à l'étape 1 est **déjà agnostique** : un flux SSE *pousse* des
+fragments, ce qui est exactement la forme du puits. Le choix synchrone se paie
+ici en avantage : lire un SSE ligne à ligne demande un client HTTP bloquant,
+pas un runtime async.
 
 **Le point dur de l'étape 4** : le FFI wasm est **one-shot à trois endroits** —
 `AsyncCallback` appelé exactement une fois sans drapeau terminal, `RETURN_BUF`
