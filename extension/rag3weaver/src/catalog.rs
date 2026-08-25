@@ -120,6 +120,8 @@ pub struct Catalog {
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     /// Cross-encoder optionnel (doc 29, chantier 3) — `SearchOptions.rerank`.
     reranker: Option<Arc<dyn crate::reranker::Reranker>>,
+    /// OCR (chantier 4) : exposé aux graphes comme service `"ocr"`.
+    ocr: Option<Arc<dyn crate::ocr::Ocr>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
     config: CatalogConfig,
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
@@ -195,6 +197,7 @@ impl Catalog {
             embedder: Arc::from(embedder),
             sparse_embedder: None,
             reranker: None,
+            ocr: None,
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
@@ -242,6 +245,16 @@ impl Catalog {
     /// `SearchOptions.rerank`.
     pub fn set_reranker(&mut self, reranker: Arc<dyn crate::reranker::Reranker>) {
         self.reranker = Some(reranker);
+    }
+
+    /// Branche un OCR ; les graphes exécutés par le catalogue le voient
+    /// comme service `"ocr"` (`OcrNode`).
+    pub fn set_ocr(&mut self, ocr: Arc<dyn crate::ocr::Ocr>) {
+        self.ocr = Some(ocr);
+    }
+
+    pub fn ocr(&self) -> Option<Arc<dyn crate::ocr::Ocr>> {
+        self.ocr.clone()
     }
 
     pub fn set_embedder(&mut self, embedder: Arc<dyn Embedder>) {
@@ -1929,6 +1942,9 @@ impl Catalog {
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
+        if let Some(ref ocr) = self.ocr {
+            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
+        }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("entity_configs", self.entity_configs.clone());
@@ -2582,6 +2598,9 @@ impl Catalog {
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
+        if let Some(ref ocr) = self.ocr {
+            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
+        }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());
@@ -2838,6 +2857,9 @@ impl Catalog {
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         services.register("embedder", self.embedder.clone());
+        if let Some(ref ocr) = self.ocr {
+            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
+        }
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());

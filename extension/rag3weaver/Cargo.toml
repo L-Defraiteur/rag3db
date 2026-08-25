@@ -58,6 +58,7 @@ rag3db = { path = "../../tools/rust_api", optional = true }
 # burn (GPU-agnostique : Vulkan/WebGPU/Metal/CUDA — feature flag)
 burn = { version = "0.22.0-pre.2", optional = true, default-features = false, features = ["std", "wgpu", "vulkan"] }
 burn-store = { version = "0.22.0-pre.2", optional = true }
+image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
 # PostgreSQL/Supabase backend (feature flag)
 tokio-postgres = { version = "0.7", optional = true }
@@ -85,6 +86,10 @@ postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types",
 # Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
 # depuis un .bpk fourni par l'appelant (cf generated/README.md).
 burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers"]
+# OCR : décodage d'images (PNG/JPEG/WebP…) pour `OcrImage::decode` et le nœud
+# `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
+# PP-OCR sur burn viendra sous `burn-ocr`.
+ocr = ["dep:image"]
 wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]

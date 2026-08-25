@@ -5778,6 +5778,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "hf-hub",
+ "image",
  "ld-lucivy",
  "luciole",
  "lucivy-core",

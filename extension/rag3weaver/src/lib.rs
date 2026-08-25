@@ -92,6 +92,7 @@ pub mod fts_handle;
 pub mod fusion;
 pub mod hash;
 pub mod node_id_cache;
+pub mod ocr;
 pub mod records;
 pub mod dataflow;
 pub mod query;

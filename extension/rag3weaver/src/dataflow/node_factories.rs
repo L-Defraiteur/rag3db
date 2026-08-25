@@ -914,7 +914,7 @@ impl NodeFactory for ResolveParentNodeFactory {
 
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 25 built-in node types.
+/// Populate a NodeRegistry with all 27 built-in node types.
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
@@ -946,6 +946,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Migration nodes
     registry.register(Box::new(CypherNodeFactory));
     registry.register(Box::new(ValidateNodeFactory));
+    // Média
+    registry.register(Box::new(super::ocr_nodes::OcrNodeFactory));
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -961,9 +963,9 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_26_types() {
+    fn register_builtins_has_all_27_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 26);
+        assert_eq!(registry.types().len(), 27);
     }
 
     #[test]

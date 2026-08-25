@@ -54,6 +54,13 @@ pub enum PortType {
     KBContent,
     Updates,
     Deletes,
+    // ── Ports média / OCR ─────────────────────────────────────────────
+    /// `Vec<u8>` encodés (PNG/JPEG…) ou `crate::ocr::OcrImage` décodée.
+    Image,
+    /// `String` — texte brut.
+    Text,
+    /// `crate::ocr::OcrOutput` — lignes, boîtes, confiances.
+    Ocr,
 }
 
 impl PortType {
