@@ -116,7 +116,9 @@ impl ProjectParser {
             None => self.read_files(&options.files, &options.root),
         };
 
-        // Phase 2: Build tasks
+        // Phase 2: Build tasks. Un fichier d'extension inconnue n'est pas
+        // parsé comme du TypeScript par défaut : il est ignoré et signalé.
+        let mut unsupported: Vec<ParseError> = Vec::new();
         let tasks: Vec<(String, ParseFileTask)> = options.files.iter().filter_map(|file| {
             let absolute_path = if Path::new(file).is_absolute() {
                 file.clone()
@@ -125,7 +127,13 @@ impl ProjectParser {
             };
 
             let content = contents.get(&absolute_path).or_else(|| contents.get(file))?;
-            let language = detect_language_from_path(file).unwrap_or(SupportedLanguage::Typescript);
+            let Some(language) = detect_language_from_path(file) else {
+                unsupported.push(ParseError {
+                    file: absolute_path,
+                    error: "unsupported extension (skipped)".to_string(),
+                });
+                return None;
+            };
 
             Some((absolute_path.clone(), ParseFileTask {
                 file_path: absolute_path,
@@ -158,7 +166,7 @@ impl ProjectParser {
 
         // Collect results
         let mut parsed_files = ParsedFilesMap::default();
-        let mut errors = Vec::new();
+        let mut errors = unsupported;
         let mut total_scopes = 0usize;
 
         for (path, result) in results {

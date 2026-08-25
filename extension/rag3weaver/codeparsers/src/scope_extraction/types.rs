@@ -174,6 +174,15 @@ pub struct ScopeInfo {
     pub r#type: ScopeInfoType,
     pub scope_start_line: usize,
     pub scope_end_line: usize,
+    /// Offsets d'octets dans le fichier, à la granularité de la ligne : du
+    /// début de `scope_start_line` à la fin de `scope_end_line` (fin de ligne
+    /// exclue). Remplis par `parallel::parser_worker::finalize` après
+    /// extraction, à partir des lignes — c'est ce qui fait de `File` la
+    /// source de vérité des positions et permet un `read` par tranche.
+    #[serde(default)]
+    pub scope_start_byte: usize,
+    #[serde(default)]
+    pub scope_end_byte: usize,
     pub signature_start_line: usize,
     pub signature_end_line: usize,
     pub body_start_line: Option<usize>,

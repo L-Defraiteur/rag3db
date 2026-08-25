@@ -160,6 +160,23 @@ impl RelationshipResolver {
         // Build global scope mapping
         self.build_global_scope_mapping(parsed_files);
 
+        // Un FileInfo par fichier parsé — c'est ce dont un consommateur a
+        // besoin pour créer les entités File (la map restait vide, 25 août 2026).
+        self.files_map.clear();
+        for file_path in parsed_files.keys() {
+            let relative_path = self.get_relative_path(file_path);
+            let absolute_path = if Path::new(file_path).is_absolute() {
+                file_path.clone()
+            } else {
+                Path::new(&self.options.project_root).join(file_path).to_string_lossy().to_string()
+            };
+            self.files_map.insert(relative_path.clone(), FileInfo {
+                uuid: self.generate_file_uuid(&relative_path),
+                path: relative_path,
+                absolute_path,
+            });
+        }
+
         // Resolve relationships
         let mut relationships: Vec<ResolvedRelationship> = Vec::new();
         let mut unresolved_references: Vec<UnresolvedReference> = Vec::new();
@@ -215,6 +232,24 @@ impl RelationshipResolver {
                 if self.options.include_uses_library.unwrap_or(true) {
                     let library_refs = self.resolve_uses_library_relations(scope, file_path);
                     relationships.extend(library_refs);
+                }
+            }
+        }
+
+        // Une ExternalLibraryInfo par librairie vue dans USES_LIBRARY, avec les
+        // symboles importés (même remarque : la map restait vide).
+        self.external_libraries_map.clear();
+        for rel in relationships.iter().filter(|r| r.r#type == RelationshipType::USESLIBRARY) {
+            let entry = self.external_libraries_map
+                .entry(rel.to_name.clone())
+                .or_insert_with(|| ExternalLibraryInfo {
+                    uuid: rel.to_uuid.clone(),
+                    name: rel.to_name.clone(),
+                    symbols: Vec::new(),
+                });
+            if let Some(sym) = rel.metadata.as_ref().and_then(|m| m.symbol.clone()) {
+                if !sym.is_empty() && !entry.symbols.contains(&sym) {
+                    entry.symbols.push(sym);
                 }
             }
         }
@@ -646,12 +681,6 @@ impl RelationshipResolver {
         };
 
         let file_uuid = self.generate_file_uuid(&relative_path);
-
-        // Track the file in our map
-        if !self.files_map.contains_key(&relative_path) {
-            // Note: files_map is &self, but we'd need &mut self to insert.
-            // This is handled in resolve_relationships where we have &mut self.
-        }
 
         let scope_uuid = self.generate_uuid(scope, &relative_path);
 

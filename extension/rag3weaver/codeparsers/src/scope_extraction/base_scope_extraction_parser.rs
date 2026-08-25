@@ -570,6 +570,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Class, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses, decorator_details,
@@ -633,6 +635,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Interface, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters, heritage_clauses, decorator_details,
@@ -697,6 +701,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses: None, decorator_details,
@@ -761,6 +767,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Method, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type, return_type_info,
             modifiers, generic_parameters, heritage_clauses: None, decorator_details,
@@ -820,6 +828,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Enum, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
@@ -877,6 +887,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::TypeAlias, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
@@ -934,6 +946,8 @@ impl BaseScopeExtractionParser {
         let docstring = self.extract_js_doc(node, content);
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Namespace, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type: None, return_type_info: None,
             modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
@@ -1011,6 +1025,8 @@ impl BaseScopeExtractionParser {
             let docstring = self.extract_js_doc(node, content);
 
             scopes.push(ScopeInfo {
+                scope_start_byte: 0,
+                scope_end_byte: 0,
                 name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
                 file_path: String::new(), signature, parameters, return_type, return_type_info: None,
                 modifiers, generic_parameters: None, heritage_clauses: None, decorator_details: None,
@@ -1099,6 +1115,8 @@ impl BaseScopeExtractionParser {
             let value = value_node.map(|vn| self.get_node_text(Some(vn), content));
 
             scopes.push(ScopeInfo {
+                scope_start_byte: 0,
+                scope_end_byte: 0,
                 name, r#type: ScopeInfoType::Variable, scope_start_line: start_line, signature_start_line: start_line, signature_end_line: end_line, body_start_line: None, body_end_line: None, scope_end_line: end_line,
                 file_path: String::new(), signature, parameters: Vec::new(),
                 return_type: variable_type, return_type_info: None,
@@ -2991,6 +3009,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -3113,6 +3133,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -3375,6 +3397,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: file_path.to_string(),
             signature,
             parameters: Vec::new(),
@@ -3462,6 +3486,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: String::new(),
             signature,
             parameters,
@@ -3540,6 +3566,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: String::new(),
             signature,
             parameters,
@@ -3825,6 +3853,8 @@ impl BaseScopeExtractionParser {
             body_start_line: None,
             body_end_line: None,
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: String::new(),
             signature,
             parameters: Vec::new(),

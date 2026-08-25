@@ -302,6 +302,8 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Class, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters,
             return_type: None, return_type_info: None,
@@ -372,6 +374,8 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Function, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters, return_type,
             return_type_info: None, modifiers: Vec::new(),
@@ -444,6 +448,8 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         Some(ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: ScopeInfoType::Lambda, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters,
             return_type: None, return_type_info: None,
@@ -515,6 +521,8 @@ impl PythonScopeExtractionParser {
         let lines_of_code = end_line - start_line + 1;
 
         Some(ScopeInfo {
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             name, r#type: scope_type, scope_start_line: start_line, signature_start_line: start_line, signature_end_line, body_start_line, body_end_line, scope_end_line: end_line,
             file_path: String::new(), signature, parameters: Vec::new(),
             return_type: None, return_type_info: None,
@@ -585,6 +593,8 @@ impl PythonScopeExtractionParser {
             signature_end_line: start_line,
             body_start_line: Some(start_line), body_end_line: Some(end_line),
             scope_end_line: end_line,
+            scope_start_byte: 0,
+            scope_end_byte: 0,
             file_path: String::new(), signature, parameters: vec![],
             return_type: None, return_type_info: None,
             modifiers: Vec::new(), generic_parameters: None,

@@ -80,7 +80,7 @@ fn main() {
         let rel = path.strip_prefix(&root).unwrap_or(path).trim_start_matches('/');
         eprintln!("{}: {} scopes, {} lines", rel, analysis.scopes.len(), analysis.total_lines);
         for scope in &analysis.scopes {
-            eprintln!("  [{:?}] {} (L{}-L{})", scope.r#type, scope.name, scope.start_line, scope.end_line);
+            eprintln!("  [{:?}] {} (L{}-L{})", scope.r#type, scope.name, scope.scope_start_line, scope.scope_end_line);
         }
     }
 
@@ -110,8 +110,8 @@ fn main() {
             serde_json::json!({
                 "name": s.name,
                 "type": serde_json::to_value(&s.r#type).unwrap(),
-                "startLine": s.start_line,
-                "endLine": s.end_line,
+                "startLine": s.scope_start_line,
+                "endLine": s.scope_end_line,
             })
         }).collect();
         files_obj.insert(rel.to_string(), serde_json::json!({ "scopes": scopes }));
