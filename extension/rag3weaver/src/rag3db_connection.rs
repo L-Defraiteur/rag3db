@@ -43,10 +43,32 @@ impl Rag3dbConnection {
     /// Create an in-memory database.
     pub fn in_memory() -> Result<Self, DbError> {
         let db = Arc::new(
-            rag3db::Database::in_memory(Self::default_config())
+            rag3db::Database::in_memory(Self::in_memory_config())
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
         Self::connect(db)
+    }
+
+    /// Réservation d'espace d'adressage virtuel d'une base **en mémoire** :
+    /// 1 TiB, contre 8 TiB pour une base sur disque.
+    ///
+    /// kuzu `mmap`e d'un bloc la région `max_db_size` (`MAP_NORESERVE` : de
+    /// l'espace d'adressage, pas de la RAM) et y place ses pages à adresses
+    /// fixes. 8 TiB par base, c'est raisonnable pour une base sur disque et
+    /// une base par processus ; c'est absurde pour une base en mémoire, qui
+    /// ne peut pas dépasser la RAM, et ça plafonne le nombre de bases en
+    /// mémoire par processus à seize (128 TiB adressables) — `cargo test`
+    /// en ouvre vingt-quatre en parallèle et `in_memory()` échouait au hasard
+    /// (« Mmap for size 8796093022208 failed », 25 août 2026).
+    /// `RAG3DB_MAX_DB_SIZE` prime toujours.
+    pub const IN_MEMORY_MAX_DB_SIZE: u64 = 1 << 40;
+
+    fn in_memory_config() -> rag3db::SystemConfig {
+        let config = Self::default_config();
+        if std::env::var_os("RAG3DB_MAX_DB_SIZE").is_some() {
+            return config;
+        }
+        config.max_db_size(Self::IN_MEMORY_MAX_DB_SIZE)
     }
 
     /// `SystemConfig::default()`, with two knobs overridable from the

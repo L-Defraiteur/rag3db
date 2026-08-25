@@ -12,6 +12,7 @@
 #   ./run_e2e.sh --build-only             # just build, don't run tests
 #   ./run_e2e.sh --no-cuda phase0         # accepté, sans effet (burn/wgpu, pas de CUDA)
 #   ./run_e2e.sh --summary                # show only the per-suite summary at the end
+#   ./run_e2e.sh --features openai-llm    # add features to the default set
 
 set -euo pipefail
 
@@ -25,6 +26,7 @@ FORCE_BUILD=false
 NO_CUDA=false
 SUMMARY=false
 TEST_FILE=""
+EXTRA_FEATURES=""
 TEST_FILTER=""
 EXTRA_ARGS=()
 
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --no-cuda)    NO_CUDA=true; shift ;;
     --summary)    SUMMARY=true; shift ;;
     --test)       shift; TEST_FILE="$1"; shift ;;
+    --features)   shift; EXTRA_FEATURES="$1"; shift ;;
     -*)           EXTRA_ARGS+=("$1"); shift ;;
     *)            TEST_FILTER="$1"; shift ;;
   esac
@@ -84,7 +87,11 @@ cd "$WEAVER"
 # Build the cargo test filter args
 # Chemin produit : burn (wgpu — AMD/NVIDIA/Apple, un seul code). candle n'est
 # plus une feature des E2E ; --no-cuda est accepté pour compatibilité et sans effet.
-FEATURES="rag3db-native,burn-embedder"
+# Tout l'arsenal burn est dans le jeu : une suite qui ne tourne pas n'existe
+# pas. burn-llm (Qwen2.5-0.5B, 996 Mo) et burn-ocr (PP-OCRv6 tiny) chargent
+# leurs poids depuis ~/.cache/rag3weaver/ — téléchargés au premier passage.
+# `--features a,b` ajoute au jeu.
+FEATURES="rag3db-native,burn-embedder,burn-llm,burn-ocr${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
 CARGO_ARGS=(
   --features "$FEATURES"
@@ -108,12 +115,11 @@ fi
 
 CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 
-# Chaque base en mémoire réserve 8 TiB d'espace d'adressage virtuel (kuzu).
-# cargo test lance jusqu'à `nproc` tests en parallèle dans un même processus :
-# 24 × 8 TiB dépasse les 128 TiB adressables, et `in_memory()` échoue au
-# hasard (« Mmap for size 8796093022208 failed »). 64 GiB suffisent largement
-# aux E2E ; l'appelant peut surcharger.
-export RAG3DB_MAX_DB_SIZE="${RAG3DB_MAX_DB_SIZE:-68719476736}"
+# Espace d'adressage : une base en mémoire réserve 1 TiB (Rag3dbConnection::
+# IN_MEMORY_MAX_DB_SIZE), pas les 8 TiB de kuzu — sinon 24 tests parallèles
+# dans un même processus dépassent les 128 TiB adressables et `in_memory()`
+# échoue au hasard. Le script ne force rien : c'est le défaut de la
+# bibliothèque qui est testé ici. RAG3DB_MAX_DB_SIZE reste surchargeable.
 
 echo "▸ Running: cargo test ${CARGO_ARGS[*]}"
 

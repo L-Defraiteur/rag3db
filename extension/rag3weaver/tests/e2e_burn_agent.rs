@@ -9,7 +9,7 @@
 //!
 //! Artefacts : voir l'en-tête de `e2e_burn_llm.rs`.
 //!
-//! Run with: ./run_e2e.sh --test e2e_burn_agent --features burn-llm
+//! Run with: ./run_e2e.sh --test e2e_burn_agent   (burn-llm est dans le jeu de features par défaut)
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-llm"))]
 

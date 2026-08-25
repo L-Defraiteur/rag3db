@@ -30,8 +30,8 @@ qui est mesuré, ce qui a été décidé, et ce qui attend.
   ordre. Les huit tests d'équivalence nœuds ↔ `Catalog::search` restent verts
   après le passage du vecteur par le backend.
 - **`e2e_graph_tool`** 4 / 4, **`e2e_agent_loop`** 4 / 4.
-- **Passe E2E complète du soir** : voir §7 — lancée après le dernier commit,
-  résultat consigné en bas de ce document.
+- **Passe E2E complète du soir** : 28 suites, **234 / 234** après deux
+  correctifs d'environnement — voir §7.
 - **Vertex** : 0,72 $ consommés sur les crédits de démarrage, confirmé par
   Lucie sur le solde (1 995,09 → 1 994,37 $).
 - **Le matin** : passe complète 206 / 206 avant le chantier OCR.
@@ -125,16 +125,25 @@ l'environnement, pas le code** — consigné parce que ça reviendra :
   un même processus ; 24 × 8 TiB > 128 TiB adressables. Dès que seize bases
   coexistent, la suivante échoue — au hasard, selon l'ordonnancement. La
   passe de ce matin (206/206) a eu de la chance.
-- Correctif : `run_e2e.sh` exporte `RAG3DB_MAX_DB_SIZE=64 GiB` par défaut
-  (bouton qui existait déjà dans `rag3db_connection.rs` pour valgrind).
-  Relancées avec : `e2e_idempotent_registration` **22/22**, `e2e_search`
-  **38/38**.
+- Ce qui réserve : le gestionnaire de tampons de kuzu `mmap`e d'un bloc une
+  région de `max_db_size` (`vm_region.cpp:39`, `MAP_NORESERVE` — de
+  l'espace d'adressage, pas de la RAM) pour placer ses pages à adresses
+  fixes ; défaut `DEFAULT_VM_REGION_MAX_SIZE = 2^43` sur Linux 64 bits
+  (`constants.h:62`), 256 Go ailleurs, 1 Go en wasm. Contraintes : puissance
+  de deux, au moins deux groupes de pages.
+- Correctif, **dans la bibliothèque** : une base en mémoire ne peut pas
+  dépasser la RAM, donc `Rag3dbConnection::in_memory()` réserve désormais
+  **1 TiB** (`IN_MEMORY_MAX_DB_SIZE`), pas 8 — 24 bases parallèles font
+  24 TiB. Les bases sur disque gardent les 8 TiB de kuzu ;
+  `RAG3DB_MAX_DB_SIZE` prime toujours. `run_e2e.sh` ne force rien : c'est le
+  défaut qui est testé. Relancées : `e2e_idempotent_registration` **22/22**,
+  `e2e_search` **38/38**.
 - Autre trouvaille : `set -euo pipefail` arrête le script à la première suite
   en échec — onze suites n'avaient pas tourné et le résumé affichait
   « TOTAL 89 passed, 4 FAILED » comme s'il était complet. Non corrigé ce
   soir ; à savoir en lisant un résumé.
 
-Décompte final, 28 suites, **218 tests, 0 échec** :
+Décompte final, 28 suites, **234 tests, 0 échec** :
 
 | suite | | suite | |
 |---|---|---|---|
@@ -150,9 +159,14 @@ Décompte final, 28 suites, **218 tests, 0 échec** :
 | drain_unified | 6 | undo | 4 |
 | generic_search | 12 | native | 11 |
 | graph_tool | 4 | highlight_long_text | 8 |
-| idempotent_registration | 22 | | |
+| idempotent_registration | 22 | burn_ocr | 4 |
+| burn_llm | 10 | burn_agent | 2 |
 
-`burn_agent`, `burn_llm`, `burn_ocr` : 0 test exécuté — elles demandent les
-features `burn-llm` / `burn-ocr`, absentes du jeu de features des E2E
-(`rag3db-native,burn-embedder`). Elles ont été validées en isolation à leur
-livraison (docs 46, 47), pas dans cette passe.
+`burn_agent`, `burn_llm`, `burn_ocr` étaient à **0 test exécuté** : leurs
+features `burn-llm` / `burn-ocr` n'étaient pas dans le jeu des E2E
+(`rag3db-native,burn-embedder`), et le commentaire de `e2e_burn_agent.rs`
+renvoyait à un `--features` que le script n'acceptait pas. Une suite qui ne
+tourne pas n'existe pas — et le jeu E2E est aussi l'inventaire de l'arsenal.
+Les deux features sont désormais dans le jeu par défaut (`--features a,b`
+pour en ajouter), et les trois suites tournent : OCR 4/4 en 2,6 s, LLM 10/10
+en 130 s, agent 2/2 en 48 s. La passe complète gagne trois minutes.
