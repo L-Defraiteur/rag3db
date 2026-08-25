@@ -88,8 +88,12 @@ postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types",
 burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers"]
 # OCR : décodage d'images (PNG/JPEG/WebP…) pour `OcrImage::decode` et le nœud
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
-# PP-OCR sur burn viendra sous `burn-ocr`.
+# PP-OCRv6 sur burn est sous `burn-ocr`.
 ocr = ["dep:image"]
+# PP-OCRv6 tiny (détection DB + reconnaissance CTC) sur burn — sans tokenizers.
+# Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
+# poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).
+burn-ocr = ["ocr", "dep:burn", "dep:burn-store"]
 wasm-emscripten = ["dep:futures", "tokio/rt"]
 
 [dependencies.futures]
@@ -166,4 +170,9 @@ required-features = ["burn-embedder"]
 [[example]]
 name = "burn_throughput"
 required-features = ["burn-embedder"]
+
+# Parité PP-OCRv6 tiny : burn (wgpu) contre onnxruntime (oracle Python jetable).
+[[example]]
+name = "burn_ppocr_vs_onnxruntime"
+required-features = ["burn-ocr"]
 

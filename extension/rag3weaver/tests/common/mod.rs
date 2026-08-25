@@ -117,3 +117,33 @@ pub mod burn {
         Arc::new(r)
     });
 }
+
+#[cfg(feature = "burn-ocr")]
+pub mod burn_ocr {
+    use std::sync::{Arc, LazyLock};
+
+    use rag3weaver::burn_device::BurnDevice;
+    use rag3weaver::burn_ppocr::BurnPpOcr;
+
+    /// PP-OCRv6 tiny (det + rec) sur burn. 6 Mo ; chargé une fois par binaire.
+    /// Dossier : `RAG3WEAVER_PPOCR_DIR` ou `~/.cache/rag3weaver/ppocrv6-tiny`
+    /// (`det.bpk`, `rec.bpk`, `dict.txt` — voir generated/README.md).
+    pub static PPOCR: LazyLock<Arc<BurnPpOcr>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let dir = BurnPpOcr::default_cache_dir();
+        for name in ["det.bpk", "rec.bpk", "dict.txt"] {
+            let path = dir.join(name);
+            if !path.exists() {
+                panic!(
+                    "artefact PP-OCRv6 tiny introuvable : {}\n\
+                     Définir RAG3WEAVER_PPOCR_DIR, ou le récupérer une fois — voir generated/README.md.",
+                    path.display()
+                );
+            }
+        }
+        eprintln!("▸ Loading PP-OCRv6 tiny on burn (wgpu) from {}...", dir.display());
+        let ocr = BurnPpOcr::from_cache_dir(&dir, BurnDevice::default()).expect("build BurnPpOcr");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(ocr)
+    });
+}

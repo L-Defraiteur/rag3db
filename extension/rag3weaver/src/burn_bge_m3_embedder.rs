@@ -56,31 +56,9 @@ const HIDDEN_SIZE: usize = 1024;
 /// Layout: 1024 little-endian f32 weights, then 1 f32 bias.
 const SPARSE_LINEAR: &[u8] = include_bytes!("../generated/bge_m3_sparse_linear.bin");
 
-/// Which GPU burn should run on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BurnDevice {
-    /// Best available device (discrete GPU if present).
-    #[default]
-    Default,
-    /// Nth discrete GPU — useful for sharding across several cards.
-    DiscreteGpu(usize),
-    /// Integrated GPU.
-    IntegratedGpu(usize),
-    /// CPU fallback. Correct but slow; handy for reproducible reference output.
-    Cpu,
-}
-
-impl BurnDevice {
-    /// Shared with the other burn embedders in this crate.
-    pub(crate) fn resolve(self) -> Device {
-        match self {
-            BurnDevice::Default => Device::default(),
-            BurnDevice::DiscreteGpu(i) => Device::wgpu(DeviceKind::DiscreteGpu(i)),
-            BurnDevice::IntegratedGpu(i) => Device::wgpu(DeviceKind::IntegratedGpu(i)),
-            BurnDevice::Cpu => Device::wgpu(DeviceKind::Cpu),
-        }
-    }
-}
+/// Ré-exporté ici pour compatibilité : le type vit dans [`crate::burn_device`],
+/// partagé avec l'OCR (feature `burn-ocr`, sans embedder).
+pub use crate::burn_device::BurnDevice;
 
 /// The learned sparse projection: `Linear(1024 → 1)` followed by ReLU.
 #[derive(Module, Debug)]

@@ -727,3 +727,153 @@ cargo run --release --example xlmr_reranker_reference --features candle-embedder
 cargo run --release --example burn_xlmr_reranker_vs_candle --no-default-features --features burn-embedder -- \
     /tmp/xlmr_bge.json bge
 ```
+
+---
+
+## `ppocrv6_tiny_det_onnx.rs` et `ppocrv6_tiny_rec_onnx.rs`
+
+Traduction mécanique, par `burn-onnx`, des deux graphes ONNX de **PP-OCRv6 tiny**
+(PaddleOCR 3.7, juin 2026) : le détecteur **PP-OCRv6_tiny_det** (DBNet — backbone
+PPLCNetV4, cou RepLKFPN, 428 k paramètres) et le reconnaisseur **PP-OCRv6_tiny_rec**
+(PPLCNetV4, projection directe, tête CTC sur 6 904 caractères + blank + espace,
+1,1 M paramètres, 49 langues dont le latin accentué et le chinois). C'est l'OCR
+embarqué de rag3weaver (`src/burn_ppocr.rs`, feature `burn-ocr`) : 6 Mo de poids en
+tout, pas de tokenizer.
+
+**Ce n'est pas notre modèle.** Licence Apache-2.0, tout le mérite revient à l'équipe
+PaddleOCR (Baidu — *PP-OCRv6: From 1.5M to 34.5M Parameters, Surpassing Billion-Scale
+VLMs on OCR Tasks*, 2026). Les ONNX sont **ceux publiés par PaddlePaddle** sur HF, pas
+un export tiers.
+
+| | det | rec |
+|---|---|---|
+| Source | [PaddlePaddle/PP-OCRv6_tiny_det_onnx](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx) `inference.onnx` (1 780 590 octets, sha256 `193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8`) | [PaddlePaddle/PP-OCRv6_tiny_rec_onnx](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx) `inference.onnx` (4 462 639 octets, sha256 `9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6`) |
+| Opset / IR | 14 / 10 | 11 / 6 |
+| Entrée | `x [B, 3, H, W]` f32, H et W dynamiques | `x [B, 3, 48, W]` f32, W dynamique |
+| Sortie | `[B, 1, H, W]` (sigmoïde, carte DB) | `[B, W/8, 6906]` (softmax, CTC) |
+| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::Bytes` | idem |
+| Taille | 1 393 lignes | 1 548 lignes |
+| Poids | **non inclus** — 1,7 Mo | **non inclus** — 4,4 Mo |
+
+### Le patch `auto_pad`
+
+Le détecteur contient deux `Conv` et un `MaxPool` (noyau 2×2, stride 1) déclarés avec
+`auto_pad = SAME_UPPER`. `burn-onnx 0.22.0-pre.1` refuse cette forme dès que l'entrée
+est dynamique :
+
+```
+auto_pad SAME_UPPER/SAME_LOWER requires static input shape, but input has dynamic
+dimensions. Use explicit pads instead
+```
+
+On a donc réécrit, avant génération, ces trois nœuds en `pads = [0, 0, 1, 1]`
+(padding total `k − 1 = 1`, placé en bas/droite comme `SAME_UPPER` l'exige) — même
+arithmétique, aucun poids touché, et **H, W restent dynamiques** (l'alternative,
+fixer 1×3×640×640, marche aussi mais forçait un resize à taille fixe). Le
+reconnaisseur n'a rien eu besoin. Le script (`onnx` seul, pas d'onnxruntime) :
+
+```python
+for n in m.graph.node:
+    if n.op_type in ("MaxPool", "AveragePool", "Conv"):
+        ap = [a for a in n.attribute if a.name == "auto_pad"]
+        if ap and ap[0].s in (b"SAME_UPPER", b"SAME_LOWER"):
+            ks = [a for a in n.attribute if a.name == "kernel_shape"][0].ints
+            tot = [k - 1 for k in ks]      # strides == 1 vérifié
+            pads = [t // 2 for t in tot] + [t - t // 2 for t in tot]   # SAME_UPPER
+            n.attribute.remove(ap[0]); n.attribute.append(helper.make_attribute("pads", pads))
+```
+
+Les ONNX patchés sont publiés avec les `.bpk` (`det_pads.onnx`, sha256
+`f74ec758df06b1f77cde82a44bc840cbb39f8b7cf1573f373ea052a1e8d93ae6` ; `rec_pads.onnx` est
+l'original octet pour octet, rien n'y a été touché).
+
+### Les poids
+
+```
+det.bpk        1 737 476 octets
+sha256         73a139fa82b9fc8f7c03b66ab3c3dc9e959e8c1f4d95b2da09b4e50529e76b04
+rec.bpk        4 443 368 octets
+sha256         53bfcb22a068cc6991f2b8b3ba0782a1aac3c54c16895ae7138eb4e755169436
+dict.txt          27 156 octets (6 904 lignes, UTF-8, une entrée par ligne)
+sha256         c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd
+```
+
+`dict.txt` est la liste `PostProcess.character_dict` du `inference.yml` publié avec
+PP-OCRv6_tiny_rec, dans l'ordre : l'index CTC `i ∈ 1..=6904` est la ligne `i`, `0` est
+le blank, `6905` l'espace (`use_space_char`). Les trois fichiers vont dans
+`~/.cache/rag3weaver/ppocrv6-tiny/` (`RAG3WEAVER_PPOCR_DIR` pour un autre dossier) ;
+`BurnPpOcr::from_cache_dir` les lit. Publication HF : à venir (dépôt Lucie666, avec
+l'attribution Apache-2.0 PaddleOCR, les ONNX patchés et cette recette).
+
+### Interface
+
+```rust
+// det — Submodule1..2 avant le forward de Model (ligne ~1386)
+pub fn forward(&self, x: Tensor<4>) -> Tensor<4>   // [B,3,H,W] -> [B,1,H,W]
+// rec — Submodule1..3 avant le forward de Model (ligne ~1540)
+pub fn forward(&self, x: Tensor<4>) -> Tensor<3>   // [B,3,48,W] -> [B,W/8,6906]
+```
+
+H, W, B sont dynamiques à l'exécution (vérifié sur 320×320, 224×416, 2464×736 pour
+det ; W = 160/320/640 et B = 1/2 pour rec). Aucun `Shape`/`Reshape` dans le tiny rec :
+le graphe le plus simple de la famille (le small rec en a, et passe aussi).
+
+### Pré et post-traitement (ce que `src/burn_ppocr.rs` reproduit)
+
+D'après les `inference.yml` des modèles, `ppocr/data/imaug/operators.py`,
+`tools/infer/predict_rec.py`, `ppocr/postprocess/{db,rec}_postprocess.py` et les
+défauts PaddleX (`text_detection/predictor.py`) :
+
+* **det** — `DetResizeForTest` : `limit_type min`, `limit_side_len 736` (le plus petit
+  côté est ramené à ≥ 736 ; v5 mobile utilisait `max 960`), plafond `max_side_limit
+  4000`, puis H et W arrondis au **multiple de 32** (jamais sous 32) ; resize
+  bilinéaire ; `NormalizeImage` mean `[0.485, 0.456, 0.406]` std `[0.229, 0.224, 0.225]`
+  sur `x/255`, **appliqué aux canaux BGR dans cet ordre** (PaddleOCR décode en BGR et
+  n'échange pas — on swappe donc notre RGB) ; CHW. Post-DB : `thresh 0.2`, contours →
+  boîte minimale, rejet côté < 3, score = moyenne de la carte dans la boîte
+  (`box_score_fast`) ≥ `box_thresh 0.4`, unclip `d = aire × 1.4 / périmètre`, rejet
+  côté < 5, `max_candidates 3000`, retour aux pixels d'origine (arrondi, borné).
+  **Écart assumé** : boîte englobante axée au lieu de `minAreaRect` + `pyclipper`
+  (texte incliné : détecté, recadré droit, mal lu — dette).
+* **rec** — crop du quadrilatère (perspective chez PaddleOCR, simple crop ici puisque
+  la boîte est axée), rotation de 90° si `h/w ≥ 1.5` ; `rec_image_shape 3,48,320` :
+  hauteur 48, largeur `ceil(48·w/h)` plafonnée à `48 × max(320/48, max w/h du lot)`,
+  bilinéaire, `(x/255 − 0.5)/0.5` en BGR, padding zéro à droite ; lots de
+  `rec_batch_num 6` triés par ratio. CTC glouton : argmax, répétitions consécutives
+  fusionnées puis blank (0) retiré, confiance = moyenne des probabilités gardées ; une
+  ligne sans caractère est écartée.
+
+### Régénérer
+
+```rust
+// build.rs — un ModelGen par graphe, sur les ONNX patchés
+ModelGen::new().input("det_pads.onnx").out_dir("model/").load_strategy(LoadStrategy::Bytes).run_from_script();
+ModelGen::new().input("rec_pads.onnx").out_dir("model/").load_strategy(LoadStrategy::Bytes).run_from_script();
+```
+
+`burn-onnx = "0.22.0-pre.1"` en build-dep, `burn = "0.22.0-pre.2"` (features `std`,
+`ndarray` suffit pour générer). L'en-tête du fichier généré porte le chemin machine de
+l'ONNX : on le remplace par la provenance HF. Même réserve que les autres : le `.bpk`
+n'est pas reproductible octet à octet.
+
+### Parité vérifiée
+
+Oracle : onnxruntime 1.29 (CPU, Python jetable — jamais une dépendance produit) sur les
+ONNX patchés, avec **nos** tenseurs d'entrée (pour ne comparer que les réseaux) ; en
+face `examples/burn_ppocr_vs_onnxruntime.rs`. Fixture `tests/fixtures/ocr/hello.png`
+(400×120 → det 2464×736 ; deux crops → rec `[2, 3, 48, 320]`) :
+
+```
+                      max|Δ|     moyenne|Δ|   n > 1e-3
+det carte 2464×736   1.81e-3     1.77e-6      87 / 1 813 504   (seuil 5e-3)
+rec probas [2,40,6906]  1.44e-5  9.2e-11       0                (seuil 1e-3)
+```
+
+Les 87 pixels du det sont sur les bords des glyphes (sigmoïde en zone raide, image
+agrandie ×6) ; **burn/ndarray donne le même écart face à ORT (1.89e-3) et wgpu ≈
+ndarray à 9.7e-5** : bruit d'accumulation f32 propre à l'ordre des opérations, pas un
+défaut wgpu. Boîtes identiques, texte identique des deux côtés :
+`"Hello rag3weaver"` (0.987) et `"OCR 2026"` (0.984). Avec le pré-traitement refait
+par PIL côté oracle (resize ×6 : jusqu'à un niveau de gris d'écart), la carte bouge de
+0.1 sur les bords et les probas rec de 1.9e-3 — même texte. Backend au moment du test :
+Burn + wgpu/Vulkan sur AMD Radeon AI PRO R9700 via RADV.
