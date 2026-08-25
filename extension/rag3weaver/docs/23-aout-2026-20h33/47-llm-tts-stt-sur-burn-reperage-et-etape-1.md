@@ -446,6 +446,20 @@ fournisseur la recrache, sinon on rend `Finish::Eos`. `is_complete()` reste vrai
 dans les deux cas. Un test nommé `provider_truncated_the_stop_sequence_so_we_report_eos`
 rend le comportement explicite.
 
+## 6 ter. Le chemin local : voir le doc 50
+
+Le repérage du chemin **local** (rendu des chat templates, parsing des appels
+d'outils par famille, harnais de schéma) est dans le
+[doc 50](50-tool-calling-local-formats-schemas-et-ce-quon-ecrit.md). En bref :
+la pile **se prend** (`hf-chat-template` + `schemars` + `llguidance` = 34 crates,
+wasm OK, sans tokio) et il reste **800 à 1 100 lignes** à écrire, dont le parsing
+par famille. Trois pièges mesurés : Granite 3.3, SmolLM3 et Phi-4-mini **perdent
+silencieusement `message.tool_calls`** ; Granite 3.3 supprime son instruction
+d'outils si on fournit son propre système ; **Mistral v0.3 rejette nos
+identifiants** (9 alphanumériques exigés). Et un schéma portable doit être
+**non récursif** — Vertex et Anthropic refusent la récursion, OpenAI et Gemini
+natif l'acceptent.
+
 ## 7. Dettes nommées
 
 - **fp16 de Luciole** diverge (§3) — éprouver l'export natif fp16.
@@ -464,3 +478,7 @@ rend le comportement explicite.
 - **Écart Kokoro** (corr 0,966) : à qualifier (décalage de phase inaudible ou
   artefact réel) — en cours.
 - **Aucune brique audio** dans le crate : ni FFT, ni mel, ni WAV.
+- **`params_object_schema` ne passe pas le mode strict** (doc 50 §8) : 15 de nos
+  28 nœuds échouent — `required` omis quand vide, paramètres optionnels absents,
+  `default` émis, `ConfigParamType::Json` nu. Sans effet sur les appels d'outils,
+  bloque la réutilisation d'un `ToolDef` comme schéma de sortie structurée.
