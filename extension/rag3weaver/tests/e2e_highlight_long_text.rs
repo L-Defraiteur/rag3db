@@ -94,6 +94,7 @@ fn make_article_config() -> EntityConfig {
         fields,
         signals: SearchSignals::FULLTEXT,
         chunking: small_chunking(),
+        hashsafe: None,
     }
 }
 

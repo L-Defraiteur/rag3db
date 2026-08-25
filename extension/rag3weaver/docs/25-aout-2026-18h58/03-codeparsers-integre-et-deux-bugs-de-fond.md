@@ -56,6 +56,13 @@ devra filtrer (par fichier, par import, par type). Dette nommée.
 
 ## 3. Bug 1 — l'UPDATE de l'index HNSW segfaute au-delà de ~512 lignes
 
+> **Corrigé le soir même** — deux défauts dans l'extension (état de
+> suppression partageant ses vecteurs avec l'insertion ; vecteur en attente
+> relu dans la table avant d'y être écrit) et un hors-bornes dans le cœur.
+> Récit et mesures : `docs/25-aout-2026-20h30/01` à la racine du dépôt.
+> Après correctif : UPDATE à 4 096, double ré-ingestion, `e2e_code` sur le
+> module entier (1 402 scopes). Le texte qui suit est l'état d'avant.
+
 `e2e_code` sur le module entier : SIGSEGV. Trace gdb :
 `OnDiskHNSWIndex::update` → `insertInternal` → `insertToLayer` →
 `createRels` → **`shrinkForNode`** → `computeDistance` → `simsimd_cos_f32`.
@@ -102,8 +109,7 @@ suites `search` 38, `idempotent_registration` 22, `generic_search` 12,
 
 ## 5. Ce qui reste
 
-1. **Le bug HNSW UPDATE** — build Debug, reproduire avec la sonde, corriger
-   dans `extension/vector`. Bloquant pour toute ingestion réelle.
+1. ~~**Le bug HNSW UPDATE**~~ — corrigé (`docs/25-aout-2026-20h30/01`).
 2. **La résolution contre la base** — remplacer le repli par nom global ;
    c'est aussi ce qui rend l'ingestion incrémentale.
 3. `FileSource` (`GitRef`, `WorkingTree`), `CodeSyncNode`, le curseur de

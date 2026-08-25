@@ -169,12 +169,20 @@ std::vector<NodeWithDistance> InMemHNSWLayer::searchKNN(const EmbeddingHandle& q
 struct NodeWithDistanceAndEmbedding {
     NodeWithDistanceAndEmbedding(common::offset_t nodeOffset, double_t dist,
         EmbeddingHandle embedding)
-        : node(nodeOffset, dist), embedding(std::move(embedding)) {}
+        : node(nodeOffset, dist), embedding(std::move(embedding)) {
+        ptr = this->embedding.isNull() ? nullptr : this->embedding.getPtr();
+    }
+    // A neighbour whose vector is not readable from the table yet (the one
+    // being inserted on the update path): a raw pointer, no handle.
+    NodeWithDistanceAndEmbedding(common::offset_t nodeOffset, double_t dist, const void* vectorPtr)
+        : node(nodeOffset, dist), embedding(EmbeddingHandle::createNullHandle()), ptr(vectorPtr) {}
     NodeWithDistance node;
     EmbeddingHandle embedding;
+    const void* ptr = nullptr;
 
     common::offset_t getNodeOffset() const { return node.nodeOffset; }
     double_t getDist() const { return node.distance; }
+    const void* getPtr() const { return ptr; }
 };
 
 static std::vector<NodeWithDistanceAndEmbedding> populateNeighbours(const InMemHNSWLayerInfo& info,
@@ -198,8 +206,11 @@ static std::vector<NodeWithDistanceAndEmbedding> populateNeighbours(const InMemH
 template<typename Embedding>
 static bool checkEmbeddingValidity(const std::vector<NodeWithDistanceAndEmbedding>& nbrs,
     common::idx_t nbrIdx, Embedding& embeddings, GetEmbeddingsScanState& scanState) {
+    if (nbrs[nbrIdx].embedding.isNull()) {
+        return true; // pending vector, not in the table yet
+    }
     const auto tmpEmbedding = embeddings.getEmbedding(nbrs[nbrIdx].getNodeOffset(), scanState);
-    return std::memcmp(nbrs[nbrIdx].embedding.getPtr(), tmpEmbedding.getPtr(),
+    return std::memcmp(nbrs[nbrIdx].getPtr(), tmpEmbedding.getPtr(),
                embeddings.getDimension()) == 0;
 }
 
@@ -216,8 +227,8 @@ void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGrap
         for (auto j = i + 1; j < nbrs.size(); j++) {
             KU_ASSERT(checkEmbeddingValidity(nbrs, i, info, scanState));
             KU_ASSERT(checkEmbeddingValidity(nbrs, j, info, scanState));
-            const auto dist = info.metricFunc(nbrs[i].embedding.getPtr(),
-                nbrs[j].embedding.getPtr(), info.getDimension());
+            const auto dist = info.metricFunc(nbrs[i].getPtr(), nbrs[j].getPtr(),
+                info.getDimension());
             if (info.alpha * dist < nbrs[i].getDist()) {
                 keepNbr = false;
                 break;
@@ -444,8 +455,20 @@ OnDiskHNSWIndex::HNSWInsertState::HNSWInsertState(main::ClientContext* context,
     std::vector dataVectors{&insertChunk.getValueVectorMutable(1)};
     relInsertState = std::make_unique<RelTableInsertState>(srcNodeIDChunk.getValueVectorMutable(0),
         insertChunk.getValueVectorMutable(0), std::move(dataVectors));
-    relDeleteState = std::make_unique<RelTableDeleteState>(srcNodeIDChunk.getValueVectorMutable(0),
-        insertChunk.getValueVectorMutable(0), insertChunk.getValueVectorMutable(1));
+    // Delete state on its own chunks (see the header).
+    std::vector<common::LogicalType> deleteSrcTypes;
+    deleteSrcTypes.push_back(common::LogicalType::INTERNAL_ID());
+    deleteSrcNodeIDChunk =
+        Table::constructDataChunk(MemoryManager::Get(*context), std::move(deleteSrcTypes));
+    deleteSrcNodeIDChunk.state->getSelVectorUnsafe().setToUnfiltered(1);
+    std::vector<common::LogicalType> deleteTypes;
+    deleteTypes.push_back(common::LogicalType::INTERNAL_ID());
+    deleteTypes.push_back(common::LogicalType::INTERNAL_ID());
+    deleteChunk = Table::constructDataChunk(MemoryManager::Get(*context), std::move(deleteTypes));
+    deleteChunk.state->getSelVectorUnsafe().setToUnfiltered(1);
+    relDeleteState =
+        std::make_unique<RelTableDeleteState>(deleteSrcNodeIDChunk.getValueVectorMutable(0),
+            deleteChunk.getValueVectorMutable(0), deleteChunk.getValueVectorMutable(1));
     relInsertState->logToWAL = false;
     relDeleteState->logToWAL = false;
 }
@@ -815,6 +838,10 @@ OnDiskHNSWIndex::DeletedNeighbors OnDiskHNSWIndex::deleteFromGraph(Transaction* 
 
 void OnDiskHNSWIndex::insertInternal(Transaction* transaction, common::offset_t offset,
     const EmbeddingHandle& vector, HNSWInsertState& insertState) {
+    // While inserting, `offset`'s vector may not be readable from the table
+    // (update path) — shrinkForNode reads it from here.
+    insertState.pendingOffset = offset;
+    insertState.pendingVector = &vector;
     // Search fow lower layer entry point.
     const auto entryPoint = searchNNInUpperLayer(vector, insertState.searchState);
     insertToLayer(transaction, offset, entryPoint, vector, insertState, false /*isUpperLayer*/);
@@ -825,6 +852,8 @@ void OnDiskHNSWIndex::insertInternal(Transaction* transaction, common::offset_t 
         insertToLayer(transaction, offset, hnswStorageInfo.upperEntryPoint, vector, insertState,
             true /*isUpperLayer*/);
     }
+    insertState.pendingOffset = common::INVALID_OFFSET;
+    insertState.pendingVector = nullptr;
 }
 
 common::offset_t OnDiskHNSWIndex::searchNNInUpperLayer(const EmbeddingHandle& queryVector,
@@ -1150,8 +1179,20 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
     bool isUpperLayer, common::length_t maxDegree, HNSWInsertState& insertState) {
     const auto& embeddings = *insertState.searchState.embeddings;
     auto& embeddingScanState = insertState.searchState.embeddingScanState;
-    const auto vector = embeddings.getEmbedding(offset, embeddingScanState);
-    KU_ASSERT(!vector.isNull());
+    const bool hasPending =
+        insertState.pendingVector != nullptr && insertState.pendingOffset != common::INVALID_OFFSET;
+    EmbeddingHandle ownVector = EmbeddingHandle::createNullHandle();
+    const void* vectorPtr = nullptr;
+    if (hasPending && offset == insertState.pendingOffset) {
+        vectorPtr = insertState.pendingVector->getPtr();
+    } else {
+        ownVector = embeddings.getEmbedding(offset, embeddingScanState);
+        KU_ASSERT(!ownVector.isNull());
+        if (ownVector.isNull()) {
+            return; // nothing readable to shrink against; keep the rels as they are
+        }
+        vectorPtr = ownVector.getPtr();
+    }
     const auto& searchState = insertState.searchState;
     const auto& graph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
     const auto relTableID = isUpperLayer ? storageInfo->cast<HNSWStorageInfo>().upperRelTableID :
@@ -1177,11 +1218,17 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
     {
         auto nbrVectors = embeddings.getEmbeddings(nbrOffsets, embeddingScanState);
         for (size_t i = 0; i < nbrOffsets.size(); i++) {
+            if (hasPending && nbrOffsets[i] == insertState.pendingOffset) {
+                // The node being inserted: its table value is stale or NULL.
+                const auto pendingPtr = insertState.pendingVector->getPtr();
+                auto dist = metricFunc(vectorPtr, pendingPtr, embeddings.getDimension());
+                nbrs.emplace_back(nbrOffsets[i], dist, pendingPtr);
+                continue;
+            }
             if (nbrVectors[i].isNull()) {
                 continue;
             }
-            auto dist =
-                metricFunc(vector.getPtr(), nbrVectors[i].getPtr(), embeddings.getDimension());
+            auto dist = metricFunc(vectorPtr, nbrVectors[i].getPtr(), embeddings.getDimension());
             nbrs.emplace_back(nbrOffsets[i], dist, std::move(nbrVectors[i]));
         }
     }
@@ -1201,8 +1248,8 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
         for (auto j = i + 1; j < nbrs.size(); j++) {
             KU_ASSERT(checkEmbeddingValidity(nbrs, i, embeddings, embeddingScanState));
             KU_ASSERT(checkEmbeddingValidity(nbrs, j, embeddings, embeddingScanState));
-            const auto dist = metricFunc(nbrs[i].embedding.getPtr(), nbrs[j].embedding.getPtr(),
-                embeddings.getDimension());
+            const auto dist =
+                metricFunc(nbrs[i].getPtr(), nbrs[j].getPtr(), embeddings.getDimension());
             if (config.alpha * dist < nbrs[i].getDist()) {
                 keepNbr = false;
                 break;

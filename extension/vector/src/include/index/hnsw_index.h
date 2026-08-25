@@ -281,8 +281,22 @@ public:
         common::DataChunk srcNodeIDChunk;
         common::DataChunk insertChunk;
         std::unique_ptr<storage::RelTableInsertState> relInsertState;
-        // State for detaching delete.
+        // State for detaching delete — with its OWN chunks. `detachDelete` scans
+        // through the delete state's vectors and rewrites their selection
+        // (`detachDeleteForCSRRels`); sharing them with the insert state left
+        // every rel inserted afterwards with a corrupted selection (assert
+        // `getSelSize() == 1` in RelTable::insert; silent garbage in release,
+        // then a segfault in shrinkForNode — 25 août 2026, update path).
+        common::DataChunk deleteSrcNodeIDChunk;
+        common::DataChunk deleteChunk;
         std::unique_ptr<storage::RelTableDeleteState> relDeleteState;
+        // The vector being inserted right now, when it is NOT yet visible in
+        // the node table: on the UPDATE path, NodeTable::update calls the
+        // index before writing the column, so a table lookup of `pendingOffset`
+        // returns the old value (NULL on first embedding). shrinkForNode must
+        // read this instead.
+        common::offset_t pendingOffset = common::INVALID_OFFSET;
+        const EmbeddingHandle* pendingVector = nullptr;
         // Nodes to shrink at the end of insertions.
         std::unordered_set<common::offset_t> upperNodesToShrink;
         std::unordered_set<common::offset_t> lowerNodesToShrink;

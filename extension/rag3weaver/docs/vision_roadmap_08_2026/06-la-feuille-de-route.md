@@ -96,11 +96,10 @@ d'embedding à l'ingestion) ; un E2E de fusion inter-KB.
 
 **Bloquantes pour une brique entière :**
 
-- **L'UPDATE de l'index HNSW segfaute au-delà de ~512 lignes** — chemin du
-  fork (`98e35566a`, février), celui de toute notre ingestion (`INSERT` puis
-  `SET`) et le seul possible pour une ré-ingestion. Le chemin d'insertion
-  amont tient à 4 096. Sonde `e2e_hnsw_scale` (`RAG3DB_PROBE_HNSW=1`),
-  `25-aout-2026-18h58/03` §3. **À corriger avant toute ingestion réelle.**
+- ~~**L'UPDATE de l'index HNSW segfaute au-delà de ~512 lignes**~~ —
+  trouvé et corrigé le 25 août au soir (`docs/25-aout-2026-20h30/01` à la
+  racine) : deux défauts dans l'extension, un hors-bornes dans le cœur.
+  Sonde `e2e_hnsw_scale` conservée, canaris à 1 024 dans la passe.
 
 - **Le Zipformer produit des valeurs fausses sur wgpu** (corr 0,47 contre
   1,000000 sur ndarray). Seul candidat STT à streaming natif. Bug amont,

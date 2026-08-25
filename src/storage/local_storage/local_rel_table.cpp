@@ -111,20 +111,21 @@ bool LocalRelTable::delete_(Transaction* transaction, TableDeleteState& state) {
     const auto& deleteState = state.cast<RelTableDeleteState>();
 
     std::vector<row_idx_vec_t*> rowIndicesToDeleteFrom;
-    auto& directedIndex =
-        directedIndices[RelDirectionUtils::relDirectionToKeyIdx(deleteState.detachDeleteDirection)];
-    auto& reverseDirectedIndex = directedIndices[RelDirectionUtils::relDirectionToKeyIdx(
-        RelDirectionUtils::getOppositeDirection(deleteState.detachDeleteDirection))];
+    // Bounds first, references after: a single-direction rel table (the HNSW
+    // layer tables) has no reverse index, and `directedIndices[reverseIdx]`
+    // was taken out of bounds before the check (aborts under
+    // _GLIBCXX_ASSERTIONS, undefined behaviour otherwise).
     std::vector<std::pair<DirectedCSRIndex&, ValueVector&>> directedIndicesAndNodeIDVectors;
     auto directedIndexPos =
         RelDirectionUtils::relDirectionToKeyIdx(deleteState.detachDeleteDirection);
     if (directedIndexPos < directedIndices.size()) {
-        directedIndicesAndNodeIDVectors.emplace_back(directedIndex, deleteState.srcNodeIDVector);
+        directedIndicesAndNodeIDVectors.emplace_back(directedIndices[directedIndexPos],
+            deleteState.srcNodeIDVector);
     }
     auto reverseDirectedIndexPos = RelDirectionUtils::relDirectionToKeyIdx(
         RelDirectionUtils::getOppositeDirection(deleteState.detachDeleteDirection));
     if (reverseDirectedIndexPos < directedIndices.size()) {
-        directedIndicesAndNodeIDVectors.emplace_back(reverseDirectedIndex,
+        directedIndicesAndNodeIDVectors.emplace_back(directedIndices[reverseDirectedIndexPos],
             deleteState.dstNodeIDVector);
     }
     for (auto& [csrIndex, nodeIDVector] : directedIndicesAndNodeIDVectors) {

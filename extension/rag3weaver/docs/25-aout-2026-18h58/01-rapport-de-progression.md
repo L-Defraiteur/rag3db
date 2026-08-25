@@ -98,9 +98,10 @@ qui est mesuré, ce qui a été décidé, et ce qui attend.
 
 ## 6. La suite, dans l'ordre
 
-0. **Le bug HNSW UPDATE** (doc 03 §3) — bloquant pour toute ingestion au-delà
-   de ~512 lignes vectorisées, c'est-à-dire toute ingestion réelle. Build
-   Debug de l'extension, sonde `e2e_hnsw_scale` armée, correctif C++.
+0. ~~**Le bug HNSW UPDATE**~~ — corrigé dans la foulée, 20h30 : deux
+   défauts dans l'extension, un hors-bornes dans le cœur
+   (`docs/25-aout-2026-20h30/01` à la racine). UPDATE à 4 096, double
+   ré-ingestion, `e2e_code` sur le module entier.
 1. ~~**`codeparsers` intégré**~~ — première étape faite le soir (doc 03).
    Reste : la résolution des relations **contre la base** (le repli par nom
    global produit 47 relations par scope), `FileSource`, `CodeSyncNode`.

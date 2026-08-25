@@ -34,14 +34,11 @@ fn dataflow_dir() -> String {
     format!("{manifest}/src/dataflow")
 }
 
-/// **Borné sous le seuil du bug HNSW** (voir `e2e_hnsw_scale`) : le module
-/// entier fait 1 402 scopes et l'UPDATE de l'index vectoriel segfaute au-delà
-/// de ~512 lignes. Cinq fichiers, quelques centaines de scopes, le temps que
-/// le chemin UPDATE soit corrigé côté C++.
-const SUBSET: [&str; 5] = ["generic_search_nodes.rs", "search_nodes.rs", "port.rs", "node.rs", "services.rs"];
-
+/// Le module entier — 25 fichiers, ~1 400 scopes. Il a d'abord été borné à
+/// cinq fichiers : l'UPDATE de l'index HNSW segfautait au-delà de ~512 lignes
+/// (voir `e2e_hnsw_scale`), corrigé le 25 août au soir.
 fn subset_sources(root: &str) -> Vec<(String, String)> {
-    read_sources(root).unwrap().into_iter().filter(|(p, _)| SUBSET.contains(&p.as_str())).collect()
+    read_sources(root).unwrap()
 }
 
 fn setup() -> Arc<Mutex<Catalog>> {
@@ -76,7 +73,7 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
     let catalog = setup();
     let root = dataflow_dir();
     let sources = subset_sources(&root);
-    assert_eq!(sources.len(), SUBSET.len(), "subset files present");
+    assert!(sources.len() >= 20, "the dataflow module's files, got {}", sources.len());
 
     // ── Graphe : ParseCodeNode → CodeIngestNode ─────────────────────────
     // `sources` en entrée initiale (le sous-ensemble) plutôt que `root` lu
@@ -98,8 +95,8 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
     let ingest = report.nodes.iter().find(|n| n.name == "ingest").unwrap();
     let m = |k: &str| ingest.metrics.get(k).and_then(|v| v.as_f64()).unwrap_or(-1.0);
     assert_eq!(m("files"), sources.len() as f64, "one File per source");
-    assert!(m("scopes") > 100.0, "the subset has hundreds of scopes, got {}", m("scopes"));
-    assert!(m("relations") > 100.0, "and hundreds of relations, got {}", m("relations"));
+    assert!(m("scopes") > 1000.0, "the dataflow module has over a thousand scopes, got {}", m("scopes"));
+    assert!(m("relations") > 1000.0, "and thousands of relations, got {}", m("relations"));
     assert_eq!(m("failed"), 0.0);
 
     {

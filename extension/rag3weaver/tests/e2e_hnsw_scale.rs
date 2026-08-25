@@ -3,14 +3,15 @@
 //! non dégénéré, aucune dépendance au code. Un test par taille : le processus
 //! meurt à la première qui segfaute, et on sait laquelle.
 //!
-//! Run with: RAG3DB_PROBE_HNSW=1 ./run_e2e.sh --test e2e_hnsw_scale n256
+//! Run with: RAG3DB_PROBE_HNSW=1 ./run_e2e.sh --test e2e_hnsw_scale
 //!
-//! **État au 25 août 2026** : le chemin d'insertion (CREATE avec embedding,
-//! code amont) tient à 4 096 lignes ; le chemin INSERT puis SET — l'UPDATE
-//! HNSW du fork (`98e35566a`), celui que prend toute notre ingestion —
-//! **segfaute entre 512 et 768 lignes** (`OnDiskHNSWIndex::shrinkForNode` →
-//! `computeDistance`). Les sondes au-delà du seuil tuent le processus de
-//! test : elles ne tournent que si `RAG3DB_PROBE_HNSW` est posée.
+//! **Histoire** : le 25 août 2026, le chemin INSERT puis SET — l'UPDATE HNSW
+//! du fork (`98e35566a`), celui que prend toute notre ingestion — segfautait
+//! entre 512 et 768 lignes (`shrinkForNode` → `computeDistance`) ; le chemin
+//! d'insertion tenait à 4 096. Corrigé le soir même (deux défauts dans
+//! l'extension, un hors-bornes dans le cœur : `docs/25-aout-2026-20h30/01` à
+//! la racine). Les sondes à 1 024 sont des **canaris permanents** ; celles à
+//! 4 096 (trois minutes) ne tournent qu'avec `RAG3DB_PROBE_HNSW`.
 
 #![cfg(feature = "rag3db-native")]
 
@@ -18,7 +19,7 @@ fn probing() -> bool {
     if std::env::var_os("RAG3DB_PROBE_HNSW").is_some() {
         return true;
     }
-    eprintln!("skipped: crashes the process on the known HNSW update bug — set RAG3DB_PROBE_HNSW=1 to run");
+    eprintln!("skipped: long probe (minutes) — set RAG3DB_PROBE_HNSW=1 to run");
     false
 }
 
@@ -71,7 +72,8 @@ fn ingest_n(n: usize, dim: usize) {
 
 #[test] #[ignore] fn n64() { ingest_n(64, 64); }
 #[test] #[ignore] fn n256() { ingest_n(256, 64); }
-#[test] #[ignore] fn n1024() { if !probing() { return; } ingest_n(1024, 64); }
+// Canari permanent : le chemin catalogue (INSERT puis SET) au-delà du seuil du bug.
+#[test] #[ignore] fn n1024() { ingest_n(1024, 64); }
 #[test] #[ignore] fn n4096() { if !probing() { return; } ingest_n(4096, 64); }
 #[test] #[ignore] fn n1024_dim4() { if !probing() { return; } ingest_n(1024, 4); }
 #[test] #[ignore] fn n512() { ingest_n(512, 64); }
@@ -119,5 +121,20 @@ fn raw_insert_then_set(n: usize) {
 }
 
 #[test] #[ignore] fn raw_insert_path_n1024() { raw_insert_with_embedding(1024); }
-#[test] #[ignore] fn raw_update_path_n1024() { if !probing() { return; } raw_insert_then_set(1024); }
+// Canari permanent : le chemin UPDATE brut au-delà du seuil du bug.
+#[test] #[ignore] fn raw_update_path_n1024() { raw_insert_then_set(1024); }
 #[test] #[ignore] fn raw_insert_path_n4096() { raw_insert_with_embedding(4096); }
+#[test] #[ignore] fn raw_update_path_n4096() { if !probing() { return; } raw_insert_then_set(4096); }
+#[test] #[ignore] fn n4096_update_twice() {
+    // Ré-ingestion : chaque ligne reçoit un SET d'embedding une seconde fois
+    // (l'ancienne valeur n'est plus NULL mais périmée).
+    if !probing() { return; }
+    let conn = raw_conn();
+    for i in 0..2048 { conn.execute(&format!("CREATE (:V {{id: {i}}})")).unwrap(); }
+    for round in 0..2 {
+        for i in 0..2048 {
+            conn.execute(&format!("MATCH (v:V {{id: {i}}}) SET v.emb = {}", literal_vec(i + round * 7))).unwrap();
+        }
+        eprintln!("[update twice] round {round} ok");
+    }
+}
