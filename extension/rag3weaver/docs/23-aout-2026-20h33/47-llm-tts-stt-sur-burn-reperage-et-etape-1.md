@@ -124,37 +124,93 @@ signature (`input_ids`, `attention_mask`, `position_ids`,
 `past_key_values.{i}.{key,value}`) et le même nombre de couches ; seuls `KVH` et
 le vocabulaire changent. Luciole devient alors une option, pas une réécriture.
 
-## 4. TTS / STT : les deux tombent, le bloqueur est ailleurs
+## 4. TTS / STT : les deux tombent, mais deux bugs de burn commandent
 
-**STT — `sherpa-onnx-streaming-zipformer-fr`** (Apache-2.0) est le gagnant :
-parité **1,000000** sur les trois graphes, **aucun patch ONNX**, et il est
-*conçu* pour le streaming — **35 tenseurs d'état** entrent et sortent du graphe,
-la boucle est `for chunk { (out, states) = enc(chunk, states) }`. Son décodeur k2
-est « stateless » (9 nœuds) : **pas de cache KV**, donc pas le problème du LLM.
-Whisper : encodeur ✅ parfait, **décodeur ❌** (nœud `If`, burn-onnx ne descend
-pas les sous-graphes). Moonshine : encodeur ✅ et il prend **la forme d'onde
-brute** (pas de mel à écrire), même mur sur le décodeur. NeMo FastConformer CTC
-multilingue tourne (RTF 0,24) et **réutiliserait notre décodeur CTC de PP-OCR**,
-mais il est CC-BY-4.0 et non causal.
+**Les mesures wgpu ont renversé le classement.** Tout avait d'abord été
+chronométré sur ndarray ; sur le backend de production, un modèle exact devient
+faux et un modèle lent devient largement temps réel.
 
-**TTS — `Kokoro-82M`** (Apache-2.0) : le plus surprenant, **il tourne déjà de
-bout en bout**, `STFT` et six `LSTM` compris, voix française `ff_siwis`. Piper
-(MIT) échoue à l'exécution dans l'alignement VITS.
+| Modèle | wgpu (médiane) | RTF | ndarray | parité wgpu vs ORT |
+|---|---|---|---|---|
+| **NeMo FastConformer CTC** (5 s d'audio) | **93,6 ms** | 0,019 — **×53 le temps réel** | 1 190 ms | **1,000000** ✅ |
+| **Kokoro** (2,3 s d'audio) | **515 ms** | 0,224 — ×4,5 | 42 700 ms (**×83**) | 0,964 ⚠️ |
+| Whisper-tiny encodeur (30 s) | 2,75 ms | 0,0001 | 1 070 ms | 1,000000 ✅ |
+| Moonshine-base encodeur (5 s) | 55,7 ms | 0,011 — ×90 | 770 ms | 1,000000 ✅ |
+| **Zipformer streaming fr** (chunk 320 ms) | 115 ms | 0,360 — ×2,8 | 468 ms | **0,47** ❌ |
 
-**Le bloqueur TTS n'est pas le modèle, c'est la phonémisation.** Kokoro et Piper
-consomment de l'IPA/espeak, et le portage Rust d'espeak-ng est **GPL-3.0** —
-hors doctrine. Seule piste propre : `piper-plus-g2p` (MIT, 8 langues dont le
-français) — elle débloquerait **les deux d'un coup**. En cours d'épreuve.
+Compilation des noyaux : 0,4 à 2,1 s, payée une fois. **Aucun refus de dtype ni
+d'opérateur** sur wgpu.
 
-À écrire nous-mêmes : fbank 80 mel (~150 lignes + une FFT), recherche par
-faisceau transducteur (~300 lignes). Aucune dépendance audio n'existe
-aujourd'hui dans le crate. Vocodeur : **rien** (Kokoro et Piper sortent la forme
-d'onde).
+### Le Zipformer produit des valeurs fausses sur wgpu
 
-**Chiffre manquant et décisif** : tout a été mesuré sur **ndarray**, jamais sur
-wgpu (le backend de production), et ndarray est 30 à 180× plus lent
-qu'onnxruntime ici. Le RTF de 1,46 du zipformer ne veut rien dire tant qu'on n'a
-pas le chiffre wgpu. En cours.
+Exact sur ndarray (**1,000000**), faux sur wgpu (**0,47** avec une entrée
+réaliste — pire qu'avec une entrée nulle, donc ce n'est pas un cas dégénéré).
+Déterministe (deux exécutions identiques bit à bit), aucun NaN. Bissection par
+sondes sur les 18 appels du `forward` : `submodule1` (frontend convolutif) est
+exact à 5,2e-6, **`submodule2` — le premier bloc d'encodeur — diverge déjà**
+(corr 0,933) ; les 16 suivants ne font que propager. Opérateurs testés isolément
+sur wgpu, **tous corrects** (`cumsum` 2D/3D, `gather`, `recip`, `repeat`,
+`expand`, `arange`, `split_with_sizes`, `mean_dim`, `powf`, `matmul` 4D,
+`softmax`) : c'est une combinaison ou un cas de forme, pas un opérateur cassé.
+Et ce n'est pas le backend : NeMo et Moonshine sont à 1,000000 sur wgpu.
+
+**Conséquence** : le seul candidat à streaming natif est **bloqué**. Son
+architecture reste la bonne (35 tenseurs d'état explicites, décodeur k2
+stateless de 9 nœuds, donc pas de cache KV) — c'est un bug amont à isoler, pas
+un travail d'intégration.
+
+### L'écart Kokoro est un bug unique, et il est localisé
+
+Décalage de phase **réfuté** (corrélation croisée maximale à lag 0). Corrélation
+log-mel 0,996 — l'enveloppe spectrale est quasi identique, la voix serait
+reconnaissable — mais **SNR de l'erreur 10,7 dB** et **−15 % de RMS** : c'est
+audible, comme un voile de bruit. Suspect, pas cassé.
+
+Bissection par sondes des deux côtés : les **6 LSTM sont exacts** (1,000000), le
+**STFT est exact** (burn-onnx le lowerise en matmul DFT en f64 puis cast, c'est
+propre), la source sinusoïdale est exacte. La divergence naît **exactement** au
+`ConvTranspose1d` de l'iSTFT de sortie (`kernel 20`, `stride 5`, recouvrement
+4:1) : la corrélation à ce nœud (0,966245) **est** la corrélation finale, et le
+déficit de RMS y apparaît d'un coup. Identique sur wgpu et ndarray → **code
+partagé**. Testable en une vingtaine de lignes hors de Kokoro.
+
+### Classement révisé
+
+| | avant (ndarray) | après (wgpu) |
+|---|---|---|
+| STT n°1 | Zipformer streaming fr | **NeMo FastConformer CTC** — exact sur wgpu, ×53 le temps réel, multilingue français, et **décodable par le CTC déjà écrit pour PP-OCR** (`burn_ppocr.rs:699`) |
+| STT n°2 | NeMo CTC | Zipformer fr — **bloqué** sur wgpu |
+| TTS n°1 | Kokoro | **Kokoro** (inchangé) — ×4,5 le temps réel, voix `ff_siwis` |
+
+Réserves sur NeMo : licence **CC-BY-4.0** (hors du triptyque Apache/MIT/BSD — à
+trancher) et **non causal**, donc pseudo-streaming par fenêtres glissantes.
+
+### Le G2P français : bon emballage, contenu insuffisant
+
+`piper-plus-g2p` 0.4 (MIT) a exactement le profil voulu — **536 Ko, 24 crates,
+aucun C/C++, `cargo check --target wasm32-unknown-unknown` passe**. Et **la
+chaîne française complète est démontrée**, zéro Python : texte → G2P Rust → IPA →
+ids Kokoro (**0 symbole hors vocabulaire**) → Kokoro sur wgpu → 2,25 s d'audio
+en 496 ms.
+
+Mais la qualité linguistique ne suit pas : **les nombres sont purement
+supprimés** (« 21 h 30 » ne produit rien), un bug de table rend `y_vowel` en
+toutes lettres au lieu du symbole `y` (une ligne à corriger), les consonnes
+finales muettes sont prononcées (`vɛ̃ɡ` pour « vingt »), et **le mot « liaison »
+n'apparaît pas une seule fois** dans `french.rs`. Le crate étant MIT, corriger
+`french.rs` en amont est probablement la meilleure voie — plutôt qu'un G2P
+maison. (L'oracle espeak-ng n'a jamais pu être mis en route : le paquet pip
+ignore le chemin de données passé ; la référence est une transcription manuelle,
+les écarts majeurs restent non discutables.)
+
+**f16 : hors de portée** de burn-onnx 0.22.0-pre.1 — `half` non déclaré, puis 15
+erreurs de type f16/f32 dans `interpolate` et `Conv1d`. Le `.bpk` fp16 ferait
+pourtant exactement la moitié (270 contre 541 Mo).
+
+À écrire nous-mêmes : log-mel 80 bandes (normalisation `per_feature` pour NeMo)
+avec une FFT, et — quand le Zipformer sera débloqué — la recherche par faisceau
+transducteur. **Aucune brique audio n'existe dans le crate** : ni FFT, ni mel,
+ni lecture WAV. Vocodeur : rien à écrire, Kokoro sort la forme d'onde.
 
 ## 5. Ce qui est livré
 
