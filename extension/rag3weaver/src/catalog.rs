@@ -1823,6 +1823,13 @@ impl Catalog {
                     enrich_fields.push(title_owned);
                 }
             }
+            if let Some(extra) = &ec.return_fields {
+                for f in extra {
+                    if !enrich_fields.contains(f) {
+                        enrich_fields.push(f.clone());
+                    }
+                }
+            }
             enrich_fields.push("_content_hash".to_string());
             let bm25_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
             return Ok(search::SearchTarget {

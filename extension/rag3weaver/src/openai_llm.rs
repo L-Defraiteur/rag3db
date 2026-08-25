@@ -1725,8 +1725,8 @@ mod tests {
         assert_eq!(body["max_tokens"], 64);
         assert_eq!(body["messages"][0]["role"], "system");
         assert_eq!(body["messages"][1]["content"], "bonjour");
-        // Les 28 nœuds passent en outils, dans la forme de `tools.rs`.
-        assert_eq!(body["tools"].as_array().unwrap().len(), 28);
+        // Tous les nœuds passent en outils, dans la forme de `tools.rs`.
+        assert_eq!(body["tools"].as_array().unwrap().len(), crate::dataflow::node_factories::BUILTIN_NODE_COUNT);
         assert_eq!(body["tools"][0]["type"], "function");
         assert_eq!(body["tools"][0]["function"]["parameters"]["type"], "object");
         assert_eq!(body["tool_choice"], "auto");

@@ -86,7 +86,12 @@ pub fn file_config() -> EntityConfig {
     // Curseur de source (commit git, instant de balayage…) — vide tant que
     // `FileSource` n'existe pas ; le champ est là pour ne pas migrer.
     fields.insert("cursor".into(), field(FieldType::String));
-    EntityConfig { fields, hashsafe: Some(vec!["path".into()]), ..Default::default() }
+    EntityConfig {
+        fields,
+        hashsafe: Some(vec!["path".into()]),
+        return_fields: Some(vec!["language".into(), "lines_of_code".into(), "cursor".into()]),
+        ..Default::default()
+    }
 }
 
 pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
@@ -106,7 +111,14 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // Clé déterministe de `codeparsers` : `blake3(file:name:type:signature)`,
     // stable quand les lignes bougent.
     fields.insert("key".into(), field(FieldType::String));
-    EntityConfig { fields, chunking, hashsafe: Some(vec!["key".into()]), ..Default::default() }
+    EntityConfig {
+        fields,
+        chunking,
+        hashsafe: Some(vec!["key".into()]),
+        // Ce qu'un résultat de recherche doit dire pour qu'on puisse le lire.
+        return_fields: Some(vec!["file_path".into(), "start_line".into(), "end_line".into(), "scope_type".into(), "parent_name".into()]),
+        ..Default::default()
+    }
 }
 
 pub fn library_config() -> EntityConfig {

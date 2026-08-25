@@ -199,7 +199,14 @@ impl TokenSource {
             ),
         };
 
-        let mut resp = ureq::post(&url)
+        // `http_status_as_error(false)` : sans ça, un 400 (`invalid_grant`,
+        // clé révoquée) devient une erreur ureq sans corps, et le message
+        // utile — celui de Google — est perdu (25 août 2026).
+        let agent = ureq::Agent::new_with_config(
+            ureq::Agent::config_builder().http_status_as_error(false).build(),
+        );
+        let mut resp = agent
+            .post(&url)
             .header("content-type", "application/x-www-form-urlencoded")
             .send(form)
             // Ne jamais réémettre le corps envoyé : il porte l'assertion.

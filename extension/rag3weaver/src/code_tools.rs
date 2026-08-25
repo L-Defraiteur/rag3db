@@ -258,7 +258,27 @@ pub fn read_file(
     offset: usize,
     limit: usize,
 ) -> Result<ReadResult, String> {
-    let content = source.read(path)?.ok_or_else(|| format!("no such file in {}: {path}", source.cursor()))?;
+    let content = match source.read(path)? {
+        Some(c) => c,
+        None => {
+            // « Vouliez-vous dire » : même nom de fichier ailleurs, ou un
+            // chemin qui finit par ce qu'on a demandé — le cas classique d'un
+            // préfixe de répertoire deviné (`src/dataflow/x.rs` pour `x.rs`).
+            let wanted = Path::new(path).file_name().and_then(|f| f.to_str()).unwrap_or(path).to_string();
+            let mut candidates: Vec<String> = source
+                .list()?
+                .into_iter()
+                .filter(|p| p.ends_with(&format!("/{wanted}")) || *p == wanted || path.ends_with(&format!("/{p}")))
+                .take(5)
+                .collect();
+            candidates.sort();
+            return Err(if candidates.is_empty() {
+                format!("no such file in {}: {path}", source.cursor())
+            } else {
+                format!("no such file in {}: {path} — did you mean: {}", source.cursor(), candidates.join(", "))
+            });
+        }
+    };
     let limit = limit.clamp(1, MAX_READ_LIMIT);
     let offset = offset.max(1);
     let lines: Vec<&str> = content.lines().collect();
@@ -530,6 +550,10 @@ mod tests {
         assert!(!last.has_more);
         assert!(last.to_markdown().contains("(End of file - 300 lines)"));
         assert!(read_file(&s, None, "nope.rs", 1, 10).is_err());
+        let err = read_file(&s, None, "src/dataflow/b.rs", 1, 10).unwrap_err();
+        assert!(err.contains("did you mean: src/b.rs"), "{err}");
+        let err = read_file(&s, None, "b.rs", 1, 10).unwrap_err();
+        assert!(err.contains("did you mean: src/b.rs"), "{err}");
     }
 
     #[test]

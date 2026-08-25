@@ -371,6 +371,13 @@ pub struct EntityConfig {
     /// ré-ingestion met à jour au lieu de dupliquer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hashsafe: Option<Vec<String>>,
+
+    /// Champs rendus par une recherche **en plus** du titre et des contenus.
+    /// Un `Scope` de code trouvé par `search` doit dire son fichier et ses
+    /// lignes, sinon le modèle ne peut pas le lire (25 août 2026, l'agent
+    /// cloud a erré faute de `file_path` dans les résultats).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_fields: Option<Vec<String>>,
 }
 
 impl Default for EntityConfig {
@@ -380,6 +387,7 @@ impl Default for EntityConfig {
             signals: crate::search::SearchSignals::HYBRID,
             chunking: ChunkingConfig::default(),
             hashsafe: None,
+            return_fields: None,
         }
     }
 }
@@ -423,6 +431,11 @@ impl EntityConfig {
             }
             if let Some(unknown) = hs.iter().find(|f| !self.fields.contains_key(*f)) {
                 return Err(format!("hashsafe: '{unknown}' is not a field of this entity"));
+            }
+        }
+        if let Some(rf) = &self.return_fields {
+            if let Some(unknown) = rf.iter().find(|f| !self.fields.contains_key(*f)) {
+                return Err(format!("return_fields: '{unknown}' is not a field of this entity"));
             }
         }
         for (name, f) in &self.fields {
