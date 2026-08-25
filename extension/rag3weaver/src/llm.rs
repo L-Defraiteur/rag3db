@@ -483,6 +483,12 @@ pub struct GenOptions {
     pub stop: Vec<String>,
     /// Outils exposés au modèle, en général `crate::tools::tool_defs()`.
     pub tools: Vec<ToolDef>,
+    /// Comment le modèle choisit ses outils. Sans effet s'il n'y a pas
+    /// d'outils : le champ n'est alors pas envoyé du tout.
+    pub tool_choice: ToolChoice,
+    /// Forme imposée à la sortie. `None` = on n'envoie rien, donc le modèle
+    /// répond en texte libre comme aujourd'hui.
+    pub response_format: Option<ResponseFormat>,
     /// Combien le modèle a le droit de « réfléchir » avant de répondre.
     /// `None` = on n'envoie rien, donc rien ne change pour un fournisseur qui
     /// ne connaît pas ce réglage. Voir [`ReasoningEffort`] : ce n'est pas un
@@ -498,6 +504,8 @@ impl Default for GenOptions {
             top_p: 1.0,
             stop: Vec::new(),
             tools: Vec::new(),
+            tool_choice: ToolChoice::Auto,
+            response_format: None,
             reasoning: None,
         }
     }
@@ -524,6 +532,16 @@ impl GenOptions {
         self.tools = tools;
         self
     }
+    /// Impose la façon dont le modèle choisit ses outils.
+    pub fn with_tool_choice(mut self, choice: ToolChoice) -> Self {
+        self.tool_choice = choice;
+        self
+    }
+    /// Impose une forme à la sortie. Voir [`ResponseFormat`].
+    pub fn with_response_format(mut self, format: ResponseFormat) -> Self {
+        self.response_format = Some(format);
+        self
+    }
     /// Borne la réflexion du modèle. Voir [`ReasoningEffort`] pour les mesures.
     pub fn with_reasoning(mut self, effort: ReasoningEffort) -> Self {
         self.reasoning = Some(effort);
@@ -534,6 +552,94 @@ impl GenOptions {
     pub fn without_reasoning(mut self) -> Self {
         self.reasoning = None;
         self
+    }
+}
+
+/// Comment le modèle choisit ses outils, sérialisé en `tool_choice`.
+///
+/// Type fermé, comme [`ReasoningEffort`] : une faute de frappe doit être une
+/// erreur de compilation, pas un 400.
+///
+/// ⚠ **Le piège du `finish_reason`.** Avec [`ToolChoice::Auto`] et
+/// [`ToolChoice::Required`], le fournisseur rend `finish_reason: "tool_calls"`.
+/// Avec [`ToolChoice::Function`], il rend **`"stop"`** — le même code que pour
+/// une fin de texte ordinaire. Un client qui déciderait « appel d'outil ou
+/// pas » d'après `finish_reason` casserait donc précisément sur le cas le plus
+/// contraint. [`crate::openai_llm`] tranche sur la présence d'appels accumulés,
+/// jamais sur le seul `finish_reason`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ToolChoice {
+    /// Le modèle décide : appeler un outil, ou répondre en texte. Le défaut,
+    /// et le comportement historique.
+    #[default]
+    Auto,
+    /// Le modèle **doit** appeler un outil, celui qu'il veut.
+    Required,
+    /// Aucun outil, même si `tools` en propose. Utile pour forcer une
+    /// synthèse en fin de boucle d'agent.
+    None,
+    /// **Cet** outil précis, nommé. C'est la sortie structurée du pauvre :
+    /// un outil dont le schéma décrit la forme voulue.
+    Function(String),
+}
+
+impl ToolChoice {
+    /// La forme du protocole : une chaîne pour les trois premiers, un objet
+    /// pour l'outil nommé.
+    pub fn to_openai_json(&self) -> serde_json::Value {
+        match self {
+            ToolChoice::Auto => serde_json::json!("auto"),
+            ToolChoice::Required => serde_json::json!("required"),
+            ToolChoice::None => serde_json::json!("none"),
+            ToolChoice::Function(name) => serde_json::json!({
+                "type": "function",
+                "function": { "name": name },
+            }),
+        }
+    }
+}
+
+/// Forme imposée à la sortie, sérialisée en `response_format`.
+///
+/// Le schéma est un [`serde_json::Value`] brut : on ne dépend d'aucune
+/// bibliothèque de dérivation, et nos [`crate::tools::ToolDef`] en produisent
+/// déjà — leur champ `parameters` se branche ici tel quel.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResponseFormat {
+    /// Texte libre, explicitement. Rarement utile — ne rien envoyer revient
+    /// au même — mais permet d'annuler un réglage hérité.
+    Text,
+    /// JSON valide, sans schéma imposé. Le prompt **doit** demander du JSON,
+    /// sans quoi le modèle peut tourner jusqu'à `max_tokens`.
+    JsonObject,
+    /// JSON conforme à un schéma. `strict` demande au fournisseur de le
+    /// garantir plutôt que de le suggérer — et impose alors des contraintes
+    /// sur le schéma lui-même.
+    JsonSchema {
+        /// Nom du schéma, exigé par le protocole.
+        name: String,
+        /// JSON Schema de la réponse attendue.
+        schema: serde_json::Value,
+        strict: bool,
+    },
+}
+
+impl ResponseFormat {
+    /// Raccourci pour un schéma strict.
+    pub fn strict_schema(name: impl Into<String>, schema: serde_json::Value) -> Self {
+        ResponseFormat::JsonSchema { name: name.into(), schema, strict: true }
+    }
+
+    /// La forme du protocole.
+    pub fn to_openai_json(&self) -> serde_json::Value {
+        match self {
+            ResponseFormat::Text => serde_json::json!({ "type": "text" }),
+            ResponseFormat::JsonObject => serde_json::json!({ "type": "json_object" }),
+            ResponseFormat::JsonSchema { name, schema, strict } => serde_json::json!({
+                "type": "json_schema",
+                "json_schema": { "name": name, "schema": schema, "strict": strict },
+            }),
+        }
     }
 }
 

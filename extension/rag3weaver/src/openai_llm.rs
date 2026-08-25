@@ -79,6 +79,8 @@ pub struct OpenAiLlm {
     /// serveur strict (llama.cpp, Ollama, Mistral) peut répondre 400 — et
     /// notre argument est justement qu'un seul client parle à tous.
     google_extras: bool,
+    /// `tool_choice: "validated"` — voir [`OpenAiLlm::with_validated_tool_choice`].
+    google_validated_tool_choice: bool,
 }
 
 impl std::fmt::Debug for OpenAiLlm {
@@ -102,6 +104,7 @@ impl OpenAiLlm {
             model: model.into(),
             auth: Auth::None,
             google_extras: false,
+            google_validated_tool_choice: false,
             context_len: 128_000,
             agent: ureq::Agent::new_with_defaults(),
         }
@@ -155,6 +158,25 @@ impl OpenAiLlm {
 
     /// Repointe l'endpoint sans toucher au reste — sert surtout à faire viser
     /// un serveur de test à un constructeur de fournisseur.
+    /// Active `tool_choice: "validated"`, **propre à Google** — d'où sa place
+    /// ici plutôt que dans [`crate::llm::ToolChoice`], qui reste l'intersection
+    /// des fournisseurs.
+    ///
+    /// Documenté par Vertex comme correspondant au mode `VALIDATED` de
+    /// `FunctionCallingConfig`, avec la mention « This is Google-specific ».
+    /// Il contraint le modèle à produire **soit un appel conforme au schéma,
+    /// soit du langage naturel** — là où `required` (mode `ANY`) interdit le
+    /// texte libre. C'est aussi le mode qui devient le défaut dès qu'on
+    /// combine outils et sorties structurées sur Gemini 3.
+    ///
+    /// Ne s'applique **que** si l'appelant a laissé
+    /// [`crate::llm::ToolChoice::Auto`], c'est-à-dire « je n'ai pas d'avis » :
+    /// un `Required`, un `None` ou un outil nommé explicites gardent la main.
+    pub fn with_validated_tool_choice(mut self) -> Self {
+        self.google_validated_tool_choice = true;
+        self
+    }
+
     /// Active les extensions propres à Google (`extra_body.google.*`).
     /// Posé par [`Self::vertex`] et [`Self::ai_studio`] ; à ne pas activer
     /// pour un fournisseur générique, qui peut rejeter le champ.
@@ -207,6 +229,14 @@ impl OpenAiLlm {
         if let Some(effort) = opts.reasoning {
             body.insert("reasoning_effort".into(), json!(effort.as_str()));
         }
+        // Indépendant de `tools` : on peut vouloir une sortie structurée sans
+        // aucun outil, et l'inverse. ⚠ Chez Google, **combiner les deux est en
+        // préversion et réservé aux modèles Gemini 3** ; dans ce cas le mode
+        // `VALIDATED` devient le défaut, que l'on demande `validated` ou non
+        // (cf. `with_validated_tool_choice`).
+        if let Some(format) = &opts.response_format {
+            body.insert("response_format".into(), format.to_openai_json());
+        }
         // `opts.stop` n'est **délibérément pas** envoyé. Ne pas « corriger »
         // ceci : le fournisseur écrase `Finish::stop(seq)` et `Finish::eos()` en
         // un seul `finish_reason: "stop"`, si bien qu'on ne saurait plus dire
@@ -223,7 +253,35 @@ impl OpenAiLlm {
             // pour borner une grammaire — n'y est pas garanti honoré.
             let tools: Vec<Value> = opts.tools.iter().map(ToolDef::to_openai_json).collect();
             body.insert("tools".into(), json!(tools));
-            body.insert("tool_choice".into(), json!("auto"));
+            // `tool_choice` n'a de sens qu'avec des outils. Ce n'est pas une
+            // précaution de style : OpenAI répond 400 — « Invalid value for
+            // 'tool_choice': 'tool_choice' is only allowed when 'tools' are
+            // specified. » — y compris pour `"none"`, pourtant censé être le
+            // défaut sans outils. D'où l'émission sous condition.
+            //
+            // ⚠ La forme objet qui nomme un outil
+            // (`{"type":"function","function":{"name":…}}`) n'est **pas**
+            // documentée par Vertex : sa table ne liste que les quatre valeurs
+            // chaînes et conclut qu'un paramètre non supporté est ignoré. Elle
+            // a pourtant été **vérifiée empiriquement** le 25 août 2026 sur
+            // `gemini-3.5-flash` — deux outils déclarés, l'outil nommé est bien
+            // celui qui est appelé. À retester si le comportement dérive :
+            // déclarer deux outils sans rapport, en nommer un, et vérifier
+            // lequel revient dans `tool_calls`.
+            // ⚠ Second piège, celui-là purement OpenAI : le **guide**
+            // function-calling montre `tool_choice: {"type":"function",
+            // "name":"…"}` **à plat**, mais ce guide est écrit pour la
+            // Responses API. En `/chat/completions`, la spec OpenAPI n'accepte
+            // que la forme **imbriquée** sous `function`. Ne pas « corriger »
+            // ce qui suit en recopiant le guide.
+            let choice = if self.google_validated_tool_choice
+                && opts.tool_choice == crate::llm::ToolChoice::Auto
+            {
+                json!("validated")
+            } else {
+                opts.tool_choice.to_openai_json()
+            };
+            body.insert("tool_choice".into(), choice);
             // Vertex ne fragmente les arguments d'un appel d'outil que si on
             // le demande ; sans ça ils arrivent d'un bloc (ce que le parseur
             // gère aussi, mais on perd le fil au fil de l'eau).
@@ -235,6 +293,202 @@ impl OpenAiLlm {
             }
         }
         Value::Object(body)
+    }
+}
+
+/// Profondeur d'imbrication maximale acceptée par le mode strict.
+const MAX_SCHEMA_DEPTH: usize = 10;
+/// Nombre total de propriétés acceptées.
+const MAX_SCHEMA_PROPERTIES: usize = 5_000;
+/// Nombre de valeurs dans une énumération.
+const MAX_ENUM_VALUES: usize = 1_000;
+/// Taille cumulée, en caractères.
+const MAX_SCHEMA_CHARS: usize = 120_000;
+/// Au-delà de ce nombre de valeurs, une énumération de chaînes est en plus
+/// plafonnée en longueur cumulée.
+const BIG_ENUM_THRESHOLD: usize = 250;
+/// Ce plafond-là.
+const BIG_ENUM_CHARS: usize = 15_000;
+
+/// Mots-clés JSON Schema que le mode strict **refuse**.
+const FORBIDDEN_KEYWORDS: &[&str] =
+    &["allOf", "not", "if", "then", "else", "dependentRequired", "dependentSchemas"];
+
+/// Vérifie qu'un schéma respecte les contraintes du **mode strict** avant
+/// l'envoi. `Ok(())` ou la liste de ce qu'il faut corriger.
+///
+/// Pourquoi vérifier chez nous plutôt que laisser le fournisseur répondre :
+/// son 400 sur ce sujet est particulièrement opaque — il nomme un chemin
+/// interne sans dire quoi changer, et il n'en signale **qu'un à la fois**, ce
+/// qui transforme la mise au point d'un schéma imbriqué en une série
+/// d'allers-retours facturés. Ici on les rend tous d'un coup, avec le geste à
+/// faire.
+///
+/// ⚠ **Appelé dès qu'un `json_schema` est fourni, que `strict` soit vrai ou
+/// non.** La table des paramètres de Vertex ne mentionne nulle part `strict` :
+/// il y est donc probablement ignoré en silence, l'adhérence au schéma venant
+/// de `responseJsonSchema` côté Gemini. Conditionner la vérification au
+/// drapeau reviendrait à envoyer des schémas invalides à un fournisseur qui
+/// les accepte sans les respecter — le pire des deux mondes.
+///
+/// ⚠ Ces règles sont celles d'**OpenAI**. Gemini décrit son `parameters`
+/// comme une spec **OpenAPI 3.0**, pas un JSON Schema — la doc de Vertex le
+/// dit explicitement (« This differs from the OpenAI parameters field, which
+/// is described as a JSON Schema object »). En pratique son sous-ensemble est
+/// plus étroit : par exemple il n'accepte que `enum` et `date-time` comme
+/// `format` de chaîne, et refuse `uri`. On ne modélise pas cette seconde
+/// grille ici — la première suffit à éviter les erreurs les plus fréquentes,
+/// et un schéma qui passe le strict d'OpenAI est déjà bien plus proche de ce
+/// que Gemini accepte qu'un JSON Schema quelconque.
+///
+/// Ce qui **passe** en strict : `$ref` et `$defs`, **récursivité comprise**
+/// (`{"$ref": "#"}`), `anyOf`, `pattern`, `format`, les bornes numériques,
+/// `minItems`/`maxItems`. Ce qui est **refusé** : voir [`FORBIDDEN_KEYWORDS`].
+/// `oneOf` n'apparaît dans aucune liste de support : on le signale, avec
+/// `anyOf` comme remplaçant.
+pub fn check_strict_schema(schema: &Value) -> Result<(), String> {
+    let mut problems = Vec::new();
+
+    if schema.get("anyOf").is_some() {
+        problems.push("racine : le mode strict interdit un `anyOf` à la racine".to_string());
+    }
+    if schema.get("type").and_then(Value::as_str) != Some("object") {
+        problems.push(
+            "racine : le mode strict exige un schéma de `\"type\": \"object\"`".to_string(),
+        );
+    }
+
+    let size = schema.to_string().len();
+    if size > MAX_SCHEMA_CHARS {
+        problems.push(format!(
+            "schéma de {size} caractères : le plafond est {MAX_SCHEMA_CHARS}"
+        ));
+    }
+
+    let mut properties = 0usize;
+    check_node(schema, "#", 1, &mut properties, &mut problems);
+    if properties > MAX_SCHEMA_PROPERTIES {
+        problems.push(format!(
+            "{properties} propriétés : le plafond est {MAX_SCHEMA_PROPERTIES}"
+        ));
+    }
+
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems.join(" ; "))
+    }
+}
+
+/// Vérifie le `name` d'un `json_schema` : `[a-zA-Z0-9_-]`, 64 caractères au
+/// plus, non vide. C'est le seul champ requis de l'objet interne.
+pub fn check_schema_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("le nom du schéma est vide".into());
+    }
+    if name.len() > 64 {
+        return Err(format!("nom de {} caractères : le plafond est 64", name.len()));
+    }
+    if let Some(bad) = name.chars().find(|c| !c.is_ascii_alphanumeric() && *c != '_' && *c != '-') {
+        return Err(format!(
+            "le nom du schéma contient {bad:?} : seuls [a-zA-Z0-9_-] sont acceptés"
+        ));
+    }
+    Ok(())
+}
+
+fn check_node(
+    node: &Value,
+    path: &str,
+    depth: usize,
+    properties: &mut usize,
+    out: &mut Vec<String>,
+) {
+    let Some(obj) = node.as_object() else { return };
+
+    if depth > MAX_SCHEMA_DEPTH {
+        out.push(format!(
+            "{path} : imbrication de {depth} niveaux, le plafond est {MAX_SCHEMA_DEPTH}"
+        ));
+        return;
+    }
+
+    for kw in FORBIDDEN_KEYWORDS {
+        if obj.contains_key(*kw) {
+            out.push(format!("{path} : `{kw}` n'est pas supporté en mode strict"));
+        }
+    }
+    if obj.contains_key("oneOf") {
+        out.push(format!(
+            "{path} : `oneOf` ne figure dans aucune liste de support — utiliser `anyOf`"
+        ));
+    }
+    if let Some(values) = obj.get("enum").and_then(Value::as_array) {
+        if values.len() > MAX_ENUM_VALUES {
+            out.push(format!(
+                "{path} : {} valeurs d'énumération, le plafond est {MAX_ENUM_VALUES}",
+                values.len()
+            ));
+        }
+        // Règle supplémentaire : au-delà de 250 valeurs de chaîne dans une
+        // seule énumération, leur longueur cumulée est plafonnée.
+        if values.len() > BIG_ENUM_THRESHOLD {
+            let chars: usize = values.iter().filter_map(Value::as_str).map(str::len).sum();
+            if chars > BIG_ENUM_CHARS {
+                out.push(format!(
+                    "{path} : énumération de {} valeurs totalisant {chars} caractères, \
+                     le plafond est {BIG_ENUM_CHARS} au-delà de {BIG_ENUM_THRESHOLD} valeurs",
+                    values.len()
+                ));
+            }
+        }
+    }
+
+    if obj.get("type").and_then(Value::as_str) == Some("object") {
+        if obj.get("additionalProperties") != Some(&Value::Bool(false)) {
+            out.push(format!("{path} : ajouter `\"additionalProperties\": false`"));
+        }
+        let required: std::collections::HashSet<&str> = obj
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|r| r.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if let Some(props) = obj.get("properties").and_then(Value::as_object) {
+            *properties += props.len();
+            let missing: Vec<&str> = props
+                .keys()
+                .map(String::as_str)
+                .filter(|k| !required.contains(k))
+                .collect();
+            if !missing.is_empty() {
+                out.push(format!(
+                    "{path} : ajouter à `required` : {} \
+                     (en mode strict tout champ déclaré est requis ; pour rendre un champ \
+                     facultatif, donner à son `type` l'union avec `\"null\"`)",
+                    missing.join(", ")
+                ));
+            }
+            for (k, v) in props {
+                check_node(v, &format!("{path}/{k}"), depth + 1, properties, out);
+            }
+        }
+    }
+    if let Some(items) = obj.get("items") {
+        check_node(items, &format!("{path}/items"), depth + 1, properties, out);
+    }
+    if let Some(arr) = obj.get("anyOf").and_then(Value::as_array) {
+        for (i, v) in arr.iter().enumerate() {
+            check_node(v, &format!("{path}/anyOf/{i}"), depth + 1, properties, out);
+        }
+    }
+    // `$defs` ne compte pas comme un niveau d'imbrication : c'est un
+    // dictionnaire de définitions, pas une structure. On ne suit jamais les
+    // `$ref` — c'est ce qui rend un schéma récursif (`{"$ref": "#"}`), pourtant
+    // accepté en strict, analysable sans boucler.
+    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
+        for (k, v) in defs {
+            check_node(v, &format!("{path}/$defs/{k}"), depth, properties, out);
+        }
     }
 }
 
@@ -438,6 +692,41 @@ impl Llm for OpenAiLlm {
         }
         if let Some(t) = turns.iter().find(|t| t.role.is_empty()) {
             return Err(LlmError::Prompt(format!("turn with empty role: {:?}", t.content)));
+        }
+
+        // Forcer un outil qui n'est pas dans `tools` est un 400 aussi opaque
+        // que le précédent — et c'est typiquement une faute de frappe ou un
+        // nœud renommé. On la rend ici, avec la liste des noms connus.
+        if let crate::llm::ToolChoice::Function(name) = &opts.tool_choice {
+            if !opts.tools.iter().any(|t| &t.name == name) {
+                let known: Vec<&str> = opts.tools.iter().map(|t| t.name.as_str()).collect();
+                return Err(LlmError::Prompt(format!(
+                    "tool_choice impose l'outil `{name}`, absent de `tools` (connus : {})",
+                    if known.is_empty() { "aucun".to_string() } else { known.join(", ") }
+                )));
+            }
+        }
+
+        // Vérifié avant d'ouvrir la moindre socket : un schéma non conforme
+        // est une erreur de l'appelant, pas une erreur du modèle.
+        //
+        // Volontairement **sans regarder `strict`** : Vertex ne mentionne pas
+        // ce drapeau dans sa table de paramètres, il y est donc probablement
+        // ignoré. Ne vérifier qu'en `strict: true` laisserait passer des
+        // schémas invalides vers un fournisseur qui les accepte sans les
+        // respecter — on croirait la sortie contrainte alors qu'elle ne l'est
+        // pas.
+        if let Some(crate::llm::ResponseFormat::JsonSchema { name, schema, .. }) =
+            &opts.response_format
+        {
+            if let Err(why) = check_schema_name(name) {
+                return Err(LlmError::Prompt(format!("response_format : {why}")));
+            }
+            if let Err(why) = check_strict_schema(schema) {
+                return Err(LlmError::Prompt(format!(
+                    "response_format `{name}` non conforme au mode strict : {why}"
+                )));
+            }
         }
 
         let started = Instant::now();
@@ -729,7 +1018,9 @@ fn read_sse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::{CountingSink, FinishReason, ReasoningEffort, StringSink};
+    use crate::llm::{
+        CountingSink, FinishReason, ReasoningEffort, ResponseFormat, StringSink, ToolChoice,
+    };
 
     fn hello() -> Vec<Turn> {
         vec![Turn::system("tu es utile"), Turn::user("bonjour")]
@@ -1578,6 +1869,493 @@ mod tests {
         // Le reste de la forme est intact.
         assert_eq!(serialized["type"], "function");
         assert!(serialized["function"]["arguments"].is_string());
+    }
+
+    // ─── tool_choice ────────────────────────────────────────────────────────
+
+    #[test]
+    fn tool_choice_serializes_the_four_forms() {
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let tool = ToolDef {
+            name: "KBQuerySourceNode".into(),
+            description: "d".into(),
+            parameters: json!({"type":"object","properties":{},"additionalProperties":false}),
+        };
+        let base = GenOptions::default().with_tools(vec![tool]);
+
+        // Défaut : `auto`, exactement le comportement historique.
+        assert_eq!(llm.request_body(&hello(), &base)["tool_choice"], "auto");
+
+        for (choice, expected) in [
+            (ToolChoice::Auto, json!("auto")),
+            (ToolChoice::Required, json!("required")),
+            (ToolChoice::None, json!("none")),
+            (
+                ToolChoice::Function("KBQuerySourceNode".into()),
+                json!({"type":"function","function":{"name":"KBQuerySourceNode"}}),
+            ),
+        ] {
+            let opts = base.clone().with_tool_choice(choice);
+            assert_eq!(llm.request_body(&hello(), &opts)["tool_choice"], expected);
+        }
+    }
+
+    #[test]
+    fn tool_choice_is_not_sent_without_tools() {
+        // Un `tool_choice` orphelin est au mieux inutile, au pire un 400.
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let opts = GenOptions::default().with_tool_choice(ToolChoice::Required);
+        let body = llm.request_body(&hello(), &opts);
+        assert!(body.get("tool_choice").is_none());
+        assert!(body.get("tools").is_none());
+    }
+
+    #[test]
+    fn a_tool_call_finishing_with_stop_is_still_a_tool_call() {
+        // Ce filet est **actif**, pas théorique. Trois sources distinctes de
+        // `finish_reason: "stop"` sur un tour qui appelle pourtant un outil :
+        //
+        // 1. **OpenAI, outil nommé.** Attesté par un membre du staff, puis
+        //    reproduit (openai-node #305, openai-dotnet #64). Aujourd'hui ni
+        //    documenté ni garanti — donc à tolérer, jamais à supposer.
+        // 2. **Google, en streaming.** Sur l'endpoint compatible OpenAI, le
+        //    même appel rend `"tool_calls"` en non-streamé et **`"stop"` en
+        //    streamé**. Signalé le 20 décembre 2025, toujours reproductible
+        //    en août 2026, sans correctif. **Nous streamons toujours**, donc
+        //    ce cas nous concerne directement.
+        // 3. Les passerelles compatibles OpenAI qui recopient mal le champ.
+        //
+        // La mesure du 25 août 2026 sur `gemini-3.5-flash` (quatre formes de
+        // `tool_choice`, toutes rendant `"tool_calls"`) ne contredit pas le
+        // point 2 : le défaut dépend du modèle. Conclusion opérationnelle,
+        // valable pour les trois fournisseurs : **ne jamais trancher sur
+        // `finish_reason` seul**, toujours sur la présence d'appels accumulés.
+        let frames = &[
+            r#"{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_S","type":"function","function":{"name":"KBQuerySourceNode","arguments":"{\"kb_name\":"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"docs\"}"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        ];
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(frames, &GenOptions::default(), &mut sink);
+
+        assert_eq!(
+            finish.reason,
+            FinishReason::ToolCall,
+            "`stop` + appels accumulés doit rester un appel d'outil"
+        );
+        assert!(finish.is_complete());
+        assert_eq!(finish.tool_calls.len(), 1);
+        assert_eq!(finish.tool_calls[0].id, "call_S");
+        let args: Value = serde_json::from_str(&finish.tool_calls[0].arguments).unwrap();
+        assert_eq!(args["kb_name"], "docs");
+    }
+
+    #[test]
+    fn stop_without_any_tool_call_stays_eos() {
+        // Le pendant : sans appel accumulé, `stop` reste une fin de texte.
+        let mut sink = StringSink::default();
+        let (finish, _) = replay(TEXT, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::Eos);
+        assert!(finish.tool_calls.is_empty());
+    }
+
+    // ─── response_format ────────────────────────────────────────────────────
+
+    #[test]
+    fn tool_choice_has_the_same_shape_for_every_provider() {
+        // `tool_choice` est un paramètre standard, pas une extension Google :
+        // même forme partout, et il cohabite avec `extra_body.google`.
+        let tool = ToolDef {
+            name: "f".into(),
+            description: "d".into(),
+            parameters: json!({"type":"object","properties":{},"additionalProperties":false}),
+        };
+        let opts = GenOptions::default()
+            .with_tools(vec![tool])
+            .with_tool_choice(ToolChoice::Function("f".into()));
+        for llm in [
+            OpenAiLlm::new("http://x/v1", "m"),
+            OpenAiLlm::ai_studio("k", "gemini-3.5-flash"),
+            OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash"),
+        ] {
+            let body = llm.request_body(&hello(), &opts);
+            assert_eq!(
+                body["tool_choice"],
+                json!({"type":"function","function":{"name":"f"}})
+            );
+        }
+        // L'extension Google reste dans `extra_body`, séparée.
+        let vertex = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        let body = vertex.request_body(&hello(), &opts);
+        assert_eq!(body["extra_body"]["google"]["stream_function_call_arguments"], true);
+    }
+
+    #[test]
+    fn forcing_an_undeclared_tool_fails_before_any_socket() {
+        let llm = OpenAiLlm::new("http://127.0.0.1:1/v1", "m");
+        let tool = ToolDef {
+            name: "KBQuerySourceNode".into(),
+            description: "d".into(),
+            parameters: json!({"type":"object","properties":{},"additionalProperties":false}),
+        };
+        let opts = GenOptions::default()
+            .with_tools(vec![tool])
+            .with_tool_choice(ToolChoice::Function("KBQuerySourceNodee".into()));
+        let mut sink = StringSink::default();
+        match llm.generate(&hello(), &opts, &mut sink).unwrap_err() {
+            LlmError::Prompt(m) => {
+                assert!(m.contains("KBQuerySourceNodee"), "{m}");
+                assert!(m.contains("KBQuerySourceNode"), "les noms connus aident : {m}");
+            }
+            other => panic!("attendu Prompt, eu {other:?}"),
+        }
+    }
+
+    #[test]
+    fn response_format_is_absent_by_default() {
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let body = llm.request_body(&hello(), &GenOptions::default());
+        assert!(body.get("response_format").is_none());
+    }
+
+    #[test]
+    fn response_format_serializes_the_three_forms() {
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let schema = json!({
+            "type": "object",
+            "properties": { "réponse": { "type": "string" } },
+            "required": ["réponse"],
+            "additionalProperties": false
+        });
+        let cases = [
+            (ResponseFormat::Text, json!({"type":"text"})),
+            (ResponseFormat::JsonObject, json!({"type":"json_object"})),
+            (
+                ResponseFormat::strict_schema("extraction", schema.clone()),
+                json!({
+                    "type": "json_schema",
+                    "json_schema": {"name":"extraction","schema":schema,"strict":true}
+                }),
+            ),
+        ];
+        for (format, expected) in cases {
+            let opts = GenOptions::default().with_response_format(format);
+            assert_eq!(llm.request_body(&hello(), &opts)["response_format"], expected);
+        }
+    }
+
+    #[test]
+    fn response_format_and_tools_coexist() {
+        let llm = OpenAiLlm::new("http://x/v1", "m");
+        let tool = ToolDef {
+            name: "f".into(),
+            description: "d".into(),
+            parameters: json!({"type":"object","properties":{},"additionalProperties":false}),
+        };
+        let opts = GenOptions::default()
+            .with_tools(vec![tool])
+            .with_tool_choice(ToolChoice::Required)
+            .with_response_format(ResponseFormat::JsonObject);
+        let body = llm.request_body(&hello(), &opts);
+        assert_eq!(body["tool_choice"], "required");
+        assert_eq!(body["response_format"]["type"], "json_object");
+        assert!(body["tools"].is_array());
+    }
+
+    // ─── mode strict : vérification avant l'envoi ───────────────────────────
+
+    #[test]
+    fn only_tool_defs_without_optional_params_satisfy_strict_mode() {
+        // Contre-intuitif, et mesuré : `tools.rs` pose bien
+        // `additionalProperties: false`, mais ça ne suffit pas. Le mode strict
+        // exige que **tout** champ déclaré soit dans `required`, or nos
+        // `ToolDef` n'y mettent que les paramètres obligatoires. Résultat au
+        // 25 août 2026 : 13 des 28 nœuds passent, 15 échouent — tous ceux qui
+        // ont au moins un paramètre facultatif.
+        //
+        // Conséquence pratique : on ne peut pas reprendre tel quel le
+        // `parameters` d'un `ToolDef` comme schéma de `response_format`
+        // strict. Ça ne gêne pas `tools` (les schémas d'outils ne sont pas
+        // soumis à cette contrainte), seulement la réutilisation en sortie
+        // structurée.
+        let registry = {
+            let mut r = crate::dataflow::node_registry::NodeRegistry::new();
+            crate::dataflow::register_builtins(&mut r);
+            r
+        };
+
+        // Sans paramètre : rien à mettre dans `required`, donc conforme.
+        let compose = crate::tools::tool_def(&registry.schema("ComposeNode").unwrap());
+        assert_eq!(check_strict_schema(&compose.parameters), Ok(()));
+
+        // Avec un paramètre facultatif : refusé, et le message dit lequel et
+        // comment le rendre acceptable.
+        let kb = crate::tools::tool_def(&registry.schema("KBQuerySourceNode").unwrap());
+        let err = check_strict_schema(&kb.parameters).unwrap_err();
+        assert!(err.contains("options"), "le champ facultatif doit être nommé : {err}");
+        assert!(err.contains("null"), "le remède doit être donné : {err}");
+
+        // Et au moins un nœud échoue, sinon ce test ne prouverait rien.
+        let defs = crate::tools::tool_defs(&registry);
+        let refused = defs
+            .iter()
+            .filter(|d| check_strict_schema(&d.parameters).is_err())
+            .count();
+        assert!(refused > 0 && refused < defs.len(), "{refused} sur {}", defs.len());
+    }
+
+    #[test]
+    fn a_json_param_is_an_open_object_and_strict_mode_says_so() {
+        // La dette documentée dans `tools.rs` : un `ConfigParamType::Json`
+        // devient un objet libre, sans `additionalProperties`. Le mode strict
+        // le refuse — c'est le premier endroit où cette dette se paie.
+        let registry = {
+            let mut r = crate::dataflow::node_registry::NodeRegistry::new();
+            crate::dataflow::register_builtins(&mut r);
+            r
+        };
+        let embed = crate::tools::tool_def(&registry.schema("EmbedNode").unwrap());
+        let err = check_strict_schema(&embed.parameters).unwrap_err();
+        assert!(err.contains("#/signals"), "le chemin du sous-objet : {err}");
+        assert!(err.contains("additionalProperties"), "{err}");
+    }
+
+    #[test]
+    fn strict_check_names_every_problem_and_says_what_to_do() {
+        // Objet imbriqué sans `additionalProperties`, et un champ absent de
+        // `required` : les deux doivent être signalés d'un coup.
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "titre": { "type": "string" },
+                "auteur": {
+                    "type": "object",
+                    "properties": { "nom": { "type": "string" } }
+                }
+            },
+            "required": ["titre"],
+            "additionalProperties": false
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("auteur"), "{err}");
+        assert!(err.contains("additionalProperties"), "{err}");
+        assert!(err.contains("required"), "{err}");
+        // Le message dit quoi faire pour un champ facultatif.
+        assert!(err.contains("null"), "{err}");
+    }
+
+    #[test]
+    fn strict_check_walks_arrays_unions_and_defs() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": { "type": "object", "properties": { "x": {"type":"string"} } }
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": false
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("#/items/items"), "chemin attendu dans : {err}");
+
+        // Une racine qui n'est pas un objet est refusée d'emblée.
+        let err = check_strict_schema(&json!({"type":"string"})).unwrap_err();
+        assert!(err.contains("racine"), "{err}");
+    }
+
+    #[test]
+    fn a_non_conforming_strict_schema_fails_before_any_socket() {
+        // Port injoignable : si l'erreur n'était pas rendue avant l'ouverture,
+        // on aurait une erreur de transport à la place.
+        let llm = OpenAiLlm::new("http://127.0.0.1:1/v1", "m");
+        let bad = json!({ "type": "object", "properties": { "a": {"type":"string"} } });
+        let opts = GenOptions::default()
+            .with_response_format(ResponseFormat::strict_schema("x", bad));
+        let mut sink = StringSink::default();
+        let err = llm.generate(&hello(), &opts, &mut sink).unwrap_err();
+        match err {
+            LlmError::Prompt(m) => {
+                assert!(m.contains("mode strict"), "{m}");
+                assert!(m.contains('x'), "le nom du schéma doit apparaître : {m}");
+            }
+            other => panic!("attendu Prompt, eu {other:?}"),
+        }
+
+        // Et le MÊME schéma en `strict: false` est refusé aussi. Vertex ne
+        // mentionne nulle part `strict` : il l'ignore probablement, donc
+        // n'attendre que de lui la contrainte reviendrait à croire la sortie
+        // bornée alors qu'elle ne l'est pas.
+        let lax = GenOptions::default().with_response_format(ResponseFormat::JsonSchema {
+            name: "x".into(),
+            schema: json!({ "type": "object", "properties": { "a": {"type":"string"} } }),
+            strict: false,
+        });
+        let err = llm.generate(&hello(), &lax, &mut sink).unwrap_err();
+        assert!(matches!(err, LlmError::Prompt(_)), "vérifié même sans `strict` : {err:?}");
+    }
+
+    #[test]
+    fn validated_is_google_only_and_never_overrides_an_explicit_choice() {
+        let tool = ToolDef {
+            name: "f".into(),
+            description: "d".into(),
+            parameters: json!({"type":"object","properties":{},"additionalProperties":false}),
+        };
+        let base = GenOptions::default().with_tools(vec![tool]);
+        let vertex = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash")
+            .with_validated_tool_choice();
+
+        // `Auto` = « je n'ai pas d'avis » : l'extension s'applique.
+        assert_eq!(vertex.request_body(&hello(), &base)["tool_choice"], "validated");
+
+        // Un choix explicite garde la main, quel qu'il soit.
+        for choice in [
+            ToolChoice::Required,
+            ToolChoice::None,
+            ToolChoice::Function("f".into()),
+        ] {
+            let opts = base.clone().with_tool_choice(choice.clone());
+            assert_eq!(
+                vertex.request_body(&hello(), &opts)["tool_choice"],
+                choice.to_openai_json(),
+                "{choice:?} doit primer sur `validated`"
+            );
+        }
+
+        // Sans l'appel explicite, rien ne change — et `validated` ne peut pas
+        // partir vers un fournisseur générique, faute de constructeur.
+        let plain = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
+        assert_eq!(plain.request_body(&hello(), &base)["tool_choice"], "auto");
+        let generic = OpenAiLlm::new("http://x/v1", "m");
+        assert_eq!(generic.request_body(&hello(), &base)["tool_choice"], "auto");
+    }
+
+    #[test]
+    fn strict_check_refuses_the_unsupported_keywords() {
+        for kw in ["allOf", "not", "if", "then", "else", "dependentRequired", "dependentSchemas"] {
+            let schema = json!({
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false,
+                kw: {}
+            });
+            let err = check_strict_schema(&schema)
+                .expect_err(&format!("`{kw}` aurait dû être refusé"));
+            assert!(err.contains(kw), "{err}");
+        }
+        // `oneOf` n'est listé nulle part : on le signale, avec le remplaçant.
+        let schema = json!({
+            "type": "object", "properties": {}, "required": [],
+            "additionalProperties": false, "oneOf": []
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("oneOf") && err.contains("anyOf"), "{err}");
+    }
+
+    #[test]
+    fn strict_check_accepts_refs_defs_and_recursion() {
+        // `$ref`, `$defs` et la récursivité racine sont supportés en strict.
+        // Le vérificateur ne doit ni les refuser ni boucler dessus.
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "enfants": { "type": "array", "items": { "$ref": "#" } },
+                "nœud": { "$ref": "#/$defs/n" }
+            },
+            "required": ["enfants", "nœud"],
+            "additionalProperties": false,
+            "$defs": {
+                "n": {
+                    "type": "object",
+                    "properties": { "v": { "type": "string" } },
+                    "required": ["v"],
+                    "additionalProperties": false
+                }
+            }
+        });
+        assert_eq!(check_strict_schema(&schema), Ok(()));
+
+        // Et un `$defs` fautif est bien signalé, avec son chemin.
+        let schema = json!({
+            "type": "object", "properties": {}, "required": [],
+            "additionalProperties": false,
+            "$defs": { "n": { "type": "object", "properties": { "v": {"type":"string"} } } }
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("#/$defs/n"), "{err}");
+    }
+
+    #[test]
+    fn strict_check_enforces_the_documented_limits() {
+        // Profondeur : 10 niveaux.
+        let mut deep = json!({"type":"string"});
+        for _ in 0..12 {
+            deep = json!({
+                "type": "object",
+                "properties": { "n": deep },
+                "required": ["n"],
+                "additionalProperties": false
+            });
+        }
+        let err = check_strict_schema(&deep).unwrap_err();
+        assert!(err.contains("imbrication"), "{err}");
+
+        // Énumération : 1 000 valeurs.
+        let big: Vec<String> = (0..1001).map(|i| i.to_string()).collect();
+        let schema = json!({
+            "type": "object",
+            "properties": { "e": { "type": "string", "enum": big } },
+            "required": ["e"],
+            "additionalProperties": false
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("énumération"), "{err}");
+
+        // Grande énumération de chaînes : plafond de longueur cumulée.
+        let long: Vec<String> = (0..300).map(|i| format!("{i:0>60}")).collect();
+        let schema = json!({
+            "type": "object",
+            "properties": { "e": { "type": "string", "enum": long } },
+            "required": ["e"],
+            "additionalProperties": false
+        });
+        let err = check_strict_schema(&schema).unwrap_err();
+        assert!(err.contains("caractères"), "{err}");
+
+        // 300 valeurs courtes restent acceptables : le seuil porte bien sur
+        // la longueur cumulée, pas sur le seul nombre.
+        let short: Vec<String> = (0..300).map(|i| i.to_string()).collect();
+        let schema = json!({
+            "type": "object",
+            "properties": { "e": { "type": "string", "enum": short } },
+            "required": ["e"],
+            "additionalProperties": false
+        });
+        assert_eq!(check_strict_schema(&schema), Ok(()));
+    }
+
+    #[test]
+    fn schema_names_follow_the_protocol() {
+        assert_eq!(check_schema_name("extraction_v2-1"), Ok(()));
+        assert!(check_schema_name("").is_err());
+        assert!(check_schema_name(&"x".repeat(65)).is_err());
+        let err = check_schema_name("mon schéma").unwrap_err();
+        assert!(err.contains("a-zA-Z0-9_-"), "{err}");
+
+        // Et le nom est vérifié avant toute socket.
+        let llm = OpenAiLlm::new("http://127.0.0.1:1/v1", "m");
+        let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema(
+            "nom invalide",
+            json!({"type":"object","properties":{},"required":[],"additionalProperties":false}),
+        ));
+        let mut sink = StringSink::default();
+        assert!(matches!(
+            llm.generate(&hello(), &opts, &mut sink).unwrap_err(),
+            LlmError::Prompt(_)
+        ));
     }
 
     #[test]
