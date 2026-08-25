@@ -137,7 +137,18 @@ pub fn tool_defs_openai(registry: &NodeRegistry) -> Vec<Value> {
 /// L'ordre est celui du registre, une `BTreeMap` : stable par construction,
 /// donc le préfixe du prompt reste identique d'une exécution à l'autre.
 pub fn graph_tool_defs(registry: &crate::dataflow::GraphToolRegistry) -> Vec<ToolDef> {
-    registry.tools().map(|t| t.tool_def()).collect()
+    graph_tool_defs_with(registry, None)
+}
+
+/// Les mêmes, résolues contre le catalogue : les paramètres bornés par
+/// `@targets` / `@relations` reçoivent en `enum` les cibles et relations qui
+/// existent **à cet instant**. C'est la forme que [`crate::agent::GraphToolBox`]
+/// envoie quand un service `"catalog"` est là.
+pub fn graph_tool_defs_with(
+    registry: &crate::dataflow::GraphToolRegistry,
+    catalog: Option<&crate::catalog::Catalog>,
+) -> Vec<ToolDef> {
+    registry.tools().map(|t| t.tool_def_with(catalog)).collect()
 }
 
 /// Les mêmes, prêts à être envoyés (`tools` d'une API compatible OpenAI).

@@ -241,6 +241,18 @@ fn read_and_grep_as_graph_tools() {
     let defs = rag3weaver::tools::graph_tool_defs(&tools);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     assert_eq!(names, vec!["edit", "grep", "list", "read", "search", "search_expand"]);
+
+    // Résolues contre le catalogue, les fiches bornent cibles et relations
+    // à ce qui existe : un modèle ne peut plus inventer `HAS_SIGNALS`.
+    let bound = rag3weaver::tools::graph_tool_defs_with(&tools, Some(&catalog.lock().unwrap()));
+    let expand = bound.iter().find(|d| d.name == "search_expand").unwrap();
+    let targets = expand.parameters["properties"]["target"]["enum"].as_array().unwrap().clone();
+    assert!(targets.contains(&serde_json::json!("Scope")) && targets.contains(&serde_json::json!("File")), "{targets:?}");
+    let relations = expand.parameters["properties"]["relation"]["enum"].as_array().unwrap();
+    assert_eq!(relations.len(), rag3weaver::code::RELATIONS.len(), "{relations:?}");
+    let rel_desc = expand.parameters["properties"]["relation"]["description"].as_str().unwrap();
+    assert!(rel_desc.contains("DEFINED_IN (Scope→File)"), "{rel_desc}");
+    assert_eq!(expand.parameters["properties"]["direction"]["enum"], serde_json::json!(["Outgoing", "Incoming"]));
     let mut services = ServiceRegistry::new();
     services.register("catalog", catalog.clone());
     services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
@@ -261,6 +273,13 @@ fn read_and_grep_as_graph_tools() {
 
     let bad = call("read", serde_json::json!({"path": "nope.rs"}));
     assert!(bad.contains("error"), "an unknown file is a tool error the model can read: {bad}");
+
+    // La relation inventée du doc 06 : refusée avant le graphe, avec la liste.
+    let invented = call("search_expand", serde_json::json!({"target": "Scope", "query": "merge_port_values", "relation": "HAS_SIGNALS"}));
+    eprintln!("[search_expand HAS_SIGNALS]\n{invented}");
+    assert!(invented.contains("\"bad_choice\"") && invented.contains("CONSUMED_BY"), "{invented}");
+    let wrong_target = call("search", serde_json::json!({"target": "FuseResultsNode", "query": "signals"}));
+    assert!(wrong_target.contains("\"bad_choice\"") && wrong_target.contains("Scope"), "{wrong_target}");
 }
 
 /// `edit` sur un instantané indexé : le fichier est réécrit, ré-ingéré —

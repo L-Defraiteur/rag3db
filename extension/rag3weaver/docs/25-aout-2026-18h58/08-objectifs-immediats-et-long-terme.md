@@ -6,7 +6,14 @@ la pile de travail telle qu'elle se présente après ce soir.
 
 ## Immédiat — la prochaine session
 
-1. **Des `enum` dans les schémas d'outils.** Cibles (`Scope`, `File`,
+1. ~~**Des `enum` dans les schémas d'outils.**~~ **Fait le 25 au soir** :
+   directive `%% choices:` dans les fiches (`@targets`, `@relations`, ou
+   une liste close), résolue contre le catalogue vivant quand la fiche part
+   vers le modèle (`GraphToolBox::tool_defs`), et refus `bad_choice` à
+   l'appel avec la liste des valeurs admises. Le détail de `relation`
+   nomme aussi les extrémités (`DEFINED_IN (Scope→File)`). Reste à
+   mesurer sur Gemini si `search_expand` devient prenable.
+   L'intention d'origine : cibles (`Scope`, `File`,
    `Product`…) et relations (`CONSUMES`, `DEFINED_IN`…) réelles, tirées du
    catalogue au moment où les `ToolDef` sont générés — un modèle ne peut pas
    inventer `HAS_SIGNALS` si le schéma ne le permet pas, et le 0,5 B l'a

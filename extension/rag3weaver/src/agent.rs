@@ -128,8 +128,15 @@ impl ToolBox for GraphToolBox<'_> {
             .call_with_policy(call, self.nodes, self.services.clone(), &self.policy)
     }
 
+    /// Les fiches, résolues contre le catalogue des services quand il y en a
+    /// un : les `enum` de cibles et de relations sont ceux du schéma courant.
     fn tool_defs(&self) -> Vec<ToolDef> {
-        crate::tools::graph_tool_defs(self.tools)
+        let catalog = self
+            .services
+            .get::<Arc<std::sync::Mutex<crate::catalog::Catalog>>>("catalog")
+            .cloned();
+        let guard = catalog.as_ref().and_then(|c| c.lock().ok());
+        crate::tools::graph_tool_defs_with(self.tools, guard.as_deref())
     }
 }
 

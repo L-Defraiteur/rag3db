@@ -253,7 +253,8 @@ fn an_execution_failure_comes_back_as_a_tool_result() {
     let (nodes, tools) = builtin_graph_tools().unwrap();
     let services = services(setup_catalog());
 
-    // Cible inexistante : le catalogue refusera de résoudre la `SearchTarget`.
+    // Cible inexistante : refusée avant le graphe (`bad_choice`, avec les
+    // cibles réelles du catalogue dans le détail).
     let call = ToolCall::new(
         "call_bad_target",
         "search",

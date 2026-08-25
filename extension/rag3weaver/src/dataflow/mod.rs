@@ -56,7 +56,7 @@ pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use graph_tool::{
     build_definition, builtin_graph_tools, execute_definition, param_type_name, resolve_params,
     run_definition_as_tool_content, substitute_definition, template_vars, validate_node_types,
-    GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_EXPAND_TOOL_MERMAID,
+    Choices, GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_EXPAND_TOOL_MERMAID,
     SEARCH_TOOL_MERMAID, SEARCH_TOOL_NODE_TYPE,
 };
 pub use migration_nodes::{CypherNode, CypherNodeFactory, ValidateNode, ValidateNodeFactory, Assertion};

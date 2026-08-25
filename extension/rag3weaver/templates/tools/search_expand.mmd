@@ -6,6 +6,9 @@
 %% param: relation string! -- Type de relation à suivre depuis chaque résultat — un nom de relation déclaré dans le schéma (ex. 'CONSUMED_BY').
 %% param: direction string = "Outgoing" -- Sens de parcours : Outgoing ou Incoming.
 %% param: expand_limit int = 5 -- Nombre maximum de voisins par résultat (0 = illimité).
+%% choices: target = @targets
+%% choices: relation = @relations
+%% choices: direction = Outgoing | Incoming
 %% result: compose.results
 %%
 %% La composition : `inner` n'est pas un nœud de base, c'est le graphe-outil

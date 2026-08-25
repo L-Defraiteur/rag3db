@@ -103,6 +103,16 @@ pub enum GraphToolError {
         expected: &'static str,
         got: &'static str,
     },
+    /// La valeur n'est pas dans la liste des valeurs admises du paramètre —
+    /// une relation qui n'existe pas dans le schéma, une cible qui n'est ni
+    /// une entité ni une base de connaissances. La liste est **dans**
+    /// l'erreur : c'est ce qui permet au modèle de se corriger au tour
+    /// suivant plutôt que d'inventer un autre nom.
+    BadChoice {
+        name: String,
+        value: String,
+        choices: Vec<String>,
+    },
     /// Le graphe n'a pas pu être construit (port absent, type incompatible,
     /// entrée requise non connectée…). Le message vient de
     /// [`DataflowGraph::connect`] / [`DataflowGraph::validate`], qui nomment
@@ -133,6 +143,7 @@ impl GraphToolError {
             Self::MissingArgument(_) => "missing_argument",
             Self::UnknownArgument { .. } => "unknown_argument",
             Self::TypeMismatch { .. } => "type_mismatch",
+            Self::BadChoice { .. } => "bad_choice",
             Self::Build(_) => "build",
             Self::UnknownNodeType { .. } => "unknown_node_type",
             Self::ForbiddenNodeType { .. } => "forbidden_node_type",
@@ -170,6 +181,11 @@ impl fmt::Display for GraphToolError {
             Self::TypeMismatch { name, expected, got } => write!(
                 f,
                 "argument '{name}' : attendu {expected}, reçu {got}"
+            ),
+            Self::BadChoice { name, value, choices } => write!(
+                f,
+                "argument '{name}' : '{value}' n'est pas une valeur admise ; admises : {}",
+                choices.join(", ")
             ),
             Self::Build(d) => write!(f, "le graphe n'a pas pu être construit : {d}"),
             Self::UnknownNodeType { node, node_type } => write!(
@@ -625,6 +641,103 @@ pub fn run_definition_as_tool_content(
     }
 }
 
+// ─── Choices ────────────────────────────────────────────────────────────────
+
+/// D'où viennent les valeurs admises d'un paramètre de fiche.
+///
+/// Un modèle ne peut pas inventer `HAS_SIGNALS` si le schéma ne le permet
+/// pas : une liste close devient un `enum` JSON Schema, et une valeur hors
+/// liste est refusée **avant** d'instancier le graphe, avec la liste dans
+/// l'erreur. Deux sources : la fiche elle-même (`Fixed`), ou le catalogue au
+/// moment où la fiche est rendue au modèle — les cibles de recherche et les
+/// relations sont celles qui existent *maintenant*, pas celles qu'un
+/// gabarit aurait figées.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Choices {
+    /// Une liste close, écrite dans la fiche (`%% choices: direction = Outgoing | Incoming`).
+    Fixed(Vec<String>),
+    /// Les cibles qu'accepte `Catalog::resolve_search_target` (`@targets`).
+    Targets,
+    /// Les relations déclarées dans le schéma du catalogue (`@relations`).
+    Relations,
+}
+
+impl Choices {
+    /// La forme qui s'écrit dans une fiche — l'inverse de [`parse_choices`].
+    fn spec(&self) -> String {
+        match self {
+            Self::Fixed(values) => values.join(" | "),
+            Self::Targets => "@targets".to_string(),
+            Self::Relations => "@relations".to_string(),
+        }
+    }
+
+    /// Les valeurs, résolues contre un catalogue quand il en faut un, et un
+    /// complément de description (les relations avec leurs extrémités : un
+    /// `enum` ne sait pas dire que `DEFINED_IN` va de `Scope` à `File`).
+    ///
+    /// `None` quand la source manque (pas de catalogue) ou qu'elle est vide
+    /// (rien d'enregistré) : un `enum` vide interdirait tout, et une fiche
+    /// rendue sans catalogue reste utilisable — juste moins contrainte.
+    fn resolve(&self, catalog: Option<&crate::catalog::Catalog>) -> Option<(Vec<String>, Option<String>)> {
+        match self {
+            Self::Fixed(values) => Some((values.clone(), None)),
+            Self::Targets => {
+                let names = catalog?.search_target_names();
+                (!names.is_empty()).then_some((names, None))
+            }
+            Self::Relations => {
+                let rels = catalog?.relation_summaries();
+                if rels.is_empty() {
+                    return None;
+                }
+                let hint = format!(
+                    "Relations du schéma : {}.",
+                    rels.iter()
+                        .map(|(name, from, to)| format!("{name} ({from}→{to})"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                Some((rels.into_iter().map(|(name, _, _)| name).collect(), Some(hint)))
+            }
+        }
+    }
+}
+
+/// `<param> = @targets` | `<param> = @relations` | `<param> = a | b | c`
+fn parse_choices(line: &str) -> Result<(String, Choices), GraphToolError> {
+    let spec = |d: String| GraphToolError::Spec(d);
+    let (name, rest) = line
+        .split_once('=')
+        .ok_or_else(|| spec(format!("choices '{line}' : attendu '<param> = …'")))?;
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(spec(format!("choices '{line}' : nom de paramètre vide")));
+    }
+    let rest = rest.trim();
+    let choices = match rest {
+        "@targets" => Choices::Targets,
+        "@relations" => Choices::Relations,
+        other if other.starts_with('@') => {
+            return Err(spec(format!(
+                "choices '{name}' : source '{other}' inconnue (@targets, @relations)"
+            )))
+        }
+        other => {
+            let values: Vec<String> = other
+                .split('|')
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+                .collect();
+            if values.is_empty() {
+                return Err(spec(format!("choices '{name}' : liste vide")));
+            }
+            Choices::Fixed(values)
+        }
+    };
+    Ok((name.to_string(), choices))
+}
+
 // ─── GraphTool ──────────────────────────────────────────────────────────────
 
 /// Le **spécificateur** : la face publique d'un graphe.
@@ -638,6 +751,8 @@ pub struct GraphTool {
     name: String,
     description: String,
     params: Vec<ConfigParam>,
+    /// Valeurs admises, par nom de paramètre. Voir [`Choices`].
+    choices: BTreeMap<String, Choices>,
     template: GraphDefinition,
     result_node: String,
     result_port: String,
@@ -663,12 +778,45 @@ impl GraphTool {
             name: name.into(),
             description: description.into(),
             params,
+            choices: BTreeMap::new(),
             template,
             result_node: result_node.to_string(),
             result_port: result_port.to_string(),
         };
         tool.check_spec()?;
         Ok(tool)
+    }
+
+    /// Borne un paramètre à une liste de valeurs admises.
+    ///
+    /// Le paramètre doit exister et être une chaîne ; un défaut déclaré doit
+    /// figurer dans une liste close — sinon la fiche promettrait une valeur
+    /// qu'elle refuserait.
+    pub fn with_choices(mut self, param: &str, choices: Choices) -> Result<Self, GraphToolError> {
+        let spec = |d: String| GraphToolError::Spec(d);
+        let p = self
+            .params
+            .iter()
+            .find(|p| p.name == param)
+            .ok_or_else(|| spec(format!("choices '{param}' : paramètre inconnu de l'outil '{}'", self.name)))?;
+        if p.param_type != ConfigParamType::String {
+            return Err(spec(format!("choices '{param}' : seul un paramètre string se borne")));
+        }
+        if let (Choices::Fixed(values), Some(Value::String(d))) = (&choices, &p.default) {
+            if !values.contains(d) {
+                return Err(spec(format!(
+                    "choices '{param}' : le défaut '{d}' n'est pas dans la liste ({})",
+                    values.join(", ")
+                )));
+            }
+        }
+        self.choices.insert(param.to_string(), choices);
+        Ok(self)
+    }
+
+    /// Les valeurs admises déclarées, par paramètre.
+    pub fn choices(&self) -> &BTreeMap<String, Choices> {
+        &self.choices
     }
 
     fn check_spec(&self) -> Result<(), GraphToolError> {
@@ -778,13 +926,17 @@ impl GraphTool {
         let template = parse_mermaid_template(source, &identity)
             .map_err(|e| GraphToolError::Spec(e.to_string()))?;
 
-        Self::new(
+        let mut tool = Self::new(
             header.name,
             header.description,
             header.params,
             template,
             &header.result,
-        )
+        )?;
+        for (param, choices) in header.choices {
+            tool = tool.with_choices(&param, choices)?;
+        }
+        Ok(tool)
     }
 
     pub fn name(&self) -> &str {
@@ -805,12 +957,32 @@ impl GraphTool {
         (&self.result_node, &self.result_port)
     }
 
-    /// La fiche d'identité, telle qu'un LLM la reçoit.
+    /// La fiche d'identité, telle qu'un LLM la reçoit — sans catalogue : les
+    /// listes closes deviennent des `enum`, les listes `@targets` /
+    /// `@relations` restent des chaînes libres.
     pub fn tool_def(&self) -> ToolDef {
+        self.tool_def_with(None)
+    }
+
+    /// La même, résolue contre le catalogue : les cibles et les relations
+    /// **réelles**, au moment où la fiche part vers le modèle.
+    pub fn tool_def_with(&self, catalog: Option<&crate::catalog::Catalog>) -> ToolDef {
+        let mut parameters = params_object_schema(&self.params);
+        for (param, choices) in &self.choices {
+            let Some((values, hint)) = choices.resolve(catalog) else { continue };
+            let Some(schema) = parameters["properties"].get_mut(param).and_then(Value::as_object_mut) else {
+                continue;
+            };
+            schema.insert("enum".into(), Value::Array(values.into_iter().map(Value::String).collect()));
+            if let Some(hint) = hint {
+                let description = schema.get("description").and_then(Value::as_str).unwrap_or("").to_string();
+                schema.insert("description".into(), Value::String(format!("{description} {hint}")));
+            }
+        }
         ToolDef {
             name: self.name.clone(),
             description: self.description.clone(),
-            parameters: params_object_schema(&self.params),
+            parameters,
         }
     }
 
@@ -830,6 +1002,9 @@ impl GraphTool {
             };
             out.push_str(&format!("%% param: {} {} -- {}\n", p.name, spec, p.description));
         }
+        for (param, choices) in &self.choices {
+            out.push_str(&format!("%% choices: {param} = {}\n", choices.spec()));
+        }
         out.push_str(&format!(
             "%% result: {}.{}\n\n",
             self.result_node, self.result_port
@@ -839,13 +1014,47 @@ impl GraphTool {
     }
 
     /// Valide les arguments et rend l'objet complet (défauts remplis).
+    /// Les listes closes sont vérifiées ; celles qui viennent du catalogue
+    /// ne le sont pas sans lui — voir [`Self::validate_arguments_with`].
     pub fn validate_arguments(&self, args: &Value) -> Result<Map<String, Value>, GraphToolError> {
-        resolve_params(&self.params, args)
+        self.validate_arguments_with(args, None)
+    }
+
+    /// La même, avec les valeurs admises résolues contre le catalogue : une
+    /// relation absente du schéma est un [`GraphToolError::BadChoice`] qui
+    /// nomme les relations existantes, pas un graphe qui rend zéro voisin.
+    pub fn validate_arguments_with(
+        &self,
+        args: &Value,
+        catalog: Option<&crate::catalog::Catalog>,
+    ) -> Result<Map<String, Value>, GraphToolError> {
+        let resolved = resolve_params(&self.params, args)?;
+        for (param, choices) in &self.choices {
+            let Some(Value::String(value)) = resolved.get(param) else { continue };
+            let Some((values, _)) = choices.resolve(catalog) else { continue };
+            if !values.contains(value) {
+                return Err(GraphToolError::BadChoice {
+                    name: param.clone(),
+                    value: value.clone(),
+                    choices: values,
+                });
+            }
+        }
+        Ok(resolved)
     }
 
     /// Valide, substitue, et rend la définition **concrète** à exécuter.
     pub fn instantiate(&self, args: &Value) -> Result<GraphDefinition, GraphToolError> {
-        let resolved = self.validate_arguments(args)?;
+        self.instantiate_with(args, None)
+    }
+
+    /// La même, sous les valeurs admises du catalogue.
+    pub fn instantiate_with(
+        &self,
+        args: &Value,
+        catalog: Option<&crate::catalog::Catalog>,
+    ) -> Result<GraphDefinition, GraphToolError> {
+        let resolved = self.validate_arguments_with(args, catalog)?;
         Ok(substitute_definition(&self.template, &resolved))
     }
 
@@ -943,6 +1152,7 @@ struct Header {
     name: String,
     description: String,
     params: Vec<ConfigParam>,
+    choices: Vec<(String, Choices)>,
     result: String,
 }
 
@@ -955,6 +1165,7 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
     let mut name = None;
     let mut description = String::new();
     let mut params: Vec<ConfigParam> = Vec::new();
+    let mut choices = Vec::new();
     let mut result = None;
 
     for raw in source.lines() {
@@ -975,6 +1186,8 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
             description.push_str(v.trim());
         } else if let Some(v) = body.strip_prefix("param:") {
             params.push(parse_param(v.trim())?);
+        } else if let Some(v) = body.strip_prefix("choices:") {
+            choices.push(parse_choices(v.trim())?);
         } else if let Some(v) = body.strip_prefix("result:") {
             result = Some(v.trim().to_string());
         }
@@ -985,6 +1198,7 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
         name: name.ok_or_else(|| spec("en-tête sans directive '%% tool:'".into()))?,
         description,
         params,
+        choices,
         result: result.ok_or_else(|| spec("en-tête sans directive '%% result:'".into()))?,
     })
 }
@@ -1161,9 +1375,17 @@ impl GraphToolRegistry {
             }
         };
 
-        let def = match tool.instantiate(&args) {
-            Ok(d) => d,
-            Err(e) => return e.to_tool_json(),
+        // Le catalogue n'est tenu que le temps de valider : les nœuds du
+        // graphe le reprendront pendant l'exécution.
+        let def = {
+            let catalog = services
+                .get::<Arc<std::sync::Mutex<crate::catalog::Catalog>>>("catalog")
+                .cloned();
+            let guard = catalog.as_ref().and_then(|c| c.lock().ok());
+            match tool.instantiate_with(&args, guard.as_deref()) {
+                Ok(d) => d,
+                Err(e) => return e.to_tool_json(),
+            }
         };
         run_definition_as_tool_content(&def, nodes, services, policy, tool.result())
     }
@@ -1471,6 +1693,59 @@ mod tests {
         assert_eq!(props.len(), 3);
         assert!(!props.contains_key("fuzzy_distance"));
         assert!(!props.contains_key("result_mode"));
+    }
+
+    // ── Valeurs admises ─────────────────────────────────────────────
+
+    #[test]
+    fn choices_are_parsed_from_the_header_and_written_back() {
+        let t = GraphTool::from_mermaid(SEARCH_EXPAND_TOOL_MERMAID).unwrap();
+        assert_eq!(t.choices().get("target"), Some(&Choices::Targets));
+        assert_eq!(t.choices().get("relation"), Some(&Choices::Relations));
+        assert_eq!(
+            t.choices().get("direction"),
+            Some(&Choices::Fixed(vec!["Outgoing".into(), "Incoming".into()]))
+        );
+        let emitted = t.to_mermaid();
+        assert!(emitted.contains("%% choices: direction = Outgoing | Incoming\n"), "{emitted}");
+        assert!(emitted.contains("%% choices: relation = @relations\n"), "{emitted}");
+        let back = GraphTool::from_mermaid(&emitted).unwrap();
+        assert_eq!(back.choices(), t.choices());
+    }
+
+    #[test]
+    fn a_fixed_list_becomes_an_enum_and_bounds_the_call() {
+        let t = GraphTool::from_mermaid(SEARCH_EXPAND_TOOL_MERMAID).unwrap();
+        let d = t.tool_def();
+        assert_eq!(d.parameters["properties"]["direction"]["enum"], json!(["Outgoing", "Incoming"]));
+        // Sans catalogue, les listes `@…` restent des chaînes libres.
+        assert!(d.parameters["properties"]["relation"].get("enum").is_none());
+        assert!(d.parameters["properties"]["target"].get("enum").is_none());
+
+        let ok = json!({"target": "Scope", "query": "x", "relation": "CONSUMES", "direction": "Incoming"});
+        assert!(t.validate_arguments(&ok).is_ok());
+        let bad = json!({"target": "Scope", "query": "x", "relation": "CONSUMES", "direction": "Sideways"});
+        let err = t.validate_arguments(&bad).unwrap_err();
+        assert_eq!(err.kind(), "bad_choice");
+        let text = err.to_string();
+        assert!(text.contains("'Sideways'") && text.contains("Outgoing, Incoming"), "{text}");
+    }
+
+    #[test]
+    fn choices_are_checked_against_the_spec() {
+        let base = |extra: &str| {
+            format!(
+                "%% tool: t\n%% description: d\n%% param: mode string = \"fast\" -- m\n\
+                 %% param: n int = 1 -- n\n{extra}\n%% result: a.out\n\ngraph LR\n    a[\"FetchRelatedNode(relation=$mode, limit=$n)\"]\n"
+            )
+        };
+        let spec = |extra: &str| GraphTool::from_mermaid(&base(extra)).unwrap_err().to_string();
+        let e = spec("%% choices: nope = a | b"); assert!(e.contains("paramètre inconnu"), "{e}");
+        assert!(spec("%% choices: n = a | b").contains("seul un paramètre string"));
+        assert!(spec("%% choices: mode = slow | slower").contains("le défaut 'fast'"));
+        assert!(spec("%% choices: mode = @planets").contains("source '@planets' inconnue"));
+        assert!(spec("%% choices: mode = |").contains("liste vide"));
+        assert!(GraphTool::from_mermaid(&base("%% choices: mode = fast | slow")).is_ok());
     }
 
     #[test]

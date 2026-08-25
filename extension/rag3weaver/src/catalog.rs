@@ -3064,6 +3064,41 @@ impl Catalog {
         self.config.relations.get(name)
     }
 
+    /// Les cibles qu'accepte [`Self::resolve_search_target`], triées : les
+    /// bases de connaissances et les entités simples qui ont leur propre
+    /// pipeline. C'est la liste qu'une fiche d'outil (`@targets`) propose au
+    /// modèle.
+    pub fn search_target_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .kb_metadata
+            .keys()
+            .cloned()
+            .chain(
+                self.entity_configs
+                    .iter()
+                    .filter(|(_, ec)| ec.has_simple_pipeline())
+                    .map(|(name, _)| name.clone()),
+            )
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// Les relations déclarées du schéma, triées par nom : `(nom, de, vers)`.
+    /// Les relations internes (chunks, index de KB) n'y sont pas — elles ne
+    /// sont pas enregistrées par `register_relation`.
+    pub fn relation_summaries(&self) -> Vec<(String, String, String)> {
+        let mut rels: Vec<(String, String, String)> = self
+            .config
+            .relations
+            .iter()
+            .map(|(name, def)| (name.clone(), def.from.clone(), def.to.clone()))
+            .collect();
+        rels.sort();
+        rels
+    }
+
     pub fn get_kbs_for_entity(&self, entity_name: &str) -> Vec<&str> {
         self.kb_metadata
             .iter()

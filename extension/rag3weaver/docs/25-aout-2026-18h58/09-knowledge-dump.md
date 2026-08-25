@@ -115,9 +115,17 @@ après un passage en Debug.
    dans `openai_llm` et `gcp_auth` ; y penser pour tout nouveau client.
 6. **Vertex `stream_function_call_arguments`** : ne pas réactiver sans lire
    [06](06-lacher-lagent-sur-notre-code.md) §6.
-7. **Extension `.so` désynchronisée** après un rebuild du cœur :
-   `undefined symbol: rag3db::catalog::IndexAuxInfo`, ou pire un crash
-   ABI — `rm` puis `cmake --build build/native-test --target rag3db_vector_extension`.
+7. **`undefined symbol: rag3db::catalog::IndexAuxInfo` au `LOAD EXTENSION`.**
+   Deux causes, à distinguer avant d'agir :
+   - un `cargo test --test …` lancé **à la main**, sans `RAG3DB_SHARED=1`,
+     `RAG3DB_LIBRARY_DIR` et `LD_LIBRARY_PATH` : le crate `rag3db` recompile
+     alors le cœur **en statique** (longue recompilation, et l'extension ne
+     trouve plus ses symboles dans le binaire). Remède : passer par
+     `./run_e2e.sh --test <suite>`, qui exporte ces variables — les suites
+     E2E ne se lancent pas autrement ;
+   - une extension vraiment périmée après un rebuild du cœur (ou un crash
+     ABI) : `rm extension/vector/build/libvector.rag3db_extension` puis
+     `cmake --build build/native-test --target rag3db_vector_extension`.
 8. **Ne pas toucher `.gitmodules`** (modifié localement par Lucie), ni
    l'arbre de lucivy (`~/git_workspaces/lucivy`, dépendance par chemin,
    voulue). Pas de trailer d'attribution IA dans les commits.

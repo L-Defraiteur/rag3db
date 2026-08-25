@@ -215,7 +215,7 @@ fn a_bad_call_is_corrected_on_the_next_turn() {
     let toolbox = GraphToolBox::new(&graph_tools, &nodes, services);
 
     let llm = scripted(vec![
-        // Cible inexistante : le graphe échouera pour de vrai.
+        // Cible inexistante : refusée avant le graphe (`bad_choice`).
         MockLlm::new("").with_tool_calls(vec![(
             "search",
             r#"{"target":"Licorne","query":"programming language"}"#,
@@ -240,8 +240,10 @@ fn a_bad_call_is_corrected_on_the_next_turn() {
 
     let v: serde_json::Value = serde_json::from_str(&turns[2].content).unwrap();
     eprintln!("[agent] erreur réinjectée : {}", turns[2].content);
-    assert_eq!(v["error"], "execution");
-    assert!(v["detail"].as_str().unwrap().contains("Licorne"));
+    // Refusée avant le graphe, avec les cibles réelles dans le détail.
+    assert_eq!(v["error"], "bad_choice");
+    let detail = v["detail"].as_str().unwrap();
+    assert!(detail.contains("Licorne") && detail.contains("Product"), "{detail}");
     // Le deuxième appel a bien rendu des résultats.
     assert!(turns[4].content.starts_with('['), "{}", turns[4].content);
     assert_well_formed(&turns);
