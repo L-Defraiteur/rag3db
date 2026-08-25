@@ -1,7 +1,7 @@
 /// Compile a regex literal once per call site, return `&regex::Regex`.
 /// Each invocation expands to its own `OnceLock` — zero HashMap lookup.
 ///
-/// ```rust
+/// ```ignore
 /// let re = cached_regex!(r"\d+");
 /// if re.is_match("abc123") { ... }
 /// let caps = cached_regex!(r"(\w+)=(\w+)").captures(text);

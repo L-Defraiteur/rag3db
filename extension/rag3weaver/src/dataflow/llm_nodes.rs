@@ -349,7 +349,7 @@ mod tests {
         node.execute(&mut ctx).unwrap();
         let text = ctx.drain_outputs().remove("text").and_then(take_or_clone::<String>).unwrap();
         // 29 nœuds enregistrés, triés : le premier est BM25SearchNode.
-        assert_eq!(text, "29 outils, premier=BM25SearchNode");
+        assert_eq!(text, format!("{} outils, premier=BM25SearchNode", crate::dataflow::node_factories::BUILTIN_NODE_COUNT));
     }
 
     #[test]

@@ -1126,7 +1126,17 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::ocr_nodes::OcrNodeFactory));
     // Génération
     registry.register(Box::new(super::llm_nodes::LlmNodeFactory));
+    // Code
+    #[cfg(feature = "code")]
+    {
+        registry.register(Box::new(super::code_nodes::ParseCodeNodeFactory));
+        registry.register(Box::new(super::code_nodes::CodeIngestNodeFactory));
+    }
 }
+
+/// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
+/// de comptage le lisent ici pour suivre les features.
+pub const BUILTIN_NODE_COUNT: usize = 29 + if cfg!(feature = "code") { 2 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1143,7 +1153,7 @@ mod tests {
     #[test]
     fn register_builtins_has_all_29_types() {
         let registry = builtin_registry();
-        assert_eq!(registry.types().len(), 29);
+        assert_eq!(registry.types().len(), BUILTIN_NODE_COUNT);
     }
 
     #[test]

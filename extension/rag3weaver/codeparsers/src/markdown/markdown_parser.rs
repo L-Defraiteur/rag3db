@@ -864,7 +864,7 @@ impl MarkdownParser {
         let multi_re = cached_regex!(r"-+");
         let normalized = norm_re.replace_all(&base_name, "-");
         let normalized = multi_re.replace_all(&normalized, "-");
-        let normalized = if normalized.len() > 50 { &normalized[..50] } else { &normalized };
+        let normalized = crate::utils::text::truncate_at_char_boundary(&normalized, 50);
 
         let lang = language.unwrap_or("").to_lowercase();
         let parser_type = LANGUAGE_MAP.get(lang.as_str()).copied().unwrap_or("generic");
@@ -955,7 +955,7 @@ impl MarkdownParser {
         if !paragraph_lines.is_empty() {
             let desc = paragraph_lines.join(" ");
             if desc.len() > 160 {
-                Some(format!("{}...", &desc[..157]))
+                Some(crate::utils::text::ellipsize(&desc, 160))
             } else {
                 Some(desc)
             }

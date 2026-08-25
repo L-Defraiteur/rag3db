@@ -63,6 +63,9 @@ pub enum PortType {
     Ocr,
     /// `crate::llm::LlmOutput` — texte généré, raison de fin, comptage.
     Llm,
+    /// Code : `Vec<(String, String)>` (chemin relatif, contenu) en entrée de
+    /// `ParseCodeNode`, `crate::code::CodeAnalysis` en sortie.
+    Code,
 }
 
 impl PortType {

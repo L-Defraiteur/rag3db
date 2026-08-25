@@ -210,7 +210,7 @@ impl Node for InsertRecordNode {
                                         v.as_str().map(|s| (k.clone(), s.to_string()))
                                     })
                                     .collect();
-                                crate::fts_handle::index_document(
+                                crate::fts_handle::upsert_document(
                                     handle,
                                     &text_fields,
                                     node_id.offset,

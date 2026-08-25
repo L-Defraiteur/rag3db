@@ -2995,7 +2995,7 @@ impl BaseScopeExtractionParser {
 
         let first_line = content.split('\n').next().map(|l| l.trim()).unwrap_or("");
         let signature = if first_line.len() > 80 {
-            format!("{}...", &first_line[..77])
+            crate::utils::text::ellipsize(first_line, 80)
         } else {
             first_line.to_string()
         };
@@ -3119,7 +3119,7 @@ impl BaseScopeExtractionParser {
 
         let first_line = content.split('\n').next().map(|l| l.trim()).unwrap_or("");
         let signature = if first_line.len() > 80 {
-            format!("{}...", &first_line[..77])
+            crate::utils::text::ellipsize(first_line, 80)
         } else {
             first_line.to_string()
         };
@@ -3383,7 +3383,7 @@ impl BaseScopeExtractionParser {
 
         let first_line = content.split('\n').next().map(|l| l.trim()).unwrap_or("");
         let signature = if first_line.len() > 80 {
-            format!("{}...", &first_line[..77])
+            crate::utils::text::ellipsize(first_line, 80)
         } else {
             first_line.to_string()
         };

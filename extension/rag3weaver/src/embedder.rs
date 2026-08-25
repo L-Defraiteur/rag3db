@@ -71,6 +71,58 @@ impl Embedder for MockEmbedder {
     }
 }
 
+// ─── HashEmbedder ────────────────────────────────────────────────────────────
+
+/// Embedder de test **non dégénéré** : un vecteur unitaire pseudo-aléatoire,
+/// déterministe, dérivé du hash du texte. Deux textes identiques → même
+/// vecteur ; deux textes différents → vecteurs sans rapport.
+///
+/// À utiliser dès qu'un test ingère plus qu'une poignée de lignes :
+/// [`MockEmbedder`] rend des vecteurs **nuls**, et l'index HNSW de l'extension
+/// vectorielle **segfaute** (`shrinkForNode` → `computeDistance`) quand on lui
+/// insère quelques centaines de points identiques (25 août 2026, 1 402 scopes
+/// de code).
+#[derive(Debug, Clone)]
+pub struct HashEmbedder {
+    dim: usize,
+}
+
+impl HashEmbedder {
+    pub fn new(dim: usize) -> Self {
+        Self { dim }
+    }
+
+    fn vector(&self, text: &str) -> Vec<f32> {
+        // xorshift ensemencé par le hash du texte : autant de flottants qu'il
+        // faut, dans [-1, 1], puis normalisation.
+        let hex = crate::hash::content_hash(text);
+        let mut state = u64::from_str_radix(&hex[..16], 16).unwrap_or(0x9E37_79B9_7F4A_7C15) | 1;
+        let mut v: Vec<f32> = (0..self.dim)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                (state >> 11) as f32 / (1u64 << 53) as f32 * 2.0 - 1.0
+            })
+            .collect();
+        let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-12);
+        for x in &mut v {
+            *x /= norm;
+        }
+        v
+    }
+}
+
+impl Embedder for HashEmbedder {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Ok(texts.iter().map(|t| self.vector(t)).collect())
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+}
+
 // ─── CallbackEmbedder ────────────────────────────────────────────────────────
 
 /// Type alias for the embed callback.

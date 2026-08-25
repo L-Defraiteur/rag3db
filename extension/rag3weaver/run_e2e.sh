@@ -91,7 +91,7 @@ cd "$WEAVER"
 # pas. burn-llm (Qwen2.5-0.5B, 996 Mo) et burn-ocr (PP-OCRv6 tiny) chargent
 # leurs poids depuis ~/.cache/rag3weaver/ — téléchargés au premier passage.
 # `--features a,b` ajoute au jeu.
-FEATURES="rag3db-native,burn-embedder,burn-llm,burn-ocr${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+FEATURES="rag3db-native,burn-embedder,burn-llm,burn-ocr,code${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
 CARGO_ARGS=(
   --features "$FEATURES"

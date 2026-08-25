@@ -497,7 +497,7 @@ impl PythonScopeExtractionParser {
         let is_constant = name == name.to_uppercase() && name.contains('_');
         let scope_type = if is_constant { ScopeInfoType::Constant } else { ScopeInfoType::Variable };
 
-        let truncated_value = if value.len() > 50 { format!("{}...", &value[..50]) } else { value.clone() };
+        let truncated_value = if value.len() > 50 { format!("{}...", crate::utils::text::truncate_at_char_boundary(&value, 50)) } else { value.clone() };
         let signature = format!("{} = {}", name, truncated_value);
         let content_dedented = self.dedent_content(&node_content);
 
@@ -564,7 +564,7 @@ impl PythonScopeExtractionParser {
 
         // Truncate for signature if too long
         let signature = if node_content.len() > 80 {
-            format!("{}...", &node_content[..77])
+            crate::utils::text::ellipsize(&node_content, 80)
         } else {
             node_content.clone()
         };

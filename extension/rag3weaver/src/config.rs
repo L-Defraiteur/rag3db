@@ -362,6 +362,15 @@ pub struct EntityConfig {
 
     /// Chunking configuration (default: Semantic, 1500 chars, 200 overlap).
     pub chunking: ChunkingConfig,
+
+    /// Champs dont les valeurs, concaténées, déterminent l'`_uuid` de la
+    /// ligne (`hashsafe_uuid(entity, values)`). Sans cette liste, l'uuid est
+    /// dérivé de **tous** les champs : une ligne dont le contenu change est
+    /// une autre ligne. Avec — `["path"]` pour un fichier, `["key"]` pour un
+    /// scope de code — l'identité survit au changement de contenu, et une
+    /// ré-ingestion met à jour au lieu de dupliquer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hashsafe: Option<Vec<String>>,
 }
 
 impl Default for EntityConfig {
@@ -370,6 +379,7 @@ impl Default for EntityConfig {
             fields: HashMap::new(),
             signals: crate::search::SearchSignals::HYBRID,
             chunking: ChunkingConfig::default(),
+            hashsafe: None,
         }
     }
 }
@@ -407,6 +417,14 @@ impl EntityConfig {
 
     /// Validate field definitions (mutual exclusivity of is_title/title_for, is_content/content_for).
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(hs) = &self.hashsafe {
+            if hs.is_empty() {
+                return Err("hashsafe: empty list (omit it to hash all fields)".into());
+            }
+            if let Some(unknown) = hs.iter().find(|f| !self.fields.contains_key(*f)) {
+                return Err(format!("hashsafe: '{unknown}' is not a field of this entity"));
+            }
+        }
         for (name, f) in &self.fields {
             if crate::scope::is_scope_column(name) {
                 return Err(format!("Field '{name}': nom réservé au scope (org/project)"));

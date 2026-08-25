@@ -860,7 +860,34 @@ impl Catalog {
         }
         crate::config::EntityDef {
             fields: entity_fields,
-            hashsafe: None,
+            hashsafe: config.hashsafe.clone(),
+        }
+    }
+
+    /// L'`_uuid` qu'aura une ligne de `entity_name` portant `data` — le même
+    /// calcul que `ingest_entities`, exposé pour que ceux qui relient des
+    /// entités par identité (l'ingestion de code) n'aient pas à le deviner.
+    pub fn entity_uuid(&self, entity_name: &str, data: &BTreeMap<String, CypherValue>) -> Result<String, CatalogError> {
+        let entity_def = self.config.entities.get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
+        Ok(Self::uuid_for(entity_name, entity_def, data))
+    }
+
+    fn uuid_for(entity_name: &str, entity_def: &crate::config::EntityDef, data: &BTreeMap<String, CypherValue>) -> String {
+        if let Some(ref hashsafe_fields) = entity_def.hashsafe {
+            let field_values: Vec<&str> = hashsafe_fields
+                .iter()
+                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
+                .collect();
+            hashsafe_uuid(entity_name, &field_values)
+        } else {
+            // Use all data fields as hashsafe input for deterministic UUIDs
+            let mut field_values: Vec<String> = data.iter()
+                .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+                .collect();
+            field_values.sort();
+            let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
+            hashsafe_uuid(entity_name, &refs)
         }
     }
 
@@ -1875,21 +1902,7 @@ impl Catalog {
         let mut entity_records: Vec<EntityRecord> = Vec::with_capacity(records.len());
         for mut data in records {
             // Generate deterministic UUID from hashsafe fields or all content fields
-            let uuid = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
-                let field_values: Vec<&str> = hashsafe_fields
-                    .iter()
-                    .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
-                    .collect();
-                hashsafe_uuid(entity_name, &field_values)
-            } else {
-                // Use all data fields as hashsafe input for deterministic UUIDs
-                let mut field_values: Vec<String> = data.iter()
-                    .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
-                    .collect();
-                field_values.sort();
-                let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
-                hashsafe_uuid(entity_name, &refs)
-            };
+            let uuid = Self::uuid_for(entity_name, &entity_def, &data);
             data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
 
             // Content hash from content fields

@@ -168,6 +168,26 @@ pub fn indexed_text_fields(
         .collect()
 }
 
+/// Indexe une ligne écrite par `MERGE` : ré-indexation si elle était déjà
+/// connue de l'index, ajout sinon.
+///
+/// `add_document` n'est pas un merge : ré-ingérer une ligne existante lui
+/// faisait porter **deux** documents, et chaque recherche la rendait deux
+/// fois (25 août 2026, ré-ingestion de code). `delete_by_node_id` sur un
+/// identifiant inconnu diffuse une suppression à tous les shards — trop cher
+/// pour le cas courant (une ligne neuve) ; on ne supprime que si le routeur
+/// connaît l'identifiant.
+pub fn upsert_document(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    fields: &[(String, String)],
+    offset: u64,
+) -> Result<(), String> {
+    if handle.shard_for_node_id(offset).is_some() {
+        return reindex_document(handle, fields, offset);
+    }
+    index_document(handle, fields, offset)
+}
+
 /// Remplace le document d'une entité : suppression puis ré-ajout.
 ///
 /// `fields` doit porter **toutes** les valeurs indexées (voir

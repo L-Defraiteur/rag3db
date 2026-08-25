@@ -96,6 +96,9 @@ pub mod ppocrv6_tiny_det_onnx;
 pub mod ppocrv6_tiny_rec_onnx;
 #[cfg(feature = "burn-ocr")]
 pub mod burn_ppocr;
+/// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
+#[cfg(feature = "code")]
+pub mod code;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
