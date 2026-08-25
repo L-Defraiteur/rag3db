@@ -60,6 +60,12 @@ burn = { version = "0.22.0-pre.2", optional = true, default-features = false, fe
 burn-store = { version = "0.22.0-pre.2", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
+# Chat templates Jinja de HuggingFace, pour le chemin LOCAL uniquement : c'est
+# nous le serveur, donc c'est nous qui rendons le template. minijinja nu rend 6
+# des 9 templates réels mesurés (doc 50 §4) ; celui-ci les rend 9 sur 9, pour
+# 16 crates, sans tokio ni getrandom, et compile en wasm32.
+hf-chat-template = { version = "1", optional = true }
+
 # ─── Fournisseurs LLM distants (feature `openai-llm`) ────────────────────────
 # Client HTTP **bloquant**. Pourquoi ureq et pas reqwest/genai/rig : le trait
 # `Llm` est synchrone parce que `Node::execute` l'est, et luciole n'y change
@@ -106,6 +112,10 @@ burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers"]
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
 # PP-OCRv6 sur burn est sous `burn-ocr`.
 ocr = ["dep:image"]
+# Qwen2.5-0.5B-Instruct (décodeur, fp16) sur burn — génération locale.
+# Le graphe généré vit dans generated/qwen2_5_0_5b_onnx.rs ; les poids (.bpk) et
+# le tokenizer se chargent depuis un dossier (cf generated/README.md).
+burn-llm = ["dep:burn", "dep:burn-store", "dep:tokenizers", "dep:hf-chat-template"]
 # PP-OCRv6 tiny (détection DB + reconnaissance CTC) sur burn — sans tokenizers.
 # Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
 # poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).

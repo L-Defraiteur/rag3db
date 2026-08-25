@@ -29,7 +29,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 
-use crate::llm::{Finish, Flow, GenOptions, Llm, LlmError, TokenSink, ToolCall, Turn};
+use crate::llm::{
+    emit, first_stop, holdback, Finish, Flow, GenOptions, Llm, LlmError, TokenSink, ToolCall, Turn,
+};
 use crate::tools::ToolDef;
 
 /// Comment on prouve son identité à l'endpoint. Ne dérive **pas** `Debug` :
@@ -995,66 +997,6 @@ fn message_json(t: &Turn, google: bool) -> Value {
         m.insert("content".into(), json!(t.content));
     }
     Value::Object(m)
-}
-
-/// Première séquence d'arrêt présente dans `text` : celle qui apparaît le plus
-/// tôt, et à position égale la plus longue. Rend son décalage en octets et la
-/// séquence. Le texte qui la précède est gardé **verbatim** par l'appelant,
-/// espaces compris — même règle que le `MockLlm` de [`crate::llm`].
-fn first_stop(text: &str, stops: &[String]) -> Option<(usize, String)> {
-    let mut best: Option<(usize, &String)> = None;
-    for s in stops.iter().filter(|s| !s.is_empty()) {
-        if let Some(pos) = text.find(s.as_str()) {
-            let better = match best {
-                None => true,
-                Some((p, b)) => pos < p || (pos == p && s.len() > b.len()),
-            };
-            if better {
-                best = Some((pos, s));
-            }
-        }
-    }
-    best.map(|(p, s)| (p, s.clone()))
-}
-
-/// Combien d'octets retenir à la fin de `pending` parce qu'ils pourraient être
-/// le début d'une séquence d'arrêt coupée entre deux trames SSE (`"Obser"`
-/// puis `"vation:"`).
-///
-/// C'est le plus long suffixe de `pending` qui soit un préfixe **strict** d'une
-/// séquence — un préfixe complet aurait déjà été vu par [`first_stop`]. Sans
-/// cette rétention, on pousserait dans le puits du texte qu'il aurait fallu
-/// couper : irrattrapable, puisque le puits *pousse*.
-fn holdback(pending: &str, stops: &[String]) -> usize {
-    let mut best = 0usize;
-    for s in stops.iter().filter(|s| !s.is_empty()) {
-        let max = (s.len() - 1).min(pending.len());
-        for k in (best + 1..=max).rev() {
-            let at = pending.len() - k;
-            // Ne jamais couper au milieu d'un caractère multi-octet.
-            if !pending.is_char_boundary(at) {
-                continue;
-            }
-            if pending.as_bytes()[at..] == s.as_bytes()[..k] {
-                best = k;
-                break;
-            }
-        }
-    }
-    best
-}
-
-/// Pousse un fragment dans le puits. `Err(())` = le puits demande l'arrêt.
-fn emit(sink: &mut dyn TokenSink, emitted: &mut usize, frag: &str) -> Result<(), ()> {
-    if frag.is_empty() {
-        return Ok(());
-    }
-    *emitted += 1;
-    if sink.on_token(frag) == Flow::Stop {
-        Err(())
-    } else {
-        Ok(())
-    }
 }
 
 impl Llm for OpenAiLlm {

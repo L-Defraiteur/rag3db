@@ -894,6 +894,81 @@ pub fn generate_to_string(
     Ok(LlmOutput { text: sink.text, finish, usage })
 }
 
+// ─── Séquences d'arrêt (partagé cloud / local) ──────────────────────────────
+//
+// Ces trois fonctions étaient dans `openai_llm.rs`. Elles n'ont rien de
+// spécifique à SSE : le problème qu'elles résolvent est celui de **tout**
+// producteur qui pousse par morceaux — une trame SSE ou un jeton de
+// décodeur — face à une séquence d'arrêt qui peut être à cheval sur deux
+// morceaux. Le puits pousse, donc ce qu'on lui a donné est irrattrapable :
+// la rétention est la seule façon de tenir la règle du préfixe verbatim.
+//
+// Publiques, et pas `pub(crate)` : le contrat de `GenOptions::stop` dit
+// « verbatim, séquence non émise », et qui implémente `Llm` hors de cette
+// crate doit le tenir. Le laisser réinventer, c'est le laisser produire le
+// bogue qu'on a déjà corrigé deux fois.
+
+/// Première séquence d'arrêt présente dans `text` : celle qui apparaît le plus
+/// tôt, et à position égale la plus longue. Rend son décalage en octets et la
+/// séquence. Le texte qui la précède est gardé **verbatim** par l'appelant,
+/// espaces compris — même règle que le `MockLlm` de [`crate::llm`].
+pub fn first_stop(text: &str, stops: &[String]) -> Option<(usize, String)> {
+    let mut best: Option<(usize, &String)> = None;
+    for s in stops.iter().filter(|s| !s.is_empty()) {
+        if let Some(pos) = text.find(s.as_str()) {
+            let better = match best {
+                None => true,
+                Some((p, b)) => pos < p || (pos == p && s.len() > b.len()),
+            };
+            if better {
+                best = Some((pos, s));
+            }
+        }
+    }
+    best.map(|(p, s)| (p, s.clone()))
+}
+
+/// Combien d'octets retenir à la fin de `pending` parce qu'ils pourraient être
+/// le début d'une séquence d'arrêt coupée entre deux trames SSE (`"Obser"`
+/// puis `"vation:"`).
+///
+/// C'est le plus long suffixe de `pending` qui soit un préfixe **strict** d'une
+/// séquence — un préfixe complet aurait déjà été vu par [`first_stop`]. Sans
+/// cette rétention, on pousserait dans le puits du texte qu'il aurait fallu
+/// couper : irrattrapable, puisque le puits *pousse*.
+pub fn holdback(pending: &str, stops: &[String]) -> usize {
+    let mut best = 0usize;
+    for s in stops.iter().filter(|s| !s.is_empty()) {
+        let max = (s.len() - 1).min(pending.len());
+        for k in (best + 1..=max).rev() {
+            let at = pending.len() - k;
+            // Ne jamais couper au milieu d'un caractère multi-octet.
+            if !pending.is_char_boundary(at) {
+                continue;
+            }
+            if pending.as_bytes()[at..] == s.as_bytes()[..k] {
+                best = k;
+                break;
+            }
+        }
+    }
+    best
+}
+
+/// Pousse un fragment dans le puits. `Err(())` = le puits demande l'arrêt.
+pub fn emit(sink: &mut dyn TokenSink, emitted: &mut usize, frag: &str) -> Result<(), ()> {
+    if frag.is_empty() {
+        return Ok(());
+    }
+    *emitted += 1;
+    if sink.on_token(frag) == Flow::Stop {
+        Err(())
+    } else {
+        Ok(())
+    }
+}
+
+
 // ─── Découpage en fragments ──────────────────────────────────────────────────
 
 /// Découpe un texte comme un tokeniseur BPE le rendrait : l'espace part
