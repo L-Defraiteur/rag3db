@@ -97,6 +97,9 @@ parité burn/candle                       MiniLM 2e-7 · multilingual 1.4e-7 · 
 - Le reranker **remplace** le score de fusion (blend possible plus tard).
 - RBAC : pas maintenant ; charnière = `set_scope` + future vue restreinte
   (`restrict_to(cells)`), rôles = données du graphe avec le chantier MCP.
+- **`ShardedHandle::compact(max_docs)`** (lucivy, doc 45) : à appeler après un
+  chargement en masse (−21 % de sidecars, moins de FST à ouvrir par requête) —
+  exposer un `Catalog::compact()` ou l'accrocher à la fin de `drain`/`reindex`.
 - `sparse-vector` : plan lucivy en 4 étapes vers lucistore (BlobDirectory,
   ShardStorage, sharding, delta) — après la fiabilisation, avec eux.
 - Reportés derrière tout ça : codeparsers (avec `project` dès le premier
