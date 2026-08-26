@@ -96,6 +96,7 @@ fn make_article_config() -> EntityConfig {
         chunking: small_chunking(),
         hashsafe: None,
         return_fields: None,
+        ..Default::default()
     }
 }
 

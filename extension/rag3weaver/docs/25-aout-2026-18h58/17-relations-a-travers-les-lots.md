@@ -390,3 +390,47 @@ Coût à l'ingestion : deux liens de plus par référence et par définition,
 et une lecture de voisins par symbole défini. À l'échelle de notre module,
 quelques milliers d'arêtes de plus — invisible à côté des 12 418 déjà là.
 Coût à la recherche : **zéro**, puisque `CONSUMES` reste matérialisé.
+
+---
+
+## 8. Fait, le 26 août au soir : le court-circuit, version correcte
+
+La règle du §6 est écrite, à sa place — `Catalog::split_unchanged`, appelée
+par `ingest_entities`, qui connaît la configuration de l'entité et sa table
+de chunks. Un enregistrement ne redescend pas dans le graphe **si et
+seulement si** :
+
+1. **sa ligne existe et tous ses champs y sont identiques** — les champs
+   déclarés, `_content_hash`, et les deux colonnes de cellule. Comparer le
+   seul `_content_hash` était le premier échec : il ne porte que sur les
+   champs de *contenu*, et le champ de contenu de `File` est `path` ;
+2. **ses artefacts dérivés existent** — au moins un chunk, et *tous*
+   embarqués si l'entité a un signal vectoriel. C'était le second échec :
+   après une annulation, le hash correspond et les chunks ne sont plus là.
+
+Une entité déclarée sans chunk (`chunked: Some(false)`, comme `Symbol`) ne
+demande évidemment que la première condition.
+
+Deux requêtes en tout, par `batch_select` en `UNWIND` : la ligne parente,
+et le compte de chunks par parent. En cas de doute — requête en échec,
+entité participant à une base de connaissance — **tout le lot repart au
+chemin complet** : refaire coûte du temps, sauter à tort donne un index
+faux.
+
+Mesure, deuxième ingestion de `src/dataflow`, contenu identique
+(`reingest_is_idempotent`, qui ingère deux fois et compare) :
+
+| phase | avant | après |
+|---|---|---|
+| entités | 16 892 ms | **101 ms** |
+| symboles | 1 922 ms | 1 268 ms |
+| relations | 729 ms | 701 ms |
+| **ré-ingestion complète** | **~19,5 s** | **~2,1 s** |
+
+Les 1 268 ms de symboles qui restent ne sont pas des entités : ce sont les
+deux passes `UNWIND` de matérialisation, qui refont leur travail parce que
+le graphe, lui, a pu changer.
+
+Et le compte rendu ne bouge pas : ces enregistrements *sont* ingérés, ils
+l'étaient déjà. `RAG3WEAVER_INGEST_PROFILE=1` dit combien ont été sautés,
+par entité.

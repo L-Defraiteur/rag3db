@@ -1972,6 +1972,151 @@ impl Catalog {
     ///             ←|trigger| chunk_insert.done
     ///     →|done:trigger| FlushNode("flush_fts", tables=["{Entity}"])
     /// ```
+    /// Le court-circuit de l'inchangé
+    /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md) §6).
+    ///
+    /// Sépare le lot en `(à faire, déjà à jour)`. Un enregistrement est déjà
+    /// à jour **si et seulement si** deux conditions tiennent :
+    ///
+    /// 1. sa ligne existe et **tous** ses champs y sont identiques — pas
+    ///    seulement `_content_hash`, qui ne porte que sur les *champs de
+    ///    contenu* : le champ de contenu de `File` est `path`, le texte vit
+    ///    dans un champ utilisateur, et un enregistrement peut donc changer
+    ///    sans que ce hash bouge ;
+    /// 2. ses **artefacts dérivés existent** — au moins un chunk, et tous
+    ///    embarqués si l'entité a un signal vectoriel. Un hash identique
+    ///    prouve que le contenu est le même, pas que les chunks sont là :
+    ///    après une annulation, ils ne le sont pas.
+    ///
+    /// Ces deux conditions sont, dans l'ordre, les deux échecs de la première
+    /// tentative — celle qui gardait la garde dans `InsertRecordNode`, qui ne
+    /// connaît ni la configuration de l'entité ni sa table de chunks.
+    ///
+    /// En cas de doute — requête qui échoue, entité participant à une base de
+    /// connaissance — tout le lot repart au chemin complet : refaire coûte du
+    /// temps, sauter à tort donne un index faux.
+    fn split_unchanged(
+        &self,
+        entity_name: &str,
+        config: &crate::config::EntityConfig,
+        records: Vec<EntityRecord>,
+    ) -> (Vec<EntityRecord>, usize) {
+        const NULL: CypherValue = CypherValue::Null;
+
+        // Le pipeline des bases de connaissance repart de chaque
+        // enregistrement : on ne lui coupe rien.
+        if config.has_kb_participation() {
+            return (records, 0);
+        }
+        let Some(entity_def) = self.config.entities.get(entity_name) else {
+            return (records, 0);
+        };
+
+        // Les colonnes comparées : les champs déclarés, le hash de contenu, et
+        // les colonnes de cellule — la même clé dans une autre cellule est un
+        // autre enregistrement.
+        let mut columns: Vec<String> = entity_def.fields.keys().cloned().collect();
+        columns.sort();
+        columns.push("_content_hash".into());
+        columns.extend(crate::scope::scope_columns().into_iter().map(|c| c.name));
+
+        let uuid_of = |r: &EntityRecord| -> String {
+            r.data.get("_uuid").and_then(|v| v.as_str()).unwrap_or("").to_string()
+        };
+        let items = || {
+            CypherValue::List(
+                records
+                    .iter()
+                    .map(|r| {
+                        CypherValue::Map(BTreeMap::from([(
+                            "uuid".to_string(),
+                            CypherValue::String(uuid_of(r)),
+                        )]))
+                    })
+                    .collect(),
+            )
+        };
+
+        // ── 1. La ligne stockée, champ pour champ ───────────────────────
+        let mut select: Vec<&str> = vec!["_uuid"];
+        select.extend(columns.iter().map(|c| c.as_str()));
+        let cypher = self.dialect.batch_select(entity_name, "uuid", "_uuid", &select);
+        let Ok(result) = self
+            .conn
+            .execute_with_params(&cypher, &[QueryParam::new("items", items())])
+        else {
+            return (records, 0);
+        };
+        let stored: HashMap<String, Vec<CypherValue>> = result
+            .rows
+            .iter()
+            .filter_map(|row| match row.first() {
+                Some(CypherValue::String(u)) if row.len() == columns.len() + 1 => {
+                    Some((u.clone(), row[1..].to_vec()))
+                }
+                _ => None,
+            })
+            .collect();
+
+        // ── 2. Les artefacts dérivés ────────────────────────────────────
+        let with_chunks = config.chunked != Some(false);
+        let mut complete: std::collections::HashSet<String> = std::collections::HashSet::new();
+        if with_chunks {
+            let chunk_table = format!("{entity_name}_Chunk");
+            let cypher = self.dialect.batch_select(
+                &chunk_table,
+                "uuid",
+                "_parent_uuid",
+                &["_parent_uuid", "_embed_hash"],
+            );
+            let Ok(result) = self
+                .conn
+                .execute_with_params(&cypher, &[QueryParam::new("items", items())])
+            else {
+                return (records, 0);
+            };
+            // Par parent : combien de chunks, combien d'embarqués.
+            let mut tally: HashMap<String, (usize, usize)> = HashMap::new();
+            for row in &result.rows {
+                let Some(parent) = row.first().and_then(|v| v.as_str()) else { continue };
+                let embedded = row.get(1).and_then(|v| v.as_str()).is_some_and(|h| !h.is_empty());
+                let e = tally.entry(parent.to_string()).or_insert((0, 0));
+                e.0 += 1;
+                e.1 += usize::from(embedded);
+            }
+            let needs_embedding = config.signals.vector();
+            complete = tally
+                .into_iter()
+                .filter(|(_, (chunks, embedded))| {
+                    *chunks > 0 && (!needs_embedding || embedded == chunks)
+                })
+                .map(|(uuid, _)| uuid)
+                .collect();
+        }
+
+        // ── 3. Le partage ───────────────────────────────────────────────
+        let mut todo = Vec::with_capacity(records.len());
+        let mut skipped = 0usize;
+        for rec in records {
+            let uuid = uuid_of(&rec);
+            let identical = stored.get(&uuid).is_some_and(|values| {
+                columns.iter().zip(values).all(|(col, was)| {
+                    let now = rec.data.get(col).unwrap_or(&NULL);
+                    match (now.as_str(), was.as_str()) {
+                        (Some(a), Some(b)) => a == b,
+                        _ => now == was,
+                    }
+                })
+            });
+            if identical && (!with_chunks || complete.contains(&uuid)) {
+                skipped += 1;
+            } else {
+                todo.push(rec);
+            }
+        }
+        (todo, skipped)
+    }
+
     pub fn ingest_entities(
         &mut self,
         entity_name: &str,
@@ -2039,6 +2184,19 @@ impl Catalog {
         }
 
         let record_count = entity_records.len();
+
+        // Le court-circuit de l'inchangé : ce qui est déjà en base, identique
+        // et complet, ne redescend pas dans le graphe (doc 17 §6). Le compte
+        // rendu ne bouge pas — ces enregistrements *sont* ingérés, ils
+        // l'étaient déjà.
+        let (entity_records, unchanged) = self.split_unchanged(entity_name, &entity_config, entity_records);
+        if entity_records.is_empty() {
+            self.flush_blob_store("ingest");
+            return Ok(FlushResult { processed: record_count, ..Default::default() });
+        }
+        if unchanged > 0 && std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+            eprintln!("[ingest-profile] {entity_name} : {unchanged}/{record_count} inchangés, travail dérivé sauté");
+        }
 
         // Keep data copies for KB pipeline triggering (if needed)
         let kb_data: Vec<BTreeMap<String, CypherValue>> = if entity_config.has_kb_participation() {
