@@ -1707,11 +1707,17 @@ mod tests {
                     node_type: "ResolveParentNode".into(),
                     config: json!({}),
                 },
+                NodeDef {
+                    name: "render".into(),
+                    node_type: "RenderResultsNode".into(),
+                    config: json!({}),
+                },
             ],
             edges: vec![
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "bm25".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "resolve".into(), to_port: "query".into() },
                 EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
+                EdgeDef { from_node: "resolve".into(), from_port: "results".into(), to_node: "render".into(), to_port: "results".into() },
             ],
         };
         GraphTool::new(
@@ -1723,7 +1729,7 @@ mod tests {
                 p("limit", ConfigParamType::Int, false, Some(json!(10)), "Nombre maximum de résultats."),
             ],
             template,
-            "resolve.results",
+            "render.text",
         )
         .unwrap()
     }
@@ -1734,7 +1740,7 @@ mod tests {
     fn build_from_rust() {
         let t = search_in_rust();
         assert_eq!(t.name(), "search");
-        assert_eq!(t.result(), ("resolve", "results"));
+        assert_eq!(t.result(), ("render", "text"));
         assert_eq!(t.params().len(), 3);
     }
 
@@ -1742,7 +1748,7 @@ mod tests {
     fn build_from_mermaid() {
         let t = GraphTool::from_mermaid(SEARCH_TOOL_MERMAID).unwrap();
         assert_eq!(t.name(), "search");
-        assert_eq!(t.result(), ("resolve", "results"));
+        assert_eq!(t.result(), ("render", "text"));
         let names: Vec<&str> = t.params().iter().map(|p| p.name).collect();
         assert_eq!(names, vec!["target", "query", "limit"]);
         assert!(t.params()[1].required);
@@ -1783,8 +1789,8 @@ mod tests {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_TOOL_MERMAID, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 3);
-        assert_eq!(def.edges.len(), 3);
+        assert_eq!(def.nodes.len(), 4);
+        assert_eq!(def.edges.len(), 4);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -2218,7 +2224,7 @@ mod tests {
             .unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["bm25", "resolve", "source"]);
+        assert_eq!(names, vec!["bm25", "render", "resolve", "source"]);
     }
 
     #[test]
@@ -2240,7 +2246,7 @@ mod tests {
             .unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["compose", "fetch", "inner"]);
+        assert_eq!(names, vec!["compose", "fetch", "inner", "render"]);
     }
 
     #[test]
@@ -2262,7 +2268,10 @@ mod tests {
             .create(SEARCH_TOOL_NODE_TYPE, "inner", &inner.config)
             .unwrap();
         let outs: Vec<&str> = node.outputs().iter().map(|p| p.name).collect();
-        assert!(outs.contains(&"resolve.results"), "ports libres : {outs:?}");
+        // Le nœud de rendu laisse passer les résultats : c'est ce port-là
+        // qui reste libre, et c'est par lui que `search_expand` compose.
+        assert!(outs.contains(&"render.results"), "ports libres : {outs:?}");
+        assert!(outs.contains(&"render.text"), "ports libres : {outs:?}");
     }
 
     #[test]

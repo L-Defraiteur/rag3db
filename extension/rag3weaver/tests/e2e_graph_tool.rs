@@ -186,19 +186,16 @@ fn a_tool_call_runs_a_graph_against_a_real_catalog() {
     assert_eq!(turn.tool_call_id.as_deref(), Some("call_search_1"));
     assert_eq!(turn.tool_name.as_deref(), Some("search"));
 
-    let results: Value = serde_json::from_str(&turn.content)
-        .unwrap_or_else(|e| panic!("contenu non JSON ({e}) : {}", turn.content));
-    let arr = results
-        .as_array()
-        .unwrap_or_else(|| panic!("attendu un tableau de résultats, reçu : {}", turn.content));
-    eprintln!("[search] {} résultats", arr.len());
-    for r in arr {
-        eprintln!("  uuid={} score={}", r["uuid"], r["score"]);
-    }
-    assert!(!arr.is_empty(), "le livre Rust doit sortir : {}", turn.content);
-    assert!(arr[0]["uuid"].is_string());
-    assert!(arr[0]["score"].is_number());
-    assert!(arr.len() <= 5, "la limite déclarée doit être respectée");
+    // Markdown compact, pas de JSON : ni uuid, ni hash, ni champ nul —
+    // c'est ce que le modèle lit (doc 11).
+    eprintln!("[search]\n{}", turn.content);
+    assert!(turn.content.starts_with("**1 result**"), "{}", turn.content);
+    assert!(turn.content.contains("`Rust Book` — Product · 0."), "{}", turn.content);
+    assert!(turn.content.contains("description=A comprehensive guide"), "{}", turn.content);
+    assert!(!turn.content.contains("uuid"), "pas d'uuid pour le modèle : {}", turn.content);
+    assert!(!turn.content.contains("_content_hash"), "{}", turn.content);
+    let shown = turn.content.matches("\n1. `").count() + turn.content.matches("\n2. `").count();
+    assert!(shown <= 5, "la limite déclarée doit être respectée : {}", turn.content);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -219,22 +216,12 @@ fn a_tool_graph_that_contains_another_one_runs_too() {
     let turn = tools.call(&call, &nodes, services);
     assert_eq!(turn.tool_call_id.as_deref(), Some("call_expand_1"));
 
-    let results: Value = serde_json::from_str(&turn.content)
-        .unwrap_or_else(|e| panic!("contenu non JSON ({e}) : {}", turn.content));
-    let arr = results
-        .as_array()
-        .unwrap_or_else(|| panic!("attendu un tableau, reçu : {}", turn.content));
-    eprintln!("[search_expand] {} résultats", arr.len());
-    assert!(!arr.is_empty(), "réponse vide : {}", turn.content);
+    eprintln!("[search_expand]\n{}", turn.content);
+    assert!(turn.content.starts_with("**"), "réponse vide ou en erreur : {}", turn.content);
 
-    // Le sous-graphe `search` a tourné (les résultats sont là), et l'étage
-    // d'expansion a attaché les variantes du livre.
-    // `UnifiedResult` sérialise en camelCase : `otherChildren`.
-    let expanded = arr
-        .iter()
-        .filter_map(|r| r["otherChildren"].as_array())
-        .map(|c| c.len())
-        .sum::<usize>();
+    // Le sous-graphe `search` a tourné, et l'étage d'expansion a attaché les
+    // variantes du livre : une ligne `↳ HAS_VARIANT` par voisin.
+    let expanded = turn.content.matches("↳ HAS_VARIANT").count();
     eprintln!("[search_expand] {expanded} voisins attachés");
     assert!(
         expanded >= 2,

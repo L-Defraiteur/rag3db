@@ -258,8 +258,8 @@ fn the_tool_result_is_summarised_by_the_local_model() {
     let result = toolbox.call(&call);
     assert!(result.is_tool_result());
     eprintln!("[burn-agent] résultat du graphe : {}", result.content);
-    let arr: serde_json::Value = serde_json::from_str(&result.content).expect("JSON");
-    assert!(!arr.as_array().unwrap().is_empty(), "la base doit rendre le livre Rust");
+    assert!(result.content.starts_with("**"), "la base doit rendre le livre Rust : {}", result.content);
+    assert!(result.content.contains("Rust"), "{}", result.content);
 
     let turns = vec![
         Turn::system("Réponds en une phrase, à partir du résultat de l'outil."),

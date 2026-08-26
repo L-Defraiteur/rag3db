@@ -27,6 +27,7 @@ pub mod node_registry;
 pub mod search_nodes;
 pub mod generic_search_nodes;
 pub mod reactor;
+pub mod render_nodes;
 pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
@@ -53,6 +54,7 @@ pub use generic_search_nodes::{
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{Choices, NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
 pub use reactor::{as_message, doorbell_cursor, ReactPolicy, Reactor, ReactorHandle};
+pub use render_nodes::{render_results_markdown, RenderResultsNode, RenderResultsNodeFactory};
 pub use trace_nodes::{
     drain_events, message_config, record_runs_and_messages, register_trace_schema, run_config, trace_config,
     trace_record, EventSourceNode, EventSourceNodeFactory, SendMessageNode, SendMessageNodeFactory, TraceSinkNode,

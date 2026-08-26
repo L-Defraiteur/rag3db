@@ -213,12 +213,9 @@ fn the_agent_really_calls_the_search_graph_tool() {
     );
 
     // Le contenu du résultat vient de la base, pas d'un mock.
-    let results: serde_json::Value = serde_json::from_str(&turns[3].content)
-        .unwrap_or_else(|e| panic!("résultat non JSON ({e}) : {}", turns[3].content));
-    let arr = results.as_array().expect("un tableau de résultats");
-    eprintln!("[agent] {} résultats réinjectés", arr.len());
-    assert!(!arr.is_empty(), "le livre Rust doit sortir : {}", turns[3].content);
-    assert!(arr[0]["uuid"].is_string());
+    eprintln!("[agent] résultat réinjecté :\n{}", turns[3].content);
+    assert!(turns[3].content.starts_with("**1 result**"), "le livre Rust doit sortir : {}", turns[3].content);
+    assert!(turns[3].content.contains("`Rust Book` — Product"), "{}", turns[3].content);
     assert_well_formed(&turns);
 }
 
@@ -264,7 +261,7 @@ fn a_bad_call_is_corrected_on_the_next_turn() {
     let detail = v["detail"].as_str().unwrap();
     assert!(detail.contains("Licorne") && detail.contains("Product"), "{detail}");
     // Le deuxième appel a bien rendu des résultats.
-    assert!(turns[4].content.starts_with('['), "{}", turns[4].content);
+    assert!(turns[4].content.starts_with("**1 result**"), "{}", turns[4].content);
     assert_well_formed(&turns);
 }
 
@@ -425,7 +422,8 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     // fin) et ses 3 nœuds — le second appel est refusé avant le graphe.
     let mut cat = catalog.lock().unwrap();
     assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
-    assert_eq!(n, 2 + 3 + 4 + 2 + 3, "{n} événements tracés");
+    // Le graphe `search` a un nœud de plus depuis le rendu compact.
+    assert_eq!(n, 2 + 3 + 4 + 2 + 4, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -580,12 +578,12 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     let turn = graph_tools.call(&call, &nodes, services.clone());
     eprintln!("[search_expand] {}", turn.content.chars().take(600).collect::<String>());
     assert!(!turn.content.starts_with("{\"error\""), "{}", turn.content);
-    let expanded: serde_json::Value = serde_json::from_str(&turn.content).unwrap();
-    let neighbour = &expanded[0]["otherChildren"][0];
-    assert_eq!(neighbour["relation"], "SENT_TO");
-    assert_eq!(neighbour["entity"], "Run");
-    assert_eq!(neighbour["data"]["run_id"], "run-b");
-    assert_eq!(neighbour["data"]["kind"], "agent");
+    // Markdown compact : le voisin est une ligne, pas un objet de trente
+    // colonnes dont vingt-huit nulles.
+    assert!(turn.content.contains("↳ SENT_TO Run"), "{}", turn.content);
+    assert!(turn.content.contains("run_id=run-b"), "{}", turn.content);
+    assert!(turn.content.contains("kind=agent"), "{}", turn.content);
+    assert!(!turn.content.contains("null"), "aucun champ nul : {}", turn.content);
     let cat = catalog.lock().unwrap();
     assert_eq!(cat.count(MESSAGE_ENTITY).unwrap(), 2);
     // run-a (graphe), run-b (agent), run-c (squelette, il n'a fait que parler), le graphe search sous run-b.
@@ -632,8 +630,8 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     let run = agent.run(&mut turns, &mut sink).unwrap();
     assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
 
-    // 2 (run) + 2 (modèle) + 2 (outil) + 2 (run du graphe search) + 3 (nœuds).
-    let expected = 11;
+    // 2 (run) + 2 (modèle) + 2 (outil) + 2 (run du graphe search) + 4 (nœuds).
+    let expected = 12;
     let start = Instant::now();
     loop {
         let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();

@@ -3,7 +3,7 @@
 %% param: target string! -- Nom de l'entité ou de la base de connaissances où chercher (ex. 'Product').
 %% param: query string! -- Texte de la requête, en langue naturelle.
 %% param: limit int = 10 -- Nombre maximum de résultats.
-%% result: resolve.results
+%% result: render.text
 %%
 %% Trois nœuds, dont deux que le modèle n'a pas à connaître : la fiche
 %% ci-dessus est toute la surface. `fuzzy_distance`, `result_mode` et les
@@ -13,7 +13,9 @@ graph LR
     source["SearchSourceNode(target_name=$target, query=$query)"]
     bm25["BM25SearchNode(limit=$limit)"]
     resolve["ResolveParentNode"]
+    render["RenderResultsNode"]
 
     source -->|query| bm25
     source -->|query| resolve
     bm25 -->|results| resolve
+    resolve -->|results| render

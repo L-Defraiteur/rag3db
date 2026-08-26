@@ -91,6 +91,12 @@ pub fn port_value_to_checkpoint(value: &PortValue) -> Result<CheckpointPortValue
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
         return Ok(CheckpointPortValue { port_type: PortType::Rules, is_batch: false, data_json: Some(json), record_count: None });
     }
+    // Texte brut (markdown d'un outil, réponse d'un modèle) : encodé en
+    // chaîne JSON, que `render_port_value` rend telle quelle au modèle.
+    if let Some(v) = value.downcast::<String>() {
+        let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
+        return Ok(CheckpointPortValue { port_type: PortType::Text, is_batch: false, data_json: Some(json), record_count: None });
+    }
     if let Some(v) = value.downcast::<serde_json::Value>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
         return Ok(CheckpointPortValue { port_type: PortType::Map, is_batch: false, data_json: Some(json), record_count: None });
@@ -259,6 +265,10 @@ fn deserialize_non_batch_port_value(port_type: PortType, json: &str) -> Result<P
         }
         PortType::Map | PortType::Any => {
             let v: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("Map deser: {e}"))?;
+            Ok(PortValue::new(v))
+        }
+        PortType::Text => {
+            let v: String = serde_json::from_str(json).map_err(|e| format!("Text deser: {e}"))?;
             Ok(PortValue::new(v))
         }
         PortType::Empty => Ok(PortValue::Trigger),

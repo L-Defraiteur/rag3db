@@ -1169,6 +1169,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::trace_nodes::EventSourceNodeFactory));
     registry.register(Box::new(super::trace_nodes::TraceSinkNodeFactory));
     registry.register(Box::new(super::trace_nodes::SendMessageNodeFactory));
+    registry.register(Box::new(super::render_nodes::RenderResultsNodeFactory));
     // Search nodes (generic)
     registry.register(Box::new(SearchSourceNodeFactory));
     registry.register(Box::new(VectorSearchNodeFactory));
@@ -1213,7 +1214,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 32 + if cfg!(feature = "code") { 6 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 6 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
