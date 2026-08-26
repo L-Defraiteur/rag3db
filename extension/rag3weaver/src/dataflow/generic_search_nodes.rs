@@ -339,9 +339,18 @@ impl Node for BM25SearchNode {
             .ok_or("BM25SearchNode: 'conn' service not found")?
             .0.clone();
 
-        let fts_handles = ctx
+        // Le handle FTS de la table parente : d'abord l'instantané du service
+        // `fts_handles`, sinon le catalogue **vivant** — une entité
+        // enregistrée après la construction des services (une trace, un
+        // message) a son index dans le catalogue, pas dans l'instantané.
+        let fts_handle = ctx
             .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
-            .cloned();
+            .and_then(|h| h.get(&target.parent_table).cloned())
+            .or_else(|| {
+                ctx.service::<Arc<Mutex<Catalog>>>("catalog")
+                    .and_then(|c| c.lock().ok())
+                    .and_then(|c| c.fts_handle(&target.parent_table))
+            });
 
         let fields: &[String] = match &self.fields {
             Some(f) => {
@@ -374,10 +383,7 @@ impl Node for BM25SearchNode {
             &mut node_warnings,
             // Handle FTS de la table parente si le service l'expose ; sinon on
             // reste sur le chemin C++.
-            fts_handles
-                .as_ref()
-                .and_then(|h| h.get(&target.parent_table))
-                .map(|h| h.as_ref()),
+            fts_handle.as_deref(),
         )
         .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
 

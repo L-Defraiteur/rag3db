@@ -532,15 +532,13 @@ impl DataflowRuntime {
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
-                if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
-                    bus.emit(crate::events::CatalogEvent::NodeRun {
-                        run: run_id.clone(),
-                        node: node_name.clone(),
-                        node_type: node_type.clone(),
-                        ms: duration_ms,
-                        error: exec_result.as_ref().err().cloned(),
-                    });
-                }
+                self.publish(crate::events::CatalogEvent::NodeRun {
+                    run: run_id.clone(),
+                    node: node_name.clone(),
+                    node_type: node_type.clone(),
+                    ms: duration_ms,
+                    error: exec_result.as_ref().err().cloned(),
+                });
 
                 match exec_result {
                     Ok(()) => {
@@ -677,26 +675,41 @@ impl DataflowRuntime {
         result
     }
 
-    fn emit_run_started(&self, run_id: &str, graph: &DataflowGraph) {
-        if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
-            bus.emit(crate::events::CatalogEvent::RunStarted {
-                run: run_id.to_string(),
-                parent: self.services.get::<String>("parent_run").cloned(),
-                kind: "graph".to_string(),
-                name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
-            });
+    /// Publie un événement de ce run sur le service `"event_bus"`, s'il est
+    /// là. **Celui qui monte le runtime choisit le sujet** de ses runs par le
+    /// service `"run_topic"` : sans lui, le sujet par défaut de l'événement
+    /// (`dataflow`) ; avec, ce sujet-là — le catalogue met ses graphes
+    /// d'ingestion sur `catalog`, pour qu'un graphe de trace qui écoute
+    /// `dataflow` ne se voie pas écrire. `run.<id>` reçoit dans tous les cas.
+    fn publish(&self, event: crate::events::CatalogEvent) {
+        let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") else { return };
+        match self.services.get::<String>("run_topic") {
+            Some(topic) => {
+                if let Some(run) = event.run() {
+                    bus.emit_on(&crate::events::run_topic(run), event.clone());
+                }
+                bus.emit_on(topic, event);
+            }
+            None => bus.emit(event),
         }
     }
 
+    fn emit_run_started(&self, run_id: &str, graph: &DataflowGraph) {
+        self.publish(crate::events::CatalogEvent::RunStarted {
+            run: run_id.to_string(),
+            parent: self.services.get::<String>("parent_run").cloned(),
+            kind: "graph".to_string(),
+            name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
+        });
+    }
+
     fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
-        if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
-            bus.emit(crate::events::CatalogEvent::RunFinished {
-                run: run_id.to_string(),
-                kind: "graph".to_string(),
-                ms,
-                ok,
-            });
-        }
+        self.publish(crate::events::CatalogEvent::RunFinished {
+            run: run_id.to_string(),
+            kind: "graph".to_string(),
+            ms,
+            ok,
+        });
     }
 
     fn execute_inner(
@@ -859,15 +872,13 @@ impl DataflowRuntime {
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
-                if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
-                    bus.emit(crate::events::CatalogEvent::NodeRun {
-                        run: run_id.clone(),
-                        node: node_name.clone(),
-                        node_type: node_type.clone(),
-                        ms: duration_ms,
-                        error: exec_result.as_ref().err().cloned(),
-                    });
-                }
+                self.publish(crate::events::CatalogEvent::NodeRun {
+                    run: run_id.clone(),
+                    node: node_name.clone(),
+                    node_type: node_type.clone(),
+                    ms: duration_ms,
+                    error: exec_result.as_ref().err().cloned(),
+                });
 
                 match exec_result {
                     Ok(()) => {

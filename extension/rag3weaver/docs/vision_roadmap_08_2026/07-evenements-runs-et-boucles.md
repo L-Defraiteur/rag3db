@@ -143,7 +143,8 @@ des résultats entiers.
 | L'agent publie (`with_events`), le runtime publie (`event_bus`) | fait |
 | `EventSourceNode(topics, cursor)`, `TraceSinkNode`, entité `Trace`, graphe `trace.mmd` | faits, sur sujets et curseurs ; second drain à 0 (pas d'écho) |
 | `run_id` partout, `run.<id>`, `parent`, champs `Trace` | fait : `RunStarted`/`RunFinished`, `ctx.run_id()`, `execute_as`, `ToolBox::call_in` + `ServiceRegistry::layered` pour le parent, `AgentRun.run` |
-| `SendMessageNode`, `inbox` relatif, `Agent::with_inbox` (lecture entre tours) | à faire — l'étape suivante |
+| `SendMessageNode`, `EventBus::send_message`, `inbox`/`self` relatifs, `Agent::with_inbox` (lecture entre tours, `AgentRun.messages`) | fait — testé : un message d'avant le run vu avant le premier tour, un message arrivé pendant un appel vu au tour suivant, jamais au milieu |
+| Schéma lié : `Run` (hashsafe `run_id`), `Message`, `CHILD_OF` / `SENT_BY` / `SENT_TO`, écrits par `TraceSinkNode` | fait — `search_expand(target = "Message", relation = "SENT_TO")` rend le run |
 | `interrupt` | à faire, petit (le puits sait déjà arrêter) |
 | `%% on:` / `%% policy:`, `Reactor` natif + `pump` | à faire |
 | Boîte durable (`Message` en base, `MessageSourceNode`) | plus tard, même forme de nœud |
@@ -165,4 +166,19 @@ voit au tour suivant), puis le réacteur. Un commit par étape.
   et c'est ce qui empêche un graphe de trace de se retracer.
 - **Un curseur ne voit que ce qui suit sa création.** On l'ouvre avant ce
   qu'on veut observer ; le réacteur les ouvre pour ses fiches à
-  l'enregistrement.
+  l'enregistrement. L'agent ouvre le sien (`run.<id>.inbox@agent`) au
+  début de son run ; pour qu'il voie un message d'**avant** son run, celui
+  qui monte les boucles l'ouvre plus tôt.
+- **Celui qui publie choisit le sujet de ses runs** (service `"run_topic"`).
+  Trouvé en marchant : les graphes d'ingestion internes du catalogue
+  publiaient leurs `NodeRun` sur `dataflow` comme les graphes d'outils, et
+  le graphe de trace, qui écrit dans le catalogue, se voyait écrire (dix
+  événements par drain). Le catalogue met ses runs sur `catalog` ; `run.<id>`
+  reçoit dans tous les cas.
+- **L'instantané `fts_handles` des services vieillit** : une entité
+  enregistrée après (une trace, un message) a son index dans le catalogue
+  vivant. `BM25SearchNode` y retombe quand l'instantané n'a pas la table.
+- **`FetchRelatedNode` rend toutes les colonnes**, nulles comprises
+  (`"error": null`, `"execution_id": null`… sur un `Run`) — le même
+  poids que le JSON brut de `search` ([11](../25-aout-2026-18h58/11-gemini-fiches-bornees-mesure.md)) ;
+  à rendre compact avec lui.

@@ -293,6 +293,9 @@ pub struct AgentRun {
     /// Appels orphelins refermés à la sortie — non nul après une annulation
     /// au milieu d'un appel.
     pub closed_orphans: usize,
+    /// Messages lus dans la boîte et injectés en tours `user`
+    /// ([`Agent::with_inbox`]).
+    pub messages: usize,
     /// Cumul de tous les appels : jetons, durée, **et réessais**.
     pub usage: Usage,
     pub stop: StopReason,
@@ -346,7 +349,15 @@ pub struct Agent<'a> {
     name: String,
     /// L'identifiant du prochain run, s'il est choisi ; sinon généré.
     run_id: Option<String>,
+    /// Lire sa boîte (`run.<id>.inbox`) entre deux tours.
+    inbox: bool,
 }
+
+/// Le curseur sous lequel un agent lit sa boîte. Un message envoyé **avant**
+/// le run n'est vu que si ce curseur a été ouvert avant
+/// (`bus.cursor(&inbox_topic(id), AGENT_INBOX_CURSOR)`) ; l'agent l'ouvre
+/// lui-même au début de son run.
+pub const AGENT_INBOX_CURSOR: &str = "agent";
 
 impl<'a> Agent<'a> {
     /// Les options de génération partent des défauts, **avec les outils de
@@ -361,6 +372,7 @@ impl<'a> Agent<'a> {
             events: None,
             name: "agent".to_string(),
             run_id: None,
+            inbox: false,
         }
     }
 
@@ -391,6 +403,43 @@ impl<'a> Agent<'a> {
     pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
         self.run_id = Some(run_id.into());
         self
+    }
+
+    /// Lit sa boîte **entre deux tours** : avant chaque appel au modèle, les
+    /// messages arrivés (`Event::Message` sur `run.<id>.inbox`) deviennent
+    /// des tours `user` — `[message de <from>] <content>` — dans l'ordre
+    /// d'arrivée, l'historique intact. Un message arrivé pendant un appel
+    /// d'outil est vu à l'itération suivante : la latence est un tour, la
+    /// granularité à laquelle l'agent raisonne. Demande `with_events`.
+    pub fn with_inbox(mut self) -> Self {
+        self.inbox = true;
+        self
+    }
+
+    /// Les messages en attente dans la boîte, en tours `user`. Rend combien.
+    fn read_inbox(&self, run_id: &str, turns: &mut Vec<Turn>) -> usize {
+        let Some(bus) = &self.events else { return 0 };
+        if !self.inbox {
+            return 0;
+        }
+        let cursor = bus.cursor(&crate::events::inbox_topic(run_id), AGENT_INBOX_CURSOR);
+        let mut rx = match cursor.lock() {
+            Ok(rx) => rx,
+            Err(_) => return 0,
+        };
+        let mut n = 0;
+        loop {
+            match rx.try_recv() {
+                Ok(crate::events::Event::Message { from, content, .. }) => {
+                    turns.push(Turn::user(format!("[message de {from}] {content}")));
+                    n += 1;
+                }
+                Ok(_) => {}
+                Err(async_broadcast::TryRecvError::Overflowed(_)) => continue,
+                Err(_) => break,
+            }
+        }
+        n
     }
 
     fn emit(&self, event: crate::events::CatalogEvent) {
@@ -442,6 +491,13 @@ impl<'a> Agent<'a> {
             .clone()
             .unwrap_or_else(|| crate::events::new_run_id("agent"));
         let run_started = std::time::Instant::now();
+        if self.inbox {
+            if let Some(bus) = &self.events {
+                // Ouvert avant tout le reste : ce qui arrive pendant le run
+                // est vu, même pendant un appel d'outil.
+                bus.cursor(&crate::events::inbox_topic(&run_id), AGENT_INBOX_CURSOR);
+            }
+        }
         self.emit(crate::events::CatalogEvent::RunStarted {
             run: run_id.clone(),
             parent: None,
@@ -471,6 +527,7 @@ impl<'a> Agent<'a> {
             tool_calls: 0,
             tool_errors: 0,
             closed_orphans: 0,
+            messages: 0,
             usage: Usage::default(),
             stop: StopReason::MaxIterations,
         };
@@ -505,6 +562,8 @@ impl<'a> Agent<'a> {
                     opts.tool_choice = crate::llm::ToolChoice::None;
                 }
             }
+            // La boîte, à la frontière du tour : jamais au milieu d'un appel.
+            run.messages += self.read_inbox(run_id, turns);
             let mut tee = TeeSink { inner: sink, text: String::new() };
             let generated = self.llm.generate(turns, &opts, &mut tee);
             let text = std::mem::take(&mut tee.text);

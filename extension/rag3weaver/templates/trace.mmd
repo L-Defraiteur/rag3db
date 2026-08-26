@@ -1,10 +1,10 @@
-%% Le graphe de trace : draine les sujets `agent` et `dataflow` du bus, écrit
-%% dans l'entité Trace. Services attendus : "events" (Arc<EventBus>, le bus à
+%% Le graphe de trace : draine les sujets `agent`, `dataflow` et `messages` du
+%% bus, écrit dans Trace (à plat) et dans Run / Message (liés). Services attendus : "events" (Arc<EventBus>, le bus à
 %% lire — pas "event_bus", sinon ce runtime publierait ses propres nœuds sur
 %% `dataflow` et se retracerait) et "catalog". Le curseur 'trace' doit être
 %% ouvert (bus.cursor(topic, 'trace')) avant ce qu'on veut observer.
 graph LR
-    events["EventSourceNode(topics='agent,dataflow', cursor='trace', limit=1000)"]
+    events["EventSourceNode(topics='agent,dataflow,messages', cursor='trace', limit=1000)"]
     sink["TraceSinkNode"]
 
     events -->|events| sink

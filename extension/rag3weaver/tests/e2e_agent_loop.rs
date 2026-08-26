@@ -17,11 +17,13 @@ use std::sync::{Arc, Mutex};
 use rag3weaver::agent::{Agent, AgentLimits, GraphToolBox, StopReason, ToolBox};
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
+use rag3weaver::agent::AGENT_INBOX_CURSOR;
 use rag3weaver::dataflow::{
-    builtin_graph_tools, execute_definition, parse_mermaid, register_trace_schema, ConnService, NodeTypePolicy,
-    ServiceRegistry, EVENTS_SERVICE, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
+    builtin_graph_tools, execute_definition, execute_definition_as, parse_mermaid, register_trace_schema, ConnService,
+    NodeTypePolicy, ServiceRegistry, EVENTS_SERVICE, MESSAGE_ENTITY, RUN_ENTITY, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
 };
-use rag3weaver::topic;
+use rag3weaver::events::inbox_topic;
+use rag3weaver::{topic, EventBus};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions};
 use rag3weaver::embedder::{Embedder, MockEmbedder};
 use rag3weaver::llm::{
@@ -124,6 +126,15 @@ fn services(catalog: Catalog) -> Arc<ServiceRegistry> {
     services.register("sparse_handles", sparse_handles);
     services.register::<Arc<dyn Embedder>>("embedder", embedder);
     Arc::new(services)
+}
+
+/// Les mêmes services, plus le bus **en publication** (`event_bus`) : les
+/// nœuds des graphes d'outils apparaîtront sous l'appel d'outil.
+fn services_with_bus(catalog: Catalog, bus: &EventBus) -> Arc<ServiceRegistry> {
+    let base = services(catalog);
+    let mut with_bus = ServiceRegistry::layered(base);
+    with_bus.register("event_bus", Arc::new(bus.shared()));
+    Arc::new(with_bus)
 }
 
 /// Un modèle qui joue une suite de `MockLlm`, un par tour, et rejoue le
@@ -362,18 +373,7 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     bus.cursor(topic::DATAFLOW, "trace");
 
     let (nodes, graph_tools) = builtin_graph_tools().unwrap();
-    let services = {
-        let base = services(catalog);
-        // Le même bus pour le runtime : les nœuds du graphe `search`
-        // apparaîtront sous l'appel d'outil.
-        let mut with_bus = ServiceRegistry::new();
-        with_bus.register("catalog", base.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap());
-        with_bus.register("conn", ConnService(base.get::<ConnService>("conn").unwrap().0.clone()));
-        with_bus.register("fts_handles", base.get::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles").cloned().unwrap());
-        with_bus.register::<Arc<dyn Embedder>>("embedder", base.get::<Arc<dyn Embedder>>("embedder").cloned().unwrap());
-        with_bus.register("event_bus", Arc::new(bus.shared()));
-        Arc::new(with_bus)
-    };
+    let services = services_with_bus(catalog, &bus);
     let catalog = services.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap();
     let toolbox = GraphToolBox::new(&graph_tools, &nodes, services.clone());
 
@@ -483,4 +483,108 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
         let mut turns = vec![Turn::user("cherche")];
         assert!(agent.run(&mut turns, &mut sink).is_ok());
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 6. Un graphe parle à un agent par son id ; l'agent lit entre deux tours
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Un graphe envoie un message à `run-b` avant que l'agent n'existe (sa
+/// boîte a été ouverte par celui qui monte les boucles) ; un second message
+/// arrive **pendant** le premier appel au modèle. L'agent voit le premier
+/// avant son premier tour, le second avant le suivant — jamais au milieu.
+/// Puis le graphe de trace écrit `Run` et `Message` liés, et
+/// `search_expand(target = "Message", relation = "SENT_TO")` retrouve `run-b`.
+#[test]
+#[ignore]
+fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
+    let mut catalog = setup_catalog();
+    register_trace_schema(&mut catalog).unwrap();
+    let bus = catalog.event_bus();
+    let services = services_with_bus(catalog, &bus);
+    let catalog = services.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap();
+    let (nodes, graph_tools) = builtin_graph_tools().unwrap();
+    for t in [topic::AGENT, topic::DATAFLOW, topic::MESSAGES] {
+        bus.cursor(t, "trace");
+    }
+
+    // 1. La boîte de run-b existe avant lui ; un graphe (run-a) lui parle.
+    bus.cursor(&inbox_topic("run-b"), AGENT_INBOX_CURSOR);
+    let send = parse_mermaid(
+        "graph LR\n    send[\"SendMessageNode(to='run-b', content='regarde le Rust Book', from='graph-a')\"]\n",
+    )
+    .unwrap();
+    let out = execute_definition_as(&send, &nodes, services.clone(), &NodeTypePolicy::All, ("send", "result"), Some("run-a")).unwrap();
+    assert!(out.contains("run-b"), "{out}");
+
+    // 2. L'agent run-b : au premier appel, le modèle « reçoit » un message
+    // de run-c pendant qu'il génère — il ne sera vu qu'au tour suivant.
+    let llm = {
+        let bus = bus.shared();
+        let calls = Mutex::new(0usize);
+        CallbackLlm::new("scripted", 8192, move |turns, opts, sink| {
+            let n = {
+                let mut g = calls.lock().unwrap();
+                *g += 1;
+                *g
+            };
+            if n == 1 {
+                bus.send_message("run-c", "run-c", "run-b", "et le couteau ?");
+                rag3weaver::llm::Llm::generate(
+                    &MockLlm::new("").with_tool_calls(vec![("search", r#"{"target":"Product","query":"programming language"}"#)]),
+                    turns, opts, sink,
+                )
+            } else {
+                rag3weaver::llm::Llm::generate(&MockLlm::new("Le Rust Book, et le couteau."), turns, opts, sink)
+            }
+        })
+    };
+    let toolbox = GraphToolBox::new(&graph_tools, &nodes, services.clone());
+    let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name("b").with_run_id("run-b").with_inbox();
+    let mut turns = vec![Turn::user("que lire ?")];
+    let mut sink = StringSink::default();
+    let run = agent.run(&mut turns, &mut sink).unwrap();
+    assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
+    assert_eq!(run.messages, 2);
+    let shape: Vec<(String, String)> = turns.iter().map(|t| (t.role.clone(), t.content.chars().take(32).collect())).collect();
+    eprintln!("[inbox] {shape:?}");
+    assert_eq!(turns.len(), 6, "{shape:?}");
+    assert!(turns[1].role == "user" && turns[1].content == "[message de graph-a] regarde le Rust Book", "{shape:?}");
+    assert!(turns[2].role == "assistant" && !turns[2].tool_calls.is_empty());
+    assert!(turns[3].is_tool_result());
+    assert!(turns[4].role == "user" && turns[4].content == "[message de run-c] et le couteau ?", "{shape:?}");
+    assert!(turns[5].role == "assistant" && turns[5].content.contains("couteau"));
+    assert_well_formed(&turns);
+
+    // 3. Le graphe de trace : runs et messages, liés.
+    let mut trace_services = ServiceRegistry::new();
+    trace_services.register("catalog", catalog.clone());
+    trace_services.register(EVENTS_SERVICE, Arc::new(bus.shared()));
+    let def = parse_mermaid(TRACE_GRAPH_MERMAID).unwrap();
+    let out = execute_definition(&def, &nodes, Arc::new(trace_services), &NodeTypePolicy::All, ("sink", "result")).unwrap();
+    eprintln!("[trace] {out}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["messages"], 2, "{out}");
+    assert!(v["runs"].as_u64().unwrap() >= 2, "{out}");
+
+    // 4. Par l'outil : Message —SENT_TO→ Run, et le run s'appelle run-b.
+    let call = rag3weaver::llm::ToolCall {
+        id: "c1".into(),
+        name: "search_expand".into(),
+        arguments: serde_json::json!({"target": "Message", "query": "couteau", "relation": "SENT_TO"}).to_string(),
+        provider_extra: None,
+    };
+    let turn = graph_tools.call(&call, &nodes, services.clone());
+    eprintln!("[search_expand] {}", turn.content.chars().take(600).collect::<String>());
+    assert!(!turn.content.starts_with("{\"error\""), "{}", turn.content);
+    let expanded: serde_json::Value = serde_json::from_str(&turn.content).unwrap();
+    let neighbour = &expanded[0]["otherChildren"][0];
+    assert_eq!(neighbour["relation"], "SENT_TO");
+    assert_eq!(neighbour["entity"], "Run");
+    assert_eq!(neighbour["data"]["run_id"], "run-b");
+    assert_eq!(neighbour["data"]["kind"], "agent");
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cat.count(MESSAGE_ENTITY).unwrap(), 2);
+    // run-a (graphe), run-b (agent), run-c (squelette, il n'a fait que parler), le graphe search sous run-b.
+    assert!(cat.count(RUN_ENTITY).unwrap() >= 4, "{}", cat.count(RUN_ENTITY).unwrap());
 }

@@ -591,12 +591,27 @@ pub fn execute_definition(
     policy: &NodeTypePolicy,
     result: (&str, &str),
 ) -> Result<String, GraphToolError> {
+    execute_definition_as(def, nodes, services, policy, result, None)
+}
+
+/// La même, sous un identifiant de run choisi (`None` : généré) — l'adresse
+/// du graphe sur le bus, pour un `EventSourceNode(topics='inbox')`.
+pub fn execute_definition_as(
+    def: &GraphDefinition,
+    nodes: &NodeRegistry,
+    services: Arc<ServiceRegistry>,
+    policy: &NodeTypePolicy,
+    result: (&str, &str),
+    run_id: Option<&str>,
+) -> Result<String, GraphToolError> {
     let (result_node, result_port) = result;
     let mut graph = build_definition(def, nodes, policy)?;
     let runtime = DataflowRuntime::with_services_arc(MAX_ITERATIONS, services);
-    let output = runtime
-        .execute(&mut graph)
-        .map_err(GraphToolError::Execution)?;
+    let output = match run_id {
+        Some(id) => runtime.execute_as(&mut graph, id),
+        None => runtime.execute(&mut graph),
+    }
+    .map_err(GraphToolError::Execution)?;
     let value = output
         .get(result_node, result_port)
         .ok_or_else(|| GraphToolError::NoResult {

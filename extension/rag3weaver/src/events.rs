@@ -419,6 +419,19 @@ impl EventBus {
         self.emit_on(topic, event);
     }
 
+    /// Parle à un run : le message part sur sa boîte (`run.<to>.inbox`) et,
+    /// par [`Self::emit`], sur `messages` et `run.<run>`. Fire and forget.
+    pub fn send_message(&self, run: &str, from: &str, to: &str, content: &str) {
+        let event = Event::Message {
+            run: run.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            content: content.to_string(),
+        };
+        self.emit_on(&inbox_topic(to), event.clone());
+        self.emit(event);
+    }
+
     /// Publie sur un sujet choisi — `messages.<destinataire>`, par exemple.
     pub fn emit_on(&self, topic: &str, event: Event) {
         self.with_channel(topic, |ch| {

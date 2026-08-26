@@ -2688,6 +2688,10 @@ impl Catalog {
 
         // Event bus for node-emitted lifecycle events + warnings
         services.register("event_bus", Arc::new(self.event_bus.shared()));
+        // Les graphes internes du catalogue publient leurs runs sur `catalog`,
+        // pas sur `dataflow` : un graphe de trace qui écrit ici ne doit pas
+        // se voir écrire.
+        services.register("run_topic", crate::events::topic::CATALOG.to_string());
 
         // entity_configs needed by DeleteRecordNode, UpdateRecordNode, ChunkRecordNode
         if has_deletes || has_updates || needs_kb {

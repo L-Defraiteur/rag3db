@@ -54,12 +54,14 @@ pub use generic_search_nodes::{
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{Choices, NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
 pub use trace_nodes::{
-    drain_events, register_trace_schema, trace_config, trace_record, EventSourceNode, EventSourceNodeFactory,
-    TraceSinkNode, TraceSinkNodeFactory, DEFAULT_CURSOR, DEFAULT_TOPICS, EVENTS_SERVICE, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
+    drain_events, message_config, record_runs_and_messages, register_trace_schema, run_config, trace_config,
+    trace_record, EventSourceNode, EventSourceNodeFactory, SendMessageNode, SendMessageNodeFactory, TraceSinkNode,
+    TraceSinkNodeFactory, CHILD_OF, DEFAULT_CURSOR, DEFAULT_TOPICS, EVENTS_SERVICE, MESSAGE_ENTITY, RUN_ENTITY, SENT_BY,
+    SENT_TO, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
 };
 pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use graph_tool::{
-    build_definition, builtin_graph_tools, execute_definition, param_type_name, resolve_params,
+    build_definition, builtin_graph_tools, check_choices, execute_definition, execute_definition_as, param_type_name, resolve_params,
     run_definition_as_tool_content, substitute_definition, template_vars, validate_node_types,
     GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_EXPAND_TOOL_MERMAID,
     SEARCH_TOOL_MERMAID, SEARCH_TOOL_NODE_TYPE,
