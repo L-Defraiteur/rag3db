@@ -957,3 +957,101 @@ fn an_ambiguous_name_abstains_but_keeps_its_candidates_in_the_graph() {
     assert!(mentioners.contains(&"run".to_string()), "{mentioners:?}");
     let _ = CypherValue::Null;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 10. Grossir : un fichier, puis un autre, puis tout le projet
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Les quatre façons dont un index grossit dans la vraie vie :
+/// fichier par fichier ; tout d'un coup ; **fichier par fichier puis tout
+/// d'un coup** (on découvre le projet après coup) ; et **tout d'un coup puis
+/// un fichier de plus**. Les quatre doivent converger vers le même graphe,
+/// sans scope en double.
+#[test]
+#[ignore]
+fn a_project_converges_however_it_was_ingested() {
+    use rag3weaver::code::analyze;
+
+    let a = || ("core.rs".to_string(),
+        "pub trait Engine {\n    fn run(&self) -> i32;\n}\n\npub fn boot() -> i32 {\n    7\n}\n".to_string());
+    let b = || ("app.rs".to_string(),
+        "use crate::core::{boot, Engine};\n\npub struct Main;\n\nimpl Engine for Main {\n    fn run(&self) -> i32 {\n        boot()\n    }\n}\n".to_string());
+    let c = || ("tools.rs".to_string(),
+        "use crate::core::boot;\n\npub fn helper() -> i32 {\n    boot() + 1\n}\n".to_string());
+    // Un manifeste : ce n'est pas du code, on veut voir ce qu'il devient.
+    let manifest = || ("package.json".to_string(), "{\n  \"name\": \"demo\",\n  \"dependencies\": { \"left-pad\": \"1.0.0\" }\n}\n".to_string());
+
+    let picture = |cat: &mut rag3weaver::Catalog| -> (Vec<(String, String, String)>, usize, usize) {
+        let mut all = Vec::new();
+        for rel in ["CONSUMES", "IMPLEMENTS", "INHERITS_FROM"] {
+            for (x, y) in edges(cat, rel) {
+                all.push((rel.to_string(), x, y));
+            }
+        }
+        all.sort();
+        (all, cat.count(SCOPE).unwrap(), cat.count(FILE).unwrap())
+    };
+
+    let run = |batches: Vec<Vec<(String, String)>>| -> (Vec<(String, String, String)>, usize, usize) {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for batch in batches {
+            let r = cat.ingest_code(&analyze("/projet", batch)).unwrap();
+            eprintln!("    lot : fichiers={} scopes={} symboles={} inter-lots={} attente={} ambigus={}",
+                r.files, r.scopes, r.symbols, r.linked_across_batches, r.still_pending, r.ambiguous);
+        }
+        picture(&mut cat)
+    };
+
+    let whole = vec![a(), b(), c(), manifest()];
+
+    eprintln!("[1] tout d'un coup");
+    let at_once = run(vec![whole.clone()]);
+    eprintln!("[2] un par un");
+    let one_by_one = run(vec![vec![a()], vec![b()], vec![c()], vec![manifest()]]);
+    eprintln!("[3] un par un, puis tout le projet");
+    let then_whole = run(vec![vec![a()], vec![b()], vec![c()], whole.clone()]);
+    eprintln!("[4] tout le projet, puis un fichier de plus");
+    let then_one = run(vec![vec![a(), b(), manifest()], vec![c()]]);
+
+    eprintln!("[1] {at_once:?}");
+    eprintln!("[2] {one_by_one:?}");
+    eprintln!("[3] {then_whole:?}");
+    eprintln!("[4] {then_one:?}");
+
+    assert_eq!(one_by_one, at_once, "un par un doit donner le même graphe que tout d'un coup");
+    assert_eq!(then_whole, at_once, "découvrir le projet après coup ne doit rien dupliquer");
+    assert_eq!(then_one, at_once, "un fichier de plus doit se raccrocher à l'existant");
+
+    // Ce que le manifeste devient : rien, et il faut le savoir.
+    let analysis = analyze("/projet", vec![manifest()]);
+    eprintln!("[manifeste] fichiers={} scopes={} écartés={:?}",
+        analysis.files.len(), analysis.scopes.len(), analysis.skipped);
+}
+
+/// **Test de constat, pas de souhait.** Le même fichier ingéré depuis deux
+/// racines différentes — le projet, puis un sous-dossier — donne **deux
+/// identités**, parce que la clé contient le chemin *relatif à la racine
+/// d'analyse*. C'est la question ouverte du
+/// [doc 15](../docs/25-aout-2026-18h58/15-identite-d-un-fichier.md) : un
+/// fichier devrait être identifié par une URI de source, pas par un chemin
+/// relatif. Le test fixe le comportement d'aujourd'hui pour qu'on voie le
+/// jour où il change.
+#[test]
+#[ignore]
+fn the_same_file_seen_from_two_roots_is_two_identities_today() {
+    use rag3weaver::code::analyze;
+
+    const SRC: &str = "pub fn boot() -> i32 {\n    7\n}\n";
+
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projet", vec![("src/core.rs".to_string(), SRC.to_string())])).unwrap();
+    let after_first = (cat.count(FILE).unwrap(), cat.count(SCOPE).unwrap());
+    cat.ingest_code(&analyze("/projet/src", vec![("core.rs".to_string(), SRC.to_string())])).unwrap();
+    let after_second = (cat.count(FILE).unwrap(), cat.count(SCOPE).unwrap());
+
+    eprintln!("[deux racines] après la première {after_first:?} | après la seconde {after_second:?}");
+    assert_eq!(after_second.0, after_first.0 * 2, "aujourd'hui : deux fichiers pour un seul");
+    assert_eq!(after_second.1, after_first.1 * 2, "et deux fois les scopes");
+}

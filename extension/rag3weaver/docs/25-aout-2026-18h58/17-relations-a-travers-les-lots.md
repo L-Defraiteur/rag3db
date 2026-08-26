@@ -591,3 +591,56 @@ du graphe. C'est un choix, pas un reste à faire.
 | **Renommage d'une cible au nom ambigu** | **pas réglé** — abstention, l'arête ne revient qu'en réingérant le fichier appelant | `an_ambiguous_name_abstains…` (dit ce qu'on garde) |
 | **`DECORATES` inter-lots** | **pas réglé**, et pas par oubli : l'arête va du **décorateur vers le décoré**, à l'envers du rendez-vous. Il lui faut son propre sens, pas la même passe | — |
 | `USES_LIBRARY`, `DEFINED_IN`, `PARENT_OF`/`HAS_PARENT` | sans objet : cibles à clé stable (nom, chemin) ou relations internes au fichier, refaites à chaque réingestion | — |
+
+## 11. Comment un index grossit vraiment — les quatre chemins, mesurés
+
+La question posée : « j'ingère un fichier, puis un autre, les relations se
+construisent ? et si j'ingère ensuite tout le projet ? ou l'inverse ? »
+Plutôt que d'y répondre par déduction, un test fait les quatre
+(`a_project_converges_however_it_was_ingested`). Trois fichiers, un trait,
+une implémentation, deux appelants :
+
+| Chemin | Graphe | Scopes | Fichiers |
+|---|---|---|---|
+| tout d'un coup | 6 arêtes | 9 | 3 |
+| un par un | 6 arêtes | 9 | 3 |
+| un par un, **puis tout le projet** | 6 arêtes | 9 | 3 |
+| tout le projet, **puis un fichier de plus** | 6 arêtes | 9 | 3 |
+
+Identiques, aux arêtes près et aux entités près — donc **rien n'est
+dupliqué** quand on réingère un surensemble de ce qu'on avait déjà, et rien
+n'est manqué quand on ajoute un fichier à un projet complet. Les compteurs
+racontent bien l'histoire : un par un, le deuxième lot relie 5 arêtes après
+coup et le troisième 5 de plus ; tout d'un coup, un seul lot en relie 7.
+Même destination, chemins différents.
+
+**Ce qui rend ça vrai**, et qui ne l'était pas ce matin : l'identité d'un
+scope ne dépend que de `fichier#parent.nom:type` (§10.1). Réingérer un
+fichier déjà connu produit exactement les mêmes clés, donc un `MERGE` et non
+un doublon.
+
+### Le manifeste ne dit rien
+
+Au passage, une chose qu'il faut savoir plutôt que découvrir :
+
+```
+[manifeste] fichiers=0 scopes=0 écartés=[("package.json", "unsupported extension")]
+```
+
+Un `package.json`, un `Cargo.toml`, un `pyproject.toml` ne sont **pas lus**.
+Les entités `Library` naissent des **instructions d'import** trouvées dans
+le code, pas des dépendances déclarées. Conséquence : une dépendance
+installée mais jamais importée n'existe pas dans le graphe, et une version
+de dépendance n'y est nulle part. Lire les manifestes serait une source
+d'entités à part entière — et le bon endroit pour la brancher est
+l'analyse, pas l'ingestion.
+
+### Et la limite qui reste : deux racines, deux identités
+
+`the_same_file_seen_from_two_roots_is_two_identities_today` est un test de
+**constat**. Le même fichier ingéré depuis `/projet` puis depuis
+`/projet/src` donne deux `File` et deux `Scope`, parce que la clé contient
+le chemin *relatif à la racine d'analyse*. C'est exactement la question
+ouverte du [doc 15](15-identite-d-un-fichier.md) — un fichier devrait
+s'identifier par une URI de source. Le test fixe le comportement
+d'aujourd'hui pour qu'on voie le jour où il change.
