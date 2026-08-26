@@ -193,3 +193,86 @@ L'ordre ne change pas :
 Autrement dit : on a de quoi avancer six mois sans que lucivy bouge, et on a
 maintenant une liste précise à lui remettre — écrite depuis l'usage, avec
 les numéros de ligne.
+
+---
+
+## 6. Addendum, après la réponse de lucivy ([07](07-reponse-lucivy-cahier-des-charges.md))
+
+Deux corrections reçues, **vérifiées dans le code toutes les deux**, et un
+désaccord sur l'ordre que j'accepte.
+
+### 6.1 R5 était trop généreux : le mécanisme existe, l'entrée n'existe pas
+
+`ShardFilter` est `pub(crate)` (`lucivy_core/src/search_dag.rs:796`) et
+`Subset` n'est construit que dans le découpage mémoire de `search_internal`
+(`sharded_handle.rs:2237`, `:2248`). Aucune méthode publique ne prend un
+sous-ensemble de shards. Donc R5 passe de **oui** à **non** : c'est une API
+à ajouter, pas un correctif à appliquer.
+
+### 6.2 L2 était faux — et l'aurait cassé
+
+Ma formulation (« les statistiques doivent porter sur le sous-ensemble »)
+aurait cassé une invariance qu'on ne voyait pas. Vérifié :
+
+- l'agrégat BM25 est construit sur `self.shards` — tous (`search_dag.rs:370`) ;
+- la boucle de prescan v3 travaille sur `self.active` — le sous-ensemble
+  (`search_dag.rs:384-387`) ;
+- et le chemin batché **prescanne tous les lots en passe 1** avant de
+  chercher lot par lot en passe 2 (`sharded_handle.rs:2222`, « Pass 2 —
+  search, batch by batch, with the fully prescanned query »).
+
+C'est ça qui rend les scores **invariants au découpage mémoire** : sans
+statistiques du corpus entier, le score d'un document dépendrait du lot dans
+lequel il tombe.
+
+Donc `Subset` porte **deux intentions opposées** :
+
+| Intention | Statistiques voulues | Pourquoi |
+|---|---|---|
+| « je découpe mon index par contrainte mémoire » | **corpus entier** | sinon le score dépend du lot |
+| « je restreins à un locataire / un domaine » | **sous-ensemble** | sinon ça fuite |
+
+Ce sont **deux variantes**, pas un réglage. L2 se réécrit :
+
+> Exposer publiquement la restriction à un sous-ensemble de shards, **et**
+> distinguer explicitement les deux intentions — la restriction par mémoire
+> garde les statistiques globales, la restriction par périmètre les cadre
+> sur le sous-ensemble.
+
+C'est la bonne leçon de la journée, appliquée à un autre dépôt : *un même
+mécanisme qui sert deux intentions doit les nommer, sinon l'une des deux
+sera fausse en silence.*
+
+### 6.3 L'ordre : ils ont raison, on inverse
+
+Je mettais L1 en premier et bloquant. Leur ordre — **L3, puis L5.1, puis L2
+avec son entrée publique, puis L1 en dernier** — est meilleur pour une
+raison que j'avais moi-même écrite au §5 sans en tirer la conséquence : le
+chemin qu'on veut réellement emprunter (fédérer entre projets d'une org) est
+`ExportableStats`, il est **déjà écrit**, et L3 ne fait que le remettre sur
+le DAG. Il peut donc suffire **sans jamais faire L1 ni L2**.
+
+Et L5.1 (temporaire + `rename` + CRC sur `sparse.mmap`) passe devant tout
+le reste dans mon esprit : c'est une corruption silencieuse aujourd'hui, pas
+une amélioration pour demain.
+
+### 6.4 Leur question, et notre réponse provisoire
+
+« Combien de shards un domaine monte-t-il en pratique ? » — parce que
+l'agrégat interroge chaque searcher à chaque requête, donc linéairement.
+
+On ne peut pas encore le mesurer : `Origin` n'existe pas. Mais l'ordre de
+grandeur se devine, et il vaut mieux le dire tout de suite qu'attendre :
+
+- **poste de développement réel** (celui-ci) : 26 racines git sous un seul
+  répertoire de travail. C'est le haut de la fourchette d'un domaine « tout
+  ce que je touche » ;
+- **un domaine de travail normal** — un projet et ses dépendances lues :
+  **3 à 10 origines** ;
+- **un domaine dérivé par défaut** (l'origine du fichier courant, §3 du
+  [05](05-origine-cellule-domaine.md)) : **1**.
+
+Donc la fourchette utile est **1 à 30**, pas 1 000. À ces nombres, un
+agrégat linéaire sans cache est probablement le bon compromis — et c'est
+même un avantage (R7 : rien à invalider au montage). On mesurera pour de
+vrai dès qu'`Origin` sera là, et on leur enverra le chiffre.
