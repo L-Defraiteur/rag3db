@@ -7,6 +7,14 @@ j'indexe un dossier, puis un sous-dossier de ce dossier — que doit-il se
 passer ? J'indexe un dossier parent d'un dossier déjà ingéré — que doit-il
 se passer ? »*
 
+> **Corrigé une demi-heure plus tard** par le
+> [16](16-le-monde-est-ouvert.md) : ce document suppose que tout fichier
+> intéressant est déjà dans un projet, et c'est faux — « chemin relatif au
+> projet » n'a pas de sens pour `/etc/hosts` ni pour le dépôt d'à côté. Ce
+> qui tient : l'identité par URI (§3) et la couverture bornée (§4). Ce qui
+> est remplacé : la présentation (§5), où le monde ouvert impose des
+> chemins auto-descriptifs plutôt qu'une racine unique.
+
 La réponse courte : ce n'est pas une option à ajouter, c'est **trois notions
 à séparer**. Une fois séparées, les deux cas de RAGForge n'ont plus besoin
 de règle particulière — ils tombent tout seuls.
