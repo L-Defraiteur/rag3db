@@ -154,3 +154,67 @@ rm extension/vector/build/libvector.rag3db_extension   # avant reconstruction si
 - **Vision** : `docs/vision_roadmap_08_2026/01` (la vision), `06` (la feuille de route), `07` (événements, runs et boucles).
 - **Hier soir** : `docs/25-aout-2026-18h58/07` à `09` (rapport, objectifs, savoir-faire), `11` (les mesures d'agents), `13` à `18` (session, écoute, identité, monde ouvert, relations, index vectoriel).
 - **Aujourd'hui** : ce dossier — `01` (progression et pistes), `02` (architecture), `03` (celui-ci).
+
+---
+
+## Ménage de la machine (ajouté le 27 août)
+
+### Ce qui est réglé une fois pour toutes
+
+| Où | Quoi | Pourquoi |
+|---|---|---|
+| `rag3db/.cargo/config.toml` | `jobs = -2` | « tous les cœurs sauf deux » — portable, pas un nombre en dur |
+| `run_e2e.sh` | `nproc - 2` pour cmake | c'est le build C++ qui fige le poste |
+| `run_e2e.sh` | `confined()` — cgroup `MemoryHigh=16G` | que le build récupère **son** cache, pas les pages du bureau |
+
+### Les commandes
+
+```bash
+# Le build prend plus (ou moins) de place — ou pas de cgroup du tout
+RAG3WEAVER_BUILD_MEMORY_HIGH=24G ./run_e2e.sh
+RAG3WEAVER_BUILD_MEMORY_HIGH=0   ./run_e2e.sh
+
+# Ramener en RAM ce qui est parti en zram (demande sudo, refuse si la RAM
+# libre ne suffit pas)
+./unswap.sh
+
+# Le diagnostic, quand « ça galère » sans que le CPU bouge
+free -h && sysctl vm.swappiness
+awk '{printf "%.1f Go stockés → %.1f Go de RAM\n", $1/1073741824, $2/1073741824}' /sys/block/zram0/mm_stat
+for f in /proc/[0-9]*/status; do sw=$(awk '/VmSwap/{print $2}' "$f" 2>/dev/null); \
+  [ -n "$sw" ] && [ "$sw" -gt 100000 ] && echo "$sw $(awk '/^Name/{print $2}' "$f")"; done | sort -rn | head
+```
+
+### Ce qu'on a appris, pour ne pas le rechercher
+
+Le 27 août, poste « qui galère », **CPU à 3 %** :
+
+- ce n'était pas un manque de RAM — 51 Go libres ;
+- c'était **36 Go de pages compressées dans le zram**, dont Chrome et
+  l'éditeur ;
+- cause : `vm.swappiness = 150` (défaut CachyOS, pensé pour zram) veut dire
+  « je préfère compresser des applications plutôt que jeter du cache
+  disque », et un gros build fait défiler des gigaoctets à travers ce cache.
+
+Donc **c'était bien la compilation, mais par ses entrées-sorties, pas par ses
+threads** — le `-j` réduit ne traitait pas ça. Le réglage retenu :
+`vm.swappiness = 80` (celui par défaut est pensé pour 16 Go de RAM, pas pour
+93), le confinement par cgroup en prévention, `unswap.sh` en cure.
+
+## Le dump de vecteurs creux pour lucivy (27 août)
+
+```bash
+./run_e2e.sh --test e2e_sparse_dump
+# → target/sparse-dump/sparse-docs.jsonl  (2,0 Mo)
+#   target/sparse-dump/sparse-queries.jsonl
+# SPARSE_DUMP_DIR=/ailleurs pour choisir la destination
+```
+
+Produit de **vrais** vecteurs BGE-M3 depuis notre propre code, et imprime la
+distribution : `nnz` par vecteur, quantiles de poids, et combien de
+dimensions portent la moitié des occurrences — le déséquilibre dont le WAND
+tire son élagage, et que des vecteurs synthétiques n'ont pas.
+
+Mesure du 27 août : documents `nnz` médian 38, moyenne 45,2, **215 dimensions
+sur 6 583 portent la moitié des occurrences** ; requêtes `nnz` médian 10.
+Débit sur burn/Vulkan : **16 vecteurs/s** en documents, 46 en requêtes.
