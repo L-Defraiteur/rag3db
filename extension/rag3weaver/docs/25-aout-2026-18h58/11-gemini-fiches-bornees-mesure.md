@@ -92,11 +92,39 @@ fermer, et elles ne s'excluent pas :
 
 - **côté llama.cpp** : la conversion des appels d'outils dépend du gabarit
   et de la version ; c'est le premier essai à faire ;
-- **côté harnais** : détecter un appel d'outil resté dans le texte
-  (`<function=…>`, `<tool_call>`) et le renvoyer au modèle en résultat
-  d'erreur lisible — exactement ce qu'on a déjà fait pour Vertex avec
-  `repair_arguments_json` et `stray_error`. Général, bon marché, utile à
-  tout modèle local.
+- **côté harnais** : ~~détecter un appel d'outil resté dans le texte~~
+  **fait dans la foulée** — `recover_tool_calls` (dans `llm.rs`, à côté de
+  `repair_arguments_json`) reconnaît les trois formes courantes
+  (`<function=NOM><parameter=CLÉ>…` de Qwen3-Coder,
+  `<tool_call>{json}</tool_call>` d'Hermes et Qwen2.5, `[TOOL_CALLS] […]`
+  de Mistral) et l'agent les exécute au lieu de conclure le tour.
+
+**Ce n'est pas un parseur XML, et c'était la question.** `<function=search>`
+n'est pas un nom de balise légal : aucun parseur conforme ne récupère ça,
+même permissif — il faudrait lui enseigner la forme. Un scanner tolérant
+de trois formes connues suffit, sans dépendance. En revanche trois idées
+de [LR_XMLParser](https://github.com/LuciformResearch/LR_XMLParser) se
+portent telles quelles et sont dedans : **plafond de récupérations**
+(`maxRecoveries` → on s'arrête, on résume, on rend le partiel : 8 appels),
+**diagnostics plutôt qu'échec silencieux** (chaque renoncement part en
+`Warning` sur le bus et se retrouve dans la trace ; `Usage.recovered_calls`
+compte, pour qui n'écoute pas), et **limites d'entrée** (64 Ko fouillés au
+maximum). Le texte gardé dans l'historique est nettoyé de l'appel — sinon
+le modèle relit son propre appel comme du contenu.
+
+**Q1 rejouée, même serveur, après le rattrapage :**
+
+| | avant | après |
+|---|---|---|
+| appels d'outils | 0 | **3** (`search`, `grep`, `grep`) |
+| réponse | inventée | juste — `generic_search_nodes.rs:1022-1026` |
+| durée | 2,4 s | 6,2 s |
+
+Et dans la même exécution, le « vouliez-vous dire » de `grep` a servi pour
+de vrai : le modèle a tenté `path_prefix='src/'` (le chemin du dépôt), a lu
+*« Paths are relative to the root of this source »*, et a réessayé sans
+préfixe au coup suivant. Les deux corrections de la matinée se voient à
+l'œuvre dans la même trace.
 
 Les deux erreurs d'outil de Q2 et Q3 sont **la même que chez Gemini** :
 `read('extension/rag3weaver/src/…')`, le chemin du dépôt au lieu de celui

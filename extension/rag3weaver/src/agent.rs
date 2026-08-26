@@ -581,6 +581,40 @@ impl<'a> Agent<'a> {
             };
 
             run.iterations += 1;
+
+            // Un appel d'outil resté **dans le texte** : certains serveurs
+            // locaux ne le convertissent pas en `tool_calls` (mesuré le
+            // 26 août sur Qwen3-Coder par `llama-server` — une question sur
+            // cinq perdue pour cette seule raison, doc 11). Sans ce
+            // rattrapage, la boucle voit « aucun outil demandé » et conclut
+            // le tour alors que le modèle avait bien décidé d'agir.
+            let (mut text, mut finish) = (text, finish);
+            if !finish.has_tool_calls() {
+                let (cleaned, recovered, diagnostics) = crate::llm::recover_tool_calls(&text);
+                for detail in diagnostics {
+                    self.emit(crate::events::CatalogEvent::Warning {
+                        context: format!("agent:{}", self.name),
+                        message: detail,
+                    });
+                }
+                if !recovered.is_empty() {
+                    // Jamais silencieux : ce qui a été rattrapé se voit dans
+                    // la trace **et** dans le compteur, pour qui n'écoute pas.
+                    self.emit(crate::events::CatalogEvent::Warning {
+                        context: format!("agent:{}", self.name),
+                        message: format!(
+                            "{} appel(s) d'outil récupéré(s) dans le texte — le serveur n'a pas converti la réponse du modèle",
+                            recovered.len()
+                        ),
+                    });
+                    run.usage.recovered_calls += recovered.len() as u32;
+                    // Le texte gardé dans l'historique ne contient plus
+                    // l'appel : le modèle le relirait comme du contenu.
+                    text = cleaned;
+                    finish = finish.with_tool_calls(recovered);
+                }
+            }
+
             run.text = text.clone();
             accumulate(&mut run.usage, &usage);
             last_finish = finish.clone();
@@ -691,6 +725,7 @@ fn accumulate(total: &mut Usage, one: &Usage) {
     total.completion_tokens += one.completion_tokens;
     total.ms += one.ms;
     total.retries += one.retries;
+    total.recovered_calls += one.recovered_calls;
 }
 
 /// Le détail d'erreur d'un résultat d'outil, s'il en porte une.

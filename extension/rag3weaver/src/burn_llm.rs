@@ -784,8 +784,7 @@ impl Llm for BurnLlm {
                 prompt_tokens: prompt_ids.len(),
                 completion_tokens: gen_ids.len(),
                 ms: started.elapsed().as_millis() as u64,
-                retries: 0,
-            },
+                retries: 0, recovered_calls: 0 },
         ))
     }
 

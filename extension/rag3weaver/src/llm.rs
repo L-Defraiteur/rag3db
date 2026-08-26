@@ -791,6 +791,11 @@ pub struct Usage {
     /// Un appelant qui n'a rien implémenté voit quand même, après coup, qu'un
     /// appel de 63 s en a passé 60 à attendre.
     pub retries: u32,
+    /// Appels d'outils **récupérés dans le texte** ([`recover_tool_calls`]).
+    /// `0` en temps normal. Même raison d'être que `retries` : un appelant
+    /// qui n'a rien implémenté voit quand même, après coup, que le modèle
+    /// n'a pas parlé le bon protocole.
+    pub recovered_calls: u32,
 }
 
 impl Usage {
@@ -1159,8 +1164,7 @@ impl Llm for MockLlm {
                 completion_tokens: emitted,
                 ms: started.elapsed().as_millis() as u64,
                 // Un modèle local ne réessaie rien.
-                retries: 0,
-            },
+                retries: 0, recovered_calls: 0 },
         ))
     }
 
@@ -1400,7 +1404,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1664,7 +1668,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 
@@ -1687,6 +1691,179 @@ mod tests {
 }
 
 // ─── Arguments d'appel d'outil : réparation et mise sur le fil ──────────────
+
+/// Plafond de récupérations par réponse. Au-delà, on s'arrête et on le dit :
+/// une récupération non bornée est une porte ouverte (l'idée vient du
+/// `maxRecoveries` de LR_XMLParser, qui a raison sur ce point).
+pub const MAX_RECOVERED_CALLS: usize = 8;
+
+/// Longueur maximale fouillée. Un texte de plusieurs centaines de kilooctets
+/// n'est pas un appel d'outil oublié, c'est une réponse.
+const MAX_RECOVER_SCAN: usize = 64 * 1024;
+
+/// Récupère les appels d'outils **restés dans le texte**, et rend
+/// `(texte nettoyé, appels, diagnostics)`.
+///
+/// Certains modèles — Qwen3-Coder par `llama-server` en particulier —
+/// écrivent leur appel dans le contenu au lieu du champ `tool_calls`, quand
+/// le gabarit du serveur ne sait pas le convertir. Notre boucle voit alors
+/// « aucun outil demandé » et conclut le tour : mesuré le 26 août sur
+/// Qwen3-Coder-30B, une question sur cinq perdue pour cette seule raison.
+///
+/// **Ce n'est pas du XML** et on n'essaie pas d'en faire : `<function=x>`
+/// n'est pas un nom de balise légal. C'est un scanner tolérant de trois
+/// formes connues, borné en longueur et en nombre :
+///
+/// 1. `<function=NOM><parameter=CLÉ>valeur</parameter>…</function>` (Qwen3-Coder) ;
+/// 2. `<tool_call>{"name":…,"arguments":{…}}</tool_call>` (Hermes, Qwen2.5) ;
+/// 3. `[TOOL_CALLS] [{"name":…,"arguments":{…}}]` (Mistral).
+///
+/// Les diagnostics ne sont jamais silencieux : ce qui a été récupéré, et ce
+/// qui a été laissé faute de place, revient dans la troisième valeur.
+pub fn recover_tool_calls(text: &str) -> (String, Vec<ToolCall>, Vec<String>) {
+    let mut calls = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    let scan_end = text.len().min(MAX_RECOVER_SCAN);
+    if scan_end < text.len() {
+        diagnostics.push(format!(
+            "récupération : {} octets fouillés sur {}",
+            scan_end,
+            text.len()
+        ));
+    }
+    let hay = &text[..floor_char_boundary(text, scan_end)];
+
+    let push = |name: String, arguments: String, span: (usize, usize), calls: &mut Vec<ToolCall>, spans: &mut Vec<(usize, usize)>, diagnostics: &mut Vec<String>| {
+        if calls.len() >= MAX_RECOVERED_CALLS {
+            diagnostics.push(format!("récupération : plafond de {MAX_RECOVERED_CALLS} appels atteint, le reste est laissé dans le texte"));
+            return;
+        }
+        let id = ToolCall::local_id("recovered", calls.len(), &name, &arguments);
+        calls.push(ToolCall { id, name, arguments, provider_extra: None });
+        spans.push(span);
+    };
+
+    // 1. `<function=NOM>` … `<parameter=CLÉ>` … `</function>`
+    let mut at = 0usize;
+    while let Some(rel) = hay[at..].find("<function=") {
+        let start = at + rel;
+        let Some(head_end) = hay[start..].find('>').map(|d| start + d) else { break };
+        let name = hay[start + "<function=".len()..head_end].trim().to_string();
+        let body_start = head_end + 1;
+        let (body_end, span_end) = match hay[body_start..].find("</function>") {
+            Some(d) => (body_start + d, body_start + d + "</function>".len()),
+            None => (hay.len(), hay.len()),
+        };
+        let mut args = serde_json::Map::new();
+        let body = &hay[body_start..body_end];
+        let mut p = 0usize;
+        while let Some(rel) = body[p..].find("<parameter=") {
+            let ps = p + rel;
+            let Some(key_end) = body[ps..].find('>').map(|d| ps + d) else { break };
+            let key = body[ps + "<parameter=".len()..key_end].trim().to_string();
+            let vs = key_end + 1;
+            let ve = body[vs..].find("</parameter>").map(|d| vs + d).unwrap_or(body.len());
+            args.insert(key, serde_json::Value::String(body[vs..ve].trim().to_string()));
+            p = (ve + "</parameter>".len()).min(body.len());
+        }
+        if name.is_empty() {
+            diagnostics.push("récupération : `<function=>` sans nom, ignoré".into());
+        } else {
+            push(name, serde_json::Value::Object(args).to_string(), (start, span_end), &mut calls, &mut spans, &mut diagnostics);
+        }
+        at = span_end.max(start + 1);
+    }
+
+    // 2. `<tool_call>{…}</tool_call>` — du JSON dans une balise.
+    let mut at = 0usize;
+    while let Some(rel) = hay[at..].find("<tool_call>") {
+        let start = at + rel;
+        let inner = start + "<tool_call>".len();
+        let (end, span_end) = match hay[inner..].find("</tool_call>") {
+            Some(d) => (inner + d, inner + d + "</tool_call>".len()),
+            None => (hay.len(), hay.len()),
+        };
+        if spans.iter().any(|(a, b)| start < *b && *a < span_end) {
+            at = span_end.max(start + 1);
+            continue;
+        }
+        match serde_json::from_str::<serde_json::Value>(hay[inner..end].trim()) {
+            Ok(v) => match json_call(&v) {
+                Some((name, arguments)) => push(name, arguments, (start, span_end), &mut calls, &mut spans, &mut diagnostics),
+                None => diagnostics.push("récupération : `<tool_call>` sans `name`".into()),
+            },
+            Err(e) => diagnostics.push(format!("récupération : `<tool_call>` illisible ({e})")),
+        }
+        at = span_end.max(start + 1);
+    }
+
+    // 3. `[TOOL_CALLS] [ … ]`
+    if let Some(start) = hay.find("[TOOL_CALLS]") {
+        let inner = start + "[TOOL_CALLS]".len();
+        if let Some(open) = hay[inner..].find('[') {
+            let from = inner + open;
+            if let Some(close) = hay[from..].rfind(']') {
+                let span_end = from + close + 1;
+                match serde_json::from_str::<serde_json::Value>(&hay[from..span_end]) {
+                    Ok(serde_json::Value::Array(items)) => {
+                        for v in &items {
+                            match json_call(v) {
+                                Some((name, arguments)) => push(name, arguments, (start, span_end), &mut calls, &mut spans, &mut diagnostics),
+                                None => diagnostics.push("récupération : `[TOOL_CALLS]` sans `name`".into()),
+                            }
+                        }
+                    }
+                    Ok(_) => diagnostics.push("récupération : `[TOOL_CALLS]` n'est pas un tableau".into()),
+                    Err(e) => diagnostics.push(format!("récupération : `[TOOL_CALLS]` illisible ({e})")),
+                }
+            }
+        }
+    }
+
+    if calls.is_empty() {
+        return (text.to_string(), calls, diagnostics);
+    }
+
+    // Le texte rendu au modèle ne garde pas les appels récupérés — ni les
+    // balises orphelines que le serveur a laissées en chemin.
+    spans.sort_unstable();
+    let mut cleaned = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    for (a, b) in spans {
+        if a >= cursor {
+            cleaned.push_str(&text[cursor..a]);
+            cursor = b;
+        }
+    }
+    cleaned.push_str(&text[cursor.min(text.len())..]);
+    for orphan in ["</tool_call>", "<tool_call>", "</function>"] {
+        cleaned = cleaned.replace(orphan, "");
+    }
+    (cleaned.trim().to_string(), calls, diagnostics)
+}
+
+/// `{"name": …, "arguments": {…} | "…"}` → `(nom, arguments bruts)`.
+fn json_call(v: &serde_json::Value) -> Option<(String, String)> {
+    let name = v.get("name")?.as_str()?.to_string();
+    let arguments = match v.get("arguments").or_else(|| v.get("parameters")) {
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+        None => "{}".to_string(),
+    };
+    Some((name, arguments))
+}
+
+/// `str::floor_char_boundary` n'est pas stable : la même chose, à la main.
+fn floor_char_boundary(s: &str, mut i: usize) -> usize {
+    if i >= s.len() {
+        return s.len();
+    }
+    while !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
 
 /// Échappe les caractères de contrôle **bruts** à l'intérieur des chaînes
 /// JSON de `raw` (`\n` réel → `\\n`, etc.), sans toucher au reste.
@@ -1773,5 +1950,73 @@ mod arguments_tests {
         // Tronqué : irréparable → objet vide plutôt qu'une requête refusée.
         assert_eq!(arguments_for_wire("{\"new\":\"    pub fn len("), "{}");
         assert_eq!(arguments_for_wire("[1,2]"), "{}");
+    }
+
+    // ── Appels d'outils restés dans le texte ────────────────────────
+
+    /// La sortie **exacte** de Qwen3-Coder-30B par `llama-server`, mesurée
+    /// le 26 août : l'appel est dans le contenu, et le `</tool_call>` est
+    /// orphelin — le serveur a commencé à convertir puis a renoncé.
+    const QWEN_STRAY: &str = "I'll search for the `take_results` function to find where it's defined and which methods call it.\n\n<function=search>\n<parameter=target>\nScope\n</parameter>\n<parameter=query>\ntake_results\n</parameter>\n</function>\n</tool_call>";
+
+    #[test]
+    fn a_qwen_call_left_in_the_text_is_recovered() {
+        let (text, calls, diags) = recover_tool_calls(QWEN_STRAY);
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        assert_eq!(calls[0].name, "search");
+        let args: serde_json::Value = serde_json::from_str(&calls[0].arguments).unwrap();
+        assert_eq!(args["target"], "Scope");
+        assert_eq!(args["query"], "take_results");
+        assert!(!calls[0].id.is_empty());
+        // Le texte rendu ne garde ni l'appel ni la balise orpheline.
+        assert_eq!(text, "I'll search for the `take_results` function to find where it's defined and which methods call it.");
+        assert!(diags.is_empty(), "{diags:?}");
+    }
+
+    #[test]
+    fn the_json_in_a_tag_and_the_mistral_form_are_recovered_too() {
+        let hermes = "voici\n<tool_call>{\"name\": \"read\", \"arguments\": {\"path\": \"a.rs\"}}</tool_call>\nvoilà";
+        let (text, calls, _) = recover_tool_calls(hermes);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "read");
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&calls[0].arguments).unwrap()["path"], "a.rs");
+        assert_eq!(text, "voici\n\nvoilà");
+
+        let mistral = "[TOOL_CALLS] [{\"name\": \"grep\", \"arguments\": {\"pattern\": \"fn\"}}]";
+        let (text, calls, _) = recover_tool_calls(mistral);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "grep");
+        assert!(text.is_empty(), "{text:?}");
+    }
+
+    #[test]
+    fn recovery_is_bounded_and_never_silent() {
+        // Au-delà du plafond : on s'arrête, et on le dit.
+        let many = (0..MAX_RECOVERED_CALLS + 3)
+            .map(|i| format!("<function=read><parameter=path>f{i}.rs</parameter></function>"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (_, calls, diags) = recover_tool_calls(&many);
+        assert_eq!(calls.len(), MAX_RECOVERED_CALLS);
+        assert!(diags.iter().any(|d| d.contains("plafond")), "{diags:?}");
+
+        // Un JSON illisible dans une balise : aucun appel, un diagnostic.
+        let (_, calls, diags) = recover_tool_calls("<tool_call>{pas du json}</tool_call>");
+        assert!(calls.is_empty());
+        assert!(diags.iter().any(|d| d.contains("illisible")), "{diags:?}");
+
+        // Une longueur déraisonnable est bornée, et signalée.
+        let long = format!("{}<function=read><parameter=path>a.rs</parameter></function>", "x".repeat(MAX_RECOVER_SCAN + 10));
+        let (_, calls, diags) = recover_tool_calls(&long);
+        assert!(calls.is_empty());
+        assert!(diags.iter().any(|d| d.contains("octets fouillés")), "{diags:?}");
+    }
+
+    #[test]
+    fn an_honest_answer_is_left_alone() {
+        let plain = "La fonction est définie dans `port.rs`, ligne 101. Rien à récupérer ici.";
+        let (text, calls, diags) = recover_tool_calls(plain);
+        assert_eq!(text, plain);
+        assert!(calls.is_empty() && diags.is_empty());
     }
 }
