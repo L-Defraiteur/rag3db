@@ -485,3 +485,94 @@ cible pointée porte bien la **nouvelle** signature, et `app.rs` n'a pas été
 relu) et `a_new_file_added_alone_finds_what_the_folder_already_defined`
 (la demande de départ : « j'indexe un dossier, puis un nouveau fichier du
 dossier »).
+
+---
+
+## 10. Le 26 au soir, deuxième passe : ne plus détruire, et transporter le genre
+
+Le §9 réparait. Cette passe-ci **enlève la cause**, puis ferme les deux
+bordures qui restaient. Lucie a demandé qu'on regarde ces points
+sérieusement plutôt que d'avancer avec un module à moitié sûr derrière
+nous — et il y avait effectivement pire que ce qu'on croyait.
+
+### 10.1 L'identité d'un scope ne dépend plus de sa signature
+
+`codeparsers` dérive son uuid de `blake3(fichier:nom:type:hash de
+signature)` — et, **quand la signature est vide, du contenu** :
+
+```rust
+let base_input = if !scope.signature.is_empty() { scope.signature.clone() }
+                 else { format!("{}:{}:{}", scope.name, type_str, content) };
+```
+
+Donc changer une signature détruisait le scope ; et **toucher au corps d'un
+module ou d'un fichier le détruisait aussi, à chaque édition**. Le second
+cas est le plus violent, et personne ne l'avait vu : ce n'est pas un cas
+limite, c'est *toute* modification d'un scope sans signature.
+
+Notre identité ne dépend donc plus ni de la signature ni du contenu, mais
+de `fichier#parent.nom:type`, avec un **rang** qui ne départage que des
+homonymes de même parent et de même type dans le même fichier — les
+surcharges. Dans un langage qui n'en a pas, il n'apparaît jamais. Elle est
+calculée dans rag3weaver (`stable_scope_keys`), pas dans le parseur :
+l'identité est une décision du **catalogue**.
+
+Ce qui change encore une identité : renommer, changer de parent, changer de
+fichier — c'est-à-dire exactement ce qui *est* un autre symbole. Effet de
+bord agréable : les clés sont lisibles (`port.rs#merge_port_values:function`)
+au lieu d'un blake3 tronqué.
+
+| | avant | après |
+|---|---|---|
+| `edit` d'une signature | scope détruit, **entrantes perdues** | mise à jour, rien ne bouge |
+| `edit` d'un corps sans signature | scope détruit | mise à jour |
+| renommage | scope détruit *(correct)* | scope détruit *(correct)* |
+
+### 10.2 Le rendez-vous transporte le **genre** de la relation
+
+Deuxième trou, prouvé par un test avant d'être corrigé : l'invariant « l'ordre
+d'ingestion ne change pas le graphe » n'avait **jamais été vérifié que sur
+`CONSUMES`**. Un trait et son implémentation dans deux fichiers :
+
+```
+ensemble      → IMPLEMENTS Runner→Compute
+lib puis app  → (rien)
+app puis lib  → (rien)
+```
+
+Parce que le genre d'une relation était décidé **à la résolution**, quand la
+cible est connue. Or il ne dépend en réalité que du scope **source** et du
+**nom** cherché — `impl X for Y`, `class X extends Y`, `implements`… La
+fonction qui le décide était une méthode privée de `codeparsers` ; elle est
+maintenant une fonction publique, `detect_relationship_type_by_name`, et la
+méthode d'origine s'y délègue.
+
+Le genre voyage donc avec le rendez-vous : `MENTIONS` porte une propriété
+`kind`, et la matérialisation pose l'arête de ce genre-là. Seul `CONSUMES` a
+une réciproque déclarée (`CONSUMED_BY`) ; on n'en invente pas pour les
+autres. Les clauses d'héritage sont lues directement, parce qu'elles ne
+passent pas toujours par les références d'identifiants.
+
+Un défaut du §9 tombe au passage : la matérialisation ajoutait un `CONSUMES`
+**en plus** de chaque relation typée que le résolveur avait posée. Le graphe
+est plus précis qu'avant-hier, pas seulement plus complet.
+
+Il a fallu que `register_relation` sache déclarer des **propriétés d'arête**,
+avec migration additive par `ALTER` — une relation déclarée hier sans `kind`
+ne doit pas empêcher d'ouvrir une base.
+
+### 10.3 L'ambiguïté : ce qu'on perd, et ce qu'on ne perd pas
+
+Troisième bordure, et celle-ci se **referme sans code**. Quand un nom a
+plusieurs définisseurs (181 sur les 3 291 symboles de `src/dataflow`), la
+matérialisation s'abstient. C'est délibéré — une arête manquante vaut mieux
+qu'une fausse, c'est la sur-connexion que RAGForge a payée.
+
+Ce qu'on perd est **le raccourci**, pas l'information : les deux `DEFINES` et
+le `MENTIONS` restent dans le graphe, donc « qui définit ce nom ? » reste une
+question à laquelle on répond en une requête. Un test le fixe
+(`an_ambiguous_name_abstains_but_keeps_its_candidates_in_the_graph`).
+
+La désambiguïsation par chemin d'import reste donc une amélioration de la
+**recherche** — proposer les candidats, les classer — et non une réparation
+du graphe. C'est un choix, pas un reste à faire.

@@ -756,82 +756,7 @@ impl RelationshipResolver {
 
     /// Detect relationship type: CONSUMES, INHERITS_FROM, or IMPLEMENTS.
     fn detect_relationship_type(&self, source: &ScopeInfo, target: &ScopeMappingEntry, context: Option<&str>) -> RelationshipType {
-        // Check context for "extends" / "implements" (all languages)
-        if let Some(ctx) = context {
-            if ctx.contains("extends") {
-                return RelationshipType::INHERITSFROM;
-            }
-            if ctx.contains("implements") {
-                return RelationshipType::IMPLEMENTS;
-            }
-        }
-
-        let file = &source.file_path;
-        let sig = &source.signature;
-
-        if !sig.is_empty() && sig.contains(&target.name) {
-            // TypeScript/JavaScript/Java: class X extends Y
-            if sig.contains("extends") {
-                return RelationshipType::INHERITSFROM;
-            }
-
-            // TypeScript/JavaScript/Java: class X implements Y
-            if sig.contains("implements") {
-                return RelationshipType::IMPLEMENTS;
-            }
-
-            // Rust only: impl Trait for Struct
-            if file.ends_with(".rs")
-                && cached_regex!(r"impl\s+\w+\s+for").is_match(sig)
-            {
-                return RelationshipType::IMPLEMENTS;
-            }
-
-            // C++/C# only: class X : public Y or class X : Y
-            if (file.ends_with(".cpp") || file.ends_with(".cc") || file.ends_with(".h")
-                || file.ends_with(".hpp") || file.ends_with(".cs") || file.ends_with(".c"))
-                && cached_regex!(r":\s*(public|private|protected)?\s*").is_match(sig)
-            {
-                if target.r#type == "interface" {
-                    return RelationshipType::IMPLEMENTS;
-                }
-                return RelationshipType::INHERITSFROM;
-            }
-
-            // Python only: class X(Y):
-            if file.ends_with(".py")
-                && source.r#type == ScopeInfoType::Class
-                && sig.contains(&format!("({}", target.name))
-            {
-                return RelationshipType::INHERITSFROM;
-            }
-
-            // Go only: embedding (type A struct { B })
-            if file.ends_with(".go") && sig.contains("struct") {
-                let content = &source.content;
-                if content.contains(&format!("\t{}\n", target.name))
-                    || content.contains(&format!(" {}\n", target.name))
-                {
-                    return RelationshipType::INHERITSFROM;
-                }
-            }
-        }
-
-        // Check heritage clauses if available (TypeScript/JavaScript)
-        if let Some(ref clauses) = source.heritage_clauses {
-            for clause in clauses {
-                if clause.types.iter().any(|t| t == &target.name) {
-                    return if clause.clause == crate::scope_extraction::types::HeritageClauseClause::Implements {
-                        RelationshipType::IMPLEMENTS
-                    } else {
-                        RelationshipType::INHERITSFROM
-                    };
-                }
-            }
-        }
-
-        // Default
-        RelationshipType::CONSUMES
+        detect_relationship_type_by_name(source, &target.name, &target.r#type, context)
     }
 
     /// Resolve heritage clauses (extends/implements) directly as relationships.
@@ -1092,4 +1017,97 @@ impl RelationshipResolver {
             .filter_map(|rel| self.uuid_mapping.get(&rel.to_uuid))
             .collect()
     }
+}
+
+
+/// Le genre d'une relation ne dépend que du scope **source** et du **nom** de
+/// la cible — jamais de son uuid. C'est ce qui permet de le décider pour une
+/// référence que le lot n'a pas su résoudre : le consommateur peut inscrire
+/// « ceci sera un `IMPLEMENTS` quand la cible existera » au lieu de tout
+/// ramener à `CONSUMES` (rag3weaver, couche `Symbol`, doc 17).
+///
+/// `target_type` ne sert qu'au cas C++/C# (interface ou classe de base) ; le
+/// passer vide fait retomber sur `INHERITS_FROM`, le cas majoritaire.
+pub fn detect_relationship_type_by_name(
+    source: &ScopeInfo,
+    target_name: &str,
+    target_type: &str,
+    context: Option<&str>,
+) -> RelationshipType {
+        // Check context for "extends" / "implements" (all languages)
+        if let Some(ctx) = context {
+            if ctx.contains("extends") {
+                return RelationshipType::INHERITSFROM;
+            }
+            if ctx.contains("implements") {
+                return RelationshipType::IMPLEMENTS;
+            }
+        }
+
+        let file = &source.file_path;
+        let sig = &source.signature;
+
+        if !sig.is_empty() && sig.contains(&target_name) {
+            // TypeScript/JavaScript/Java: class X extends Y
+            if sig.contains("extends") {
+                return RelationshipType::INHERITSFROM;
+            }
+
+            // TypeScript/JavaScript/Java: class X implements Y
+            if sig.contains("implements") {
+                return RelationshipType::IMPLEMENTS;
+            }
+
+            // Rust only: impl Trait for Struct
+            if file.ends_with(".rs")
+                && cached_regex!(r"impl\s+\w+\s+for").is_match(sig)
+            {
+                return RelationshipType::IMPLEMENTS;
+            }
+
+            // C++/C# only: class X : public Y or class X : Y
+            if (file.ends_with(".cpp") || file.ends_with(".cc") || file.ends_with(".h")
+                || file.ends_with(".hpp") || file.ends_with(".cs") || file.ends_with(".c"))
+                && cached_regex!(r":\s*(public|private|protected)?\s*").is_match(sig)
+            {
+                if target_type == "interface" {
+                    return RelationshipType::IMPLEMENTS;
+                }
+                return RelationshipType::INHERITSFROM;
+            }
+
+            // Python only: class X(Y):
+            if file.ends_with(".py")
+                && source.r#type == ScopeInfoType::Class
+                && sig.contains(&format!("({}", target_name))
+            {
+                return RelationshipType::INHERITSFROM;
+            }
+
+            // Go only: embedding (type A struct { B })
+            if file.ends_with(".go") && sig.contains("struct") {
+                let content = &source.content;
+                if content.contains(&format!("\t{}\n", target_name))
+                    || content.contains(&format!(" {}\n", target_name))
+                {
+                    return RelationshipType::INHERITSFROM;
+                }
+            }
+        }
+
+        // Check heritage clauses if available (TypeScript/JavaScript)
+        if let Some(ref clauses) = source.heritage_clauses {
+            for clause in clauses {
+                if clause.types.iter().any(|t| t.as_str() == target_name) {
+                    return if clause.clause == crate::scope_extraction::types::HeritageClauseClause::Implements {
+                        RelationshipType::IMPLEMENTS
+                    } else {
+                        RelationshipType::INHERITSFROM
+                    };
+                }
+            }
+        }
+
+        // Default
+        RelationshipType::CONSUMES
 }

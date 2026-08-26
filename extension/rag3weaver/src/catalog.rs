@@ -1179,6 +1179,20 @@ impl Catalog {
         from: &str,
         to: &str,
     ) -> Result<(), CatalogError> {
+        self.register_relation_with(rel_name, from, to, HashMap::new())
+    }
+
+    /// Comme [`Self::register_relation`], mais avec des **propriétés** sur
+    /// l'arête. Additif et idempotent, comme la migration d'entité : une
+    /// propriété ajoutée à une relation déjà déclarée arrive par
+    /// `ALTER TABLE` plutôt que de casser l'ouverture.
+    pub fn register_relation_with(
+        &mut self,
+        rel_name: &str,
+        from: &str,
+        to: &str,
+        mut properties: HashMap<String, crate::config::FieldDef>,
+    ) -> Result<(), CatalogError> {
         self.check_initialized()?;
 
         // Validate identifiers
@@ -1202,9 +1216,35 @@ impl Catalog {
                 )));
             }
             // Same definition → no-op, but persist anyway for idempotence
+            // Les propriétés manquantes arrivent par ALTER : une relation
+            // déclarée hier sans `kind` ne doit pas empêcher d'ouvrir la base.
+            let known = existing.properties.clone().unwrap_or_default();
+            for (name, def) in &properties {
+                if known.contains_key(name) {
+                    continue;
+                }
+                let col = crate::dialect::ColumnDef {
+                    name: name.clone(),
+                    col_type: crate::dialect::ColumnType::from_field_type(&def.field_type),
+                };
+                let ddl = self.dialect.alter_add_column(rel_name, &col);
+                self.conn.execute(&ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            }
+            // Ce qui était déclaré hier reste déclaré : on ajoute, on n'ôte pas.
+            for (name, def) in known {
+                properties.entry(name).or_insert(def);
+            }
         } else {
             // Create the rel table
-            let ddl = self.dialect.create_rel_table(&rel_name, from, to, &[]);
+            let mut cols: Vec<crate::dialect::ColumnDef> = properties
+                .iter()
+                .map(|(name, def)| crate::dialect::ColumnDef {
+                    name: name.clone(),
+                    col_type: crate::dialect::ColumnType::from_field_type(&def.field_type),
+                })
+                .collect();
+            cols.sort_by(|a, b| a.name.cmp(&b.name));
+            let ddl = self.dialect.create_rel_table(&rel_name, from, to, &cols);
             self.conn.execute(&ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
@@ -1213,7 +1253,7 @@ impl Catalog {
         let rel_def = RelationDef {
             from: from.to_string(),
             to: to.to_string(),
-            properties: None,
+            properties: (!properties.is_empty()).then_some(properties),
         };
         self.persist_relation(rel_name, &rel_def)?;
         self.config.relations.insert(rel_name.to_string(), rel_def);

@@ -171,6 +171,25 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     catalog.register_entity(LIBRARY, library_config())?;
     catalog.register_entity(SYMBOL, symbol_config())?;
     for (rel, from, to) in RELATIONS {
+        if rel == "MENTIONS" {
+            // Le rendez-vous porte le **genre** de l'arête à poser quand la
+            // cible arrivera : sans lui, un `IMPLEMENTS` dont l'interface est
+            // ingérée au lot suivant se matérialiserait en `CONSUMES`, et
+            // l'ordre d'ingestion changerait le graphe (doc 17 §10).
+            let mut props = HashMap::new();
+            props.insert(
+                "kind".to_string(),
+                crate::config::FieldDef {
+                    field_type: FieldType::String,
+                    title_for: None,
+                    content_for: None,
+                    boost: None,
+                    default_value: None,
+                },
+            );
+            catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
         catalog.register_relation(rel, from, to)?;
     }
     Ok(())
@@ -241,11 +260,17 @@ pub struct CodeAnalysis {
     /// Relations dont une extrémité n'a pas été retrouvée.
     pub relations_dropped: usize,
     /// Toute référence externe d'un scope, par nom : `(clé du scope, nom
-    /// cherché)`. Ce ne sont pas des échecs, ce sont des **rendez-vous** —
-    /// le symbole sera peut-être défini par une ingestion ultérieure, et
-    /// celui qui est déjà défini peut être détruit puis recréé
+    /// cherché, **genre** de la relation à faire)`. Ce ne sont pas des
+    /// échecs, ce sont des **rendez-vous** — le symbole sera peut-être défini
+    /// par une ingestion ultérieure, et celui qui est déjà défini peut être
+    /// détruit puis recréé
     /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
-    pub pending: Vec<(String, String)>,
+    ///
+    /// Le genre est porté ici parce qu'il ne dépend **que de la source et du
+    /// nom** : sans lui, un `IMPLEMENTS` dont l'interface arrive au lot
+    /// suivant se matérialiserait en `CONSUMES`, et l'ordre d'ingestion
+    /// changerait le graphe.
+    pub pending: Vec<(String, String, String)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -323,10 +348,14 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
         return analysis;
     };
 
-    // uuid codeparsers → (entité, clé). Les scopes portent leur uuid comme clé.
+    // L'identité d'un scope, la nôtre (voir `stable_scope_keys`).
+    let stable = stable_scope_keys(&rels.uuid_mapping);
+
+    // uuid codeparsers → (entité, clé).
     let mut identity: HashMap<&str, (&str, String)> = HashMap::new();
-    for (uuid, entry) in &rels.uuid_mapping {
-        identity.insert(uuid.as_str(), (SCOPE, entry.uuid.clone()));
+    for (uuid, _entry) in &rels.uuid_mapping {
+        let Some(key) = stable.get(uuid.as_str()) else { continue };
+        identity.insert(uuid.as_str(), (SCOPE, key.clone()));
     }
     for (path, info) in &rels.files {
         identity.insert(info.uuid.as_str(), (FILE, path.clone()));
@@ -346,7 +375,8 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
     // (fichier relatif, nom, type, ligne de début).
     let mut by_position: HashMap<(String, String, String, usize), String> = HashMap::new();
     for (uuid, entry) in &rels.uuid_mapping {
-        by_position.insert((entry.file.clone(), entry.name.clone(), entry.r#type.clone(), entry.start_line), uuid.clone());
+        let Some(key) = stable.get(uuid.as_str()) else { continue };
+        by_position.insert((entry.file.clone(), entry.name.clone(), entry.r#type.clone(), entry.start_line), key.clone());
     }
     for (abs, fa) in &result.files {
         let rel = relative(root, abs);
@@ -434,14 +464,90 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
                 {
                     continue;
                 }
-                analysis.pending.push((key.clone(), id.to_string()));
+                let kind = relation_name(&codeparsers::relationship_resolution::relationship_resolver::detect_relationship_type_by_name(
+                    sc, id, "", r.context.as_deref(),
+                ));
+                analysis.pending.push((key.clone(), id.to_string(), kind.to_string()));
+            }
+            // Les clauses d'héritage ne passent pas toujours par les
+            // références d'identifiants — `codeparsers` les résout à part.
+            // Sans ça, `class X implements Y` dans un fichier ingéré seul ne
+            // laisse aucune trace.
+            for clause in sc.heritage_clauses.iter().flatten() {
+                let kind = match clause.clause {
+                    codeparsers::scope_extraction::types::HeritageClauseClause::Implements => "IMPLEMENTS",
+                    _ => "INHERITS_FROM",
+                };
+                for t in &clause.types {
+                    if t.is_empty() || t == &sc.name || libraries.contains(t.as_str()) {
+                        continue;
+                    }
+                    analysis.pending.push((key.clone(), t.clone(), kind.to_string()));
+                }
             }
         }
     }
+    analysis.pending.sort();
+    analysis.pending.dedup();
 
     fold_lambdas(&mut analysis);
     dedupe_relations(&mut analysis);
     analysis
+}
+
+/// L'identité d'un scope — la nôtre, pas celle de `codeparsers`.
+///
+/// `codeparsers` dérive son uuid de la **signature**, et quand il n'y en a
+/// pas, du **contenu**. Deux conséquences, toutes deux vérifiées :
+///
+/// - changer une signature détruit le scope, et **toutes ses arêtes
+///   entrantes** meurent avec lui ;
+/// - toucher au corps d'un scope sans signature — un module, un fichier —
+///   fait exactement la même chose, à chaque édition.
+///
+/// La couche `Symbol` sait refaire les `CONSUMES` après coup ; elle ne sait
+/// pas refaire un `IMPLEMENTS`. Mieux vaut donc ne rien détruire.
+///
+/// Notre identité ne dépend ni de la signature ni du contenu :
+/// `fichier#parent.nom:type`, plus un **rang** qui ne départage que des
+/// homonymes de même parent, de même type, dans le même fichier — les
+/// surcharges. Dans un langage qui n'en a pas, il n'apparaît jamais.
+///
+/// Ce qui change encore une identité : renommer, changer de parent, changer
+/// de fichier. C'est-à-dire exactement ce qui *est* un autre symbole.
+fn stable_scope_keys(
+    mapping: &codeparsers::relationship_resolution::types::UuidToScopeMapping,
+) -> HashMap<String, String> {
+    // Les homonymes de même parent et de même type, par fichier.
+    let mut groups: HashMap<(&str, &str, &str, &str), Vec<(usize, &str)>> = HashMap::new();
+    for (uuid, e) in mapping {
+        groups
+            .entry((
+                e.file.as_str(),
+                e.parent.as_deref().unwrap_or(""),
+                e.name.as_str(),
+                e.r#type.as_str(),
+            ))
+            .or_default()
+            .push((e.start_line, uuid.as_str()));
+    }
+
+    let mut keys = HashMap::with_capacity(mapping.len());
+    for ((file, parent, name, typ), mut members) in groups {
+        // Par ligne, puis par uuid : deux surcharges sur la même ligne
+        // restent départagées de façon déterministe.
+        members.sort_unstable();
+        let qualified = if parent.is_empty() { name.to_string() } else { format!("{parent}.{name}") };
+        for (rank, (_, uuid)) in members.into_iter().enumerate() {
+            let key = if rank == 0 {
+                format!("{file}#{qualified}:{typ}")
+            } else {
+                format!("{file}#{qualified}:{typ}#{rank}")
+            };
+            keys.insert(uuid.to_string(), key);
+        }
+    }
+    keys
 }
 
 /// Une fermeture n'est pas une entité qu'on cherche par son nom : ses
@@ -750,7 +856,7 @@ impl Catalog {
 
         // Les noms en jeu : ceux que le lot définit, ceux qu'il attend.
         let offered: BTreeSet<&str> = analysis.scopes.iter().map(|s| s.name.as_str()).collect();
-        let expected: BTreeSet<&str> = analysis.pending.iter().map(|(_, n)| n.as_str()).collect();
+        let expected: BTreeSet<&str> = analysis.pending.iter().map(|(_, n, _)| n.as_str()).collect();
         let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
         if names.is_empty() {
             return Ok(());
@@ -781,10 +887,13 @@ impl Catalog {
             let to = symbol_uuid(self, &sc.name)?;
             self.link("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
         }
-        for (scope_key, name) in &analysis.pending {
+        for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key))?;
             let to = symbol_uuid(self, name)?;
-            self.link("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
+            // Le genre voyage avec le rendez-vous : c'est lui qui décide de
+            // l'arête à poser quand la cible arrivera.
+            let props = BTreeMap::from([("kind".to_string(), s(kind))]);
+            self.link("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), props)?;
         }
         let drained = self.drain();
         report.failed += drained.failed;
@@ -794,10 +903,11 @@ impl Catalog {
         // requête par symbole coûtait 2,5 fois le temps d'ingestion.
         let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
         let definers_by_symbol = self.linked_from_many("DEFINES", &uuids)?;
-        let mentioners_by_symbol = self.linked_from_many("MENTIONS", &uuids)?;
+        let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", &uuids, true)?;
         for sym in &uuids {
-            let empty: Vec<String> = Vec::new();
-            let definers = definers_by_symbol.get(sym).unwrap_or(&empty);
+            let no_definer: Vec<String> = Vec::new();
+            let empty: Vec<(String, String)> = Vec::new();
+            let definers = definers_by_symbol.get(sym).unwrap_or(&no_definer);
             if definers.len() > 1 {
                 // Plusieurs définisseurs : on s'abstient. Une relation
                 // manquante vaut mieux qu'une relation fausse — c'est
@@ -809,12 +919,18 @@ impl Catalog {
                 report.still_pending += 1;
                 continue;
             };
-            for mentioner in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
+            for (mentioner, kind) in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
                 if &mentioner == target {
                     continue;
                 }
-                self.link("CONSUMES", RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new())?;
-                self.link("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new())?;
+                // L'arête est du genre inscrit au rendez-vous. Seul `CONSUMES`
+                // a une réciproque déclarée ; `IMPLEMENTS` et `INHERITS_FROM`
+                // n'en ont pas, et on n'en invente pas.
+                let rel = if RELATIONS.iter().any(|(r, _, _)| *r == kind) { kind.as_str() } else { "CONSUMES" };
+                self.link(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new())?;
+                if rel == "CONSUMES" {
+                    self.link("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new())?;
+                }
                 report.linked_across_batches += 1;
             }
         }
@@ -830,12 +946,28 @@ impl Catalog {
         rel: &str,
         to_uuids: &[String],
     ) -> Result<std::collections::HashMap<String, Vec<String>>, CatalogError> {
-        let mut out: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        Ok(self
+            .linked_from_many_with_kind(rel, to_uuids, false)?
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().map(|(uuid, _)| uuid).collect()))
+            .collect())
+    }
+
+    /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
+    /// de l'arête quand `with_kind` — le genre inscrit au rendez-vous.
+    fn linked_from_many_with_kind(
+        &self,
+        rel: &str,
+        to_uuids: &[String],
+        with_kind: bool,
+    ) -> Result<std::collections::HashMap<String, Vec<(String, String)>>, CatalogError> {
+        let mut out: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
         if to_uuids.is_empty() {
             return Ok(out);
         }
+        let kind_expr = if with_kind { ", r.kind" } else { "" };
         let cypher = format!(
-            "UNWIND $uuids AS uid MATCH (n {{_uuid: uid}})<-[:{rel}]-(m) RETURN uid, m._uuid"
+            "UNWIND $uuids AS uid MATCH (n {{_uuid: uid}})<-[r:{rel}]-(m) RETURN uid, m._uuid{kind_expr}"
         );
         let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
@@ -844,7 +976,8 @@ impl Catalog {
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
             if let (Some(CypherValue::String(to)), Some(CypherValue::String(from))) = (row.first(), row.get(1)) {
-                out.entry(to.clone()).or_default().push(from.clone());
+                let kind = row.get(2).and_then(|v| v.as_str()).unwrap_or("CONSUMES").to_string();
+                out.entry(to.clone()).or_default().push((from.clone(), kind));
             }
         }
         Ok(out)

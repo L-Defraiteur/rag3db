@@ -668,15 +668,19 @@ fn an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens() {
 // 9. Un `edit` doit refaire les relations **entrantes**
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// Le test qui manquait (doc 17 §7, point 4) : renommer — ou seulement
-/// changer la signature — d'une fonction **référencée depuis un autre
-/// fichier**. L'identité d'un scope contient le hash de sa signature, donc
-/// changer la signature **détruit l'ancien scope** et avec lui les arêtes qui
-/// pointaient dessus. La couche `Symbol` doit les refaire, sans qu'on
-/// réanalyse le fichier appelant — que `reingest_file` ne lit même pas.
+/// Le test qui manquait (doc 17 §7, point 4), et qui a servi deux fois.
+///
+/// `lib_mod.rs` définit `compute_total`, `app.rs` l'appelle, les deux sont
+/// ingérés **ensemble**. Puis un `edit` change la **signature**.
+///
+/// Avant, l'identité d'un scope contenait le hash de sa signature : le scope
+/// était détruit, ses arêtes entrantes mouraient, et la couche `Symbol`
+/// devait les refaire — ce qu'elle ne savait faire que pour `CONSUMES`.
+/// Maintenant l'identité n'en dépend plus : **rien n'est détruit**, et la
+/// question ne se pose plus pour aucun type de relation.
 #[test]
 #[ignore]
-fn editing_a_signature_rebuilds_the_relations_coming_from_other_files() {
+fn editing_a_signature_destroys_nothing_and_keeps_the_incoming_edges() {
     use rag3weaver::connection::CypherValue;
 
     const LIB: &str = "pub fn compute_total(x: i32) -> i32 {\n    x * 2\n}\n";
@@ -690,28 +694,19 @@ fn editing_a_signature_rebuilds_the_relations_coming_from_other_files() {
     let mut cat = catalog.lock().unwrap();
     cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
 
-    let consumes = |cat: &mut rag3weaver::Catalog, rel: &str| -> Vec<(String, String)> {
+    let key_of = |cat: &mut rag3weaver::Catalog, name: &str| -> Vec<String> {
         let rows = cat
-            .execute_raw(&format!("MATCH (a:Scope)-[:{rel}]->(b:Scope) RETURN a.name, b.name"))
+            .execute_raw(&format!("MATCH (s:Scope {{name: '{name}'}}) RETURN s.key"))
             .unwrap();
-        let mut out: Vec<(String, String)> = rows
-            .rows
-            .iter()
-            .filter_map(|r| match (r.first(), r.get(1)) {
-                (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
-                _ => None,
-            })
-            .collect();
-        out.sort();
-        out.dedup();
-        out
+        rows.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from)).collect()
     };
 
-    let before = consumes(&mut cat, "CONSUMES");
-    eprintln!("[avant] {before:?}");
+    let before_key = key_of(&mut cat, "compute_total");
+    let before = edges(&mut cat, "CONSUMES");
+    eprintln!("[avant] clé {before_key:?} | {before:?}");
     assert!(before.contains(&("run".to_string(), "compute_total".to_string())), "{before:?}");
 
-    // La signature change : même nom, autre clé de scope.
+    // La signature change. Le nom, le parent et le fichier, non.
     let r = edit_file(
         &snapshot,
         Some(&mut cat),
@@ -724,35 +719,69 @@ fn editing_a_signature_rebuilds_the_relations_coming_from_other_files() {
     .unwrap();
     let reingest = r.reingest.as_ref().expect("catalogue → ré-ingestion");
     eprintln!("[réingestion] {reingest:?}");
-    assert_eq!(reingest.scopes_deleted, 1, "l'ancienne clé de scope disparaît");
+    assert_eq!(reingest.scopes_deleted, 0, "l'identité ne dépend plus de la signature");
+    assert_eq!(key_of(&mut cat, "compute_total"), before_key, "la clé ne bouge pas");
 
-    // `app.rs` n'a pas été relu — c'est tout l'intérêt.
-    let after = consumes(&mut cat, "CONSUMES");
-    let back = consumes(&mut cat, "CONSUMED_BY");
-    eprintln!("[après] CONSUMES {after:?} | CONSUMED_BY {back:?}");
-    assert!(
-        after.contains(&("run".to_string(), "compute_total".to_string())),
-        "l'entrante doit se refaire par le symbole : {after:?}"
-    );
-    assert!(
-        back.contains(&("compute_total".to_string(), "run".to_string())),
-        "et dans l'autre sens : {back:?}"
-    );
-
-    // Et le scope pointé est bien le **nouveau** : celui qui porte la nouvelle
-    // signature, pas un fantôme.
+    // Le contenu, lui, est bien à jour.
     let rows = cat
-        .execute_raw("MATCH (a:Scope {name: 'run'})-[:CONSUMES]->(b:Scope) RETURN b.signature, b.key")
+        .execute_raw("MATCH (s:Scope {name: 'compute_total'}) RETURN s.signature")
         .unwrap();
     let signatures: Vec<String> = rows
         .rows
         .iter()
         .filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from))
         .collect();
-    eprintln!("[cible] {signatures:?}");
+    eprintln!("[signature] {signatures:?}");
+    assert!(signatures.iter().any(|s| s.contains("factor")), "{signatures:?}");
+
+    // Et les entrantes n'ont jamais été touchées — `app.rs` n'a pas été relu.
+    let after = edges(&mut cat, "CONSUMES");
+    let back = edges(&mut cat, "CONSUMED_BY");
+    eprintln!("[après] CONSUMES {after:?} | CONSUMED_BY {back:?}");
+    assert!(after.contains(&("run".to_string(), "compute_total".to_string())), "{after:?}");
+    assert!(back.contains(&("compute_total".to_string(), "run".to_string())), "{back:?}");
+    let _ = CypherValue::Null;
+}
+
+/// Et quand une identité change pour de bon — un **renommage** —, le scope
+/// est bien détruit, les entrantes meurent avec lui, et c'est la couche
+/// `Symbol` qui les refait quand le nom revient. C'est le chemin de
+/// réparation, celui qui reste nécessaire.
+#[test]
+#[ignore]
+fn renaming_back_and_forth_rebuilds_the_incoming_edges_through_the_symbol() {
+    const LIB: &str = "pub fn compute_total(x: i32) -> i32 {\n    x * 2\n}\n";
+    const APP: &str = "use crate::lib_mod::compute_total;\n\npub fn run() -> i32 {\n    compute_total(21)\n}\n";
+
+    let snapshot = Snapshot::new("worktree:/projet", [
+        ("lib_mod.rs".to_string(), LIB.to_string()),
+        ("app.rs".to_string(), APP.to_string()),
+    ]);
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+    assert!(edges(&mut cat, "CONSUMES").contains(&("run".to_string(), "compute_total".to_string())));
+
+    // Renommer : l'ancien scope disparaît, et l'arête avec lui — `app.rs`
+    // appelle un nom qui n'existe plus, c'est correct.
+    let r = edit_file(&snapshot, Some(&mut cat), "lib_mod.rs",
+        &EditOp::Replace { old: "pub fn compute_total(".into(), new: "pub fn compute_grand_total(".into() }).unwrap();
+    eprintln!("[renommage] {:?}", r.reingest);
+    assert_eq!(r.reingest.as_ref().unwrap().scopes_deleted, 1, "un renommage est bien une autre identité");
+    let orphan = edges(&mut cat, "CONSUMES");
+    eprintln!("[orphelin] {orphan:?}");
+    assert!(!orphan.contains(&("run".to_string(), "compute_total".to_string())), "{orphan:?}");
+
+    // Le nom revient : le rendez-vous est toujours inscrit dans le graphe,
+    // et l'arête se refait sans qu'`app.rs` soit relu.
+    let r = edit_file(&snapshot, Some(&mut cat), "lib_mod.rs",
+        &EditOp::Replace { old: "pub fn compute_grand_total(".into(), new: "pub fn compute_total(".into() }).unwrap();
+    eprintln!("[retour] {:?}", r.reingest);
+    let back = edges(&mut cat, "CONSUMES");
+    eprintln!("[refait] {back:?}");
     assert!(
-        signatures.iter().any(|s| s.contains("factor")),
-        "la cible doit être le scope à la nouvelle signature : {signatures:?}"
+        back.contains(&("run".to_string(), "compute_total".to_string())),
+        "la couche Symbol doit refaire l'entrante : {back:?}"
     );
 }
 
@@ -793,4 +822,115 @@ fn a_new_file_added_alone_finds_what_the_folder_already_defined() {
         edges.contains(&("run".to_string(), "compute_total".to_string())),
         "le fichier ajouté seul doit retrouver la définition déjà en base : {edges:?}"
     );
+}
+
+/// Les arêtes d'un type donné, en (nom source, nom cible), triées et dédupées.
+fn edges(cat: &mut rag3weaver::Catalog, rel: &str) -> Vec<(String, String)> {
+    use rag3weaver::connection::CypherValue;
+    let rows = cat
+        .execute_raw(&format!("MATCH (a:Scope)-[:{rel}]->(b:Scope) RETURN a.name, b.name"))
+        .unwrap();
+    let mut out: Vec<(String, String)> = rows
+        .rows
+        .iter()
+        .filter_map(|r| match (r.first(), r.get(1)) {
+            (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
+            _ => None,
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// L'invariant du doc 17 — « l'ordre d'ingestion ne change pas le graphe » —
+/// n'a jamais été vérifié que sur `CONSUMES`. Ici on le vérifie sur **toutes**
+/// les relations entre scopes, avec un trait et son implémentation dans deux
+/// fichiers différents.
+#[test]
+#[ignore]
+fn ingestion_order_does_not_change_the_typed_relations_either() {
+    use rag3weaver::code::analyze;
+
+    const LIB: &str = "pub trait Compute {\n    fn go(&self) -> i32;\n}\n\npub struct Base;\n";
+    const APP: &str = "use crate::lib_mod::{Base, Compute};\n\npub struct Runner;\n\nimpl Compute for Runner {\n    fn go(&self) -> i32 {\n        21\n    }\n}\n";
+
+    let lib = || ("lib_mod.rs".to_string(), LIB.to_string());
+    let app = || ("app.rs".to_string(), APP.to_string());
+
+    let all_edges = |cat: &mut rag3weaver::Catalog| -> Vec<(String, String, String)> {
+        let mut out = Vec::new();
+        for rel in ["CONSUMES", "INHERITS_FROM", "IMPLEMENTS", "DECORATES"] {
+            for (a, b) in edges(cat, rel) {
+                out.push((rel.to_string(), a, b));
+            }
+        }
+        out.sort();
+        out
+    };
+
+    let ingest = |batches: Vec<Vec<(String, String)>>| -> Vec<(String, String, String)> {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for batch in batches {
+            cat.ingest_code(&analyze("/projet", batch)).unwrap();
+        }
+        all_edges(&mut cat)
+    };
+
+    let together = ingest(vec![vec![lib(), app()]]);
+    let lib_first = ingest(vec![vec![lib()], vec![app()]]);
+    let app_first = ingest(vec![vec![app()], vec![lib()]]);
+
+    eprintln!("[ensemble]     {together:?}");
+    eprintln!("[lib puis app] {lib_first:?}");
+    eprintln!("[app puis lib] {app_first:?}");
+
+    assert_eq!(lib_first, together, "définition d'abord");
+    assert_eq!(app_first, together, "usage d'abord");
+}
+
+/// L'ambiguïté : deux fichiers définissent `helper`, un troisième l'appelle.
+/// La matérialisation **s'abstient** — une arête manquante vaut mieux qu'une
+/// fausse. Ce test dit ce qu'on perd, et surtout ce qu'on **ne perd pas** :
+/// le rendez-vous reste dans le graphe, donc les candidats restent
+/// interrogeables. L'information n'est pas jetée, elle n'est pas *raccourcie*.
+#[test]
+#[ignore]
+fn an_ambiguous_name_abstains_but_keeps_its_candidates_in_the_graph() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::connection::CypherValue;
+
+    let one = || ("one.rs".to_string(), "pub fn helper() -> i32 {\n    1\n}\n".to_string());
+    let two = || ("two.rs".to_string(), "pub fn helper() -> i32 {\n    2\n}\n".to_string());
+    let user = || ("user.rs".to_string(), "pub fn run() -> i32 {\n    helper()\n}\n".to_string());
+
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    // Chacun seul : le résolveur du lot ne peut rien relier lui-même.
+    for batch in [one(), two(), user()] {
+        let report = cat.ingest_code(&analyze("/projet", vec![batch])).unwrap();
+        eprintln!("[lot] ambigus={} en attente={} inter-lots={}", report.ambiguous, report.still_pending, report.linked_across_batches);
+    }
+
+    let linked = edges(&mut cat, "CONSUMES");
+    eprintln!("[relié] {linked:?}");
+    assert!(
+        !linked.contains(&("run".to_string(), "helper".to_string())),
+        "deux définisseurs : on s'abstient plutôt que de choisir au hasard — {linked:?}"
+    );
+
+    // Mais tout est là pour répondre « qui définit ce nom ? ».
+    let rows = cat
+        .execute_raw("MATCH (d:Scope)-[:DEFINES]->(s:Symbol {name: 'helper'}) RETURN d.file_path")
+        .unwrap();
+    let definers: Vec<String> = rows.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from)).collect();
+    let rows = cat
+        .execute_raw("MATCH (m:Scope)-[:MENTIONS]->(s:Symbol {name: 'helper'}) RETURN m.name")
+        .unwrap();
+    let mentioners: Vec<String> = rows.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from)).collect();
+    eprintln!("[candidats] définis par {definers:?} | mentionné par {mentioners:?}");
+    assert_eq!(definers.len(), 2, "les deux candidats restent interrogeables : {definers:?}");
+    assert!(mentioners.contains(&"run".to_string()), "{mentioners:?}");
+    let _ = CypherValue::Null;
 }
