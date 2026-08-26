@@ -20,6 +20,30 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="$ROOT/build/native-test"
 WEAVER="$ROOT/extension/rag3weaver"
 
+# ── Confiner la pression mémoire ────────────────────────────────────────────
+#
+# Le 27 août 2026 : le poste ramait, et ce n'était pas le CPU. Un gros build
+# fait défiler des gigaoctets à travers le cache de fichiers ; ça déclenche de
+# la récupération mémoire en continu, et avec `vm.swappiness=150` (défaut
+# CachyOS, pensé pour zram) ce qui part en zram, c'est **le bureau** — Chrome,
+# l'éditeur. On revient dessus, il faut décompresser : « ça galère », CPU à 3 %.
+#
+# La cure serait un `swapoff/swapon` après coup, qui demande root. La
+# prévention ne le demande pas : on met le build dans son propre cgroup, avec
+# une limite haute. Sous la limite, rien ne change ; au-dessus, c'est **son**
+# cache à lui qui est récupéré, pas les pages des applications ouvertes.
+#
+# `RAG3WEAVER_BUILD_MEMORY_HIGH=0` désactive, une taille (`24G`) la change.
+confined() {
+  local high="${RAG3WEAVER_BUILD_MEMORY_HIGH:-16G}"
+  if [ "$high" = "0" ] || ! command -v systemd-run >/dev/null 2>&1 \
+     || [ ! -e /sys/fs/cgroup/user.slice/user-"$(id -u)".slice/cgroup.controllers ]; then
+    "$@"
+    return $?
+  fi
+  systemd-run --user --scope --quiet --collect -p MemoryHigh="$high" -- "$@"
+}
+
 # Parse flags
 BUILD_ONLY=false
 FORCE_BUILD=false
@@ -74,7 +98,7 @@ if [ "$NEED_BUILD" = true ]; then
   # Deux cœurs restent à la machine : c'est la compilation C++ qui fige le
   # poste, pas les tests (voir .cargo/config.toml à la racine).
   JOBS=$(( $(nproc) > 2 ? $(nproc) - 2 : 1 ))
-  cmake --build "$BUILD" -j"$JOBS"
+  confined cmake --build "$BUILD" -j"$JOBS"
   echo "▸ Build done."
 fi
 
@@ -145,7 +169,7 @@ if [ "$SUMMARY" = true ]; then
   TMPLOG=$(mktemp)
   trap 'rm -f "$TMPLOG"' EXIT
   set +e
-  cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
+  confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
 
@@ -204,7 +228,7 @@ if [ "$SUMMARY" = true ]; then
   echo "═══════════════════════════════════════════════"
   exit "$EXIT_CODE"
 else
-  cargo test "${CARGO_ARGS[@]}"
+  confined cargo test "${CARGO_ARGS[@]}"
   echo ""
   echo "Tip: run with --summary for a per-suite results table."
 fi
