@@ -116,7 +116,8 @@ les handles arrivent **avec** leur outil, ou pas du tout.
 
 ## 6. Le rendu est une politique, pas une question posée au modèle
 
-Trois améliorations attendent, toutes dans `RenderResultsNode` :
+**Faites le 26 au matin** (`RenderResultsNode`) — et la troisième a
+révélé un défaut plus profond, voir §6 bis :
 
 - **liens fichier** : `port.rs:101-140` au lieu de
   `file_path=port.rs · start_line=101 · end_line=140` — actionnable d'un
@@ -131,6 +132,22 @@ paramètre exposé à un modèle est une décision qu'il peut rater — mesuré
 cette nuit : relations inventées, cibles fausses, `enum` nécessaires pour
 l'en empêcher ([11](11-gemini-fiches-bornees-mesure.md)). Celui qui
 écrit le graphe choisit le rendu ; l'agent le reçoit.
+
+## 6 bis. Ce que le rendu a révélé
+
+En lisant la sortie sur notre propre code, le même scope apparaissait
+**deux fois**, même uuid, même lignes. Ce n'était pas le rendu :
+`ResultMode::Aggregated` documente « index entry + best chunk » — une
+entrée par parent — et le code émettait **une entrée par chunk attribué**.
+Or la requête BM25 borne les *parents* ; les chunks sont attribués après.
+Un `limit=5` rendait donc jusqu'à cinq *chunks*, parfois tous du même
+scope, et l'appelant payait chacun. Corrigé : `Aggregated` tient son
+contrat, `Detailed` reste le mode qui rend tous les chunks. Le rendu de
+l'exemple passe de 955 à 611 caractères pour la même recherche, et une
+assertion de non-régression garde la propriété.
+
+C'est le deuxième défaut que le rendu compact met au jour après le
+`list(prefix)` silencieux : **rendre lisible, c'est rendre vérifiable.**
 
 Le « résumé des membres d'une classe », lui, demande un aller au graphe
 (`PARENT_OF`) : c'est `search_expand`, donc **composable**, à ne pas câbler

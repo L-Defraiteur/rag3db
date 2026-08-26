@@ -293,8 +293,22 @@ fn read_and_grep_as_graph_tools() {
     };
     eprintln!("[search markdown {} caractères]\n{markdown}", markdown.len());
     eprintln!("[search json] {} caractères", json.len());
+    {
+        // Un résultat par **parent**, pas un par chunk : la limite borne les
+        // parents, et un scope rendu deux fois se paie deux fois (trouvé le
+        // 26 août en lisant le rendu compact).
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut uuids: Vec<&str> = v.as_array().unwrap().iter().map(|r| r["uuid"].as_str().unwrap()).collect();
+        let before = uuids.len();
+        uuids.sort_unstable();
+        uuids.dedup();
+        assert_eq!(uuids.len(), before, "un scope ne doit sortir qu'une fois : {json}");
+    }
     assert!(markdown.starts_with("**"), "{markdown}");
-    assert!(markdown.contains("`merge_port_values`") && markdown.contains("file_path=port.rs"), "{markdown}");
+    assert!(markdown.contains("`merge_port_values`"), "{markdown}");
+    // Le lien fichier, actionnable tel quel : `read(path, offset)`.
+    assert!(markdown.contains(" · port.rs:"), "{markdown}");
+    assert!(!markdown.contains("file_path=") && !markdown.contains("start_line="), "{markdown}");
     assert!(!markdown.contains("_content_hash") && !markdown.contains("uuid"), "{markdown}");
     assert!(
         markdown.len() * 3 < json.len(),

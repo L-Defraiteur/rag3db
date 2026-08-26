@@ -2161,8 +2161,16 @@ fn finish_bm25_chunked(
                     chunks: Some(attributed),
                 });
             } else {
-                // Aggregated/SourceResolved: one result per chunk (best first)
-                for (_, c) in matched_chunks {
+                // Aggregated / SourceResolved : **une entrée par parent**, avec
+                // son meilleur chunk — c'est ce que `ResultMode::Aggregated`
+                // documente (« index entry + best chunk »), et c'est ce que la
+                // limite promet : la requête BM25 borne les *parents*, les
+                // chunks sont attribués après. Émettre un résultat par chunk
+                // multipliait ce qu'un appelant paie sans améliorer le rappel
+                // — mesuré le 26 août : le même scope rendu deux fois par
+                // `search`. Tous les chunks d'un parent restent accessibles
+                // par `ResultMode::Detailed`, qui est fait pour ça.
+                for (_, c) in matched_chunks.into_iter().take(1) {
                     results.push(SearchResult {
                         uuid: parent.uuid.clone(),
                         score: *score,
