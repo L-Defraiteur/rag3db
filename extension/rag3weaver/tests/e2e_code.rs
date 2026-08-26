@@ -441,6 +441,25 @@ fn ingestion_order_does_not_change_the_graph() {
     let lib = || ("lib_mod.rs".to_string(), LIB.to_string());
     let app = || ("app.rs".to_string(), APP.to_string());
 
+    // Un `Symbol` n'a ni chunk ni vecteur — mais il reste **cherchable**,
+    // parce que l'index plein texte vit sur la table parente. C'est tout
+    // l'intérêt de garder BM25 dessus : retrouver un symbole par son nom.
+    {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze("/projet", vec![lib(), app()])).unwrap();
+        let found = cat
+            .search("Symbol", "compute_total", bm25("compute_total"))
+            .unwrap();
+        let names: Vec<String> = found.results.iter().map(name_of).collect();
+        eprintln!("[symboles trouvés] {names:?}");
+        assert!(names.iter().any(|n| n == "compute_total"), "{names:?}");
+        // Sans chunk : pas d'extrait, et c'est attendu.
+        assert!(found.results.iter().all(|r| r.chunk.is_none()), "un Symbol n'a pas de chunk");
+        let chunks = cat.execute_raw("MATCH (c:Symbol_Chunk) RETURN count(c)").unwrap();
+        eprintln!("[chunks de Symbol] {:?}", chunks.rows.first());
+    }
+
     let together = ingest(vec![vec![lib(), app()]]);
     let lib_first = ingest(vec![vec![lib()], vec![app()]]);
     let app_first = ingest(vec![vec![app()], vec![lib()]]);

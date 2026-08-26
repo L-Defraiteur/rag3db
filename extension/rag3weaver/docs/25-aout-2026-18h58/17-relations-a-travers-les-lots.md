@@ -275,10 +275,51 @@ Trois leviers, par valeur décroissante :
   ci-dessous : le gain est énorme et la garde était fausse ;
 - **grouper les insertions** : ~5 ms par enregistrement sent l'aller-retour
   unitaire ;
-- **une entité sans pipeline de recherche** — un troisième genre à côté des
-  entités simples et des bases de connaissances, pour les nœuds d'identité
-  comme `Symbol`. À ne faire que si les deux premiers ne suffisent pas :
-  c'est un concept de plus dans le modèle.
+- **une entité sans chunks** — ~~un troisième genre~~ **fait le 26 au
+  matin**, et bien moins cher que prévu : voir ci-dessous.
+
+### `chunked: Some(false)` — étudié avant d'être fait
+
+L'étude a renversé l'hypothèse de départ. **Le plein texte ne dépend pas
+des chunks** : son index vit sur la table **parente**
+(`open_fts_handles_for` passe `target.parent_table`, et `InsertRecordNode`
+porte le commentaire « Absent pour les tables de chunks — l'index vit sur
+la table parente »). Une entité sans chunk reste donc cherchable en BM25,
+sans rien changer.
+
+Le verrou est **le vecteur** : la colonne `embedding` n'existe que sur la
+table de chunks, et la table parente d'une entité simple n'a même pas de
+colonne où en loger un. Le sparse a le même symptôme (handle ouvert sous le
+nom de la table de chunks) mais un remède à une ligne, puisqu'il indexe par
+offset de nœud et non par colonne.
+
+D'où la règle retenue, qui **contourne le verrou au lieu de l'affronter** :
+
+> Les chunks restent obligatoires pour tout ce qui a un signal vectoriel ou
+> sparse. Ils deviennent facultatifs pour une entité BM25 seule.
+
+`EntityConfig.chunked: Option<bool>`, et `validate()` **refuse**
+`Some(false)` avec un signal vecteur ou sparse — mieux vaut une erreur de
+configuration qu'une entité silencieusement introuvable. `Symbol` devient
+`signals: BM25, chunked: Some(false)`.
+
+**Ce qu'on découvre en passant** : `symbol_config()` héritait du défaut
+`HYBRID`, donc on calculait et stockait **un embedding pour chacun des
+3 275 symboles** — des noms nus. Personne ne l'avait voulu.
+
+**Mesure** (`src/dataflow`, mêmes 27 fichiers) :
+
+| Phase | Avant | Après |
+|---|---|---|
+| Symboles | 12 121 ms | **1 706 ms** |
+| Ingestion totale | ~28 s | **~17,5 s** |
+
+Soit sept fois moins, et la couche de rendez-vous du doc 17 ne coûte
+presque plus rien. Le test qui garde la propriété : un `Symbol` a zéro
+chunk **et** `search(target = "Symbol", query = "compute_total")` le
+trouve. Le chemin « pas de chunk » était d'ailleurs déjà écrit et testé
+dans la recherche (`ChunkAttributionMiss::NoChunks`, branche « No chunk
+intersection ») — il n'était simplement jamais emprunté.
 
 Les 2 765 symboles sans définisseur sont le prix du rendez-vous : ils ne
 servent que si une ingestion future définit ce nom. Pour un dépôt qui ne

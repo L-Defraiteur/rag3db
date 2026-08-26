@@ -1252,6 +1252,14 @@ impl ChunkRecordNode {
             None => return (vec![], vec![]),
         };
 
+        // Entité déclarée sans chunks : rien à découper, rien à lier. Elle
+        // reste écrite et indexée en plein texte — cet index vit sur la
+        // table parente. `EntityConfig::validate` a déjà refusé cette
+        // déclaration si un signal vecteur ou sparse était demandé.
+        if entity_config.chunked == Some(false) {
+            return (vec![], vec![]);
+        }
+
         let content_fields = entity_config.content_fields();
         if content_fields.is_empty() {
             return (vec![], vec![]);

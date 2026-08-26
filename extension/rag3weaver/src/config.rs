@@ -378,6 +378,26 @@ pub struct EntityConfig {
     /// cloud a erré faute de `file_path` dans les résultats).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_fields: Option<Vec<String>>,
+
+    /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
+    /// indexée en plein texte et cherchable, mais sans ligne dans
+    /// `{Entity}_Chunk` ni lien `CHUNKED_FROM`.
+    ///
+    /// Pour quoi faire : une entité dont le contenu *est* son titre — un
+    /// nom de symbole de vingt caractères — paie sinon deux écritures pour
+    /// rien. L'index plein texte, lui, vit sur la table **parente** : le
+    /// BM25 ne perd rien (26 août 2026).
+    ///
+    /// Ce que ça coûte : pas d'extrait ni de lignes dans les résultats, et
+    /// **aucune recherche vectorielle ni sparse** — la colonne `embedding`
+    /// et l'index HNSW vivent sur la table de chunks. C'est pourquoi
+    /// [`Self::validate`] refuse `Some(false)` avec un signal vecteur ou
+    /// sparse : mieux vaut une erreur de configuration qu'une entité
+    /// silencieusement introuvable.
+    ///
+    /// `None` (défaut) : comme avant, des chunks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunked: Option<bool>,
 }
 
 impl Default for EntityConfig {
@@ -388,6 +408,7 @@ impl Default for EntityConfig {
             chunking: ChunkingConfig::default(),
             hashsafe: None,
             return_fields: None,
+            chunked: None,
         }
     }
 }
@@ -436,6 +457,26 @@ impl EntityConfig {
         if let Some(rf) = &self.return_fields {
             if let Some(unknown) = rf.iter().find(|f| !self.fields.contains_key(*f)) {
                 return Err(format!("return_fields: '{unknown}' is not a field of this entity"));
+            }
+        }
+        if self.chunked == Some(false) {
+            // Le vecteur et le sparse vivent sur la table de chunks : sans
+            // chunk, l'entité serait invisible pour eux — en silence. On
+            // refuse plutôt que de le laisser arriver.
+            let mut absent = Vec::new();
+            if self.signals.vector() {
+                absent.push("vector");
+            }
+            if self.signals.sparse() {
+                absent.push("sparse");
+            }
+            if !absent.is_empty() {
+                return Err(format!(
+                    "chunked = false est incompatible avec le(s) signal(aux) {} : \
+                     leur index vit sur la table de chunks, l'entité serait introuvable. \
+                     Garder les chunks, ou déclarer `signals: BM25`.",
+                    absent.join(", ")
+                ));
             }
         }
         for (name, f) in &self.fields {
@@ -530,6 +571,32 @@ impl Default for CatalogConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_chunkless_entity_must_not_claim_a_vector_signal() {
+        use crate::search::SearchSignals;
+        let base = |signals: SearchSignals, chunked: Option<bool>| {
+            let mut fields = HashMap::new();
+            fields.insert(
+                "name".to_string(),
+                SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() },
+            );
+            EntityConfig { fields, signals, chunked, ..Default::default() }
+        };
+
+        // Sans chunk et sans vecteur : le cas voulu (un nom de symbole).
+        assert!(base(SearchSignals::BM25, Some(false)).validate().is_ok());
+        // Avec chunks, tout est permis comme avant.
+        assert!(base(SearchSignals::HYBRID, None).validate().is_ok());
+        assert!(base(SearchSignals::HYBRID, Some(true)).validate().is_ok());
+
+        // Sans chunk **et** avec un signal dont l'index vit sur les chunks :
+        // refusé, avec la raison et le remède.
+        let e = base(SearchSignals::HYBRID, Some(false)).validate().unwrap_err();
+        assert!(e.contains("vector") && e.contains("introuvable") && e.contains("BM25"), "{e}");
+        let e = base(SearchSignals::BM25 | SearchSignals::SPARSE, Some(false)).validate().unwrap_err();
+        assert!(e.contains("sparse"), "{e}");
+    }
 
     #[test]
     fn default_catalog_config() {

@@ -150,6 +150,14 @@ pub fn symbol_config() -> EntityConfig {
     EntityConfig {
         fields,
         hashsafe: Some(vec!["name".into()]),
+        // BM25 seul, et sans chunks. Un nom de symbole n'a rien à gagner
+        // d'un vecteur — et le défaut `HYBRID` faisait calculer et stocker
+        // un embedding pour chacun des 3 275 symboles de `src/dataflow`,
+        // ce que personne n'avait voulu. Le plein texte, lui, reste entier :
+        // son index vit sur la table parente, et le mode BM25 `Symbol` est
+        // fait pour les identifiants.
+        signals: crate::search::SearchSignals::BM25,
+        chunked: Some(false),
         ..Default::default()
     }
 }
