@@ -39,7 +39,45 @@ Trois pièces, dans cet ordre : le **sélecteur** dit *quoi* (structure), le
 **prédicat** dit *lequel* (valeurs de champs), le **registre d'intérêt** dit
 *si ça vaut la peine de le fabriquer*.
 
-## 3. Le sélecteur
+## 3. La portée n'est pas un filtre : c'est l'espace de noms
+
+Un processus peut porter plusieurs cellules (`Scope { org, project }`,
+doc 37) — et le bus les ignore aujourd'hui : `src/events.rs` ne connaît pas
+la notion. Avec des jokers, un abonné d'une organisation recevrait les
+nœuds, les erreurs et — au niveau contenu — **les données** d'une autre.
+C'est le trou que la suite ferme, et il se ferme d'une seule façon :
+
+> **La portée ne se filtre pas, elle s'impose.** Un abonnement est ouvert
+> *depuis* une cellule et ne peut pas exprimer une autre cellule.
+
+Pas un prédicat par défaut — un filtre par défaut, ça s'oublie, ça se
+contourne, et l'oubli est silencieux. L'espace de noms : le sujet réel est
+`org/project/dataflow`, `org/project/run.<id>`, `org/project/run.<id>.inbox`,
+et le seul objet capable d'émettre ou de s'abonner est un `EventBus` **déjà
+lié à une cellule** (`bus.in_scope(&scope)`). Un joker parcourt son espace,
+et rien d'autre : la question « et si on oublie de filtrer ? » ne se pose
+plus, parce qu'il n'y a rien à filtrer.
+
+Trois conséquences :
+
+- **Un message à un run d'une autre cellule est refusé**, pas ignoré : la
+  boîte `run.<id>.inbox` vit dans l'espace de son propriétaire, et
+  `send_message` ne peut pas nommer un espace qu'il n'a pas.
+- **L'événement porte quand même sa cellule** (`org`, `project`) : défense
+  en profondeur, et une trace relue dit de quelle cellule elle parle. Le
+  catalogue le fait déjà — `_org` et `_project` sont estampillés sur chaque
+  ligne, donc `Trace`, `Run` et `Message` étaient **déjà** isolés ; le bus
+  était le seul passage ouvert.
+- **La supervision inter-cellules existe, mais elle se demande** :
+  `EventBus::across_scopes(capability)`, jamais par défaut, et **auditable**
+  — l'ouverture publie un `WatchAcrossScopes { by, selector }`. Une console
+  d'exploitation en a besoin ; un graphe de session, non.
+
+Le test qui le prouve : deux cellules dans un processus, une montre avec le
+sélecteur le plus large possible dans A ne voit **aucun** événement de B, et
+un message de A vers un run de B est refusé avec un message clair.
+
+## 4. Le sélecteur
 
 Cinq dimensions, chacune facultative — absente vaut `*` :
 
@@ -54,7 +92,7 @@ Cinq dimensions, chacune facultative — absente vaut `*` :
 
 | Dimension | Valeurs |
 |---|---|
-| `run` | un identifiant, `$parent`, `$self`, ou `*` |
+| `run` | un identifiant, `$parent`, `$self`, ou `*` — **toujours dans la cellule de l'abonné** (§3) |
 | `tag` | un tag déclaré par la fiche (`%% tags: search, code`) |
 | `kind` | `RunStarted`, `RunFinished`, `NodeStarted`, `NodePort`, `NodeFinished`, `NodeFailed`, `NodeLog`, `LlmCall`, `ToolCall*`, `Message` |
 | `node` / `node_type` | par nom d'instance ou par type |
@@ -69,7 +107,7 @@ pour filtrer les événements suivants. Le tag ne voyage pas sur chaque
 événement — ce serait payer un champ à chaque nœud pour une information qui
 ne change pas d'un run.
 
-## 4. Le prédicat, et son coût
+## 5. Le prédicat, et son coût
 
 « Filtrable au max » a un prix qui n'est pas uniforme. Trois niveaux, et le
 sélecteur dit lequel il veut :
@@ -87,7 +125,7 @@ aujourd'hui) mais il se demande, et un graphe qui veut décider sur le
 sinon on réinvente un langage de requête dans un bus d'événements, et on
 paie la sérialisation partout pour trois abonnés.
 
-## 5. Ne pas produire ce que personne n'écoute
+## 6. Ne pas produire ce que personne n'écoute
 
 C'est la garde que Lucie pose, et c'est la partie qui a du contenu
 d'ingénierie. Aujourd'hui, `execute_inner` construit
@@ -111,7 +149,7 @@ doit être **conservateur** (en cas de doute, on produit) ; et il doit être
 **visible** — `bus.interest()` se lit, pour qu'un « pourquoi je ne reçois
 rien » ait une réponse.
 
-## 6. Trois règles payées d'avance
+## 7. Trois règles payées d'avance
 
 - **Un run ne s'écoute pas lui-même.** Un sélecteur exclut par défaut les
   événements produits par le run qui écoute. On a payé cette leçon cette
@@ -129,7 +167,7 @@ rien » ait une réponse.
   silencieux est indistinguable d'un abonnement cassé, et c'est ce qui fait
   perdre une heure.
 
-## 7. Ce que ça donne pour la session
+## 8. Ce que ça donne pour la session
 
 Le graphe de session du [13](13-la-session-comme-graphe.md) devient un
 abonné comme un autre :
@@ -148,16 +186,19 @@ en entier, il écoute `kind=RunStarted|RunFinished|ToolCall*|LlmCall` et
 laisse les nœuds tranquilles — ou l'inverse, selon ce qu'on veut garder.
 C'est une ligne de fiche, plus une décision de code.
 
-## 8. Ce qu'on ne fait pas
+## 9. Ce qu'on ne fait pas
 
 - **Pas de jointures ni d'agrégats** dans le sélecteur (« quand ce nœud a
   échoué *trois fois* ») : c'est un état, donc un nœud, donc un graphe.
 - **Pas de rejeu.** Un abonné voit ce qui suit son abonnement ; l'histoire
   se relit dans `Trace`, qui est faite pour ça.
-- **Pas de sélecteur sur le contenu par défaut** — voir §4.
+- **Pas de sélecteur sur le contenu par défaut** — voir §5.
 
-## 9. L'ordre, et comment on saura
+## 10. L'ordre, et comment on saura
 
+0. **La portée d'abord** (§3) : sujets préfixés par la cellule,
+   `bus.in_scope()`, et le test des deux cellules. Avant les jokers, pas
+   après — un joker sur un bus non cloisonné est une fuite.
 1. **`NodePort { run, node, node_type, port, dir, port_type, count, bytes }`**
    sur le bus, gardé par le registre d'intérêt. Test : sans abonné, aucun
    instantané n'est construit (un compteur le prouve) ; avec, on les reçoit.

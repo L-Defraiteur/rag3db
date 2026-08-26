@@ -163,8 +163,9 @@ dans le rendu.
 Un graphe de session doit pouvoir dire « je veux savoir quand un outil du
 run que j'ai lancé échoue » sans écouter la terre entière. C'est le sujet
 du [14](14-tout-est-ecoutable.md) : sélecteurs (`run`, `tag`, `kind`,
-`node`, `port`, `dir`), prédicats sur les champs, et un registre d'intérêt
-pour ne pas fabriquer ce que personne n'écoute. Les étapes 1 et 2 de ce
+`node`, `port`, `dir`), prédicats sur les champs, un registre d'intérêt
+pour ne pas fabriquer ce que personne n'écoute — et la cellule comme
+espace de noms, pour qu'un joker ne traverse jamais une organisation. Les étapes 1 et 2 de ce
 document-là suffisent à rendre la session écrivable.
 
 ## 9. L'ordre, et comment on saura
