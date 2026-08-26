@@ -774,6 +774,11 @@ pub struct GraphTool {
     /// type, défaut et valeurs admises du nœud qu'ils alimentent, à
     /// [`Self::bind`]. Vide une fois lié.
     untyped: BTreeSet<String>,
+    /// Les sujets auxquels la fiche réagit (`%% on:`) — vide : un outil
+    /// qu'on appelle, pas un graphe qui se déclenche.
+    on: Vec<String>,
+    /// Quand réagir (`%% policy:`), si `on` n'est pas vide.
+    policy: super::reactor::ReactPolicy,
     template: GraphDefinition,
     result_node: String,
     result_port: String,
@@ -811,6 +816,8 @@ impl GraphTool {
             description,
             params,
             untyped,
+            on: Vec::new(),
+            policy: super::reactor::ReactPolicy::Each,
             template,
             result_node: result_node.to_string(),
             result_port: result_port.to_string(),
@@ -1060,7 +1067,34 @@ impl GraphTool {
         for (param, choices) in header.choices {
             tool = tool.with_choices(&param, choices)?;
         }
+        if let Some(policy) = header.policy {
+            if header.on.is_empty() {
+                return Err(GraphToolError::Spec(format!("outil '{}' : '%% policy:' sans '%% on:'", tool.name)));
+            }
+            tool.policy = policy;
+        }
+        tool.on = header.on;
         Ok(tool)
+    }
+
+    /// Réagir à ces sujets (voir [`super::reactor::Reactor`]).
+    pub fn with_on<S: Into<String>, I: IntoIterator<Item = S>>(mut self, topics: I) -> Self {
+        self.on = topics.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn with_policy(mut self, policy: super::reactor::ReactPolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// Les sujets auxquels la fiche réagit — vide pour un outil ordinaire.
+    pub fn on(&self) -> &[String] {
+        &self.on
+    }
+
+    pub fn policy(&self) -> super::reactor::ReactPolicy {
+        self.policy
     }
 
     pub fn name(&self) -> &str {
@@ -1138,6 +1172,10 @@ impl GraphTool {
             if let Some(choices) = &p.choices {
                 out.push_str(&format!("%% choices: {} = {}\n", p.name, choices.spec()));
             }
+        }
+        if !self.on.is_empty() {
+            out.push_str(&format!("%% on: {}\n", self.on.join(", ")));
+            out.push_str(&format!("%% policy: {}\n", self.policy.spec()));
         }
         out.push_str(&format!(
             "%% result: {}.{}\n\n",
@@ -1279,6 +1317,8 @@ struct Header {
     /// Les paramètres déclarés sans type — à lier.
     untyped: Vec<String>,
     choices: Vec<(String, Choices)>,
+    on: Vec<String>,
+    policy: Option<super::reactor::ReactPolicy>,
     result: String,
 }
 
@@ -1293,6 +1333,8 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
     let mut params: Vec<ConfigParam> = Vec::new();
     let mut untyped = Vec::new();
     let mut choices = Vec::new();
+    let mut on = Vec::new();
+    let mut policy = None;
     let mut result = None;
 
     for raw in source.lines() {
@@ -1319,6 +1361,10 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
             params.push(param);
         } else if let Some(v) = body.strip_prefix("choices:") {
             choices.push(parse_choices(v.trim())?);
+        } else if let Some(v) = body.strip_prefix("on:") {
+            on = v.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
+        } else if let Some(v) = body.strip_prefix("policy:") {
+            policy = Some(super::reactor::ReactPolicy::parse(v.trim()).map_err(spec)?);
         } else if let Some(v) = body.strip_prefix("result:") {
             result = Some(v.trim().to_string());
         }
@@ -1331,6 +1377,8 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
         params,
         untyped,
         choices,
+        on,
+        policy,
         result: result.ok_or_else(|| spec("en-tête sans directive '%% result:'".into()))?,
     })
 }

@@ -1,8 +1,16 @@
-%% Le graphe de trace : draine les sujets `agent`, `dataflow` et `messages` du
-%% bus, écrit dans Trace (à plat) et dans Run / Message (liés). Services attendus : "events" (Arc<EventBus>, le bus à
-%% lire — pas "event_bus", sinon ce runtime publierait ses propres nœuds sur
-%% `dataflow` et se retracerait) et "catalog". Le curseur 'trace' doit être
-%% ouvert (bus.cursor(topic, 'trace')) avant ce qu'on veut observer.
+%% tool: trace
+%% description: Draine les sujets agent, dataflow et messages du bus, écrit chaque événement dans Trace (à plat) et les runs et messages dans Run / Message, liés (CHILD_OF, SENT_BY, SENT_TO).
+%% on: agent, dataflow, messages
+%% policy: batch 200
+%% result: sink.result
+%%
+%% Une fiche réactive : un Reactor::watch(trace) ouvre la sonnette et le
+%% curseur 'trace' sur chaque sujet de `on`, puis exécute ce graphe 200 ms
+%% après le premier événement d'un lot. Services attendus : "events"
+%% (Arc<EventBus>, le bus à lire — pas "event_bus", sinon ce runtime
+%% publierait ses propres nœuds sur `dataflow` et se retracerait) et
+%% "catalog". Sans réacteur, l'exécuter à la main quand on veut : ce qui
+%% n'a pas été drainé attend.
 graph LR
     events["EventSourceNode(topics='agent,dataflow,messages', cursor='trace', limit=1000)"]
     sink["TraceSinkNode"]

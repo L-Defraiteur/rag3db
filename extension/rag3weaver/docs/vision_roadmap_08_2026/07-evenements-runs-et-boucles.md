@@ -105,10 +105,14 @@ La fiche d'un graphe-outil déclare à quoi elle réagit :
 %% policy: batch 200ms           -- each | batch <durée> | debounce <durée>
 ```
 
-Le réacteur est un objet, `Reactor::new(bus)`, à qui on confie des fiches.
-Il tourne dans un fil (`recv_blocking` sur ses curseurs — le bus le
-permet) ; `pump()` reste possible pour un hôte qui préfère cadencer
-lui-même, mais ce n'est plus une contrainte. Par événement (ou par lot), il
+Le réacteur est un objet, `Reactor::new(bus, nœuds, services)`, à qui on
+confie des fiches (`watch`) ou des fermetures (`on`). Il tourne dans un fil
+et **sonde** ses sonnettes à chaque tick (25 ms par défaut) plutôt que de
+bloquer sur un `recv` : plusieurs sujets, un seul fil, un arrêt propre —
+la latence est le tick, et c'est petit. `pump()` reste là pour un hôte qui
+cadence lui-même. Deux curseurs par sujet : la sonnette du réacteur
+(`<nom>@reactor`), qu'il ne fait que vider, et le curseur du graphe
+(`<nom>`), que son `EventSourceNode` lit — les deux voient tout. Par événement (ou par lot), il
 instancie le graphe avec l'événement en paramètre (`$event`, ou le lot sur
 un port) et l'exécute avec **ses** services — ce qui, encore une fois,
 décide de ce que ce run publie (`event_bus`) et lit (`events`).
@@ -146,12 +150,13 @@ des résultats entiers.
 | `SendMessageNode`, `EventBus::send_message`, `inbox`/`self` relatifs, `Agent::with_inbox` (lecture entre tours, `AgentRun.messages`) | fait — testé : un message d'avant le run vu avant le premier tour, un message arrivé pendant un appel vu au tour suivant, jamais au milieu |
 | Schéma lié : `Run` (hashsafe `run_id`), `Message`, `CHILD_OF` / `SENT_BY` / `SENT_TO`, écrits par `TraceSinkNode` | fait — `search_expand(target = "Message", relation = "SENT_TO")` rend le run |
 | `interrupt` | à faire, petit (le puits sait déjà arrêter) |
-| `%% on:` / `%% policy:`, `Reactor` natif + `pump` | à faire |
+| `%% on:` / `%% policy:`, `Reactor` (fil, tick, `each` / `batch` / `debounce`, sonnette par curseur), `ReactorHandle` | fait — la fiche `trace` est réactive (`batch 200`) et tourne dans son fil sans se tracer ; deux agents conversent par leurs boîtes, chacun un réacteur (`on(nom, sujets, politique, fermeture)`), bornés par un budget |
 | Boîte durable (`Message` en base, `MessageSourceNode`) | plus tard, même forme de nœud |
 
-L'ordre : identité des runs, puis messages et boîte de l'agent (avec le
-test où un graphe envoie un message à un agent par son id et l'agent le
-voit au tour suivant), puis le réacteur. Un commit par étape.
+L'ordre suivi : identité des runs, puis messages et boîte de l'agent, puis
+le réacteur — un commit par étape, tous faits dans la nuit du 26. Reste
+`interrupt` et la boîte durable ; et, transversal, rendre compacts les
+résultats bruts (`search`, `FetchRelatedNode`).
 
 ## 6. Ce qui gêne, et ce qu'on a tranché
 

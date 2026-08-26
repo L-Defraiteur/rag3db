@@ -17,7 +17,10 @@ use std::sync::{Arc, Mutex};
 use rag3weaver::agent::{Agent, AgentLimits, GraphToolBox, StopReason, ToolBox};
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
-use rag3weaver::agent::AGENT_INBOX_CURSOR;
+use rag3weaver::agent::{CallbackToolBox, AGENT_INBOX_CURSOR};
+use rag3weaver::dataflow::{GraphTool, ReactPolicy, Reactor};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 use rag3weaver::dataflow::{
     builtin_graph_tools, execute_definition, execute_definition_as, parse_mermaid, register_trace_schema, ConnService,
     NodeTypePolicy, ServiceRegistry, EVENTS_SERVICE, MESSAGE_ENTITY, RUN_ENTITY, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
@@ -587,4 +590,133 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     assert_eq!(cat.count(MESSAGE_ENTITY).unwrap(), 2);
     // run-a (graphe), run-b (agent), run-c (squelette, il n'a fait que parler), le graphe search sous run-b.
     assert!(cat.count(RUN_ENTITY).unwrap() >= 4, "{}", cat.count(RUN_ENTITY).unwrap());
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 7. Le réacteur : la trace dans son propre fil, et deux agents qui conversent
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// La fiche `trace` (`%% on: agent, dataflow, messages`, `%% policy: batch 200`)
+/// tourne dans un fil, sans que l'agent sache qu'elle existe. Après son run,
+/// tout est dans `Trace` — et le réacteur n'a rien tracé de lui-même.
+#[test]
+#[ignore]
+fn a_reactor_traces_the_agent_from_its_own_thread() {
+    let mut catalog = setup_catalog();
+    register_trace_schema(&mut catalog).unwrap();
+    let bus = catalog.event_bus();
+    let services = services_with_bus(catalog, &bus);
+    let catalog = services.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap();
+    let (nodes, graph_tools) = builtin_graph_tools().unwrap();
+    let nodes = Arc::new(nodes);
+
+    let trace = GraphTool::from_mermaid(TRACE_GRAPH_MERMAID).unwrap().bind(&nodes).unwrap();
+    assert_eq!(trace.on(), ["agent", "dataflow", "messages"]);
+    assert_eq!(trace.policy(), ReactPolicy::Batch(200));
+    let mut trace_services = ServiceRegistry::new();
+    trace_services.register("catalog", catalog.clone());
+    trace_services.register(EVENTS_SERVICE, Arc::new(bus.shared()));
+    let handle = Reactor::new(bus.shared(), nodes.clone(), Arc::new(trace_services))
+        .with_tick(Duration::from_millis(5))
+        .watch(trace)
+        .unwrap()
+        .spawn();
+
+    let toolbox = GraphToolBox::new(&graph_tools, &nodes, services.clone());
+    let llm = scripted(vec![
+        MockLlm::new("").with_tool_calls(vec![("search", r#"{"target":"Product","query":"programming language","limit":5}"#)]),
+        MockLlm::new("C'est le Rust Book."),
+    ]);
+    let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name("demo").with_run_id("run-threaded");
+    let mut turns = vec![Turn::user("cherche")];
+    let mut sink = StringSink::default();
+    let run = agent.run(&mut turns, &mut sink).unwrap();
+    assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
+
+    // 2 (run) + 2 (modèle) + 2 (outil) + 2 (run du graphe search) + 3 (nœuds).
+    let expected = 11;
+    let start = Instant::now();
+    loop {
+        let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();
+        if n >= expected {
+            assert_eq!(n, expected, "pas plus : le réacteur ne se trace pas");
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(5), "{n}/{expected} tracés après 5 s, runs={}, erreurs={:?}", handle.runs(), handle.errors());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(handle.errors().is_empty(), "{:?}", handle.errors());
+    let runs = handle.runs();
+    assert!(runs >= 1, "{runs}");
+    // Le silence : plus rien n'arrive, plus rien ne tourne.
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(handle.runs(), runs);
+    let reactor = handle.stop();
+    assert_eq!(reactor.names(), vec!["trace"]);
+}
+
+/// Deux agents, chacun un réacteur sur sa boîte : un message relance
+/// `Agent::run` en gardant l'historique, la réponse part vers l'autre. Ce qui
+/// borne la conversation est un compteur — le même genre de garde que
+/// `AgentLimits`. Pas de catalogue, pas d'outil : juste le bus.
+#[test]
+#[ignore]
+fn two_agents_converse_through_their_inboxes() {
+    let bus = EventBus::new(64);
+    let transcript: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let budget = Arc::new(AtomicUsize::new(0));
+    const MAX_MESSAGES: usize = 6;
+
+    // Les boîtes existent avant que quiconque parle.
+    for who in ["A", "B"] {
+        bus.cursor(&inbox_topic(who), AGENT_INBOX_CURSOR);
+    }
+
+    let wake = |name: &'static str, peer: &'static str| {
+        let bus = bus.shared();
+        let transcript = transcript.clone();
+        let budget = budget.clone();
+        let history: Mutex<Vec<Turn>> = Mutex::new(vec![Turn::system(format!("Tu es {name}. Réponds en une phrase."))]);
+        move |_doorbell: Vec<serde_json::Value>| {
+            if budget.load(Ordering::Relaxed) >= MAX_MESSAGES {
+                return;
+            }
+            let n = budget.fetch_add(1, Ordering::Relaxed) + 1;
+            // L'agent lit lui-même sa boîte, entre deux tours ; le réacteur
+            // n'est que la sonnette.
+            let llm = MockLlm::new(format!("{name} #{n}"));
+            let toolbox = CallbackToolBox::new(vec![], |_| String::new());
+            let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name(name).with_run_id(name).with_inbox();
+            let mut turns = history.lock().unwrap();
+            let mut sink = StringSink::default();
+            let run = agent.run(&mut turns, &mut sink).unwrap();
+            assert_eq!(run.messages, 1, "un message par réveil");
+            transcript.lock().unwrap().push(format!("{name}: {}", run.text));
+            bus.send_message(name, name, peer, &run.text);
+        }
+    };
+    let handle = Reactor::new(bus.shared(), Arc::new(rag3weaver::dataflow::NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+        .with_tick(Duration::from_millis(2))
+        .on("A", [inbox_topic("A")], ReactPolicy::Each, wake("A", "B"))
+        .on("B", [inbox_topic("B")], ReactPolicy::Each, wake("B", "A"))
+        .spawn();
+
+    bus.send_message("test", "test", "A", "ping");
+    let start = Instant::now();
+    while transcript.lock().unwrap().len() < MAX_MESSAGES {
+        assert!(start.elapsed() < Duration::from_secs(5), "{:?}", transcript.lock().unwrap());
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // Les derniers messages en vol n'ont réveillé personne : le budget est
+    // épuisé, et le réacteur s'arrête proprement.
+    std::thread::sleep(Duration::from_millis(50));
+    let reactor = handle.stop();
+    assert_eq!(reactor.names(), vec!["A", "B"]);
+    let t = transcript.lock().unwrap();
+    eprintln!("[conversation] {t:?}");
+    assert_eq!(t.len(), MAX_MESSAGES);
+    assert_eq!(t[0], "A: A #1");
+    assert_eq!(t[1], "B: B #2");
+    assert_eq!(t[5], "B: B #6");
+    assert!(t.iter().enumerate().all(|(i, l)| l.starts_with(if i % 2 == 0 { "A:" } else { "B:" })));
 }
