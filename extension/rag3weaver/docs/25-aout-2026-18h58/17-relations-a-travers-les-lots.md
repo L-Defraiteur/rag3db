@@ -41,6 +41,24 @@ de `edit`, du `FileSource`, de la mémoire à TTL du
 [16](16-le-monde-est-ouvert.md). Le résolveur suppose un monde clos ; le
 reste du système suppose un monde qui grandit. C'est là que ça casse.
 
+## 2 bis. Un quatrième cas, trouvé en relisant RAGForge
+
+Notre identité de scope est `blake3(fichier:nom:type:hash_de_signature)`
+(`codeparsers/src/relationship_resolution/relationship_resolver.rs:920`),
+avec le commentaire *« Same scope = same hash even if line numbers
+change »* — bonne propriété : déplacer du code ne casse rien.
+
+**Mais changer une signature change l'identité.** Et `reingest_file`
+supprime les scopes disparus. Donc, après un `edit` qui touche une
+signature : l'ancien scope est effacé, ses relations **entrantes** —
+venues d'autres fichiers, qui ne seront pas reparsés — partent avec lui, et
+rien ne les recrée. Le graphe se dégrade **à chaque refactor**, en silence.
+
+C'est exactement ce qui est arrivé à RAGForge (`DETACH DELETE` sur le même
+déclencheur). On ne l'avait pas vu parce qu'aucun test ne renomme une
+fonction *référencée depuis un autre fichier* — le nôtre (`e2e_code`)
+renomme `take_results`, dont tous les appelants sont dans le même fichier.
+
 ## 3. Le principe
 
 > **Une référence non résolue est une donnée, pas un échec.**
@@ -116,6 +134,81 @@ Le test qui tranche, et c'est celui que Lucie a posé :
 S'ils le sont, l'ordre n'a plus d'importance — ce qui est exactement la
 propriété qu'on cherche.
 
+## 6 bis. Ce que RAGForge a payé pour nous
+
+RAGForge — le moteur Neo4j précédent, avec la version **TypeScript** de
+codeparsers — a buté sur exactement ces questions. Enquête faite dans son
+code ; voici ce qui s'y lit, et ce qu'on en retient.
+
+**Le résolveur TS était intra-lot, explicitement** : *« resolves cross-file
+relationships without needing a database »*, et ses tables sont vidées à
+chaque appel (`RelationshipResolver.ts:256`). Même conception que la nôtre,
+même limite. La perte se lit dans un `continue` commenté *« might be from a
+different file set »* — silencieuse, comme notre `relations_dropped`.
+
+**Le rattrapage inter-ingestions existait, mais par chemin de fichier** :
+une arête `PENDING_IMPORT` stockée en base, rejouée après coup. Deux
+conséquences :
+
+- ça ne marche que si le fichier contient un `import` **textuel** dont le
+  chemin résout sur disque. Une référence par simple nom — le cas courant
+  en Rust dans un même crate — est perdue définitivement ;
+- **le rendez-vous se faisait par chemin, jamais par symbole.** C'est la
+  différence de fond avec la couche `Symbol` proposée ici, et c'est ce qui
+  a plafonné leur incrémental.
+
+Le mécanisme avait fini en **quatre conventions incompatibles**, dont deux
+mortes et une requête qui ne correspondait à aucune. Leçon : *une seule
+convention pour l'arête en attente*, ou le rattrapage devient lui-même une
+source de bugs invisibles.
+
+**L'asymétrie qu'on vient de retrouver chez nous** y était aussi : les
+relations sortantes d'un fichier modifié étaient supprimées puis
+reconstruites depuis le lot seul (donc appauvries), et **les entrantes
+n'étaient jamais réévaluées**. Il n'existait aucune notion de *dépendants
+inverses* — zéro occurrence de `relink`, `affected files`, `reverse
+dependency` dans tout le moteur.
+
+**La sur-connexion était réelle et documentée.** Leur repli « nom seul,
+inter-fichiers, prends le premier » a produit des garde-fous empilés au fil
+du temps, dont un commentaire qui est notre cas mot pour mot : *« sinon
+c'est probablement un appel de méthode sur variable locale ou un builtin
+(ex : `map.get()`) »*. Un **score de confiance** sur l'arête était prévu au
+design (1,0 fichier résolu, 0,8 candidat unique, 0,5 heuristique de nom) et
+n'a **jamais été implémenté** ; il n'en reste qu'un booléen. Pire, une de
+leurs requêtes de rattrapage fait un **produit cartésien** quand le scope
+source est inconnu — *tous* les scopes du fichier importateur × *tous* les
+scopes cibles portant le nom — et c'est la branche toujours prise.
+
+**Le chiffre qui justifie tout ce document** : avant leurs nœuds
+fantômes, **27 % des relations échouaient silencieusement** — 12 773 sur
+46 379. C'est l'ordre de grandeur de ce qu'une résolution intra-lot laisse
+sur la table quand l'ingestion est incrémentale.
+
+### Ce que ça change dans le dessin ci-dessus
+
+1. **Le rendez-vous est le symbole, pas le chemin** — confirmé par
+   l'échec de leur approche, et c'est déjà notre §4.
+2. **Les dépendants inverses deviennent une notion de premier rang.** Une
+   ré-ingestion doit remettre en file les scopes qui *mentionnent* ce que
+   le fichier définissait. Avec la couche `Symbol` c'est gratuit : les
+   `MENTIONS` entrants du symbole *sont* la liste des dépendants.
+3. **Ne jamais éventer quand la source est imprécise.** Si l'origine d'une
+   référence n'est pas connue au scope près, on rattache au fichier ou on
+   s'abstient — jamais un produit cartésien.
+4. **Un score de confiance sur l'arête**, en plus de la règle du
+   définisseur unique : `1.0` résolu dans le lot, `0.8` définisseur unique
+   trouvé par symbole, et rien en dessous. Leur design l'avait vu ; ne pas
+   le construire est ce qui a laissé l'ambiguïté sans recours.
+5. **Rendre l'incomplétude observable** : leur compteur de `PENDING`
+   restants était utile. Nos `MENTIONS` non résolus jouent ce rôle, et
+   remplacent `relations_dropped`.
+6. **L'identité par chemin absolu** leur a évité les doublons mais rendu le
+   graphe non portable, avec une migration Cypher à chaque rattachement.
+   Cela confirme le choix d'URI du [15](15-identite-d-un-fichier.md) : le
+   schéma de l'URI est à la source de le choisir, `git://…@commit` pour ce
+   qui doit voyager.
+
 ## 7. L'ordre, et ce que ça coûte
 
 1. **Stocker les références non résolues** (`Symbol`, `DEFINES`,
@@ -125,9 +218,12 @@ propriété qu'on cherche.
    unique. *Test* : A puis B, et B puis A, donnent le même graphe.
 3. **Le test d'équivalence** avec la ré-résolution complète, sur notre
    propre module. *Test* : fichier par fichier = tout d'un coup.
-4. **`reingest_file` passe par là** : après un `edit`, les relations
-   inter-fichiers du fichier modifié se refont — aujourd'hui elles
-   disparaissent en silence.
+4. **`reingest_file` passe par là**, et **réévalue les entrantes** via les
+   `MENTIONS` du symbole : après un `edit` qui change une signature, les
+   relations venues d'ailleurs se refont au lieu de disparaître (§2 bis).
+   *Test* : renommer une fonction **référencée depuis un autre fichier**,
+   et vérifier que `CONSUMED_BY` pointe le nouveau scope — le test qui
+   manquait, et qui aurait montré le défaut.
 5. **Le chemin d'import** pour départager les homonymes, si la mesure de
    l'étape 3 montre qu'il en manque trop.
 
