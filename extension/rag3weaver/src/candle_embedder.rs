@@ -21,8 +21,7 @@ use crate::embedder::{EmbedError, Embedder};
 
 /// Select the best available device: CUDA GPU if available, otherwise CPU.
 ///
-/// Seuls les constructeurs `from_repo` l'utilisent, et ils sont gatés sur
-/// `candle-embedder` (hf-hub). Sous `candle-wasm` le device vient de l'appelant.
+/// Seuls les constructeurs `from_repo` l'utilisent (hf-hub).
 #[cfg(feature = "candle-embedder")]
 fn best_device() -> Device {
     #[cfg(feature = "cuda")]
@@ -452,8 +451,7 @@ mod tests {
         );
     }
 
-    // Utilisé seulement par les tests à vrai modèle (candle-embedder) ; sous
-    // candle-wasm seul il était compilé sans appelant, refusé par -D warnings.
+    // Utilisé seulement par les tests à vrai modèle (candle-embedder).
     #[cfg(feature = "candle-embedder")]
     fn cosine(a: &[f32], b: &[f32]) -> f32 {
         let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();

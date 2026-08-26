@@ -396,8 +396,6 @@ impl DualEmbedder for BgeM3Embedder {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-// Le module entier dépend de `bge-m3` : sous `candle-wasm` seul, ses imports
-// et helpers étaient compilés sans aucun test et cassaient `-D warnings`.
 #[cfg(all(test, feature = "bge-m3"))]
 mod tests {
     use super::*;

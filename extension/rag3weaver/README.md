@@ -1,6 +1,6 @@
 # rag3weaver
 
-RAG pipeline orchestrator for [rag3db](../../README.md). Handles document ingestion, chunking, embedding, and hybrid search — all in Rust, with native and WASM targets.
+RAG pipeline orchestrator for [rag3db](../../README.md). Handles document ingestion, chunking, embedding, and hybrid search — all in Rust, native only (wasm was dropped for this crate on 26 August 2026 — lucivy keeps its own).
 
 ## Overview
 
@@ -361,11 +361,9 @@ No feature is enabled by default: the crate is an orchestrator and `Catalog` tak
 |---------|-------------|
 | `burn-embedder` | MiniLM and BGE-M3 on burn/wgpu (Vulkan, Metal, WebGPU) — the product path |
 | `candle-embedder` | Local embeddings via candle (MiniLM, BgeBase, MultilingualMiniLM) — parity reference |
-| `candle-wasm` | Candle for WASM (CPU-only, no CUDA) |
 | `bge-m3` | BGE-M3 dual embedder (native only, ~2.2GB) |
 | `cuda` | GPU acceleration for candle models |
 | `rag3db-native` | Native rag3db connection |
-| `wasm-emscripten` | WASM emscripten FFI bindings |
 
 ## Tests
 
@@ -405,7 +403,6 @@ src/
 ├── connection.rs           DbConnection trait + CypherValue
 ├── events.rs               EventBus (async_broadcast)
 ├── sparse_index.rs         SparseVector: parallel indices/values
-├── wasm_ffi.rs             WASM emscripten FFI
 ├── rag3db_connection.rs    Native rag3db connection
 │
 ├── dataflow/

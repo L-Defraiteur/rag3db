@@ -106,9 +106,9 @@ La fiche d'un graphe-outil déclare à quoi elle réagit :
 ```
 
 Le réacteur est un objet, `Reactor::new(bus)`, à qui on confie des fiches.
-En natif, il tourne dans un fil (`recv_blocking` sur ses curseurs — le bus
-le permet) ; en wasm, pas de fil : l'hôte appelle `reactor.pump()` sur un
-minuteur, et c'est la même boucle. Par événement (ou par lot), il
+Il tourne dans un fil (`recv_blocking` sur ses curseurs — le bus le
+permet) ; `pump()` reste possible pour un hôte qui préfère cadencer
+lui-même, mais ce n'est plus une contrainte. Par événement (ou par lot), il
 instancie le graphe avec l'événement en paramètre (`$event`, ou le lot sur
 un port) et l'exécute avec **ses** services — ce qui, encore une fois,
 décide de ce que ce run publie (`event_bus`) et lit (`events`).
@@ -155,8 +155,13 @@ voit au tour suivant), puis le réacteur. Un commit par étape.
 
 ## 6. Ce qui gêne, et ce qu'on a tranché
 
-- **Pas de `getrandom` en wasm** : les ids sont un compteur atomique plus
-  un horodatage (`run-<n>-<ms>`), déterministes à la demande par blake3.
+- **Wasm abandonné pour rag3weaver** (26 août, décision de Lucie) : ça ne
+  servait qu'à se contraindre — pas de fils, pas d'async — pour un usage
+  que personne n'avait ; lucivy garde le sien. `wasm_ffi.rs`,
+  `build_wasm.sh` et les features `wasm-emscripten` / `candle-wasm` sont
+  retirés ; le réacteur tourne dans un fil, sans `pump()`. Les ids de run
+  restent un compteur plus un horodatage (déterministes à la demande par
+  blake3) — c'est simple, et ça ne dépend de rien.
 - **`execute()` n'a pas d'id aujourd'hui** ; il en génère un. Le checkpoint
   garde le sien.
 - **Le lien parent** : `execute_definition` tourne sous un appel d'outil ;

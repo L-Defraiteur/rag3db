@@ -2811,14 +2811,6 @@ impl Catalog {
         }
     }
 
-    /// Drain (WASM-only alias kept for the FFI surface).
-    /// `drain()` is synchronous since the async→sync migration; the rayon pool
-    /// argument is retained for call-site compatibility.
-    #[cfg(feature = "wasm-emscripten")]
-    pub fn drain_parallel(&mut self, _pool: &rayon::ThreadPool) -> FlushResult {
-        self.drain()
-    }
-
     /// Flush only entity inserts via a minimal dataflow graph.
     /// Leaves relations and aggregates in `pending` for a later `drain()`.
     pub fn flush_insertions(&mut self) -> FlushResult {

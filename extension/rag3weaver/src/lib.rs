@@ -1,18 +1,18 @@
 //! rag3weaver: RAG pipeline orchestrator for rag3db.
 //!
-//! Provides typed events, config parsing, and async traits for embedding
-//! and database access. Designed to be runtime-agnostic (WASM-compatible).
+//! Provides typed events, config parsing, and the traits for embedding
+//! and database access. Natif seulement : le wasm a été abandonné pour
+//! cette crate le 26 août 2026 (lucivy garde le sien) — fils et async sont
+//! libres ici.
 
-// `candle-wasm` est la variante sans hf-hub : elle donne accès à
-// `BgeM3Embedder::from_local_dir` sans tirer le téléchargement runtime.
-#[cfg(any(feature = "bge-m3", feature = "candle-wasm"))]
+#[cfg(feature = "bge-m3")]
 pub mod bge_m3_embedder;
 // Retiré le 24 août 2026 : `bm42_model` / `bm42_embedder` (sparse par poids
 // d'attention, « un hack » de l'aveu même des docs de février) et le
 // `CandleDualEmbedder` qui en dépendait. Zéro usage, et la seule brique qui
 // aurait exigé un export ONNX côté PyTorch pour passer sur burn. Le sparse
 // vient de BGE-M3 (tête apprise), sur candle ou sur burn.
-#[cfg(any(feature = "candle-embedder", feature = "candle-wasm"))]
+#[cfg(feature = "candle-embedder")]
 pub mod candle_embedder;
 /// Modèle BGE-M3 généré par burn-onnx depuis l'ONNX de BAAI — code machine, non édité.
 /// Voir `generated/README.md` pour la provenance et la régénération.
@@ -116,8 +116,6 @@ pub mod postgres_connection;
 pub mod postgres_blob_store;
 #[cfg(feature = "postgres")]
 pub mod postgres_search_backend;
-#[cfg(feature = "wasm-emscripten")]
-pub mod wasm_ffi;
 pub mod chunker;
 pub mod config;
 pub mod connection;
@@ -192,5 +190,3 @@ pub use search_strategy::{
 pub use validator::{validate_schema, KBFieldRef};
 #[cfg(feature = "rag3db-native")]
 pub use rag3db_connection::Rag3dbConnection;
-#[cfg(feature = "wasm-emscripten")]
-pub use wasm_ffi::WasmDbConnection;

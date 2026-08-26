@@ -3049,7 +3049,6 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
- "num_cpus",
 ]
 
 [[package]]
@@ -5855,8 +5854,6 @@ dependencies = [
  "codeparsers",
  "deadpool-postgres",
  "flume",
- "futures",
- "getrandom 0.3.4",
  "hf-chat-template",
  "hf-hub",
  "image",

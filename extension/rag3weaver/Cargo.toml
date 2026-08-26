@@ -63,7 +63,7 @@ image = { version = "0.25", optional = true, default-features = false, features 
 # Chat templates Jinja de HuggingFace, pour le chemin LOCAL uniquement : c'est
 # nous le serveur, donc c'est nous qui rendons le template. minijinja nu rend 6
 # des 9 templates réels mesurés (doc 50 §4) ; celui-ci les rend 9 sur 9, pour
-# 16 crates, sans tokio ni getrandom, et compile en wasm32.
+# 16 crates, sans tokio ni getrandom.
 hf-chat-template = { version = "1", optional = true }
 # Parseurs de code (tree-sitter, 12 langages) : entités File / Scope et
 # relations résolues. Crate du dépôt, feature `code`.
@@ -92,10 +92,6 @@ deadpool-postgres = { version = "0.14", optional = true }
 postgres-types = { version = "0.2", optional = true, features = ["derive"] }
 bytes = { version = "1", optional = true }
 
-# WASM: getrandom needs wasm_js backend for wasm32 targets
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.3", features = ["wasm_js"] }
-
 [features]
 # Aucun embedder par défaut : la crate est un orchestrateur, `Catalog` prend un
 # `Box<dyn Embedder>`, et chaque provider se paie à l'activation. `burn-embedder`
@@ -103,7 +99,6 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 # reste l'oracle de parité, jamais une dépendance produit.
 default = []
 candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
-candle-wasm = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers"]
 bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]
 rag3db-native = ["dep:rag3db"]
@@ -130,12 +125,6 @@ burn-ocr = ["ocr", "dep:burn", "dep:burn-store"]
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
 # `gcp_auth` (JWT RS256 + OAuth2, pour Vertex) est inclus : zéro crate de plus.
 openai-llm = ["dep:ureq", "dep:ring", "dep:base64"]
-wasm-emscripten = ["dep:futures", "tokio/rt"]
-
-[dependencies.futures]
-version = "0.3"
-optional = true
-features = ["thread-pool"]
 
 [dependencies.rayon]
 version = "1.10"
