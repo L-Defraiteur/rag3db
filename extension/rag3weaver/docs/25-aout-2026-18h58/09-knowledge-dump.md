@@ -40,6 +40,7 @@ la racine du dépôt ne compile rien et rend « 0 » par absence de sortie.
 
 | test | demande | coûte |
 |---|---|---|
+| `e2e_cloud_code_agent` **en local** | `RAG3WEAVER_LOCAL_LLM=http://127.0.0.1:8080/v1` — un `llama-server -m … --jinja` suffit, aucun adaptateur : le client OpenAI *est* le client llama.cpp | gratuit, mais lent |
 | `e2e_cloud_code_agent`, `e2e_cloud_schema_probe` | `GOOGLE_APPLICATION_CREDENTIALS=…/.vault/vertex-sa.json` et `GOOGLE_CLOUD_PROJECT=<project_id du JSON>` ; sautent sinon | des centimes par question (14 000–40 000 jetons) |
 | `e2e_burn_code_agent`, `e2e_burn_agent`, `e2e_burn_llm` | les poids dans `~/.cache/rag3weaver/qwen2.5-0.5b-instruct/` (téléchargés au premier passage) | 1–2 min, 2 Go de GPU chacun — ne pas les enchaîner en parallèle |
 | `e2e_hnsw_scale` | `RAG3DB_PROBE_HNSW=1` pour les sondes à 4 096 (3 min) ; les 1 024 sont des canaris permanents | — |

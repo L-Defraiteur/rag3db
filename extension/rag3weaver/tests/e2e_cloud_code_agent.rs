@@ -103,6 +103,32 @@ fn setup() -> Arc<ServiceRegistry> {
     Arc::new(services)
 }
 
+/// Le modèle à interroger : **local d'abord**, s'il est annoncé.
+///
+/// `RAG3WEAVER_LOCAL_LLM` pointe la racine d'un endpoint compatible OpenAI
+/// sans authentification — c'est exactement ce que sert `llama-server` :
+///
+/// ```sh
+/// llama-server -m ~/ML/models/…/modele.gguf --port 8080 -c 32768 --jinja
+/// RAG3WEAVER_LOCAL_LLM=http://127.0.0.1:8080/v1 \
+///   ./run_e2e.sh --features openai-llm --test e2e_cloud_code_agent
+/// ```
+///
+/// `--jinja` n'est pas facultatif : sans lui, llama.cpp n'applique pas le
+/// gabarit de discussion du modèle et les appels d'outils ne sortent pas.
+/// Les mêmes questions et les mêmes missions que pour le nuage, donc des
+/// chiffres directement comparables (doc 11).
+fn model() -> Option<OpenAiLlm> {
+    if let Ok(base) = std::env::var("RAG3WEAVER_LOCAL_LLM") {
+        let name = std::env::var("RAG3WEAVER_LOCAL_MODEL").unwrap_or_else(|_| "local".into());
+        eprintln!("[cloud-agent] {name} @ {base}");
+        // Un modèle local n'a pas de quota mais il est lent : la politique
+        // de réessai du nuage (60 s après un 429) n'a rien à faire ici.
+        return Some(OpenAiLlm::new(base, name));
+    }
+    vertex()
+}
+
 fn vertex() -> Option<OpenAiLlm> {
     let project = std::env::var("GOOGLE_CLOUD_PROJECT").map_err(|e| eprintln!("[cloud-agent] GOOGLE_CLOUD_PROJECT: {e}")).ok()?;
     let source = rag3weaver::gcp_auth::TokenSource::from_env().map_err(|e| eprintln!("[cloud-agent] TokenSource: {e}")).ok()?;
@@ -144,8 +170,8 @@ const QUESTIONS: [&str; 3] = [
 #[test]
 #[ignore]
 fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
-    let Some(llm) = vertex() else {
-        eprintln!("skipped: GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS absent");
+    let Some(llm) = model() else {
+        eprintln!("skipped: ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
         return;
     };
     let (nodes, graph_tools) = builtin_graph_tools().unwrap();
@@ -224,8 +250,8 @@ const MISSIONS: [(&str, &str); 2] = [
 #[test]
 #[ignore]
 fn a_cloud_model_edits_a_copy_of_our_code() {
-    let Some(llm) = vertex() else {
-        eprintln!("skipped: GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS absent");
+    let Some(llm) = model() else {
+        eprintln!("skipped: ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
         return;
     };
     let (dir, source) = scratch_copy();
