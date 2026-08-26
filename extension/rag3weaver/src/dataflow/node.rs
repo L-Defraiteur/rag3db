@@ -99,6 +99,8 @@ pub struct NodeContext {
     services: Arc<ServiceRegistry>,
     metrics: Vec<(String, f64)>,
     logs: Vec<(NodeLogLevel, String)>,
+    /// Le run qui exécute ce nœud — vide hors runtime.
+    run_id: String,
 }
 
 impl NodeContext {
@@ -109,6 +111,7 @@ impl NodeContext {
             services: Arc::new(ServiceRegistry::new()),
             metrics: Vec::new(),
             logs: Vec::new(),
+            run_id: String::new(),
         }
     }
 
@@ -119,6 +122,7 @@ impl NodeContext {
             services,
             metrics: Vec::new(),
             logs: Vec::new(),
+            run_id: String::new(),
         }
     }
 
@@ -184,6 +188,16 @@ impl NodeContext {
     /// Get the shared service registry (for sub-graph execution).
     pub fn services_arc(&self) -> Arc<ServiceRegistry> {
         self.services.clone()
+    }
+
+    /// L'identifiant du run courant — l'adresse de ce graphe sur le bus
+    /// (`run.<id>`, `run.<id>.inbox`). Vide hors runtime.
+    pub fn run_id(&self) -> &str {
+        &self.run_id
+    }
+
+    pub(crate) fn set_run_id(&mut self, run_id: &str) {
+        self.run_id = run_id.to_string();
     }
 
     /// Drain all output values (used by the runtime after execution).

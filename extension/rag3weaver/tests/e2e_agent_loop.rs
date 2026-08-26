@@ -385,12 +385,23 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
         MockLlm::new("").with_tool_calls(vec![("search", r#"{"target":"Licorne","query":"x"}"#)]),
         MockLlm::new("C'est le Rust Book."),
     ]);
-    let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name("demo");
+    // Le run a une adresse : `run.<id>` reçoit tout ce qui le concerne.
+    let mine = bus.cursor(&rag3weaver::events::run_topic("run-demo"), "probe");
+    let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name("demo").with_run_id("run-demo");
     let mut turns = vec![Turn::user("cherche")];
     let mut sink = StringSink::default();
     let run = agent.run(&mut turns, &mut sink).unwrap();
     assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
     assert_eq!((run.tool_calls, run.tool_errors), (2, 1));
+    assert_eq!(run.run, "run-demo");
+    let on_my_topic = rag3weaver::dataflow::drain_events(&mut mine.lock().unwrap(), "run", 100);
+    let my_kinds: Vec<&str> = on_my_topic.iter().map(|e| e["kind"].as_str().unwrap()).collect();
+    assert_eq!(
+        my_kinds,
+        ["RunStarted", "LlmCall", "ToolCallStarted", "ToolCallFinished", "LlmCall", "ToolCallStarted", "ToolCallFinished", "LlmCall", "RunFinished"],
+        "{my_kinds:?}"
+    );
+    assert!(on_my_topic.iter().all(|e| e["run"] == "run-demo"));
 
     // Le graphe de trace : ses propres services — le catalogue, et le bus
     // **en lecture** (`events`), pas en publication (`event_bus`) : son
@@ -406,11 +417,12 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     let recorded: serde_json::Value = serde_json::from_str(&out).unwrap();
     let n = recorded["recorded"].as_u64().unwrap() as usize;
 
-    // 3 appels au modèle, 2 appels d'outil (début + fin), et les nœuds du
-    // graphe `search` sous le premier (le second est refusé avant le graphe).
+    // Le run de l'agent (début, fin), 3 appels au modèle, 2 appels d'outil
+    // (début + fin), et sous le premier : le run du graphe `search` (début,
+    // fin) et ses 3 nœuds — le second appel est refusé avant le graphe.
     let mut cat = catalog.lock().unwrap();
     assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
-    assert!(n >= 3 + 4 + 3, "{n} événements tracés");
+    assert_eq!(n, 2 + 3 + 4 + 2 + 3, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -440,6 +452,22 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     );
     let nodes_run = kinds(&mut cat, "NodeRun");
     assert!(nodes_run.iter().filter(|k| *k == "NodeRun").count() >= 3, "{nodes_run:?}");
+    // L'arbre : le graphe de l'outil est né sous le run de l'agent, et ses
+    // nœuds portent le run du graphe.
+    let graph_runs = cat.search(TRACE_ENTITY, "RunStarted graph", opts.clone()).unwrap();
+    let field = |r: &rag3weaver::search::SearchResult, k: &str| match r.data.as_ref().and_then(|d| d.get(k)) {
+        Some(CypherValue::String(s)) => s.clone(),
+        _ => String::new(),
+    };
+    let graph_run = graph_runs
+        .results
+        .iter()
+        .find(|r| field(r, "kind") == "RunStarted" && field(r, "parent_run_id") == "run-demo")
+        .map(|r| field(r, "run_id"))
+        .expect("un RunStarted de graphe sous run-demo");
+    assert!(graph_run.starts_with("graph-"), "{graph_run}");
+    let node_rows = cat.search(TRACE_ENTITY, "NodeRun", opts.clone()).unwrap();
+    assert!(node_rows.results.iter().filter(|r| field(r, "kind") == "NodeRun").all(|r| field(r, "run_id") == graph_run), "les nœuds portent le run du graphe");
     drop(cat);
 
     // Pas d'écho : l'écriture de la trace a publié sur `catalog`, que ce

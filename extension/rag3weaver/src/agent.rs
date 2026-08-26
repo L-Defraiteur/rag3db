@@ -69,6 +69,13 @@ pub trait ToolBox {
     /// la conversation irrejouable.
     fn call(&self, call: &ToolCall) -> Turn;
 
+    /// Le même appel, **sous un run** : l'outillage qui sait le faire donne
+    /// ce run pour parent à ce qu'il exécute (le graphe d'un outil publie
+    /// alors `RunStarted { parent: run }`). Par défaut, l'appel simple.
+    fn call_in(&self, call: &ToolCall, _run: &str) -> Turn {
+        self.call(call)
+    }
+
     /// Les outils à annoncer au modèle. Le défaut — aucun — sert un outillage
     /// qui n'expose rien (un `ToolBox` de test qui refuse tout).
     fn tool_defs(&self) -> Vec<ToolDef> {
@@ -80,6 +87,9 @@ impl<T: ToolBox + ?Sized> ToolBox for &T {
     fn call(&self, call: &ToolCall) -> Turn {
         (**self).call(call)
     }
+    fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
+        (**self).call_in(call, run)
+    }
     fn tool_defs(&self) -> Vec<ToolDef> {
         (**self).tool_defs()
     }
@@ -88,6 +98,9 @@ impl<T: ToolBox + ?Sized> ToolBox for &T {
 impl<T: ToolBox + ?Sized> ToolBox for Arc<T> {
     fn call(&self, call: &ToolCall) -> Turn {
         (**self).call(call)
+    }
+    fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
+        (**self).call_in(call, run)
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         (**self).tool_defs()
@@ -126,6 +139,15 @@ impl ToolBox for GraphToolBox<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
         self.tools
             .call_with_policy(call, self.nodes, self.services.clone(), &self.policy)
+    }
+
+    /// Une couche de services par-dessus les partagés, avec `"parent_run"` :
+    /// le graphe de l'outil naît sous le run de l'agent.
+    fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
+        let mut layer = crate::dataflow::ServiceRegistry::layered(self.services.clone());
+        layer.register("parent_run", run.to_string());
+        self.tools
+            .call_with_policy(call, self.nodes, Arc::new(layer), &self.policy)
     }
 
     /// Les fiches, résolues contre le catalogue des services quand il y en a
@@ -258,6 +280,8 @@ pub enum StopReason {
 /// plus dans le même vecteur.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentRun {
+    /// L'identifiant du run — celui de ses événements et de sa trace.
+    pub run: String,
     /// Le dernier texte émis par le modèle, quel que soit le tour.
     pub text: String,
     /// Nombre d'appels au modèle.
@@ -320,6 +344,8 @@ pub struct Agent<'a> {
     events: Option<crate::events::EventBus>,
     /// Le nom sous lequel elle publie.
     name: String,
+    /// L'identifiant du prochain run, s'il est choisi ; sinon généré.
+    run_id: Option<String>,
 }
 
 impl<'a> Agent<'a> {
@@ -334,6 +360,7 @@ impl<'a> Agent<'a> {
             limits: AgentLimits::default(),
             events: None,
             name: "agent".to_string(),
+            run_id: None,
         }
     }
 
@@ -356,6 +383,13 @@ impl<'a> Agent<'a> {
     /// Le nom de l'agent dans ses événements (défaut : `agent`).
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
+        self
+    }
+
+    /// L'identifiant du run — son adresse sur le bus (`run.<id>`,
+    /// `run.<id>.inbox`). Généré (`agent-…`) si absent.
+    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
+        self.run_id = Some(run_id.into());
         self
     }
 
@@ -403,7 +437,35 @@ impl<'a> Agent<'a> {
         turns: &mut Vec<Turn>,
         sink: &mut dyn TokenSink,
     ) -> Result<AgentRun, LlmError> {
+        let run_id = self
+            .run_id
+            .clone()
+            .unwrap_or_else(|| crate::events::new_run_id("agent"));
+        let run_started = std::time::Instant::now();
+        self.emit(crate::events::CatalogEvent::RunStarted {
+            run: run_id.clone(),
+            parent: None,
+            kind: "agent".to_string(),
+            name: self.name.clone(),
+        });
+        let outcome = self.run_inner(turns, sink, &run_id);
+        self.emit(crate::events::CatalogEvent::RunFinished {
+            run: run_id,
+            kind: "agent".to_string(),
+            ms: run_started.elapsed().as_millis() as u64,
+            ok: outcome.is_ok(),
+        });
+        outcome
+    }
+
+    fn run_inner(
+        &self,
+        turns: &mut Vec<Turn>,
+        sink: &mut dyn TokenSink,
+        run_id: &str,
+    ) -> Result<AgentRun, LlmError> {
         let mut run = AgentRun {
+            run: run_id.to_string(),
             text: String::new(),
             iterations: 0,
             tool_calls: 0,
@@ -463,6 +525,7 @@ impl<'a> Agent<'a> {
             accumulate(&mut run.usage, &usage);
             last_finish = finish.clone();
             self.emit(crate::events::CatalogEvent::LlmCall {
+                run: run_id.to_string(),
                 agent: self.name.clone(),
                 iteration: run.iterations,
                 prompt_tokens: usage.prompt_tokens,
@@ -509,17 +572,19 @@ impl<'a> Agent<'a> {
             let mut repeated: Option<(String, String)> = None;
             for call in &finish.tool_calls {
                 self.emit(crate::events::CatalogEvent::ToolCallStarted {
+                    run: run_id.to_string(),
                     agent: self.name.clone(),
                     call_id: call.id.clone(),
                     tool: call.name.clone(),
                     arguments: call.arguments.clone(),
                 });
                 let started = std::time::Instant::now();
-                let result = self.tools.call(call);
+                let result = self.tools.call_in(call, run_id);
                 run.tool_calls += 1;
                 if self.events.is_some() {
                     let error_kind = error_kind(&result.content);
                     self.emit(crate::events::CatalogEvent::ToolCallFinished {
+                        run: run_id.to_string(),
                         agent: self.name.clone(),
                         call_id: call.id.clone(),
                         tool: call.name.clone(),

@@ -68,6 +68,8 @@ pub fn trace_config() -> EntityConfig {
     fields.insert("summary".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() });
     fields.insert("detail".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
     fields.insert("kind".into(), f(FieldType::String));
+    fields.insert("run_id".into(), f(FieldType::String));
+    fields.insert("parent_run_id".into(), f(FieldType::String));
     fields.insert("agent".into(), f(FieldType::String));
     fields.insert("tool".into(), f(FieldType::String));
     fields.insert("call_id".into(), f(FieldType::String));
@@ -78,7 +80,7 @@ pub fn trace_config() -> EntityConfig {
     fields.insert("at_ms".into(), f(FieldType::Integer));
     EntityConfig {
         fields,
-        return_fields: Some(vec!["kind".into(), "agent".into(), "tool".into(), "call_id".into(), "node".into(), "ok".into(), "ms".into(), "tokens".into(), "at_ms".into()]),
+        return_fields: Some(vec!["kind".into(), "run_id".into(), "parent_run_id".into(), "agent".into(), "tool".into(), "call_id".into(), "node".into(), "ok".into(), "ms".into(), "tokens".into(), "at_ms".into()]),
         ..Default::default()
     }
 }
@@ -97,6 +99,14 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     let i = |k: &str| event.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
     let kind = s("kind");
     let (summary, detail) = match kind.as_str() {
+        "RunStarted" => (
+            format!("RunStarted {} {}", s("run_kind"), s("name")),
+            format!("run {}{}", s("run"), event.get("parent").and_then(|v| v.as_str()).map(|p| format!(", sous {p}")).unwrap_or_default()),
+        ),
+        "RunFinished" => (
+            format!("RunFinished {} {}", s("run_kind"), if event["ok"].as_bool().unwrap_or(false) { "ok" } else { "error" }),
+            format!("run {}, {} ms", s("run"), i("ms")),
+        ),
         "LlmCall" => (
             format!("LlmCall {} #{} {}", s("agent"), i("iteration"), s("finish")),
             format!("{} jetons ({} + {}), {} ms, {} réessais, {} appels d'outil", i("tokens"), i("prompt_tokens"), i("completion_tokens"), i("ms"), i("retries"), i("tool_calls")),
@@ -119,6 +129,8 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     d.insert("summary".into(), CypherValue::String(summary));
     d.insert("detail".into(), CypherValue::String(detail));
     d.insert("kind".into(), CypherValue::String(kind));
+    d.insert("run_id".into(), CypherValue::String(s("run")));
+    d.insert("parent_run_id".into(), CypherValue::String(s("parent")));
     d.insert("agent".into(), CypherValue::String(s("agent")));
     d.insert("tool".into(), CypherValue::String(s("tool")));
     d.insert("call_id".into(), CypherValue::String(s("call_id")));

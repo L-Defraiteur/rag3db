@@ -242,6 +242,9 @@ impl DataflowRuntime {
         store: &dyn CheckpointStore,
         execution_id: &str,
     ) -> Result<DataflowOutput, String> {
+        // L'identifiant du checkpoint est celui du run : une reprise garde
+        // son adresse.
+        let run_id = execution_id.to_string();
         let graph_def = graph.to_definition();
         let graph_hash = graph_def.hash();
 
@@ -323,8 +326,11 @@ impl DataflowRuntime {
         };
 
         // Run with checkpoint awareness
+        let run_started = Instant::now();
+        self.emit_run_started(&run_id, graph);
         let result = self
             .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint);
+        self.emit_run_finished(&run_id, run_started.elapsed().as_millis() as u64, result.is_ok());
 
         match &result {
             Ok(_) => {
@@ -346,6 +352,7 @@ impl DataflowRuntime {
         execution_id: &str,
         checkpoint: &ExecutionCheckpoint,
     ) -> Result<DataflowOutput, String> {
+        let run_id = execution_id.to_string();
         let start = Instant::now();
         graph.validate()?;
 
@@ -447,6 +454,7 @@ impl DataflowRuntime {
 
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
+                ctx.set_run_id(&run_id);
                 let edges_for_node: Vec<_> = graph
                     .edges
                     .iter()
@@ -526,6 +534,7 @@ impl DataflowRuntime {
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
                     bus.emit(crate::events::CatalogEvent::NodeRun {
+                        run: run_id.clone(),
                         node: node_name.clone(),
                         node_type: node_type.clone(),
                         ms: duration_ms,
@@ -647,6 +656,55 @@ impl DataflowRuntime {
         &self,
         graph: &mut DataflowGraph,
     ) -> Result<DataflowOutput, String> {
+        let run_id = crate::events::new_run_id("graph");
+        self.execute_as(graph, &run_id)
+    }
+
+    /// La même, sous un identifiant de run choisi — l'adresse du graphe sur
+    /// le bus (`run.<id>`). Publie `RunStarted` / `RunFinished` sur le
+    /// service `"event_bus"` s'il est là, avec `parent` = service
+    /// `"parent_run"` (le run de l'agent, pour le graphe d'un outil).
+    pub fn execute_as(
+        &self,
+        graph: &mut DataflowGraph,
+        run_id: &str,
+    ) -> Result<DataflowOutput, String> {
+        let run_id = run_id.to_string();
+        let started = Instant::now();
+        self.emit_run_started(&run_id, graph);
+        let result = self.execute_inner(graph, &run_id);
+        self.emit_run_finished(&run_id, started.elapsed().as_millis() as u64, result.is_ok());
+        result
+    }
+
+    fn emit_run_started(&self, run_id: &str, graph: &DataflowGraph) {
+        if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
+            bus.emit(crate::events::CatalogEvent::RunStarted {
+                run: run_id.to_string(),
+                parent: self.services.get::<String>("parent_run").cloned(),
+                kind: "graph".to_string(),
+                name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
+            });
+        }
+    }
+
+    fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
+        if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
+            bus.emit(crate::events::CatalogEvent::RunFinished {
+                run: run_id.to_string(),
+                kind: "graph".to_string(),
+                ms,
+                ok,
+            });
+        }
+    }
+
+    fn execute_inner(
+        &self,
+        graph: &mut DataflowGraph,
+        run_id: &str,
+    ) -> Result<DataflowOutput, String> {
+        let run_id = run_id.to_string();
         let start = Instant::now();
         graph.validate()?;
 
@@ -728,6 +786,7 @@ impl DataflowRuntime {
             for node_name in &ready {
                 // Collect inputs from edges
                 let mut ctx = NodeContext::with_services(self.services.clone());
+                ctx.set_run_id(&run_id);
                 let edges_for_node: Vec<_> = graph
                     .edges
                     .iter()
@@ -802,6 +861,7 @@ impl DataflowRuntime {
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
                     bus.emit(crate::events::CatalogEvent::NodeRun {
+                        run: run_id.clone(),
                         node: node_name.clone(),
                         node_type: node_type.clone(),
                         ms: duration_ms,

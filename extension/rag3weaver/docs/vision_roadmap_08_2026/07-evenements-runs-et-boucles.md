@@ -141,9 +141,9 @@ des résultats entiers.
 | Bus à sujets, curseurs, `emit`/`emit_on` | fait (`events.rs`) |
 | Événements `LlmCall`, `ToolCall*`, `NodeRun`, `Message` | faits |
 | L'agent publie (`with_events`), le runtime publie (`event_bus`) | fait |
-| `EventSourceNode`, `TraceSinkNode`, entité `Trace`, graphe `trace.mmd` | faits, à passer aux sujets/curseurs (en cours) |
-| `run_id` partout, `run.<id>`, `parent`, champs `Trace` | à faire — l'étape suivante |
-| `SendMessageNode`, `inbox` relatif, `Agent::with_inbox` (lecture entre tours) | à faire |
+| `EventSourceNode(topics, cursor)`, `TraceSinkNode`, entité `Trace`, graphe `trace.mmd` | faits, sur sujets et curseurs ; second drain à 0 (pas d'écho) |
+| `run_id` partout, `run.<id>`, `parent`, champs `Trace` | fait : `RunStarted`/`RunFinished`, `ctx.run_id()`, `execute_as`, `ToolBox::call_in` + `ServiceRegistry::layered` pour le parent, `AgentRun.run` |
+| `SendMessageNode`, `inbox` relatif, `Agent::with_inbox` (lecture entre tours) | à faire — l'étape suivante |
 | `interrupt` | à faire, petit (le puits sait déjà arrêter) |
 | `%% on:` / `%% policy:`, `Reactor` natif + `pump` | à faire |
 | Boîte durable (`Message` en base, `MessageSourceNode`) | plus tard, même forme de nœud |

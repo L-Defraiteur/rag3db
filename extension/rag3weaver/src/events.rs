@@ -104,8 +104,25 @@ pub enum Event {
     // n'attend jamais celui qui écoute. Un graphe de trace (`EventSourceNode`
     // → `TraceSinkNode`) les consomme dans sa propre boucle, et une autre
     // boucle peut en publier (`Message`) sans que l'une bloque l'autre.
+    /// Un run commence : une boucle d'agent (`kind = "agent"`) ou une
+    /// exécution de graphe (`kind = "graph"`). `parent` : le run sous lequel
+    /// il tourne — le run de l'agent, pour le graphe d'un outil.
+    RunStarted {
+        run: String,
+        parent: Option<String>,
+        kind: String,
+        name: String,
+    },
+    /// Le même, terminé.
+    RunFinished {
+        run: String,
+        kind: String,
+        ms: u64,
+        ok: bool,
+    },
     /// Un appel au modèle, terminé.
     LlmCall {
+        run: String,
         agent: String,
         iteration: usize,
         prompt_tokens: usize,
@@ -117,6 +134,7 @@ pub enum Event {
     },
     /// Un appel d'outil, avant exécution — les arguments **exacts**.
     ToolCallStarted {
+        run: String,
         agent: String,
         call_id: String,
         tool: String,
@@ -124,6 +142,7 @@ pub enum Event {
     },
     /// Le même, terminé : résultat ou erreur (son `kind`), durée, taille.
     ToolCallFinished {
+        run: String,
         agent: String,
         call_id: String,
         tool: String,
@@ -135,6 +154,7 @@ pub enum Event {
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
     NodeRun {
+        run: String,
         node: String,
         node_type: String,
         ms: u64,
@@ -143,6 +163,8 @@ pub enum Event {
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
     Message {
+        /// Le run qui parle.
+        run: String,
         from: String,
         to: String,
         content: String,
@@ -179,11 +201,29 @@ impl Event {
     /// [`EventBus::emit_on`] permet d'en choisir un autre.
     pub fn topic(&self) -> &'static str {
         match self {
+            Self::RunStarted { kind, .. } | Self::RunFinished { kind, .. } => {
+                if kind == "agent" { topic::AGENT } else { topic::DATAFLOW }
+            }
             Self::SearchStarted { .. } | Self::SearchCompleted { .. } => topic::SEARCH,
             Self::LlmCall { .. } | Self::ToolCallStarted { .. } | Self::ToolCallFinished { .. } => topic::AGENT,
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             _ => topic::CATALOG,
+        }
+    }
+
+    /// Le run auquel l'événement appartient, s'il en a un : il est aussi
+    /// publié sur `run.<id>`.
+    pub fn run(&self) -> Option<&str> {
+        match self {
+            Self::RunStarted { run, .. }
+            | Self::RunFinished { run, .. }
+            | Self::LlmCall { run, .. }
+            | Self::ToolCallStarted { run, .. }
+            | Self::ToolCallFinished { run, .. }
+            | Self::NodeRun { run, .. }
+            | Self::Message { run, .. } => Some(run),
+            _ => None,
         }
     }
 
@@ -202,24 +242,30 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::LlmCall { agent, iteration, prompt_tokens, completion_tokens, ms, retries, finish, tool_calls } => json!({
-                "kind": "LlmCall", "agent": agent, "iteration": iteration,
+            Self::RunStarted { run, parent, kind, name } => json!({
+                "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
+            }),
+            Self::RunFinished { run, kind, ms, ok } => json!({
+                "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
+            }),
+            Self::LlmCall { run, agent, iteration, prompt_tokens, completion_tokens, ms, retries, finish, tool_calls } => json!({
+                "kind": "LlmCall", "run": run, "agent": agent, "iteration": iteration,
                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                 "tokens": prompt_tokens + completion_tokens, "ms": ms, "retries": retries,
                 "finish": finish, "tool_calls": tool_calls,
             }),
-            Self::ToolCallStarted { agent, call_id, tool, arguments } => json!({
-                "kind": "ToolCallStarted", "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
+            Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
+                "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
-            Self::ToolCallFinished { agent, call_id, tool, ok, error_kind, ms, bytes } => json!({
-                "kind": "ToolCallFinished", "agent": agent, "call_id": call_id, "tool": tool,
+            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes } => json!({
+                "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
                 "ok": ok, "error_kind": error_kind, "ms": ms, "bytes": bytes,
             }),
-            Self::NodeRun { node, node_type, ms, error } => json!({
-                "kind": "NodeRun", "node": node, "node_type": node_type, "ms": ms, "ok": error.is_none(), "error": error,
+            Self::NodeRun { run, node, node_type, ms, error } => json!({
+                "kind": "NodeRun", "run": run, "node": node, "node_type": node_type, "ms": ms, "ok": error.is_none(), "error": error,
             }),
-            Self::Message { from, to, content } => json!({
-                "kind": "Message", "from": from, "to": to, "content": content,
+            Self::Message { run, from, to, content } => json!({
+                "kind": "Message", "run": run, "from": from, "to": to, "content": content,
             }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
@@ -239,6 +285,30 @@ pub mod topic {
     pub const DATAFLOW: &str = "dataflow";
     /// Messages d'une boucle à une autre.
     pub const MESSAGES: &str = "messages";
+}
+
+/// Le sujet d'un run : `run.<id>`.
+pub fn run_topic(run: &str) -> String {
+    format!("run.{run}")
+}
+
+/// La boîte d'un run : `run.<id>.inbox` — là où on lui parle.
+pub fn inbox_topic(run: &str) -> String {
+    format!("run.{run}.inbox")
+}
+
+/// Un identifiant de run : `<préfixe>-<horodatage hex>-<compteur>`. Unique
+/// dans un processus sans `getrandom` (wasm) ; le préfixe dit la sorte
+/// (`agent`, `graph`).
+pub fn new_run_id(prefix: &str) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    format!("{prefix}-{ms:x}-{n}")
 }
 
 struct Channel {
@@ -337,9 +407,14 @@ impl EventBus {
         self.inner.cursors.lock().unwrap().remove(&format!("{topic}@{name}"));
     }
 
-    /// Publie sur le sujet par défaut de l'événement ([`Event::topic`]).
+    /// Publie sur le sujet par défaut de l'événement ([`Event::topic`]) —
+    /// et, s'il appartient à un run, sur `run.<id>` aussi : qui observe tout
+    /// et qui n'observe qu'un run lisent le même bus.
     /// Ne bloque jamais ; sans abonné, l'événement est écarté.
     pub fn emit(&self, event: Event) {
+        if let Some(run) = event.run() {
+            self.emit_on(&run_topic(run), event.clone());
+        }
         let topic = event.topic();
         self.emit_on(topic, event);
     }
@@ -363,7 +438,7 @@ mod tests {
         let mut agent = bus.subscribe(topic::AGENT);
 
         bus.emit(Event::EntitiesStored { count: 42 });
-        bus.emit(Event::ToolCallStarted { agent: "a".into(), call_id: "c".into(), tool: "search".into(), arguments: "{}".into() });
+        bus.emit(Event::ToolCallStarted { run: "r1".into(), agent: "a".into(), call_id: "c".into(), tool: "search".into(), arguments: "{}".into() });
 
         assert!(matches!(catalog.try_recv().unwrap(), Event::EntitiesStored { count: 42 }));
         assert!(matches!(catalog.try_recv(), Err(TryRecvError::Empty)));
@@ -371,11 +446,12 @@ mod tests {
         assert!(matches!(agent.try_recv(), Err(TryRecvError::Empty)));
 
         // Un sujet inconnu naît à la demande, et sans abonné il jette tout.
-        bus.emit_on("messages.bob", Event::Message { from: "a".into(), to: "bob".into(), content: "hi".into() });
+        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "hi".into() });
         let mut bob = bus.subscribe("messages.bob");
-        bus.emit_on("messages.bob", Event::Message { from: "a".into(), to: "bob".into(), content: "again".into() });
+        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "again".into() });
         assert!(matches!(bob.try_recv().unwrap(), Event::Message { content, .. } if content == "again"));
-        assert_eq!(bus.topics(), vec!["agent", "catalog", "messages.bob"]);
+        // `run.r1` est né avec le ToolCallStarted du run r1.
+        assert_eq!(bus.topics(), vec!["agent", "catalog", "messages.bob", "run.r1"]);
     }
 
     #[test]
@@ -383,7 +459,7 @@ mod tests {
         let bus = EventBus::new(2);
         let cursor = bus.cursor(topic::AGENT, "trace");
         for i in 0..5 {
-            bus.emit(Event::LlmCall { agent: "a".into(), iteration: i, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
+            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), iteration: i, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
         }
         // Le même curseur, retrouvé par son nom — pas un nouveau récepteur.
         let same = bus.cursor(topic::AGENT, "trace");
@@ -393,6 +469,23 @@ mod tests {
         assert!(matches!(rx.try_recv().unwrap(), Event::LlmCall { iteration: 3, .. }));
         assert!(matches!(rx.try_recv().unwrap(), Event::LlmCall { iteration: 4, .. }));
         assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+    }
+
+    #[test]
+    fn an_event_of_a_run_is_also_published_on_its_run_topic() {
+        let bus = EventBus::new(16);
+        let mut all = bus.subscribe(topic::AGENT);
+        let mut mine = bus.subscribe(&run_topic("r1"));
+        let mut other = bus.subscribe(&run_topic("r2"));
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into() });
+        assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
+        assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
+        assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
+        // Un run de graphe va sur `dataflow`, pas sur `agent`.
+        bus.emit(Event::RunFinished { run: "g1".into(), kind: "graph".into(), ms: 3, ok: true });
+        assert!(matches!(all.try_recv(), Err(TryRecvError::Empty)));
+        assert_ne!(new_run_id("agent"), new_run_id("agent"));
+        assert_eq!(inbox_topic("r1"), "run.r1.inbox");
     }
 
     #[test]
