@@ -141,6 +141,11 @@ pub fn library_config() -> EntityConfig {
 /// requête, ce qui rend le rendez-vous gratuit.
 pub fn symbol_config() -> EntityConfig {
     let mut fields = HashMap::new();
+    // `title_and_content` et pas `title` seul : le catalogue refuse une entité
+    // sans champ de contenu (« toute entité est cherchable »). Un `Symbol`
+    // paie donc le pipeline complet — découpage, index plein texte — pour un
+    // nom de vingt caractères. C'est 12,5 s sur 3 275 symboles, et c'est le
+    // premier levier si l'ingestion devient gênante.
     fields.insert("name".into(), title_and_content(FieldType::String));
     EntityConfig {
         fields,
@@ -614,6 +619,11 @@ pub struct CodeIngestReport {
     /// Noms écartés parce que plusieurs scopes les définissent : une
     /// relation manquante vaut mieux qu'une relation fausse.
     pub ambiguous: usize,
+    /// Millisecondes par phase — sans ça, « l'ingestion est lente » n'a pas
+    /// de suite possible.
+    pub entities_ms: u128,
+    pub relations_ms: u128,
+    pub symbols_ms: u128,
 }
 
 fn s(v: &str) -> CypherValue {
@@ -682,6 +692,7 @@ impl Catalog {
     /// puis `drain`. Le schéma doit être déclaré ([`register_code_schema`]).
     pub fn ingest_code(&mut self, analysis: &CodeAnalysis) -> Result<CodeIngestReport, CatalogError> {
         let mut report = CodeIngestReport::default();
+        let phase = std::time::Instant::now();
 
         let files = self.ingest_entities(FILE, analysis.files.iter().map(FileRecord::data).collect())?;
         report.files = files.processed;
@@ -693,6 +704,9 @@ impl Catalog {
         report.libraries = libs.processed;
         report.failed += libs.failed;
 
+        report.entities_ms = phase.elapsed().as_millis();
+        let phase = std::time::Instant::now();
+
         for r in &analysis.relations {
             let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key))?;
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key))?;
@@ -701,8 +715,11 @@ impl Catalog {
         let linked = self.drain();
         report.relations = linked.processed;
         report.failed += linked.failed;
+        report.relations_ms = phase.elapsed().as_millis();
 
+        let phase = std::time::Instant::now();
         self.resolve_across_batches(analysis, &mut report)?;
+        report.symbols_ms = phase.elapsed().as_millis();
         Ok(report)
     }
 

@@ -242,6 +242,44 @@ intra-lot ne peut structurellement pas voir.
 | Noms ambigus, écartés | 181 (`new`, `execute`… — exactement la sur-connexion évitée) |
 | Ingestion | 17,6 s → 29,8 s |
 
+**Et la question « qu'est-ce qui pèche ? » a une réponse chiffrée**, parce
+que le rapport porte désormais le temps par phase :
+
+| Phase | Premier passage | Second passage (identique) |
+|---|---|---|
+| Entités (27 fichiers, 1 387 scopes) | **14,7 s** | **24,4 s** |
+| Relations (12 498) | 0,67 s | 0,69 s |
+| Symboles (3 275 + ~13 k liens) | **12,1 s** | 19,7 s |
+
+Trois faits, et aucun n'est celui qu'on aurait deviné :
+
+1. **Ce ne sont ni les embeddings ni les relations.** `e2e_code` tourne sur
+   `HashEmbedder` — aucun poids, aucun GPU — et 12 498 relations coûtent
+   moins d'une seconde, soit **vingt fois moins par élément** qu'une entité.
+   Le coût est le **pipeline d'entité simple** : ~10 ms pièce, pour
+   l'insertion, le découpage, les chunks et l'index plein texte.
+2. **Un `Symbol` paie ce pipeline complet pour un nom de vingt
+   caractères.** Le rendre « titre seul » a été tenté : le catalogue le
+   refuse — *« Entity 'Symbol' has no content fields »*. Toute entité est
+   cherchable, donc toute entité est découpée et indexée. C'est cohérent,
+   et c'est cher pour un nœud d'identité pure.
+3. **Ré-ingérer un contenu identique coûte 60 % de plus que l'ingérer.**
+   14,7 s → 24,4 s sur exactement les mêmes fichiers. Le `content_hash` est
+   là, il sert à la péremption de `read`, mais **rien ne court-circuite une
+   entité inchangée**. C'est le défaut le plus rentable des trois.
+
+Trois leviers, par valeur décroissante :
+
+- **court-circuiter l'inchangé** (comparer `content_hash` avant de
+  reconstruire chunks et index) : profite à toute ré-ingestion, pas
+  seulement au code ;
+- **grouper les insertions** : ~5 ms par enregistrement sent l'aller-retour
+  unitaire ;
+- **une entité sans pipeline de recherche** — un troisième genre à côté des
+  entités simples et des bases de connaissances, pour les nœuds d'identité
+  comme `Symbol`. À ne faire que si les deux premiers ne suffisent pas :
+  c'est un concept de plus dans le modèle.
+
 Les 2 765 symboles sans définisseur sont le prix du rendez-vous : ils ne
 servent que si une ingestion future définit ce nom. Pour un dépôt qui ne
 définira jamais `Vec`, c'est du poids mort — d'où le levier suivant, à
