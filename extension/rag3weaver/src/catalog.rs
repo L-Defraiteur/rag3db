@@ -2011,6 +2011,13 @@ impl Catalog {
         let node_count = graph.nodes.len();
         let runtime = DataflowRuntime::with_services(node_count + 20, services);
 
+        // `RAG3WEAVER_INGEST_PROFILE=1` : la durée de chaque nœud du pipeline
+        // d'ingestion, sur la sortie d'erreur. « L'ingestion est lente » sans
+        // ventilation n'a pas de suite possible — et la ventilation existe
+        // déjà, le runtime la publie.
+        let profile = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        let mut rx = profile.then(|| runtime.subscribe());
+
         let graph_def = graph.to_definition();
         let execution_id = format!(
             "ingest-{}-{}",
@@ -2024,6 +2031,23 @@ impl Catalog {
         } else {
             runtime.execute(&mut graph)
         };
+
+        if let Some(rx) = rx.as_mut() {
+            let mut by_node: Vec<(String, u64)> = Vec::new();
+            while let Ok(event) = rx.try_recv() {
+                if let crate::dataflow::DataflowEvent::NodeCompleted { node, duration_ms, metrics, .. } = event {
+                    let extra: Vec<String> = metrics
+                        .iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect();
+                    by_node.push((format!("{node} {}", extra.join(" ")), duration_ms));
+                }
+            }
+            by_node.sort_by(|a, b| b.1.cmp(&a.1));
+            for (node, ms) in by_node {
+                eprintln!("[ingest-profile] {ms:>6} ms  {node}");
+            }
+        }
 
         let mut kb_failed = 0usize;
         match result {

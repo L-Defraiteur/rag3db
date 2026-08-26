@@ -270,9 +270,9 @@ Trois faits, et aucun n'est celui qu'on aurait deviné :
 
 Trois leviers, par valeur décroissante :
 
-- **court-circuiter l'inchangé** (comparer `content_hash` avant de
-  reconstruire chunks et index) : profite à toute ré-ingestion, pas
-  seulement au code ;
+- **court-circuiter l'inchangé** : profite à toute ré-ingestion, pas
+  seulement au code. **Tenté le 26 au matin, mesuré, puis retiré** — voir
+  ci-dessous : le gain est énorme et la garde était fausse ;
 - **grouper les insertions** : ~5 ms par enregistrement sent l'aller-retour
   unitaire ;
 - **une entité sans pipeline de recherche** — un troisième genre à côté des
@@ -287,6 +287,45 @@ faire quand il gênera : **un graphe d'entretien qui élague les `MENTIONS`
 vers des symboles sans définisseur au-delà d'un certain âge**, exactement
 comme les racines à TTL du [16](16-le-monde-est-ouvert.md). Le compter
 d'abord (`still_pending`), le couper ensuite.
+
+### Le court-circuit : ce qu'il rapporte, et pourquoi il a été retiré
+
+Essai : dans `InsertRecordNode`, comparer le `_content_hash` stocké et ne
+pas faire descendre les enregistrements inchangés dans le reste du graphe.
+
+**Le gain est massif** — deuxième ingestion de `src/dataflow`, contenu
+identique :
+
+| | avant | après |
+|---|---|---|
+| entités | 24 385 ms | **196 ms** |
+| symboles | 19 667 ms | **1 270 ms** |
+| ré-ingestion complète | ~44 s | **~2 s** |
+
+**Et la garde était fausse.** La passe complète a rendu deux échecs, tous
+deux instructifs :
+
+1. `e2e_code::edit_reingests…` — après un `edit`, le fichier restait marqué
+   **périmé**. Parce que `_content_hash` est calculé sur les *champs de
+   contenu*, et le champ de contenu de `File` est… `path`. Le texte du
+   fichier vit dans `content_hash`, un champ **utilisateur**. Un
+   enregistrement peut donc changer sans que son `_content_hash` bouge :
+   la condition testait la mauvaise chose.
+2. `e2e_undo::undo_delete…` — après une restauration, l'entité parente
+   revient **sans ses chunks**. Le hash correspond, on saute, et les chunks
+   ne reviennent jamais. Un hash identique prouve que le *contenu* est le
+   même ; il ne prouve pas que les **artefacts dérivés existent**.
+
+La règle correcte, pour la prochaine fois :
+
+> Sauter le travail dérivé **si et seulement si** le contenu est identique
+> **et** que les artefacts (chunks, index, embeddings) existent déjà.
+
+Et la place correcte n'est pas `InsertRecordNode` — qui ne connaît ni la
+configuration de l'entité ni sa table de chunks — mais
+`Catalog::ingest_entities`, qui a les deux et qui construit les
+enregistrements. L'écriture de la ligne, elle, doit rester : elle est
+bon marché, et c'est elle qui rafraîchit les champs hors contenu.
 
 ## 7. L'ordre, et ce que ça coûte
 
