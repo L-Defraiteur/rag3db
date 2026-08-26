@@ -108,19 +108,31 @@ relations réelles.
 
 ## 4. Les pistes à poursuivre
 
-### Immédiat — chiffré, sans risque
+### Immédiat — ~~chiffré, sans risque~~ **fait le 26 au soir**
 
-1. **La bascule d'index en masse** (`e0d690482` mesure 24×). Reste à
-   décider *où* : une première ingestion la veut, un `edit` de trois
-   vecteurs non. Je propose un **paramètre explicite** d'`ingest_code`
-   plutôt qu'un seuil magique — `analyze` connaît déjà la taille du lot.
-2. **Le court-circuit de l'inchangé, version correcte** (44 s → 2 s
-   mesurés) : sauter le travail dérivé **si et seulement si** le contenu est
-   identique **et** que les artefacts existent, et le faire dans
-   `ingest_entities` qui connaît la configuration.
-3. **`reingest_file` passe par la couche `Symbol`** et réévalue les
-   entrantes — le défaut n° 3 ci-dessus. Test : renommer une fonction
-   **référencée depuis un autre fichier**.
+1. ~~**La bascule d'index en masse**~~ — `Catalog::bulk_vector_index`,
+   explicite (pas de seuil deviné), générique (des entités, pas du code) et
+   **réparable** : un drapeau dans `_catalog_meta` fait rebâtir à
+   l'ouverture si le processus meurt entre la destruction et la
+   reconstruction. Ingestion de `src/dataflow` **21,3 s → 6,2 s**, l'index
+   passant de ~90 % du coût à 9 % (`ef0d656ab`,
+   [doc 18 §8](../25-aout-2026-18h58/18-index-vectoriel-differe.md)).
+2. ~~**Le court-circuit de l'inchangé**~~ — `Catalog::split_unchanged`, dans
+   `ingest_entities`, avec la garde en deux conditions : tous les champs
+   identiques **et** les artefacts dérivés présents. Ré-ingestion à contenu
+   identique **19,5 s → 2,1 s**, entités 16 892 → 101 ms (`8ebf4ab35`,
+   [doc 17 §8](../25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
+3. ~~**Les relations entrantes après un `edit`**~~ — le test manquant
+   échouait, et pas pour la raison prévue : `CONSUMES` n'était pas une vue
+   matérialisée mais une arête sans trace, parce qu'une référence **résolue
+   dans le lot** ne laissait pas de `MENTIONS`. Désormais toute référence en
+   laisse un, pour un demi-seconde et pas une arête de plus au final
+   (`f4498880a`, [doc 17 §9](../25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
+
+Au passage, un défaut de la passe elle-même : `e2e_highlight_long_text` ne
+compilait plus depuis l'ajout du champ `chunked`, et la passe complète
+rendait « 0 passed, 33 suites non lancées » — vert de loin. Corrigé ; la
+passe tourne à **263 tests sur 33 suites**.
 
 ### Court terme — les chantiers ouverts avec leur dessin écrit
 
