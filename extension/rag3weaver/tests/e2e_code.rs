@@ -1075,3 +1075,69 @@ fn the_same_file_seen_from_two_roots_is_one_identity() {
     assert_eq!(named[0].0, "/projet/src/core.rs", "absolu, pas relatif à l'appel");
     assert_eq!(named[0].1, "file", "le système de fichiers est la source");
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 11. Le domaine de travail : ce que l'agent a dans sa vision
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Un domaine est une **sélection**, pas un contenant : rien n'y est rangé,
+/// tout y est reconnu. Trois fichiers dans trois endroits, un domaine qui
+/// n'en reconnaît qu'un — et la recherche ne rend que celui-là, sans qu'on
+/// ait rien réindexé (doc 05 §3).
+#[test]
+#[ignore]
+fn a_work_domain_narrows_what_a_search_can_see() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::work_domain::{Selector, WorkDomain};
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    // Trois endroits, aucun n'étant un dépôt : le domaine travaillera sur des
+    // préfixes de chemin, ce qui est le cas le plus général.
+    cat.ingest_code(&analyze("/projets/alpha", vec![("src/a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets/beta", vec![("src/b.rs".to_string(), boot("beta"))])).unwrap();
+    cat.ingest_code(&analyze("/ailleurs", vec![("notes.rs".to_string(), boot("ailleurs"))])).unwrap();
+
+    let found = |cat: &mut rag3weaver::Catalog, domain: &WorkDomain| -> Vec<String> {
+        let opts = SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            bm25_mode: BM25Mode::Contains,
+            limit: 20,
+            filter_condition: domain.to_filter("file_path"),
+            ..Default::default()
+        };
+        let mut names: Vec<String> = cat.search(SCOPE, "boot", opts).unwrap().results.iter().map(name_of).collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+
+    let tout = found(&mut cat, &WorkDomain::everything());
+    eprintln!("[tout] {tout:?}");
+    assert!(tout.iter().any(|n| n == "boot_alpha") && tout.iter().any(|n| n == "boot_ailleurs"), "{tout:?}");
+
+    // « Je travaille dans alpha » — beta et le reste sortent du champ.
+    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let vus = found(&mut cat, &alpha);
+    eprintln!("[alpha] {} → {vus:?}", alpha.describe());
+    assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
+
+    // Un domaine dispersé est une **union** : deux endroits qui n'ont rien à
+    // voir, et rien d'autre.
+    let deux = WorkDomain::new("les deux")
+        .including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })
+        .including(Selector { under: vec!["/ailleurs".into()], ..Default::default() });
+    let vus = found(&mut cat, &deux);
+    eprintln!("[dispersé] {} → {vus:?}", deux.describe());
+    assert_eq!(vus, vec!["boot_ailleurs".to_string(), "boot_alpha".to_string()], "{vus:?}");
+
+    // Et une exclusion l'emporte sur l'inclusion qui la contient.
+    let sauf = WorkDomain::new("les projets sauf beta")
+        .including(Selector { under: vec!["/projets".into()], ..Default::default() })
+        .excluding(Selector { under: vec!["/projets/beta".into()], ..Default::default() });
+    let vus = found(&mut cat, &sauf);
+    eprintln!("[exclusion] {} → {vus:?}", sauf.describe());
+    assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
+}

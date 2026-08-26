@@ -141,6 +141,7 @@ pub mod query;
 pub mod refs;
 pub mod schema;
 pub mod scope;
+pub mod work_domain;
 pub mod tools;
 pub mod reranker;
 pub use reranker::{CallbackReranker, MockReranker, Reranker};
