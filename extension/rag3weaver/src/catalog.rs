@@ -745,6 +745,10 @@ impl Catalog {
         self.load_relations()?;
         self.load_kb_configs()?;
 
+        // 10 ter. Un chargement en masse interrompu a pu laisser un index
+        // vectoriel détruit : on le rebâtit avant de servir la moindre requête.
+        self.restore_dropped_vector_indexes()?;
+
         // 10 bis. Multi-tenant (doc 37) : tables _Org/_Project, colonnes de scope
         // sur les bases d'avant, nœuds de la cellule courante.
         for ddl in crate::schema::generate_scope_tables_ddl(self.dialect.as_ref()) {
@@ -949,6 +953,106 @@ impl Catalog {
 
         // 6. Sparse vector index — handled by ensure_sparse_handle() in register_entity()
 
+        Ok(())
+    }
+
+    // ── Chargement en masse de l'index vectoriel (doc 18) ────────────────
+
+    /// Les index vectoriels des entités citées : `(table de chunks, index)`.
+    /// Seule une entité à pipeline simple et à signal vectoriel en a un.
+    fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String)> {
+        entities
+            .iter()
+            .filter(|e| {
+                self.entity_configs
+                    .get(**e)
+                    .map_or(false, |c| c.has_simple_pipeline() && c.signals.vector())
+            })
+            .map(|e| (format!("{e}_Chunk"), format!("{e}_Chunk_vec")))
+            .collect()
+    }
+
+    /// Détruit les index vectoriels des entités citées, exécute `f`, puis les
+    /// reconstruit sur les tables pleines.
+    ///
+    /// C'est le mode nominal de HNSW : construire sur une table déjà remplie
+    /// coûte 24 fois moins que l'insertion ligne par ligne — 16 663 ms contre
+    /// 5 366 + 550 ms sur notre propre module dataflow (doc 18, mesuré par
+    /// `building_the_vector_index_in_bulk_beats_row_by_row`).
+    ///
+    /// La bascule est **explicite** et jamais devinée : l'appelant sait si son
+    /// lot est gros. Une première ingestion la veut, un `edit` qui réingère
+    /// trois vecteurs certainement pas — il paierait une reconstruction
+    /// complète pour économiser trois insertions.
+    ///
+    /// Pendant l'opération un drapeau `vector_index_dropped:{table}` est posé :
+    /// si le processus meurt entre la destruction et la reconstruction,
+    /// l'ouverture suivante rebâtit ([`Self::restore_dropped_vector_indexes`])
+    /// au lieu de chercher en silence dans un index absent.
+    pub fn bulk_vector_index<T>(
+        &mut self,
+        entities: &[&str],
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> Result<T, CatalogError> {
+        let indexes = self.vector_indexes_of(entities);
+        for (table, index) in &indexes {
+            self.persist_meta_key(&format!("vector_index_dropped:{table}"), index)?;
+            let ddl = self.dialect.drop_vector_index(table, index);
+            self.conn
+                .execute(&ddl)
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        let out = f(self);
+        for (table, index) in &indexes {
+            self.rebuild_vector_index(table, index)?;
+        }
+        Ok(out)
+    }
+
+    /// Reconstruit un index vectoriel sur une table pleine, et lève le drapeau.
+    fn rebuild_vector_index(&self, table: &str, index: &str) -> Result<(), CatalogError> {
+        let ddl = self.dialect.create_vector_index(table, "embedding", index);
+        self.conn
+            .execute(&ddl)
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(&format!("vector_index_dropped:{table}"), "")
+    }
+
+    /// À l'ouverture : rebâtir ce qu'une ingestion en masse interrompue a
+    /// laissé détruit. Sans cela la recherche vectorielle rendrait moins de
+    /// résultats **en silence** — exactement le défaut qu'on s'est promis de
+    /// ne plus écrire.
+    fn restore_dropped_vector_indexes(&mut self) -> Result<(), CatalogError> {
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self
+            .conn
+            .execute_with_params(
+                &stmt,
+                &[QueryParam::new(
+                    "prefix",
+                    CypherValue::String("vector_index_dropped:".into()),
+                )],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let pending: Vec<(String, String)> = result
+            .rows
+            .iter()
+            .filter_map(|row| {
+                let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) =
+                    (row.get(0), row.get(1))
+                else {
+                    return None;
+                };
+                let table = k.strip_prefix("vector_index_dropped:")?;
+                (!v.is_empty()).then(|| (table.to_string(), v.clone()))
+            })
+            .collect();
+        for (table, index) in pending {
+            eprintln!(
+                "[rag3weaver] index vectoriel '{index}' laissé détruit par un chargement en masse interrompu — reconstruction"
+            );
+            self.rebuild_vector_index(&table, &index)?;
+        }
         Ok(())
     }
 

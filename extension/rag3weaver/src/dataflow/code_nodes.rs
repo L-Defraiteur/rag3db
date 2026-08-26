@@ -103,11 +103,19 @@ impl Node for ParseCodeNode {
 /// être déclaré (`crate::code::register_code_schema`).
 pub struct CodeIngestNode {
     node_name: String,
+    bulk_index: bool,
 }
 
 impl CodeIngestNode {
     pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string() }
+        Self { node_name: name.to_string(), bulk_index: false }
+    }
+
+    /// Détruire l'index vectoriel, charger, reconstruire (doc 18). Pour une
+    /// première ingestion volumineuse ; jamais pour un fichier.
+    pub fn with_bulk_index(mut self, bulk: bool) -> Self {
+        self.bulk_index = bulk;
+        self
     }
 }
 
@@ -134,11 +142,19 @@ impl Node for CodeIngestNode {
             .cloned()
             .ok_or("CodeIngestNode: 'catalog' service not found")?;
         let started = std::time::Instant::now();
-        let report = catalog
-            .lock()
-            .unwrap()
-            .ingest_code(&analysis)
-            .map_err(|e| format!("CodeIngestNode: {e}"))?;
+        let mut cat = catalog.lock().unwrap();
+        let report = if self.bulk_index {
+            // Les trois entités que l'analyse écrit ; `bulk_vector_index`
+            // ignore celles qui n'ont pas de signal vectoriel.
+            cat.bulk_vector_index(&[crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY], |c| {
+                c.ingest_code(&analysis)
+            })
+            .map_err(|e| format!("CodeIngestNode: {e}"))?
+        } else {
+            cat.ingest_code(&analysis)
+        }
+        .map_err(|e| format!("CodeIngestNode: {e}"))?;
+        drop(cat);
         let ms = started.elapsed().as_secs_f64() * 1000.0;
         ctx.metric("files", report.files as f64);
         ctx.metric("scopes", report.scopes as f64);
@@ -554,8 +570,9 @@ impl NodeFactory for ParseCodeNodeFactory {
 pub struct CodeIngestNodeFactory;
 
 impl NodeFactory for CodeIngestNodeFactory {
-    fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-        Ok(Box::new(CodeIngestNode::new(name)))
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let bulk = config.get("bulk_index").and_then(|v| v.as_bool()).unwrap_or(false);
+        Ok(Box::new(CodeIngestNode::new(name).with_bulk_index(bulk)))
     }
     fn node_type(&self) -> &'static str {
         "CodeIngestNode"
@@ -566,7 +583,9 @@ impl NodeFactory for CodeIngestNodeFactory {
             description: "Persists a code analysis into the catalog (File, Scope, Library and their relations)",
             inputs: vec![PortDef { name: "code", port_type: PortType::Code, required: true }],
             outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
-            config_params: vec![],
+            config_params: vec![
+                ConfigParam { name: "bulk_index", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Détruire l'index vectoriel, charger, le reconstruire — 24x sur un gros lot, une perte sèche sur un petit", choices: None, json_schema: None },
+            ],
         }
     }
 }

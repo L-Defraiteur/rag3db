@@ -550,3 +550,116 @@ fn building_the_vector_index_in_bulk_beats_row_by_row() {
     // Pas d'assertion sur le rapport : c'est une mesure, pas une promesse.
     // Le chiffre est imprimé pour la décision (doc 18).
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 8. La bascule explicite, et sa réparation
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Le chemin en masse doit rendre **le même graphe** et un index vectoriel qui
+/// cherche. Le rapport de vitesse est mesuré au test 7 ; ici on teste la
+/// correction, sur un corpus tenu à la main.
+#[test]
+#[ignore]
+fn the_bulk_switch_yields_the_same_graph_and_a_working_vector_index() {
+    let root = dataflow_dir();
+    let sources: Vec<(String, String)> = read_sources(&root).unwrap().into_iter().take(4).collect();
+    let analysis = rag3weaver::code::analyze(&root, sources);
+
+    let semantic = || SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::SEMANTIC),
+        limit: 5,
+        ..Default::default()
+    };
+
+    let normal = {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        let r = cat.ingest_code(&analysis).unwrap();
+        let found = cat.search(SCOPE, "merge port values", semantic()).unwrap();
+        (r.files, r.scopes, r.relations, r.symbols, found.results.len())
+    };
+
+    let bulk = {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        let r = cat
+            .bulk_vector_index(&[FILE, SCOPE, "Library"], |c| c.ingest_code(&analysis))
+            .unwrap()
+            .unwrap();
+        let found = cat.search(SCOPE, "merge port values", semantic()).unwrap();
+        (r.files, r.scopes, r.relations, r.symbols, found.results.len())
+    };
+
+    eprintln!("[en masse] normal {normal:?} | en masse {bulk:?}");
+    assert_eq!(normal.0, bulk.0, "mêmes fichiers");
+    assert_eq!(normal.1, bulk.1, "mêmes scopes");
+    assert_eq!(normal.2, bulk.2, "mêmes relations");
+    assert_eq!(normal.3, bulk.3, "mêmes symboles");
+    assert!(bulk.4 > 0, "la recherche vectorielle doit marcher après une construction en masse");
+}
+
+/// Et si le processus meurt entre la destruction et la reconstruction ? La
+/// réouverture rebâtit — sans quoi la recherche vectorielle rendrait moins de
+/// résultats **en silence**. On simule la mort par une panique dans la
+/// fermeture, sur une base **sur disque** pour pouvoir rouvrir.
+#[test]
+#[ignore]
+fn an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens() {
+    use std::panic::AssertUnwindSafe;
+
+    let dir = std::env::temp_dir().join(format!("rag3weaver-bulk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let open = |register: bool| {
+        let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
+        let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+        load_extensions(boxed.as_ref());
+        let config = CatalogConfig { name: Some("code-e2e".into()), embedding_dim: 64, ..Default::default() };
+        let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+        catalog.initialize().unwrap();
+        if register {
+            register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+        }
+        catalog
+    };
+
+    let root = dataflow_dir();
+    let sources: Vec<(String, String)> = read_sources(&root).unwrap().into_iter().take(3).collect();
+    let analysis = rag3weaver::code::analyze(&root, sources);
+
+    {
+        let mut cat = open(true);
+        cat.ingest_code(&analysis).unwrap();
+        // Le processus meurt au milieu du chargement : l'index est détruit,
+        // le drapeau est posé, la reconstruction n'a pas lieu.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let dead = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _ = cat.bulk_vector_index(&[SCOPE], |_| panic!("le processus meurt ici"));
+        }));
+        std::panic::set_hook(hook);
+        assert!(dead.is_err(), "la panique doit traverser");
+    }
+
+    // Réouverture **sans** redéclarer le schéma : rien d'autre que la
+    // réparation ne peut recréer l'index.
+    let mut cat = open(false);
+    let found = cat
+        .search(
+            SCOPE,
+            "merge port values",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::SEMANTIC),
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    eprintln!("[réparation] {} résultats après réouverture", found.results.len());
+    assert!(found.results.len() > 0, "l'index vectoriel doit être rebâti à l'ouverture");
+
+    drop(cat);
+    let _ = std::fs::remove_dir_all(&dir);
+}

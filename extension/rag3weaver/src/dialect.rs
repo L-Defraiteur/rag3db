@@ -124,6 +124,10 @@ pub trait SchemaDialect: Send + Sync {
     /// Create a vector similarity index on an embedding column.
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String;
 
+    /// Drop a vector similarity index — le pendant du précédent, pour charger
+    /// en masse puis reconstruire (doc 18).
+    fn drop_vector_index(&self, table: &str, index_name: &str) -> String;
+
     // ── Internal tables ──────────────────────────────────────────────────
 
     /// CREATE TABLE for the `_catalog_meta` key-value store.
@@ -437,6 +441,10 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "CALL CREATE_VECTOR_INDEX('{table}', '{index_name}', '{column}', metric := 'cosine', skip_if_exists := true)"
         )
+    }
+
+    fn drop_vector_index(&self, table: &str, index_name: &str) -> String {
+        format!("CALL DROP_VECTOR_INDEX('{table}', '{index_name}', skip_if_not_exists := true)")
     }
 
     fn create_meta_table(&self) -> String {
@@ -991,6 +999,10 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "CREATE INDEX IF NOT EXISTS {index_name} ON {table} USING hnsw ({column} vector_cosine_ops)"
         )
+    }
+
+    fn drop_vector_index(&self, _table: &str, index_name: &str) -> String {
+        format!("DROP INDEX IF EXISTS {index_name}")
     }
 
     fn create_meta_table(&self) -> String {

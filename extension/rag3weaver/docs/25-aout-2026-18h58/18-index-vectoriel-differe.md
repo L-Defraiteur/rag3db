@@ -167,3 +167,51 @@ point existant, un cron n'est plus qu'une politique d'appel.
 
 Aucun des deux ne vient de l'idée du différé ; tous deux méritent leur
 correction.
+
+---
+
+## 8. Fait, le 26 août au soir : la bascule explicite
+
+La première piste du §6 est écrite. Elle ne prend pas la forme d'un seuil.
+
+```rust
+cat.bulk_vector_index(&[FILE, SCOPE, LIBRARY], |c| c.ingest_code(&analysis))?
+```
+
+Trois décisions, chacune contre une tentation :
+
+1. **Explicite, pas deviné.** Pas de seuil magique sur la taille du lot :
+   l'appelant sait si son lot est gros. Une première ingestion la demande,
+   un `edit` qui réingère trois vecteurs non — il paierait une
+   reconstruction complète pour économiser trois insertions. Le nœud
+   l'expose comme paramètre de configuration (`bulk_index`, faux par
+   défaut), donc une fiche peut le câbler comme n'importe quel autre.
+2. **Générique, pas propre au code.** La méthode prend des *entités* et
+   ignore celles qui n'ont pas de signal vectoriel. Rien dans le mécanisme
+   ne connaît `Scope`.
+3. **Réparable.** Entre la destruction et la reconstruction, un drapeau
+   `vector_index_dropped:{table}` est posé dans `_catalog_meta`. Si le
+   processus meurt là, **l'ouverture suivante rebâtit** — parce que
+   l'alternative, c'est une recherche vectorielle qui rend moins de
+   résultats *en silence*, exactement le défaut qu'on passe nos journées à
+   débusquer ailleurs.
+
+Mesuré sur les quatre premiers fichiers de `src/dataflow`, même graphe des
+deux côtés (4 fichiers, 288 scopes, 1 313 relations, 964 symboles, mêmes
+résultats vectoriels), et sur le module entier :
+
+| chemin | total |
+|---|---|
+| incrémental | 17 114 ms |
+| en masse | 5 400 ms de chargement + 528 ms de construction = **5 928 ms** |
+
+L'index passe de ~90 % du coût à 9 %. Ce qui reste — les 5 400 ms — est
+l'affaire de la piste suivante : le court-circuit de l'inchangé.
+
+Deux tests le tiennent, dans `e2e_code` :
+`the_bulk_switch_yields_the_same_graph_and_a_working_vector_index` compare
+les deux chemins, et
+`an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens` tue le
+chargement par une panique, sur une base **sur disque**, puis rouvre **sans
+redéclarer le schéma** — de sorte que rien d'autre que la réparation ne
+peut recréer l'index.
