@@ -383,6 +383,9 @@ pub struct GrepResult {
     pub total_found: usize,
     pub returned: usize,
     pub matches: Vec<GrepMatch>,
+    /// Renseigné quand un préfixe ne rend aucun fichier — voir [`prefix_hint`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 fn escape_md(s: &str) -> String {
@@ -402,6 +405,10 @@ impl GrepResult {
             out.push_str(&format!(" — **showing {}**; narrow with path_prefix or extension", self.returned));
         }
         out.push('\n');
+        if let Some(hint) = &self.hint {
+            out.push_str(&format!("\n{hint}\n"));
+            return out;
+        }
         if self.matches.is_empty() {
             out.push_str("\n(no match)\n");
             return out;
@@ -512,6 +519,12 @@ pub fn grep_files(
             });
         }
     }
+    // Aucun fichier regardé sous un préfixe : c'est le préfixe qui est faux,
+    // pas le motif — et le dire vaut mieux qu'un « (no match) ».
+    let hint = match opts.path_prefix.as_deref() {
+        Some(prefix) if files_searched == 0 => Some(prefix_hint(source, prefix)?),
+        _ => None,
+    };
     Ok(GrepResult {
         pattern: pattern.to_string(),
         cursor: source.cursor(),
@@ -520,6 +533,7 @@ pub fn grep_files(
         total_found,
         returned: matches.len(),
         matches,
+        hint,
     })
 }
 
@@ -543,6 +557,9 @@ pub struct ListResult {
     pub total: usize,
     pub returned: usize,
     pub entries: Vec<ListEntry>,
+    /// Renseigné quand un préfixe ne rend rien — voir [`prefix_hint`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 pub const DEFAULT_LIST_LIMIT: usize = 200;
@@ -557,6 +574,9 @@ impl ListResult {
             if self.returned < self.total { format!(" — **showing {}**; narrow with path_prefix", self.returned) } else { String::new() }
         );
         out.push('\n');
+        if let Some(hint) = &self.hint {
+            out.push_str(&format!("\n{hint}\n"));
+        }
         for e in &self.entries {
             let state = match (e.indexed, e.stale) {
                 (Some(true), Some(true)) => " ⚠stale",
@@ -601,7 +621,59 @@ pub fn list_files(
         };
         entries.push(ListEntry { path, lines, indexed, stale });
     }
-    Ok(ListResult { cursor: source.cursor(), path_prefix: path_prefix.map(String::from), total, returned: entries.len(), entries })
+    let hint = match path_prefix {
+        Some(prefix) if total == 0 => Some(prefix_hint(source, prefix)?),
+        _ => None,
+    };
+    Ok(ListResult { cursor: source.cursor(), path_prefix: path_prefix.map(String::from), total, returned: entries.len(), entries, hint })
+}
+
+/// « Vouliez-vous dire » pour un **préfixe** qui ne rend aucun fichier.
+///
+/// Le piège mesuré (doc 11) : un modèle demande `src/` parce que c'est ce
+/// qu'il voit dans un dépôt, alors que les chemins sont relatifs à la
+/// racine de la [`FileSource`] — qui peut être `src/dataflow`. Un résultat
+/// vide ne le dit pas ; cette phrase le dit, avec ce qui existe vraiment.
+pub fn prefix_hint(source: &dyn FileSource, prefix: &str) -> Result<String, String> {
+    let all = source.list()?;
+    if all.is_empty() {
+        return Ok(format!("This source ({}) is empty.", source.cursor()));
+    }
+    // Les entrées de premier niveau : `dir/` pour un dossier, le nom pour un
+    // fichier à la racine.
+    let mut tops: Vec<String> = all
+        .iter()
+        .map(|p| match p.split_once('/') {
+            Some((dir, _)) => format!("{dir}/"),
+            None => p.clone(),
+        })
+        .collect();
+    tops.sort();
+    tops.dedup();
+
+    // Le dernier segment demandé existe-t-il, plus haut ? `src/dataflow/`
+    // quand la source *est* `src/dataflow` : la réponse est « sans préfixe ».
+    let tail = prefix.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    let exact: Vec<&String> = tops.iter().filter(|t| !tail.is_empty() && t.trim_end_matches('/') == tail).collect();
+
+    let mut hint = format!(
+        "No file matches `{prefix}`. Paths are relative to the root of this source ({}), not to the repository.",
+        source.cursor()
+    );
+    if let Some(found) = exact.first() {
+        hint.push_str(&format!(" Did you mean `{found}`?"));
+    } else {
+        let shown: Vec<String> = tops.iter().take(8).map(|t| format!("`{t}`")).collect();
+        hint.push_str(&format!(
+            " Top level ({} {}): {}{}.",
+            tops.len(),
+            if tops.len() == 1 { "entry" } else { "entries" },
+            shown.join(", "),
+            if tops.len() > shown.len() { ", …" } else { "" }
+        ));
+        hint.push_str(" Call again without path_prefix to see everything.");
+    }
+    Ok(hint)
 }
 
 // ─── edit ────────────────────────────────────────────────────────────────────
@@ -817,6 +889,41 @@ mod tests {
                 ("README.md".to_string(), "# Alpha\nbeta is called by alpha\n".to_string()),
             ],
         )
+    }
+
+    #[test]
+    fn a_prefix_that_matches_nothing_says_why() {
+        let s = snapshot();
+        // Le piège mesuré : la source est enracinée quelque part, le modèle
+        // donne le chemin du dépôt.
+        let r = list_files(&s, None, Some("extension/rag3weaver/src/"), 50, false).unwrap();
+        assert_eq!(r.total, 0);
+        let md = r.to_markdown();
+        assert!(md.contains("Paths are relative to the root of this source (snapshot:t)"), "{md}");
+        assert!(md.contains("Did you mean `src/`?"), "{md}");
+
+        // Sans segment reconnaissable : ce qui existe, et l'appel qui marche.
+        let r = list_files(&s, None, Some("lib/"), 50, false).unwrap();
+        let md = r.to_markdown();
+        assert!(md.contains("`README.md`") && md.contains("`src/`"), "{md}");
+        assert!(md.contains("without path_prefix"), "{md}");
+
+        // Un préfixe juste ne dit rien de plus.
+        let r = list_files(&s, None, Some("src/"), 50, false).unwrap();
+        assert_eq!(r.total, 2);
+        assert!(r.hint.is_none());
+        assert!(!r.to_markdown().contains("Paths are relative"));
+    }
+
+    #[test]
+    fn grep_under_a_wrong_prefix_blames_the_prefix_not_the_pattern() {
+        let s = snapshot();
+        let opts = GrepOptions { path_prefix: Some("extension/src/".into()), ..Default::default() };
+        let r = grep_files(&s, None, "alpha", &opts).unwrap();
+        assert_eq!(r.files_searched, 0);
+        let md = r.to_markdown();
+        assert!(md.contains("Did you mean `src/`?"), "{md}");
+        assert!(!md.contains("(no match)"), "le motif n'est pas en cause : {md}");
     }
 
     #[test]
