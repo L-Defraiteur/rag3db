@@ -523,6 +523,15 @@ impl DataflowRuntime {
                 };
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
+                // Vers le bus commun, s'il est là : la trace *sous* un outil.
+                if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
+                    bus.emit(crate::events::CatalogEvent::NodeRun {
+                        node: node_name.clone(),
+                        node_type: node_type.clone(),
+                        ms: duration_ms,
+                        error: exec_result.as_ref().err().cloned(),
+                    });
+                }
 
                 match exec_result {
                     Ok(()) => {
@@ -790,6 +799,15 @@ impl DataflowRuntime {
                 let exec_result = graph.nodes[node_idx].execute(&mut ctx);
 
                 let duration_ms = node_start.elapsed().as_millis() as u64;
+                // Vers le bus commun, s'il est là : la trace *sous* un outil.
+                if let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") {
+                    bus.emit(crate::events::CatalogEvent::NodeRun {
+                        node: node_name.clone(),
+                        node_type: node_type.clone(),
+                        ms: duration_ms,
+                        error: exec_result.as_ref().err().cloned(),
+                    });
+                }
 
                 match exec_result {
                     Ok(()) => {

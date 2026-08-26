@@ -1165,6 +1165,9 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(KBSearchNodeFactory));
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
+    // Trace : le consommateur du bus d'événements, en graphe.
+    registry.register(Box::new(super::trace_nodes::EventSourceNodeFactory));
+    registry.register(Box::new(super::trace_nodes::TraceSinkNodeFactory));
     // Search nodes (generic)
     registry.register(Box::new(SearchSourceNodeFactory));
     registry.register(Box::new(VectorSearchNodeFactory));
@@ -1209,7 +1212,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 29 + if cfg!(feature = "code") { 6 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 31 + if cfg!(feature = "code") { 6 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

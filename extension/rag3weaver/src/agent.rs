@@ -316,6 +316,10 @@ pub struct Agent<'a> {
     tools: &'a dyn ToolBox,
     opts: GenOptions,
     limits: AgentLimits,
+    /// Le bus où la boucle publie ce qu'elle fait — sans jamais l'attendre.
+    events: Option<crate::events::EventBus>,
+    /// Le nom sous lequel elle publie.
+    name: String,
 }
 
 impl<'a> Agent<'a> {
@@ -328,6 +332,8 @@ impl<'a> Agent<'a> {
             tools,
             opts: GenOptions::default().with_tools(tools.tool_defs()),
             limits: AgentLimits::default(),
+            events: None,
+            name: "agent".to_string(),
         }
     }
 
@@ -336,6 +342,27 @@ impl<'a> Agent<'a> {
     pub fn with_gen_options(mut self, opts: GenOptions) -> Self {
         self.opts = opts;
         self
+    }
+
+    /// Publie chaque appel au modèle et chaque appel d'outil (arguments
+    /// exacts, résultat, durée, réessais) sur le bus. Fire and forget : si
+    /// personne n'écoute, rien ne se passe ; si le tampon déborde, le plus
+    /// ancien est écarté — la boucle ne ralentit jamais pour son observateur.
+    pub fn with_events(mut self, bus: crate::events::EventBus) -> Self {
+        self.events = Some(bus);
+        self
+    }
+
+    /// Le nom de l'agent dans ses événements (défaut : `agent`).
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
+
+    fn emit(&self, event: crate::events::CatalogEvent) {
+        if let Some(bus) = &self.events {
+            bus.emit(event);
+        }
     }
 
     pub fn with_limits(mut self, limits: AgentLimits) -> Self {
@@ -435,6 +462,16 @@ impl<'a> Agent<'a> {
             run.text = text.clone();
             accumulate(&mut run.usage, &usage);
             last_finish = finish.clone();
+            self.emit(crate::events::CatalogEvent::LlmCall {
+                agent: self.name.clone(),
+                iteration: run.iterations,
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                ms: usage.ms,
+                retries: usage.retries,
+                finish: format!("{:?}", finish.reason),
+                tool_calls: finish.tool_calls.len(),
+            });
 
             // ── Pas d'outil demandé : c'est fini ────────────────────────
             if !finish.has_tool_calls() {
@@ -471,8 +508,27 @@ impl<'a> Agent<'a> {
             // l'outillage en fait une erreur lisible, et le modèle reprend.
             let mut repeated: Option<(String, String)> = None;
             for call in &finish.tool_calls {
+                self.emit(crate::events::CatalogEvent::ToolCallStarted {
+                    agent: self.name.clone(),
+                    call_id: call.id.clone(),
+                    tool: call.name.clone(),
+                    arguments: call.arguments.clone(),
+                });
+                let started = std::time::Instant::now();
                 let result = self.tools.call(call);
                 run.tool_calls += 1;
+                if self.events.is_some() {
+                    let error_kind = error_kind(&result.content);
+                    self.emit(crate::events::CatalogEvent::ToolCallFinished {
+                        agent: self.name.clone(),
+                        call_id: call.id.clone(),
+                        tool: call.name.clone(),
+                        ok: error_detail(&result.content).is_none(),
+                        error_kind,
+                        ms: started.elapsed().as_millis() as u64,
+                        bytes: result.content.len(),
+                    });
+                }
                 match error_detail(&result.content) {
                     Some(detail) => {
                         run.tool_errors += 1;
@@ -522,6 +578,19 @@ fn accumulate(total: &mut Usage, one: &Usage) {
 /// La comparaison porte sur le **document entier** et pas seulement sur le
 /// code : deux `unknown_argument` sur des arguments différents sont deux
 /// erreurs différentes, et le modèle progresse peut-être entre les deux.
+/// Le `kind` d'un résultat d'outil en erreur (`{"error": "bad_choice", …}`).
+fn error_kind(content: &str) -> Option<String> {
+    let trimmed = content.trim();
+    if !trimmed.starts_with('{') {
+        return None;
+    }
+    serde_json::from_str::<serde_json::Value>(trimmed)
+        .ok()?
+        .get("error")?
+        .as_str()
+        .map(str::to_string)
+}
+
 fn error_detail(content: &str) -> Option<&str> {
     let trimmed = content.trim();
     if !trimmed.starts_with('{') {

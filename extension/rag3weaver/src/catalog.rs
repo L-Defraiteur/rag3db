@@ -205,7 +205,11 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             drain_counters: DrainCounters::default(),
-            event_bus: EventBus::new(64),
+            // 1024 : un agent émet quelques événements par appel d'outil et
+            // par nœud ; un graphe de trace qui draine entre deux tours ne
+            // doit pas en perdre. Au-delà, le plus ancien est écarté sans
+            // bloquer, et le drain le dit (`EventsMissed`).
+            event_bus: EventBus::new(1024),
             kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
             scope: crate::scope::Scope::default(),
@@ -3021,8 +3025,16 @@ impl Catalog {
 
     // ── Event bus ──────────────────────────────────────────────────────
 
+    /// Le bus, partagé : à donner à un `Agent` (`with_events`) ou à un
+    /// `ServiceRegistry` (`"event_bus"`, en `Arc`) pour que ses événements
+    /// rejoignent ceux de l'ingestion.
+    pub fn event_bus(&self) -> EventBus {
+        self.event_bus.shared()
+    }
+
+    /// Le sujet `catalog` : ingestion, drain, cycle de vie, erreurs.
     pub fn subscribe(&self) -> async_broadcast::Receiver<CatalogEvent> {
-        self.event_bus.subscribe()
+        self.event_bus.subscribe(crate::events::topic::CATALOG)
     }
 
     // ── Node ID cache ─────────────────────────────────────────────────

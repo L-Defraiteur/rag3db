@@ -167,7 +167,7 @@ pub use chunker::{Chunk, Chunker, ChunkerConfig};
 pub use config::{CatalogConfig, EntityConfig, SimpleFieldDef};
 pub use connection::{CallbackConnection, DbConnection, SyncDbConnection};
 pub use embedder::{CallbackDualEmbedder, CallbackEmbedder, CallbackSparseEmbedder, DualEmbedFn, DualEmbedder, EmbedError, EmbedFn, Embedder, SparseEmbedder};
-pub use events::{CatalogEvent, EventBus};
+pub use events::{topic, CatalogEvent, Event, EventBus};
 pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};

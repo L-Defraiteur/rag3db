@@ -17,7 +17,12 @@ use std::sync::{Arc, Mutex};
 use rag3weaver::agent::{Agent, AgentLimits, GraphToolBox, StopReason, ToolBox};
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
-use rag3weaver::dataflow::{builtin_graph_tools, ConnService, ServiceRegistry};
+use rag3weaver::dataflow::{
+    builtin_graph_tools, execute_definition, parse_mermaid, register_trace_schema, ConnService, NodeTypePolicy,
+    ServiceRegistry, EVENTS_SERVICE, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
+};
+use rag3weaver::topic;
+use rag3weaver::search::{BM25Mode, Consistency, SearchOptions};
 use rag3weaver::embedder::{Embedder, MockEmbedder};
 use rag3weaver::llm::{
     dangling_tool_results, orphan_tool_calls, CallbackLlm, CountingSink, FinishReason, MockLlm,
@@ -334,4 +339,120 @@ fn an_interruption_mid_tool_call_can_be_resumed() {
     assert_eq!(sink2.text, "Trouvé.");
     assert_well_formed(&turns);
     eprintln!("[agent] historique final : {} tours", turns.len());
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. La trace est un graphe parallèle : fire and forget des deux côtés
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// L'agent publie sur le bus (appels au modèle, appels d'outils avec leurs
+/// arguments exacts, nœuds exécutés sous l'outil) sans jamais attendre
+/// personne. Un graphe de trace, dans sa propre boucle et avec ses propres
+/// services, draine ce qui s'est accumulé et l'écrit dans `Trace` — et
+/// `search(target = "Trace")` retrouve l'appel d'outil.
+#[test]
+#[ignore]
+fn the_agent_publishes_and_a_parallel_trace_graph_records() {
+    let mut catalog = setup_catalog();
+    register_trace_schema(&mut catalog).unwrap();
+    let bus = catalog.event_bus();
+    // Les curseurs du graphe de trace existent **avant** ce qu'on veut
+    // observer : un sujet sans abonné écarte tout.
+    bus.cursor(topic::AGENT, "trace");
+    bus.cursor(topic::DATAFLOW, "trace");
+
+    let (nodes, graph_tools) = builtin_graph_tools().unwrap();
+    let services = {
+        let base = services(catalog);
+        // Le même bus pour le runtime : les nœuds du graphe `search`
+        // apparaîtront sous l'appel d'outil.
+        let mut with_bus = ServiceRegistry::new();
+        with_bus.register("catalog", base.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap());
+        with_bus.register("conn", ConnService(base.get::<ConnService>("conn").unwrap().0.clone()));
+        with_bus.register("fts_handles", base.get::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles").cloned().unwrap());
+        with_bus.register::<Arc<dyn Embedder>>("embedder", base.get::<Arc<dyn Embedder>>("embedder").cloned().unwrap());
+        with_bus.register("event_bus", Arc::new(bus.shared()));
+        Arc::new(with_bus)
+    };
+    let catalog = services.get::<Arc<Mutex<Catalog>>>("catalog").cloned().unwrap();
+    let toolbox = GraphToolBox::new(&graph_tools, &nodes, services.clone());
+
+    let llm = scripted(vec![
+        MockLlm::new("").with_tool_calls(vec![(
+            "search",
+            r#"{"target":"Product","query":"programming language","limit":5}"#,
+        )]),
+        MockLlm::new("").with_tool_calls(vec![("search", r#"{"target":"Licorne","query":"x"}"#)]),
+        MockLlm::new("C'est le Rust Book."),
+    ]);
+    let agent = Agent::new(&llm, &toolbox).with_events(bus.shared()).with_name("demo");
+    let mut turns = vec![Turn::user("cherche")];
+    let mut sink = StringSink::default();
+    let run = agent.run(&mut turns, &mut sink).unwrap();
+    assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
+    assert_eq!((run.tool_calls, run.tool_errors), (2, 1));
+
+    // Le graphe de trace : ses propres services — le catalogue, et le bus
+    // **en lecture** (`events`), pas en publication (`event_bus`) : son
+    // runtime ne publie pas ses nœuds, et il n'écoute pas `catalog` — il ne
+    // se retrace pas.
+    let mut trace_services = ServiceRegistry::new();
+    trace_services.register("catalog", catalog.clone());
+    trace_services.register(EVENTS_SERVICE, Arc::new(bus.shared()));
+    let trace_services = Arc::new(trace_services);
+    let def = parse_mermaid(TRACE_GRAPH_MERMAID).unwrap();
+    let out = execute_definition(&def, &nodes, trace_services.clone(), &NodeTypePolicy::All, ("sink", "result")).unwrap();
+    eprintln!("[trace] {out}");
+    let recorded: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let n = recorded["recorded"].as_u64().unwrap() as usize;
+
+    // 3 appels au modèle, 2 appels d'outil (début + fin), et les nœuds du
+    // graphe `search` sous le premier (le second est refusé avant le graphe).
+    let mut cat = catalog.lock().unwrap();
+    assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
+    assert!(n >= 3 + 4 + 3, "{n} événements tracés");
+    let opts = SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::ContainsSplit,
+        limit: 20,
+        ..Default::default()
+    };
+    let kinds = |cat: &mut Catalog, query: &str| -> Vec<String> {
+        cat.search(TRACE_ENTITY, query, opts.clone())
+            .unwrap()
+            .results
+            .iter()
+            .filter_map(|r| match r.data.as_ref().and_then(|d| d.get("kind")) {
+                Some(CypherValue::String(k)) => Some(k.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let started = kinds(&mut cat, "ToolCallStarted search");
+    assert_eq!(started.iter().filter(|k| *k == "ToolCallStarted").count(), 2, "{started:?}");
+    let llm_calls = kinds(&mut cat, "LlmCall demo");
+    assert_eq!(llm_calls.iter().filter(|k| *k == "LlmCall").count(), 3, "{llm_calls:?}");
+    let failed = cat.search(TRACE_ENTITY, "ToolCallFinished search error", opts.clone()).unwrap();
+    assert!(
+        failed.results.iter().any(|r| matches!(r.data.as_ref().and_then(|d| d.get("ok")), Some(CypherValue::Bool(false)))),
+        "l'appel refusé (bad_choice) est tracé en erreur"
+    );
+    let nodes_run = kinds(&mut cat, "NodeRun");
+    assert!(nodes_run.iter().filter(|k| *k == "NodeRun").count() >= 3, "{nodes_run:?}");
+    drop(cat);
+
+    // Pas d'écho : l'écriture de la trace a publié sur `catalog`, que ce
+    // graphe n'écoute pas, et son runtime n'a rien publié sur `dataflow`.
+    // Un second drain rend exactement 0.
+    let out = execute_definition(&def, &nodes, trace_services.clone(), &NodeTypePolicy::All, ("sink", "result")).unwrap();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&out).unwrap()["recorded"], 0, "{out}");
+    // Fire and forget : un agent sans personne qui draine ne bloque ni ne
+    // panique — le tampon du sujet écarte le plus ancien.
+    bus.drop_cursor(topic::AGENT, "trace");
+    bus.drop_cursor(topic::DATAFLOW, "trace");
+    for _ in 0..3 {
+        let mut turns = vec![Turn::user("cherche")];
+        assert!(agent.run(&mut turns, &mut sink).is_ok());
+    }
 }

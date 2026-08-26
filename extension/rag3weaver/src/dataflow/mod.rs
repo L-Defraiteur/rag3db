@@ -27,6 +27,7 @@ pub mod node_factories;
 pub mod node_registry;
 pub mod search_nodes;
 pub mod generic_search_nodes;
+pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
 pub mod ocr_nodes;
@@ -52,6 +53,10 @@ pub use generic_search_nodes::{
 };
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{Choices, NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
+pub use trace_nodes::{
+    drain_events, register_trace_schema, trace_config, trace_record, EventSourceNode, EventSourceNodeFactory,
+    TraceSinkNode, TraceSinkNodeFactory, DEFAULT_CURSOR, DEFAULT_TOPICS, EVENTS_SERVICE, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
+};
 pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use graph_tool::{
     build_definition, builtin_graph_tools, execute_definition, param_type_name, resolve_params,
