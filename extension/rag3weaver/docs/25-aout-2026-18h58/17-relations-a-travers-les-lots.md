@@ -576,3 +576,18 @@ question à laquelle on répond en une requête. Un test le fixe
 La désambiguïsation par chemin d'import reste donc une amélioration de la
 **recherche** — proposer les candidats, les classer — et non une réparation
 du graphe. C'est un choix, pas un reste à faire.
+
+### 10.4 Le compte exact, pour ne pas se raconter d'histoires
+
+| Cas | État | Tenu par |
+|---|---|---|
+| `edit` de signature → entrantes `CONSUMES` | **réglé à la racine** (rien n'est détruit) | `editing_a_signature_destroys_nothing…` |
+| `edit` de signature d'un trait → `IMPLEMENTS` d'ailleurs | **réglé à la racine** | `…typed_relations_either` (2ᵉ partie) |
+| `edit` d'un corps sans signature (module, fichier) | **réglé** — c'était le pire, et il était invisible | idem (le scope de fichier ne bouge plus) |
+| Ordre d'ingestion, `CONSUMES` | réglé (25 août) | `ingestion_order_does_not_change_the_graph` |
+| Ordre d'ingestion, `IMPLEMENTS` / `INHERITS_FROM` | **réglé** (le genre voyage) | `…typed_relations_either` |
+| Fichier ajouté seul dans un dossier déjà ingéré | réglé | `a_new_file_added_alone_finds…` |
+| Renommage puis retour | réparé par le symbole | `renaming_back_and_forth…` |
+| **Renommage d'une cible au nom ambigu** | **pas réglé** — abstention, l'arête ne revient qu'en réingérant le fichier appelant | `an_ambiguous_name_abstains…` (dit ce qu'on garde) |
+| **`DECORATES` inter-lots** | **pas réglé**, et pas par oubli : l'arête va du **décorateur vers le décoré**, à l'envers du rendez-vous. Il lui faut son propre sens, pas la même passe | — |
+| `USES_LIBRARY`, `DEFINED_IN`, `PARENT_OF`/`HAS_PARENT` | sans objet : cibles à clé stable (nom, chemin) ou relations internes au fichier, refaites à chaque réingestion | — |

@@ -888,6 +888,29 @@ fn ingestion_order_does_not_change_the_typed_relations_either() {
 
     assert_eq!(lib_first, together, "définition d'abord");
     assert_eq!(app_first, together, "usage d'abord");
+
+    // Et changer la signature du **trait** ne détruit pas l'implémentation
+    // venue d'ailleurs — c'est le cas typé de l'identité stable, celui que le
+    // test sur `compute_total` ne couvre que pour `CONSUMES`.
+    let snapshot = Snapshot::new("worktree:/projet", [
+        ("lib_mod.rs".to_string(), LIB.to_string()),
+        ("app.rs".to_string(), APP.to_string()),
+    ]);
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+    assert!(edges(&mut cat, "IMPLEMENTS").contains(&("Runner".to_string(), "Compute".to_string())));
+
+    let r = edit_file(&snapshot, Some(&mut cat), "lib_mod.rs",
+        &EditOp::Replace { old: "pub trait Compute {".into(), new: "pub trait Compute: Send {".into() }).unwrap();
+    eprintln!("[trait modifié] {:?}", r.reingest);
+    assert_eq!(r.reingest.as_ref().unwrap().scopes_deleted, 0, "changer la signature d'un trait ne détruit rien");
+    let after = edges(&mut cat, "IMPLEMENTS");
+    eprintln!("[IMPLEMENTS après] {after:?}");
+    assert!(
+        after.contains(&("Runner".to_string(), "Compute".to_string())),
+        "l'implémentation venue d'un autre fichier survit : {after:?}"
+    );
 }
 
 /// L'ambiguïté : deux fichiers définissent `helper`, un troisième l'appelle.
