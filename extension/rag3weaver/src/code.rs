@@ -87,12 +87,19 @@ pub fn default_scope_chunking() -> ChunkingConfig {
 
 pub fn file_config() -> EntityConfig {
     let mut fields = HashMap::new();
+    // **Absolu dans sa source**, toujours (doc 04 v3). Pas relatif à la
+    // racine d'analyse, qui n'est qu'un point de vue.
     fields.insert("path".into(), title_and_content(FieldType::String));
-    // L'ancre par rapport à laquelle `path` se lit (doc 04). Portable :
-    // `git:github.com/org/dépôt`, `package:nom`, `source:snapshot:…`. Le
-    // chemin local de l'ancre n'est **pas** ici — c'est une carte par poste,
-    // pas un nom.
-    fields.insert("origin".into(), field(FieldType::String));
+    // D'où viennent les octets : `file` pour le système de fichiers local,
+    // `snapshot:…` pour un instantané. Connu à l'ingestion, jamais deviné.
+    fields.insert("source".into(), field(FieldType::String));
+    // Coordonnées : d'autres façons de nommer le même fichier, produites par
+    // les fournisseurs souscrits ([`crate::origin::Coordinates`]). Des champs
+    // comme les autres — donc `hashsafe` peut les prendre, et la politique
+    // d'identité se change sans une ligne de moteur.
+    fields.insert("repo".into(), field(FieldType::String));
+    fields.insert("repo_path".into(), field(FieldType::String));
+    fields.insert("revision".into(), field(FieldType::String));
     fields.insert("absolute_path".into(), field(FieldType::String));
     fields.insert("language".into(), field(FieldType::String));
     fields.insert("lines_of_code".into(), field(FieldType::Integer));
@@ -103,9 +110,12 @@ pub fn file_config() -> EntityConfig {
     fields.insert("cursor".into(), field(FieldType::String));
     EntityConfig {
         fields,
-        // Deux fichiers de même nom dans deux origines sont deux fichiers ;
-        // le même fichier atteint par deux racines d'analyse est le même.
-        hashsafe: Some(vec!["origin".into(), "path".into()]),
+        // La politique par défaut : **copie de travail**. Un fichier, un
+        // nœud, mis à jour sur place ; la révision est une propriété. Un
+        // gestionnaire de commits déclarerait `["repo", "revision",
+        // "repo_path"]` et aurait un nœud par révision — même moteur, même
+        // schéma, autre configuration (doc 04 §10).
+        hashsafe: Some(vec!["source".into(), "path".into()]),
         return_fields: Some(vec!["language".into(), "lines_of_code".into(), "cursor".into()]),
         ..Default::default()
     }
@@ -119,9 +129,12 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     fields.insert("docstring".into(), content(FieldType::Text));
     fields.insert("scope_type".into(), field(FieldType::String));
     fields.insert("file_path".into(), field(FieldType::String));
-    // L'ancre du fichier — même rôle que sur `File`, et ce qu'un domaine
-    // d'agent filtrera (doc 05).
-    fields.insert("origin".into(), field(FieldType::String));
+    // La source du fichier qui le contient — le même nom absolu peut exister
+    // dans deux sources, ce sont deux fichiers.
+    fields.insert("source".into(), field(FieldType::String));
+    // La coordonnée portable, dénormalisée depuis `File` : c'est elle qu'un
+    // domaine d'agent filtrera, et on ne veut pas une jointure par scope.
+    fields.insert("repo".into(), field(FieldType::String));
     fields.insert("parent_name".into(), field(FieldType::String));
     fields.insert("language".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
@@ -209,12 +222,16 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileRecord {
-    /// Le nom du fichier **dans son origine** — pas relatif à la racine
-    /// d'analyse, qui n'est qu'un point de vue (doc 04).
+    /// **Absolu dans sa source** — pas relatif à la racine d'analyse, qui
+    /// n'est qu'un point de vue (doc 04).
     pub path: String,
-    /// L'identité de l'ancre. Voir [`crate::origin::Origin`].
+    /// D'où viennent les octets : `file`, `snapshot:…`.
     #[serde(default)]
-    pub origin: String,
+    pub source: String,
+    /// Les autres façons de nommer ce fichier, par fournisseur souscrit :
+    /// `repo`, `repo_path`, `revision`. Vide quand personne ne sait.
+    #[serde(default)]
+    pub coordinates: BTreeMap<String, String>,
     /// Vide pour une source virtuelle (instantané, dépôt distant).
     pub absolute_path: String,
     pub language: String,
@@ -231,9 +248,12 @@ pub struct FileRecord {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ScopeRecord {
     pub key: String,
-    /// L'ancre du fichier qui le contient. Voir [`crate::origin::Origin`].
+    /// La source du fichier qui le contient.
     #[serde(default)]
-    pub origin: String,
+    pub source: String,
+    /// La coordonnée portable du dépôt, dénormalisée depuis `File`.
+    #[serde(default)]
+    pub repo: String,
     pub name: String,
     pub scope_type: String,
     pub signature: String,
@@ -306,6 +326,21 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
     analyze_with(root, sources, "")
 }
 
+/// La source des octets d'un poste : **le système de fichiers**, pas la
+/// racine de l'arbre de travail. C'est ce qui fait qu'ouvrir une source sur
+/// `/projet` ou sur `/projet/src` donne la même identité — il n'y a rien à
+/// faire converger, c'est la même chose.
+pub const LOCAL_SOURCE: &str = "file";
+
+/// D'où viennent les octets, à partir du curseur d'une [`crate::code_tools::FileSource`].
+pub fn source_id(cursor: &str) -> String {
+    if cursor.is_empty() || cursor.starts_with("worktree:") {
+        LOCAL_SOURCE.to_string()
+    } else {
+        cursor.to_string()
+    }
+}
+
 /// [`analyze`], en disant d'où viennent les fichiers.
 ///
 /// `cursor` sert à une seule chose, mais elle est décisive : une source sans
@@ -313,36 +348,37 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
 /// origine**. Sans le curseur, on irait chercher une ancre sur un disque qui
 /// ne contient pas ces fichiers.
 pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) -> CodeAnalysis {
-    use crate::origin::Origin;
-
     let mut content_map = HashMap::new();
     let mut files = Vec::new();
     let mut skipped = Vec::new();
     let mut sizes: HashMap<String, usize> = HashMap::new();
-    // Le nom de chaque fichier **dans son origine** : `chemin d'analyse →
-    // (origine, nom ancré)`. C'est ce couple qui est l'identité, pas le
-    // chemin relatif à la racine qu'on nous a passée (doc 04).
-    let mut anchored: HashMap<String, (String, String)> = HashMap::new();
-    let virtual_origin = (!cursor.is_empty() && !cursor.starts_with("worktree:"))
-        .then(|| Origin::from_cursor(cursor));
+    // L'identité de chaque fichier : `chemin d'analyse → (source, chemin
+    // absolu dans cette source, coordonnées)`. Aucune découverte, aucune
+    // heuristique — la source est **connue** à l'ingestion (doc 04 v3).
+    let source = source_id(cursor);
+    let virtual_source = source != LOCAL_SOURCE;
+    let registry = crate::origin::CoordinateRegistry::default();
+    let mut named: HashMap<String, (String, BTreeMap<String, String>)> = HashMap::new();
     for (rel, content) in sources {
         if !is_code_parser_supported(&rel) {
             skipped.push((rel, "unsupported extension".to_string()));
             continue;
         }
         let abs = Path::new(root).join(&rel).to_string_lossy().to_string();
-        let origin = match &virtual_origin {
-            Some(o) => o.clone(),
-            None => Origin::discover(Path::new(&abs), cursor),
+        // Une source sans disque n'a pas de chemin absolu : son nom dans la
+        // source *est* son identité, et personne ne peut la coordonner.
+        let (name, coords) = if virtual_source {
+            (rel.clone(), BTreeMap::new())
+        } else {
+            (abs.clone(), registry.of(Path::new(&abs)))
         };
-        let name = origin.relative(Path::new(&abs)).unwrap_or_else(|| rel.clone());
-        anchored.insert(rel.clone(), (origin.id.clone(), name));
+        named.insert(rel.clone(), (name, coords));
         sizes.insert(abs.clone(), content.len());
         content_map.insert(abs.clone(), content);
         files.push(abs);
     }
-    let anchor_of = |rel: &str| -> (String, String) {
-        anchored.get(rel).cloned().unwrap_or_else(|| (String::new(), rel.to_string()))
+    let identity_of = |rel: &str| -> (String, BTreeMap<String, String>) {
+        named.get(rel).cloned().unwrap_or_else(|| (rel.to_string(), BTreeMap::new()))
     };
 
     let parser = ProjectParser::new(ProjectParserOptions { verbose: false });
@@ -376,10 +412,11 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
 
     // Fichiers
     for (abs, fa) in &result.files {
-        let (origin, name) = anchor_of(&relative(root, abs));
+        let (name, coordinates) = identity_of(&relative(root, abs));
         analysis.files.push(FileRecord {
             path: name,
-            origin,
+            source: source.clone(),
+            coordinates,
             absolute_path: abs.clone(),
             language: language_name(abs),
             lines_of_code: fa.total_lines,
@@ -395,7 +432,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
     };
 
     // L'identité d'un scope, la nôtre (voir `stable_scope_keys`).
-    let stable = stable_scope_keys(&rels.uuid_mapping, &anchored);
+    let stable = stable_scope_keys(&rels.uuid_mapping, &named, &source);
 
     // uuid codeparsers → (entité, clé).
     let mut identity: HashMap<&str, (&str, String)> = HashMap::new();
@@ -404,7 +441,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         identity.insert(uuid.as_str(), (SCOPE, key.clone()));
     }
     for (path, info) in &rels.files {
-        identity.insert(info.uuid.as_str(), (FILE, path.clone()));
+        identity.insert(info.uuid.as_str(), (FILE, identity_of(path).0));
     }
     for (name, lib) in &rels.external_libraries {
         identity.insert(lib.uuid.as_str(), (LIBRARY, name.clone()));
@@ -426,7 +463,8 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
     }
     for (abs, fa) in &result.files {
         let rel = relative(root, abs);
-        let (anchored_origin, anchored_name) = anchor_of(&rel);
+        let (indexed_name, coords) = identity_of(&rel);
+        let repo = coords.get("repo").cloned().unwrap_or_default();
         let language = language_name(abs);
         for s in &fa.scopes {
             let type_str = scope_type_name(&s.r#type).to_string();
@@ -436,13 +474,14 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             let content = if s.content_dedented.is_empty() { s.content.clone() } else { s.content_dedented.clone() };
             analysis.scopes.push(ScopeRecord {
                 key: key.clone(),
-                origin: anchored_origin.clone(),
+                source: source.clone(),
+                repo: repo.clone(),
                 name: s.name.clone(),
                 scope_type: type_str,
                 signature: s.signature.clone(),
                 content,
                 docstring: s.docstring.clone().unwrap_or_default(),
-                file_path: anchored_name.clone(),
+                file_path: indexed_name.clone(),
                 parent_name: s.parent.clone().unwrap_or_default(),
                 language: language.clone(),
                 start_line: s.scope_start_line,
@@ -565,7 +604,8 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
 /// de fichier. C'est-à-dire exactement ce qui *est* un autre symbole.
 fn stable_scope_keys(
     mapping: &codeparsers::relationship_resolution::types::UuidToScopeMapping,
-    anchored: &HashMap<String, (String, String)>,
+    named: &HashMap<String, (String, BTreeMap<String, String>)>,
+    source: &str,
 ) -> HashMap<String, String> {
     // Les homonymes de même parent et de même type, par fichier.
     let mut groups: HashMap<(&str, &str, &str, &str), Vec<(usize, &str)>> = HashMap::new();
@@ -583,11 +623,9 @@ fn stable_scope_keys(
 
     let mut keys = HashMap::with_capacity(mapping.len());
     for ((file, parent, name, typ), mut members) in groups {
-        // Le fichier se nomme dans son origine, pas dans la racine d'analyse.
-        let (origin, file) = anchored
-            .get(file)
-            .cloned()
-            .unwrap_or_else(|| (String::new(), file.to_string()));
+        // Le fichier se nomme dans sa source, pas dans la racine d'analyse.
+        let file = named.get(file).map(|(n, _)| n.clone()).unwrap_or_else(|| file.to_string());
+        let origin = source;
         // Par ligne, puis par uuid : deux surcharges sur la même ligne
         // restent départagées de façon déterministe.
         members.sort_unstable();
@@ -808,7 +846,10 @@ impl FileRecord {
     pub fn data(&self) -> BTreeMap<String, CypherValue> {
         BTreeMap::from([
             ("path".into(), s(&self.path)),
-            ("origin".into(), s(&self.origin)),
+            ("source".into(), s(&self.source)),
+            ("repo".into(), s(self.coordinates.get("repo").map(String::as_str).unwrap_or(""))),
+            ("repo_path".into(), s(self.coordinates.get("repo_path").map(String::as_str).unwrap_or(""))),
+            ("revision".into(), s(self.coordinates.get("revision").map(String::as_str).unwrap_or(""))),
             ("absolute_path".into(), s(&self.absolute_path)),
             ("language".into(), s(&self.language)),
             ("lines_of_code".into(), i(self.lines_of_code)),
@@ -829,7 +870,8 @@ impl ScopeRecord {
             ("content".into(), s(&self.content)),
             ("docstring".into(), s(&self.docstring)),
             ("file_path".into(), s(&self.file_path)),
-            ("origin".into(), s(&self.origin)),
+            ("source".into(), s(&self.source)),
+            ("repo".into(), s(&self.repo)),
             ("parent_name".into(), s(&self.parent_name)),
             ("language".into(), s(&self.language)),
             ("start_line".into(), i(self.start_line)),
@@ -1050,7 +1092,10 @@ mod tests {
     fn analyze_yields_files_scopes_and_relations_by_key() {
         let a = analyze("/virtual", vec![("a.rs".into(), RUST_SRC.into()), ("README.md".into(), "# no".into())]);
         assert_eq!(a.files.len(), 1);
-        assert_eq!(a.files[0].path, "a.rs");
+        // L'identité d'un fichier est son chemin **absolu dans sa source**,
+        // pas son chemin relatif à la racine d'analyse (doc 04 v3).
+        assert_eq!(a.files[0].path, "/virtual/a.rs");
+        assert_eq!(a.files[0].source, LOCAL_SOURCE);
         assert_eq!(a.files[0].language, "rust");
         assert!(!a.files[0].content_hash.is_empty());
         assert_eq!(a.skipped.len(), 1, "{:?}", a.skipped);
@@ -1059,7 +1104,7 @@ mod tests {
         assert_eq!(norm.scope_type, "method");
         assert!(norm.end_byte > norm.start_byte);
         assert!(RUST_SRC[norm.start_byte..norm.end_byte].contains("fn norm"));
-        assert!(a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == norm.key && r.to_entity == FILE && r.to_key == "a.rs"),
+        assert!(a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == norm.key && r.to_entity == FILE && r.to_key == "/virtual/a.rs"),
             "{:?}", a.relations.iter().map(|r| (&r.rel, &r.from_entity, &r.to_entity)).collect::<Vec<_>>());
         let twice = a.scopes.iter().find(|s| s.name == "twice").expect("twice");
         let named = |k: &str| a.scopes.iter().find(|s| s.key == k).map(|s| s.name.clone()).unwrap_or_else(|| k.to_string());

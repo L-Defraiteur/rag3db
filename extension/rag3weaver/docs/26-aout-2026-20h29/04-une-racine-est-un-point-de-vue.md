@@ -167,3 +167,114 @@ devient maximalement simple.
    une arête qu'on peut ajouter à tout moment sans rien réécrire. C'est
    d'ailleurs la meilleure preuve que v3 tient : *ce qui reste à faire ne
    demande aucune migration.*
+
+---
+
+## 10. v4 — les deux en parallèle, et la politique d'identité
+
+Ajouté dans la foulée, sur une remarque de Lucie : *« pourrait y avoir les
+deux en parallèle, le chemin git quand dispo et le chemin absolu quoi qu'il
+arrive — comme ça tu reviens, hop, ce git a déjà été cloné ailleurs sur ton
+PC, tu le reclones, ça fait le merge avec idempotence ? »*
+
+Oui, et ça change la nature de la chose.
+
+### 10.1 Une identité canonique, des coordonnées dérivées
+
+Pas « une identité **ou** l'autre » : **une clé + des faits calculés**.
+
+- la clé : `(source, chemin absolu)` — toujours là, aucune heuristique ;
+- les **coordonnées** : d'autres façons de nommer le même fichier, produites
+  par les systèmes qui savent. Git sait dire « c'est `src/x.rs` dans
+  `github.com/org/dépôt` ».
+
+Deux clones du même dépôt ont donc **deux clés** (ce sont deux fichiers sur
+le disque, c'est vrai) et **la même coordonnée** — le rapprochement se fait
+tout seul, sans que personne ne déclare quoi que ce soit. Le `SAME_AS` du §6
+devient **dérivable au lieu d'être déclaré**, ce qui est strictement mieux.
+
+Et ça répare l'objection à v2 : là-bas la coordonnée git *était* la clé, donc
+le jour où un dépôt gagne un remote, tout était à réindexer. En coordonnée,
+ce jour-là, **un champ se remplit**.
+
+Deux précisions qui décident :
+
+- **La coordonnée ne porte pas la révision** : `git:org/dépôt#src/x.rs`. Ce
+  qu'on identifie ainsi, c'est « ce fichier dans ce dépôt », pas « cet
+  état » — sinon deux clones sur deux commits ne se reconnaîtraient jamais.
+  La révision est une propriété, comme `content_hash` et `cursor`.
+- **Le rapprochement se fait à la lecture, pas au stockage.** On garde deux
+  nœuds et on regroupe par coordonnée en préférant le plus frais. Fusionner
+  physiquement referait l'erreur de l'identité par union, et écraserait le
+  cas « deux arbres de travail sur deux branches », qu'on veut distincts.
+
+### 10.2 Le vrai objet variable : la **politique d'identité**
+
+Lucie, encore : *« ouais mais un gloubiboulga sous une configuration
+différente veut être un gestionnaire de commits non ? »* — et c'est le point
+qui va plus loin que la coordonnée.
+
+Si la révision n'est qu'une propriété, ingérer le même dépôt à deux
+révisions produit **un seul nœud** qui s'écrase. Un gestionnaire de commits
+en veut un **par révision**. Ce qu'il veut n'est donc pas une coordonnée de
+plus : c'est **la révision dans la clé**.
+
+| Politique | `hashsafe` | Un nœud par |
+|---|---|---|
+| copie de travail (défaut) | `["source", "path"]` | fichier |
+| gestionnaire de commits | `["repo", "revision", "repo_path"]` | fichier × révision |
+
+Et voilà pourquoi il n'y a pas de nouveau moteur à écrire : **`hashsafe`
+*est* la politique d'identité**, et elle est déjà configurable par entité.
+Il ne manquait que les coordonnées comme **champs**.
+
+Deux choses à dire franchement plutôt que de les laisser découvrir :
+
+1. les deux politiques ne cohabitent pas dans une même cellule pour une même
+   entité — un schéma par entité et par catalogue. La contrainte tombe du
+   bon côté : une archive de commits et un index de travail sont deux
+   usages, ils méritent deux index (doc 05 : « la cellule dit dans quel
+   index ») ;
+2. le mode gestionnaire de commits est **multiplicatif** — chunks,
+   embeddings et index par révision. C'est pourquoi ce doit être une
+   configuration délibérée, jamais un défaut.
+
+### 10.3 Souscrire plutôt qu'énumérer — et quand *ne pas* le faire
+
+Lucie encore : *« peut-être c'est un pattern générique qu'on rate déjà, à
+séparer en un gros `if` alors que c'est une politique avec des systèmes qui
+y souscrivent ? »* Oui, et pas seulement ici : `Origin::discover` (git /
+manifeste / dossier / source), `detect_relationship_type_by_name` (rust /
+ts / py / go / cpp), `language_name` par extension. Chaque fois, un système
+qui *sait quelque chose* est enfermé dans une branche d'un `match`.
+
+Le critère pour y aller — et il n'est pas « c'est plus propre » :
+
+> **Un système extérieur au crate a-t-il besoin d'ajouter un cas sans éditer
+> le `match` ?**
+
+Pour les coordonnées : évidemment oui (git aujourd'hui, un registre de
+paquets ou un stockage adressé par contenu demain). Pour le genre de
+relation par langage : non — le parseur *possède* les langages, et l'en
+sortir n'achèterait rien. Et ce n'est même pas un patron nouveau chez nous :
+`NodeRegistry` / `NodeFactory` font déjà exactement ça pour les nœuds.
+
+### 10.4 Ce qui reste ouvert, et qu'on assume
+
+Lucie : *« on trouvera une solution plus tard, peut-être que ça ne fait
+jamais partie du même project id mais qu'on pourra trouver des ponts quand
+même — des entités ou relations multi-projets, ou même un projet qui sert de
+pont, ou pire une entité aurait un `policyDomain` »*.
+
+Trois pistes, notées telles quelles, sans en choisir une :
+
+- des **relations** qui traversent les projets, sans que les entités changent
+  de cellule ;
+- un **projet-pont**, dont le seul rôle est de tenir ces relations ;
+- une **politique par entité** (`policyDomain`), qui serait le cas le plus
+  puissant et le plus dangereux — c'est-à-dire à n'ouvrir qu'avec un besoin
+  mesuré devant.
+
+Ce qui rend cette indécision confortable : **aucune de ces trois voies ne
+demande de migration**. Ce sont des arêtes et des configurations sur une
+identité qui, elle, ne bouge plus.

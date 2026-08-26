@@ -111,9 +111,11 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
         eprintln!("[File] {names:?}");
         // Le fichier se nomme **dans son dépôt**, pas dans la racine
         // d'analyse qu'on a passée — c'est tout l'objet du doc 04.
+        // Le fichier se nomme par son chemin **absolu dans sa source** — la
+        // racine d'analyse n'est qu'un point de vue (doc 04 v3).
         assert_eq!(
             names.first().map(String::as_str),
-            Some("extension/rag3weaver/src/dataflow/generic_search_nodes.rs")
+            Some(format!("{}/generic_search_nodes.rs", dataflow_dir()).as_str())
         );
 
         // ── Un scope par sa signature ───────────────────────────────────
@@ -1060,7 +1062,7 @@ fn the_same_file_seen_from_two_roots_is_one_identity() {
 
     // Et le nom stocké est celui du fichier dans son ancre, identique des
     // deux côtés.
-    let rows = cat.execute_raw("MATCH (f:File) RETURN f.path, f.origin").unwrap();
+    let rows = cat.execute_raw("MATCH (f:File) RETURN f.path, f.source").unwrap();
     let named: Vec<(String, String)> = rows
         .rows
         .iter()
@@ -1068,8 +1070,8 @@ fn the_same_file_seen_from_two_roots_is_one_identity() {
         .collect();
     eprintln!("[fichier] {named:?}");
     assert_eq!(named.len(), 1, "{named:?}");
-    // Sans dépôt ni manifeste, l'ancre est le système de fichiers : le nom
-    // garde sa hiérarchie et ne dépend pas de la racine passée à l'appel.
-    assert_eq!(named[0].0, "projet/src/core.rs", "le nom est ancré, pas relatif à l'appel");
-    assert_eq!(named[0].1, "dir:/");
+    // Le chemin absolu dans sa source : rien à faire converger, c'est la
+    // même chose des deux côtés.
+    assert_eq!(named[0].0, "/projet/src/core.rs", "absolu, pas relatif à l'appel");
+    assert_eq!(named[0].1, "file", "le système de fichiers est la source");
 }

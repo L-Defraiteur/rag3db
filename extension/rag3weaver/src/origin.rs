@@ -17,6 +17,7 @@
 //! 2. **L'identité est portable, la localisation ne l'est pas.** `id` entre
 //!    dans les clés, `anchor` jamais : c'est une carte par poste.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Ce qu'une origine **est**, dit franchement. Un dépôt git s'appelle un
@@ -243,6 +244,159 @@ fn package_name(manifest: &str, text: &str) -> Option<String> {
     }
 }
 
+// ─── Coordonnées ─────────────────────────────────────────────────────────────
+
+/// Un système qui **sait nommer un fichier autrement que par son chemin**.
+///
+/// Git en est un : il sait dire « ce fichier, c'est `src/x.rs` dans
+/// `github.com/org/dépôt` ». Un registre de paquets en serait un autre, un
+/// stockage adressé par contenu aussi.
+///
+/// Pourquoi une souscription plutôt qu'un `match` : le `match` est une
+/// famille **fermée**, écrite ici, qu'un système extérieur ne peut pas
+/// enrichir sans éditer ce fichier. Le critère est celui-là et pas
+/// « c'est plus propre » — quand la famille est fermée pour de bon (les
+/// langages que le parseur connaît, par exemple), le `match` reste la bonne
+/// forme.
+///
+/// Les coordonnées sont des **champs** comme les autres. C'est ce qui rend
+/// la politique d'identité configurable sans une ligne de moteur : `hashsafe`
+/// dit déjà quels champs font la clé.
+///
+/// | Politique | `hashsafe` | Un nœud par |
+/// |---|---|---|
+/// | copie de travail (défaut) | `["source", "path"]` | fichier |
+/// | gestionnaire de commits | `["repo", "revision", "repo_path"]` | fichier × révision |
+pub trait Coordinates: Send + Sync {
+    fn name(&self) -> &'static str;
+    /// Les champs que ce fournisseur remplit — pour les déclarer au schéma.
+    fn fields(&self) -> &'static [&'static str];
+    /// Les valeurs pour ce fichier, ou rien s'il n'en sait rien.
+    fn of(&self, absolute_path: &Path) -> Option<BTreeMap<String, String>>;
+}
+
+/// Les coordonnées git d'un fichier : le dépôt, le chemin dedans, la
+/// révision courante.
+///
+/// **Le dépôt et le chemin ne portent pas la révision, et c'est délibéré** :
+/// ce qu'on identifie ainsi est « ce fichier dans ce dépôt », pas « cet
+/// état ». Sans ça, deux clones sur deux commits ne se reconnaîtraient
+/// jamais. Qui veut identifier un état met `revision` dans la clé — c'est la
+/// politique « gestionnaire de commits », et elle est déjà exprimable.
+pub struct GitCoordinates;
+
+impl Coordinates for GitCoordinates {
+    fn name(&self) -> &'static str {
+        "git"
+    }
+    fn fields(&self) -> &'static [&'static str] {
+        &["repo", "repo_path", "revision"]
+    }
+    fn of(&self, absolute_path: &Path) -> Option<BTreeMap<String, String>> {
+        let origin = Origin::discover(absolute_path, "");
+        if origin.kind != OriginKind::Git || !origin.portable {
+            return None;
+        }
+        let repo = origin.id.strip_prefix("git:")?.to_string();
+        let mut out = BTreeMap::new();
+        out.insert("repo".into(), repo);
+        out.insert("repo_path".into(), origin.relative(absolute_path)?);
+        if let Some(rev) = head_revision(&origin.anchor.join(".git")) {
+            out.insert("revision".into(), rev);
+        }
+        Some(out)
+    }
+}
+
+/// Les fournisseurs souscrits, et un cache par répertoire — remonter jusqu'au
+/// `.git` pour chacun des mille fichiers d'un lot serait absurde.
+pub struct CoordinateRegistry {
+    providers: Vec<Box<dyn Coordinates>>,
+    cache: std::cell::RefCell<std::collections::HashMap<PathBuf, BTreeMap<String, String>>>,
+}
+
+impl Default for CoordinateRegistry {
+    fn default() -> Self {
+        Self::new(vec![Box::new(GitCoordinates)])
+    }
+}
+
+impl CoordinateRegistry {
+    pub fn new(providers: Vec<Box<dyn Coordinates>>) -> Self {
+        Self { providers, cache: Default::default() }
+    }
+
+    /// Tous les champs que les fournisseurs souscrits peuvent remplir.
+    pub fn fields(&self) -> Vec<&'static str> {
+        let mut all: Vec<&'static str> = self.providers.iter().flat_map(|p| p.fields().iter().copied()).collect();
+        all.sort_unstable();
+        all.dedup();
+        all
+    }
+
+    /// Les coordonnées d'un fichier, tous fournisseurs confondus. Un champ
+    /// déjà rempli n'est pas écrasé : le premier souscripteur qui sait a
+    /// raison.
+    pub fn of(&self, absolute_path: &Path) -> BTreeMap<String, String> {
+        let dir = absolute_path.parent().unwrap_or(absolute_path).to_path_buf();
+        // Ce qui dépend du répertoire (le dépôt, la révision) se mémorise ;
+        // ce qui dépend du fichier (son chemin dans le dépôt) se recalcule.
+        let mut out = BTreeMap::new();
+        if let Some(hit) = self.cache.borrow().get(&dir) {
+            out = hit.clone();
+        }
+        if out.is_empty() {
+            for p in &self.providers {
+                if let Some(values) = p.of(absolute_path) {
+                    for (k, v) in values {
+                        out.entry(k).or_insert(v);
+                    }
+                }
+            }
+            let mut stable = out.clone();
+            stable.remove("repo_path");
+            self.cache.borrow_mut().insert(dir, stable);
+            return out;
+        }
+        // Coup au cache : seul le chemin dans le dépôt reste à faire.
+        if let Some(repo_path) = out.get("repo").and_then(|_| {
+            let o = Origin::discover(absolute_path, "");
+            o.relative(absolute_path)
+        }) {
+            out.insert("repo_path".into(), repo_path);
+        }
+        out
+    }
+}
+
+/// La révision courante, sans lancer `git`. `HEAD` détaché ou référence
+/// symbolique, y compris quand la référence est empaquetée.
+fn head_revision(dot_git: &Path) -> Option<String> {
+    let gitdir = git_config_dir(dot_git)?;
+    // `HEAD` d'un arbre lié vit dans SON répertoire, pas dans le commun.
+    let head_file = if dot_git.is_dir() { dot_git.join("HEAD") } else { resolved_gitdir(dot_git)?.join("HEAD") };
+    let head = std::fs::read_to_string(head_file).ok()?;
+    let head = head.trim();
+    let Some(reference) = head.strip_prefix("ref:").map(str::trim) else {
+        return (head.len() == 40).then(|| head.to_string());
+    };
+    if let Ok(sha) = std::fs::read_to_string(gitdir.join(reference)) {
+        return Some(sha.trim().to_string());
+    }
+    let packed = std::fs::read_to_string(gitdir.join("packed-refs")).ok()?;
+    packed.lines().find_map(|l| {
+        let (sha, name) = l.split_once(' ')?;
+        (name.trim() == reference).then(|| sha.to_string())
+    })
+}
+
+/// Le répertoire propre d'un arbre de travail lié (`.git` fichier).
+fn resolved_gitdir(dot_git: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(dot_git).ok()?;
+    let g = PathBuf::from(text.strip_prefix("gitdir:")?.trim());
+    Some(if g.is_absolute() { g } else { dot_git.parent()?.join(g) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,6 +484,35 @@ mod tests {
         assert_eq!(Origin::discover(&nu, "").id, o.id, "le dossier et son fichier ont la même ancre");
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn git_coordinates_name_a_file_by_its_repo_not_by_the_disk() {
+        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file = PathBuf::from(&manifest).join("src/origin.rs");
+        let reg = CoordinateRegistry::default();
+
+        let c = reg.of(&file);
+        eprintln!("[coordonnées] {c:?}");
+        assert!(c.get("repo").is_some_and(|r| r.contains("rag3db")), "{c:?}");
+        assert_eq!(c.get("repo_path").map(String::as_str), Some("extension/rag3weaver/src/origin.rs"));
+        // La révision est une **propriété** : elle est là, elle n'est pas
+        // dans le nom du dépôt ni dans le chemin.
+        assert!(c.get("revision").is_some_and(|r| r.len() == 40), "{c:?}");
+        assert!(!c["repo"].contains('@') && !c["repo_path"].contains('@'), "{c:?}");
+
+        // Le cache par répertoire ne fabrique pas de faux chemins : deux
+        // fichiers du même dossier gardent chacun le leur.
+        let other = PathBuf::from(&manifest).join("src/code.rs");
+        assert_eq!(reg.of(&other).get("repo_path").map(String::as_str), Some("extension/rag3weaver/src/code.rs"));
+        assert_eq!(reg.of(&file).get("repo_path").map(String::as_str), Some("extension/rag3weaver/src/origin.rs"));
+
+        // Hors dépôt : le fournisseur ne sait rien, et le dit.
+        let nowhere = std::env::temp_dir().join(format!("rag3weaver-coord-{}/x.rs", std::process::id()));
+        std::fs::create_dir_all(nowhere.parent().unwrap()).unwrap();
+        std::fs::write(&nowhere, "\n").unwrap();
+        assert!(reg.of(&nowhere).is_empty(), "{:?}", reg.of(&nowhere));
+        let _ = std::fs::remove_dir_all(nowhere.parent().unwrap());
     }
 
     #[test]

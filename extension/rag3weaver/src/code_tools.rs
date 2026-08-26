@@ -191,39 +191,36 @@ fn col<'a>(row: &'a BTreeMap<String, CypherValue>, name: &str) -> Option<&'a Cyp
     })
 }
 
-/// Ce que le catalogue stocke pour un chemin **tapé par l'agent**.
+/// L'identité d'un fichier que l'agent nomme relativement à sa source :
+/// `(source, chemin absolu dans cette source)` (doc 04 v3).
 ///
-/// L'agent nomme un fichier relativement à la source qu'il regarde ; le
-/// catalogue le nomme relativement à son **origine** (doc 04). Les deux
-/// coïncident quand la source est ouverte sur l'ancre — le cas courant — et
-/// divergent dès qu'on ouvre une source sur un sous-répertoire. Toute
-/// interrogation de l'index passe donc par ici.
+/// Une jointure, pas une découverte : l'agent tape `port.rs`, sa source est
+/// ouverte sur un répertoire, le reste est une concaténation. C'est
+/// précisément parce que l'identité ne dépend d'aucune heuristique que deux
+/// sources ouvertes à deux profondeurs donnent le même nom.
 ///
-/// Une source sans disque est sa propre origine : le nom ne change pas.
+/// Une source sans disque n'a pas de chemin absolu : son nom dans la source
+/// *est* son identité.
 pub fn indexed_name(source: &dyn FileSource, path: &str) -> (String, String) {
     let cursor = source.cursor();
+    let id = crate::code::source_id(&cursor);
     match cursor.strip_prefix("worktree:") {
-        Some(root) => {
-            let abs = Path::new(root).join(path);
-            let origin = crate::origin::Origin::discover(&abs, &cursor);
-            let name = origin.relative(&abs).unwrap_or_else(|| path.to_string());
-            (origin.id, name)
-        }
-        None => (crate::origin::Origin::from_cursor(&cursor).id, path.to_string()),
+        Some(root) => (id, Path::new(root).join(path).to_string_lossy().to_string()),
+        None => (id, path.to_string()),
     }
 }
 
 /// Les scopes d'un fichier, par ligne croissante. Vide sans catalogue.
-fn scopes_of(catalog: Option<&Catalog>, origin: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
+fn scopes_of(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
     let Some(catalog) = catalog else { return Ok(vec![]) };
     let rows = catalog
-        .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "origin"])
+        .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "source"])
         .map_err(|e| e.to_string())?;
     let mut scopes: Vec<ScopeRef> = rows
         .iter()
-        // Le même nom ancré peut exister dans deux origines : ce sont deux
+        // Le même chemin peut exister dans deux sources : ce sont deux
         // fichiers différents, et on ne mélange pas leurs scopes.
-        .filter(|r| col(r, "origin").and_then(|v| v.as_str()).unwrap_or("") == origin)
+        .filter(|r| col(r, "source").and_then(|v| v.as_str()).unwrap_or("") == source)
         .filter_map(|r| {
             Some(ScopeRef {
                 name: col(r, "name")?.as_str()?.to_string(),
@@ -246,11 +243,11 @@ fn narrowest<'a>(scopes: &'a [ScopeRef], line: usize) -> Option<&'a ScopeRef> {
 }
 
 /// `File.content_hash` tel qu'indexé, si le fichier est connu du catalogue.
-fn indexed_hash(catalog: Option<&Catalog>, origin: &str, path: &str) -> Result<Option<String>, String> {
+fn indexed_hash(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Option<String>, String> {
     let Some(catalog) = catalog else { return Ok(None) };
     let uuid = catalog
         .entity_uuid(FILE, &BTreeMap::from([
-            ("origin".to_string(), CypherValue::String(origin.to_string())),
+            ("source".to_string(), CypherValue::String(source.to_string())),
             ("path".to_string(), CypherValue::String(path.to_string())),
         ]))
         .map_err(|e| e.to_string())?;
@@ -508,8 +505,8 @@ fn read_window(
     }
     let content_hash = crate::hash::content_hash(&content);
     // Le nom sous lequel le catalogue connaît ce fichier (doc 04).
-    let (origin, indexed_path) = indexed_name(source, path);
-    let indexed = if outside { None } else { indexed_hash(catalog, &origin, &indexed_path)? };
+    let (src_id, indexed_path) = indexed_name(source, path);
+    let indexed = if outside { None } else { indexed_hash(catalog, &src_id, &indexed_path)? };
     let stale = indexed.as_ref().map(|h| *h != content_hash);
     // Hors index, les repères viennent d'une analyse à la volée : les mêmes
     // scopes, sans rien écrire.
@@ -523,7 +520,7 @@ fn read_window(
             Vec::new()
         }
     } else {
-        scopes_of(catalog, &origin, &indexed_path)?
+        scopes_of(catalog, &src_id, &indexed_path)?
     };
     let scopes: Vec<ScopeRef> = all_scopes
         .into_iter()
@@ -690,18 +687,18 @@ pub fn grep_files(
             if matches.len() >= max_results {
                 continue; // on compte, on ne rend plus
             }
-            let (origin, indexed_path) = indexed_name(source, &path);
+            let (src_id, indexed_path) = indexed_name(source, &path);
             let scopes = match scope_cache.get(&path) {
                 Some(s) => s,
                 None => {
-                    let s = scopes_of(catalog, &origin, &indexed_path)?;
+                    let s = scopes_of(catalog, &src_id, &indexed_path)?;
                     scope_cache.entry(path.clone()).or_insert(s)
                 }
             };
             let stale = match stale_cache.get(&path) {
                 Some(s) => *s,
                 None => {
-                    let s = indexed_hash(catalog, &origin, &indexed_path)?.map(|h| h != crate::hash::content_hash(&content));
+                    let s = indexed_hash(catalog, &src_id, &indexed_path)?.map(|h| h != crate::hash::content_hash(&content));
                     stale_cache.insert(path.clone(), s);
                     s
                 }
@@ -812,8 +809,8 @@ pub fn list_files(
     for path in all.into_iter().take(limit) {
         let (lines, indexed, stale) = if with_state {
             let content = source.read(&path)?.unwrap_or_default();
-            let (origin, indexed_path) = indexed_name(source, &path);
-            let indexed = indexed_hash(catalog, &origin, &indexed_path)?;
+            let (src_id, indexed_path) = indexed_name(source, &path);
+            let indexed = indexed_hash(catalog, &src_id, &indexed_path)?;
             let stale = indexed.as_ref().map(|h| *h != crate::hash::content_hash(&content));
             (Some(content.lines().count()), catalog.map(|_| indexed.is_some()), stale)
         } else {
@@ -1025,13 +1022,13 @@ pub fn reingest_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str,
         }
     }
     // Scopes connus du fichier, moins ceux que l'analyse produit encore.
-    let (origin, indexed_path) = indexed_name(source, path);
+    let (src_id, indexed_path) = indexed_name(source, path);
     let known = catalog
-        .find_by_field(SCOPE, "file_path", CypherValue::String(indexed_path.clone()), &["key", "origin"])
+        .find_by_field(SCOPE, "file_path", CypherValue::String(indexed_path.clone()), &["key", "source"])
         .map_err(|e| e.to_string())?;
     let known: Vec<_> = known
         .into_iter()
-        .filter(|r| col(r, "origin").and_then(|v| v.as_str()).unwrap_or("") == origin)
+        .filter(|r| col(r, "source").and_then(|v| v.as_str()).unwrap_or("") == src_id)
         .collect();
     let new_keys: std::collections::HashSet<&str> = analysis.scopes.iter().map(|s| s.key.as_str()).collect();
     let mut deleted = 0usize;
