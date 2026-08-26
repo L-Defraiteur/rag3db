@@ -71,7 +71,10 @@ if [ "$NEED_BUILD" = true ]; then
   fi
 
   echo "▸ Building rag3db + extensions..."
-  cmake --build "$BUILD" -j"$(nproc)"
+  # Deux cœurs restent à la machine : c'est la compilation C++ qui fige le
+  # poste, pas les tests (voir .cargo/config.toml à la racine).
+  JOBS=$(( $(nproc) > 2 ? $(nproc) - 2 : 1 ))
+  cmake --build "$BUILD" -j"$JOBS"
   echo "▸ Build done."
 fi
 

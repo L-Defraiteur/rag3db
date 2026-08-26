@@ -1,0 +1,11 @@
+# Toujours laisser deux cœurs à la machine.
+#
+# Le 26 août 2026, en cherchant pourquoi le poste ramait pendant les suites,
+# la réponse n'était ni burn ni l'inférence : c'était la **compilation**. Un
+# `-j` sur tous les cœurs rend l'interface inutilisable pendant plusieurs
+# minutes, pour un gain de quelques secondes.
+#
+# `jobs = -2` veut dire « tous les cœurs sauf deux », donc ça vaut aussi sur
+# une autre machine — pas un nombre en dur.
+[build]
+jobs = -2

@@ -132,9 +132,12 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // La source du fichier qui le contient — le même nom absolu peut exister
     // dans deux sources, ce sont deux fichiers.
     fields.insert("source".into(), field(FieldType::String));
-    // La coordonnée portable, dénormalisée depuis `File` : c'est elle qu'un
-    // domaine d'agent filtrera, et on ne veut pas une jointure par scope.
+    // Les coordonnées portables, dénormalisées depuis `File` : `repo` est ce
+    // qu'un domaine d'agent filtrera, `repo_path` ce que le rendu affiche.
+    // Une jointure par scope à l'affichage coûterait plus que ces deux
+    // colonnes.
     fields.insert("repo".into(), field(FieldType::String));
+    fields.insert("repo_path".into(), field(FieldType::String));
     fields.insert("parent_name".into(), field(FieldType::String));
     fields.insert("language".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
@@ -254,6 +257,9 @@ pub struct ScopeRecord {
     /// La coordonnée portable du dépôt, dénormalisée depuis `File`.
     #[serde(default)]
     pub repo: String,
+    /// Le chemin du fichier **dans ce dépôt** — ce que le rendu affiche.
+    #[serde(default)]
+    pub repo_path: String,
     pub name: String,
     pub scope_type: String,
     pub signature: String,
@@ -465,6 +471,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         let rel = relative(root, abs);
         let (indexed_name, coords) = identity_of(&rel);
         let repo = coords.get("repo").cloned().unwrap_or_default();
+        let repo_path = coords.get("repo_path").cloned().unwrap_or_default();
         let language = language_name(abs);
         for s in &fa.scopes {
             let type_str = scope_type_name(&s.r#type).to_string();
@@ -476,6 +483,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 key: key.clone(),
                 source: source.clone(),
                 repo: repo.clone(),
+                repo_path: repo_path.clone(),
                 name: s.name.clone(),
                 scope_type: type_str,
                 signature: s.signature.clone(),
@@ -872,6 +880,7 @@ impl ScopeRecord {
             ("file_path".into(), s(&self.file_path)),
             ("source".into(), s(&self.source)),
             ("repo".into(), s(&self.repo)),
+            ("repo_path".into(), s(&self.repo_path)),
             ("parent_name".into(), s(&self.parent_name)),
             ("language".into(), s(&self.language)),
             ("start_line".into(), i(self.start_line)),

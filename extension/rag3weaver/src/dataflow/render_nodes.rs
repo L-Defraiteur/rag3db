@@ -58,7 +58,53 @@ fn is_internal(key: &str) -> bool {
 /// Les champs que le rendu consomme lui-même : ils deviennent le lien, le
 /// titre hiérarchique ou l'en-tête de groupe, et ne sont donc pas répétés
 /// dans la liste des champs.
-const CONSUMED: [&str; 6] = ["file_path", "path", "start_line", "end_line", "parent_name", "language"];
+const CONSUMED: [&str; 10] = [
+    "file_path", "path", "start_line", "end_line", "parent_name", "language",
+    // Les coordonnées : elles servent à identifier, à filtrer et à écrire le
+    // chemin — jamais à être récitées à côté de lui.
+    "source", "repo", "repo_path", "revision",
+];
+
+/// **Par rapport à quoi on écrit un chemin.**
+///
+/// Le stockage est absolu (doc 04 v3) ; l'affichage, lui, est un point de
+/// vue, et il change à chaque tour de boucle sans que rien ne soit
+/// réindexé. C'est la quatrième des quatre notions qui s'appelaient toutes
+/// « racine », et la seule qui ait le droit de bouger si souvent.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum PathLens {
+    /// Le chemin **dans son dépôt** quand on le connaît — `repo_path` est
+    /// déjà stocké, donc c'est gratuit — et l'absolu sinon.
+    #[default]
+    Origin,
+    /// Depuis un préfixe donné : « montre-moi les chemins d'ici ».
+    From(String),
+    /// Tel qu'il est stocké.
+    Absolute,
+}
+
+impl PathLens {
+    /// Le chemin d'un résultat, vu par cette lentille.
+    fn path_of(&self, data: Option<&Data>) -> Option<String> {
+        let stored = text_field(data, "file_path").or_else(|| text_field(data, "path"))?;
+        Some(match self {
+            Self::Absolute => stored,
+            Self::Origin => text_field(data, "repo_path").unwrap_or(stored),
+            Self::From(prefix) => {
+                let p = prefix.trim_end_matches('/');
+                match stored.strip_prefix(p) {
+                    // Hors du préfixe : on rend l'absolu plutôt qu'un chemin
+                    // faux. Un `../../..` serait juste et illisible.
+                    None => stored,
+                    Some(rest) => {
+                        let rest = rest.trim_start_matches('/');
+                        if rest.is_empty() { stored } else { rest.to_string() }
+                    }
+                }
+            }
+        })
+    }
+}
 
 type Data = std::collections::BTreeMap<String, CypherValue>;
 
@@ -79,8 +125,8 @@ fn int_field(data: Option<&Data>, key: &str) -> Option<i64> {
 /// `port.rs:101-140` — de quoi lancer `read(path, offset)` sans réfléchir.
 /// C'est la forme que tout le monde sait lire, et la seule que le modèle
 /// peut réutiliser telle quelle.
-fn location(data: Option<&Data>) -> Option<String> {
-    let path = text_field(data, "file_path").or_else(|| text_field(data, "path"))?;
+fn location(data: Option<&Data>, lens: &PathLens) -> Option<String> {
+    let path = lens.path_of(data)?;
     match (int_field(data, "start_line"), int_field(data, "end_line")) {
         (Some(a), Some(b)) if b > a => Some(format!("{path}:{a}-{b}")),
         (Some(a), _) => Some(format!("{path}:{a}")),
@@ -99,9 +145,21 @@ fn scope_sep(data: Option<&Data>) -> &'static str {
 }
 
 /// Le nom d'un résultat : ce qu'un humain citerait.
-fn title_of(data: Option<&std::collections::BTreeMap<String, CypherValue>>, uuid: &str) -> String {
+fn title_of(
+    data: Option<&std::collections::BTreeMap<String, CypherValue>>,
+    uuid: &str,
+    lens: &PathLens,
+) -> String {
     let Some(data) = data else { return uuid.chars().take(8).collect() };
     for key in ["_title", "name", "title", "path", "file_path", "summary", "content"] {
+        // Le titre d'un fichier **est** son chemin : il passe donc par la
+        // lentille comme le reste.
+        if matches!(key, "path" | "file_path") {
+            if let Some(p) = lens.path_of(Some(data)) {
+                return ellipsize(&p, 80);
+            }
+            continue;
+        }
         if let Some(CypherValue::String(s)) = data.get(key) {
             if !s.is_empty() {
                 return ellipsize(s, 80);
@@ -128,11 +186,9 @@ fn fields_of(
 
 /// La clé de regroupement : le parent, dans son fichier. Vide = pas de
 /// groupe.
-fn group_key(r: &UnifiedResult) -> Option<(String, String)> {
+fn group_key(r: &UnifiedResult, lens: &PathLens) -> Option<(String, String)> {
     let parent = text_field(r.data.as_ref(), "parent_name")?;
-    let file = text_field(r.data.as_ref(), "file_path")
-        .or_else(|| text_field(r.data.as_ref(), "path"))
-        .unwrap_or_default();
+    let file = lens.path_of(r.data.as_ref()).unwrap_or_default();
     Some((file, parent))
 }
 
@@ -148,6 +204,16 @@ pub fn render_results_markdown(results: &[UnifiedResult], max_chars: usize) -> S
 /// l'ordre de leur meilleur score, la numérotation reste globale, et un
 /// résultat seul dans son groupe n'a pas d'en-tête.
 pub fn render_results_with(results: &[UnifiedResult], max_chars: usize, group: bool) -> String {
+    render_results_through(results, max_chars, group, &PathLens::default())
+}
+
+/// La même, en choisissant **par rapport à quoi les chemins sont écrits**.
+pub fn render_results_through(
+    results: &[UnifiedResult],
+    max_chars: usize,
+    group: bool,
+    lens: &PathLens,
+) -> String {
     if results.is_empty() {
         return "**No results.**".to_string();
     }
@@ -158,7 +224,7 @@ pub fn render_results_with(results: &[UnifiedResult], max_chars: usize, group: b
         // Un groupe par (fichier, parent) ; sans parent, chacun le sien.
         let mut groups: Vec<(Option<(String, String)>, Vec<usize>)> = Vec::new();
         for (i, r) in results.iter().enumerate() {
-            let key = group_key(r);
+            let key = group_key(r, lens);
             match key.as_ref().and_then(|k| groups.iter_mut().find(|(g, _)| g.as_ref() == Some(k))) {
                 Some((_, members)) => members.push(i),
                 None => groups.push((key, vec![i])),
@@ -180,7 +246,7 @@ pub fn render_results_with(results: &[UnifiedResult], max_chars: usize, group: b
         if let Some((header, n)) = header_at.get(&i) {
             out.push_str(&format!("\n{header} — {n} matches\n"));
         }
-        let name = title_of(r.data.as_ref(), &r.uuid);
+        let name = title_of(r.data.as_ref(), &r.uuid, lens);
         // Hiérarchie : `Classe::methode`, quand le parent est connu.
         let title = match text_field(r.data.as_ref(), "parent_name") {
             Some(parent) if parent != name => format!("{parent}{}{name}", scope_sep(r.data.as_ref())),
@@ -188,7 +254,7 @@ pub fn render_results_with(results: &[UnifiedResult], max_chars: usize, group: b
         };
         let entity = r.entity.as_deref().unwrap_or("?");
         out.push_str(&format!("\n{}. `{title}` — {entity} · {:.2}", rank + 1, r.score));
-        if let Some(loc) = location(r.data.as_ref()) {
+        if let Some(loc) = location(r.data.as_ref(), lens) {
             out.push_str(&format!(" · {loc}"));
         }
         if let Some(rel) = &r.relation {
@@ -221,16 +287,16 @@ pub fn render_results_with(results: &[UnifiedResult], max_chars: usize, group: b
             }
         }
         for child in r.other_children.iter().flatten() {
-            let child_title = title_of(Some(&child.data), &child.uuid);
+            let child_title = title_of(Some(&child.data), &child.uuid, lens);
             let fields = fields_of(Some(&child.data), &child_title);
             let extra = if fields.is_empty() { String::new() } else { format!(" ({})", fields.join(" · ")) };
             // Le voisin porte son lien aussi : un `DEFINED_IN` devient un
             // chemin qu'on peut lire.
-            let loc = location(Some(&child.data)).map(|l| format!(" {l}")).unwrap_or_default();
+            let loc = location(Some(&child.data), lens).map(|l| format!(" {l}")).unwrap_or_default();
             out.push_str(&format!("   ↳ {} {} `{child_title}`{loc}{extra}\n", child.relation, child.entity));
         }
         for child in r.matched_children.iter().flatten() {
-            let child_title = title_of(child.data.as_ref(), &child.uuid);
+            let child_title = title_of(child.data.as_ref(), &child.uuid, lens);
             out.push_str(&format!("   ↳ {} `{child_title}` · {:.2}\n", child.entity.as_deref().unwrap_or("?"), child.score));
         }
     }
@@ -247,11 +313,12 @@ pub struct RenderResultsNode {
     json: bool,
     max_chars: usize,
     group: bool,
+    lens: PathLens,
 }
 
 impl RenderResultsNode {
     pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string(), json: false, max_chars: DEFAULT_MAX_CHARS, group: true }
+        Self { node_name: name.to_string(), json: false, max_chars: DEFAULT_MAX_CHARS, group: true, lens: PathLens::default() }
     }
     /// `true` : le JSON brut, pour un appelant qui est un programme.
     pub fn with_json(mut self, json: bool) -> Self {
@@ -265,6 +332,11 @@ impl RenderResultsNode {
     /// Regrouper les résultats d'une même classe (défaut : oui).
     pub fn with_group(mut self, group: bool) -> Self {
         self.group = group;
+        self
+    }
+    /// Par rapport à quoi écrire les chemins (défaut : leur dépôt).
+    pub fn with_lens(mut self, lens: PathLens) -> Self {
+        self.lens = lens;
         self
     }
 }
@@ -281,6 +353,11 @@ impl Node for RenderResultsNode {
             "format": if self.json { "json" } else { "markdown" },
             "max_chars": self.max_chars,
             "group": self.group,
+            "relative_to": match &self.lens {
+                PathLens::From(p) => p.clone(),
+                PathLens::Absolute => "/".to_string(),
+                PathLens::Origin => String::new(),
+            },
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
@@ -300,7 +377,7 @@ impl Node for RenderResultsNode {
         let text = if self.json {
             serde_json::to_string(&results).map_err(|e| format!("RenderResultsNode: {e}"))?
         } else {
-            render_results_with(&results, self.max_chars, self.group)
+            render_results_through(&results, self.max_chars, self.group, &self.lens)
         };
         ctx.set_output("text", PortValue::new(text));
         ctx.set_output("results", PortValue::new(results));
@@ -323,6 +400,15 @@ impl NodeFactory for RenderResultsNodeFactory {
         }
         if let Some(g) = config.get("group").and_then(|v| v.as_bool()) {
             node = node.with_group(g);
+        }
+        // `relative_to` : vide = le chemin dans son dépôt ; `/` = l'absolu
+        // tel qu'il est stocké ; un chemin = depuis là.
+        if let Some(p) = config.get("relative_to").and_then(|v| v.as_str()) {
+            node = node.with_lens(match p {
+                "" => PathLens::Origin,
+                "/" => PathLens::Absolute,
+                other => PathLens::From(other.to_string()),
+            });
         }
         Ok(Box::new(node))
     }
@@ -366,6 +452,15 @@ impl NodeFactory for RenderResultsNodeFactory {
                     choices: None,
                     json_schema: None,
                 },
+                ConfigParam {
+                    name: "relative_to",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "Par rapport à quoi écrire les chemins : vide = dans leur dépôt, '/' = absolu tel que stocké, un chemin = depuis là",
+                    choices: None,
+                    json_schema: None,
+                },
             ],
         }
     }
@@ -374,6 +469,60 @@ impl NodeFactory for RenderResultsNodeFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Les trois lentilles sur le même résultat. Le stockage est absolu ; ce
+    /// que le modèle lit ne l'est pas (doc 04 §5).
+    #[test]
+    fn the_same_result_is_written_three_ways_without_reindexing_anything() {
+        let data = std::collections::BTreeMap::from([
+            ("file_path".to_string(), CypherValue::String("/home/x/dépôt/src/dataflow/port.rs".into())),
+            ("repo_path".to_string(), CypherValue::String("src/dataflow/port.rs".into())),
+            ("repo".to_string(), CypherValue::String("github.com/o/dépôt".into())),
+            ("name".to_string(), CypherValue::String("merge_port_values".into())),
+            ("start_line".to_string(), CypherValue::Int(101)),
+            ("end_line".to_string(), CypherValue::Int(140)),
+        ]);
+        let r = UnifiedResult {
+            uuid: "u1".into(),
+            entity: Some("Scope".into()),
+            score: 1.0,
+            data: Some(data),
+            chunk: None,
+            chunks: None,
+            relation: None,
+            matched_children: None,
+            other_children: None,
+            graph: None,
+            signal: None,
+        };
+
+        let through = |lens: PathLens| render_results_through(std::slice::from_ref(&r), 200, false, &lens);
+
+        let origin = through(PathLens::Origin);
+        assert!(origin.contains("src/dataflow/port.rs:101-140"), "{origin}");
+        assert!(!origin.contains("/home/x/"), "la lentille par défaut ne montre pas le disque : {origin}");
+
+        let absolute = through(PathLens::Absolute);
+        assert!(absolute.contains("/home/x/dépôt/src/dataflow/port.rs:101-140"), "{absolute}");
+
+        let from = through(PathLens::From("/home/x/dépôt/src".into()));
+        assert!(from.contains("`merge_port_values`") && from.contains("dataflow/port.rs:101-140"), "{from}");
+        assert!(!from.contains("/home/x/"), "{from}");
+
+        // Hors du préfixe : l'absolu, jamais un `../..` juste et illisible.
+        let ailleurs = through(PathLens::From("/autre/projet".into()));
+        assert!(ailleurs.contains("/home/x/dépôt/src/dataflow/port.rs"), "{ailleurs}");
+
+        // Et les coordonnées ne sont jamais récitées à côté du chemin :
+        // elles servent à l'écrire, pas à occuper la place qu'on a passé la
+        // journée à libérer.
+        for lens in [PathLens::Origin, PathLens::Absolute] {
+            let out = through(lens);
+            assert!(!out.contains("repo="), "{out}");
+            assert!(!out.contains("repo_path="), "{out}");
+        }
+    }
+
     use crate::search::ChunkInfo;
     use crate::search_strategy::ChildSummary;
 
