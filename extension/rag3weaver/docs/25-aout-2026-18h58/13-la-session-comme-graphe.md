@@ -158,6 +158,15 @@ dans le rendu.
   runs : tout existe. Une session est un graphe comme les autres, sinon la
   proposition ne vaut rien.
 
+## 8 bis. Ce à quoi la session s'abonne
+
+Un graphe de session doit pouvoir dire « je veux savoir quand un outil du
+run que j'ai lancé échoue » sans écouter la terre entière. C'est le sujet
+du [14](14-tout-est-ecoutable.md) : sélecteurs (`run`, `tag`, `kind`,
+`node`, `port`, `dir`), prédicats sur les champs, et un registre d'intérêt
+pour ne pas fabriquer ce que personne n'écoute. Les étapes 1 et 2 de ce
+document-là suffisent à rendre la session écrivable.
+
 ## 9. L'ordre, et comment on saura
 
 1. **Rendu** (liens, hiérarchie, regroupement) — une heure, mesurable au

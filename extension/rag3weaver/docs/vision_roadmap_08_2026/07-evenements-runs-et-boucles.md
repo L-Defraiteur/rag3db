@@ -139,6 +139,11 @@ pas dedans : les instantanés de ports du runtime (`DataflowEvent`), qui
 restent son flux propre pour une interface — une trace ne transporte pas
 des résultats entiers.
 
+**La suite du sujet** : [14 — tout est écoutable, tout est filtrable](../25-aout-2026-18h58/14-tout-est-ecoutable.md)
+(sélecteurs, prédicats, registre d'intérêt) et [13 — la session comme
+graphe](../25-aout-2026-18h58/13-la-session-comme-graphe.md), sa première
+cliente.
+
 ## 5. Ce qui existe, ce qui manque
 
 | | Où on en est |
