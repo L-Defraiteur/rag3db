@@ -77,6 +77,7 @@ impl Origin {
         // fragmenterait en autant d'ancres que de paquets, et le même fichier
         // changerait de nom selon qu'on l'a atteint par l'un ou par l'autre.
         let mut nearest_manifest: Option<(PathBuf, &str)> = None;
+        let mut top = start;
         for dir in start.ancestors() {
             let dot_git = dir.join(".git");
             if dot_git.exists() {
@@ -87,10 +88,19 @@ impl Origin {
                     nearest_manifest = Some((dir.to_path_buf(), m));
                 }
             }
+            top = dir;
         }
         match nearest_manifest {
             Some((dir, manifest)) => Self::from_manifest(&dir, manifest),
-            None => Self { id: format!("dir:{}", start.display()), kind: OriginKind::Directory, anchor: start.to_path_buf(), portable: false },
+            // Ni dépôt ni manifeste : **il n'y a pas de fait** sur l'endroit
+            // où ce projet commence. La seule ancre vraie est alors le
+            // système de fichiers lui-même, et le nom d'un fichier son chemin
+            // absolu. C'est laid et c'est honnête : ça garde la hiérarchie
+            // (donc un domaine peut filtrer par préfixe) et ça fait converger
+            // deux racines d'analyse sur la même identité. Ancrer sur le
+            // dossier du fichier, à l'inverse, fabriquerait une origine par
+            // répertoire.
+            None => Self { id: format!("dir:{}", top.display()), kind: OriginKind::Directory, anchor: top.to_path_buf(), portable: false },
         }
     }
 
@@ -312,6 +322,12 @@ mod tests {
         let o = Origin::discover(&nu.join("seul.rs"), "");
         assert_eq!(o.kind, OriginKind::Directory, "{o:?}");
         assert!(!o.portable, "un dossier nu n'a pas de nom partageable : {o:?}");
+        // L'ancre remonte jusqu'à la racine du système de fichiers : le nom
+        // garde donc toute sa hiérarchie, et deux racines d'analyse
+        // différentes tombent sur la même identité.
+        let rel = o.relative(&nu.join("seul.rs")).unwrap();
+        assert!(rel.ends_with("nu/seul.rs") && !rel.starts_with('/'), "{rel}");
+        assert_eq!(Origin::discover(&nu, "").id, o.id, "le dossier et son fichier ont la même ancre");
 
         let _ = std::fs::remove_dir_all(&base);
     }

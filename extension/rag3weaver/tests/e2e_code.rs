@@ -109,7 +109,12 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
         let files = cat.search(FILE, "generic_search_nodes", bm25("generic_search_nodes")).unwrap();
         let names: Vec<String> = files.results.iter().map(name_of).collect();
         eprintln!("[File] {names:?}");
-        assert_eq!(names.first().map(String::as_str), Some("generic_search_nodes.rs"));
+        // Le fichier se nomme **dans son dépôt**, pas dans la racine
+        // d'analyse qu'on a passée — c'est tout l'objet du doc 04.
+        assert_eq!(
+            names.first().map(String::as_str),
+            Some("extension/rag3weaver/src/dataflow/generic_search_nodes.rs")
+        );
 
         // ── Un scope par sa signature ───────────────────────────────────
         let scopes = cat.search(SCOPE, "fn take_results", bm25("fn take_results")).unwrap();
@@ -1029,17 +1034,16 @@ fn a_project_converges_however_it_was_ingested() {
         analysis.files.len(), analysis.scopes.len(), analysis.skipped);
 }
 
-/// **Test de constat, pas de souhait.** Le même fichier ingéré depuis deux
-/// racines différentes — le projet, puis un sous-dossier — donne **deux
-/// identités**, parce que la clé contient le chemin *relatif à la racine
-/// d'analyse*. C'est la question ouverte du
-/// [doc 15](../docs/25-aout-2026-18h58/15-identite-d-un-fichier.md) : un
-/// fichier devrait être identifié par une URI de source, pas par un chemin
-/// relatif. Le test fixe le comportement d'aujourd'hui pour qu'on voie le
-/// jour où il change.
+/// Le même fichier ingéré depuis deux racines différentes — le projet, puis
+/// un sous-dossier — est **un seul fichier**. Ce test était un constat
+/// d'échec jusqu'au 27 août : la clé portait le chemin relatif à la racine
+/// d'analyse, donc le point de vue devenait l'identité. Depuis
+/// [`Origin`](../src/origin.rs), l'ancre se découvre et la racine passée à
+/// `analyze` redevient ce qu'elle aurait dû rester — ce qu'on demande de
+/// lire, pas ce qui décide des noms (doc 04).
 #[test]
 #[ignore]
-fn the_same_file_seen_from_two_roots_is_two_identities_today() {
+fn the_same_file_seen_from_two_roots_is_one_identity() {
     use rag3weaver::code::analyze;
 
     const SRC: &str = "pub fn boot() -> i32 {\n    7\n}\n";
@@ -1052,6 +1056,20 @@ fn the_same_file_seen_from_two_roots_is_two_identities_today() {
     let after_second = (cat.count(FILE).unwrap(), cat.count(SCOPE).unwrap());
 
     eprintln!("[deux racines] après la première {after_first:?} | après la seconde {after_second:?}");
-    assert_eq!(after_second.0, after_first.0 * 2, "aujourd'hui : deux fichiers pour un seul");
-    assert_eq!(after_second.1, after_first.1 * 2, "et deux fois les scopes");
+    assert_eq!(after_second, after_first, "deux points de vue, une seule identité");
+
+    // Et le nom stocké est celui du fichier dans son ancre, identique des
+    // deux côtés.
+    let rows = cat.execute_raw("MATCH (f:File) RETURN f.path, f.origin").unwrap();
+    let named: Vec<(String, String)> = rows
+        .rows
+        .iter()
+        .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_str()?.to_string())))
+        .collect();
+    eprintln!("[fichier] {named:?}");
+    assert_eq!(named.len(), 1, "{named:?}");
+    // Sans dépôt ni manifeste, l'ancre est le système de fichiers : le nom
+    // garde sa hiérarchie et ne dépend pas de la racine passée à l'appel.
+    assert_eq!(named[0].0, "projet/src/core.rs", "le nom est ancré, pas relatif à l'appel");
+    assert_eq!(named[0].1, "dir:/");
 }
