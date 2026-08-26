@@ -152,7 +152,15 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
     let services = setup();
     let toolbox = GraphToolBox::new(&graph_tools, &nodes, services);
     let mut summary = Vec::new();
+    // `RAG3WEAVER_CLOUD_QUESTIONS=3` ou `1,3` : ne poser que celles-là —
+    // pour remesurer une question sans repayer les autres.
+    let only: Option<Vec<usize>> = std::env::var("RAG3WEAVER_CLOUD_QUESTIONS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|n| n.trim().parse().ok()).collect());
     for (qi, question) in QUESTIONS.iter().enumerate() {
+        if only.as_ref().is_some_and(|o| !o.contains(&(qi + 1))) {
+            continue;
+        }
         eprintln!("\n══════ Q{} : {question}", qi + 1);
         let opts = GenOptions::default()
             .with_max_tokens(1500)
@@ -164,7 +172,16 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
         let mut turns = vec![Turn::system(SYSTEM), Turn::user(*question)];
         let mut sink = StringSink::default();
         let t = Instant::now();
-        let run = agent.run(&mut turns, &mut sink).unwrap();
+        // Un quota épuisé après les réessais (429) n'est pas un défaut du
+        // harnais : la question est « non mesurée », les autres comptent.
+        let run = match agent.run(&mut turns, &mut sink) {
+            Ok(run) => run,
+            Err(e) => {
+                eprintln!("[cloud-agent] Q{} NON MESURÉE en {:?} : {e}", qi + 1, t.elapsed());
+                summary.push((qi + 1, format!("non mesurée : {e}"), 0, 0, vec![], String::new(), 0));
+                continue;
+            }
+        };
         eprintln!(
             "[cloud-agent] Q{} {:?} en {:?} — itérations={} appels={} erreurs={} jetons={}",
             qi + 1, run.stop, t.elapsed(), run.iterations, run.tool_calls, run.tool_errors, run.total_tokens()
