@@ -32,6 +32,20 @@ est une mission qui **exige** le graphe — « qui appelle `X`, dans tous les
 fichiers ? » (`CONSUMED_BY`), « quelles méthodes a `Y` ? » (`PARENT_OF`) —
 et un système qui le dit. C'est le prochain essai, pas celui-ci.
 
+> **Corrigé le 26 août au matin** (`09c4ef782`) : `search` et
+> `search_expand` rendent du markdown compact (`RenderResultsNode`).
+> Mesure déterministe sur notre propre code, même appel : **1 027
+> caractères contre 4 721** en JSON, soit 4,6 fois moins, sans rien
+> perdre de ce qui se lit (nom, entité, score, fichier, lignes, extrait,
+> voisins). Q3 rejouée : **35 432 jetons en 30 s** contre 369 666 en
+> 197 s, réponse toujours juste — avec une nuance d'honnêteté : cette
+> fois le modèle a choisi `grep`/`read` plutôt que `search`, donc les
+> deux chiffres ne comparent pas exactement la même trajectoire. Le
+> rapport de 4,6 sur le rendu, lui, est mesuré à trajectoire identique.
+> Reste le « vouliez-vous dire » de `list` : le modèle a encore tenté
+> `read('src/dataflow/node_factories.rs')` (chemin du dépôt, pas de la
+> source) et s'est rattrapé au coup suivant.
+
 **Le coût est dans les résultats bruts.** 370 k jetons pour Q3, c'est le
 contexte qui grossit à chaque itération : le résultat de `search` est le
 JSON complet (`uuid`, `score`, `_content_hash`, le `content` entier de

@@ -254,6 +254,12 @@ fn read_and_grep_as_graph_tools() {
     assert!(rel_desc.contains("DEFINED_IN (Scope→File)"), "{rel_desc}");
     assert_eq!(expand.parameters["properties"]["direction"]["enum"], serde_json::json!(["Outgoing", "Incoming"]));
     let mut services = ServiceRegistry::new();
+    {
+        let cat = catalog.lock().unwrap();
+        services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+        services.register("fts_handles", cat.fts_handles().clone());
+        services.register::<Arc<dyn rag3weaver::embedder::Embedder>>("embedder", Arc::new(HashEmbedder::new(64)));
+    }
     services.register("catalog", catalog.clone());
     services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
     let services = Arc::new(services);
@@ -266,6 +272,35 @@ fn read_and_grep_as_graph_tools() {
     eprintln!("[grep tool]\n{grep}");
     assert!(grep.starts_with("**Pattern:**"), "raw markdown, not a JSON string: {grep}");
     assert!(grep.contains("| port.rs |") && grep.contains("`merge_port_values`"), "{grep}");
+
+    // Le rendu compact, mesuré contre le JSON brut du même appel : c'est le
+    // poids que payait chaque tour d'agent (doc 11).
+    let args = serde_json::json!({"target": "Scope", "query": "merge_port_values", "limit": 5});
+    let markdown = call("search", args.clone());
+    let json = {
+        let tool = tools.get("search").unwrap();
+        let mut def = tool.instantiate(&args).unwrap();
+        for node in &mut def.nodes {
+            if node.name == "render" {
+                node.config = serde_json::json!({"format": "json"});
+            }
+        }
+        rag3weaver::dataflow::execute_definition(
+            &def, &nodes, services.clone(),
+            &rag3weaver::dataflow::NodeTypePolicy::All,
+            ("render", "text"),
+        ).unwrap()
+    };
+    eprintln!("[search markdown {} caractères]\n{markdown}", markdown.len());
+    eprintln!("[search json] {} caractères", json.len());
+    assert!(markdown.starts_with("**"), "{markdown}");
+    assert!(markdown.contains("`merge_port_values`") && markdown.contains("file_path=port.rs"), "{markdown}");
+    assert!(!markdown.contains("_content_hash") && !markdown.contains("uuid"), "{markdown}");
+    assert!(
+        markdown.len() * 3 < json.len(),
+        "le markdown doit peser bien moins que le JSON : {} contre {}",
+        markdown.len(), json.len()
+    );
 
     let read = call("read", serde_json::json!({"path": "port.rs", "offset": 1, "limit": 5}));
     eprintln!("[read tool]\n{read}");
