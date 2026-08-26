@@ -489,3 +489,64 @@ fn ingestion_order_does_not_change_the_graph() {
     assert_eq!(report.ambiguous, 0, "{report:?}");
     assert!(cat.count(SCOPE).unwrap() >= 2);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 7. L'index vectoriel : incrémental contre construction en masse
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Le profil dit que 90 % de l'ingestion est l'insertion HNSW, ligne par
+/// ligne (doc 18). `CREATE_VECTOR_INDEX` sur une table déjà remplie est
+/// pourtant son mode nominal, et `DROP_VECTOR_INDEX` existe dans le fork
+/// sans être utilisé nulle part. On mesure les deux, sur les mêmes fichiers.
+#[test]
+#[ignore]
+fn building_the_vector_index_in_bulk_beats_row_by_row() {
+    use std::time::Instant;
+
+    let root = dataflow_dir();
+    let sources = read_sources(&root).unwrap();
+    let analysis = rag3weaver::code::analyze(&root, sources);
+    eprintln!("[hnsw] {} fichiers, {} scopes", analysis.files.len(), analysis.scopes.len());
+
+    // ── Chemin actuel : l'index existe pendant l'ingestion ──────────────
+    let incremental = {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        let t = Instant::now();
+        let report = cat.ingest_code(&analysis).unwrap();
+        let ms = t.elapsed().as_millis();
+        eprintln!("[hnsw] incrémental : {ms} ms (entités {} ms, symboles {} ms)", report.entities_ms, report.symbols_ms);
+        ms
+    };
+
+    // ── Chemin en masse : détruire, charger, construire ─────────────────
+    let (bulk, build_ms, results_after) = {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        cat.execute_raw("CALL DROP_VECTOR_INDEX('Scope_Chunk', 'Scope_Chunk_vec', skip_if_not_exists := true)")
+            .expect("l'index doit pouvoir être détruit");
+        let t = Instant::now();
+        cat.ingest_code(&analysis).unwrap();
+        let load = t.elapsed().as_millis();
+        let t = Instant::now();
+        cat.execute_raw("CALL CREATE_VECTOR_INDEX('Scope_Chunk', 'Scope_Chunk_vec', 'embedding', metric := 'cosine', skip_if_exists := true)")
+            .expect("l'index doit pouvoir être construit sur une table pleine");
+        let build = t.elapsed().as_millis();
+        eprintln!("[hnsw] en masse : {load} ms de chargement + {build} ms de construction = {} ms", load + build);
+
+        // Et il faut que la recherche vectorielle marche après.
+        let opts = SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::SEMANTIC),
+            limit: 5,
+            ..Default::default()
+        };
+        let found = cat.search(rag3weaver::code::SCOPE, "merge port values", opts).unwrap();
+        (load + build, build, found.results.len())
+    };
+
+    eprintln!("[hnsw] incrémental {incremental} ms | en masse {bulk} ms (dont {build_ms} ms de construction) | vecteur après : {results_after} résultats");
+    assert!(results_after > 0, "la recherche vectorielle doit marcher après une construction en masse");
+    // Pas d'assertion sur le rapport : c'est une mesure, pas une promesse.
+    // Le chiffre est imprimé pour la décision (doc 18).
+}

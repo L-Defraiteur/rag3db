@@ -123,9 +123,26 @@ du 25 août — et on ne diffère rien du tout.
 
 ## 6. L'ordre proposé
 
-1. **Mesurer** `DROP` → ingestion → `CREATE` contre l'actuel, sur les mêmes
-   27 fichiers. Aucun contrat touché ; si le rapport est bon, ça devient le
-   mode d'une première ingestion, avec `reindex` comme filet.
+1. ~~**Mesurer**~~ **Mesuré le 26 à midi**, et le rapport dépasse
+   l'espérance :
+
+   | | durée |
+   |---|---|
+   | Ingestion, index incrémental (actuel) | **16 663 ms** |
+   | Chargement, index détruit | 5 366 ms |
+   | **Construction en masse de l'index** | **550 ms** |
+   | Total en masse | **5 916 ms** |
+
+   **2,8 fois plus rapide au total, et 24 fois sur la partie index** :
+   ~13 s d'insertions ligne à ligne contre 0,55 s de construction en une
+   fois, pour les mêmes 4 027 vecteurs. La recherche vectorielle fonctionne
+   après (`SEMANTIC` rend ses résultats), et le test garde la propriété.
+
+   Aucun contrat touché : rien n'est différé, l'index est complet quand
+   `ingest_code` rend la main. Reste à décider **où** placer la bascule —
+   une première ingestion volumineuse la veut, un `edit` d'un fichier
+   certainement pas (détruire l'index pour trois vecteurs serait absurde).
+   Un seuil, donc, et `reindex` comme filet.
 2. **Écrire l'embedding au `CREATE`** si la mesure ne suffit pas : même
    gain potentiel, chemin plus sûr.
 3. **Le vidage différé**, seulement si les deux premiers ne suffisent pas,
