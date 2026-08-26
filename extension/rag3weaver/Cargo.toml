@@ -24,7 +24,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
 thiserror = "2"
-tokio = { version = "1", features = ["sync"] }
+# Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
+# plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
+# nœuds, ingestion) reste synchrone sur le pool luciole ; les deux cohabitent.
+tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }

@@ -617,7 +617,6 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     trace_services.register("catalog", catalog.clone());
     trace_services.register(EVENTS_SERVICE, Arc::new(bus.shared()));
     let handle = Reactor::new(bus.shared(), nodes.clone(), Arc::new(trace_services))
-        .with_tick(Duration::from_millis(5))
         .watch(trace)
         .unwrap()
         .spawn();
@@ -696,7 +695,6 @@ fn two_agents_converse_through_their_inboxes() {
         }
     };
     let handle = Reactor::new(bus.shared(), Arc::new(rag3weaver::dataflow::NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
-        .with_tick(Duration::from_millis(2))
         .on("A", [inbox_topic("A")], ReactPolicy::Each, wake("A", "B"))
         .on("B", [inbox_topic("B")], ReactPolicy::Each, wake("B", "A"))
         .spawn();

@@ -17,20 +17,21 @@
 //! `watch` — avant ce qu'on veut observer. Les deux voient tout, chacun à
 //! son rythme.
 //!
-//! **Un tick, pas un `recv` bloquant.** Plusieurs sujets, un seul fil, et un
-//! arrêt propre : le réacteur sonde ses sonnettes à chaque tick (25 ms par
-//! défaut) et dort entre deux. La latence est le tick ; c'est le prix de la
-//! simplicité, et il est petit.
+//! **Il attend, il ne sonde pas.** Un fil, un runtime tokio à un seul fil
+//! dedans, une tâche par sonnette qui pousse dans une file commune, et une
+//! boucle qui `select` entre « un événement arrive » et « un lot est dû »
+//! (`batch` / `debounce` sont des minuteurs). Latence nulle, aucun réveil
+//! pour rien, un arrêt propre par un signal.
 //!
 //! Ce que le réacteur publie, c'est ce que ses services décident : avec
 //! `"event_bus"`, ses runs sont sur le bus ; sans, il est muet — le graphe de
 //! trace, qui écrit dans le catalogue, tourne sans, pour ne pas se retracer.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use async_broadcast::TryRecvError;
+use async_broadcast::Receiver;
 
 use crate::events::{Event, EventBus};
 
@@ -93,16 +94,28 @@ struct Watch {
     topics: Vec<String>,
     policy: ReactPolicy,
     target: Target,
+    /// Les récepteurs de sonnette, un par sujet — ouverts au `watch`.
+    doorbells: Vec<(String, Receiver<Event>)>,
     /// Sonnette en attente : depuis quand, et dernier coup.
     pending: Option<(Instant, Instant)>,
     /// Les événements de la sonnette, gardés pour une fermeture.
     buffered: Vec<serde_json::Value>,
 }
 
+impl Watch {
+    fn due_at(&self) -> Option<Instant> {
+        let (first, last) = self.pending?;
+        Some(match self.policy {
+            ReactPolicy::Each => first,
+            ReactPolicy::Batch(ms) => first + Duration::from_millis(ms),
+            ReactPolicy::Debounce(ms) => last + Duration::from_millis(ms),
+        })
+    }
+}
+
 /// Compteurs partagés entre le réacteur et sa poignée.
 #[derive(Default)]
 struct Shared {
-    stop: AtomicBool,
     runs: AtomicUsize,
     errors: Mutex<Vec<String>>,
 }
@@ -112,7 +125,6 @@ pub struct Reactor {
     nodes: Arc<NodeRegistry>,
     services: Arc<ServiceRegistry>,
     watches: Vec<Watch>,
-    tick: Duration,
     shared: Arc<Shared>,
 }
 
@@ -120,19 +132,11 @@ impl Reactor {
     /// Un réacteur sur `bus`, qui exécutera ses graphes avec `nodes` et
     /// `services` — et c'est `services` qui dit ce qu'ils publient.
     pub fn new(bus: EventBus, nodes: Arc<NodeRegistry>, services: Arc<ServiceRegistry>) -> Self {
-        Self {
-            bus,
-            nodes,
-            services,
-            watches: Vec::new(),
-            tick: Duration::from_millis(25),
-            shared: Arc::new(Shared::default()),
-        }
+        Self { bus, nodes, services, watches: Vec::new(), shared: Arc::new(Shared::default()) }
     }
 
-    pub fn with_tick(mut self, tick: Duration) -> Self {
-        self.tick = tick.max(Duration::from_millis(1));
-        self
+    fn doorbells(&self, topics: &[String]) -> Vec<(String, Receiver<Event>)> {
+        topics.iter().map(|t| (t.clone(), self.bus.subscribe(t))).collect()
     }
 
     /// Surveille une fiche : ses sujets (`%% on:`), sa politique
@@ -147,14 +151,15 @@ impl Reactor {
             )));
         }
         for topic in tool.on() {
-            self.bus.cursor(topic, &doorbell_cursor(tool.name()));
             self.bus.cursor(topic, tool.name());
         }
+        let doorbells = self.doorbells(tool.on());
         self.watches.push(Watch {
             name: tool.name().to_string(),
             topics: tool.on().to_vec(),
             policy: tool.policy(),
             target: Target::Graph(Arc::new(tool)),
+            doorbells,
             pending: None,
             buffered: Vec::new(),
         });
@@ -172,14 +177,13 @@ impl Reactor {
         f: impl Fn(Vec<serde_json::Value>) + Send + Sync + 'static,
     ) -> Self {
         let topics: Vec<String> = topics.into_iter().map(Into::into).collect();
-        for topic in &topics {
-            self.bus.cursor(topic, &doorbell_cursor(name));
-        }
+        let doorbells = self.doorbells(&topics);
         self.watches.push(Watch {
             name: name.to_string(),
             topics,
             policy,
             target: Target::Callback(Arc::new(f)),
+            doorbells,
             pending: None,
             buffered: Vec::new(),
         });
@@ -191,53 +195,17 @@ impl Reactor {
         self.watches.iter().map(|w| w.name.as_str()).collect()
     }
 
-    /// Un passage : sonde chaque sonnette, applique la politique, exécute ce
-    /// qui est dû. Rend le nombre d'exécutions. Pour cadencer soi-même ; la
-    /// boucle est [`Self::spawn`].
-    pub fn pump(&mut self) -> usize {
-        let now = Instant::now();
+    /// Les sujets d'une montre.
+    pub fn topics_of(&self, name: &str) -> Option<&[String]> {
+        self.watches.iter().find(|w| w.name == name).map(|w| w.topics.as_slice())
+    }
+
+    /// Exécute ce qui est dû à `now`. Rend le nombre d'exécutions.
+    fn fire_due(&mut self, now: Instant) -> usize {
         let mut runs = 0;
-        for i in 0..self.watches.len() {
-            // Sonnette : ce qui est arrivé depuis le dernier passage.
-            let mut rang = false;
-            for topic in self.watches[i].topics.clone() {
-                let cursor = self.bus.cursor(&topic, &doorbell_cursor(&self.watches[i].name));
-                let mut rx = match cursor.lock() {
-                    Ok(rx) => rx,
-                    Err(_) => continue,
-                };
-                loop {
-                    match rx.try_recv() {
-                        Ok(event) => {
-                            rang = true;
-                            if matches!(self.watches[i].target, Target::Callback(_)) {
-                                self.watches[i].buffered.push(event.to_json());
-                            }
-                        }
-                        Err(TryRecvError::Overflowed(n)) => {
-                            rang = true;
-                            if matches!(self.watches[i].target, Target::Callback(_)) {
-                                self.watches[i].buffered.push(serde_json::json!({ "kind": "EventsMissed", "topic": topic, "count": n }));
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-            }
-            let w = &mut self.watches[i];
-            if rang {
-                w.pending = Some(match w.pending {
-                    Some((first, _)) => (first, now),
-                    None => (now, now),
-                });
-            }
-            let due = match (w.pending, w.policy) {
-                (None, _) => false,
-                (Some(_), ReactPolicy::Each) => true,
-                (Some((first, _)), ReactPolicy::Batch(ms)) => now.duration_since(first) >= Duration::from_millis(ms),
-                (Some((_, last)), ReactPolicy::Debounce(ms)) => now.duration_since(last) >= Duration::from_millis(ms),
-            };
-            if !due {
+        for w in &mut self.watches {
+            let Some(due) = w.due_at() else { continue };
+            if due > now {
                 continue;
             }
             w.pending = None;
@@ -260,22 +228,93 @@ impl Reactor {
         runs
     }
 
-    /// La boucle, dans un fil : `pump`, et dort un tick quand rien n'est dû.
+    /// Le prochain instant où quelque chose est dû.
+    fn next_due(&self) -> Option<Instant> {
+        self.watches.iter().filter_map(Watch::due_at).min()
+    }
+
+    /// Un coup de sonnette sur la montre `i`, venu du sujet `topic`.
+    fn ring(&mut self, i: usize, topic: &str, event: Option<Event>, missed: u64, now: Instant) {
+        let w = &mut self.watches[i];
+        if let Target::Callback(_) = w.target {
+            if let Some(event) = &event {
+                w.buffered.push(event.to_json());
+            }
+            if missed > 0 {
+                w.buffered.push(serde_json::json!({ "kind": "EventsMissed", "topic": topic, "count": missed }));
+            }
+        }
+        w.pending = Some(match w.pending {
+            Some((first, _)) => (first, now),
+            None => (now, now),
+        });
+    }
+
+    /// La boucle, dans un fil : attend les sonnettes et les échéances, rien
+    /// d'autre. S'arrête sur [`ReactorHandle::stop`].
     pub fn spawn(mut self) -> ReactorHandle {
         let shared = self.shared.clone();
-        let tick = self.tick;
+        let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
         let thread = std::thread::Builder::new()
             .name("rag3weaver-reactor".into())
             .spawn(move || {
-                while !self.shared.stop.load(Ordering::Relaxed) {
-                    if self.pump() == 0 {
-                        std::thread::sleep(tick);
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                    .expect("tokio runtime for the reactor");
+                rt.block_on(async {
+                    // Une tâche par sonnette, toutes vers la même file.
+                    let (tx, mut rings) = tokio::sync::mpsc::unbounded_channel::<(usize, String, Option<Event>, u64)>();
+                    let mut tasks = Vec::new();
+                    for (i, w) in self.watches.iter_mut().enumerate() {
+                        for (topic, rx) in w.doorbells.drain(..) {
+                            let tx = tx.clone();
+                            let mut rx = rx;
+                            tasks.push(tokio::spawn(async move {
+                                loop {
+                                    match rx.recv().await {
+                                        Ok(event) => {
+                                            if tx.send((i, topic.clone(), Some(event), 0)).is_err() {
+                                                break;
+                                            }
+                                        }
+                                        Err(async_broadcast::RecvError::Overflowed(n)) => {
+                                            if tx.send((i, topic.clone(), None, n)).is_err() {
+                                                break;
+                                            }
+                                        }
+                                        Err(async_broadcast::RecvError::Closed) => break,
+                                    }
+                                }
+                            }));
+                        }
                     }
-                }
+                    drop(tx);
+                    loop {
+                        let now = Instant::now();
+                        self.fire_due(now);
+                        let sleep = match self.next_due() {
+                            Some(at) => tokio::time::sleep(at.saturating_duration_since(now)),
+                            None => tokio::time::sleep(Duration::from_secs(3600)),
+                        };
+                        tokio::pin!(sleep);
+                        tokio::select! {
+                            _ = &mut stop_rx => break,
+                            _ = &mut sleep => {}
+                            ring = rings.recv() => match ring {
+                                Some((i, topic, event, missed)) => self.ring(i, &topic, event, missed, Instant::now()),
+                                None => break,
+                            },
+                        }
+                    }
+                    for t in tasks {
+                        t.abort();
+                    }
+                });
                 self
             })
             .expect("spawn reactor thread");
-        ReactorHandle { shared, thread: Some(thread) }
+        ReactorHandle { shared, stop: Some(stop_tx), thread: Some(thread) }
     }
 }
 
@@ -289,6 +328,7 @@ fn run_tool(tool: &GraphTool, nodes: &NodeRegistry, services: Arc<ServiceRegistr
 /// La poignée d'un réacteur qui tourne : compteurs, arrêt.
 pub struct ReactorHandle {
     shared: Arc<Shared>,
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
     thread: Option<std::thread::JoinHandle<Reactor>>,
 }
 
@@ -311,14 +351,16 @@ impl ReactorHandle {
             if start.elapsed() > timeout {
                 return false;
             }
-            std::thread::sleep(Duration::from_millis(5));
+            std::thread::sleep(Duration::from_millis(2));
         }
         true
     }
 
     /// Arrête la boucle et rend le réacteur (ses montres, pour le relancer).
     pub fn stop(mut self) -> Reactor {
-        self.shared.stop.store(true, Ordering::Relaxed);
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
         let thread = self.thread.take().expect("already stopped");
         thread.join().expect("reactor thread panicked")
     }
@@ -326,7 +368,9 @@ impl ReactorHandle {
 
 impl Drop for ReactorHandle {
     fn drop(&mut self) {
-        self.shared.stop.store(true, Ordering::Relaxed);
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
@@ -361,41 +405,51 @@ mod tests {
     }
 
     #[test]
-    fn a_callback_watch_receives_events_and_a_batch_collapses_them() {
+    fn a_batch_collapses_a_burst_into_one_run() {
         let bus = EventBus::new(64);
         let seen = Arc::new(Mutex::new(Vec::<usize>::new()));
         let sink = seen.clone();
-        let mut reactor = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
-            .on("count", ["messages"], ReactPolicy::Batch(30), move |events| sink.lock().unwrap().push(events.len()));
+        let handle = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+            .on("count", ["messages"], ReactPolicy::Batch(40), move |events| sink.lock().unwrap().push(events.len()))
+            .spawn();
         for i in 0..5 {
             bus.send_message("r", "a", "b", &format!("m{i}"));
         }
-        // Sonné, mais pas encore dû : le lot attend 30 ms.
-        assert_eq!(reactor.pump(), 0);
-        std::thread::sleep(Duration::from_millis(35));
-        assert_eq!(reactor.pump(), 1);
-        assert_eq!(*seen.lock().unwrap(), vec![5]);
-        // Plus rien : pas d'exécution.
-        assert_eq!(reactor.pump(), 0);
+        assert!(handle.wait_runs(1, Duration::from_secs(2)));
+        assert_eq!(*seen.lock().unwrap(), vec![5], "un lot, une exécution");
+        std::thread::sleep(Duration::from_millis(60));
+        assert_eq!(handle.runs(), 1, "rien de nouveau, rien ne tourne");
+        let reactor = handle.stop();
+        assert_eq!(reactor.names(), vec!["count"]);
     }
 
     #[test]
-    fn a_spawned_reactor_runs_and_stops() {
+    fn each_runs_per_ring_and_debounce_waits_for_quiet() {
         let bus = EventBus::new(64);
         let count = Arc::new(AtomicUsize::new(0));
         let c = count.clone();
-        let reactor = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
-            .with_tick(Duration::from_millis(2))
-            .on("tick", ["messages"], ReactPolicy::Each, move |events| {
+        let quiet = Arc::new(AtomicUsize::new(0));
+        let q = quiet.clone();
+        let handle = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+            .on("each", ["messages"], ReactPolicy::Each, move |events| {
                 c.fetch_add(events.len(), Ordering::Relaxed);
-            });
-        let handle = reactor.spawn();
+            })
+            .on("quiet", ["messages"], ReactPolicy::Debounce(30), move |events| {
+                q.fetch_add(events.len(), Ordering::Relaxed);
+            })
+            .spawn();
         bus.send_message("r", "a", "b", "one");
         bus.send_message("r", "a", "b", "two");
-        assert!(handle.wait_runs(1, Duration::from_secs(2)));
-        std::thread::sleep(Duration::from_millis(20));
-        assert_eq!(count.load(Ordering::Relaxed), 2);
+        // `each` a tout vu tout de suite ; `debounce` attend le calme.
+        let start = Instant::now();
+        while count.load(Ordering::Relaxed) < 2 {
+            assert!(start.elapsed() < Duration::from_secs(2));
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(quiet.load(Ordering::Relaxed), 0);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(quiet.load(Ordering::Relaxed), 2, "un seul réveil pour les deux, après 30 ms de calme");
         let reactor = handle.stop();
-        assert_eq!(reactor.names(), vec!["tick"]);
+        assert_eq!(reactor.topics_of("each"), Some(&["messages".to_string()][..]));
     }
 }

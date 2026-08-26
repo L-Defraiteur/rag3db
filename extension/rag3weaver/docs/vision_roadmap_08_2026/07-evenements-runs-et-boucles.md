@@ -107,12 +107,13 @@ La fiche d'un graphe-outil déclare à quoi elle réagit :
 
 Le réacteur est un objet, `Reactor::new(bus, nœuds, services)`, à qui on
 confie des fiches (`watch`) ou des fermetures (`on`). Il tourne dans un fil
-et **sonde** ses sonnettes à chaque tick (25 ms par défaut) plutôt que de
-bloquer sur un `recv` : plusieurs sujets, un seul fil, un arrêt propre —
-la latence est le tick, et c'est petit. `pump()` reste là pour un hôte qui
-cadence lui-même. Deux curseurs par sujet : la sonnette du réacteur
-(`<nom>@reactor`), qu'il ne fait que vider, et le curseur du graphe
-(`<nom>`), que son `EventSourceNode` lit — les deux voient tout. Par événement (ou par lot), il
+et **attend** : un runtime tokio à un seul fil dedans, une tâche par
+sonnette qui pousse dans une file commune, et une boucle qui `select` entre
+« un événement arrive » et « un lot est dû » (`batch` / `debounce` sont des
+minuteurs). Latence nulle, aucun réveil pour rien, un arrêt propre par un
+signal. Deux récepteurs par sujet : la sonnette du réacteur, qu'il ne fait
+que vider, et le curseur du graphe (`<nom>`), que son `EventSourceNode`
+lit — les deux voient tout. Par événement (ou par lot), il
 instancie le graphe avec l'événement en paramètre (`$event`, ou le lot sur
 un port) et l'exécute avec **ses** services — ce qui, encore une fois,
 décide de ce que ce run publie (`event_bus`) et lit (`events`).
@@ -150,7 +151,7 @@ des résultats entiers.
 | `SendMessageNode`, `EventBus::send_message`, `inbox`/`self` relatifs, `Agent::with_inbox` (lecture entre tours, `AgentRun.messages`) | fait — testé : un message d'avant le run vu avant le premier tour, un message arrivé pendant un appel vu au tour suivant, jamais au milieu |
 | Schéma lié : `Run` (hashsafe `run_id`), `Message`, `CHILD_OF` / `SENT_BY` / `SENT_TO`, écrits par `TraceSinkNode` | fait — `search_expand(target = "Message", relation = "SENT_TO")` rend le run |
 | `interrupt` | à faire, petit (le puits sait déjà arrêter) |
-| `%% on:` / `%% policy:`, `Reactor` (fil, tick, `each` / `batch` / `debounce`, sonnette par curseur), `ReactorHandle` | fait — la fiche `trace` est réactive (`batch 200`) et tourne dans son fil sans se tracer ; deux agents conversent par leurs boîtes, chacun un réacteur (`on(nom, sujets, politique, fermeture)`), bornés par un budget |
+| `%% on:` / `%% policy:`, `Reactor` (fil, tokio `select`, `each` / `batch` / `debounce`, sonnette par sujet), `ReactorHandle` | fait — la fiche `trace` est réactive (`batch 200`) et tourne dans son fil sans se tracer ; deux agents conversent par leurs boîtes, chacun un réacteur (`on(nom, sujets, politique, fermeture)`), bornés par un budget |
 | Boîte durable (`Message` en base, `MessageSourceNode`) | plus tard, même forme de nœud |
 
 L'ordre suivi : identité des runs, puis messages et boîte de l'agent, puis
@@ -164,9 +165,14 @@ résultats bruts (`search`, `FetchRelatedNode`).
   servait qu'à se contraindre — pas de fils, pas d'async — pour un usage
   que personne n'avait ; lucivy garde le sien. `wasm_ffi.rs`,
   `build_wasm.sh` et les features `wasm-emscripten` / `candle-wasm` sont
-  retirés ; le réacteur tourne dans un fil, sans `pump()`. Les ids de run
-  restent un compteur plus un horodatage (déterministes à la demande par
-  blake3) — c'est simple, et ça ne dépend de rien.
+  retirés. Les ids de run restent un compteur plus un horodatage
+  (déterministes à la demande par blake3) — c'est simple, et ça ne dépend
+  de rien.
+- **Tokio revient, pour attendre — pas pour calculer.** Le réacteur
+  `select` sur le bus et ses minuteurs ; plus tard un serveur, et les appels
+  cloud en parallèle. Le catalogue, les nœuds et l'ingestion restent
+  synchrones sur le pool luciole ; les deux cohabitent. Si luciole apprend
+  un jour à attendre, ce sera une adaptation locale sur du code éprouvé.
 - **`execute()` n'a pas d'id aujourd'hui** ; il en génère un. Le checkpoint
   garde le sien.
 - **Le lien parent** : `execute_definition` tourne sous un appel d'outil ;
