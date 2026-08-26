@@ -7,6 +7,7 @@
 use crate::named_factory;
 
 use super::node_registry::{
+    Choices,
     ConfigParam, ConfigParamType, NodeFactory, NodeRegistry, NodeSchema,
 };
 use super::port::{PortDef, PortType};
@@ -231,6 +232,8 @@ impl NodeFactory for FlushNodeFactory {
                     required: false,
                     default: None,
                     description: "Single table name to flush",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
             inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
@@ -275,6 +278,8 @@ impl NodeFactory for SparseCommitNodeFactory {
                     required: false,
                     default: None,
                     description: "Single table name to commit",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
             inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
@@ -335,6 +340,8 @@ impl NodeFactory for KBQuerySourceNodeFactory {
                     required: true,
                     default: None,
                     description: "Knowledge base name",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "query",
@@ -342,6 +349,8 @@ impl NodeFactory for KBQuerySourceNodeFactory {
                     required: true,
                     default: None,
                     description: "Search query text",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "options",
@@ -349,6 +358,8 @@ impl NodeFactory for KBQuerySourceNodeFactory {
                     required: false,
                     default: None,
                     description: "SearchOptions as JSON",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
@@ -420,6 +431,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: true,
                     default: None,
                     description: "Relationship type (e.g. HAS_FILE)",
+                    choices: Some(Choices::Relations),
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "direction",
@@ -427,6 +440,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("Outgoing")),
                     description: "Outgoing or Incoming",
+                    choices: Some(Choices::fixed(["Outgoing", "Incoming"])),
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "limit",
@@ -434,6 +449,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(10)),
                     description: "Max children per parent (0 = unlimited)",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "source_entity",
@@ -441,6 +458,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: false,
                     default: None,
                     description: "Filter results by source entity type",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
@@ -494,6 +513,8 @@ impl NodeFactory for KBEmbedNodeFactory {
                 required: false,
                 default: Some(serde_json::json!(64)),
                 description: "GPU batch size for embedding calls",
+                choices: None,
+                json_schema: None,
             }],
         }
     }
@@ -560,6 +581,8 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(64)),
                     description: "GPU batch size for embedding calls",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "signals",
@@ -567,6 +590,8 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(["bm25", "vector"])),
                     description: "Search signals array (bm25, vector, sparse)",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "text_field",
@@ -574,6 +599,8 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("_text")),
                     description: "Field name containing text to embed",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "embedding_col",
@@ -581,6 +608,8 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("embedding")),
                     description: "Column name for dense embeddings",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "sparse_col",
@@ -588,6 +617,8 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("sparse")),
                     description: "Prefix for sparse columns ({prefix}_indices, {prefix}_weights)",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
@@ -643,6 +674,8 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: true,
                     default: None,
                     description: "Target name (KB or entity)",
+                    choices: Some(Choices::Targets),
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "query",
@@ -650,6 +683,8 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: true,
                     default: None,
                     description: "Search query text",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "options",
@@ -657,6 +692,8 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: false,
                     default: None,
                     description: "SearchOptions as JSON",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
@@ -694,6 +731,8 @@ fn signal_param() -> ConfigParam {
         required: false,
         default: None,
         description: "Étiquette des résultats (défaut : nom du nœud) ; sert à la fusion par le port 'signals'",
+        choices: None,
+        json_schema: None,
     }
 }
 
@@ -704,6 +743,8 @@ fn result_mode_param() -> ConfigParam {
         required: false,
         default: Some(serde_json::json!("aggregated")),
         description: "aggregated | detailed | source_resolved (KB → entité source, pour fusionner plusieurs KB)",
+        choices: None,
+        json_schema: None,
     }
 }
 
@@ -714,6 +755,8 @@ fn limit_param() -> ConfigParam {
         required: false,
         default: Some(serde_json::json!(10)),
         description: "Max results to return",
+        choices: None,
+        json_schema: None,
     }
 }
 
@@ -808,6 +851,8 @@ impl NodeFactory for BM25SearchNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(0)),
                     description: "Levenshtein distance for fuzzy matching (0 = exact)",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "mode",
@@ -815,6 +860,8 @@ impl NodeFactory for BM25SearchNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("contains")),
                     description: "contains | contains_split | regex | parse",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "fields",
@@ -822,6 +869,8 @@ impl NodeFactory for BM25SearchNodeFactory {
                     required: false,
                     default: None,
                     description: "Champs indexés à interroger, 'a,b' (défaut : tous ceux de la cible) — une branche par champ pour les peser à la fusion",
+                    choices: None,
+                    json_schema: None,
                 },
                 result_mode_param(),
                 signal_param(),
@@ -944,6 +993,8 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("rrf")),
                     description: "rrf | weighted",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "rrf_k",
@@ -951,6 +1002,8 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(crate::search::DEFAULT_RRF_K)),
                     description: "Constante RRF",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "weights",
@@ -958,6 +1011,8 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: None,
                     description: "Poids par étiquette, 'label:w,label:w' (défauts : vector 0.7, bm25 0.3, sparse 0.2, autres 1.0)",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "boost",
@@ -965,6 +1020,8 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: None,
                     description: "Étiquettes en rôle boost, 'a,b' : elles modulent le score fusionné au lieu d'y entrer",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "top_k",
@@ -972,6 +1029,8 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: None,
                     description: "Troncature de chaque liste avant fusion",
+                    choices: None,
+                    json_schema: None,
                 },
                 signal_param(),
             ],
@@ -1025,6 +1084,8 @@ impl NodeFactory for RerankNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(RerankNode::DEFAULT_CANDIDATES)),
                     description: "Taille du pool re-scoré",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "service",
@@ -1032,6 +1093,8 @@ impl NodeFactory for RerankNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("reranker")),
                     description: "Clé du service Arc<dyn Reranker> (plusieurs cross-encoders possibles dans un graphe)",
+                    choices: None,
+                    json_schema: None,
                 },
                 signal_param(),
             ],
@@ -1082,6 +1145,8 @@ impl NodeFactory for ResolveParentNodeFactory {
                 required: false,
                 default: None,
                 description: "Fields to return from parent entity (JSON array of strings)",
+                choices: None,
+                json_schema: None,
             }],
         }
     }

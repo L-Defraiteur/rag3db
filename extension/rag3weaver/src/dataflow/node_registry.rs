@@ -21,6 +21,72 @@ pub enum ConfigParamType {
     Json,
 }
 
+/// D'où viennent les valeurs admises d'un paramètre de chaîne.
+///
+/// Un modèle ne peut pas inventer `HAS_SIGNALS` si le schéma ne le permet
+/// pas : une liste close devient un `enum` JSON Schema, et une valeur hors
+/// liste est refusée avant d'instancier quoi que ce soit, avec la liste dans
+/// l'erreur. Le savoir est déclaré **par le nœud** qui consomme le
+/// paramètre (`FetchRelatedNode` sait que `direction` vaut `Outgoing` ou
+/// `Incoming`) ; une fiche de graphe-outil qui expose ce paramètre en
+/// hérite par câblage — voir `GraphTool::bind`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Choices {
+    /// Une liste close, connue à l'écriture.
+    Fixed(Vec<String>),
+    /// Les cibles qu'accepte `Catalog::resolve_search_target` (`@targets`) —
+    /// résolues contre le catalogue au moment où la fiche est rendue.
+    Targets,
+    /// Les relations déclarées dans le schéma du catalogue (`@relations`).
+    Relations,
+}
+
+impl Choices {
+    pub fn fixed<S: Into<String>, I: IntoIterator<Item = S>>(values: I) -> Self {
+        Self::Fixed(values.into_iter().map(Into::into).collect())
+    }
+
+    /// La forme qui s'écrit dans une fiche (`%% choices: p = …`).
+    pub fn spec(&self) -> String {
+        match self {
+            Self::Fixed(values) => values.join(" | "),
+            Self::Targets => "@targets".to_string(),
+            Self::Relations => "@relations".to_string(),
+        }
+    }
+
+    /// Les valeurs, résolues contre un catalogue quand il en faut un, et un
+    /// complément de description (les relations avec leurs extrémités : un
+    /// `enum` ne sait pas dire que `DEFINED_IN` va de `Scope` à `File`).
+    ///
+    /// `None` quand la source manque (pas de catalogue) ou qu'elle est vide
+    /// (rien d'enregistré) : un `enum` vide interdirait tout, et une fiche
+    /// rendue sans catalogue reste utilisable — juste moins contrainte.
+    pub fn resolve(&self, catalog: Option<&crate::catalog::Catalog>) -> Option<(Vec<String>, Option<String>)> {
+        match self {
+            Self::Fixed(values) => Some((values.clone(), None)),
+            Self::Targets => {
+                let names = catalog?.search_target_names();
+                (!names.is_empty()).then_some((names, None))
+            }
+            Self::Relations => {
+                let rels = catalog?.relation_summaries();
+                if rels.is_empty() {
+                    return None;
+                }
+                let hint = format!(
+                    "Relations du schéma : {}.",
+                    rels.iter()
+                        .map(|(name, from, to)| format!("{name} ({from}→{to})"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                Some((rels.into_iter().map(|(name, _, _)| name).collect(), Some(hint)))
+            }
+        }
+    }
+}
+
 /// Describes a configuration parameter accepted by a node factory.
 #[derive(Debug, Clone)]
 pub struct ConfigParam {
@@ -29,6 +95,32 @@ pub struct ConfigParam {
     pub required: bool,
     pub default: Option<serde_json::Value>,
     pub description: &'static str,
+    /// Valeurs admises d'un paramètre `String` — `enum` dans le schéma,
+    /// refus avant instanciation. `None` : chaîne libre.
+    pub choices: Option<Choices>,
+    /// Sous-schéma d'un paramètre `Json` — sans lui, un objet libre, ce qui
+    /// est justement le cas où un décodage contraint ne borne plus rien.
+    pub json_schema: Option<serde_json::Value>,
+}
+
+/// Refuse, au point central d'instanciation, une valeur hors d'une liste
+/// close : une fabrique de base qui retombe silencieusement sur son défaut
+/// (`direction` inconnue → `Outgoing`) ne doit pas masquer une faute de
+/// frappe. Les listes du catalogue (`@targets`, `@relations`) demandent le
+/// catalogue et se vérifient à la fiche.
+pub fn check_fixed_choices(params: &[ConfigParam], config: &serde_json::Value) -> Result<(), String> {
+    for p in params {
+        let Some(Choices::Fixed(values)) = &p.choices else { continue };
+        let Some(value) = config.get(p.name).and_then(|v| v.as_str()) else { continue };
+        if !values.iter().any(|v| v == value) {
+            return Err(format!(
+                "'{}' : '{value}' n'est pas une valeur admise ; admises : {}",
+                p.name,
+                values.join(", ")
+            ));
+        }
+    }
+    Ok(())
 }
 
 // ─── NodeSchema ──────────────────────────────────────────────────────────────
@@ -97,6 +189,8 @@ impl NodeRegistry {
             .factories
             .get(node_type)
             .ok_or_else(|| format!("unknown node type: {node_type}"))?;
+        check_fixed_choices(&factory.schema().config_params, config)
+            .map_err(|e| format!("{node_type} '{name}': {e}"))?;
         factory.create(name, config)
     }
 
@@ -250,6 +344,8 @@ mod tests {
                     required: false,
                     default: Some(serde_json::json!(0)),
                     description: "A fake value",
+                    choices: None,
+                    json_schema: None,
                 }],
             }
         }

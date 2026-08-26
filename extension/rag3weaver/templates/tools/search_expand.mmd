@@ -4,12 +4,14 @@
 %% param: query string! -- Texte de la requête : un nom de fonction ou de type, ou de la langue naturelle.
 %% param: limit int = 10 -- Nombre maximum de résultats de la recherche.
 %% param: relation string! -- Type de relation à suivre depuis chaque résultat — un nom de relation déclaré dans le schéma (ex. 'CONSUMED_BY').
-%% param: direction string = "Outgoing" -- Sens de parcours : Outgoing ou Incoming.
+%% param: direction -- Sens de parcours depuis chaque résultat.
 %% param: expand_limit int = 5 -- Nombre maximum de voisins par résultat (0 = illimité).
-%% choices: target = @targets
-%% choices: relation = @relations
-%% choices: direction = Outgoing | Incoming
 %% result: compose.results
+%%
+%% Pas de `%% choices:` ici : `target` hérite des cibles de `SearchTool`
+%% (qui les tient de `SearchSourceNode`), `relation` et `direction` de
+%% `FetchRelatedNode` — `direction` n'a même pas de type déclaré, il prend
+%% celui du nœud, avec son défaut et sa liste (voir `GraphTool::bind`).
 %%
 %% La composition : `inner` n'est pas un nœud de base, c'est le graphe-outil
 %% `search` enregistré comme type de nœud (`SearchTool`). Ses paramètres sont

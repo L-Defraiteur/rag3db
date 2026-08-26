@@ -309,6 +309,10 @@ impl NodeFactory for GraphNodeFactory {
             // lancé à moitié.
             let args = super::graph_tool::resolve_params(&self.schema.config_params, config)
                 .map_err(|e| format!("{}: {e}", self.schema.node_type))?;
+            // Les listes closes se vérifient ici aussi ; celles du catalogue
+            // l'ont été à la fiche, où le catalogue est disponible.
+            super::graph_tool::check_choices(&self.schema.config_params, &args, None)
+                .map_err(|e| format!("{}: {e}", self.schema.node_type))?;
             super::graph_tool::substitute_definition(&self.definition, &args)
         };
         let node = GraphNode::from_definition(name, definition, self.registry.clone())?;

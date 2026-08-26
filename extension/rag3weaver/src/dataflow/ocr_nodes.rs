@@ -140,6 +140,8 @@ impl NodeFactory for OcrNodeFactory {
                 required: false,
                 default: Some(serde_json::json!(0.0)),
                 description: "Drop lines whose confidence is below this threshold [0, 1]",
+                choices: None,
+                json_schema: None,
             }],
         }
     }

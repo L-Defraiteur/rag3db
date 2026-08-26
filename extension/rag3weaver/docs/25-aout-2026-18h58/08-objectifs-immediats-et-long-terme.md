@@ -11,8 +11,11 @@ la pile de travail telle qu'elle se présente après ce soir.
    une liste close), résolue contre le catalogue vivant quand la fiche part
    vers le modèle (`GraphToolBox::tool_defs`), et refus `bad_choice` à
    l'appel avec la liste des valeurs admises. Le détail de `relation`
-   nomme aussi les extrémités (`DEFINED_IN (Scope→File)`). Reste à
-   mesurer sur Gemini si `search_expand` devient prenable.
+   nomme aussi les extrémités (`DEFINED_IN (Scope→File)`). Puis, après
+   minuit, généralisé : les `choices` vivent sur `ConfigParam`, déclarés
+   par les nœuds, et une fiche en **hérite par câblage** de ses `$var`, à
+   travers les niveaux d'imbrication ([10](10-parametres-de-config-entrees-du-graphe.md)).
+   Reste à mesurer sur Gemini si `search_expand` devient prenable.
    L'intention d'origine : cibles (`Scope`, `File`,
    `Product`…) et relations (`CONSUMES`, `DEFINED_IN`…) réelles, tirées du
    catalogue au moment où les `ToolDef` sont générés — un modèle ne peut pas

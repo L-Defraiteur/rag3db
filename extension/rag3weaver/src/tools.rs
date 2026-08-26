@@ -12,7 +12,7 @@
 
 use serde_json::{json, Map, Value};
 
-use crate::dataflow::node_registry::{ConfigParam, ConfigParamType, NodeRegistry, NodeSchema};
+use crate::dataflow::node_registry::{Choices, ConfigParam, ConfigParamType, NodeRegistry, NodeSchema};
 
 /// Un outil exposable à un LLM : nom, description, schéma JSON des arguments.
 #[derive(Debug, Clone, PartialEq)]
@@ -50,6 +50,9 @@ pub fn param_schema(param: &ConfigParam) -> Value {
     match param.param_type {
         ConfigParamType::String => {
             schema.insert("type".into(), json!("string"));
+            if let Some(Choices::Fixed(values)) = &param.choices {
+                schema.insert("enum".into(), json!(values));
+            }
         }
         ConfigParamType::Int => {
             schema.insert("type".into(), json!("integer"));
@@ -60,9 +63,14 @@ pub fn param_schema(param: &ConfigParam) -> Value {
         ConfigParamType::Bool => {
             schema.insert("type".into(), json!("boolean"));
         }
-        ConfigParamType::Json => {
-            schema.insert("type".into(), json!("object"));
-        }
+        ConfigParamType::Json => match &param.json_schema {
+            // Le sous-schéma déclaré par le nœud, tel quel ; description et
+            // défaut de la fiche par-dessus.
+            Some(Value::Object(declared)) => schema.extend(declared.clone()),
+            _ => {
+                schema.insert("type".into(), json!("object"));
+            }
+        },
     }
     schema.insert("description".into(), json!(param.description));
     if let Some(ref default) = param.default {
@@ -227,6 +235,8 @@ mod tests {
                 required: false,
                 default: None,
                 description: "d",
+                choices: None,
+                json_schema: None,
             };
             assert_eq!(param_schema(&p)["type"], expected);
             assert!(param_schema(&p).get("default").is_none());
@@ -241,6 +251,8 @@ mod tests {
             required: false,
             default: Some(json!(10)),
             description: "max results",
+            choices: None,
+            json_schema: None,
         };
         let s = param_schema(&p);
         assert_eq!(s["default"], 10);

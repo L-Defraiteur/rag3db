@@ -429,6 +429,8 @@ fn format_param() -> ConfigParam {
         required: false,
         default: Some(serde_json::json!("markdown")),
         description: "markdown (compact, pour le modèle) | json (structuré)",
+        choices: None,
+        json_schema: None,
     }
 }
 
@@ -462,9 +464,9 @@ impl NodeFactory for ReadFileNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)" },
-                ConfigParam { name: "offset", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)" },
-                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_READ_LIMIT)), description: "Nombre maximum de lignes (plafond 2000)" },
+                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)", choices: None, json_schema: None },
+                ConfigParam { name: "offset", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)", choices: None, json_schema: None },
+                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_READ_LIMIT)), description: "Nombre maximum de lignes (plafond 2000)", choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -499,12 +501,12 @@ impl NodeFactory for GrepNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "pattern", param_type: ConfigParamType::String, required: true, default: None, description: "Expression régulière" },
-                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que sous ce préfixe de chemin" },
-                ConfigParam { name: "extension", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que cette extension (ex. 'rs')" },
-                ConfigParam { name: "case_insensitive", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse" },
-                ConfigParam { name: "max_results", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés" },
-                ConfigParam { name: "context_lines", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)" },
+                ConfigParam { name: "pattern", param_type: ConfigParamType::String, required: true, default: None, description: "Expression régulière", choices: None, json_schema: None },
+                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que sous ce préfixe de chemin", choices: None, json_schema: None },
+                ConfigParam { name: "extension", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que cette extension (ex. 'rs')", choices: None, json_schema: None },
+                ConfigParam { name: "case_insensitive", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse", choices: None, json_schema: None },
+                ConfigParam { name: "max_results", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés", choices: None, json_schema: None },
+                ConfigParam { name: "context_lines", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)", choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -536,6 +538,8 @@ impl NodeFactory for ParseCodeNodeFactory {
                 required: false,
                 default: None,
                 description: "Racine du projet ; lue sur le disque si 'sources' n'est pas connecté",
+                choices: None,
+                json_schema: None,
             }],
         }
     }
@@ -590,9 +594,9 @@ impl NodeFactory for ListFilesNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe" },
-                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés" },
-                ConfigParam { name: "with_state", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(true)), description: "Lire chaque fichier pour compter ses lignes et comparer au catalogue" },
+                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe", choices: None, json_schema: None },
+                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés", choices: None, json_schema: None },
+                ConfigParam { name: "with_state", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(true)), description: "Lire chaque fichier pour compter ses lignes et comparer au catalogue", choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -626,10 +630,10 @@ impl NodeFactory for EditFileNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source" },
-                ConfigParam { name: "old", param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)" },
-                ConfigParam { name: "new", param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement" },
-                ConfigParam { name: "content", param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)" },
+                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source", choices: None, json_schema: None },
+                ConfigParam { name: "old", param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)", choices: None, json_schema: None },
+                ConfigParam { name: "new", param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement", choices: None, json_schema: None },
+                ConfigParam { name: "content", param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)", choices: None, json_schema: None },
                 format_param(),
             ],
         }

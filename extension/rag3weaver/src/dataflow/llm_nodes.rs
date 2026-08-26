@@ -212,6 +212,8 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(512)),
                     description: "Maximum number of tokens to generate",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "temperature",
@@ -219,6 +221,8 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(0.0)),
                     description: "Sampling temperature in [0, 2]; 0 is greedy and deterministic",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "top_p",
@@ -226,6 +230,8 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(1.0)),
                     description: "Nucleus sampling threshold in [0, 1]",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "stop",
@@ -233,6 +239,8 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: None,
                     description: "Array of strings that end generation when produced",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "with_tools",
@@ -240,6 +248,8 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(false)),
                     description: "Expose every registered node type to the model as a tool",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }

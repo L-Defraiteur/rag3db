@@ -266,6 +266,8 @@ impl NodeFactory for CypherNodeFactory {
                     required: true,
                     default: None,
                     description: "Cypher query to execute",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "capture",
@@ -273,6 +275,8 @@ impl NodeFactory for CypherNodeFactory {
                     required: false,
                     default: None,
                     description: "Cypher query to capture undo data before mutation",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
@@ -591,6 +595,8 @@ impl NodeFactory for ValidateNodeFactory {
                     required: true,
                     default: None,
                     description: "Cypher query to execute for validation",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "assert",
@@ -598,6 +604,8 @@ impl NodeFactory for ValidateNodeFactory {
                     required: true,
                     default: None,
                     description: "Assertion: 'empty', 'not_empty', 'count == N', 'count > N', 'column > N'",
+                    choices: None,
+                    json_schema: None,
                 },
                 ConfigParam {
                     name: "message",
@@ -605,6 +613,8 @@ impl NodeFactory for ValidateNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("validation failed")),
                     description: "Error message when assertion fails",
+                    choices: None,
+                    json_schema: None,
                 },
             ],
         }
