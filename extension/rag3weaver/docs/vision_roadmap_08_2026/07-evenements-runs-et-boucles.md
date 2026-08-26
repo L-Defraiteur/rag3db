@@ -168,13 +168,24 @@ résultats bruts (`search`, `FetchRelatedNode`).
   retirés. Les ids de run restent un compteur plus un horodatage
   (déterministes à la demande par blake3) — c'est simple, et ça ne dépend
   de rien.
+- **Luciole est retiré de rag3weaver** (26 août, ~6h). Mesuré avant de
+  décider : `PortValue` était le sien (réexporté), `execute_via_luciole`
+  n'avait que deux appels (la recherche à stratégie, le sous-graphe d'un
+  `GraphNode`), le puits SSE lui empruntait deux lignes, et rien d'autre —
+  ni acteurs, ni `task_pipe_to`, ni `WaitGraph`. Deux exécuteurs pour les
+  mêmes nœuds, dont l'un ramenait tous les ports à `Any`. Notre
+  `DataflowRuntime` exécute maintenant chaque niveau en parallèle (un fil
+  par nœud prêt, résultats dans l'ordre topologique), `PortValue` est à
+  nous, les deux appels passent par le runtime, le pont et la dépendance
+  par chemin sont supprimés. `lucivy-core` reste la seule dépendance vers
+  l'arbre lucivy — le moteur plein texte, la vraie. `e2e_search` : 13,8 s
+  avant, 14,0 s après, à bruit égal. Le doc 12 devient une note pour lucivy,
+  plus un contrat avec nous.
 - **Tokio revient, pour attendre — pas pour calculer.** Le réacteur
   `select` sur le bus et ses minuteurs ; plus tard un serveur, et les appels
   cloud en parallèle. Le catalogue, les nœuds et l'ingestion restent
-  synchrones sur le pool luciole ; les deux cohabitent. Si luciole apprend
-  un jour à attendre, ce sera une adaptation locale sur du code éprouvé —
-  ce qu'il lui faudrait pour ça est dans le
-  [12](../25-aout-2026-18h58/12-cahier-des-charges-luciole-parite-tokio.md).
+  synchrones, en parallèle par niveau sur notre runtime ; les deux
+  cohabitent (tokio attend, rayon/`std::thread::scope` calcule).
 - **`execute()` n'a pas d'id aujourd'hui** ; il en génère un. Le checkpoint
   garde le sien.
 - **Le lien parent** : `execute_definition` tourne sous un appel d'outil ;

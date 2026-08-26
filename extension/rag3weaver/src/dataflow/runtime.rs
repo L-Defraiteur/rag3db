@@ -118,10 +118,6 @@ impl DataflowOutput {
         }
     }
 
-    /// Create from pre-built data (used by luciole bridge).
-    pub(crate) fn from_data(data: HashMap<String, HashMap<String, PortValue>>) -> Self {
-        Self { data }
-    }
 }
 
 // ─── DataflowRuntime ─────────────────────────────────────────────────────────

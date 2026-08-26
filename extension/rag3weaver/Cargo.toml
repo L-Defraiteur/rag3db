@@ -26,7 +26,7 @@ async-trait = "0.1"
 thiserror = "2"
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
-# nœuds, ingestion) reste synchrone sur le pool luciole ; les deux cohabitent.
+# nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
 tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
 
 # Candle embedder (feature flag, active par defaut)
@@ -43,12 +43,6 @@ lucivy-core = { path = "../../../lucivy/lucivy_core" }
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
 ld-lucivy = { path = "../../../lucivy", default-features = false, features = ["stopwords", "lz4-compression"] }
 
-# luciole (DAG execution engine, actor runtime) — même arbre vivant que
-# lucivy-core. En `[patch.crates-io]` jusqu'au 24 août au soir ; quand la copie
-# locale est passée en 0.2.0, le patch ne satisfaisait plus "0.1.0" et cargo
-# retombait sur crates.io : deux luciole dans le graphe, sans le correctif du
-# double free. Une dep par chemin ne peut pas dériver.
-luciole = { path = "../../../lucivy/luciole" }
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant, voir
 # son NOTICE), persistance via lucistore. Vit dans le workspace lucivy depuis le
@@ -75,14 +69,12 @@ regex = { version = "1", optional = true }
 
 # ─── Fournisseurs LLM distants (feature `openai-llm`) ────────────────────────
 # Client HTTP **bloquant**. Pourquoi ureq et pas reqwest/genai/rig : le trait
-# `Llm` est synchrone parce que `Node::execute` l'est, et luciole n'y change
-# rien — son `AsyncScope` est un *exécuteur* (il poll des futures dans
-# `poll_idle`), pas un *réacteur* : il n'a aucune registration d'I/O, donc il
-# ne peut pas porter une socket. Tout client async (reqwest, et donc genai,
-# rig-core, async-openai…) exige le réacteur de tokio ; l'adopter voudrait dire
-# un runtime tokio bloquant en plus du pool luciole. ureq lit le SSE avec
-# `BufRead::read_line` sur un thread du pool, et coûte 3 lignes de Cargo.lock.
-# Ne PAS « simplifier » ceci en réintroduisant reqwest.
+# `Llm` est synchrone parce que `Node::execute` l'est. Le client cloud est
+# `ureq` (bloquant, rustls, 3 lignes de Cargo.lock) : un appel LLM occupe un
+# fil le temps de la réponse, lu en SSE par `BufRead::read_line`. Tokio est
+# là pour attendre (réacteur, minuteurs), pas pour ces appels — quand on
+# voudra N appels cloud sans N fils, ce sera un client async sur tokio, pas
+# une « simplification » de celui-ci.
 ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
 # Déjà dans l'arbre via ureq (rustls→ring) : déclarés pour que `gcp_auth`
 # puisse signer un JWT RS256 sans ajouter le moindre crate.
@@ -137,9 +129,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
 tempfile = "3"
-# Déjà dans l'arbre via luciole : sert au test de la règle d'interblocage
-# (`try_send` + `run_one_step` contre `send`).
-flume = "0.11"
 
 [[example]]
 name = "tei_reqwest"

@@ -263,7 +263,6 @@ impl OpenAiLlm {
     ) -> Flow {
         const SLICE: Duration = Duration::from_millis(200);
         let deadline = self.clock.now() + total;
-        let on_pool = luciole::scheduler::is_scheduler_thread();
 
         loop {
             let now = self.clock.now();
@@ -283,10 +282,7 @@ impl OpenAiLlm {
             if sink.on_retry(&event) == Flow::Stop {
                 return Flow::Stop;
             }
-            if on_pool && luciole::scheduler::global_scheduler().run_one_step() {
-                // On a été utile plutôt que de dormir : on ne dort pas.
-                continue;
-            }
+            // Par tranches, pour que le puits puisse dire stop entre deux.
             self.clock.sleep(SLICE.min(remaining));
         }
     }

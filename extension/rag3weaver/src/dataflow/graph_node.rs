@@ -205,12 +205,18 @@ impl Node for GraphNode {
             }
         }
 
-        // 3. Execute the sub-graph via luciole
-        let services = ctx.services_arc();
-        let output = super::luciole_bridge::execute_via_luciole(
-            &mut sub_graph,
-            services,
-        )?;
+        // 3. Execute the sub-graph on our runtime — under the parent run,
+        //    so its nodes trace as children of this one.
+        let services = if ctx.run_id().is_empty() {
+            ctx.services_arc()
+        } else {
+            let mut layer = super::services::ServiceRegistry::layered(ctx.services_arc());
+            layer.register("parent_run", ctx.run_id().to_string());
+            std::sync::Arc::new(layer)
+        };
+        let max_iterations = sub_graph.nodes.len().max(1);
+        let output = super::runtime::DataflowRuntime::with_services_arc(max_iterations, services)
+            .execute(&mut sub_graph)?;
 
         // 5. Collect free outputs and set them on the parent context
         for (ext_name, (inner_node, inner_port)) in &self.output_map {

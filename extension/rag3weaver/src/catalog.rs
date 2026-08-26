@@ -4041,11 +4041,12 @@ impl Catalog {
         let (mut graph, services) =
             Self::build_dataflow_graph(catalog, kb_name, query, strategy);
 
-        let output = crate::dataflow::execute_via_luciole(
-            &mut graph,
-            std::sync::Arc::new(services),
-        )
-        .map_err(|e| CatalogError::DbError(e))?;
+        // Notre runtime, en parallèle par niveau ; une itération achève au
+        // moins un nœud, donc autant d'itérations que de nœuds suffit.
+        let max_iterations = graph.nodes.len().max(1);
+        let output = crate::dataflow::DataflowRuntime::with_services_arc(max_iterations, std::sync::Arc::new(services))
+            .execute(&mut graph)
+            .map_err(CatalogError::DbError)?;
 
         // Results from terminal node
         let results_node = if has_expansions {

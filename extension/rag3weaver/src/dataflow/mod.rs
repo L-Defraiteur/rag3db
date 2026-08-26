@@ -12,7 +12,6 @@
 pub mod checkpoint;
 pub mod checkpoint_store;
 pub mod graph;
-pub mod luciole_bridge;
 pub mod node;
 pub mod observe;
 pub mod port;
@@ -43,7 +42,6 @@ pub use observe::{TapEvent, TapSpec};
 pub use port::{merge_port_values, BatchPayload, PortDef, PortType, PortValue, QueryPayload};
 pub use record::{DataflowRecorder, RecordRetention, RecordSink};
 pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeStatus};
-pub use luciole_bridge::{execute_via_luciole, execute_via_luciole_with_result};
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};
 pub use search_nodes::{
     ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,

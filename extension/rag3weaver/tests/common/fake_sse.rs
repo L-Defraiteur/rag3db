@@ -1,7 +1,7 @@
 //! Serveur SSE local, écrit à la main, **sans aucune dépendance** (std only).
 //! Aucun appel réseau réel, aucun secret : il rejoue des trames enregistrées.
 //!
-//! Partagé par `openai_llm_sse.rs` et `openai_llm_luciole.rs` via `mod common`.
+//! Partagé par les tests SSE via `mod common`.
 //! `dead_code` est permis : chaque binaire de test n'en utilise qu'une part.
 
 #![allow(dead_code)]
