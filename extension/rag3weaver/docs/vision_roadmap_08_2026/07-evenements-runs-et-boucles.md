@@ -172,7 +172,9 @@ résultats bruts (`search`, `FetchRelatedNode`).
   `select` sur le bus et ses minuteurs ; plus tard un serveur, et les appels
   cloud en parallèle. Le catalogue, les nœuds et l'ingestion restent
   synchrones sur le pool luciole ; les deux cohabitent. Si luciole apprend
-  un jour à attendre, ce sera une adaptation locale sur du code éprouvé.
+  un jour à attendre, ce sera une adaptation locale sur du code éprouvé —
+  ce qu'il lui faudrait pour ça est dans le
+  [12](../25-aout-2026-18h58/12-cahier-des-charges-luciole-parite-tokio.md).
 - **`execute()` n'a pas d'id aujourd'hui** ; il en génère un. Le checkpoint
   garde le sien.
 - **Le lien parent** : `execute_definition` tourne sous un appel d'outil ;
