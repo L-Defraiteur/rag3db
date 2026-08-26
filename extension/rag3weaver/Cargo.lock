@@ -4284,7 +4284,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "ld-lucivy"
-version = "3.0.4"
+version = "3.0.5"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -4597,14 +4597,14 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "luciole"
-version = "3.0.4"
+version = "3.0.5"
 dependencies = [
  "flume",
 ]
 
 [[package]]
 name = "lucistore"
-version = "3.0.4"
+version = "3.0.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -4612,7 +4612,7 @@ dependencies = [
 
 [[package]]
 name = "lucivy-core"
-version = "3.0.4"
+version = "3.0.5"
 dependencies = [
  "ld-lucivy",
  "luciole",
@@ -6738,7 +6738,7 @@ dependencies = [
 
 [[package]]
 name = "sparse-vector"
-version = "3.0.4"
+version = "3.0.5"
 dependencies = [
  "bincode",
  "luciole",
