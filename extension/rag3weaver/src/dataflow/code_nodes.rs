@@ -12,7 +12,7 @@ use super::port::{take_or_clone, PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code::{analyze, analyze_source, read_sources, CodeAnalysis};
 use crate::code_tools::{
-    edit_file, grep_files, list_files, read_file, source_service, EditOp, GrepOptions, ToolFormat,
+    edit_file, grep_files, list_files, source_service, EditOp, GrepOptions, ToolFormat,
     DEFAULT_GREP_LIMIT, DEFAULT_LIST_LIMIT, DEFAULT_READ_LIMIT,
 };
 
@@ -203,9 +203,15 @@ impl Node for ReadFileNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("ReadFileNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
+        // La frontière d'accès, si l'opérateur en a déclaré une : un chemin
+        // hors de la source devient lisible, sous sa responsabilité.
+        let access = ctx
+            .service::<Arc<crate::code_tools::RootPolicy>>(crate::code_tools::FILE_ACCESS_SERVICE)
+            .cloned()
+            .unwrap_or_else(|| Arc::new(crate::code_tools::RootPolicy::closed()));
         let result = {
             let guard = catalog.as_ref().map(|c| c.lock().unwrap());
-            read_file(source.as_ref(), guard.as_deref(), &self.path, self.offset, self.limit)
+            crate::code_tools::read_file_with(source.as_ref(), guard.as_deref(), &access, &self.path, self.offset, self.limit)
                 .map_err(|e| format!("ReadFileNode: {e}"))?
         };
         ctx.metric("lines_read", result.lines_read as f64);

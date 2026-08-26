@@ -235,6 +235,10 @@ fn indexed_hash(catalog: Option<&Catalog>, path: &str) -> Result<Option<String>,
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResult {
     pub path: String,
+    /// Lu **hors de la source**, par la frontière d'accès : pas d'index,
+    /// donc pas de péremption, et des scopes analysés à la volée.
+    #[serde(default)]
+    pub outside: bool,
     pub cursor: String,
     pub total_lines: usize,
     /// Première ligne rendue, 1-based.
@@ -255,6 +259,9 @@ impl ReadResult {
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
         out.push_str(&format!("**{}** — lines {}-{} of {}", self.path, self.offset, self.offset + self.lines_read.saturating_sub(1), self.total_lines));
+        if self.outside {
+            out.push_str(" — **outside the index**: read straight from disk, scopes parsed on the fly, nothing recorded");
+        }
         if let Some(true) = self.stale {
             out.push_str(" — **INDEX STALE**: the file changed since it was indexed; scope lines below may be off");
         }
@@ -277,6 +284,107 @@ impl ReadResult {
     }
 }
 
+/// Le service qui porte la frontière d'accès : `Arc<RootPolicy>`.
+pub const FILE_ACCESS_SERVICE: &str = "file_access";
+
+/// Ce qu'un agent a le droit de lire **hors de sa source**.
+///
+/// L'index est un service rendu, pas une porte ([doc 16](../../docs/25-aout-2026-18h58/16-le-monde-est-ouvert.md)) :
+/// « va regarder à tel chemin » doit marcher, et ce qui borne l'agent n'est
+/// pas ce qui est indexé mais ce que l'opérateur autorise — décidé une
+/// fois, vérifiable, et qui dit non **avec la liste**.
+///
+/// `RootPolicy::anywhere()` (`*`) est une valeur de première classe : « touche
+/// à tout » est une configuration légitime pour un agent local, pas un
+/// contournement. Le défaut, lui, est fermé.
+#[derive(Debug, Clone, Default)]
+pub struct RootPolicy {
+    roots: Vec<PathBuf>,
+    anywhere: bool,
+}
+
+impl RootPolicy {
+    /// Aucune lecture hors de la source. Le défaut.
+    pub fn closed() -> Self {
+        Self::default()
+    }
+
+    /// Tout le système de fichiers — `*`.
+    pub fn anywhere() -> Self {
+        Self { roots: Vec::new(), anywhere: true }
+    }
+
+    /// Les racines autorisées, chacune avec ses descendants.
+    pub fn under<P: Into<PathBuf>, I: IntoIterator<Item = P>>(roots: I) -> Self {
+        Self { roots: roots.into_iter().map(Into::into).collect(), anywhere: false }
+    }
+
+    /// `*` ou une liste séparée par `:` — la forme d'une variable
+    /// d'environnement.
+    pub fn parse(spec: &str) -> Self {
+        let spec = spec.trim();
+        if spec == "*" {
+            return Self::anywhere();
+        }
+        Self::under(spec.split(':').map(str::trim).filter(|s| !s.is_empty()).map(PathBuf::from))
+    }
+
+    pub fn is_closed(&self) -> bool {
+        !self.anywhere && self.roots.is_empty()
+    }
+
+    /// Le chemin **canonique** s'il est permis, sinon le refus, qui dit ce
+    /// qui est permis. Canonique d'abord : sans ça, `~/ok/../secret` passe.
+    pub fn resolve(&self, path: &str) -> Result<PathBuf, String> {
+        if self.is_closed() {
+            return Err(format!(
+                "'{path}' n'est pas dans la source, et la lecture hors source n'est pas autorisée \
+                 (aucune racine permise ; voir RootPolicy)"
+            ));
+        }
+        let candidate = PathBuf::from(path);
+        let canonical = candidate
+            .canonicalize()
+            .map_err(|e| format!("'{path}' : {e}"))?;
+        if self.anywhere {
+            return Ok(canonical);
+        }
+        for root in &self.roots {
+            let root = root.canonicalize().unwrap_or_else(|_| root.clone());
+            if canonical.starts_with(&root) {
+                return Ok(canonical);
+            }
+        }
+        Err(format!(
+            "'{path}' est hors des racines autorisées : {}",
+            self.roots.iter().map(|r| r.display().to_string()).collect::<Vec<_>>().join(", ")
+        ))
+    }
+}
+
+/// Les scopes d'un contenu **non indexé**, analysés à la volée.
+///
+/// Rien n'est écrit : c'est le deuxième niveau du doc 16 — la lecture
+/// analysée, qui donne les mêmes repères qu'un fichier indexé sans rien
+/// coûter à la base. `None` si la langue n'est pas gérée.
+#[cfg(feature = "code")]
+fn scopes_on_the_fly(path: &str, content: &str) -> Vec<ScopeRef> {
+    let name = Path::new(path).file_name().and_then(|f| f.to_str()).unwrap_or(path).to_string();
+    // Racine virtuelle **absolue** : le parseur travaille sur des chemins
+    // absolus, même quand le contenu lui est fourni en mémoire.
+    let analysis = crate::code::analyze("/hors-index", vec![(name, content.to_string())]);
+    analysis
+        .scopes
+        .iter()
+        .map(|s| ScopeRef {
+            name: s.name.clone(),
+            scope_type: s.scope_type.clone(),
+            start_line: s.start_line,
+            end_line: s.end_line,
+        })
+        .collect()
+}
+
 /// Lit `path` dans la source à partir de la ligne `offset` (1-based), au plus
 /// `limit` lignes, et annote depuis le catalogue s'il y en a un.
 pub fn read_file(
@@ -286,8 +394,31 @@ pub fn read_file(
     offset: usize,
     limit: usize,
 ) -> Result<ReadResult, String> {
+    read_file_with(source, catalog, &RootPolicy::closed(), path, offset, limit)
+}
+
+/// La même, avec une frontière d'accès : un chemin absent de la source mais
+/// permis par la politique est lu **directement sur le disque**, et annoté
+/// par une analyse à la volée. Aucune écriture : lire n'est pas indexer.
+pub fn read_file_with(
+    source: &dyn FileSource,
+    catalog: Option<&Catalog>,
+    access: &RootPolicy,
+    path: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<ReadResult, String> {
+    let mut outside = false;
     let content = match source.read(path)? {
         Some(c) => c,
+        // Un chemin **absolu** ne peut pas être une faute de frappe sur un
+        // chemin de source : c'est la frontière d'accès qui répond, et son
+        // refus dit ce qui est permis.
+        None if Path::new(path).is_absolute() => {
+            let resolved = access.resolve(path)?;
+            outside = true;
+            std::fs::read_to_string(&resolved).map_err(|e| format!("'{path}' : {e}"))?
+        }
         None => {
             // « Vouliez-vous dire » : même nom de fichier ailleurs, ou un
             // chemin qui finit par ce qu'on a demandé — le cas classique d'un
@@ -300,6 +431,14 @@ pub fn read_file(
                 .take(5)
                 .collect();
             candidates.sort();
+            // Relatif et sans candidat : peut-être un chemin du disque, si
+            // la frontière l'autorise.
+            if candidates.is_empty() && !access.is_closed() {
+                if let Ok(resolved) = access.resolve(path) {
+                    let content = std::fs::read_to_string(&resolved).map_err(|e| format!("'{path}' : {e}"))?;
+                    return read_window(source, catalog, path, offset, limit, content, true);
+                }
+            }
             return Err(if candidates.is_empty() {
                 format!("no such file in {}: {path}", source.cursor())
             } else {
@@ -307,6 +446,20 @@ pub fn read_file(
             });
         }
     };
+    read_window(source, catalog, path, offset, limit, content, outside)
+}
+
+/// La fenêtre, une fois le contenu obtenu — quelle qu'en soit la provenance.
+#[allow(clippy::too_many_arguments)]
+fn read_window(
+    source: &dyn FileSource,
+    catalog: Option<&Catalog>,
+    path: &str,
+    offset: usize,
+    limit: usize,
+    content: String,
+    outside: bool,
+) -> Result<ReadResult, String> {
     let limit = limit.clamp(1, MAX_READ_LIMIT);
     let offset = offset.max(1);
     let lines: Vec<&str> = content.lines().collect();
@@ -326,15 +479,30 @@ pub fn read_file(
         text.push_str(&format!("{n:05}| {shown}\n"));
     }
     let content_hash = crate::hash::content_hash(&content);
-    let indexed = indexed_hash(catalog, path)?;
+    let indexed = if outside { None } else { indexed_hash(catalog, path)? };
     let stale = indexed.as_ref().map(|h| *h != content_hash);
-    let scopes: Vec<ScopeRef> = scopes_of(catalog, path)?
+    // Hors index, les repères viennent d'une analyse à la volée : les mêmes
+    // scopes, sans rien écrire.
+    let all_scopes = if outside {
+        #[cfg(feature = "code")]
+        {
+            scopes_on_the_fly(path, &content)
+        }
+        #[cfg(not(feature = "code"))]
+        {
+            Vec::new()
+        }
+    } else {
+        scopes_of(catalog, path)?
+    };
+    let scopes: Vec<ScopeRef> = all_scopes
         .into_iter()
         .filter(|s| s.start_line <= end && s.end_line >= start + 1)
         .collect();
     Ok(ReadResult {
         path: path.to_string(),
-        cursor: source.cursor(),
+        outside,
+        cursor: if outside { "hors index".to_string() } else { source.cursor() },
         total_lines,
         offset,
         lines_read: end - start,
@@ -889,6 +1057,64 @@ mod tests {
                 ("README.md".to_string(), "# Alpha\nbeta is called by alpha\n".to_string()),
             ],
         )
+    }
+
+    #[test]
+    fn a_closed_policy_refuses_and_an_open_one_reads_outside_the_source() {
+        let s = snapshot();
+        let outside = std::env::current_dir().unwrap().join("Cargo.toml");
+        let outside = outside.to_str().unwrap();
+
+        // Fermée par défaut : « pas dans la source », et on le dit.
+        let e = read_file(&s, None, outside, 1, 5).unwrap_err();
+        assert!(e.contains("n'est pas autorisée"), "{e}");
+
+        // `*` : « touche à tout » est une configuration légitime.
+        let r = read_file_with(&s, None, &RootPolicy::anywhere(), outside, 1, 5).unwrap();
+        assert!(r.outside && r.stale.is_none() && r.indexed_hash.is_none());
+        assert!(r.to_markdown().contains("outside the index"), "{}", r.to_markdown());
+        assert!(r.text.contains("00001| "), "{}", r.text);
+
+        // Une racine permise laisse passer ses descendants, et rien d'autre.
+        let policy = RootPolicy::under([std::env::current_dir().unwrap()]);
+        assert!(read_file_with(&s, None, &policy, outside, 1, 5).is_ok());
+        let e = read_file_with(&s, None, &policy, "/etc/hostname", 1, 5).unwrap_err();
+        assert!(e.contains("hors des racines autorisées"), "{e}");
+
+        // Un chemin qui remonte hors de la racine est refusé : on canonise
+        // avant de comparer.
+        let escaping = format!("{}/../..", std::env::current_dir().unwrap().display());
+        assert!(read_file_with(&s, None, &policy, &escaping, 1, 5).is_err());
+
+        // La source garde la priorité : un chemin qu'elle connaît n'est
+        // jamais lu sur le disque.
+        let r = read_file_with(&s, None, &RootPolicy::anywhere(), "src/a.rs", 1, 5).unwrap();
+        assert!(!r.outside);
+    }
+
+    #[test]
+    fn a_spec_reads_like_an_environment_variable() {
+        assert!(RootPolicy::parse("*").resolve(".").is_ok());
+        assert!(RootPolicy::closed().is_closed());
+        assert!(!RootPolicy::parse("/tmp:/home").is_closed());
+        assert!(RootPolicy::parse("").is_closed());
+    }
+
+    /// Hors index, les repères viennent d'une analyse à la volée — les mêmes
+    /// scopes qu'un fichier indexé, sans rien écrire.
+    #[test]
+    fn scopes_are_parsed_on_the_fly_outside_the_index() {
+        let s = snapshot();
+        let dir = std::env::temp_dir().join(format!("rag3weaver-hors-index-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("libre.rs");
+        std::fs::write(&file, "fn alpha() {\n    let x = 1;\n}\n\nstruct Beta;\n").unwrap();
+
+        let r = read_file_with(&s, None, &RootPolicy::under([&dir]), file.to_str().unwrap(), 1, 10).unwrap();
+        let names: Vec<&str> = r.scopes.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"alpha"), "{names:?}");
+        assert!(r.to_markdown().contains("Scopes:"), "{}", r.to_markdown());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

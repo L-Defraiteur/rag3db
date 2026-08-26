@@ -134,12 +134,21 @@ nuage sans recompiler.
 
 ## 8. L'ordre, et les tests qui tranchent
 
-1. **Racines autorisées** (capacité) et **lecture directe hors index**.
-   *Test* : `read('/etc/hostname')` marche si la racine est permise, et
-   refuse avec la liste sinon ; aucun `File` n'est créé.
-2. **Lecture analysée à la volée** : les scopes de la fenêtre lue
-   apparaissent pour un fichier non indexé. *Test* : mêmes annotations
-   qu'indexé, `stale` absent, zéro écriture en base.
+1. ~~**Racines autorisées** et **lecture directe hors index**~~ **fait le
+   26 au matin** : `RootPolicy` — `closed()` par défaut, `anywhere()` pour
+   `*`, `under([…])` pour une liste, `parse("*"|"/a:/b")` pour une variable
+   d'environnement — service `"file_access"`, lu par `ReadFileNode`. Un
+   chemin **absolu** ne peut pas être une faute de frappe sur un chemin de
+   source : c'est la frontière qui répond, et son refus nomme les racines
+   permises. Canonisation avant comparaison, donc `racine/../secret` ne
+   passe pas. La source garde la priorité : un chemin qu'elle connaît n'est
+   jamais lu sur le disque, et rien n'est écrit en base.
+2. ~~**Lecture analysée à la volée**~~ **fait** : hors index, les scopes
+   viennent de `codeparsers` à la volée (racine virtuelle absolue — le
+   parseur travaille sur des chemins absolus même quand le contenu lui est
+   donné en mémoire), `stale` et `indexed_hash` sont absents, et le
+   markdown le dit : *« outside the index: read straight from disk, scopes
+   parsed on the fly, nothing recorded »*.
 3. **Chemins auto-descriptifs** (`/abs`, `proj:id/chemin`, relatif) et
    normalisation. *Test* : les trois formes rendent le même fichier.
 4. **`Root` avec `expires_at`** et le graphe d'entretien. *Test* : une
