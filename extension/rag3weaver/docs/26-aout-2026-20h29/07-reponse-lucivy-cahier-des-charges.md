@@ -109,3 +109,124 @@ un domaine monte en pratique. `AggregatedBm25StatsOwned` interroge chaque
 searcher à chaque requête (aucun cache, ce qui vous arrange pour R2/R7) —
 c'est linéaire en nombre de shards, et c'est ce chiffre qui dira si R7 tient
 ou s'il faut y mettre un cache invalidé au montage.
+
+## Post-scriptum — L3 et L5 sont faits
+
+Écrit après coup, le même soir : les deux premiers points de l'ordre
+ci-dessus sont sur `main` de lucivy (non publiés, ils partiront en 3.0.6).
+
+- **L3.** `search_with_global_stats` passe par le même DAG que `search()` :
+  shards en parallèle, top-k borné par shard, batching mémoire pour un index
+  qui ne tient pas en RAM, réparation des highlights. Les statistiques
+  fusionnées voyagent par `DagOpts::global_stats` jusqu'à `BuildWeightNode`,
+  où elles remplacent l'agrégat local et écrasent les `doc_freq` du prescan
+  local — le prescan tourne quand même, c'est lui qui remplit le cache que
+  les scorers rejouent.
+- **Et `search_filtered_with_global_stats`**, qui n'existait pas : le
+  pré-filtre `allowed_ids` sous les statistiques de la fédération. Les ids
+  décident quels documents sont visités, les statistiques comment ils
+  scorent. C'est, tel quel, le §5.2 + §5.3 de votre doc dans un seul appel.
+- Vérité : `lucivy_core/tests/test_federated_search.rs` — l'union de deux
+  nœuds est ce que rend un index unique qui tient tout, **et un document
+  score pareil des deux côtés** (jamais affirmé avant), sur substring,
+  cross-token, séparateurs relaxés, fuzzy, regex et booléen ; une recherche
+  fédérée filtrée est la fédérée intersectée avec les ids ; le top-k est bien
+  les k meilleurs.
+- **L5.1**, élargi : `sparse.mmap` **et** `vectors.bin` **et** `dims.bin`
+  (les trois avaient le même défaut, en corriger un seul n'aurait servi à
+  rien) passent par un temporaire, `flush`, `sync`, `rename`, plus un `sync`
+  du répertoire. `sparse.mmap` gagne un pied CRC-32 (format v2 ; un v1
+  s'ouvre toujours), l'ouverture vérifie la longueur que ses propres en-têtes
+  décrivent — le contrôle bon marché qui attrape une troncature — et
+  `verify_checksum()` / `LUCIVY_SPARSE_VERIFY_CRC=1` recalcule le CRC quand
+  on le demande. `test_mmap_durability.rs` : troncature refusée à six
+  endroits différents, octet retourné attrapé par le CRC, fichier d'avant le
+  changement toujours lisible, aucun temporaire laissé derrière.
+- **L5.2** au passage : `_sparse_config.json` porte un `version` et
+  n'utilise plus `deny_unknown_fields` ; un format plus récent est refusé
+  avec une phrase qui le dit.
+
+Suites : `test_federated_search.rs` prouve la justesse, pas encore le gain
+de charge — le mesurer demande un corpus où le mode fédéré rendait beaucoup
+de documents. Et `search_filtered_with_global_stats` n'est pas encore exposé
+dans les bindings Python / Node / C++ / WASM (dites-nous si vous en avez
+besoin autrement qu'en Rust).
+
+## Une demande, en retour : des vrais vecteurs
+
+Écrit le 27 au matin, après avoir segmenté l'index sparse (un commit n'écrit
+plus que son delta : 320 ms → 30 ms à 200 000 vecteurs, et le merge de
+segments marche des tables de dimensions triées sans rien remapper — c'est
+la primitive dont votre L4 avait besoin, elle est là).
+
+En le mesurant, on est tombés sur notre propre trou : **nos vecteurs de test
+sont synthétiques et uniformes.** Les tests WAND tirent une densité plate
+(10-30 % des dimensions, poids dans (-1, 1]), et les deux benchs qu'on vient
+d'écrire dispersent les dimensions par hachage avec tous les poids à 1.0.
+
+Or le WAND ne tire son pouvoir d'élagage que du **déséquilibre** : quelques
+dimensions à listes énormes et poids faibles, une longue traîne à listes
+courtes et poids forts. Avec des dimensions uniformes et des poids égaux, la
+borne de score est plate et l'élagage se comporte autrement. Nos chiffres —
+0,03 ms par requête sur 100 000 vecteurs, et le seuil de compactage à huit
+segments qu'on en a tiré — sont donc mesurés sur une distribution que vos
+vecteurs n'ont pas. On ne les croit qu'à moitié, et on le dit.
+
+Vous avez BGE-M3 qui tourne sur burn/Vulkan. Ce qui nous manque tient en un
+fichier :
+
+**1. Un dump, pas du code.**
+
+```
+50 000 vecteurs de documents : {node_id: u64, token_ids: [u32], weights: [f32]}
+   500 vecteurs de requêtes  : idem, encodés en mode requête
+```
+
+Sur un corpus que vous choisissez — le vôtre est le plus utile, c'est celui
+sur lequel l'index tournera. Les requêtes séparément, parce que le mode
+requête et le mode document n'ont pas la même distribution, et qu'un bench
+qui interroge avec des vecteurs de documents se ment à lui-même.
+
+Deux tailles, en fait, et c'est la seule contrainte de forme :
+
+- **un gros** (50 000, ~50-100 Mo) déposé sur disque, hors git, sous
+  `$LUCIVY_BENCH_DIR` ou `~/lucivy_bench/sparse/` — c'est déjà la
+  convention des benchs lourds de lucivy (`bench_sharding`) ;
+- **un petit** (500 documents, 50 requêtes, ~1 Mo compressé) qu'on commite,
+  pour que la CI ait quand même de vrais vecteurs sous la main.
+
+`.jsonl` ou bincode, comme vous préférez ; on écrira le lecteur.
+
+**Pourquoi un dump et pas un appel au modèle**, alors que c'est la même
+machine et que le modèle est à portée : l'**invariabilité**. Un appel dérive
+— version des poids, tokenizer, taille de lot, ordre GPU — et deux mesures à
+trois semaines d'écart ne comparent plus le même index. Un dump ne bouge
+pas, donc une régression devient attribuable. (Accessoirement notre CI
+tourne sur une machine GitHub sans GPU ni poids, mais ce n'est pas la
+raison principale.)
+
+Ce qu'on en fera : extraire la distribution empirique (nnz par document,
+exposant de Zipf des fréquences de dimensions, histogramme des poids) et
+committer un générateur calibré dessus — reproductible partout, à n'importe
+quelle échelle, avec la bonne forme. Le dump reste la fixture de
+vérification à côté. Vous produisez la vérité, on produit la
+reproductibilité.
+
+**2. Deux chiffres, quand vous les aurez.**
+
+- Combien de vecteurs vous insérez par seconde, et de quel `nnz` moyen ? On
+  n'a pas d'insertion par lot (`insert` document par document, un verrou
+  chacun) ; si votre GPU sort des lots, c'est là qu'il faut un
+  `insert_many`, et votre débit dira si ça vaut la demi-journée.
+- Combien de segments un domaine monte en pratique — la question déjà posée
+  plus haut. C'est elle qui fixe le seuil de compactage, aujourd'hui à huit
+  par défaut (`LUCIVY_SPARSE_MAX_SEGMENTS`).
+
+Votre e2e reste chez vous, et c'est bien : c'est votre test d'intégration
+contre notre crate, sur votre matériel. Ce qu'on veut de lui, c'est un
+chiffre, pas un harnais.
+
+En attendant, on fabrique des vecteurs à partir de vrai texte (le dépôt
+lui-même, un mot = une dimension, poids = fréquence) : le vocabulaire et la
+forme sont réels même si les poids ne sont pas ceux de SPLADE. On
+recalibrera sur votre dump.
