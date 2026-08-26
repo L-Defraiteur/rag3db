@@ -61,6 +61,49 @@ lui-même : « les chemins sont relatifs à la racine du projet ; `list({})`
 pour voir le premier niveau » — le « vouliez-vous dire » de `read`, pour
 `list`.
 
+## 2 bis. Le même jeu, sur un modèle local (26 août, 8h)
+
+Aucun adaptateur : `OpenAiLlm::new(base_url, model)` sans authentification
+**est** le client `llama-server`. `RAG3WEAVER_LOCAL_LLM` suffit, et les
+cinq épreuves sont exactement les mêmes.
+
+**Qwen3-Coder-30B-A3B abliterated, Q6_K (24 Go)**, llama.cpp Vulkan, une
+seule AMD Radeon AI PRO R9700 (`--device Vulkan1`, 28,3 Go occupés ; la
+carte de l'écran n'a pas bougé) :
+
+| | Fin | Appels | Jetons | Juste ? |
+|---|---|---|---|---|
+| Q1 `take_results` | Eos, **2,4 s** | **0** | 2 135 | **non** — voir plus bas |
+| Q2 `FuseResultsNode.signals` | Eos, 21,6 s | 7 (1 erreur) | 40 928 | oui |
+| Q3 `register_builtins` | Eos, 29,4 s | 7 (1 erreur) | 35 472 | oui |
+| M1 `ServiceRegistry::len` | Eos, 15,3 s | 5 | 22 197 | **oui**, index à jour |
+| M2 renommer `take_results` | Eos, 47,5 s | 11 | 178 281 | **oui**, 0 reste |
+
+**Les deux missions d'édition passent**, sur la machine, sans quota et sans
+un centime — c'est le résultat qui compte. Quatre-vingt-deux secondes pour
+les cinq épreuves, là où le nuage en demandait trois cents avec ses 429.
+
+**Q1 est un défaut de protocole, pas d'intelligence.** Le modèle a bien
+décidé de chercher, mais il a écrit son appel *dans le texte*, au format
+XML de Qwen (`<function=search><parameter=target>Scope</parameter>…`),
+au lieu du champ `tool_calls` de l'API. llama.cpp ne l'a pas converti, notre
+boucle a vu « aucun outil demandé » et a conclu le tour. Deux façons de le
+fermer, et elles ne s'excluent pas :
+
+- **côté llama.cpp** : la conversion des appels d'outils dépend du gabarit
+  et de la version ; c'est le premier essai à faire ;
+- **côté harnais** : détecter un appel d'outil resté dans le texte
+  (`<function=…>`, `<tool_call>`) et le renvoyer au modèle en résultat
+  d'erreur lisible — exactement ce qu'on a déjà fait pour Vertex avec
+  `repair_arguments_json` et `stray_error`. Général, bon marché, utile à
+  tout modèle local.
+
+Les deux erreurs d'outil de Q2 et Q3 sont **la même que chez Gemini** :
+`read('extension/rag3weaver/src/…')`, le chemin du dépôt au lieu de celui
+de la source. Le « vouliez-vous dire » de `list` et `grep` est en place
+depuis ce matin ; celui de `read` existait déjà, et les deux modèles s'en
+rattrapent au coup suivant.
+
 ## 3. Le harnais
 
 - Une question qui meurt sur un quota est **non mesurée**, pas un échec du
