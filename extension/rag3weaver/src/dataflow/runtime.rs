@@ -16,7 +16,7 @@ use super::checkpoint::{
     port_value_to_checkpoint, port_value_from_checkpoint, timestamp_ms,
 };
 use super::graph::DataflowGraph;
-use super::node::{NodeContext, NodeLogLevel};
+use super::node::{Node, NodeContext, NodeLogLevel};
 use super::observe::{TapRegistry, TapSpec, TapEvent};
 use super::port::{merge_port_values, PortType, PortValue};
 use super::report::ExecutionReport;
@@ -133,6 +133,72 @@ pub struct DataflowRuntime {
     _inactive_rx: InactiveReceiver<DataflowEvent>,
     taps: TapRegistry,
     services: Arc<ServiceRegistry>,
+}
+
+/// Un nœud prêt, avec son contexte rempli — ce qui sort de la phase 1.
+struct PreparedNode {
+    name: String,
+    idx: usize,
+    node_type: String,
+    ctx: NodeContext,
+}
+
+/// Un nœud exécuté — ce qui entre dans la phase 3.
+struct DoneNode {
+    name: String,
+    idx: usize,
+    node_type: String,
+    ctx: NodeContext,
+    result: Result<(), String>,
+    duration_ms: u64,
+}
+
+/// Exécute un **niveau** : les nœuds prêts en même temps. Un seul nœud
+/// s'exécute en place ; plusieurs s'exécutent chacun dans un fil, sous une
+/// portée bornée (`std::thread::scope`) — le niveau ne rend la main que
+/// quand tous ont fini, et l'ordre des résultats est celui des entrées
+/// (le tri topologique), quel que soit l'ordre d'arrivée.
+///
+/// C'est le parallélisme par niveau qu'apportait le pont luciole, sans
+/// second exécuteur : les nœuds sont `Send`, leurs contextes aussi, et le
+/// magasin de ports n'est touché qu'avant et après, en séquence.
+fn run_level(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<DoneNode> {
+    let execute_one = |node: &mut Box<dyn Node>, p: PreparedNode| -> DoneNode {
+        let PreparedNode { name, idx, node_type, mut ctx } = p;
+        let started = Instant::now();
+        let result = node.execute(&mut ctx);
+        DoneNode { name, idx, node_type, ctx, result, duration_ms: started.elapsed().as_millis() as u64 }
+    };
+    if prepared.len() == 1 {
+        let p = prepared.into_iter().next().unwrap();
+        let idx = p.idx;
+        return vec![execute_one(&mut nodes[idx], p)];
+    }
+    // Des emprunts mutables disjoints : un par nœud du niveau, dans l'ordre.
+    let wanted: Vec<usize> = prepared.iter().map(|p| p.idx).collect();
+    let mut slots: Vec<Option<&mut Box<dyn Node>>> = Vec::with_capacity(wanted.len());
+    let mut by_idx: HashMap<usize, &mut Box<dyn Node>> = nodes
+        .iter_mut()
+        .enumerate()
+        .filter(|(i, _)| wanted.contains(i))
+        .collect();
+    for idx in &wanted {
+        slots.push(by_idx.remove(idx));
+    }
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = prepared
+            .into_iter()
+            .zip(slots)
+            .map(|(p, slot)| {
+                let node = slot.expect("un nœud prêt existe dans le graphe");
+                scope.spawn(move || execute_one(node, p))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("un nœud a paniqué dans son fil"))
+            .collect()
+    })
 }
 
 impl DataflowRuntime {
@@ -452,6 +518,10 @@ impl DataflowRuntime {
                 return Err(error);
             }
 
+            // ── Phase 1 : préparer (séquentiel) ──────────────────────────
+            let fail_node = self.services.get::<String>("fail_node").cloned();
+            let mut prepared: Vec<PreparedNode> = Vec::with_capacity(ready.len());
+            let mut injected: Vec<DoneNode> = Vec::new();
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
@@ -515,22 +585,28 @@ impl DataflowRuntime {
                     node_type: node_type.clone(),
                     inputs: input_snapshots,
                 });
-                let node_start = Instant::now();
-
-                // Fail injection for testing: register a String service "fail_node"
-                // in the ServiceRegistry to make a named node fail on execution.
-                let should_fail = self
-                    .services
-                    .get::<String>("fail_node")
-                    .map_or(false, |v| *v == *node_name);
-
-                let exec_result = if should_fail {
-                    Err(format!("injected failure for node '{}'", node_name))
+                if fail_node.as_deref() == Some(node_name.as_str()) {
+                    // Panne injectée (tests) : le nœud ne s'exécute pas.
+                    injected.push(DoneNode {
+                        name: node_name.clone(),
+                        idx: node_idx,
+                        node_type,
+                        ctx,
+                        result: Err(format!("injected failure for node '{}'", node_name)),
+                        duration_ms: 0,
+                    });
                 } else {
-                    graph.nodes[node_idx].execute(&mut ctx)
-                };
+                    prepared.push(PreparedNode { name: node_name.clone(), idx: node_idx, node_type, ctx });
+                }
+            }
 
-                let duration_ms = node_start.elapsed().as_millis() as u64;
+            // ── Phase 2 : exécuter le niveau (parallèle si plusieurs) ─────
+            let results = run_level(&mut graph.nodes, prepared);
+
+            // ── Phase 3 : persister et ranger, dans l'ordre (séquentiel) ──
+            for done in injected.into_iter().chain(results) {
+                let DoneNode { name: node_name, idx: node_idx, node_type, mut ctx, result: exec_result, duration_ms } = done;
+                let node_name = &node_name;
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
@@ -796,8 +872,11 @@ impl DataflowRuntime {
                 return Err(error);
             }
 
+            // ── Phase 1 : préparer chaque nœud prêt (séquentiel) ──────────
+            // Les entrées sortent du magasin de ports avec le décompte des
+            // consommateurs ; l'ordre est celui du tri topologique.
+            let mut prepared: Vec<PreparedNode> = Vec::with_capacity(ready.len());
             for node_name in &ready {
-                // Collect inputs from edges
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
                 let edges_for_node: Vec<_> = graph
@@ -816,10 +895,8 @@ impl DataflowRuntime {
                         let count = remaining_consumers.get_mut(&key).unwrap();
                         *count -= 1;
                         let value = if *count == 0 {
-                            // Last consumer: remove from port_data (ownership transfer)
                             port_data.remove(&key).unwrap()
                         } else {
-                            // More consumers remain: clone (read-only ref)
                             port_data.get(&key).unwrap().clone()
                         };
                         self.taps.check_and_emit(edge, &value);
@@ -830,7 +907,6 @@ impl DataflowRuntime {
                     }
                 }
 
-                // Merge fan-in and set inputs
                 for (port, values) in port_inputs {
                     let merged = values.into_iter().reduce(|a, b| {
                         match merge_port_values(a, b) {
@@ -860,17 +936,21 @@ impl DataflowRuntime {
                 let input_snapshots: Vec<PortSnapshot> = ctx.inputs().iter()
                     .map(|(name, value)| PortSnapshot::from_port(name, value))
                     .collect();
-
                 self.emit(DataflowEvent::NodeStarted {
                     node: node_name.clone(),
                     node_type: node_type.clone(),
                     inputs: input_snapshots,
                 });
-                let node_start = Instant::now();
+                prepared.push(PreparedNode { name: node_name.clone(), idx: node_idx, node_type, ctx });
+            }
 
-                let exec_result = graph.nodes[node_idx].execute(&mut ctx);
+            // ── Phase 2 : exécuter le niveau — en parallèle s'il a plusieurs
+            // nœuds (un fil par nœud, portée bornée), en place sinon. ──────
+            let results = run_level(&mut graph.nodes, prepared);
 
-                let duration_ms = node_start.elapsed().as_millis() as u64;
+            // ── Phase 3 : ranger, dans l'ordre (séquentiel) ──────────────
+            for done in results {
+                let DoneNode { name: node_name, node_type, mut ctx, result: exec_result, duration_ms, .. } = done;
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
@@ -886,7 +966,6 @@ impl DataflowRuntime {
                         let metrics = ctx.drain_metrics();
                         let logs = ctx.drain_logs();
 
-                        // Emit NodeLog events
                         for log_entry in &logs {
                             self.emit(DataflowEvent::NodeLog {
                                 node: node_name.clone(),
@@ -896,7 +975,6 @@ impl DataflowRuntime {
                             });
                         }
 
-                        // Snapshot outputs AFTER execute
                         let output_snapshots: Vec<PortSnapshot> = outputs.iter()
                             .map(|(name, value)| PortSnapshot::from_port(name, value))
                             .collect();
@@ -1000,6 +1078,60 @@ impl NodeEventFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    /// Un nœud qui dort : deux d'entre eux sur le même niveau prouvent le
+    /// parallélisme par niveau — ensemble, ils durent comme un seul.
+    struct SleepNode {
+        name: String,
+        ms: u64,
+    }
+
+    impl Node for SleepNode {
+        fn node_type(&self) -> &'static str {
+            "SleepNode"
+        }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn inputs(&self) -> Vec<PortDef> {
+            vec![]
+        }
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef { name: "out", port_type: PortType::Any, required: false }]
+        }
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            std::thread::sleep(Duration::from_millis(self.ms));
+            ctx.set_output("out", PortValue::new(self.name.clone()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn nodes_of_one_level_run_in_parallel_and_finish_in_order() {
+        let mut graph = DataflowGraph::new();
+        for n in ["a", "b", "c", "d"] {
+            graph.add_node(Box::new(SleepNode { name: n.into(), ms: 120 })).unwrap();
+        }
+        let runtime = DataflowRuntime::new(10);
+        let mut rx = runtime.subscribe();
+        let started = Instant::now();
+        let output = runtime.execute(&mut graph).unwrap();
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_millis(400), "quatre nœuds de 120 ms en {elapsed:?} : pas en parallèle");
+        for n in ["a", "b", "c", "d"] {
+            assert!(output.get(n, "out").is_some());
+        }
+        // Les événements de fin sortent dans l'ordre topologique, pas dans
+        // l'ordre d'arrivée des fils.
+        let mut completed = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if let DataflowEvent::NodeCompleted { node, .. } = ev {
+                completed.push(node);
+            }
+        }
+        assert_eq!(completed, ["a", "b", "c", "d"]);
+    }
     use crate::dataflow::graph::DataflowGraph;
     use crate::dataflow::node::Node;
     use crate::dataflow::port::{PortDef, PortType, PortValue};
