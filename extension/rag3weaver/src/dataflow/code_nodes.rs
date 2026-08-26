@@ -7,7 +7,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::node::{Node, NodeContext};
-use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
+use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{take_or_clone, PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code::{analyze, analyze_source, read_sources, CodeAnalysis};
@@ -429,7 +429,7 @@ fn format_param() -> ConfigParam {
         required: false,
         default: Some(serde_json::json!("markdown")),
         description: "markdown (compact, pour le modèle) | json (structuré)",
-        choices: None,
+        choices: Some(Choices::fixed(["markdown", "json"])),
         json_schema: None,
     }
 }

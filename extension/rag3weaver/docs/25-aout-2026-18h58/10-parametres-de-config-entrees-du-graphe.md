@@ -85,6 +85,23 @@ le jour où un outil prendra des filtres structurés.
   L'héritage par câblage donne la première classe sans changer la syntaxe.
 - Un `$var` enfoui dans une chaîne (`"prefix_$var"`) n'est pas un câblage :
   il se substitue, mais n'hérite de rien.
-- `result_mode`, `mode`, `strategy`, `format` ont des listes closes en
-  description mais pas encore en `choices` — leurs parseurs acceptent des
-  alias (`Aggregated`/`aggregated`) qu'il faudra choisir avant de borner.
+
+## 5. Les quatre listes restantes, tranchées
+
+Une liste close est exacte : montrée au modèle comme `enum`, refusée hors
+liste à la création. Elle devient *le* contrat, donc chaque alias qu'un
+parseur acceptait en plus devait entrer dans la liste ou mourir. Décision :
+strict partout — la seule chose que les alias protégeaient (un humain qui
+tape `Aggregated`) est ce que l'`enum` rend impossible.
+
+| Paramètre | Liste | Ce qui a changé |
+|---|---|---|
+| `result_mode` | `aggregated \| detailed \| source_resolved` | les alias `Aggregated`/`Detailed`/`SourceResolved` du parseur, sans aucun appelant, supprimés |
+| `mode` (BM25) | `contains \| contains_split \| regex \| parse \| symbol` | `symbol` manquait à la description |
+| `strategy` | `rrf \| weighted` | annoté, rien d'autre |
+| `format` | `markdown \| json` | l'alias `md` de `ToolFormat::parse` supprimé |
+| `direction` | `Outgoing \| Incoming` | le `_ => Outgoing` du parseur, devenu inatteignable, remplacé par une erreur |
+
+Tests : `enumerated_params_are_exact_lists_without_aliases`,
+`tool_format_has_no_alias` ; `e2e_result_mode` (10) et les suites de la
+section 3 repassées.

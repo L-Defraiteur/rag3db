@@ -785,7 +785,7 @@ pub enum ToolFormat {
 impl ToolFormat {
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
-            "markdown" | "md" => Ok(Self::Markdown),
+            "markdown" => Ok(Self::Markdown),
             "json" => Ok(Self::Json),
             other => Err(format!("format '{other}': expected markdown | json")),
         }
@@ -800,6 +800,13 @@ pub fn source_service(ctx: &crate::dataflow::NodeContext) -> Option<Arc<dyn File
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_format_has_no_alias() {
+        assert!(ToolFormat::parse("markdown").is_ok() && ToolFormat::parse("json").is_ok());
+        assert!(ToolFormat::parse("md").is_err(), "l'enum de la fiche dit markdown | json, le parseur aussi");
+    }
+
 
     fn snapshot() -> Snapshot {
         Snapshot::new(

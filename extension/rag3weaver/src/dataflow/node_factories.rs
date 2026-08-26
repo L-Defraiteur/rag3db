@@ -386,7 +386,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
             .unwrap_or("Outgoing")
         {
             "Incoming" => ExpansionDirection::Incoming,
-            _ => ExpansionDirection::Outgoing,
+            "Outgoing" => ExpansionDirection::Outgoing,
+            other => return Err(format!("FetchRelatedNode: unknown direction '{other}' (Outgoing | Incoming)")),
         };
         let limit = config
             .get("limit")
@@ -705,9 +706,12 @@ impl NodeFactory for SearchSourceNodeFactory {
 fn parse_result_mode(config: &serde_json::Value, node: &str) -> Result<crate::search::ResultMode, String> {
     use crate::search::ResultMode;
     Ok(match config.get("result_mode").and_then(|v| v.as_str()) {
-        None | Some("Aggregated") | Some("aggregated") => ResultMode::Aggregated,
-        Some("Detailed") | Some("detailed") => ResultMode::Detailed,
-        Some("SourceResolved") | Some("source_resolved") => ResultMode::SourceResolved,
+        // La forme serde, et elle seule : c'est celle que les nœuds réémettent
+        // et celle que l'`enum` de la fiche annonce. Les alias PascalCase
+        // d'autrefois n'avaient plus aucun appelant.
+        None | Some("aggregated") => ResultMode::Aggregated,
+        Some("detailed") => ResultMode::Detailed,
+        Some("source_resolved") => ResultMode::SourceResolved,
         Some(other) => return Err(format!("{node}: unknown result_mode '{other}' (aggregated | detailed | source_resolved)")),
     })
 }
@@ -743,7 +747,7 @@ fn result_mode_param() -> ConfigParam {
         required: false,
         default: Some(serde_json::json!("aggregated")),
         description: "aggregated | detailed | source_resolved (KB → entité source, pour fusionner plusieurs KB)",
-        choices: None,
+        choices: Some(Choices::fixed(["aggregated", "detailed", "source_resolved"])),
         json_schema: None,
     }
 }
@@ -859,8 +863,8 @@ impl NodeFactory for BM25SearchNodeFactory {
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("contains")),
-                    description: "contains | contains_split | regex | parse",
-                    choices: None,
+                    description: "contains | contains_split | regex | parse | symbol (exact, séparateurs compris)",
+                    choices: Some(Choices::fixed(["contains", "contains_split", "regex", "parse", "symbol"])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -993,7 +997,7 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("rrf")),
                     description: "rrf | weighted",
-                    choices: None,
+                    choices: Some(Choices::fixed(["rrf", "weighted"])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1212,6 +1216,33 @@ pub const BUILTIN_NODE_COUNT: usize = 29 + if cfg!(feature = "code") { 6 } else 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enumerated_params_are_exact_lists_without_aliases() {
+        let mut r = NodeRegistry::new();
+        register_builtins(&mut r);
+        let refused = |node_type: &str, config: serde_json::Value| -> String {
+            r.create(node_type, "n", &config).err().map(|e| e.to_string()).unwrap_or_default()
+        };
+        // Les alias d'autrefois ne passent plus, et l'erreur dit la liste.
+        let e = refused("BM25SearchNode", serde_json::json!({"result_mode": "Aggregated"}));
+        assert!(e.contains("'Aggregated'") && e.contains("aggregated, detailed, source_resolved"), "{e}");
+        let e = refused("BM25SearchNode", serde_json::json!({"mode": "containsSplit"}));
+        assert!(e.contains("contains, contains_split, regex, parse, symbol"), "{e}");
+        let e = refused("FuseResultsNode", serde_json::json!({"strategy": "RRF"}));
+        assert!(e.contains("rrf, weighted"), "{e}");
+        // Le parseur lui-même est strict aussi, pas seulement le registre.
+        let e = FetchRelatedNodeFactory
+            .create("f", &serde_json::json!({"relation": "R", "direction": "Sideways"}))
+            .err()
+            .unwrap_or_default();
+        assert!(e.contains("unknown direction 'Sideways'"), "{e}");
+        assert!(parse_result_mode(&serde_json::json!({"result_mode": "SourceResolved"}), "n").is_err());
+        // Les schémas publient les listes.
+        let modes = r.schema("BM25SearchNode").unwrap().config_params.into_iter().find(|p| p.name == "mode").unwrap();
+        assert_eq!(modes.choices, Some(Choices::fixed(["contains", "contains_split", "regex", "parse", "symbol"])));
+    }
+
 
     fn builtin_registry() -> NodeRegistry {
         let mut registry = NodeRegistry::new();
