@@ -434,3 +434,54 @@ le graphe, lui, a pu changer.
 Et le compte rendu ne bouge pas : ces enregistrements *sont* ingérés, ils
 l'étaient déjà. `RAG3WEAVER_INGEST_PROFILE=1` dit combien ont été sautés,
 par entité.
+
+---
+
+## 9. Fait, le 26 août au soir : les entrantes se refont
+
+Le point 4 du §7 est écrit, et le test qui manquait a d'abord **échoué** —
+comme espéré, mais pas pour la raison prévue.
+
+Le scénario : `lib_mod.rs` définit `compute_total`, `app.rs` l'appelle, les
+deux sont ingérés **ensemble**. Puis un `edit` change la signature de
+`compute_total`. L'identité d'un scope contient le hash de sa signature :
+l'ancien scope est détruit, et **toutes ses arêtes entrantes avec lui**.
+Après ré-ingestion du seul `lib_mod.rs`, le graphe rendait `CONSUMES []`.
+
+La cause n'était pas dans la matérialisation, qui fait exactement son
+travail, mais **dans ce qu'on lui donnait à matérialiser** : `analysis.pending`
+ne retenait que les références que le résolveur du lot avait **abandonnées**.
+Un nom défini dans le même lot était explicitement écarté — un commentaire
+le justifiait même : « s'il n'a pas été relié, c'est une décision du
+résolveur, pas un manque ». Conséquence : `run → compute_total`, résolu
+localement, n'a **jamais laissé de trace** de la référence. Le graphe savait
+qu'une arête existait, pas *pourquoi*. Quand la cible meurt, plus rien ne
+peut la refaire sans relire les fichiers appelants — que `reingest_file`
+n'ouvre même pas.
+
+Correction : **toute référence externe laisse un `MENTIONS`**, résolue ou
+non. `CONSUMES` redevient ce qu'il aurait toujours dû être — une **vue
+matérialisée** de `DEFINES` × `MENTIONS`, que le résolveur précis complète
+au lieu de la remplacer. Les `Builtin`, les `LocalScope` et les
+bibliothèques restent écartés, et `MERGE` évite toute arête en double.
+
+Ce que ça coûte, sur `src/dataflow` (27 fichiers, 1 388 scopes) :
+
+| | avant | après |
+|---|---|---|
+| symboles | 3 282 | 3 291 |
+| phase symboles | 1 922 ms | 2 478 ms |
+| reliés par le symbole | 0 | 2 548 |
+| relations `CONSUMES` finales | 12 517 | 12 517 |
+
+Un demi-seconde pour une couche de rendez-vous complète, et pas une arête
+de plus au final : les 2 548 que la matérialisation retrouve sont celles que
+le résolveur avait déjà posées. C'est le prix de la **redondance utile** —
+elle ne sert à rien tant que rien n'est détruit.
+
+Deux tests dans `e2e_code` :
+`editing_a_signature_rebuilds_the_relations_coming_from_other_files` (la
+cible pointée porte bien la **nouvelle** signature, et `app.rs` n'a pas été
+relu) et `a_new_file_added_alone_finds_what_the_folder_already_defined`
+(la demande de départ : « j'indexe un dossier, puis un nouveau fichier du
+dossier »).

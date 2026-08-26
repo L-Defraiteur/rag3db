@@ -663,3 +663,134 @@ fn an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens() {
     drop(cat);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 9. Un `edit` doit refaire les relations **entrantes**
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Le test qui manquait (doc 17 §7, point 4) : renommer — ou seulement
+/// changer la signature — d'une fonction **référencée depuis un autre
+/// fichier**. L'identité d'un scope contient le hash de sa signature, donc
+/// changer la signature **détruit l'ancien scope** et avec lui les arêtes qui
+/// pointaient dessus. La couche `Symbol` doit les refaire, sans qu'on
+/// réanalyse le fichier appelant — que `reingest_file` ne lit même pas.
+#[test]
+#[ignore]
+fn editing_a_signature_rebuilds_the_relations_coming_from_other_files() {
+    use rag3weaver::connection::CypherValue;
+
+    const LIB: &str = "pub fn compute_total(x: i32) -> i32 {\n    x * 2\n}\n";
+    const APP: &str = "use crate::lib_mod::compute_total;\n\npub fn run() -> i32 {\n    compute_total(21)\n}\n";
+
+    let snapshot = Snapshot::new("worktree:/projet", [
+        ("lib_mod.rs".to_string(), LIB.to_string()),
+        ("app.rs".to_string(), APP.to_string()),
+    ]);
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+
+    let consumes = |cat: &mut rag3weaver::Catalog, rel: &str| -> Vec<(String, String)> {
+        let rows = cat
+            .execute_raw(&format!("MATCH (a:Scope)-[:{rel}]->(b:Scope) RETURN a.name, b.name"))
+            .unwrap();
+        let mut out: Vec<(String, String)> = rows
+            .rows
+            .iter()
+            .filter_map(|r| match (r.first(), r.get(1)) {
+                (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
+                _ => None,
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    };
+
+    let before = consumes(&mut cat, "CONSUMES");
+    eprintln!("[avant] {before:?}");
+    assert!(before.contains(&("run".to_string(), "compute_total".to_string())), "{before:?}");
+
+    // La signature change : même nom, autre clé de scope.
+    let r = edit_file(
+        &snapshot,
+        Some(&mut cat),
+        "lib_mod.rs",
+        &EditOp::Replace {
+            old: "pub fn compute_total(x: i32) -> i32 {".into(),
+            new: "pub fn compute_total(x: i32, factor: i32) -> i32 {".into(),
+        },
+    )
+    .unwrap();
+    let reingest = r.reingest.as_ref().expect("catalogue → ré-ingestion");
+    eprintln!("[réingestion] {reingest:?}");
+    assert_eq!(reingest.scopes_deleted, 1, "l'ancienne clé de scope disparaît");
+
+    // `app.rs` n'a pas été relu — c'est tout l'intérêt.
+    let after = consumes(&mut cat, "CONSUMES");
+    let back = consumes(&mut cat, "CONSUMED_BY");
+    eprintln!("[après] CONSUMES {after:?} | CONSUMED_BY {back:?}");
+    assert!(
+        after.contains(&("run".to_string(), "compute_total".to_string())),
+        "l'entrante doit se refaire par le symbole : {after:?}"
+    );
+    assert!(
+        back.contains(&("compute_total".to_string(), "run".to_string())),
+        "et dans l'autre sens : {back:?}"
+    );
+
+    // Et le scope pointé est bien le **nouveau** : celui qui porte la nouvelle
+    // signature, pas un fantôme.
+    let rows = cat
+        .execute_raw("MATCH (a:Scope {name: 'run'})-[:CONSUMES]->(b:Scope) RETURN b.signature, b.key")
+        .unwrap();
+    let signatures: Vec<String> = rows
+        .rows
+        .iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from))
+        .collect();
+    eprintln!("[cible] {signatures:?}");
+    assert!(
+        signatures.iter().any(|s| s.contains("factor")),
+        "la cible doit être le scope à la nouvelle signature : {signatures:?}"
+    );
+}
+
+/// Et le cas symétrique : un fichier **nouveau** qui référence l'existant.
+/// C'est la demande de départ — « j'indexe un dossier, puis j'indexe un
+/// nouveau fichier du dossier, les relations doivent se créer ».
+#[test]
+#[ignore]
+fn a_new_file_added_alone_finds_what_the_folder_already_defined() {
+    use rag3weaver::connection::CypherValue;
+
+    const LIB: &str = "pub fn compute_total(x: i32) -> i32 {\n    x * 2\n}\n";
+    const APP: &str = "use crate::lib_mod::compute_total;\n\npub fn run() -> i32 {\n    compute_total(21)\n}\n";
+
+    let snapshot = Snapshot::new("worktree:/projet", [("lib_mod.rs".to_string(), LIB.to_string())]);
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+
+    // Le fichier apparaît, et l'outil d'édition le crée puis l'ingère seul.
+    let r = edit_file(&snapshot, Some(&mut cat), "app.rs", &EditOp::Write { content: APP.into() }).unwrap();
+    assert!(r.created);
+    eprintln!("[réingestion] {:?}", r.reingest);
+
+    let rows = cat
+        .execute_raw("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) RETURN a.name, b.name")
+        .unwrap();
+    let edges: Vec<(String, String)> = rows
+        .rows
+        .iter()
+        .filter_map(|r| match (r.first(), r.get(1)) {
+            (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
+            _ => None,
+        })
+        .collect();
+    eprintln!("[arêtes] {edges:?}");
+    assert!(
+        edges.contains(&("run".to_string(), "compute_total".to_string())),
+        "le fichier ajouté seul doit retrouver la définition déjà en base : {edges:?}"
+    );
+}

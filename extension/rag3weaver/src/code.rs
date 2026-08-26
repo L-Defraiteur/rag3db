@@ -240,9 +240,10 @@ pub struct CodeAnalysis {
     pub skipped: Vec<(String, String)>,
     /// Relations dont une extrémité n'a pas été retrouvée.
     pub relations_dropped: usize,
-    /// Références que le lot n'a pas pu résoudre : `(clé du scope, nom
+    /// Toute référence externe d'un scope, par nom : `(clé du scope, nom
     /// cherché)`. Ce ne sont pas des échecs, ce sont des **rendez-vous** —
-    /// le symbole sera peut-être défini par une ingestion ultérieure
+    /// le symbole sera peut-être défini par une ingestion ultérieure, et
+    /// celui qui est déjà défini peut être détruit puis recréé
     /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
     pub pending: Vec<(String, String)>,
     pub parse_ms: u128,
@@ -394,15 +395,18 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
             to_key: to.1.clone(),
         });
     }
-    // ── Ce que le lot attend et n'a pas trouvé ──────────────────────────
+    // ── Ce que le lot référence, par nom ────────────────────────────────
     //
-    // Le résolveur du lot reste la voie précise : on ne retient que ce
-    // qu'il a dû abandonner. Les `Builtin` et les `LocalScope` sont écartés
-    // (résolus, ou hors projet), et un nom défini **dans le lot** n'est pas
-    // en attente — s'il n'a pas été relié, c'est une décision du résolveur,
-    // pas un manque.
-    let defined_in_batch: std::collections::HashSet<&str> =
-        analysis.scopes.iter().map(|s| s.name.as_str()).collect();
+    // **Toutes** les références externes, y compris celles que le résolveur
+    // du lot a su relier lui-même. Ne garder que ses abandons rendait la
+    // couche de rendez-vous incomplète : le graphe savait *qu'*une arête
+    // existe, pas *pourquoi*. Quand un scope est détruit puis recréé — un
+    // `edit` qui change une signature change sa clé — les arêtes entrantes
+    // meurent avec lui, et sans trace de la référence rien ne peut les
+    // refaire sans relire les fichiers appelants (doc 17 §2 bis).
+    //
+    // Les `Builtin` et les `LocalScope` restent écartés : résolus, ou hors
+    // projet. Les bibliothèques aussi — elles ont leur propre entité.
     let libraries: std::collections::HashSet<&str> =
         analysis.libraries.iter().map(|l| l.name.as_str()).collect();
     for (abs, fa) in &result.files {
@@ -425,7 +429,6 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
                 let id = r.identifier.as_str();
                 if id.is_empty()
                     || id == sc.name
-                    || defined_in_batch.contains(id)
                     || libraries.contains(id)
                     || !seen.insert(id.to_string())
                 {
