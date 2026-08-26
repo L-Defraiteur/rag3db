@@ -1,7 +1,7 @@
 //! Port types and values for the dataflow graph.
 //!
 //! [`PortType`] — static type tag for connect-time checks (domain-specific enum).
-//! [`PortValue`] — re-exports luciole's Any-based runtime value.
+//! [`PortValue`] — the Any-based runtime value (ours since 26 August 2026).
 //! [`PortDef`] — port declaration on a node.
 //! [`QueryPayload`] — typed query data flowing through ports.
 
@@ -11,8 +11,91 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-// Re-export luciole's PortValue as the canonical runtime value type.
-pub use luciole::port::PortValue;
+/// La valeur qui circule sur un port : n'importe quoi de `Send + Sync`,
+/// effacé derrière un `Arc` pour que l'éventail (fan-out) soit un clone
+/// bon marché, ou un simple signal.
+///
+/// C'était le type de luciole, réexporté ; il est à nous depuis le 26 août
+/// 2026 (même forme, mêmes méthodes) — le runtime n'a plus de second
+/// exécuteur, il n'a plus besoin d'emprunter son type de valeur.
+pub enum PortValue {
+    /// Type-erased data wrapped in Arc for cheap fan-out cloning.
+    Data(Arc<dyn Any + Send + Sync>),
+    /// Trigger signal (no payload).
+    Trigger,
+}
+
+impl Clone for PortValue {
+    fn clone(&self) -> Self {
+        match self {
+            PortValue::Data(a) => PortValue::Data(a.clone()),
+            PortValue::Trigger => PortValue::Trigger,
+        }
+    }
+}
+
+impl PortValue {
+    /// Wrap a concrete value.
+    pub fn new<T: Send + Sync + 'static>(data: T) -> Self {
+        PortValue::Data(Arc::new(data))
+    }
+
+    /// Borrow as concrete type.
+    pub fn downcast<T: 'static>(&self) -> Option<&T> {
+        match self {
+            PortValue::Data(b) => b.downcast_ref(),
+            _ => None,
+        }
+    }
+
+    /// Consume and extract the concrete type.
+    ///
+    /// Panics if the type matches but there are multiple references (fan-out) :
+    /// the bug is caught at runtime with a clear message instead of a silent
+    /// `None`. Use [`take_or_clone`] where fan-out is legitimate, or
+    /// [`Self::downcast`] for read-only access.
+    pub fn take<T: Send + Sync + 'static>(self) -> Option<T> {
+        match self {
+            PortValue::Data(arc) => {
+                let typed = Arc::downcast::<T>(arc).ok()?;
+                match Arc::try_unwrap(typed) {
+                    Ok(val) => Some(val),
+                    Err(arc) => panic!(
+                        "PortValue::take() failed: {} outstanding references to {}. \
+                         This means the same output port is connected to multiple inputs \
+                         (fan-out). Use separate output ports for data that will be taken, \
+                         or use downcast() for read-only access.",
+                        Arc::strong_count(&arc),
+                        std::any::type_name::<T>(),
+                    ),
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// True if this is a trigger signal.
+    pub fn is_trigger(&self) -> bool {
+        matches!(self, PortValue::Trigger)
+    }
+
+    /// True if the inner data matches type `T`.
+    pub fn is<T: 'static>(&self) -> bool {
+        match self {
+            PortValue::Data(b) => b.is::<T>(),
+            PortValue::Trigger => false,
+        }
+    }
+}
+
+impl std::fmt::Debug for PortValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PortValue::Data(_) => write!(f, "PortValue::Data(...)"),
+            PortValue::Trigger => write!(f, "PortValue::Trigger"),
+        }
+    }
+}
 
 /// Consomme un port : déplace la valeur si ce nœud en est le seul consommateur,
 /// la clone sinon. `PortValue::take()` de luciole panique en fan-out ; ici le

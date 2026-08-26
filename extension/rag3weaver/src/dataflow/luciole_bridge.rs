@@ -19,6 +19,21 @@ use super::port::PortValue;
 use super::runtime::DataflowOutput;
 use super::services::ServiceRegistry;
 
+/// Même forme des deux côtés : la conversion est un déplacement d'`Arc`.
+fn from_luciole(v: luciole::port::PortValue) -> PortValue {
+    match v {
+        luciole::port::PortValue::Data(a) => PortValue::Data(a),
+        luciole::port::PortValue::Trigger => PortValue::Trigger,
+    }
+}
+
+fn to_luciole(v: PortValue) -> luciole::port::PortValue {
+    match v {
+        PortValue::Data(a) => luciole::port::PortValue::Data(a),
+        PortValue::Trigger => luciole::port::PortValue::Trigger,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // LucioleNodeAdapter — wraps our Node as a luciole::Node
 // ---------------------------------------------------------------------------
@@ -75,7 +90,7 @@ impl luciole::Node for LucioleNodeAdapter {
         //    We know which ports to check from the node's declared inputs.
         for pd in self.inner.inputs() {
             if let Some(value) = ctx.take_input(pd.name) {
-                our_ctx.set_input(pd.name, value);
+                our_ctx.set_input(pd.name, from_luciole(value));
             }
         }
 
@@ -85,7 +100,7 @@ impl luciole::Node for LucioleNodeAdapter {
         // 4. Transfer outputs from our ctx → luciole ctx
         let outputs = our_ctx.drain_outputs();
         for (port, value) in outputs {
-            ctx.set_output(&port, value);
+            ctx.set_output(&port, to_luciole(value));
         }
 
         // 5. Transfer metrics
@@ -172,7 +187,7 @@ pub fn execute_via_luciole(
     let initial_inputs = std::mem::take(&mut graph.initial_inputs);
     for (node_name, ports) in initial_inputs {
         for (port_name, value) in ports {
-            dag.set_initial_input(&node_name, &port_name, value);
+            dag.set_initial_input(&node_name, &port_name, to_luciole(value));
         }
     }
 
@@ -183,7 +198,7 @@ pub fn execute_via_luciole(
     //    DagResult.outputs is HashMap<(node, port), PortValue>
     let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
     for ((node, port), value) in result.outputs.drain() {
-        data.entry(node).or_default().insert(port, value);
+        data.entry(node).or_default().insert(port, from_luciole(value));
     }
 
     Ok(DataflowOutput::from_data(data))
@@ -214,7 +229,7 @@ pub fn execute_via_luciole_with_result(
     let initial_inputs = std::mem::take(&mut graph.initial_inputs);
     for (node_name, ports) in initial_inputs {
         for (port_name, value) in ports {
-            dag.set_initial_input(&node_name, &port_name, value);
+            dag.set_initial_input(&node_name, &port_name, to_luciole(value));
         }
     }
 

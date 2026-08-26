@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-pub use luciole::port::PortValue;
+pub use super::port::PortValue;
 
 use super::port::PortDef;
 use super::services::ServiceRegistry;
