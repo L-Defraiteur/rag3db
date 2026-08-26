@@ -1,140 +1,169 @@
 # 04 — Une racine est un point de vue, pas une identité
 
-26 août 2026, tard. Lucie : « une racine devrait rester qu'un point de vue
-même dans le graphe non ? » Oui. Et c'est parce qu'elle ne l'est pas
-aujourd'hui que le même fichier peut exister deux fois.
+26 août 2026, tard, révisé dans la nuit du 27. Lucie : « une racine devrait
+rester qu'un point de vue même dans le graphe non ? »
 
-## 1. Le constat, mesuré
+Oui. Et il a fallu trois versions pour l'écrire vraiment — la trace des trois
+vaut mieux que la conclusion seule.
 
-`the_same_file_seen_from_two_roots_is_two_identities_today` :
+| Version | Identité d'un fichier | Ce qui l'a tuée |
+|---|---|---|
+| v1 (avant) | chemin relatif à la **racine d'analyse** | le point de vue *était* l'identité : deux racines, deux fichiers |
+| v2 (première nuit) | `(origine découverte, chemin dans l'ancre)` | l'origine reste dans la clé : elle n'est donc toujours pas un point de vue |
+| **v3 (retenue)** | `(source, chemin absolu dans cette source)` | — |
+
+## 1. Le constat qui a lancé tout ça
+
+`the_same_file_seen_from_two_roots…` :
 
 ```
 ingest(root=/projet,     ["src/core.rs"])  → 1 File, 1 Scope
 ingest(root=/projet/src, ["core.rs"])      → 2 File, 2 Scope
 ```
 
-Le même fichier, le même contenu, la même machine. Deux identités, parce
-que la clé porte le chemin **relatif à la racine passée à l'analyse**. La
-racine était un argument d'appel ; elle est devenue une identité
+Le même fichier, le même contenu, la même machine. Deux identités, parce que
+la clé portait le chemin **relatif à la racine passée à l'analyse**. La
+racine était un argument d'appel ; elle était devenue une identité
 permanente.
 
-## 2. Le diagnostic : quatre choses portent le même nom
+## 2. Quatre choses portaient le même nom
 
-Le mot « racine » recouvre aujourd'hui **quatre notions différentes**, et
-c'est ça le vrai défaut. Les séparer est la plus grande partie du travail :
+C'est le vrai défaut, et le nommer est la plus grande partie du travail :
 
-| Notion | Question à laquelle elle répond | Où elle vit aujourd'hui |
+| Notion | Question | Où elle vit |
 |---|---|---|
 | **La cellule** | *quel index ?* | `Scope { org, project }` — fait (doc 37) |
-| **L'ancre** | *par rapport à quoi ce fichier se nomme-t-il ?* | **l'argument `root` d'`analyze`** — le défaut |
+| **La source** | *d'où viennent ces octets ?* | `FileSource::cursor` — existait déjà |
 | **La permission** | *ai-je le droit de lire là ?* | `RootPolicy` — fait (doc 16) |
-| **La vue** | *comment je te montre ce chemin ?* | nulle part — confondue avec l'ancre |
+| **La lentille** | *par rapport à quoi je te l'écris ?* | nulle part — confondue avec l'identité |
 
-Trois sur quatre existent et sont correctes. C'est la deuxième qui est mal
-placée, et la quatrième qui manque.
+## 3. v2, et pourquoi elle ne tenait pas
 
-## 3. Ce que je propose : l'ancre se **découvre**, elle ne se passe pas
+La deuxième version faisait **découvrir** l'ancre (le dépôt git, sinon le
+manifeste, sinon le système de fichiers) et mettait son identité dans la
+clé : `git:github.com/org/dépôt` + `src/x.rs`.
 
-Une racine passée en argument est un accident de la ligne de commande. Un
-fichier, lui, **sait où il habite** : la racine git qui le contient, à
-défaut le manifeste le plus proche (`Cargo.toml`, `package.json`,
-`pyproject.toml`, `go.mod`), à défaut la source elle-même.
+C'était mieux que v1 — les deux racines convergeaient — mais Lucie a mis le
+doigt sur ce qui n'allait pas : *« moi j'aurais aimé que File ait un path
+absolu toujours, et que qui veut un relatif le calcule depuis une origine »*.
+Elle avait raison, et pour une raison qu'on peut énoncer sèchement :
+
+> **Si l'origine est dans la clé, l'origine n'est pas un point de vue.**
+
+Trois conséquences concrètes de v2, toutes mauvaises :
+
+1. **Changer ce qui compte comme origine réécrit toutes les clés.** Le jour
+   où un dépôt gagne un remote, où un sous-module apparaît, où on décide
+   qu'un monorepo s'ancre au paquet plutôt qu'au dépôt : réindexation
+   complète. Une décision de *vue* ne doit pas coûter une réindexation.
+2. **Les origines imbriquées forcent un choix arbitraire.** Un sous-module
+   dans un dépôt, un paquet dans un monorepo : v2 doit élire une ancre. Il
+   n'y a pourtant aucune raison de choisir — on veut pouvoir calculer le
+   relatif depuis l'une *ou* l'autre selon la question posée.
+3. **La découverte est une heuristique**, avec ses règles (« le dépôt
+   l'emporte sur le manifeste »), son repli, et ses pièges. J'en ai écrit
+   deux versions fausses en une soirée. Une identité ne devrait pas dépendre
+   d'une heuristique.
+
+## 4. v3 — l'identité est ce d'où viennent les octets
+
+> **`(source, chemin absolu dans cette source)`.**
+
+- Fichier local : `source = "file"`, `path = /home/lucied/…/x.rs`. C'est le
+  chemin absolu, toujours, exactement ce que Lucie demandait.
+- Instantané : `source = "snapshot:abc123"`, `path = foo.rs`.
+- Dépôt distant à une révision : `source = "git:github.com/o/r@rev"`,
+  `path = src/x.rs`.
+
+Aucune découverte, aucune heuristique, aucune règle de priorité : la source
+est **connue** au moment de l'ingestion, c'est `FileSource::cursor` qu'on
+avait déjà. Deux racines d'analyse donnent le même chemin absolu, donc la
+même identité — la propriété est acquise **par construction**, pas par
+mécanisme.
+
+Pourquoi pas le chemin absolu tout seul, littéralement ? Parce qu'un
+instantané et un dépôt distant n'en ont pas. Dès qu'on accepte ça, on a
+besoin de dire *dans quoi* le chemin est absolu — et c'est exactement la
+source. C'est la seule objection technique à la version littérale, et elle
+suffit.
+
+## 5. L'origine devient une lentille
+
+Elle ne fabrique plus rien. Elle se pose — découverte (le dépôt qui contient
+ce fichier) ou déclarée (« à partir d'ici ») — et elle **calcule** :
 
 ```
-/projet/.git/
-/projet/src/core.rs      ancre = /projet    →  clé « src/core.rs »
+Origin { id, kind, anchor }        // anchor : un préfixe, sur ce poste
+origin.relative("/home/…/rag3db/src/x.rs") → "src/x.rs"
 ```
 
-Ingéré depuis `/projet` ou depuis `/projet/src`, **la même clé**, parce que
-la question posée au fichier est la même. Le problème disparaît par
-construction plutôt que par vigilance — et c'est le test ci-dessus qui
-tombera pour nous le dire.
+Trois propriétés qui découlent de « ça ne fabrique rien » :
 
-`analyze` garde son argument, mais il redevient ce qu'il aurait dû rester :
-*ce que je te demande de lire*. Il ne décide plus des noms.
+- **On peut en poser autant qu'on veut**, imbriquées, et en changer d'avis :
+  aucune clé ne bouge.
+- **Pas de mémoïsation.** Garder les relatifs dans l'origine ajouterait une
+  invalidation à tenir (un fichier bouge, une ancre bouge) pour économiser un
+  `strip_prefix` — des nanosecondes. Le calcul à la volée est plus simple
+  *et* toujours juste.
+- **C'est un paramètre de rendu**, pas de stockage : « montre-moi les chemins
+  depuis ici » ne réindexe rien et peut changer à chaque tour de boucle.
 
-## 4. L'ancre est une **entité**, pas une chaîne
+## 6. La portabilité est une **arête**, pas une convention de nommage
 
-Deux dépôts ont chacun un `src/main.rs`. La clé doit donc contenir l'ancre —
-mais `/home/lucied/git_workspaces/rag3db` ne veut rien dire sur une autre
-machine, et c'est exactement pour ça que le chemin relatif avait été choisi.
-
-Donc l'ancre devient un nœud, avec une identité **portable** et une
-localisation **qui ne l'est pas** :
+Le seul vrai coût de l'absolu : `/home/lucied/…` ne veut rien dire ailleurs.
+La réponse de v2 était de le cacher dans le nom. La réponse de v3 est
+d'utiliser ce qu'on est — une base de graphe :
 
 ```
-Root {
-  id:         "github.com/L-Defraiteur/rag3db"   // portable : remote git, ou uuid
-  local_path: "/home/lucied/git_workspaces/rag3db"  // par machine, jamais dans la clé
-  kind:       git | manifest | source
-}
+(file:/home/lucied/git_workspaces/rag3db/src/x.rs) -[:SAME_AS]-> (git:github.com/L-Defraiteur/rag3db@a1b2c3#src/x.rs)
 ```
 
-`id` entre dans la clé, `local_path` non. Le même dépôt cloné ailleurs
-retrouve le même graphe ; deux projets homonymes ne se marchent pas dessus ;
-et un agent cloud et un agent local parlent enfin des mêmes symboles. Sans
-remote — un dossier local qui n'est nulle part — l'`id` est un uuid tiré une
-fois et gardé : local, mais stable.
+Deux clones, deux arbres de travail, le poste de Lucie et un conteneur CI
+pointent alors vers **la même identité portable, par une arête**, sans
+qu'aucune clé ne soit réécrite. Et on choisit de chercher à travers, ou pas.
 
-C'est aussi là que la « politique par agent » trouve sa place, et elle
-existe déjà : **la cellule** est ce qui est commun à un agent. Une cellule
-peut contenir plusieurs `Root`. Quatre niveaux, quatre réponses :
+Ça règle du même coup un cas que v2 traitait mal dans l'autre sens : **deux
+arbres de travail du même dépôt sur deux branches** — il y en a un sur ce
+poste — sont deux sources distinctes, donc deux graphes, et on les relie *si
+on le veut*. v2 les fusionnait d'office.
 
-> la cellule dit *dans quel index*, l'ancre dit *quel est ton nom*, la
-> politique dit *ce que tu as le droit de lire*, la vue dit *comment je te
-> l'écris*.
+Coût honnête : un saut de plus quand on veut la portabilité. Mais c'est le
+chemin rare (partage, cloud) ; le chemin courant — travailler en local —
+devient maximalement simple.
 
-## 5. Le point de vue est un **rendu**, et rien d'autre
+## 7. Ce que ça donne, cas par cas
 
-« Tiens, c'est de ce répertoire que j'aimerais voir les chemins
-maintenant » : une option d'affichage, `relative_to`, sur `read`, `grep`,
-`list` et le rendu des résultats. Ça ne touche ni la clé, ni le graphe, ni
-l'index — et ça peut changer à chaque tour de boucle sans rien réindexer.
-Le nœud de rendu existe déjà ; c'est un paramètre de plus.
-
-Un agent qui travaille dans `src/dataflow/` verra `port.rs`. Le même graphe
-vu depuis la racine dira `src/dataflow/port.rs`. Aucun des deux n'est
-l'identité.
-
-## 6. Ce que ça donne, cas par cas
-
-| Scénario | Aujourd'hui | Avec l'ancre découverte |
+| Scénario | v1 | v3 |
 |---|---|---|
-| j'indexe un dossier, puis un sous-dossier | deux identités | une seule |
+| j'indexe un dossier, puis un sous-dossier | deux identités | une seule, sans mécanisme |
 | j'indexe un dossier, puis son parent | deux identités | une seule |
-| deux dépôts avec `src/main.rs` | collision si même racine | distincts par `Root.id` |
-| le même dépôt sur une autre machine | inutilisable | même graphe |
-| un fichier hors de tout projet | dépend de l'appel | ancré à la source, stable |
+| deux dépôts avec `src/main.rs` | collision possible | distincts (chemins absolus) |
+| deux arbres de travail, deux branches | confondus si même racine | distincts, reliables par `SAME_AS` |
+| le même dépôt sur une autre machine | inutilisable | relié par `SAME_AS`, sans réécriture |
+| un fichier hors de tout projet | dépend de l'appel | son chemin absolu, point |
 | « montre-moi les chemins d'ici » | réindexation | option de rendu |
+| un dépôt gagne un remote | — | rien ne bouge (v2 : tout à réindexer) |
 
-## 7. Ce que je ne propose pas, et pourquoi
+## 8. Ce que je n'ai pas retenu, et pourquoi
 
-- **Identifier un fichier par le hash de son contenu.** Deux fichiers
-  identiques (une licence, un `mod.rs` vide) deviendraient le même nœud.
-  L'identité n'est pas le contenu — c'est tout le sens du §10.1 du doc 17.
-- **Le chemin absolu comme clé.** Simple, juste, et inutilisable dès qu'un
-  autre poste ou un conteneur entre en jeu.
-- **Des alias : un fichier, plusieurs chemins connus.** Séduisant, mais
-  l'identité par union ne converge pas : fusionner après coup deux
-  sous-arbres déjà indexés est une réécriture, pas une migration.
-- **Laisser l'agent choisir sa racine.** C'est ce qu'on fait, et c'est
-  précisément la cause. Un agent choisit ce qu'il *regarde* ; il ne choisit
-  pas comment le monde s'appelle.
+- **Le hash du contenu comme identité.** Deux fichiers identiques (une
+  licence, un `mod.rs` vide) deviendraient le même nœud. C'est l'erreur
+  qu'on venait justement de retirer sur les scopes (doc 17 §10.1).
+- **Des alias : un fichier, plusieurs chemins connus, fusionnés d'office.**
+  L'identité par union ne converge pas. `SAME_AS` fait la même chose *en le
+  disant*, et laisse le choix de traverser ou non.
+- **Laisser l'agent choisir sa racine d'identité.** C'était v1, et c'était la
+  cause. Un agent choisit ce qu'il *regarde* ; il ne choisit pas comment le
+  monde s'appelle.
+- **Mémoïser les relatifs dans l'origine** (§5).
 
-## 8. L'ordre, et ce que ça coûte
+## 9. L'ordre
 
-1. **`Root` découvert et porté par l'analyse** — remonter jusqu'à `.git`,
-   puis manifeste, puis source ; une clé par fichier, pas par appel. C'est
-   la moitié du gain, et c'est contenu dans `analyze`.
-2. **`Root` comme entité**, avec `id` portable et `local_path` par machine.
-   Débloque le cloud, et la promotion du doc 16 (« tu touches souvent à ce
-   dépôt, je l'ingère depuis sa racine ? ») écrit dedans naturellement.
-3. **`relative_to` au rendu** — une demi-journée, aucun risque, et ça enlève
-   la dernière raison de vouloir bricoler la clé.
-
-Ce qui reste ouvert et que je ne tranche pas seul : faut-il **une** cellule
-par dépôt, ou une cellule qui en contient plusieurs ? Les deux marchent avec
-ce dessin. Une par dépôt isole mieux (BM25 compris) ; une pour plusieurs
-laisse chercher à travers un monorepo *et* ses voisins d'un coup. C'est un
-choix de produit, pas de moteur — et il se prend quand on saura à quoi
-ressemble `lucyCode`.
+1. **`(source, chemin absolu)` comme identité** — remplace v2, déjà câblée.
+   La traduction dans la couche outils *disparaît* : l'absolu est canonique.
+2. **`relative_to` au rendu** — devient nécessaire, et plus seulement
+   souhaitable : les chemins stockés sont longs.
+3. **`SAME_AS`** quand le partage arrivera pour de vrai — pas avant, c'est
+   une arête qu'on peut ajouter à tout moment sans rien réécrire. C'est
+   d'ailleurs la meilleure preuve que v3 tient : *ce qui reste à faire ne
+   demande aucune migration.*
