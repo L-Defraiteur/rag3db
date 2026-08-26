@@ -39,7 +39,14 @@ pub const SCOPE: &str = "Scope";
 pub const LIBRARY: &str = "Library";
 
 /// `(relation, from, to)` — les neuf du `CODE_SCHEMA` de février.
-pub const RELATIONS: [(&str, &str, &str); 9] = [
+/// Le point de rendez-vous entre celui qui définit un nom et ceux qui
+/// l'attendent — voir [doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md).
+/// Invisible pour l'agent au sens où il n'a rien à y faire, mais parfaitement
+/// interrogeable : « qui mentionne `merge_port_values` ? » est une vraie
+/// question.
+pub const SYMBOL: &str = "Symbol";
+
+pub const RELATIONS: [(&str, &str, &str); 11] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -49,6 +56,9 @@ pub const RELATIONS: [(&str, &str, &str); 9] = [
     ("HAS_PARENT", SCOPE, SCOPE),
     ("DECORATES", SCOPE, SCOPE),
     ("USES_LIBRARY", SCOPE, LIBRARY),
+    // La couche de rendez-vous : ce qu'un scope offre, ce qu'il attend.
+    ("DEFINES", SCOPE, SYMBOL),
+    ("MENTIONS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -127,6 +137,18 @@ pub fn library_config() -> EntityConfig {
     fields.insert("import_path".into(), field(FieldType::String));
     EntityConfig { fields, hashsafe: Some(vec!["name".into()]), ..Default::default() }
 }
+/// Un nom, et rien d'autre. `hashsafe` sur le nom : l'uuid se calcule sans
+/// requête, ce qui rend le rendez-vous gratuit.
+pub fn symbol_config() -> EntityConfig {
+    let mut fields = HashMap::new();
+    fields.insert("name".into(), title_and_content(FieldType::String));
+    EntityConfig {
+        fields,
+        hashsafe: Some(vec!["name".into()]),
+        ..Default::default()
+    }
+}
+
 
 /// Déclare `File`, `Scope`, `Library` et les neuf relations. Idempotent
 /// (`register_entity` / `register_relation` le sont).
@@ -134,6 +156,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     catalog.register_entity(FILE, file_config())?;
     catalog.register_entity(SCOPE, scope_config(scope_chunking))?;
     catalog.register_entity(LIBRARY, library_config())?;
+    catalog.register_entity(SYMBOL, symbol_config())?;
     for (rel, from, to) in RELATIONS {
         catalog.register_relation(rel, from, to)?;
     }
@@ -204,6 +227,11 @@ pub struct CodeAnalysis {
     pub skipped: Vec<(String, String)>,
     /// Relations dont une extrémité n'a pas été retrouvée.
     pub relations_dropped: usize,
+    /// Références que le lot n'a pas pu résoudre : `(clé du scope, nom
+    /// cherché)`. Ce ne sont pas des échecs, ce sont des **rendez-vous** —
+    /// le symbole sera peut-être défini par une ingestion ultérieure
+    /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
+    pub pending: Vec<(String, String)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -353,6 +381,48 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
             to_key: to.1.clone(),
         });
     }
+    // ── Ce que le lot attend et n'a pas trouvé ──────────────────────────
+    //
+    // Le résolveur du lot reste la voie précise : on ne retient que ce
+    // qu'il a dû abandonner. Les `Builtin` et les `LocalScope` sont écartés
+    // (résolus, ou hors projet), et un nom défini **dans le lot** n'est pas
+    // en attente — s'il n'a pas été relié, c'est une décision du résolveur,
+    // pas un manque.
+    let defined_in_batch: std::collections::HashSet<&str> =
+        analysis.scopes.iter().map(|s| s.name.as_str()).collect();
+    let libraries: std::collections::HashSet<&str> =
+        analysis.libraries.iter().map(|l| l.name.as_str()).collect();
+    for (abs, fa) in &result.files {
+        let rel = relative(root, abs);
+        for sc in &fa.scopes {
+            let Some(key) = by_position.get(&(
+                rel.clone(),
+                sc.name.clone(),
+                scope_type_name(&sc.r#type).to_string(),
+                sc.scope_start_line,
+            )) else {
+                continue;
+            };
+            let mut seen = std::collections::HashSet::new();
+            for r in &sc.identifier_references {
+                use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
+                if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
+                    continue;
+                }
+                let id = r.identifier.as_str();
+                if id.is_empty()
+                    || id == sc.name
+                    || defined_in_batch.contains(id)
+                    || libraries.contains(id)
+                    || !seen.insert(id.to_string())
+                {
+                    continue;
+                }
+                analysis.pending.push((key.clone(), id.to_string()));
+            }
+        }
+    }
+
     fold_lambdas(&mut analysis);
     dedupe_relations(&mut analysis);
     analysis
@@ -532,6 +602,18 @@ pub struct CodeIngestReport {
     pub libraries: usize,
     pub relations: usize,
     pub failed: usize,
+    /// Symboles touchés par ce lot (définis ou attendus).
+    pub symbols: usize,
+    /// Relations `CONSUMES` créées **après coup**, en reliant ce que le lot
+    /// attendait à ce que la base connaissait, et l'inverse. C'est la mesure
+    /// de ce qu'une résolution intra-lot laissait tomber.
+    pub linked_across_batches: usize,
+    /// Rendez-vous restés en attente : personne ne définit encore ce nom.
+    /// Une incomplétude qui se **compte** plutôt que de se taire.
+    pub still_pending: usize,
+    /// Noms écartés parce que plusieurs scopes les définissent : une
+    /// relation manquante vaut mieux qu'une relation fausse.
+    pub ambiguous: usize,
 }
 
 fn s(v: &str) -> CypherValue {
@@ -619,7 +701,125 @@ impl Catalog {
         let linked = self.drain();
         report.relations = linked.processed;
         report.failed += linked.failed;
+
+        self.resolve_across_batches(analysis, &mut report)?;
         Ok(report)
+    }
+
+    /// La couche de rendez-vous : ce que le lot **offre**, ce qu'il
+    /// **attend**, et la matérialisation dans les deux sens.
+    ///
+    /// C'est ce qui rend l'ingestion indépendante de l'ordre : un fichier
+    /// ajouté seul retrouve ce qui existait, et l'existant retrouve ce que
+    /// le fichier apporte — sans ré-analyser le dossier
+    /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
+    fn resolve_across_batches(
+        &mut self,
+        analysis: &CodeAnalysis,
+        report: &mut CodeIngestReport,
+    ) -> Result<(), CatalogError> {
+        use std::collections::{BTreeMap as Map, BTreeSet};
+
+        // Les noms en jeu : ceux que le lot définit, ceux qu'il attend.
+        let offered: BTreeSet<&str> = analysis.scopes.iter().map(|s| s.name.as_str()).collect();
+        let expected: BTreeSet<&str> = analysis.pending.iter().map(|(_, n)| n.as_str()).collect();
+        let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        if names.is_empty() {
+            return Ok(());
+        }
+
+        // Un symbole par nom — `hashsafe`, donc idempotent.
+        let records: Vec<Map<String, CypherValue>> = names
+            .iter()
+            .map(|n| {
+                let mut d = Map::new();
+                d.insert("name".into(), s(n));
+                d
+            })
+            .collect();
+        report.symbols = records.len();
+        let ingested = self.ingest_entities(SYMBOL, records)?;
+        report.failed += ingested.failed;
+
+        let symbol_uuid = |cat: &Self, name: &str| -> Result<String, CatalogError> {
+            let mut d = Map::new();
+            d.insert("name".into(), s(name));
+            cat.entity_uuid(SYMBOL, &d)
+        };
+
+        // Ce que le lot offre, et ce qu'il attend.
+        for sc in &analysis.scopes {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key))?;
+            let to = symbol_uuid(self, &sc.name)?;
+            self.link("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
+        }
+        for (scope_key, name) in &analysis.pending {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key))?;
+            let to = symbol_uuid(self, name)?;
+            self.link("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
+        }
+        let drained = self.drain();
+        report.failed += drained.failed;
+
+        // Matérialisation, dans les deux sens. **Deux requêtes en tout** :
+        // une par relation, en `UNWIND` sur tous les symboles du lot. Une
+        // requête par symbole coûtait 2,5 fois le temps d'ingestion.
+        let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
+        let definers_by_symbol = self.linked_from_many("DEFINES", &uuids)?;
+        let mentioners_by_symbol = self.linked_from_many("MENTIONS", &uuids)?;
+        for sym in &uuids {
+            let empty: Vec<String> = Vec::new();
+            let definers = definers_by_symbol.get(sym).unwrap_or(&empty);
+            if definers.len() > 1 {
+                // Plusieurs définisseurs : on s'abstient. Une relation
+                // manquante vaut mieux qu'une relation fausse — c'est
+                // exactement la sur-connexion que RAGForge a payée.
+                report.ambiguous += 1;
+                continue;
+            }
+            let Some(target) = definers.first() else {
+                report.still_pending += 1;
+                continue;
+            };
+            for mentioner in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
+                if &mentioner == target {
+                    continue;
+                }
+                self.link("CONSUMES", RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new())?;
+                self.link("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new())?;
+                report.linked_across_batches += 1;
+            }
+        }
+        let linked = self.drain();
+        report.failed += linked.failed;
+        Ok(())
+    }
+
+    /// Pour chaque uuid donné, ceux qui le pointent par `rel` — en une seule
+    /// requête (`UNWIND`), le même idiome que l'expansion de recherche.
+    fn linked_from_many(
+        &self,
+        rel: &str,
+        to_uuids: &[String],
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, CatalogError> {
+        let mut out: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        if to_uuids.is_empty() {
+            return Ok(out);
+        }
+        let cypher = format!(
+            "UNWIND $uuids AS uid MATCH (n {{_uuid: uid}})<-[:{rel}]-(m) RETURN uid, m._uuid"
+        );
+        let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let result = self
+            .conn()
+            .execute_with_params(&cypher, &[crate::connection::QueryParam::new("uuids", param)])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        for row in &result.rows {
+            if let (Some(CypherValue::String(to)), Some(CypherValue::String(from))) = (row.first(), row.get(1)) {
+                out.entry(to.clone()).or_default().push(from.clone());
+            }
+        }
+        Ok(out)
     }
 }
 

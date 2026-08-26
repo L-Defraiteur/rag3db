@@ -209,6 +209,47 @@ sur la table quand l'ingestion est incrémentale.
    schéma de l'URI est à la source de le choisir, `git://…@commit` pour ce
    qui doit voyager.
 
+## 6 ter. Ce qui est fait, et ce que ça a coûté
+
+Étapes 1 à 3 faites le 26 au matin.
+
+- `analyze` rend désormais `pending: Vec<(clé de scope, nom)>` — ce que le
+  lot attend et n'a pas trouvé. Filtres : on écarte les `Builtin` et les
+  `LocalScope` (le résolveur du lot reste la voie précise), les noms
+  **définis dans le lot** (s'ils n'ont pas été reliés, c'est une décision du
+  résolveur, pas un manque) et les bibliothèques externes connues.
+- Entité `Symbol` (`hashsafe = ["name"]`, donc uuid sans requête) avec
+  `DEFINES` et `MENTIONS`. Elles sont exposées à l'agent comme les autres :
+  « qui mentionne `merge_port_values` ? » est une vraie question.
+- Matérialisation dans les deux sens à chaque lot, **en deux requêtes**
+  (`UNWIND` sur tous les symboles du lot). Une requête par symbole coûtait
+  2,5 fois le temps d'ingestion — mesuré, puis corrigé.
+- Règle du définisseur unique : plusieurs `DEFINES` ⇒ on s'abstient et on
+  compte (`ambiguous`).
+
+**Le test qui tranche passe.** Deux fichiers, dont l'un référence l'autre,
+ingérés ensemble puis dans les deux ordres, un par un : les trois graphes
+sont identiques — **y compris « usage d'abord »**, le sens que le résolveur
+intra-lot ne peut structurellement pas voir.
+
+**Ce que ça coûte, mesuré sur `src/dataflow`** (27 fichiers, 1 387 scopes,
+12 498 relations) :
+
+| | |
+|---|---|
+| Symboles créés | 3 275 |
+| Dont sans définisseur dans le projet | 2 765 (`Vec`, `Some`, types de la bibliothèque standard…) |
+| Noms ambigus, écartés | 181 (`new`, `execute`… — exactement la sur-connexion évitée) |
+| Ingestion | 17,6 s → 29,8 s |
+
+Les 2 765 symboles sans définisseur sont le prix du rendez-vous : ils ne
+servent que si une ingestion future définit ce nom. Pour un dépôt qui ne
+définira jamais `Vec`, c'est du poids mort — d'où le levier suivant, à
+faire quand il gênera : **un graphe d'entretien qui élague les `MENTIONS`
+vers des symboles sans définisseur au-delà d'un certain âge**, exactement
+comme les racines à TTL du [16](16-le-monde-est-ouvert.md). Le compter
+d'abord (`still_pending`), le couper ensuite.
+
 ## 7. L'ordre, et ce que ça coûte
 
 1. **Stocker les références non résolues** (`Symbol`, `DEFINES`,
@@ -218,7 +259,7 @@ sur la table quand l'ingestion est incrémentale.
    unique. *Test* : A puis B, et B puis A, donnent le même graphe.
 3. **Le test d'équivalence** avec la ré-résolution complète, sur notre
    propre module. *Test* : fichier par fichier = tout d'un coup.
-4. **`reingest_file` passe par là**, et **réévalue les entrantes** via les
+4. **(reste à faire) `reingest_file` passe par là**, et **réévalue les entrantes** via les
    `MENTIONS` du symbole : après un `edit` qui change une signature, les
    relations venues d'ailleurs se refont au lieu de disparaître (§2 bis).
    *Test* : renommer une fonction **référencée depuis un autre fichier**,

@@ -387,3 +387,86 @@ fn edit_reingests_the_file_and_list_reports_state() {
     let md = l.to_markdown();
     assert!(md.contains("`port.rs`") && md.contains("✓indexed") && md.contains("⚠stale") && md.contains("(not indexed)"), "{md}");
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 6. L'ordre d'ingestion ne doit rien changer
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Deux fichiers, dont l'un référence l'autre. Ingérés ensemble, puis dans
+/// les deux ordres possibles, **un par un** : les trois graphes doivent
+/// porter la même relation `CONSUMES`. C'est le test que Lucie a posé, et
+/// celui qui manquait à RAGForge (doc 17).
+#[test]
+#[ignore]
+fn ingestion_order_does_not_change_the_graph() {
+    use rag3weaver::code::{analyze, SCOPE};
+    use rag3weaver::connection::CypherValue;
+
+    const LIB: &str = "pub fn compute_total(x: i32) -> i32 {\n    x * 2\n}\n";
+    const APP: &str = "use crate::lib_mod::compute_total;\n\npub fn run() -> i32 {\n    compute_total(21)\n}\n";
+
+    // Les arêtes `CONSUMES` du graphe, en (nom source, nom cible).
+    let edges = |cat: &mut rag3weaver::Catalog| -> Vec<(String, String)> {
+        let rows = cat
+            .execute_raw("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) RETURN a.name, b.name")
+            .unwrap();
+        let mut out: Vec<(String, String)> = rows
+            .rows
+            .iter()
+            .filter_map(|r| match (r.first(), r.get(1)) {
+                (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
+                _ => None,
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    };
+
+    let ingest = |sources: Vec<Vec<(String, String)>>| -> Vec<(String, String)> {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for batch in sources {
+            let analysis = analyze("/projet", batch);
+            let report = cat.ingest_code(&analysis).unwrap();
+            eprintln!(
+                "[lot] scopes={} relations={} symboles={} inter-lots={} en attente={} ambigus={}",
+                report.scopes, report.relations, report.symbols,
+                report.linked_across_batches, report.still_pending, report.ambiguous
+            );
+        }
+        edges(&mut cat)
+    };
+
+    let lib = || ("lib_mod.rs".to_string(), LIB.to_string());
+    let app = || ("app.rs".to_string(), APP.to_string());
+
+    let together = ingest(vec![vec![lib(), app()]]);
+    let lib_first = ingest(vec![vec![lib()], vec![app()]]);
+    let app_first = ingest(vec![vec![app()], vec![lib()]]);
+
+    eprintln!("[ensemble]   {together:?}");
+    eprintln!("[lib puis app] {lib_first:?}");
+    eprintln!("[app puis lib] {app_first:?}");
+
+    // La relation attendue est là quand tout arrive d'un coup…
+    assert!(
+        together.iter().any(|(a, b)| a == "run" && b == "compute_total"),
+        "le lot complet doit relier run → compute_total : {together:?}"
+    );
+    // …et l'ordre n'y change rien, dans les deux sens.
+    assert_eq!(lib_first, together, "définition d'abord");
+    assert_eq!(app_first, together, "usage d'abord — c'est le sens que le résolveur intra-lot ne peut pas voir");
+
+    // Et l'entité `Scope` de la cible est bien la bonne, pas un homonyme.
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let analysis = analyze("/projet", vec![app()]);
+    cat.ingest_code(&analysis).unwrap();
+    let report = cat.ingest_code(&analyze("/projet", vec![lib()])).unwrap();
+    // Deux rendez-vous : `run` attendait `compute_total`, et le scope de
+    // module du fichier aussi.
+    assert_eq!(report.linked_across_batches, 2, "{report:?}");
+    assert_eq!(report.ambiguous, 0, "{report:?}");
+    assert!(cat.count(SCOPE).unwrap() >= 2);
+}
