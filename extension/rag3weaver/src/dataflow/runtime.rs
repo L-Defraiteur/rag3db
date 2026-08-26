@@ -772,6 +772,11 @@ impl DataflowRuntime {
             parent: self.services.get::<String>("parent_run").cloned(),
             kind: "graph".to_string(),
             name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
+            // La cellule du bus qui reçoit : c'est celle où ce run tourne.
+            scope: self
+                .services
+                .get::<Arc<crate::events::EventBus>>("event_bus")
+                .map(|b| b.scope().clone()),
         });
     }
 

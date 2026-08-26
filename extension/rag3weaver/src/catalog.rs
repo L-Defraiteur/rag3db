@@ -557,7 +557,7 @@ impl Catalog {
         }
         let sparse_tables: Vec<String> = self.sparse_handles.keys().cloned().collect();
 
-        self.event_bus.emit(CatalogEvent::ShutdownStarted {
+        self.emit_event(CatalogEvent::ShutdownStarted {
             fts_tables: fts_tables.clone(),
             sparse_tables: sparse_tables.clone(),
         });
@@ -600,7 +600,7 @@ impl Catalog {
         //    boundary before the connection goes away.
         self.flush_blob_store("shutdown");
 
-        self.event_bus.emit(CatalogEvent::ShutdownCompleted {
+        self.emit_event(CatalogEvent::ShutdownCompleted {
             fts_closed,
             fts_failed,
             sparse_committed,
@@ -2687,7 +2687,7 @@ impl Catalog {
         services.register("delete_results", delete_results.clone());
 
         // Event bus for node-emitted lifecycle events + warnings
-        services.register("event_bus", Arc::new(self.event_bus.shared()));
+        services.register("event_bus", Arc::new(self.event_bus.in_scope(&self.scope)));
         // Les graphes internes du catalogue publient leurs runs sur `catalog`,
         // pas sur `dataflow` : un graphe de trace qui écrit ici ne doit pas
         // se voir écrire.
@@ -2761,7 +2761,7 @@ impl Catalog {
             }
             Err(e) => {
                 eprintln!("[rag3weaver] drain FAILED: {e}");
-                self.event_bus.emit(CatalogEvent::Error {
+                self.emit_event(CatalogEvent::Error {
                     context: "drain".to_string(),
                     message: format!("ingestion dataflow failed: {e}"),
                 });
@@ -2803,7 +2803,7 @@ impl Catalog {
             }
             Err(e) => {
                 eprintln!("[rag3weaver] blob flush ({context}) FAILED: {e} — retained for retry");
-                self.event_bus.emit(CatalogEvent::Error {
+                self.emit_event(CatalogEvent::Error {
                     context: format!("blob_flush:{context}"),
                     message: format!("index blobs not persisted: {e}"),
                 });
@@ -2839,7 +2839,7 @@ impl Catalog {
                 FlushResult { processed: op_count, failed: 0, ..Default::default() }
             }
             Err(e) => {
-                self.event_bus.emit(CatalogEvent::Error {
+                self.emit_event(CatalogEvent::Error {
                     context: "flush_insertions".to_string(),
                     message: format!("insert-only dataflow failed: {e}"),
                 });
@@ -2971,7 +2971,7 @@ impl Catalog {
                 })
             }
             Err(e) => {
-                self.event_bus.emit(CatalogEvent::Error {
+                self.emit_event(CatalogEvent::Error {
                     context: "drain_resume".to_string(),
                     message: format!("resume failed: {e}"),
                 });
@@ -3025,12 +3025,18 @@ impl Catalog {
     /// `ServiceRegistry` (`"event_bus"`, en `Arc`) pour que ses événements
     /// rejoignent ceux de l'ingestion.
     pub fn event_bus(&self) -> EventBus {
-        self.event_bus.shared()
+        self.event_bus.in_scope(&self.scope)
+    }
+
+    /// Publie dans la cellule **courante** — `set_scope` déplace donc aussi
+    /// les événements, ce qui est la seule lecture cohérente.
+    fn emit_event(&self, event: CatalogEvent) {
+        self.event_bus.in_scope(&self.scope).emit(event);
     }
 
     /// Le sujet `catalog` : ingestion, drain, cycle de vie, erreurs.
     pub fn subscribe(&self) -> async_broadcast::Receiver<CatalogEvent> {
-        self.event_bus.subscribe(crate::events::topic::CATALOG)
+        self.event_bus.in_scope(&self.scope).subscribe(crate::events::topic::CATALOG)
     }
 
     // ── Node ID cache ─────────────────────────────────────────────────
@@ -3665,7 +3671,7 @@ impl Catalog {
         let total_ms = search_start.elapsed().as_millis() as u64;
         if let Some(ref mut d) = diag { d.total_ms = total_ms; }
 
-        self.event_bus.emit(CatalogEvent::SearchCompleted {
+        self.emit_event(CatalogEvent::SearchCompleted {
             kb: name.to_string(),
             results: fused.len(),
             duration_ms: total_ms,

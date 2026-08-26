@@ -63,8 +63,11 @@ Trois conséquences :
 - **Un message à un run d'une autre cellule est refusé**, pas ignoré : la
   boîte `run.<id>.inbox` vit dans l'espace de son propriétaire, et
   `send_message` ne peut pas nommer un espace qu'il n'a pas.
-- **L'événement porte quand même sa cellule** (`org`, `project`) : défense
-  en profondeur, et une trace relue dit de quelle cellule elle parle. Le
+- **Le run annonce sa cellule** (`RunStarted { …, scope }`) : les autres
+  événements appartiennent à un run, donc ne la répètent pas — payer un
+  champ à chaque nœud pour une information qui ne change pas d'un run
+  serait du gaspillage. Une trace relue dit quand même de quelle cellule
+  elle parle. Le
   catalogue le fait déjà — `_org` et `_project` sont estampillés sur chaque
   ligne, donc `Trace`, `Run` et `Message` étaient **déjà** isolés ; le bus
   était le seul passage ouvert.
@@ -196,9 +199,14 @@ C'est une ligne de fiche, plus une décision de code.
 
 ## 10. L'ordre, et comment on saura
 
-0. **La portée d'abord** (§3) : sujets préfixés par la cellule,
-   `bus.in_scope()`, et le test des deux cellules. Avant les jokers, pas
-   après — un joker sur un bus non cloisonné est une fuite.
+0. ~~**La portée d'abord**~~ **Fait le 26 au matin** : `bus.in_scope()`,
+   sujets réels `org/project/<sujet>`, curseurs et boîtes compris ;
+   `across_scopes(by)` explicite et audité (`WatchAcrossScopes` dans la
+   cellule de l'appelant) ; `RunStarted` porte sa cellule ; le catalogue
+   publie et s'abonne dans sa cellule courante. Testé : deux cellules dans
+   un processus, la montre la plus large de A n'entend rien de B, le même
+   identifiant de run ne se croise pas, un message de B n'atteint pas la
+   boîte de A.
 1. **`NodePort { run, node, node_type, port, dir, port_type, count, bytes }`**
    sur le bus, gardé par le registre d'intérêt. Test : sans abonné, aucun
    instantané n'est construit (un compteur le prouve) ; avec, on les reçoit.

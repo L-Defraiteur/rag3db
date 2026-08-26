@@ -503,6 +503,7 @@ impl<'a> Agent<'a> {
             parent: None,
             kind: "agent".to_string(),
             name: self.name.clone(),
+            scope: self.events.as_ref().map(|b| b.scope().clone()),
         });
         let outcome = self.run_inner(turns, sink, &run_id);
         self.emit(crate::events::CatalogEvent::RunFinished {

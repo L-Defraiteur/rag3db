@@ -112,6 +112,9 @@ pub enum Event {
         parent: Option<String>,
         kind: String,
         name: String,
+        /// La cellule où ce run tourne — les autres événements appartiennent
+        /// à un run, donc ne la répètent pas.
+        scope: Option<crate::scope::Scope>,
     },
     /// Le même, terminé.
     RunFinished {
@@ -159,6 +162,12 @@ pub enum Event {
         node_type: String,
         ms: u64,
         error: Option<String>,
+    },
+    /// Quelqu'un a ouvert une vue inter-cellules. Publié dans la cellule de
+    /// l'appelant : une surveillance qui traverse les organisations laisse
+    /// une trace.
+    WatchAcrossScopes {
+        by: String,
     },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
@@ -242,8 +251,10 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::RunStarted { run, parent, kind, name } => json!({
+            Self::RunStarted { run, parent, kind, name, scope } => json!({
                 "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
+                "org": scope.as_ref().map(|s| s.org.clone()),
+                "project": scope.as_ref().map(|s| s.project.clone()),
             }),
             Self::RunFinished { run, kind, ms, ok } => json!({
                 "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
@@ -264,6 +275,7 @@ impl Event {
             Self::NodeRun { run, node, node_type, ms, error } => json!({
                 "kind": "NodeRun", "run": run, "node": node, "node_type": node_type, "ms": ms, "ok": error.is_none(), "error": error,
             }),
+            Self::WatchAcrossScopes { by } => json!({ "kind": "WatchAcrossScopes", "by": by }),
             Self::Message { run, from, to, content } => json!({
                 "kind": "Message", "run": run, "from": from, "to": to, "content": content,
             }),
@@ -311,6 +323,33 @@ pub fn new_run_id(prefix: &str) -> String {
     format!("{prefix}-{ms:x}-{n}")
 }
 
+/// Une vue inter-cellules : elle nomme les sujets **en entier**
+/// (`org/project/sujet`) et ne peut rien émettre. Obtenue par
+/// [`EventBus::across_scopes`], qui l'audite.
+pub struct AllScopes {
+    inner: Arc<BusInner>,
+}
+
+impl AllScopes {
+    /// Tous les sujets de toutes les cellules, triés, préfixe compris.
+    pub fn topics(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.inner.channels.read().unwrap().keys().cloned().collect();
+        v.sort();
+        v
+    }
+
+    /// Un récepteur sur un sujet nommé en entier. `None` si ce sujet
+    /// n'existe pas encore — on n'en crée pas depuis ici.
+    pub fn subscribe_full(&self, full_topic: &str) -> Option<Receiver<Event>> {
+        self.inner
+            .channels
+            .read()
+            .unwrap()
+            .get(full_topic)
+            .map(|ch| ch.inactive.activate_cloned())
+    }
+}
+
 struct Channel {
     sender: Sender<Event>,
     inactive: InactiveReceiver<Event>,
@@ -334,6 +373,10 @@ struct Channel {
 #[derive(Clone)]
 pub struct EventBus {
     inner: Arc<BusInner>,
+    /// La cellule de **cette poignée**. Elle préfixe tout sujet, à l'émission
+    /// comme à l'abonnement : c'est ce qui rend une fuite inexprimable
+    /// plutôt qu'évitable. Voir [`Self::in_scope`].
+    scope: crate::scope::Scope,
 }
 
 struct BusInner {
@@ -351,7 +394,38 @@ impl EventBus {
                 channels: RwLock::new(HashMap::new()),
                 cursors: Mutex::new(HashMap::new()),
             }),
+            scope: crate::scope::Scope::default(),
         }
+    }
+
+    /// La même bourse d'événements, **vue depuis une cellule**.
+    ///
+    /// Un abonnement ouvert ici ne peut pas nommer une autre cellule : le
+    /// sujet réel est `org/project/<sujet>`, et il n'y a pas de syntaxe pour
+    /// en sortir. Un filtre par défaut s'oublie ; un espace de noms, non.
+    /// Pour la supervision, [`Self::across_scopes`], qui se demande et
+    /// s'audite.
+    pub fn in_scope(&self, scope: &crate::scope::Scope) -> Self {
+        Self { inner: self.inner.clone(), scope: scope.clone() }
+    }
+
+    /// La cellule de cette poignée.
+    pub fn scope(&self) -> &crate::scope::Scope {
+        &self.scope
+    }
+
+    /// Le sujet réel : `org/project/<sujet>`.
+    fn full(&self, topic: &str) -> String {
+        format!("{}/{}/{}", self.scope.org, self.scope.project, topic)
+    }
+
+    /// Une vue **inter-cellules**, pour une console d'exploitation — jamais
+    /// pour un graphe ordinaire. L'ouverture publie un `WatchAcrossScopes`
+    /// dans la cellule de l'appelant : une surveillance qui traverse les
+    /// organisations doit laisser une trace.
+    pub fn across_scopes(&self, by: &str) -> AllScopes {
+        self.emit(Event::WatchAcrossScopes { by: by.to_string() });
+        AllScopes { inner: self.inner.clone() }
     }
 
     /// Le même bus, partagé. (Équivalent de `clone` ; conservé pour les
@@ -375,26 +449,34 @@ impl EventBus {
 
     /// Crée le sujet s'il n'existe pas ; rend son nom. Utile pour déclarer.
     pub fn topic(&self, name: &str) -> String {
-        self.with_channel(name, |_| ());
+        self.with_channel(&self.full(name), |_| ());
         name.to_string()
     }
 
-    /// Les sujets existants, triés.
+    /// Les sujets existants **de cette cellule**, triés, sans le préfixe.
     pub fn topics(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.inner.channels.read().unwrap().keys().cloned().collect();
+        let prefix = self.full("");
+        let mut v: Vec<String> = self
+            .inner
+            .channels
+            .read()
+            .unwrap()
+            .keys()
+            .filter_map(|k| k.strip_prefix(&prefix).map(str::to_string))
+            .collect();
         v.sort();
         v
     }
 
     /// Un récepteur sur un sujet : ne verra que ce qui suit.
     pub fn subscribe(&self, topic: &str) -> Receiver<Event> {
-        self.with_channel(topic, |ch| ch.inactive.activate_cloned())
+        self.with_channel(&self.full(topic), |ch| ch.inactive.activate_cloned())
     }
 
     /// Un récepteur **nommé et gardé** par le bus sur un sujet — créé au
     /// premier appel, rendu tel quel ensuite. `EventSourceNode` s'en sert.
     pub fn cursor(&self, topic: &str, name: &str) -> Arc<Mutex<Receiver<Event>>> {
-        let key = format!("{topic}@{name}");
+        let key = format!("{}@{name}", self.full(topic));
         let mut cursors = self.inner.cursors.lock().unwrap();
         cursors
             .entry(key)
@@ -404,7 +486,7 @@ impl EventBus {
 
     /// Oublie un curseur : ses événements en attente sont perdus.
     pub fn drop_cursor(&self, topic: &str, name: &str) {
-        self.inner.cursors.lock().unwrap().remove(&format!("{topic}@{name}"));
+        self.inner.cursors.lock().unwrap().remove(&format!("{}@{name}", self.full(topic)));
     }
 
     /// Publie sur le sujet par défaut de l'événement ([`Event::topic`]) —
@@ -419,7 +501,11 @@ impl EventBus {
         self.emit_on(topic, event);
     }
 
-    /// Parle à un run : le message part sur sa boîte (`run.<to>.inbox`) et,
+    /// Parle à un run **de la même cellule** : il n'y a pas de syntaxe pour
+    /// nommer la boîte d'une autre organisation, donc pas de message qui la
+    /// traverse.
+    ///
+    /// Le message part sur sa boîte (`run.<to>.inbox`) et,
     /// par [`Self::emit`], sur `messages` et `run.<run>`. Fire and forget.
     pub fn send_message(&self, run: &str, from: &str, to: &str, content: &str) {
         let event = Event::Message {
@@ -434,7 +520,7 @@ impl EventBus {
 
     /// Publie sur un sujet choisi — `messages.<destinataire>`, par exemple.
     pub fn emit_on(&self, topic: &str, event: Event) {
-        self.with_channel(topic, |ch| {
+        self.with_channel(&self.full(topic), |ch| {
             let _ = ch.sender.try_broadcast(event);
         });
     }
@@ -490,7 +576,7 @@ mod tests {
         let mut all = bus.subscribe(topic::AGENT);
         let mut mine = bus.subscribe(&run_topic("r1"));
         let mut other = bus.subscribe(&run_topic("r2"));
-        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into() });
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), scope: None });
         assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
@@ -499,6 +585,69 @@ mod tests {
         assert!(matches!(all.try_recv(), Err(TryRecvError::Empty)));
         assert_ne!(new_run_id("agent"), new_run_id("agent"));
         assert_eq!(inbox_topic("r1"), "run.r1.inbox");
+    }
+
+    fn cell(org: &str, project: &str) -> crate::scope::Scope {
+        crate::scope::Scope { org: org.into(), project: project.into() }
+    }
+
+    #[test]
+    fn a_cell_never_hears_another_one() {
+        let bus = EventBus::new(16);
+        let a = bus.in_scope(&cell("acme", "prod"));
+        let b = bus.in_scope(&cell("globex", "prod"));
+
+        // Ce que A peut écouter de plus large : tous ses sujets.
+        let mut heard_by_a: Vec<Receiver<Event>> =
+            [topic::CATALOG, topic::AGENT, topic::DATAFLOW, topic::SEARCH, topic::MESSAGES]
+                .iter()
+                .map(|t| a.subscribe(t))
+                .collect();
+        let mut own = a.subscribe(&run_topic("r1"));
+
+        b.emit(Event::EntitiesStored { count: 7 });
+        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), iteration: 1, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
+        b.send_message("r1", "spy", "r1", "coucou");
+
+        for rx in &mut heard_by_a {
+            assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)), "A ne doit rien entendre de B");
+        }
+        // Le même identifiant de run dans les deux cellules ne se croise pas.
+        assert!(matches!(own.try_recv(), Err(TryRecvError::Empty)));
+        // Et la boîte de `r1` chez A est intacte : le message de B est allé
+        // dans la boîte de `r1` **de B**.
+        let mut inbox = a.cursor(&inbox_topic("r1"), "agent");
+        assert!(matches!(inbox.lock().unwrap().try_recv(), Err(TryRecvError::Empty)));
+
+        // Chez B, en revanche, tout est arrivé.
+        let mut b_inbox = b.cursor(&inbox_topic("r1"), "late");
+        b.send_message("r1", "spy", "r1", "encore");
+        assert!(matches!(b_inbox.lock().unwrap().try_recv().unwrap(), Event::Message { content, .. } if content == "encore"));
+
+        // Les sujets se lisent sans préfixe, cellule par cellule.
+        assert_eq!(a.topics(), ["agent", "catalog", "dataflow", "messages", "run.r1", "run.r1.inbox", "search"]);
+        assert!(b.topics().contains(&"agent".to_string()));
+        assert_eq!(a.scope().org, "acme");
+        let _ = &mut inbox;
+        let _ = &mut b_inbox;
+    }
+
+    #[test]
+    fn a_cross_scope_view_is_explicit_and_audited() {
+        let bus = EventBus::new(16);
+        let a = bus.in_scope(&cell("acme", "prod"));
+        let mut audit = a.subscribe(topic::CATALOG);
+        let b = bus.in_scope(&cell("globex", "prod"));
+        b.emit(Event::EntitiesStored { count: 7 });
+
+        // L'ouverture laisse une trace dans la cellule de l'appelant.
+        let all = a.across_scopes("console-exploitation");
+        assert!(matches!(audit.try_recv().unwrap(), Event::WatchAcrossScopes { by } if by == "console-exploitation"));
+
+        // Elle nomme les sujets en entier, et ne peut rien émettre.
+        assert!(all.topics().iter().any(|t| t == "globex/prod/catalog"), "{:?}", all.topics());
+        assert!(all.subscribe_full("globex/prod/catalog").is_some());
+        assert!(all.subscribe_full("globex/prod/inconnu").is_none(), "on ne crée pas de sujet depuis ici");
     }
 
     #[test]
