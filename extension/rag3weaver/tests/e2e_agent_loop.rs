@@ -584,7 +584,46 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     assert!(turn.content.contains("run_id=run-b"), "{}", turn.content);
     assert!(turn.content.contains("kind=agent"), "{}", turn.content);
     assert!(!turn.content.contains("null"), "aucun champ nul : {}", turn.content);
+    // 5. Le fil : les messages appartiennent à une conversation, avec ses
+    //    participants et leur nature — et une date lisible.
     let cat = catalog.lock().unwrap();
+    let convs = cat
+        .execute_raw("MATCH (c:Conversation) RETURN c.conversation_id, c.opened_at")
+        .unwrap();
+    let named: Vec<(String, String)> = convs
+        .rows
+        .iter()
+        .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_str()?.to_string())))
+        .collect();
+    eprintln!("[fils] {named:?}");
+    // graph-a → run-b, et run-c → run-b : deux paires, donc deux fils.
+    assert_eq!(named.len(), 2, "{named:?}");
+    assert!(named.iter().any(|(id, _)| id == "graph-a|run-b"), "{named:?}");
+    // La date est lisible, pas un nombre de millisecondes.
+    assert!(named.iter().all(|(_, at)| at.starts_with("20") && at.ends_with('Z')), "{named:?}");
+
+    let parts = cat
+        .execute_raw("MATCH (p:Participant)-[r:PARTICIPATES_IN]->(c:Conversation) RETURN p.identity, r.nature, c.conversation_id")
+        .unwrap();
+    let mut who: Vec<(String, String)> = parts
+        .rows
+        .iter()
+        .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_str()?.to_string())))
+        .collect();
+    who.sort();
+    who.dedup();
+    eprintln!("[participants] {who:?}");
+    // `run-b` est un run connu, donc un agent. `graph-a` n'en est pas un :
+    // on le dit « inconnue » plutôt que de le deviner à son nom.
+    assert!(who.contains(&("run-b".to_string(), "agent".to_string())), "{who:?}");
+    assert!(who.iter().any(|(id, _)| id == "graph-a"), "{who:?}");
+
+    // Et un message sait dans quel fil il a été dit.
+    let in_conv = cat
+        .execute_raw("MATCH (m:Message)-[:IN_CONVERSATION]->(c:Conversation) RETURN count(m)")
+        .unwrap();
+    assert_eq!(in_conv.rows[0][0].as_i64(), Some(2), "les deux messages sont dans un fil");
+
     assert_eq!(cat.count(MESSAGE_ENTITY).unwrap(), 2);
     // run-a (graphe), run-b (agent), run-c (squelette, il n'a fait que parler), le graphe search sous run-b.
     assert!(cat.count(RUN_ENTITY).unwrap() >= 4, "{}", cat.count(RUN_ENTITY).unwrap());

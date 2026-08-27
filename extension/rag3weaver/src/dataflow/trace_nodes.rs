@@ -55,9 +55,24 @@ pub const TRACE_ENTITY: &str = "Trace";
 pub const RUN_ENTITY: &str = "Run";
 /// Un message d'un run à un autre : `SENT_BY` et `SENT_TO` vers des `Run`.
 pub const MESSAGE_ENTITY: &str = "Message";
+/// L'entité `Conversation` : un **fil**, avec des participants. Elle ne se
+/// ferme jamais ([doc 12](../../docs/26-aout-2026-20h29/12-conversations-a-plusieurs.md)).
+pub const CONVERSATION_ENTITY: &str = "Conversation";
+/// L'entité `Participant` : une identité qui parle — un run d'agent, un
+/// humain. Sa **nature** n'est pas ici mais sur l'arête (voir
+/// [`PARTICIPATES_IN`]) : le même agent est un pair dans un fil et un outil
+/// dans un autre.
+pub const PARTICIPANT_ENTITY: &str = "Participant";
 pub const CHILD_OF: &str = "CHILD_OF";
 pub const SENT_BY: &str = "SENT_BY";
 pub const SENT_TO: &str = "SENT_TO";
+/// `Message —IN_CONVERSATION→ Conversation` : le fil auquel un message
+/// appartient. Sans lui, « de quoi a-t-on parlé hier dans ce fil » n'a pas
+/// de sujet — les messages ne pendaient qu'à un run.
+pub const IN_CONVERSATION: &str = "IN_CONVERSATION";
+/// `Participant —PARTICIPATES_IN→ Conversation`, avec la **nature** en
+/// propriété d'arête.
+pub const PARTICIPATES_IN: &str = "PARTICIPATES_IN";
 /// Le graphe de trace fourni : drain → catalogue.
 pub const TRACE_GRAPH_MERMAID: &str = include_str!("../../templates/trace.mmd");
 
@@ -147,6 +162,47 @@ pub fn message_config() -> EntityConfig {
     }
 }
 
+/// L'entité `Conversation`. `conversation_id` est l'identité.
+///
+/// Un fil **ne se ferme pas** : il n'y a donc ni état ni date de fin. Ce qui
+/// finit, c'est un run. Un fil silencieux reste un fil.
+pub fn conversation_config() -> EntityConfig {
+    let mut fields = HashMap::new();
+    fields.insert("conversation_id".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() });
+    fields.insert("subject".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
+    fields.insert("opened_at_ms".into(), f(FieldType::Integer));
+    fields.insert("opened_at".into(), f(FieldType::String));
+    EntityConfig {
+        fields,
+        hashsafe: Some(vec!["conversation_id".into()]),
+        return_fields: Some(vec!["opened_at".into(), "subject".into()]),
+        ..Default::default()
+    }
+}
+
+/// L'entité `Participant` : qui parle. `identity` est la clé — un
+/// identifiant de run pour un agent, un nom pour un humain.
+pub fn participant_config() -> EntityConfig {
+    let mut fields = HashMap::new();
+    fields.insert("identity".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() });
+    EntityConfig {
+        fields,
+        hashsafe: Some(vec!["identity".into()]),
+        ..Default::default()
+    }
+}
+
+/// L'identité d'un fil entre deux interlocuteurs.
+///
+/// Dérivée de la **paire non ordonnée** : A parlant à B et B parlant à A
+/// sont le même fil, ce qui est la moindre des choses. Un fil à plus de deux
+/// demandera un identifiant explicite dans l'enveloppe du message — c'est le
+/// reste à faire, et il est petit.
+pub fn conversation_id(a: &str, b: &str) -> String {
+    let (x, y) = if a <= b { (a, b) } else { (b, a) };
+    format!("{x}|{y}")
+}
+
 /// Enregistre `Trace`, `Run`, `Message` et leurs relations. Idempotent.
 pub fn register_trace_schema(catalog: &mut Catalog) -> Result<(), crate::catalog::CatalogError> {
     if !catalog.is_registered_entity(TRACE_ENTITY) {
@@ -158,10 +214,38 @@ pub fn register_trace_schema(catalog: &mut Catalog) -> Result<(), crate::catalog
     if !catalog.is_registered_entity(MESSAGE_ENTITY) {
         catalog.register_entity(MESSAGE_ENTITY, message_config())?;
     }
-    for (rel, from, to) in [(CHILD_OF, RUN_ENTITY, RUN_ENTITY), (SENT_BY, MESSAGE_ENTITY, RUN_ENTITY), (SENT_TO, MESSAGE_ENTITY, RUN_ENTITY)] {
+    if !catalog.is_registered_entity(CONVERSATION_ENTITY) {
+        catalog.register_entity(CONVERSATION_ENTITY, conversation_config())?;
+    }
+    if !catalog.is_registered_entity(PARTICIPANT_ENTITY) {
+        catalog.register_entity(PARTICIPANT_ENTITY, participant_config())?;
+    }
+    for (rel, from, to) in [
+        (CHILD_OF, RUN_ENTITY, RUN_ENTITY),
+        (SENT_BY, MESSAGE_ENTITY, RUN_ENTITY),
+        (SENT_TO, MESSAGE_ENTITY, RUN_ENTITY),
+        (IN_CONVERSATION, MESSAGE_ENTITY, CONVERSATION_ENTITY),
+    ] {
         if catalog.get_relation_def(rel).is_none() {
             catalog.register_relation(rel, from, to)?;
         }
+    }
+    // La **nature** vit sur l'arête, pas sur le participant : le même agent
+    // est un pair dans un fil et un outil dans un autre. La mettre sur
+    // l'individu aurait forcé un choix global qui n'a pas de sens.
+    if catalog.get_relation_def(PARTICIPATES_IN).is_none() {
+        let mut props = HashMap::new();
+        props.insert(
+            "nature".to_string(),
+            crate::config::FieldDef {
+                field_type: FieldType::String,
+                title_for: None,
+                content_for: None,
+                boost: None,
+                default_value: None,
+            },
+        );
+        catalog.register_relation_with(PARTICIPATES_IN, PARTICIPANT_ENTITY, CONVERSATION_ENTITY, props)?;
     }
     Ok(())
 }
@@ -187,6 +271,49 @@ fn ensure_run(cat: &mut Catalog, run_id: &str, seen: &mut std::collections::Hash
     d.insert("ok".into(), CypherValue::Bool(true));
     cat.ingest_entities(RUN_ENTITY, vec![d]).map_err(|e| e.to_string())?;
     seen.insert(run_id.to_string());
+    Ok(uuid)
+}
+
+/// Le fil, créé au premier message qui le peuple. `seen` évite de le
+/// réécrire à chaque message du même lot.
+fn ensure_conversation(
+    cat: &mut Catalog,
+    conv_id: &str,
+    at_ms: i64,
+    seen: &mut std::collections::HashSet<String>,
+) -> Result<String, String> {
+    let mut key = BTreeMap::new();
+    key.insert("conversation_id".to_string(), CypherValue::String(conv_id.to_string()));
+    let uuid = cat.entity_uuid(CONVERSATION_ENTITY, &key).map_err(|e| e.to_string())?;
+    if seen.contains(conv_id) || cat.exists(CONVERSATION_ENTITY, &uuid).map_err(|e| e.to_string())? {
+        seen.insert(conv_id.to_string());
+        return Ok(uuid);
+    }
+    let mut d = key;
+    d.insert("subject".to_string(), CypherValue::String(String::new()));
+    d.insert("opened_at_ms".to_string(), CypherValue::Int(at_ms));
+    d.insert("opened_at".to_string(), CypherValue::String(iso8601_utc(at_ms)));
+    cat.ingest_entities(CONVERSATION_ENTITY, vec![d]).map_err(|e| e.to_string())?;
+    seen.insert(conv_id.to_string());
+    Ok(uuid)
+}
+
+/// Le participant, créé à sa première parole.
+fn ensure_participant(
+    cat: &mut Catalog,
+    identity: &str,
+    seen: &mut std::collections::HashSet<String>,
+) -> Result<String, String> {
+    let mut key = BTreeMap::new();
+    key.insert("identity".to_string(), CypherValue::String(identity.to_string()));
+    let uuid = cat.entity_uuid(PARTICIPANT_ENTITY, &key).map_err(|e| e.to_string())?;
+    let marker = format!("participant:{identity}");
+    if seen.contains(&marker) || cat.exists(PARTICIPANT_ENTITY, &uuid).map_err(|e| e.to_string())? {
+        seen.insert(marker);
+        return Ok(uuid);
+    }
+    cat.ingest_entities(PARTICIPANT_ENTITY, vec![key]).map_err(|e| e.to_string())?;
+    seen.insert(marker);
     Ok(uuid)
 }
 
@@ -240,11 +367,44 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 d.insert("run_id".into(), CypherValue::String(run.clone()));
                 d.insert("seq".into(), CypherValue::String(format!("{at_ms}-{i}")));
                 d.insert("at_ms".into(), CypherValue::Int(at_ms));
-    d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
                 d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
                 let msg_uuid = cat.entity_uuid(MESSAGE_ENTITY, &d).map_err(|e| e.to_string())?;
+                let from_id = d.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 cat.ingest_entities(MESSAGE_ENTITY, vec![d]).map_err(|e| e.to_string())?;
                 messages += 1;
+
+                // Le fil : dérivé de la paire, créé au premier message. Une
+                // conversation existe dès que deux parties se parlent — on
+                // n'a rien à ouvrir, et rien ne se ferme.
+                if !from_id.is_empty() && !to.is_empty() {
+                    let conv = conversation_id(&from_id, &to);
+                    let conv_uuid = ensure_conversation(cat, &conv, at_ms, &mut seen)?;
+                    links.push((IN_CONVERSATION, msg_uuid.clone(), conv_uuid.clone()));
+                    for who in [&from_id, &to] {
+                        let p_uuid = ensure_participant(cat, who, &mut seen)?;
+                        // La nature se **lit** : un participant qui est un run
+                        // connu est un agent ; sinon on ne sait pas, et on le
+                        // dit plutôt que de le deviner au style de son nom
+                        // (doc 12 §3).
+                        let nature = if cat
+                            .exists(RUN_ENTITY, &cat.entity_uuid(RUN_ENTITY, &run_key(who)).map_err(|e| e.to_string())?)
+                            .map_err(|e| e.to_string())?
+                        {
+                            "agent"
+                        } else {
+                            "inconnue"
+                        };
+                        let mut props = BTreeMap::new();
+                        props.insert("nature".to_string(), CypherValue::String(nature.to_string()));
+                        cat.link(
+                            PARTICIPATES_IN,
+                            RefOrUuid::Uuid(p_uuid),
+                            RefOrUuid::Uuid(conv_uuid.clone()),
+                            props,
+                        )
+                        .map_err(|e| e.to_string())?;
+                    }
+                }
                 if !run.is_empty() {
                     let by = ensure_run(cat, &run, &mut seen)?;
                     links.push((SENT_BY, msg_uuid.clone(), by));
@@ -345,25 +505,109 @@ pub fn display_zone() -> jiff::tz::TimeZone {
     jiff::tz::TimeZone::system()
 }
 
-/// **Une journée locale, en intervalle d'instants** — la seule façon juste de
-/// filtrer une date.
+/// **Un instant local, écrit aussi court qu'on veut.**
 ///
-/// `day` s'écrit `AAAA-MM-JJ` et vaut dans `tz`. Rend `[début, fin)` en
-/// millisecondes d'époque, à passer à un filtre sur `at_ms`.
+/// `2026`, `2026-04`, `2026-04-27`, `2026-04-27T14`, `2026-04-27T14:30` —
+/// chaque forme désigne son **début** : l'année commence au 1ᵉʳ janvier à
+/// minuit, le mois au premier, l'heure à la minute zéro. C'est ce qui permet
+/// d'écrire une borne au grain qu'on a en tête, sans compléter de zéros.
 ///
-/// Pourquoi ça existe plutôt que `at starts_with "2026-08-27"` : `at` est en
-/// UTC. À Paris en été, la journée locale commence deux heures **avant**
-/// minuit UTC — le préfixe raterait les deux premières heures et attraperait
-/// les deux dernières de la veille.
+/// Le résultat est en millisecondes d'époque : un point sur la ligne, sans
+/// fuseau. C'est là que la traduction a lieu, et **c'est le seul endroit**.
+pub fn local_instant(spec: &str, tz: &jiff::tz::TimeZone) -> Option<i64> {
+    use jiff::civil::date;
+
+    let spec = spec.trim();
+    let (d, t) = match spec.split_once('T').or_else(|| spec.split_once(' ')) {
+        Some((d, t)) => (d, Some(t)),
+        None => (spec, None),
+    };
+    let parts: Vec<&str> = d.split('-').collect();
+    let year: i16 = parts.first()?.parse().ok()?;
+    let month: i8 = match parts.get(1) {
+        Some(m) => m.parse().ok().filter(|m| (1..=12).contains(m))?,
+        None => 1,
+    };
+    let day: i8 = match parts.get(2) {
+        Some(d) => d.parse().ok().filter(|d| (1..=31).contains(d))?,
+        None => 1,
+    };
+    if parts.len() > 3 {
+        return None;
+    }
+    let (h, mi) = match t {
+        None => (0, 0),
+        Some(t) => {
+            let mut it = t.split(':');
+            let h: i8 = it.next()?.parse().ok().filter(|h| (0..24).contains(h))?;
+            let mi: i8 = match it.next() {
+                Some(m) => m.parse().ok().filter(|m| (0..60).contains(m))?,
+                None => 0,
+            };
+            if it.next().is_some() {
+                return None;
+            }
+            (h, mi)
+        }
+    };
+    let civil = date(year, month, day).at(h, mi, 0, 0);
+    // Une heure locale peut ne pas exister (le matin du passage à l'heure
+    // d'été) ou exister deux fois (celui du retour). `to_zoned` tranche par
+    // la règle « compatible » : on avance dans le trou, on prend la première
+    // occurrence dans le pli. Un intervalle reste donc bien défini.
+    tz.to_zoned(civil).ok().map(|z| z.timestamp().as_millisecond())
+}
+
+/// **De telle date à telle date** — l'intervalle `[de, à)`, en millisecondes
+/// d'époque, à passer à un filtre sur `at_ms`.
 ///
-/// Et la journée ne fait pas toujours 24 h : aux changements d'heure elle en
-/// fait 23 ou 25. C'est exactement ce qu'on ne savait pas calculer à la main,
-/// et pourquoi la base de fuseaux vaut sa dépendance.
+/// Les deux bornes s'écrivent au grain qu'on veut ([`local_instant`]) et ne
+/// sont pas obligées d'avoir le même : `local_range("2026-04", "2026-05-15T12", tz)`
+/// est parfaitement clair.
+///
+/// C'est la forme générale ; [`local_period_range`] n'en est qu'un raccourci
+/// pour « toute cette année / ce mois / ce jour ».
+pub fn local_range(from: &str, to: &str, tz: &jiff::tz::TimeZone) -> Option<(i64, i64)> {
+    let (a, b) = (local_instant(from, tz)?, local_instant(to, tz)?);
+    (a <= b).then_some((a, b))
+}
+
+/// **Toute une période** : `2026`, `2026-04` ou `2026-04-27`, sans écrire la
+/// borne de fin.
+///
+/// Un raccourci de [`local_range`] vers le début de l'unité suivante. Il
+/// existe parce qu'écrire « avril » ne devrait pas obliger à savoir combien
+/// de jours il fait — surtout que la réponse n'est pas constante : un mois
+/// fait 28 à 31 jours, et **mars 2026 fait 743 heures et pas 744**, parce
+/// qu'on y passe à l'heure d'été. C'est ce qu'un calcul à la main rate, et
+/// pourquoi la base de fuseaux vaut sa dépendance.
+pub fn local_period_range(spec: &str, tz: &jiff::tz::TimeZone) -> Option<(i64, i64)> {
+    use jiff::civil::date;
+
+    let spec = spec.trim();
+    if spec.contains('T') || spec.contains(' ') {
+        return None;
+    }
+    let parts: Vec<&str> = spec.split('-').collect();
+    let year: i16 = parts.first()?.parse().ok()?;
+    let next = match parts.len() {
+        1 => date(year.checked_add(1)?, 1, 1).to_string(),
+        2 => {
+            let m: i8 = parts[1].parse().ok().filter(|m| (1..=12).contains(m))?;
+            if m == 12 { date(year.checked_add(1)?, 1, 1) } else { date(year, m + 1, 1) }.to_string()
+        }
+        3 => {
+            let d: jiff::civil::Date = spec.parse().ok()?;
+            d.tomorrow().ok()?.to_string()
+        }
+        _ => return None,
+    };
+    local_range(spec, &next, tz)
+}
+
+/// [`local_period_range`] pour une journée. `AAAA-MM-JJ` uniquement.
 pub fn local_day_range(day: &str, tz: &jiff::tz::TimeZone) -> Option<(i64, i64)> {
-    let date: jiff::civil::Date = day.parse().ok()?;
-    let start = tz.to_zoned(date.to_datetime(jiff::civil::Time::midnight())).ok()?;
-    let end = tz.to_zoned(date.tomorrow().ok()?.to_datetime(jiff::civil::Time::midnight())).ok()?;
-    Some((start.timestamp().as_millisecond(), end.timestamp().as_millisecond()))
+    (day.split('-').count() == 3).then(|| local_period_range(day, tz)).flatten()
 }
 
 /// L'instant, écrit dans un fuseau : `2026-08-27T00:30:00+02:00[Europe/Paris]`.
@@ -771,6 +1015,29 @@ mod tests {
         // bogue passe inaperçu tant qu'on ne sort pas de Greenwich.
         let (s0, _) = local_day_range("2026-08-27", &jiff::tz::TimeZone::UTC).unwrap();
         assert_eq!(iso8601_utc(s0), "2026-08-27T00:00:00.000Z");
+    }
+
+    /// La période, raccourci de l'intervalle — et ce qu'elle sait faire qu'un
+    /// calcul à la main rate.
+    #[test]
+    fn a_period_is_a_shorthand_and_it_knows_the_calendar() {
+        let paris = jiff::tz::TimeZone::get("Europe/Paris").unwrap();
+        let hours = |(a, b): (i64, i64)| (b - a) / 3_600_000;
+
+        assert_eq!(hours(local_period_range("2026-04", &paris).unwrap()), 30 * 24, "avril fait 30 jours");
+        assert_eq!(hours(local_period_range("2024-02", &paris).unwrap()), 29 * 24, "février 2024 est bissextile");
+        assert_eq!(hours(local_period_range("2026", &paris).unwrap()), 365 * 24, "2026 ne l'est pas");
+        assert_eq!(hours(local_period_range("2026-12", &paris).unwrap()), 31 * 24, "décembre déborde sur l'année suivante");
+
+        // **La ligne qui justifie la dépendance** : mars 2026 fait 31 jours
+        // mais 743 heures — on y passe à l'heure d'été. Un calcul à la main
+        // aurait écrit 744, une fois par an, en silence.
+        assert_eq!(hours(local_period_range("2026-03", &paris).unwrap()), 743);
+        assert_eq!(hours(local_period_range("2026-10", &paris).unwrap()), 745);
+
+        assert!(local_period_range("2026-13", &paris).is_none());
+        assert!(local_period_range("2026-04-27T14", &paris).is_none(), "une heure n'est pas une période");
+        assert!(local_day_range("2026-04", &paris).is_none(), "et un mois n'est pas un jour");
     }
 
     /// **Ce qu'on ne savait pas calculer à la main, et pourquoi la dépendance
