@@ -724,15 +724,26 @@ impl EntityConfig {
                 ));
             }
         }
-        if (self.signals.vector() || self.signals.sparse()) && !self.has_simple_pipeline() {
+        if (self.signals.vector() || self.signals.sparse())
+            && !self.has_simple_pipeline()
+            && !self.has_kb_participation()
+        {
             // Même famille que le refus ci-dessus, et même conséquence : les
             // chunks seraient vides, donc l'entité introuvable par ces
             // signaux — en silence. Une erreur de configuration vaut mieux.
+            //
+            // **Deux façons d'avoir du contenu**, et les oublier revient à
+            // refuser une configuration légitime : le pipeline simple
+            // (`is_content` / `content_for: ["self"]`), et la participation à
+            // une base de connaissances (`content_for: ["knowledge"]`), où le
+            // texte part alimenter les chunks de la KB. C'est le second qui
+            // manquait, et `e2e_idempotent_registration` l'a dit tout de suite.
             return Err(
-                "un signal vecteur ou sparse sans champ de contenu \
-                 (`is_content` / `content_for: [\"self\"]`) : il n'y aurait rien à \
-                 embarquer, et l'entité serait introuvable par ces signaux. \
-                 Déclarer un champ de contenu, ou `signals: BM25`."
+                "un signal vecteur ou sparse sans aucun champ de contenu — ni \
+                 `is_content` / `content_for: [\"self\"]`, ni participation à une \
+                 base de connaissances : il n'y aurait rien à embarquer, et \
+                 l'entité serait introuvable par ces signaux. Déclarer un champ \
+                 de contenu, ou `signals: BM25`."
                     .into(),
             );
         }
@@ -1119,6 +1130,28 @@ mod tests {
         fields.insert("name".to_string(), SimpleFieldDef { is_title: true, ..Default::default() });
         let c = EntityConfig { fields, signals: SearchSignals::BM25, ..Default::default() };
         assert!(c.validate().is_ok());
+    }
+
+    /// **Il y a deux façons d'avoir du contenu**, et n'en connaître qu'une
+    /// refuse des configurations légitimes. `Note` alimente la base
+    /// « knowledge » : son texte part dans les chunks de la KB, pas dans les
+    /// siens. `e2e_idempotent_registration::kb_vector_search_survives_migration`
+    /// l'a dit à la première passe.
+    #[test]
+    fn alimenter_une_base_de_connaissances_compte_comme_du_contenu() {
+        let mut fields = HashMap::new();
+        fields.insert("title".to_string(), SimpleFieldDef {
+            title_for: Some("knowledge".into()), ..Default::default()
+        });
+        fields.insert("content".to_string(), SimpleFieldDef {
+            field_type: FieldType::Text,
+            content_for: Some(vec!["knowledge".into()]),
+            ..Default::default()
+        });
+        let c = EntityConfig { fields, ..Default::default() }; // HYBRID
+        assert!(c.validate().is_ok(), "{:?}", c.validate());
+        assert!(!c.has_simple_pipeline(), "pas de contenu à soi…");
+        assert!(c.has_kb_participation(), "…mais il alimente une KB");
     }
 
     #[test]
