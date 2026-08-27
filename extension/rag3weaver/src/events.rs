@@ -116,6 +116,35 @@ pub enum Event {
         /// à un run, donc ne la répètent pas.
         scope: Option<crate::scope::Scope>,
     },
+    /// **Ce qu'un appel a consommé** — le compteur
+    /// ([`crate::meter`], [doc 08](../docs/27-aout-2026-13h01/08-le-compteur.md)).
+    ///
+    /// Distinct de [`Self::LlmCall`], et volontairement : celui-ci dit
+    /// *comment la boucle s'est passée* — itération, raison d'arrêt,
+    /// réessais — celui-là dit *ce qui a été consommé*, dans des unités qui
+    /// ne sont pas toutes des jetons. Un TTS et un STT émettent le second et
+    /// jamais le premier.
+    ///
+    /// **Des faits, jamais un prix.** Les tarifs changent ; la tarification
+    /// est une table qui résout des slugs de ressource au moment de lire.
+    Consumed {
+        run: String,
+        agent: String,
+        /// Le tour qui a consommé.
+        ///
+        /// **Il n'est pas décoratif** : sans lui, deux appels au même modèle
+        /// dans le même run produisent un événement identique au champ près —
+        /// et comme `Trace` n'a pas de `hashsafe`, son uuid dérive de tous les
+        /// champs : les deux faits fusionnent en une seule ligne, en silence
+        /// (27 août 2026, « 18 enregistrés, 16 stockés »). Il porte aussi ce
+        /// qu'on veut vraiment savoir : quel tour a coûté quoi.
+        iteration: usize,
+        /// Slug stable : `llm.gemini-3.5-flash`, `tts.piper.fr`.
+        resource: String,
+        provider: String,
+        /// `(unité, quantité)`. Un appel, une ligne, plusieurs unités.
+        units: Vec<(crate::meter::Unit, u64)>,
+    },
     /// **L'historique a été réduit** avant un appel au modèle.
     ///
     /// Sans cet événement, une politique d'absorption jette du contexte en
@@ -144,8 +173,14 @@ pub enum Event {
     LlmCall {
         run: String,
         agent: String,
+        /// **Quel modèle.** Sans lui, aucun coût n'est calculable — et c'est
+        /// le genre de champ qu'on ne peut pas reconstituer après coup.
+        model: String,
         iteration: usize,
         prompt_tokens: usize,
+        /// La part de `prompt_tokens` servie depuis le cache du fournisseur,
+        /// comprise dedans. Environ dix fois moins chère.
+        cached_prompt_tokens: usize,
         completion_tokens: usize,
         ms: u64,
         retries: u32,
@@ -232,7 +267,7 @@ impl Event {
             }
             Self::SearchStarted { .. } | Self::SearchCompleted { .. } => topic::SEARCH,
             Self::LlmCall { .. } | Self::ToolCallStarted { .. } | Self::ToolCallFinished { .. } => topic::AGENT,
-            Self::TurnCompacted { .. } => topic::AGENT,
+            Self::TurnCompacted { .. } | Self::Consumed { .. } => topic::AGENT,
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             _ => topic::CATALOG,
@@ -249,6 +284,7 @@ impl Event {
             | Self::ToolCallStarted { run, .. }
             | Self::ToolCallFinished { run, .. }
             | Self::TurnCompacted { run, .. }
+            | Self::Consumed { run, .. }
             | Self::NodeRun { run, .. }
             | Self::Message { run, .. } => Some(run),
             _ => None,
@@ -278,13 +314,20 @@ impl Event {
             Self::RunFinished { run, kind, ms, ok } => json!({
                 "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
             }),
+            Self::Consumed { run, agent, iteration, resource, provider, units } => json!({
+                "kind": "Consumed", "run": run, "agent": agent, "iteration": iteration,
+                "resource": resource, "provider": provider,
+                "units": units.iter().map(|(u, n)| json!({ "unit": u.as_str(), "amount": n }))
+                    .collect::<Vec<_>>(),
+            }),
             Self::TurnCompacted { run, rewritten, kept, dropped } => json!({
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
                 "kept": kept, "dropped": dropped,
             }),
-            Self::LlmCall { run, agent, iteration, prompt_tokens, completion_tokens, ms, retries, finish, tool_calls } => json!({
-                "kind": "LlmCall", "run": run, "agent": agent, "iteration": iteration,
-                "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, completion_tokens, ms, retries, finish, tool_calls } => json!({
+                "kind": "LlmCall", "run": run, "agent": agent, "model": model, "iteration": iteration,
+                "prompt_tokens": prompt_tokens, "cached_prompt_tokens": cached_prompt_tokens,
+                "completion_tokens": completion_tokens,
                 "tokens": prompt_tokens + completion_tokens, "ms": ms, "retries": retries,
                 "finish": finish, "tool_calls": tool_calls,
             }),
@@ -581,7 +624,7 @@ mod tests {
         let bus = EventBus::new(2);
         let cursor = bus.cursor(topic::AGENT, "trace");
         for i in 0..5 {
-            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), iteration: i, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
+            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
         }
         // Le même curseur, retrouvé par son nom — pas un nouveau récepteur.
         let same = bus.cursor(topic::AGENT, "trace");
@@ -629,7 +672,7 @@ mod tests {
         let mut own = a.subscribe(&run_topic("r1"));
 
         b.emit(Event::EntitiesStored { count: 7 });
-        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), iteration: 1, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
+        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, finish: "Eos".into(), tool_calls: 0 });
         b.send_message("r1", "spy", "r1", "coucou");
 
         for rx in &mut heard_by_a {

@@ -1314,6 +1314,17 @@ fn read_sse(
         if let Some(u) = chunk.get("usage").filter(|u| !u.is_null()) {
             usage.prompt_tokens = u["prompt_tokens"].as_u64().unwrap_or(0) as usize;
             usage.completion_tokens = u["completion_tokens"].as_u64().unwrap_or(0) as usize;
+            // La part servie depuis le cache. Le fournisseur l'envoie, on la
+            // jetait — et sans elle un coût est faux d'un ordre de grandeur.
+            //
+            // Deux orthographes selon la couche : `prompt_tokens_details`
+            // pour les API compatibles OpenAI, `cached_content_token_count`
+            // quand Gemini transparaît sous la compatibilité. On lit les deux
+            // plutôt que de parier sur laquelle arrivera.
+            usage.cached_prompt_tokens = u["prompt_tokens_details"]["cached_tokens"]
+                .as_u64()
+                .or_else(|| u["cached_content_token_count"].as_u64())
+                .unwrap_or(0) as usize;
         }
 
         let Some(choice) = chunk["choices"].get(0) else { continue };

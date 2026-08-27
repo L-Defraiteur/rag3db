@@ -442,6 +442,24 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
             format!("LlmCall {} #{} {}", s("agent"), i("iteration"), s("finish")),
             format!("{} jetons ({} + {}), {} ms, {} réessais, {} appels d'outil", i("tokens"), i("prompt_tokens"), i("completion_tokens"), i("ms"), i("retries"), i("tool_calls")),
         ),
+        // Sans cette branche, `Consumed` tombait dans le cas générique —
+        // résumé « Consumed », détail vide — donc **tous identiques**. Et
+        // `Trace` n'ayant pas de `hashsafe`, son uuid dérive de tous les
+        // champs : deux consommations du même run fusionnaient en une ligne,
+        // sans que rien ne le dise. Un traceur qui déduplique en silence est
+        // pire qu'un traceur absent.
+        "Consumed" => (
+            format!("Consumed {} #{} {}", s("agent"), i("iteration"), s("resource")),
+            event["units"]
+                .as_array()
+                .map(|us| {
+                    us.iter()
+                        .map(|u| format!("{} {}", u["amount"].as_u64().unwrap_or(0), u["unit"].as_str().unwrap_or("?")))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+        ),
         "ToolCallStarted" => (format!("ToolCallStarted {} {}", s("agent"), s("tool")), s("arguments")),
         "ToolCallFinished" => (
             format!("ToolCallFinished {} {} {}", s("agent"), s("tool"), if event["ok"].as_bool().unwrap_or(false) { "ok" } else { "error" }),

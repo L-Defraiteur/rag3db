@@ -141,6 +141,8 @@ pub mod query;
 pub mod refs;
 pub mod schema;
 pub mod postures;
+pub mod meter;
+pub use meter::{Consumption, Meter, Unit};
 pub mod session;
 pub use session::{Absorb, Compaction, Session, SessionTools};
 pub mod scope;

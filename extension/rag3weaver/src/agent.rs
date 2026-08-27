@@ -460,6 +460,17 @@ pub struct Agent<'a> {
     /// payer. Absente, la boucle envoie tout l'historique tel quel — c'est le
     /// comportement d'hier, et le témoin auquel on compare.
     session: Option<Arc<crate::session::Session>>,
+    /// Le compteur, s'il y en a un. L'événement `Consumed` part sur le bus
+    /// dans tous les cas ; celui-ci sert à totaliser **dans la session**, sans
+    /// avoir à rejouer la trace.
+    meter: Option<Arc<crate::meter::Meter>>,
+    /// Le slug sous lequel cet agent consomme. Vide : dérivé du modèle.
+    /// Paramétrable parce que c'est lui qu'une table de prix résoudra un jour,
+    /// et que le nom du modèle n'est pas toujours le nom du produit vendu.
+    resource: Option<String>,
+    /// Qui sert : `vertex`, `openai`, `local`… Un même modèle chez deux
+    /// fournisseurs n'a ni le même prix ni la même disponibilité.
+    provider: String,
 }
 
 /// Le curseur sous lequel un agent lit sa boîte. Un message envoyé **avant**
@@ -492,6 +503,9 @@ impl<'a> Agent<'a> {
             inbox: false,
             postures: None,
             session: None,
+            meter: None,
+            resource: None,
+            provider: "unknown".to_string(),
         }
     }
 
@@ -502,6 +516,28 @@ impl<'a> Agent<'a> {
     /// **commun** qui rend l'attente circulaire détectable.
     pub fn with_postures(mut self, postures: Arc<crate::postures::Postures>) -> Self {
         self.postures = Some(postures);
+        self
+    }
+
+    /// Partager le compteur de la session.
+    ///
+    /// Sans lui, rien n'est perdu — l'événement `Consumed` part sur le bus de
+    /// toute façon — mais il faut rejouer la trace pour totaliser. Avec, la
+    /// question « ça a coûté quoi » se répond tout de suite.
+    pub fn with_meter(mut self, meter: Arc<crate::meter::Meter>) -> Self {
+        self.meter = Some(meter);
+        self
+    }
+
+    /// Le slug de ressource et le fournisseur, pour le compteur.
+    ///
+    /// Le slug est **paramétrable** et pas dérivé une fois pour toutes : le
+    /// nom d'un modèle n'est pas le nom du produit qu'on vend, et c'est ce
+    /// slug qu'une table de prix résoudra le jour où quelqu'un facture
+    /// ([doc 08](../docs/27-aout-2026-13h01/08-le-compteur.md) §3).
+    pub fn with_resource(mut self, resource: impl Into<String>, provider: impl Into<String>) -> Self {
+        self.resource = Some(resource.into());
+        self.provider = provider.into();
         self
     }
 
@@ -813,6 +849,36 @@ impl<'a> Agent<'a> {
         outcome
     }
 
+    /// **Ce que cet appel a consommé**, sur le bus et dans le compteur.
+    ///
+    /// La part en cache est **retirée** de l'entrée plein tarif : le
+    /// fournisseur rapporte `prompt_tokens` cache compris, et laisser les deux
+    /// se recouvrir compterait deux fois ce qui n'a été payé qu'une, au plein
+    /// tarif en plus.
+    fn meter_call(&self, run_id: &str, iteration: usize, model: &str, usage: &Usage) {
+        let resource = self.resource.clone().unwrap_or_else(|| format!("llm.{model}"));
+        let plein = usage.prompt_tokens.saturating_sub(usage.cached_prompt_tokens);
+        let c = crate::meter::Consumption::new(resource, self.provider.clone())
+            .by(run_id, self.name.clone())
+            .with(crate::meter::Unit::InputTokens, plein as u64)
+            .with(crate::meter::Unit::CachedInputTokens, usage.cached_prompt_tokens as u64)
+            .with(crate::meter::Unit::OutputTokens, usage.completion_tokens as u64);
+        if c.is_empty() {
+            return;
+        }
+        self.emit(crate::events::CatalogEvent::Consumed {
+            run: run_id.to_string(),
+            agent: self.name.clone(),
+            iteration,
+            resource: c.resource.clone(),
+            provider: c.provider.clone(),
+            units: c.units.clone(),
+        });
+        if let Some(m) = &self.meter {
+            m.record(c);
+        }
+    }
+
     /// Réduit dans l'historique ce qui n'a plus à y être en entier.
     ///
     /// Sans session, **rien** : c'est la boucle d'hier, à la lettre.
@@ -967,17 +1033,21 @@ impl<'a> Agent<'a> {
             run.text = text.clone();
             accumulate(&mut run.usage, &usage);
             last_finish = finish.clone();
+            let model = self.llm.name().to_string();
             self.emit(crate::events::CatalogEvent::LlmCall {
                 run: run_id.to_string(),
                 agent: self.name.clone(),
+                model: model.clone(),
                 iteration: run.iterations,
                 prompt_tokens: usage.prompt_tokens,
+                cached_prompt_tokens: usage.cached_prompt_tokens,
                 completion_tokens: usage.completion_tokens,
                 ms: usage.ms,
                 retries: usage.retries,
                 finish: format!("{:?}", finish.reason),
                 tool_calls: finish.tool_calls.len(),
             });
+            self.meter_call(run_id, run.iterations, &model, &usage);
 
             // Parler lève sa propre pause : on ne peut pas être en pause et
             // répondre en même temps (doc 12 §2.1). C'est ce qui permet à un

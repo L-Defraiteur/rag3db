@@ -796,6 +796,18 @@ pub struct Usage {
     /// qui n'a rien implémenté voit quand même, après coup, que le modèle
     /// n'a pas parlé le bon protocole.
     pub recovered_calls: u32,
+    /// La part de `prompt_tokens` **servie depuis le cache du fournisseur**.
+    ///
+    /// Comprise dans `prompt_tokens`, pas en plus : c'est ainsi que les API
+    /// compatibles OpenAI la rapportent, et la soustraire ici ferait diverger
+    /// notre total du leur.
+    ///
+    /// Séparée parce qu'elle coûte environ **dix fois moins**. Les confondre
+    /// fausse un coût d'un ordre de grandeur, dans le sens qui flatte — donc
+    /// dans le sens qu'on ne va pas vérifier.
+    ///
+    /// `0` quand le fournisseur ne le dit pas : **on ne devine pas un cache**.
+    pub cached_prompt_tokens: usize,
 }
 
 impl Usage {
@@ -1163,8 +1175,9 @@ impl Llm for MockLlm {
                 prompt_tokens,
                 completion_tokens: emitted,
                 ms: started.elapsed().as_millis() as u64,
-                // Un modèle local ne réessaie rien.
-                retries: 0, recovered_calls: 0 },
+                // Un modèle local ne réessaie rien, et **ne met rien en
+                // cache côté fournisseur** : il n'y a pas de fournisseur.
+                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0 },
         ))
     }
 
@@ -1404,7 +1417,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0 }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1668,7 +1681,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0 };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 

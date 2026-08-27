@@ -398,7 +398,11 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     let my_kinds: Vec<&str> = on_my_topic.iter().map(|e| e["kind"].as_str().unwrap()).collect();
     assert_eq!(
         my_kinds,
-        ["RunStarted", "LlmCall", "ToolCallStarted", "ToolCallFinished", "LlmCall", "ToolCallStarted", "ToolCallFinished", "LlmCall", "RunFinished"],
+        // `Consumed` suit chaque `LlmCall` : le premier dit *comment la boucle
+        // s'est passée*, le second *ce qui a été consommé*. Deux natures, deux
+        // événements — et cette assertion est ce qui garantit que le contrat du
+        // bus ne bouge pas sans qu'on le décide (doc 08).
+        ["RunStarted", "LlmCall", "Consumed", "ToolCallStarted", "ToolCallFinished", "LlmCall", "Consumed", "ToolCallStarted", "ToolCallFinished", "LlmCall", "Consumed", "RunFinished"],
         "{my_kinds:?}"
     );
     assert!(on_my_topic.iter().all(|e| e["run"] == "run-demo"));
@@ -422,8 +426,9 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     // fin) et ses 3 nœuds — le second appel est refusé avant le graphe.
     let mut cat = catalog.lock().unwrap();
     assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
-    // Le graphe `search` a un nœud de plus depuis le rendu compact.
-    assert_eq!(n, 2 + 3 + 4 + 2 + 4, "{n} événements tracés");
+    // Le graphe `search` a un nœud de plus depuis le rendu compact, et chaque
+    // appel au modèle est suivi de sa consommation (3).
+    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 4, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -669,8 +674,9 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     let run = agent.run(&mut turns, &mut sink).unwrap();
     assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
 
-    // 2 (run) + 2 (modèle) + 2 (outil) + 2 (run du graphe search) + 4 (nœuds).
-    let expected = 12;
+    // 2 (run) + 2 (modèle) + 2 (consommation) + 2 (outil) + 2 (run du graphe
+    // search) + 4 (nœuds).
+    let expected = 14;
     let start = Instant::now();
     loop {
         let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();

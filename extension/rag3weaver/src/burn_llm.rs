@@ -227,7 +227,7 @@ impl BurnLlm {
         config: QwenConfig,
         device: BurnDevice,
     ) -> Result<Self, LlmError> {
-        let mut device = device.resolve();
+        let mut device = device.or_role(crate::burn_device::BurnRole::Llm).resolve();
         // Précision de **calcul** (les poids, eux, sont fp16 dans le .bpk).
         // `configure` verrouille le périphérique à la première allocation ;
         // s'il est déjà pris, on n'y peut plus rien et ce n'est pas fatal.
@@ -784,7 +784,9 @@ impl Llm for BurnLlm {
                 prompt_tokens: prompt_ids.len(),
                 completion_tokens: gen_ids.len(),
                 ms: started.elapsed().as_millis() as u64,
-                retries: 0, recovered_calls: 0 },
+                // Un modèle qui tourne ici ne réessaie rien et n'a pas de
+                // cache de fournisseur : il n'y a pas de fournisseur.
+                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0 },
         ))
     }
 
