@@ -2123,13 +2123,20 @@ impl Catalog {
                 .execute_with_params(&query, &parsed.params)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?
         };
-        Ok(Some(
-            result
-                .rows
-                .iter()
-                .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                .collect(),
-        ))
+        let mut ids: Vec<u64> = result
+            .rows
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+            .collect();
+        // **Contrat d'API de lucivy** (doc 09, §2.4) : un ensemble trié et
+        // sans doublon est lu sur place, sans allocation ; un ensemble
+        // quelconque est copié, trié et dédupliqué **à chaque requête**. Ils
+        // l'ont mesuré : 540 000 ids passent de 6,004 ms à 0,220 ms. La
+        // requête les rend probablement déjà triés — on ne parie pas dessus,
+        // ça coûte un tri une fois contre un tri par requête.
+        ids.sort_unstable();
+        ids.dedup();
+        Ok(Some(ids))
     }
 
     /// Le court-circuit de l'inchangé

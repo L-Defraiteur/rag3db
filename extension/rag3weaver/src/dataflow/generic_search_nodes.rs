@@ -535,12 +535,13 @@ impl Node for SparseSearchNode {
             .ok_or("SparseSearchNode: 'conn' service not found")?
             .0.clone();
 
-        // `search_sparse` ne prend aucun filtre ; `search_sparse_via_backend`
-        // accepte des `allowed_ids`, et c'est là que ça se branchera. En
-        // attendant, on le dit plutôt que de rendre trop large en silence.
-        if options.filter_condition.is_some() {
-            ctx.warn("SparseSearchNode: le filtre demandé n'est pas appliqué sur ce chemin (search_sparse ne prend pas d'allowed_ids) — résultats non restreints");
-        }
+        // Le pré-filtre sparse est **exact** : pas de statistique de corpus,
+        // donc un filtre ne peut retirer que des lignes, jamais changer un
+        // score (doc 09 §1, prouvé par leur `test_filter_truth.rs`). Et il
+        // n'est jamais perdant — au pire 30 % au-dessus d'une recherche
+        // complète, gagnant sous 1 % du corpus (doc 09 §2.3). On le pose
+        // sans arrière-pensée.
+        let allowed = allowed_ids_for(ctx, "SparseSearchNode", &target, &options);
 
         // Try dual embedder first, then sparse embedder
         let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
@@ -566,14 +567,34 @@ impl Node for SparseSearchNode {
         let handle = handles.get(&target.chunk_table)
             .ok_or_else(|| format!("SparseSearchNode: no sparse handle for '{}'", target.chunk_table))?;
 
-        let chunk_results = search_sparse(
-            handle,
-            &*conn,
-            &target.chunk_table,
-            &sparse_vec,
-            self.limit,
-            &[], // empty fields for chunked entities (fields are on parent table)
-        )
+        let backend = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog")
+            .and_then(|c| c.lock().unwrap().search_backend());
+        let chunk_results = match (&allowed, backend) {
+            // Le chemin filtré passe par le backend : c'est lui qui expose
+            // `search_filtered`.
+            (Some(ids), Some(backend)) => crate::search::search_sparse_via_backend(
+                handle,
+                backend.as_ref(),
+                &target.chunk_table,
+                &sparse_vec,
+                self.limit,
+                &[],
+                Some(ids),
+            ),
+            (Some(_), None) => {
+                ctx.warn("SparseSearchNode: un filtre est demandé mais aucun backend de recherche — résultats non restreints");
+                search_sparse(handle, &*conn, &target.chunk_table, &sparse_vec, self.limit, &[])
+            }
+            (None, _) => search_sparse(
+                handle,
+                &*conn,
+                &target.chunk_table,
+                &sparse_vec,
+                self.limit,
+                &[], // empty fields for chunked entities (fields are on parent table)
+            ),
+        }
         .map_err(|e| format!("SparseSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
