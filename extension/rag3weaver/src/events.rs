@@ -116,6 +116,23 @@ pub enum Event {
         /// à un run, donc ne la répètent pas.
         scope: Option<crate::scope::Scope>,
     },
+    /// **L'historique a été réduit** avant un appel au modèle.
+    ///
+    /// Sans cet événement, une politique d'absorption jette du contexte en
+    /// silence et on débogue à l'aveugle : le modèle « oublie » quelque chose
+    /// et rien nulle part ne dit que c'est nous qui le lui avons retiré
+    /// (doc 13 §8). Les caractères sont **gardés dans la session**, jamais
+    /// perdus — `dropped` dit ce qui n'est plus dans l'invite, pas ce qui
+    /// n'existe plus.
+    TurnCompacted {
+        run: String,
+        /// Combien de résultats d'outils ont changé de forme.
+        rewritten: usize,
+        /// Caractères restants dans l'historique.
+        kept: usize,
+        /// Caractères retirés de l'historique.
+        dropped: usize,
+    },
     /// Le même, terminé.
     RunFinished {
         run: String,
@@ -215,6 +232,7 @@ impl Event {
             }
             Self::SearchStarted { .. } | Self::SearchCompleted { .. } => topic::SEARCH,
             Self::LlmCall { .. } | Self::ToolCallStarted { .. } | Self::ToolCallFinished { .. } => topic::AGENT,
+            Self::TurnCompacted { .. } => topic::AGENT,
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             _ => topic::CATALOG,
@@ -230,6 +248,7 @@ impl Event {
             | Self::LlmCall { run, .. }
             | Self::ToolCallStarted { run, .. }
             | Self::ToolCallFinished { run, .. }
+            | Self::TurnCompacted { run, .. }
             | Self::NodeRun { run, .. }
             | Self::Message { run, .. } => Some(run),
             _ => None,
@@ -258,6 +277,10 @@ impl Event {
             }),
             Self::RunFinished { run, kind, ms, ok } => json!({
                 "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
+            }),
+            Self::TurnCompacted { run, rewritten, kept, dropped } => json!({
+                "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
+                "kept": kept, "dropped": dropped,
             }),
             Self::LlmCall { run, agent, iteration, prompt_tokens, completion_tokens, ms, retries, finish, tool_calls } => json!({
                 "kind": "LlmCall", "run": run, "agent": agent, "iteration": iteration,

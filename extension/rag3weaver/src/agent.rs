@@ -456,6 +456,10 @@ pub struct Agent<'a> {
     /// Les postures de la session : où s'inscrit une pause, et où se lit un
     /// blocage. Partagées — c'est tout l'intérêt.
     postures: Option<Arc<crate::postures::Postures>>,
+    /// La session : ce qu'on garde d'un tour à l'autre, et ce qu'on cesse de
+    /// payer. Absente, la boucle envoie tout l'historique tel quel — c'est le
+    /// comportement d'hier, et le témoin auquel on compare.
+    session: Option<Arc<crate::session::Session>>,
 }
 
 /// Le curseur sous lequel un agent lit sa boîte. Un message envoyé **avant**
@@ -463,6 +467,14 @@ pub struct Agent<'a> {
 /// (`bus.cursor(&inbox_topic(id), AGENT_INBOX_CURSOR)`) ; l'agent l'ouvre
 /// lui-même au début de son run.
 pub const AGENT_INBOX_CURSOR: &str = "agent";
+
+/// La première ligne du **bloc d'attentes**. Sert à le retrouver pour le
+/// remplacer : il est réécrit à chaque tour, jamais empilé.
+///
+/// C'est un marqueur, donc il doit être stable et improbable dans du texte
+/// ordinaire ; c'est aussi ce que le modèle lit en premier, donc il doit dire
+/// ce qu'il est.
+pub const WAITING_BLOCK: &str = "— état de la session —";
 
 impl<'a> Agent<'a> {
     /// Les options de génération partent des défauts, **avec les outils de
@@ -479,6 +491,7 @@ impl<'a> Agent<'a> {
             run_id: None,
             inbox: false,
             postures: None,
+            session: None,
         }
     }
 
@@ -489,6 +502,17 @@ impl<'a> Agent<'a> {
     /// **commun** qui rend l'attente circulaire détectable.
     pub fn with_postures(mut self, postures: Arc<crate::postures::Postures>) -> Self {
         self.postures = Some(postures);
+        self
+    }
+
+    /// Partager la session : la politique d'absorption et la table de renvois.
+    ///
+    /// **L'outillage doit être enveloppé par [`crate::session::SessionTools`]**
+    /// si on veut que `recall` existe — la boucle n'ajoute pas d'outil dans le
+    /// dos de l'appelant. Sans lui, absorber reste correct mais devient une
+    /// perte : le modèle voit un renvoi qu'il ne peut pas suivre.
+    pub fn with_session(mut self, session: Arc<crate::session::Session>) -> Self {
+        self.session = Some(session);
         self
     }
 
@@ -789,6 +813,46 @@ impl<'a> Agent<'a> {
         outcome
     }
 
+    /// Réduit dans l'historique ce qui n'a plus à y être en entier.
+    ///
+    /// Sans session, **rien** : c'est la boucle d'hier, à la lettre.
+    fn absorb_history(&self, turns: &mut [Turn]) {
+        let Some(session) = &self.session else { return };
+        session.advance();
+        let c = session.absorb(turns);
+        if !c.is_noop() {
+            // Une politique qui jette la moitié d'un historique sans le dire
+            // se débogue à l'aveugle (doc 13 §8).
+            self.emit(crate::events::CatalogEvent::TurnCompacted {
+                run: self.run_id.clone().unwrap_or_else(|| self.name.clone()),
+                rewritten: c.rewritten,
+                kept: c.kept,
+                dropped: c.dropped,
+            });
+        }
+    }
+
+    /// **Ce qui attend doit se voir** (doc 12 §9) : un bloc d'état, dérivé des
+    /// postures au moment d'assembler, jamais un message qu'on archive.
+    ///
+    /// Trois choix, chacun payé :
+    ///
+    /// - **dérivé, donc jamais périmé** : la pause tombe, la ligne s'en va, et
+    ///   personne n'a à penser à nettoyer ;
+    /// - **vide quand il n'y a rien** : un bloc toujours présent apprend au
+    ///   modèle à ne plus le lire ;
+    /// - **en dernier**, pas en tête : il change à chaque tour, et le mettre au
+    ///   début invaliderait le préfixe que le fournisseur met en cache — on
+    ///   paierait la visibilité au prix de tout l'historique.
+    fn refresh_waiting_block(&self, turns: &mut Vec<Turn>) {
+        let Some(postures) = &self.postures else { return };
+        turns.retain(|t| !(t.role == "system" && t.content.starts_with(WAITING_BLOCK)));
+        let block = postures.describe_for(&self.name);
+        if !block.is_empty() {
+            turns.push(Turn::system(format!("{WAITING_BLOCK}\n{block}")));
+        }
+    }
+
     fn run_inner(
         &self,
         turns: &mut Vec<Turn>,
@@ -846,6 +910,10 @@ impl<'a> Agent<'a> {
             }
             // La boîte, à la frontière du tour : jamais au milieu d'un appel.
             run.messages += self.read_inbox(run_id, turns);
+            // **Assembler l'invite** — les deux seules choses qui la
+            // réécrivent, et elles le font ici, à un seul endroit.
+            self.absorb_history(turns);
+            self.refresh_waiting_block(turns);
             let mut tee = TeeSink { inner: sink, text: String::new() };
             let generated = self.llm.generate(turns, &opts, &mut tee);
             let text = std::mem::take(&mut tee.text);
@@ -1817,5 +1885,175 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&turns[3].content).unwrap();
         assert!(v["error"].is_string(), "{}", turns[3].content);
         assert_well_formed(&turns);
+    }
+
+    // ── La session : ce qu'on assemble, et ce qu'on cesse de payer ──
+
+    /// **Le bloc d'attentes est une lecture, pas un message.**
+    ///
+    /// Il apparaît parce qu'un pair s'est tu en attendant celui-ci, et il
+    /// s'en va tout seul quand ce pair reparle — sans que personne n'ait à
+    /// nettoyer quoi que ce soit (doc 12 §9.2).
+    #[test]
+    fn le_bloc_d_attentes_apparait_et_disparait_tout_seul() {
+        use crate::postures::{Posture, Postures};
+        use std::sync::Arc;
+
+        let postures = Arc::new(Postures::new());
+        postures.record(
+            "chercheur",
+            Posture {
+                with: "indexeur".into(),
+                kind: PauseKind::WaitingForPeer("indexeur".into()),
+                reason: "il me faut le chemin exact".into(),
+            },
+        );
+
+        let vus: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let vus2 = vus.clone();
+        let llm = CallbackLlm::new("mock", 4096, move |turns, opts, sink| {
+            vus2.lock().unwrap().push(
+                turns.iter().filter(|t| t.content.starts_with(WAITING_BLOCK)).map(|t| t.content.clone()).collect(),
+            );
+            MockLlm::new("vu").generate(turns, opts, sink)
+        });
+        let tools = toolbox(vec![]);
+        let agent = Agent::new(&llm, &tools).with_name("indexeur").with_postures(postures.clone());
+
+        let mut turns = start();
+        agent.run(&mut turns, &mut StringSink::default()).unwrap();
+        let bloc = vus.lock().unwrap()[0].clone();
+        assert!(bloc.contains("chercheur"), "{bloc}");
+        assert!(bloc.contains("chemin exact"), "{bloc}");
+
+        // Le pair reparle : l'attente cesse, la ligne s'en va.
+        postures.speak("chercheur");
+        let mut turns = start();
+        agent.run(&mut turns, &mut StringSink::default()).unwrap();
+        assert_eq!(vus.lock().unwrap()[1], "", "un bloc vide n'a rien à faire là");
+        assert!(!turns.iter().any(|t| t.content.starts_with(WAITING_BLOCK)));
+    }
+
+    /// Il est **remplacé**, jamais empilé : dix tours d'attente ne font pas
+    /// dix blocs.
+    #[test]
+    fn le_bloc_d_attentes_ne_s_empile_pas() {
+        use crate::postures::{Posture, Postures};
+        use std::sync::Arc;
+
+        let postures = Arc::new(Postures::new());
+        postures.record(
+            "chercheur",
+            Posture { with: "indexeur".into(), kind: PauseKind::WaitingForPeer("indexeur".into()), reason: "x".into() },
+        );
+        let llm = CallbackLlm::new("mock", 4096, |turns, opts, sink| {
+            MockLlm::new("").with_tool_calls(vec![("search", "{}")]).generate(turns, opts, sink)
+        });
+        let tools = toolbox(vec![("search", "[]")]);
+        let agent = Agent::new(&llm, &tools)
+            .with_name("indexeur")
+            .with_postures(postures)
+            .with_limits(AgentLimits { max_iterations: 4, ..Default::default() });
+        let mut turns = start();
+        agent.run(&mut turns, &mut StringSink::default()).unwrap();
+        assert_eq!(turns.iter().filter(|t| t.content.starts_with(WAITING_BLOCK)).count(), 1);
+    }
+
+    /// **Sans session, rien ne change.** C'est la promesse qui vient avant
+    /// toutes les autres : le chemin simple reste le chemin simple.
+    #[test]
+    fn sans_session_l_historique_n_est_pas_touche() {
+        let tools = gros_read();
+        let llm = tour_par_tour(3);
+        let agent = Agent::new(&llm, &tools).with_limits(AgentLimits { max_iterations: 4, ..Default::default() });
+        let mut turns = start();
+        agent.run(&mut turns, &mut StringSink::default()).unwrap();
+        assert!(turns.iter().any(|t| t.content.len() == 20_000));
+    }
+
+    /// Un `read` qui rend vingt mille caractères — la taille d'un fichier
+    /// qu'on lit vraiment.
+    fn gros_read() -> CallbackToolBox {
+        CallbackToolBox::new(
+            vec![ToolDef { name: "read".into(), description: String::new(), parameters: serde_json::json!({}) }],
+            |_| "y".repeat(20_000),
+        )
+    }
+
+    /// Un modèle qui appelle `read` `n` fois, puis répond.
+    fn tour_par_tour(n: usize) -> CallbackLlm {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let reste = AtomicUsize::new(n);
+        CallbackLlm::new("mock", 4096, move |turns, opts, sink| {
+            if reste.fetch_sub(1, Ordering::SeqCst) > 0 {
+                MockLlm::new("").with_tool_calls(vec![("read", "{}")]).generate(turns, opts, sink)
+            } else {
+                MockLlm::new("fini").generate(turns, opts, sink)
+            }
+        })
+    }
+
+    /// **Le chiffre de vérité** (doc 13 §9.4) : une conversation de dix tours,
+    /// les mêmes appels, mesurée avec et sans absorption.
+    ///
+    /// Ce que le test fixe, ce n'est pas un ratio — il dépend de la taille des
+    /// résultats — c'est la **forme** : ça baisse beaucoup, et rien n'est
+    /// perdu, puisque `recall` rend l'original au caractère près.
+    #[test]
+    fn dix_tours_avec_et_sans_absorption() {
+        use crate::session::{Absorb, Session, SessionTools};
+        use std::sync::Arc;
+
+        fn mesure(session: Option<Arc<Session>>) -> usize {
+            let inner = gros_read();
+            let vu = Arc::new(Mutex::new(0usize));
+            let vu2 = vu.clone();
+            let llm = {
+                use std::sync::atomic::{AtomicUsize, Ordering};
+                let reste = AtomicUsize::new(9);
+                CallbackLlm::new("mock", 4096, move |turns: &[Turn], opts: &GenOptions, sink: &mut dyn TokenSink| {
+                    // Ce qu'on envoie au modèle, ce tour-ci : la seule chose
+                    // qui se paie.
+                    *vu2.lock().unwrap() += turns.iter().map(|t| t.content.len()).sum::<usize>();
+                    if reste.fetch_sub(1, Ordering::SeqCst) > 0 {
+                        MockLlm::new("").with_tool_calls(vec![("read", "{}")]).generate(turns, opts, sink)
+                    } else {
+                        MockLlm::new("fini").generate(turns, opts, sink)
+                    }
+                })
+            };
+            let limits = AgentLimits { max_iterations: 12, ..Default::default() };
+            let mut turns = start();
+            match &session {
+                Some(s) => {
+                    let tools = SessionTools::new(&inner, s.clone());
+                    Agent::new(&llm, &tools)
+                        .with_session(s.clone())
+                        .with_limits(limits)
+                        .run(&mut turns, &mut StringSink::default())
+                        .unwrap();
+                }
+                None => {
+                    Agent::new(&llm, &inner)
+                        .with_limits(limits)
+                        .run(&mut turns, &mut StringSink::default())
+                        .unwrap();
+                }
+            }
+            let n = *vu.lock().unwrap();
+            n
+        }
+
+        let sans = mesure(None);
+        let session = Arc::new(Session::new().with_policy(Absorb::Stale { max_chars: 2_000, after_turns: 2 }));
+        let avec = mesure(Some(session.clone()));
+
+        // Neuf résultats de 20 000 caractères, réenvoyés à chaque tour : le
+        // témoin est quadratique, et c'est bien ça le problème.
+        assert!(sans > 800_000, "témoin : {sans}");
+        assert!(avec * 4 < sans, "avec {avec}, sans {sans}");
+        // Et rien n'est perdu.
+        assert_eq!(session.recall("#read-1").map(|c| c.len()), Some(20_000));
+        eprintln!("[dix tours] sans absorption {sans} caractères, avec {avec}");
     }
 }
