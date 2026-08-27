@@ -160,6 +160,59 @@ Conséquence à retenir : *un bon schéma déclare des filtres là où il décla
 des recherches*. La déclaration doit rendre ça évident, parce que l'intuition
 de la plupart des gens — et des modèles — date d'avant.
 
+## 3 bis. Ce qui est fait (27 août, après-midi)
+
+Trois pièces du §3, petites et vérifiables. Aucune ne change le comportement
+existant : les 795 tests unitaires et la passe E2E complète sont verts après.
+
+### `EntityConfig::declared()` — le point de départ d'un schéma déclaré
+
+`BM25`, et rien d'autre. `Default` reste `HYBRID` — le casser casserait les
+appelants, et il est raisonnable pour du code écrit à la main. **Un vecteur se
+demande, il ne s'hérite pas.** Le test le dit dans les deux sens : `declared()`
+n'a pas de vecteur, et le défaut de la maison en a toujours un.
+
+### Un signal sémantique sans contenu est **refusé**
+
+Un signal vecteur ou sparse sur une entité qui n'a aucun champ de contenu : les
+chunks seraient vides, donc l'entité introuvable par ces signaux — en silence.
+Même famille que le refus déjà en place pour `chunked = false`, même remède :
+**une erreur de configuration vaut mieux qu'une entité silencieusement
+introuvable.**
+
+### `SchemaCost` — le coût avant d'être payé
+
+`EntityConfig::cost_for(rows, avg_content_chars)` rend les lignes, les chunks,
+les embeddings, les vecteurs creux et les documents plein texte ; `describe()`
+en fait une phrase, parce que l'objet est d'être **dite**.
+
+Le calcul retient deux choses qu'on oublie en estimant à la main : le titre est
+préfixé à chaque chunk pour l'embedding, donc il mange de la place utile — 256
+caractères sur 1 500, un sixième — et **le plein texte vit sur la table
+parente**, les chunks ne s'y ajoutant que si on l'a demandé.
+
+Le chiffre du §3.1 est maintenant exécutable (`cargo test --lib
+le_defaut_hybrid -- --nocapture`) :
+
+```
+[coût] Symbol (HYBRID)  : 3275 lignes, 3275 chunks, 3275 embeddings, 6550 documents plein texte
+[coût] Symbol (déclaré) : 3275 lignes, 3275 documents plein texte
+```
+
+Ce sont des **ordres de grandeur, pas des garanties** — le découpage sémantique
+suit les frontières du texte. Ça suffit pour la seule question qui se pose au
+moment de déclarer : *est-ce qu'on parle de mille ou de cent mille ?*
+
+### Ce qui reste du §3
+
+- **§3.2** — rendre une relation plus facile à déclarer qu'un signal
+  sémantique. Rien de fait : c'est une question de forme du langage, pas de
+  garde.
+- **§3.4** — le coût est calculable, il n'est pas encore **montré** au moment
+  de déclarer. Il lui faut un appelant : le schéma présenté au modèle.
+- **§3.6** — le pré-filtre exact n'est pas encore reflété dans ce qu'on
+  encourage à déclarer.
+
 ## 4. Par où commencer
 
 `EntityConfig` décrit aujourd'hui **une forme et des signaux** : champs,
@@ -177,6 +230,64 @@ brouillon à promu ([doc 49](../23-aout-2026-20h33/49-vision-le-catalogue-comme-
 d'état sous conditions de preuve. Pas besoin d'inventer un cas d'usage pour
 l'éprouver : on s'en sert le jour où on l'écrit, et les mesures viennent
 gratuitement.
+
+## 4 bis. Ce qui est fait de la §4 : `Lifecycle`
+
+`EntityConfig` décrivait **une forme et des signaux**. Il décrit maintenant, en
+option, **ce qu'une ligne a le droit de devenir** :
+
+```rust
+Lifecycle {
+    field: "status",
+    initial: "draft",
+    transitions: [
+        { name: "promote", from: "draft",    to: "promoted" },
+        { name: "demote",  from: "promoted", to: "draft"    },
+        { name: "archive", from: "promoted", to: "archived" },
+    ],
+}
+```
+
+`None` par défaut : rien de ce qui existe ne change.
+
+### Trois décisions
+
+**Les états ne sont pas listés à part.** Ils se déduisent de `initial` et des
+deux bouts de chaque transition — une seule source, donc rien à garder en
+accord. Un état qu'aucune transition ne mentionne n'existe pas, ce qui est la
+bonne réponse : personne ne pourrait l'atteindre.
+
+**Une transition porte un nom, et il est obligatoire.** `confirmed -> cancelled`
+ne dit pas qui annule ; `cancel_by_customer` le dit. C'est ce nom qui
+apparaîtra dans une trace, un événement et une politique — et deux transitions
+du même nom sont refusées, sinon on ne saurait plus laquelle a eu lieu.
+
+**Ce qui se voit sans rien exécuter est refusé maintenant** — c'est tout
+l'intérêt d'une RI produite par un modèle :
+
+| Refusé | Pourquoi ça ne se verrait pas autrement |
+|---|---|
+| le champ d'état n'existe pas | l'écriture échouerait, loin de la déclaration |
+| le champ d'état n'est pas une chaîne | **une machine à états sur un entier passe le typage** et est fausse à l'écriture |
+| deux transitions du même nom | la trace deviendrait ambiguë, sans erreur |
+| **un état inatteignable depuis l'initial** | la ligne n'y arrive jamais : ni erreur, ni symptôme |
+
+Le dernier est celui qui justifie l'exercice. Un état orphelin ne se voit ni à
+la lecture — la déclaration a l'air complète — ni à l'exécution, puisque rien
+ne s'y rend. C'est exactement la famille de défauts qu'on passe la semaine à
+rendre visibles.
+
+### Ce que ça ne fait pas encore, et où ça ira
+
+**Empêcher au moment d'écrire.** Le bon endroit est le **drain**, où l'ancien
+état est déjà lu : `UpdateRecordNode` relit la ligne existante pour comparer
+les empreintes. Vérifier plus tôt — dans `Catalog::update` — demanderait une
+lecture de plus **et mentirait** : les mises à jour déjà en attente dans le même
+lot n'auraient pas été appliquées, donc l'état lu ne serait pas celui contre
+lequel la transition aura vraiment lieu.
+
+C'est écrit dans le doc-commentaire du type, pas seulement ici : une déclaration
+vérifiée mais non appliquée est un piège si on l'oublie.
 
 ## 5. Les quatre règles, en une page
 
