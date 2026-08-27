@@ -5,6 +5,9 @@
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
 #include "common/exception/binder.h"
+#include <cstdio>
+#include <cstdlib>
+
 #include "common/mask.h"
 #include "common/types/value/nested.h"
 #include "expression_evaluator/expression_evaluator_utils.h"
@@ -67,6 +70,19 @@ std::unique_ptr<TableFuncBindData> QueryHNSWIndexBindData::copy() const {
     bindData->outputNode = outputNode;
     bindData->filterStatement = filterStatement;
     return bindData;
+}
+
+// Trace de la recherche vectorielle filtrée, derrière `RAG3DB_VECTOR_TRACE=1`.
+//
+// Le masque (semi-mask) est posé en trois temps : le plan de filtre est lié
+// (`filterStatement`), un masque est créé et enregistré pour la table, puis
+// il est épinglé à l'exécution. Si l'un des trois manque, la recherche est
+// **non filtrée en silence** — et en Release les `KU_ASSERT` du planificateur
+// sont compilés à néant, donc une forme de plan inattendue passe sans bruit.
+// Ces trois lignes disent laquelle des trois étapes n'a pas eu lieu.
+static bool vectorTraceEnabled() {
+    static const bool enabled = std::getenv("RAG3DB_VECTOR_TRACE") != nullptr;
+    return enabled;
 }
 
 static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
@@ -304,9 +320,17 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
         hnswSharedState->numNodes, static_cast<uint64_t>(k), hnswBindData->config};
     const auto tableID = hnswBindData->nodeTableEntry->getTableID();
     auto& semiMasks = hnswSharedState->semiMasks;
-    if (semiMasks.containsTableID(tableID)) {
+    const auto hasMaskForTable = semiMasks.containsTableID(tableID);
+    if (hasMaskForTable) {
         semiMasks.pin(tableID);
         searchState.semiMask = semiMasks.getPinnedMask();
+    }
+    if (vectorTraceEnabled()) {
+        fprintf(stderr, "[vector-trace] exécution : masque pour la table=%s, nœuds masqués=%lld\n",
+            hasMaskForTable ? "oui" : "NON",
+            searchState.semiMask != nullptr
+                ? static_cast<long long>(searchState.semiMask->getNumMaskedNodes())
+                : -1);
     }
     return std::make_unique<QueryHNSWLocalState>(std::move(searchState));
 }
@@ -362,6 +386,11 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
                         ->getBindData()
                         ->constPtrCast<QueryHNSWIndexBindData>();
     // Map node predicate pipeline
+    if (vectorTraceEnabled()) {
+        fprintf(stderr, "[vector-trace] plan : filterStatement=%s numRows=%llu\n",
+            bindData->filterStatement != nullptr ? "oui" : "NON",
+            static_cast<unsigned long long>(bindData->numRows));
+    }
     if (bindData->filterStatement != nullptr) {
         sharedState->semiMasks.addMask(bindData->nodeTableEntry->getTableID(),
             SemiMaskUtil::createMask(bindData->numRows));

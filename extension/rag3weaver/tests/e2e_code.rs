@@ -1427,28 +1427,25 @@ fn does_the_projected_graph_actually_mask_the_vector_index() {
     }
 }
 
-/// **Où en est le vrai pré-filtre vectoriel** — trois formes de projection,
-/// et ce qu'elles donnent aujourd'hui.
+/// **Le vrai pré-filtre vectoriel** — deux formes de projection, et le
+/// masque qui tient enfin.
 ///
-/// L'extension a tout ce qu'il faut : un `LogicalSemiMasker` alimenté par le
-/// plan de filtre, un `HNSWSearchState::semiMask`, et trois stratégies de
-/// recherche filtrée choisies par sélectivité (`BLIND_TWO_HOP`,
-/// `DIRECTED_TWO_HOP`, `ONE_HOP_FILTERED`). Ce n'est pas un oubli, c'est
-/// écrit et pensé.
+/// Ce test a d'abord servi à traquer une fuite : `QUERY_VECTOR_INDEX` sur un
+/// graphe projeté rendait des nœuds **hors** projection. Deux hypothèses
+/// écartées au passage — ce n'était pas la jointure (un filtre à un seul
+/// `MATCH` fuyait pareil), ni un vecteur de norme nulle (la première sonde
+/// interrogeait avec des zéros, elle testait sa propre erreur).
 ///
-/// Et pourtant le masque ne tient pas. Deux hypothèses écartées ici : ce
-/// n'est pas la jointure (un filtre à un seul `MATCH` fuit pareil), et ce
-/// n'est pas un vecteur de norme nulle (on interroge avec un vrai vecteur).
+/// La cause était ailleurs, et une trace l'a montrée en une exécution
+/// (`RAG3DB_VECTOR_TRACE=1`) : le masque était **correctement construit**,
+/// avec exactement les bons nœuds. C'est `searchFromUnCheckpointed` — le
+/// balayage des lignes insérées depuis le dernier checkpoint — qui ne le
+/// consultait pas. Sur un index créé puis rempli, aucune ligne n'est
+/// checkpointée : le filtre ne servait donc jamais à rien.
 ///
-/// Ce test **imprime son verdict** au lieu d'affirmer. Le jour où le masque
-/// tiendra, il nous le dira, et on pourra retirer le post-filtre et le
-/// sur-fetch de `Catalog::search` — c'est-à-dire passer de l'approché à
-/// l'exact sur le chemin vectoriel.
-///
-/// Prochaine étape pour aller plus loin : une compilation de l'extension en
-/// **Debug**, pour que les `KU_ASSERT` du planificateur parlent. En Release
-/// ils sont compilés à néant, donc une forme de plan inattendue passe sans
-/// bruit — et c'est le suspect n° 1.
+/// Corrigé dans le fork, `hnsw_index.cpp`, une ligne. Le test garde son
+/// verdict imprimé : il redeviendra notre canari si quelqu'un touche à ce
+/// chemin.
 #[test]
 #[ignore]
 fn where_the_vector_pre_filter_stands_today() {

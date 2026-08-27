@@ -3579,29 +3579,6 @@ impl Catalog {
     /// Ne garde que les hits vectoriels (chunks) de la cellule courante, dans
     /// l'ordre reçu. Vérification par colonnes, parce que le graphe projeté
     /// n'est pas respecté par QUERY_VECTOR_INDEX (voir le canari de e2e_scope).
-    fn scope_post_filter(
-        &self,
-        chunk_table: &str,
-        hits: Vec<search::SearchResult>,
-    ) -> Result<Vec<search::SearchResult>, CatalogError> {
-        if hits.is_empty() {
-            return Ok(hits);
-        }
-        let uuids = CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect());
-        let stmt = format!(
-            "MATCH (c:{chunk_table}) WHERE c.{} = $org AND c.{} = $project AND list_contains($uuids, c._uuid) RETURN c._uuid",
-            crate::scope::ORG_COLUMN, crate::scope::PROJECT_COLUMN
-        );
-        let res = self.conn.execute_with_params(&stmt, &[
-            QueryParam::new("org", CypherValue::String(self.scope.org.clone())),
-            QueryParam::new("project", CypherValue::String(self.scope.project.clone())),
-            QueryParam::new("uuids", uuids),
-        ]).map_err(|e| CatalogError::DbError(format!("scope post-filter: {e}")))?;
-        let keep: std::collections::HashSet<String> = res.rows.iter()
-            .filter_map(|r| r.get(0).and_then(|v| v.as_str()).map(String::from))
-            .collect();
-        Ok(hits.into_iter().filter(|h| keep.contains(&h.uuid)).collect())
-    }
 
     /// **Le post-filtre du chemin vectoriel.**
     ///
@@ -3613,45 +3590,6 @@ impl Catalog {
     ///
     /// Réservé aux entités simples : une base de connaissances filtre par une
     /// entité de titre (`filter_indirection`) et suit un autre chemin.
-    pub fn vector_post_filter(
-        &self,
-        entity: &str,
-        chunk_table: &str,
-        condition: &FilterCondition,
-        hits: Vec<search::SearchResult>,
-    ) -> Result<Vec<search::SearchResult>, CatalogError> {
-        if hits.is_empty() {
-            return Ok(hits);
-        }
-        let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
-        let parsed = parser
-            .parse_condition(condition, entity, "p")
-            .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-        if parsed.where_clauses.is_empty() {
-            return Ok(hits);
-        }
-        let mut params = parsed.params.clone();
-        params.push(QueryParam::new(
-            "_pf_uuids",
-            CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect()),
-        ));
-        let joins = if parsed.match_clauses.is_empty() { String::new() } else { format!(" {}", parsed.match_clauses.join(" ")) };
-        let stmt = format!(
-            "MATCH (c:{chunk_table})-[:{entity}_CHUNKED_FROM]->(p:{entity}){joins} \
-             WHERE list_contains($_pf_uuids, c._uuid) AND ({}) RETURN c._uuid",
-            parsed.combine_where()
-        );
-        let res = self
-            .conn
-            .execute_with_params(&stmt, &params)
-            .map_err(|e| CatalogError::DbError(format!("post-filtre vectoriel : {e}")))?;
-        let keep: std::collections::HashSet<String> = res
-            .rows
-            .iter()
-            .filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from))
-            .collect();
-        Ok(hits.into_iter().filter(|h| keep.contains(&h.uuid)).collect())
-    }
 
     /// Fan-out sur plusieurs cellules : une recherche par cellule, fusion par
     /// rang (RRF, k = 60) — les scores BM25 de deux index ne sont pas
@@ -3895,10 +3833,14 @@ impl Catalog {
         // de scope ne suffit donc pas. Sur-fetch, puis post-filtre par colonnes.
         // Toujours collectés (`meta.warnings`) : moteur, attribution de chunks, scope.
         let mut search_warnings: Vec<String> = Vec::new();
-        // Sur-fetch dès qu'un filtre est en jeu : le graphe projeté laisse
-        // passer des nœuds qu'il devrait exclure, et le post-filtre en retire.
-        let filtered_vector = condition.is_some() && target.filter_indirection.is_none();
-        let vector_limit = if self.multi_cell || filtered_vector { (search_limit * 4).max(50) } else { search_limit };
+        // Plus de sur-fetch : depuis le 27 août, la projection est respectée
+        // par la recherche vectorielle (`searchFromUnCheckpointed` consulte
+        // enfin le masque). Le filtre est redevenu un **vrai pré-filtre**, et
+        // les deux post-filtres qui compensaient ici ont disparu avec leurs
+        // canaris — `e2e_scope::the_projected_graph_honours_the_vector_filter`
+        // et `e2e_code::where_the_vector_pre_filter_stands_today` préviendront
+        // si ça rechange.
+        let vector_limit = search_limit;
         let vector_results = if need_dense {
             let hits = search::search_vector_via_backend(
                 self.search_backend.as_ref().unwrap().as_ref(),
@@ -3909,24 +3851,7 @@ impl Catalog {
                 &filter_params,
                 filter_match.as_deref(),
             )?;
-            let hits = match (&condition, filtered_vector) {
-                (Some(cond), true) => self.vector_post_filter(&entity, vector_entity, cond, hits)?,
-                _ => hits,
-            };
-            if self.multi_cell {
-                let fetched = hits.len();
-                let kept = self.scope_post_filter(vector_entity, hits)?;
-                if kept.len() < search_limit && fetched >= vector_limit {
-                    search_warnings.push(format!(
-                        "scope vectoriel : sur-fetch épuisé ({fetched} candidats, {} dans la cellule) — \
-                         des résultats de la cellule peuvent manquer",
-                        kept.len()
-                    ));
-                }
-                kept.into_iter().take(search_limit).collect()
-            } else {
-                hits
-            }
+            hits
         } else {
             vec![]
         };

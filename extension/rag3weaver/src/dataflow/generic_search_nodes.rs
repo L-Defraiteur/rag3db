@@ -276,19 +276,6 @@ impl Node for VectorSearchNode {
         }
         .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
 
-        // Le `WHERE` compilé plus haut n'est pas une garantie : le graphe
-        // projeté laisse passer des nœuds qu'il devrait exclure (bug du fork,
-        // canari dans `e2e_scope`). On repasse derrière — même remède que
-        // `Catalog::search`.
-        let chunk_results = match (&options.filter_condition, ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned()) {
-            (Some(cond), Some(catalog)) => catalog
-                .lock()
-                .unwrap()
-                .vector_post_filter(&target.name, &target.chunk_table, cond, chunk_results)
-                .map_err(|e| format!("VectorSearchNode: post-filtre : {e}"))?,
-            _ => chunk_results,
-        };
-
         // Resolve chunk-level results → parent-level with data enrichment
         let results = resolve_vector_chunks(
             &*conn,

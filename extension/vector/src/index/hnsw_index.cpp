@@ -538,6 +538,16 @@ void OnDiskHNSWIndex::searchFromUnCheckpointed(Transaction* transaction,
     result.reserve(numUnCheckpointedTuples + result.size());
     // TODO(Guodong): Perhaps should switch to scan instead of lookup here.
     for (auto offset = hnswStorageInfo.numCheckpointedNodes; offset < numTotalRows; offset++) {
+        if (!searchState.isMasked(offset)) {
+            // Le balayage des lignes non checkpointées ignorait le semi-masque :
+            // une recherche filtrée rendait donc **toutes** les lignes insérées
+            // depuis le dernier checkpoint, quel que soit le filtre. Sur un index
+            // créé puis rempli — le cas courant, et celui de toutes nos suites —
+            // aucune ligne n'est checkpointée, donc le filtre ne servait à rien.
+            // `isMasked` rend vrai quand il n'y a pas de masque : le chemin non
+            // filtré est inchangé.
+            continue;
+        }
         const auto vector =
             searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState);
         if (vector.isNull()) {

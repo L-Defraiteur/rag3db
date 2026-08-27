@@ -358,15 +358,25 @@ fn scope_user_filter_condition_applies_inside_cell() {
     assert_eq!(names, vec!["Pricey"]);
 }
 
-/// CANARI — bug kuzu/extension vector : `QUERY_VECTOR_INDEX` sur un graphe
-/// projeté par Cypher rend des nœuds **hors** projection. C'est pour ça que
-/// `Catalog::search` post-filtre les hits vectoriels par colonnes de scope
-/// (sur-fetch ×4). Ce test affirme le bug : le jour où il échoue, kuzu est
-/// corrigé et le post-filtre peut sauter (et les filtres vectoriels
-/// utilisateur redeviennent de vrais pré-filtres).
+/// **Le canari a chanté le 27 août, et voici ce qu'il est devenu.**
+///
+/// Il affirmait un bug : `QUERY_VECTOR_INDEX` sur un graphe projeté rendait
+/// des nœuds **hors** projection, et c'est pour ça que `Catalog::search`
+/// post-filtrait les hits vectoriels avec un sur-fetch ×4. Son message
+/// disait quoi faire le jour où il tomberait — « retirer scope_post_filter
+/// et ce canari ».
+///
+/// La cause, trouvée par une trace dans l'extension : le masque était
+/// parfaitement construit, mais `searchFromUnCheckpointed` — le balayage des
+/// lignes insérées depuis le dernier checkpoint — ne le consultait pas. Sur
+/// un index créé puis rempli, aucune ligne n'est checkpointée : le filtre ne
+/// servait jamais. Une ligne dans `hnsw_index.cpp`.
+///
+/// Le canari devient donc l'affirmation inverse : **la projection est
+/// respectée**. Il garde le même rôle — nous prévenir si ça rechange.
 #[test]
 #[ignore]
-fn canary_kuzu_projected_graph_vector_filter_is_ignored() {
+fn the_projected_graph_honours_the_vector_filter() {
     let mut catalog = catalog_in_memory();
     catalog.register_entity("Product", make_product_config_with(SearchSignals::HYBRID)).unwrap();
     catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
@@ -384,7 +394,7 @@ fn canary_kuzu_projected_graph_vector_filter_is_ignored() {
     let r2 = conn.execute(&format!("CALL QUERY_VECTOR_INDEX('Product_Chunk', 'Product_Chunk_vec', {emb}, 10) RETURN node._project")).unwrap();
     eprintln!("plain query → {:?}", r2.rows.iter().map(|row| format!("{:?}", row.get(0))).collect::<Vec<_>>());
     assert!(
-        projs.iter().any(|p| p.contains("alpha")),
-        "kuzu respecte maintenant la projection ({projs:?}) : retirer scope_post_filter et ce canari"
+        !projs.is_empty() && projs.iter().all(|p| p.contains("beta")),
+        "la projection ne retenait que beta, la recherche vectorielle doit s'y tenir : {projs:?}"
     );
 }
