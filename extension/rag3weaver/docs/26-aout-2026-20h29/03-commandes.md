@@ -250,3 +250,46 @@ tire son élagage, et que des vecteurs synthétiques n'ont pas.
 Mesure du 27 août : documents `nnz` médian 38, moyenne 45,2, **215 dimensions
 sur 6 583 portent la moitié des occurrences** ; requêtes `nnz` médian 10.
 Débit sur burn/Vulkan : **16 vecteurs/s** en documents, 46 en requêtes.
+
+## Placer les modèles sur les cartes (27 août)
+
+```sh
+# Une variable par rôle ; RAG3WEAVER_BURN_DEVICE est le défaut de tous.
+RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 \
+RAG3WEAVER_BURN_DEVICE_RERANKER=gpu:0 \
+RAG3WEAVER_BURN_DEVICE_LLM=gpu:1 \
+  ./run_e2e.sh --test e2e_burn_embedder
+```
+
+Valeurs : `default` · `cpu` · `gpu:N` · `igpu:N`. Le choix est **dit** au
+chargement, et une valeur illisible ne bloque rien : on prévient et on prend
+le défaut — un modèle sur la mauvaise carte vaut mieux qu'un modèle qui ne
+tourne pas.
+
+⚠ `gpu:1` est la deuxième carte **dans l'ordre de wgpu**, pas forcément celui
+de `rocm-smi`. À vérifier une fois par machine :
+
+```sh
+rocm-smi --showmeminfo vram   # avant/après, pour voir laquelle a bougé
+```
+
+## Tracer la recherche vectorielle filtrée
+
+```sh
+RAG3DB_VECTOR_TRACE=1 ./run_e2e.sh --test e2e_code where_the_vector
+```
+
+Trois lignes qui disent laquelle des trois étapes du masque n'a pas eu lieu :
+le plan de filtre est-il lié, le masque est-il enregistré pour la table,
+combien de nœuds porte-t-il. C'est ce qui a trouvé, le 27 août, que le masque
+était parfait et que `searchFromUnCheckpointed` ne le consultait pas.
+
+**Un rappel qui a coûté une heure** : le build est en `Release`, donc les
+`KU_ASSERT` de l'extension sont compilés à néant. Une forme de plan
+inattendue passe sans bruit. La trace remplace l'assertion.
+
+Et recompiler la seule extension, sans refaire le fork :
+
+```sh
+cmake --build build/native-test --target rag3db_vector_extension -j$(( $(nproc) - 2 ))
+```
