@@ -1141,3 +1141,140 @@ fn a_work_domain_narrows_what_a_search_can_see() {
     eprintln!("[exclusion] {} → {vus:?}", sauf.describe());
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
 }
+
+/// Le domaine **par câblage** : posé une fois dans le registre de services,
+/// il rétrécit la recherche sans que la fiche ait rien à déclarer — et le
+/// rendu dit ce qu'il ne montre pas.
+#[test]
+#[ignore]
+fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::dataflow::{DataflowGraph, DataflowRuntime, ServiceRegistry};
+    use rag3weaver::work_domain::{Selector, WorkDomain, WORK_DOMAIN_SERVICE};
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    }
+
+    let render = |domain: Option<WorkDomain>| -> String {
+        let mut graph = DataflowGraph::new();
+        let opts = SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            bm25_mode: BM25Mode::Contains,
+            limit: 20,
+            ..Default::default()
+        };
+        graph.add_node(Box::new(rag3weaver::dataflow::SearchSourceNode::new("src", SCOPE, "boot", opts))).unwrap();
+        // `KBSearchNode` passe par `Catalog::search`, donc il honore les
+        // options que `SearchSourceNode` a posées — dont le domaine. Le
+        // chemin par signal (`BM25SearchNode`) les **jette**, voir
+        // `the_per_signal_path_drops_the_search_options_today`.
+        graph.add_node(Box::new(rag3weaver::dataflow::KBSearchNode::new("search"))).unwrap();
+        graph.add_node(Box::new(rag3weaver::dataflow::RenderResultsNode::new("render"))).unwrap();
+        graph.connect("src", "query", "search", "query").unwrap();
+        graph.connect("search", "results", "render", "results").unwrap();
+
+        let mut services = ServiceRegistry::new();
+        {
+            let cat = catalog.lock().unwrap();
+            services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+            services.register("fts_handles", cat.fts_handles().clone());
+            services.register("sparse_handles", cat.sparse_handles().clone());
+        }
+        services.register("catalog", catalog.clone());
+        if let Some(d) = domain {
+            services.register(WORK_DOMAIN_SERVICE, std::sync::Arc::new(d));
+        }
+        let runtime = DataflowRuntime::with_services(8, services);
+        let out = runtime.execute(&mut graph).unwrap();
+        out.get("render", "text").and_then(|v| v.downcast::<String>()).cloned().unwrap_or_default()
+    };
+
+    let tout = render(None);
+    eprintln!("--- sans domaine ---\n{tout}");
+    assert!(tout.contains("boot_alpha") && tout.contains("boot_beta"), "{tout}");
+    assert!(!tout.contains("vision :"), "sans domaine, pas de ligne de vision : {tout}");
+
+    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let vu = render(Some(alpha));
+    eprintln!("--- domaine alpha ---\n{vu}");
+    assert!(vu.contains("boot_alpha"), "{vu}");
+    assert!(!vu.contains("boot_beta"), "beta est hors du champ : {vu}");
+    // La règle n° 3 : il dit ce qu'il ne montre pas.
+    assert!(vu.contains("vision : /projets/alpha"), "{vu}");
+}
+
+/// **Test de constat, pas de souhait.** `QueryPayload` transporte des
+/// `SearchOptions` — filtres, cohérence, mode BM25 — et deux chemins les
+/// traitent différemment :
+///
+/// - `KBSearchNode` les passe à `Catalog::search`, qui les honore ;
+/// - les nœuds **par signal** (`BM25SearchNode`, `VectorSearchNode`,
+///   `SparseSearchNode`) les **jettent** : `extract_query_and_target` ne rend
+///   que la chaîne et la cible.
+///
+/// Donc un graphe composé à la main filtre ou ne filtre pas selon le nœud
+/// qu'on a branché, **sans rien dire**. Ce test fige le comportement
+/// d'aujourd'hui pour qu'on voie le jour où il change — le correctif étant
+/// de résoudre le filtre en `allowed_ids`, que `search_bm25` accepte déjà et
+/// que lucivy tient pour un vrai pré-filtre depuis la 3.0.4.
+#[test]
+#[ignore]
+fn the_per_signal_path_drops_the_search_options_today() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::dataflow::{DataflowGraph, DataflowRuntime, ServiceRegistry};
+    use rag3weaver::work_domain::{Selector, WorkDomain, WORK_DOMAIN_SERVICE};
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    }
+
+    let opts = SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::Contains,
+        limit: 20,
+        ..Default::default()
+    };
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(rag3weaver::dataflow::SearchSourceNode::new("src", SCOPE, "boot", opts))).unwrap();
+    graph.add_node(Box::new(rag3weaver::dataflow::BM25SearchNode::new("bm25", 20))).unwrap();
+    graph.connect("src", "query", "bm25", "query").unwrap();
+
+    let mut services = ServiceRegistry::new();
+    {
+        let cat = catalog.lock().unwrap();
+        services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+        services.register("fts_handles", cat.fts_handles().clone());
+        services.register("sparse_handles", cat.sparse_handles().clone());
+    }
+    services.register("catalog", catalog.clone());
+    services.register(
+        WORK_DOMAIN_SERVICE,
+        std::sync::Arc::new(WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })),
+    );
+
+    let out = DataflowRuntime::with_services(8, services).execute(&mut graph).unwrap();
+    let results = out.get("bm25", "results")
+        .and_then(|v| v.downcast::<Vec<rag3weaver::search_strategy::UnifiedResult>>())
+        .cloned()
+        .unwrap_or_default();
+    let names: Vec<String> = results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(String::from))
+        .collect();
+    eprintln!("[par signal, domaine posé] {names:?}");
+    assert!(
+        names.iter().any(|n| n == "boot_beta"),
+        "aujourd'hui le chemin par signal ignore le filtre du domaine : {names:?}"
+    );
+}

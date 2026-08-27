@@ -39,6 +39,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::filter::{FilterCondition, FilterOp, FilterValue};
 
+/// Le domaine courant, dans le registre de services — on en hérite **par
+/// câblage**, comme le catalogue ou la source de fichiers. Une fiche n'a rien
+/// à déclarer : celui qui assemble le graphe pose le domaine, et les nœuds
+/// qui savons s'en servir s'en servent.
+pub const WORK_DOMAIN_SERVICE: &str = "work_domain";
+
 /// Un critère de reconnaissance. Les champs remplis sont combinés en **et** ;
 /// dans un champ, les valeurs sont combinées en **ou**.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,6 +192,38 @@ impl WorkDomain {
         (!must.is_empty()).then(|| FilterCondition::Must(must))
     }
 
+    /// Les champs dont ce domaine a besoin pour s'appliquer.
+    ///
+    /// Une entité qui ne les porte pas ne peut pas être rétrécie — un
+    /// `Symbol` n'a qu'un nom, il n'est ni dans un dépôt ni dans un fichier.
+    /// L'appelant doit alors **le dire**, pas filtrer dans le vide : une
+    /// restriction qui ne s'applique pas en silence est un mensonge de plus.
+    pub fn required_fields<'a>(&self, path_field: &'a str) -> Vec<&'a str> {
+        let mut fields = Vec::new();
+        for s in self.include.iter().chain(self.exclude.iter()) {
+            if !s.sources.is_empty() {
+                fields.push("source");
+            }
+            if !s.repos.is_empty() {
+                fields.push("repo");
+            }
+            if !s.languages.is_empty() {
+                fields.push("language");
+            }
+            if !s.under.is_empty() {
+                fields.push(path_field);
+            }
+        }
+        fields.sort_unstable();
+        fields.dedup();
+        fields
+    }
+
+    /// Ce domaine peut-il rétrécir une entité qui porte ces champs ?
+    pub fn applies_to(&self, has_field: impl Fn(&str) -> bool, path_field: &str) -> bool {
+        self.required_fields(path_field).iter().all(|f| has_field(f))
+    }
+
     /// **Ce qu'il montre, et ce qu'il cache** — une ligne, pour le rendu.
     ///
     /// La règle n° 3. Un agent qui ne trouve pas doit pouvoir distinguer
@@ -299,6 +337,22 @@ mod tests {
         assert!(said.contains("vision :") && said.contains("hors champ :"), "{said}");
         assert!(said.contains("tests"), "{said}");
         assert_eq!(WorkDomain::everything().describe(), "vision : tout l'index");
+    }
+
+    #[test]
+    fn a_domain_that_an_entity_cannot_carry_does_not_apply() {
+        let d = WorkDomain::new("d")
+            .including(rag3db())
+            .including(Selector { under: vec!["/x".into()], ..Default::default() });
+        assert_eq!(d.required_fields("file_path"), vec!["file_path", "repo"]);
+
+        // Un Scope porte les deux : il se rétrécit.
+        assert!(d.applies_to(|f| matches!(f, "file_path" | "repo" | "source"), "file_path"));
+        // Un Symbol n'a qu'un nom : le domaine ne s'applique pas, et
+        // l'appelant doit le dire plutôt que filtrer dans le vide.
+        assert!(!d.applies_to(|f| f == "name", "file_path"));
+        // Un domaine qui n'exige rien s'applique partout.
+        assert!(WorkDomain::everything().applies_to(|_| false, "path"));
     }
 
     #[test]

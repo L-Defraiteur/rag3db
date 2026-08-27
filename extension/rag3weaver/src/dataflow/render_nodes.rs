@@ -377,7 +377,18 @@ impl Node for RenderResultsNode {
         let text = if self.json {
             serde_json::to_string(&results).map_err(|e| format!("RenderResultsNode: {e}"))?
         } else {
-            render_results_through(&results, self.max_chars, self.group, &self.lens)
+            let mut out = render_results_through(&results, self.max_chars, self.group, &self.lens);
+            // **Le domaine dit ce qu'il ne montre pas.** Sans cette ligne, un
+            // agent ne peut pas distinguer « ça n'existe pas » de « ce n'est
+            // pas dans mon champ », et l'absence devient un mensonge par
+            // omission — la famille de défauts qu'on passe nos journées à
+            // débusquer.
+            if let Some(domain) = ctx.service::<std::sync::Arc<crate::work_domain::WorkDomain>>(crate::work_domain::WORK_DOMAIN_SERVICE) {
+                if !domain.is_everything() {
+                    out.push_str(&format!("\n_{}_\n", domain.describe()));
+                }
+            }
+            out
         };
         ctx.set_output("text", PortValue::new(text));
         ctx.set_output("results", PortValue::new(results));

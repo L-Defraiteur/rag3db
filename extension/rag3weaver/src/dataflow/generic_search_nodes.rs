@@ -103,12 +103,42 @@ impl Node for SearchSourceNode {
                 .map_err(|e| format!("SearchSourceNode: {e}"))?
         };
 
+        // Le domaine de travail, s'il y en a un dans le registre : la vision
+        // de l'agent rétrécit la recherche, par câblage et sans que la fiche
+        // ait rien à déclarer. Un filtre déjà posé par l'appelant l'emporte —
+        // il est plus précis que la vision générale.
+        let mut options = self.options.clone();
+        if options.filter_condition.is_none() {
+            if let Some(domain) = ctx.service::<Arc<crate::work_domain::WorkDomain>>(crate::work_domain::WORK_DOMAIN_SERVICE).cloned() {
+                let fields = {
+                    let catalog = catalog.lock().unwrap();
+                    catalog.entity_configs().get(&self.target_name).map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
+                };
+                let has = |f: &str| fields.as_ref().is_some_and(|s| s.contains(f));
+                let path_field = if has("file_path") { "file_path" } else { "path" };
+                if domain.applies_to(has, path_field) {
+                    options.filter_condition = domain.to_filter(path_field);
+                } else if !domain.is_everything() {
+                    // Ne jamais rétrécir en silence, et ne jamais faire
+                    // semblant de rétrécir : `Symbol` n'a ni dépôt ni
+                    // fichier, le domaine ne peut rien y faire, et il faut
+                    // que ça se sache.
+                    ctx.warn(&format!(
+                        "SearchSourceNode: le domaine « {} » ne s'applique pas à {} (champs manquants : {})",
+                        domain.name,
+                        self.target_name,
+                        domain.required_fields(path_field).into_iter().filter(|f| !has(f)).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
+        }
+
         ctx.set_output(
             "query",
             PortValue::new(QueryPayload {
                 target_name: self.target_name.clone(),
                 query: self.query.clone(),
-                options: self.options.clone(),
+                options,
                 target: Some(target),
             }),
         );
