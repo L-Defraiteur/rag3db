@@ -164,7 +164,7 @@ impl BurnPpOcr {
         if dict.is_empty() {
             return Err(OcrError::Model("empty character dictionary".into()));
         }
-        let device = device.resolve();
+        let device = device.or_role(crate::burn_device::BurnRole::Ocr).resolve();
         let det = DetGraph::from_bytes(burn::tensor::Bytes::from_bytes_vec(det.to_vec()), &device);
         let rec = RecGraph::from_bytes(burn::tensor::Bytes::from_bytes_vec(rec.to_vec()), &device);
         Ok(Self { det, rec, dict, device, opts: PpOcrOptions::default() })

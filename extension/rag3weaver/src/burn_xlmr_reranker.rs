@@ -183,7 +183,7 @@ impl<G: XlmrGraph> XlmrCrossEncoder<G> {
         tokenizer_path: &std::path::Path,
         device: BurnDevice,
     ) -> Result<Self, EmbedError> {
-        let device = device.resolve();
+        let device = device.or_role(crate::burn_device::BurnRole::Reranker).resolve();
         let tokenizer = xlmr_pair_tokenizer(tokenizer_path)?;
         let graph = G::load(burn::tensor::Bytes::from_bytes_vec(weights.to_vec()), &device);
         Ok(Self {

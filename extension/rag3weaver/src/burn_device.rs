@@ -92,6 +92,24 @@ impl BurnDevice {
         }
     }
 
+    /// **Le défaut consulte l'environnement ; un choix explicite, jamais.**
+    ///
+    /// C'est la précédence qu'on attend partout : le code l'emporte sur la
+    /// variable, qui l'emporte sur le défaut. Sans ce maillon, [`Self::for_role`]
+    /// n'était appelé par personne et les variables ne servaient à rien —
+    /// mécanisme construit, documenté, et jamais branché (27 août 2026, en
+    /// cherchant pourquoi l'embedding ralentissait le poste : les quatre
+    /// mesures comparant les cartes donnaient le même temps, et pour cause).
+    ///
+    /// Le rôle vient de l'appelant parce que **lui seul le connaît** : un
+    /// embedder sait qu'il est un embedder, `resolve()` ne le saura jamais.
+    pub fn or_role(self, role: BurnRole) -> Self {
+        match self {
+            Self::Default => Self::for_role(role),
+            explicite => explicite,
+        }
+    }
+
     /// Shared with the other burn embedders in this crate.
     pub(crate) fn resolve(self) -> Device {
         match self {

@@ -91,7 +91,7 @@ impl BurnMultilingualMiniLmEmbedder {
         tokenizer_path: impl AsRef<std::path::Path>,
         device: BurnDevice,
     ) -> Result<Self, EmbedError> {
-        let device = device.resolve();
+        let device = device.or_role(crate::burn_device::BurnRole::Embedder).resolve();
 
         let mut tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;

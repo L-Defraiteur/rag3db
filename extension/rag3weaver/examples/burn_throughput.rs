@@ -39,7 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("chargement...");
     let t0 = std::time::Instant::now();
     let embedder =
-        BurnBgeM3Embedder::from_files(&weights, &tokenizer, BurnDevice::DiscreteGpu(0))?;
+        BurnBgeM3Embedder::from_files(&weights, &tokenizer, BurnDevice::Default)?;
+    // `Default` consulte `RAG3WEAVER_BURN_DEVICE_EMBEDDER` (via `or_role`) :
+    // c'est ce qui permet de comparer les cartes sans recompiler. Avant, la
+    // carte était écrite en dur ici et la comparaison était impossible.
     eprintln!("chargé en {:.2}s\n", t0.elapsed().as_secs_f64());
 
     // Warmup: compiles the SPIR-V kernels once, otherwise the first cell is meaningless.
