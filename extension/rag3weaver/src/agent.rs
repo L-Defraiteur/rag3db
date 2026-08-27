@@ -291,7 +291,89 @@ pub enum StopReason {
         /// Le contenu d'erreur, à l'identique — c'est ce qui a été comparé.
         detail: String,
     },
+    /// **L'agent s'est tu de lui-même** — il a appelé [`PAUSE_DIALOGUE`]
+    /// ([doc 12](../docs/26-aout-2026-20h29/12-conversations-a-plusieurs.md)).
+    ///
+    /// Ce n'est ni une panne ni une limite : c'est une décision. Un silence
+    /// par défaillance et un silence choisi se ressemblent en sortie et n'ont
+    /// rien à voir — d'où une variante à part, et le genre qui dit ce qui le
+    /// réveillera.
+    Paused {
+        /// Envers qui. Vide : envers le fil entier.
+        with: String,
+        /// Le genre — c'est **la condition de réveil** (doc 12 §8.1).
+        kind: PauseKind,
+        /// Ce qu'un humain lit.
+        reason: String,
+    },
 }
+
+/// **Pourquoi un agent se tait**, et donc ce qui le réveillera.
+///
+/// Le genre *est* la condition de réveil : deux genres qui se réveillent
+/// pareil sont un seul genre. C'est le critère qui empêche la liste d'enfler
+/// — « poliment terminé » et « travail fini » attendent tous deux un nouveau
+/// message, donc c'est le même genre, et la nuance appartient au texte.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PauseKind {
+    /// Plus rien à dire. Réveil : un message qui m'est adressé.
+    Finished,
+    /// J'attends ce run — un outil asynchrone, un enfant. Réveil : sa fin.
+    /// **Fait une arête** dans le graphe d'attente.
+    WaitingForRun(String),
+    /// J'attends que ce participant parle. **Fait une arête**, et c'est par
+    /// là qu'un cycle se forme.
+    WaitingForPeer(String),
+    /// J'attends une direction, de qui voudra. **Ne fait pas d'arête** : un
+    /// humain n'attend pas, il vit sa vie — compter cette attente
+    /// fabriquerait de faux blocages tous les quarts d'heure.
+    WaitingForInstruction,
+    /// Je ne peux pas continuer et je ne sais pas ce qui me débloquerait.
+    /// **Rien ne me réveille** : c'est le seul genre qui doit remonter.
+    /// Ce n'est pas `Finished` — l'un a la forme d'un succès, l'autre d'un
+    /// échec, et les confondre cacherait ce qu'on veut voir.
+    Blocked,
+}
+
+impl PauseKind {
+    /// Lit un genre, avec la liste exacte en cas d'erreur — même discipline
+    /// que les `%% choices:` des fiches.
+    pub fn parse(s: &str, argument: Option<&str>) -> Result<Self, String> {
+        match s.trim() {
+            "finished" => Ok(Self::Finished),
+            "waiting_for_run" => Ok(Self::WaitingForRun(argument.unwrap_or_default().to_string())),
+            "waiting_for_peer" => Ok(Self::WaitingForPeer(argument.unwrap_or_default().to_string())),
+            "waiting_for_instruction" => Ok(Self::WaitingForInstruction),
+            "blocked" => Ok(Self::Blocked),
+            other => Err(format!(
+                "genre '{other}' n'est pas une valeur admise ; admises : blocked, finished, \
+                 waiting_for_instruction, waiting_for_peer, waiting_for_run"
+            )),
+        }
+    }
+
+    /// Ce genre crée-t-il une arête dans le graphe d'attente — donc peut-il
+    /// participer à un blocage circulaire (doc 12 §4) ?
+    pub fn waits_on_someone(&self) -> bool {
+        matches!(self, Self::WaitingForRun(_) | Self::WaitingForPeer(_))
+    }
+
+    /// Qui ou quoi est attendu, s'il y a lieu.
+    pub fn awaited(&self) -> Option<&str> {
+        match self {
+            Self::WaitingForRun(id) | Self::WaitingForPeer(id) => Some(id),
+            _ => None,
+        }
+    }
+}
+
+/// Le nom réservé par lequel un agent se met en pause. Intercepté par la
+/// boucle **avant** l'outillage : se taire est une décision de la boucle, pas
+/// un appel de graphe.
+pub const PAUSE_DIALOGUE: &str = "pause_dialogue";
+/// Le nom réservé par lequel un pair confirme une pause.
+pub const CONFIRM_PAUSE: &str = "confirm_pause";
 
 /// Ce qu'une exécution a coûté et comment elle s'est terminée.
 ///
@@ -437,6 +519,94 @@ impl<'a> Agent<'a> {
     }
 
     /// Les messages en attente dans la boîte, en tours `user`. Rend combien.
+    /// Traite `pause_dialogue` / `confirm_pause`.
+    ///
+    /// Rend le résultat d'outil à coller dans l'historique, et la raison
+    /// d'arrêt s'il faut s'arrêter. `confirm_pause` **n'arrête pas** : il
+    /// répond à une pause reçue, il n'en déclare pas une.
+    ///
+    /// Le pair est prévenu par un message, pas par une réplique — c'est ce
+    /// qui tue la boucle de politesses : une pause n'appelle pas de réponse
+    /// (doc 12 §2.2).
+    fn handle_pause(&self, call: &ToolCall, run_id: &str) -> (Turn, Option<StopReason>) {
+        let args: serde_json::Value = serde_json::from_str(&call.arguments).unwrap_or_default();
+        let field = |k: &str| args.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let (with, reason) = (field("avec"), field("raison"));
+        let confirming = call.name == CONFIRM_PAUSE;
+
+        // Une raison est **obligatoire** : sans elle, la pause devient la
+        // porte de sortie quand le modèle ne sait pas quoi faire, et on aura
+        // des agents qui s'endorment au lieu de travailler (doc 11 §1).
+        if reason.is_empty() {
+            return (
+                Turn::tool_result(
+                    call.id.clone(),
+                    call.name.clone(),
+                    format!("{{\"error\":\"bad_argument\",\"detail\":\"{} exige une 'raison' : une pause sans raison n'est pas une décision\"}}", call.name),
+                ),
+                None,
+            );
+        }
+        let kind = match PauseKind::parse(&field("genre"), Some(&field("attend"))) {
+            Ok(k) => k,
+            Err(detail) if confirming => {
+                // Confirmer n'exige pas de genre : on rend celui de l'autre.
+                let _ = detail;
+                PauseKind::Finished
+            }
+            Err(detail) => {
+                return (
+                    Turn::tool_result(
+                        call.id.clone(),
+                        call.name.clone(),
+                        format!("{{\"error\":\"bad_choice\",\"detail\":\"{detail}\"}}"),
+                    ),
+                    None,
+                );
+            }
+        };
+
+        if let Some(bus) = &self.events {
+            let verbe = if confirming { "a confirmé la pause" } else { "a mis la communication en pause" };
+            let suite = if confirming {
+                String::new()
+            } else {
+                format!(
+                    " Si tu penses devoir la clore de ton côté aussi, appelle \
+                     {CONFIRM_PAUSE}(avec: \"{}\", raison: …).",
+                    self.name
+                )
+            };
+            if !with.is_empty() {
+                bus.send_message(
+                    run_id,
+                    &self.name,
+                    &with,
+                    &format!("{} {verbe} — raison : {reason}.{suite}", self.name),
+                );
+            }
+            bus.emit(crate::events::CatalogEvent::Message {
+                run: run_id.to_string(),
+                from: self.name.clone(),
+                to: with.clone(),
+                content: format!(
+                    "[{}] genre={} raison={reason}",
+                    if confirming { "pause confirmée" } else { "pause" },
+                    serde_json::to_string(&kind).unwrap_or_default()
+                ),
+            });
+        }
+
+        let acquitte = format!(
+            "{{\"statut\":\"{}\",\"avec\":\"{with}\",\"genre\":{},\"raison\":\"{reason}\"}}",
+            if confirming { "pause confirmée" } else { "en pause" },
+            serde_json::to_string(&kind).unwrap_or_default()
+        );
+        let turn = Turn::tool_result(call.id.clone(), call.name.clone(), acquitte);
+        let stop = (!confirming).then(|| StopReason::Paused { with, kind, reason });
+        (turn, stop)
+    }
+
     /// Lance un appel d'outil **sous un run enfant**, dans un fil de portée,
     /// et poste son résultat dans la boîte de l'agent.
     ///
@@ -603,6 +773,8 @@ impl<'a> Agent<'a> {
         // progrès, pas une boucle.
         let mut last_error: Option<(String, String)> = None;
         let mut last_finish = Finish::eos();
+        // Une pause termine le run **sans texte** : c'est tout l'objet.
+        let mut paused = false;
 
         // Un fil de portée pour toute la boucle : les outils asynchrones y
         // travaillent pendant qu'on parle, et il est joint quand le run se
@@ -744,6 +916,21 @@ impl<'a> Agent<'a> {
                     arguments: call.arguments.clone(),
                 });
                 let started = std::time::Instant::now();
+
+                // **Se taire est une décision de la boucle**, pas un appel de
+                // graphe : on intercepte avant l'outillage. Un outil ne peut
+                // pas arrêter la boucle qui l'appelle ; cette action, si.
+                if call.name == PAUSE_DIALOGUE || call.name == CONFIRM_PAUSE {
+                    let (turn, pause) = self.handle_pause(call, run_id);
+                    turns.push(turn);
+                    run.tool_calls += 1;
+                    if let Some(p) = pause {
+                        run.stop = p;
+                        paused = true;
+                    }
+                    continue;
+                }
+
                 // **Asynchrone** : on rend un accusé tout de suite et le vrai
                 // résultat arrive plus tard dans la boîte (doc 10). Le
                 // protocole impose une réponse à chaque appel dans le même
@@ -795,6 +982,13 @@ impl<'a> Agent<'a> {
                 turns.push(result);
             }
 
+            // Une pause a été prononcée pendant ce tour : on sort. Les autres
+            // appels du même tour ont eu leur résultat — l'historique reste
+            // bien formé, il est rejouable tel quel.
+            if paused {
+                break;
+            }
+
             if let Some((tool, detail)) = repeated {
                 run.stop = StopReason::RepeatedError { tool, detail };
                 break;
@@ -803,6 +997,12 @@ impl<'a> Agent<'a> {
         Ok(())
         }); // fin du fil de portée : les outils asynchrones sont joints ici
         interrupted?;
+        // Une pause ne produit **pas** de texte : c'est ce qui la distingue
+        // d'une réponse. Un agent qui répondrait « d'accord, j'attends »
+        // aurait mal compris la consigne (doc 11 §1).
+        if paused {
+            run.text.clear();
+        }
 
         // Une dernière lecture : un résultat arrivé pendant le dernier tour,
         // ou juste après, est **dans l'historique** plutôt que perdu.
@@ -946,6 +1146,94 @@ mod tests {
         let late = late.expect("le résultat doit finir par arriver");
         assert!(late.content.contains("#cherche-1"), "rattachable à la demande : {}", late.content);
         assert!(STARTED.load(Ordering::SeqCst));
+    }
+
+    /// **Se taire est une décision**, et raccrocher n'appelle pas de réponse.
+    ///
+    /// Trois choses d'un coup : la pause arrête le run sans produire de
+    /// texte ; le pair reçoit une **notification** avec le mode d'emploi de
+    /// `confirm_pause` — pas une réplique, donc rien qui appelle une réponse,
+    /// et c'est ce qui tue la boucle de politesses ; et une pause sans raison
+    /// est refusée.
+    #[test]
+    fn an_agent_can_fall_silent_and_the_peer_is_told_not_replied_to() {
+        let bus = crate::events::EventBus::new(64);
+        // La boîte du pair, ouverte avant qu'on lui parle.
+        let inbox = bus.cursor(&crate::events::inbox_topic("run-b"), AGENT_INBOX_CURSOR);
+
+        let llm = scripted(vec![MockLlm::new("").with_tool_calls(vec![(
+            PAUSE_DIALOGUE,
+            r#"{"avec":"run-b","genre":"finished","raison":"on s'est tout dit"}"#,
+        )])]);
+        let tools = toolbox(vec![]);
+        let agent = Agent::new(&llm, &tools).with_events(bus.clone()).with_name("run-a").with_run_id("run-a");
+
+        let mut turns = vec![Turn::user("merci beaucoup, au revoir")];
+        let mut sink = StringSink::default();
+        let run = agent.run(&mut turns, &mut sink).unwrap();
+
+        // 1. Le run s'arrête sur une décision, pas sur une limite.
+        match &run.stop {
+            StopReason::Paused { with, kind, reason } => {
+                assert_eq!(with, "run-b");
+                assert_eq!(kind, &PauseKind::Finished);
+                assert_eq!(reason, "on s'est tout dit");
+            }
+            other => panic!("attendu une pause, obtenu {other:?}"),
+        }
+        // 2. Et sans un mot : une pause n'est pas une réponse.
+        assert!(run.text.is_empty(), "{:?}", run.text);
+
+        // 3. Le pair est **prévenu**, avec de quoi confirmer s'il le veut.
+        let mut rx = inbox.lock().unwrap();
+        let mut recus = Vec::new();
+        while let Ok(crate::events::Event::Message { content, from, .. }) = rx.try_recv() {
+            recus.push(format!("{from}: {content}"));
+        }
+        eprintln!("[boîte de run-b] {recus:?}");
+        assert_eq!(recus.len(), 1, "{recus:?}");
+        assert!(recus[0].contains("mis la communication en pause"), "{recus:?}");
+        assert!(recus[0].contains("on s'est tout dit"), "{recus:?}");
+        assert!(recus[0].contains(CONFIRM_PAUSE), "le mode d'emploi voyage avec : {recus:?}");
+    }
+
+    /// Une pause sans raison n'est pas une décision — elle serait la porte de
+    /// sortie quand le modèle ne sait pas quoi faire.
+    #[test]
+    fn a_pause_without_a_reason_is_refused() {
+        let llm = scripted(vec![
+            MockLlm::new("").with_tool_calls(vec![(PAUSE_DIALOGUE, r#"{"avec":"run-b","genre":"finished"}"#)]),
+            MockLlm::new("bon, je continue alors"),
+        ]);
+        let tools = toolbox(vec![]);
+        let agent = Agent::new(&llm, &tools).with_name("run-a");
+        let mut turns = vec![Turn::user("?")];
+        let mut sink = StringSink::default();
+        let run = agent.run(&mut turns, &mut sink).unwrap();
+
+        let refus = turns.iter().find(|t| t.tool_call_id.is_some()).unwrap();
+        eprintln!("[refus] {}", refus.content);
+        assert!(refus.content.contains("bad_argument"), "{}", refus.content);
+        assert!(!matches!(run.stop, StopReason::Paused { .. }), "la boucle continue : {:?}", run.stop);
+
+        // Et un genre inconnu rend la liste exacte, comme les fiches.
+        assert!(PauseKind::parse("waiting", None).unwrap_err().contains("waiting_for_peer"));
+    }
+
+    /// Le genre décide de ce qui réveille, donc de ce qui peut se bloquer.
+    #[test]
+    fn only_waiting_on_someone_can_deadlock() {
+        assert!(PauseKind::WaitingForPeer("b".into()).waits_on_someone());
+        assert!(PauseKind::WaitingForRun("#t-1".into()).waits_on_someone());
+        // Attendre une instruction n'est pas attendre quelqu'un : un humain
+        // n'attend pas, il vit sa vie. Compter cette attente fabriquerait de
+        // faux blocages tous les quarts d'heure.
+        assert!(!PauseKind::WaitingForInstruction.waits_on_someone());
+        assert!(!PauseKind::Finished.waits_on_someone());
+        // `blocked` n'attend personne — mais rien ne le réveille non plus,
+        // et c'est le seul genre qui doit remonter.
+        assert!(!PauseKind::Blocked.waits_on_someone());
+        assert_eq!(PauseKind::WaitingForPeer("b".into()).awaited(), Some("b"));
     }
 
     /// Outillage qui rend ce qu'on lui dit, par nom d'outil.
