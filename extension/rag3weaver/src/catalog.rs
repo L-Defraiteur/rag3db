@@ -3472,6 +3472,23 @@ impl Catalog {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
     }
 
+    /// La même chose, **paramétrée**.
+    ///
+    /// À préférer dès qu'une valeur ne vient pas du code : une adresse de run
+    /// arrive par un message, donc potentiellement d'un modèle, et l'interpoler
+    /// dans une chaîne Cypher est la façon habituelle de s'ouvrir une porte.
+    /// Tout le reste de ce fichier passe déjà par des paramètres ; ceci ne fait
+    /// que rendre la même prudence disponible au-dehors.
+    pub fn execute_raw_with_params(
+        &self,
+        cypher: &str,
+        params: &[crate::connection::QueryParam],
+    ) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.conn
+            .execute_with_params(cypher, params)
+            .map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
     // ── Event bus ──────────────────────────────────────────────────────
 
     /// Le bus, partagé : à donner à un `Agent` (`with_events`) ou à un

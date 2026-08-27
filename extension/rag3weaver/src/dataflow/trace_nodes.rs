@@ -73,6 +73,19 @@ pub const IN_CONVERSATION: &str = "IN_CONVERSATION";
 /// `Participant —PARTICIPATES_IN→ Conversation`, avec la **nature** en
 /// propriété d'arête.
 pub const PARTICIPATES_IN: &str = "PARTICIPATES_IN";
+
+/// **Qui a mené ce run** — `Participant -PERFORMED-> Run`.
+///
+/// Le maillon qui manquait pour refermer une asymétrie : le fil était
+/// cherchable, celui qui parle ne l'était pas. `Message -SENT_BY-> Run`
+/// existait déjà ; avec cette arête, « qui a travaillé là-dessus » devient un
+/// parcours — on cherche ce qui a été dit, on remonte au run, on remonte à
+/// celui qui l'a mené.
+///
+/// **Seulement pour les runs d'agent.** Un graphe n'est pas quelqu'un qui
+/// parle : lui donner une identité de participant brouillerait précisément la
+/// question à laquelle cette arête sert à répondre.
+pub const PERFORMED: &str = "PERFORMED";
 /// Le graphe de trace fourni : drain → catalogue.
 pub const TRACE_GRAPH_MERMAID: &str = include_str!("../../templates/trace.mmd");
 
@@ -225,6 +238,7 @@ pub fn register_trace_schema(catalog: &mut Catalog) -> Result<(), crate::catalog
         (SENT_BY, MESSAGE_ENTITY, RUN_ENTITY),
         (SENT_TO, MESSAGE_ENTITY, RUN_ENTITY),
         (IN_CONVERSATION, MESSAGE_ENTITY, CONVERSATION_ENTITY),
+        (PERFORMED, PARTICIPANT_ENTITY, RUN_ENTITY),
     ] {
         if catalog.get_relation_def(rel).is_none() {
             catalog.register_relation(rel, from, to)?;
@@ -299,6 +313,44 @@ fn ensure_conversation(
 }
 
 /// Le participant, créé à sa première parole.
+/// **L'identité stable derrière une adresse.**
+///
+/// Une adresse de message est un **run** — `run-b` — c'est-à-dire une
+/// incarnation temporaire. L'identité, elle, survit : c'est le nom de l'agent.
+/// Sans cette résolution, « Ada » serait quelqu'un de différent à chaque
+/// réveil, et « qui a travaillé là-dessus » n'aurait pas de réponse au-delà
+/// d'une session.
+///
+/// Le partage voulu, et il tient en une phrase : **le fil est épisodique, le
+/// participant persiste.** Une conversation reste donc nommée par les adresses
+/// qui l'ont ouverte — deux agents qui se reparlent demain ouvrent un nouveau
+/// fil — tandis que les participants de ces deux fils sont les mêmes.
+///
+/// La nature se **lit**, elle ne se devine pas : une adresse qui n'est pas un
+/// run connu est dite « inconnue » plutôt que jugée à son nom (doc 12 §3).
+fn identity_of(cat: &Catalog, address: &str) -> Result<(String, &'static str), String> {
+    let uuid = cat.entity_uuid(RUN_ENTITY, &run_key(address)).map_err(|e| e.to_string())?;
+    if !cat.exists(RUN_ENTITY, &uuid).map_err(|e| e.to_string())? {
+        return Ok((address.to_string(), "inconnue"));
+    }
+    let res = cat
+        .execute_raw_with_params(
+            "MATCH (r:Run) WHERE r._uuid = $uuid RETURN r.name",
+            &[crate::connection::QueryParam::new("uuid", uuid.as_str())],
+        )
+        .map_err(|e| e.to_string())?;
+    let nom = res
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    // Un run sans nom reste adressé par son identifiant : mieux vaut une
+    // identité pauvre qu'une identité fausse.
+    Ok((if nom.is_empty() { address.to_string() } else { nom }, "agent"))
+}
+
 fn ensure_participant(
     cat: &mut Catalog,
     identity: &str,
@@ -347,7 +399,17 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 seen.insert(run_id.clone());
                 if !parent.is_empty() {
                     let parent_uuid = ensure_run(cat, &parent, &mut seen)?;
-                    links.push((CHILD_OF, uuid, parent_uuid));
+                    links.push((CHILD_OF, uuid.clone(), parent_uuid));
+                }
+                // Celui qui a mené le run devient cherchable.
+                //
+                // Uniquement pour un run d'**agent** : le `name` d'un run de
+                // graphe est le nom du graphe, et en faire un participant
+                // remplirait le catalogue de faux interlocuteurs.
+                let nom = s(e, "name");
+                if s(e, "run_kind") == "agent" && !nom.is_empty() {
+                    let qui = ensure_participant(cat, &nom, &mut seen)?;
+                    links.push((PERFORMED, qui, uuid));
                 }
             }
             "RunFinished" => {
@@ -381,19 +443,10 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                     let conv_uuid = ensure_conversation(cat, &conv, at_ms, &mut seen)?;
                     links.push((IN_CONVERSATION, msg_uuid.clone(), conv_uuid.clone()));
                     for who in [&from_id, &to] {
-                        let p_uuid = ensure_participant(cat, who, &mut seen)?;
-                        // La nature se **lit** : un participant qui est un run
-                        // connu est un agent ; sinon on ne sait pas, et on le
-                        // dit plutôt que de le deviner au style de son nom
-                        // (doc 12 §3).
-                        let nature = if cat
-                            .exists(RUN_ENTITY, &cat.entity_uuid(RUN_ENTITY, &run_key(who)).map_err(|e| e.to_string())?)
-                            .map_err(|e| e.to_string())?
-                        {
-                            "agent"
-                        } else {
-                            "inconnue"
-                        };
+                        // L'adresse est un run ; le participant est celui qui
+                        // le mène, et il survit à ce run.
+                        let (identity, nature) = identity_of(cat, who)?;
+                        let p_uuid = ensure_participant(cat, &identity, &mut seen)?;
                         let mut props = BTreeMap::new();
                         props.insert("nature".to_string(), CypherValue::String(nature.to_string()));
                         cat.link(

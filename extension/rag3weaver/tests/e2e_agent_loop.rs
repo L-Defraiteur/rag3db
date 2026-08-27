@@ -618,10 +618,35 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     who.sort();
     who.dedup();
     eprintln!("[participants] {who:?}");
-    // `run-b` est un run connu, donc un agent. `graph-a` n'en est pas un :
-    // on le dit « inconnue » plutôt que de le deviner à son nom.
-    assert!(who.contains(&("run-b".to_string(), "agent".to_string())), "{who:?}");
+    // **Un participant est une identité, pas une session.** `run-b` est
+    // l'adresse d'une incarnation ; celui qui parle s'appelle `b`, et il
+    // s'appellera encore `b` demain sous un autre run. Sans cette résolution,
+    // « qui a travaillé là-dessus » n'aurait pas de réponse au-delà d'une
+    // session.
+    assert!(who.contains(&("b".to_string(), "agent".to_string())), "{who:?}");
+    assert!(!who.iter().any(|(id, _)| id == "run-b"), "l'adresse n'est pas l'identité : {who:?}");
+    // `graph-a` n'est pas un run connu : on le dit « inconnue » plutôt que de
+    // le deviner à son nom.
     assert!(who.iter().any(|(id, _)| id == "graph-a"), "{who:?}");
+
+    // Et le chemin est **entier** : de ce qui a été dit, on remonte au run,
+    // puis à celui qui l'a mené. C'est ce que `PERFORMED` a refermé — le fil
+    // était cherchable, celui qui parle ne l'était pas.
+    // Ici l'unique agent est `b`, et il **reçoit** : les expéditeurs sont un
+    // graphe et un run jamais démarré. On suit donc `SENT_TO`.
+    let chemin = cat
+        .execute_raw(
+            "MATCH (m:Message)-[:SENT_TO]->(r:Run)<-[:PERFORMED]-(p:Participant) \
+             RETURN p.identity, r.run_id, m.content",
+        )
+        .unwrap();
+    let qui: Vec<(String, String)> = chemin
+        .rows
+        .iter()
+        .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_str()?.to_string())))
+        .collect();
+    eprintln!("[qui a dit quoi] {qui:?}");
+    assert!(qui.iter().any(|(p, run)| p == "b" && run == "run-b"), "{qui:?}");
 
     // Et un message sait dans quel fil il a été dit.
     let in_conv = cat
