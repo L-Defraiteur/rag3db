@@ -223,14 +223,28 @@ impl Node for VectorSearchNode {
             .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
 
-        // `search_vector` filtre par un `WHERE` Cypher (`extra_where`), pas
-        // par des offsets : le pré-filtre du BM25 ne s'y branche pas tel
-        // quel. Tant que ce n'est pas fait, on le **dit** — une restriction
-        // qu'on ignore en silence rend plus de résultats que demandé, et
-        // personne ne peut le voir.
-        if options.filter_condition.is_some() {
-            ctx.warn("VectorSearchNode: le filtre demandé n'est pas appliqué sur ce chemin (il passe par un WHERE Cypher, pas par des offsets) — résultats non restreints");
-        }
+        // Le vecteur ne se pré-filtre pas par offsets — le HNSW ne connaît
+        // pas nos identités — mais par du Cypher sur l'entité parente. Le
+        // catalogue sait le compiler, cellule comprise.
+        let (filter_where, filter_params, filter_match) = match &options.filter_condition {
+            None => (None, vec![], None),
+            Some(cond) => match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+                Some(catalog) => {
+                    let compiled = catalog.lock().unwrap().compile_filter_for_vector(&target.name, Some(cond));
+                    match compiled {
+                        Ok(c) => c,
+                        Err(e) => {
+                            ctx.warn(&format!("VectorSearchNode: filtre non compilé ({e}) — résultats non restreints"));
+                            (None, vec![], None)
+                        }
+                    }
+                }
+                None => {
+                    ctx.warn("VectorSearchNode: un filtre est demandé mais le service 'catalog' manque — résultats non restreints");
+                    (None, vec![], None)
+                }
+            },
+        };
 
         let mut cache = HashMap::new();
         let embedding = embed_query(&*embedder, &query_str, &mut cache)
@@ -245,9 +259,9 @@ impl Node for VectorSearchNode {
                 &target.chunk_table,
                 &embedding,
                 self.limit,
-                None,
-                &[],
-                None,
+                filter_where.as_deref(),
+                &filter_params,
+                filter_match.as_deref(),
             ),
             None => search_vector(
                 &*conn,
@@ -255,12 +269,25 @@ impl Node for VectorSearchNode {
                 &target.name,
                 &embedding,
                 self.limit,
-                None,
-                &[],
-                None,
+                filter_where.as_deref(),
+                &filter_params,
+                filter_match.as_deref(),
             ),
         }
         .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
+
+        // Le `WHERE` compilé plus haut n'est pas une garantie : le graphe
+        // projeté laisse passer des nœuds qu'il devrait exclure (bug du fork,
+        // canari dans `e2e_scope`). On repasse derrière — même remède que
+        // `Catalog::search`.
+        let chunk_results = match (&options.filter_condition, ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned()) {
+            (Some(cond), Some(catalog)) => catalog
+                .lock()
+                .unwrap()
+                .vector_post_filter(&target.name, &target.chunk_table, cond, chunk_results)
+                .map_err(|e| format!("VectorSearchNode: post-filtre : {e}"))?,
+            _ => chunk_results,
+        };
 
         // Resolve chunk-level results → parent-level with data enrichment
         let results = resolve_vector_chunks(

@@ -1273,3 +1273,156 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     eprintln!("[par signal, domaine posé] {names:?}");
     assert_eq!(names, vec!["boot_alpha".to_string()], "le domaine restreint aussi le chemin par signal : {names:?}");
 }
+
+/// Le même domaine, sur le **chemin vectoriel**. Il ne se pré-filtre pas par
+/// offsets — le HNSW ne connaît pas nos identités — mais par du Cypher sur
+/// l'entité parente, que le catalogue compile (cellule comprise).
+#[test]
+#[ignore]
+fn the_vector_path_honours_the_filter_too() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::dataflow::{DataflowGraph, DataflowRuntime, ServiceRegistry};
+    use rag3weaver::embedder::HashEmbedder;
+    use rag3weaver::work_domain::{Selector, WorkDomain, WORK_DOMAIN_SERVICE};
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    }
+
+    let run = |domain: Option<WorkDomain>| -> Vec<String> {
+        let opts = SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::SEMANTIC),
+            limit: 20,
+            ..Default::default()
+        };
+        let mut graph = DataflowGraph::new();
+        graph.add_node(Box::new(rag3weaver::dataflow::SearchSourceNode::new("src", SCOPE, "boot", opts))).unwrap();
+        graph.add_node(Box::new(rag3weaver::dataflow::VectorSearchNode::new("vec", 20))).unwrap();
+        graph.connect("src", "query", "vec", "query").unwrap();
+
+        let mut services = ServiceRegistry::new();
+        {
+            let cat = catalog.lock().unwrap();
+            services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+        }
+        services.register("catalog", catalog.clone());
+        services.register::<std::sync::Arc<dyn rag3weaver::embedder::Embedder>>("embedder", std::sync::Arc::new(HashEmbedder::new(64)));
+        if let Some(d) = domain {
+            services.register(WORK_DOMAIN_SERVICE, std::sync::Arc::new(d));
+        }
+        let out = DataflowRuntime::with_services(8, services).execute(&mut graph).unwrap();
+        let results = out.get("vec", "results")
+            .and_then(|v| v.downcast::<Vec<rag3weaver::search_strategy::UnifiedResult>>())
+            .cloned()
+            .unwrap_or_default();
+        let mut names: Vec<String> = results
+            .iter()
+            .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(String::from))
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+
+    let tout = run(None);
+    eprintln!("[vecteur, sans domaine] {tout:?}");
+    assert!(tout.contains(&"boot_alpha".to_string()) && tout.contains(&"boot_beta".to_string()), "{tout:?}");
+
+    let vus = run(Some(WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })));
+    eprintln!("[vecteur, domaine alpha] {vus:?}");
+    assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
+}
+
+/// Un filtre sur un champ **parent** avec le signal vectoriel, par l'API
+/// publique. Il **plantait** — « Cannot find property file_path for n » —
+/// parce que le HNSW indexe la table de chunks et que le filtre était
+/// compilé sur l'alias des chunks. Puis, la jointure faite, il ne filtrait
+/// pas : `QUERY_VECTOR_INDEX` sur graphe projeté rend des nœuds hors
+/// projection, bug du fork déjà connu et compensé pour la seule cellule.
+///
+/// Les deux sont corrigés : jointure vers le parent, et post-filtre.
+#[test]
+#[ignore]
+fn catalog_search_with_a_vector_filter_on_a_parent_field() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::work_domain::{Selector, WorkDomain};
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+
+    let domain = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let opts = SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::SEMANTIC),
+        limit: 20,
+        filter_condition: domain.to_filter("file_path"),
+        ..Default::default()
+    };
+    let got = cat.search(SCOPE, "boot", opts);
+    match &got {
+        Ok(r) => {
+            let names: Vec<String> = r.results.iter().map(name_of).collect();
+            eprintln!("[catalog vecteur filtré] {names:?}");
+        }
+        Err(e) => eprintln!("[catalog vecteur filtré] ERREUR : {e}"),
+    }
+    let names: Vec<String> = got.expect("plus d'erreur de binder").results.iter().map(name_of).collect();
+    assert_eq!(names, vec!["boot_alpha".to_string()], "et le filtre restreint vraiment : {names:?}");
+}
+
+/// **La question posée directement au moteur** : `QUERY_VECTOR_INDEX` sur un
+/// graphe projeté respecte-t-il la projection ?
+///
+/// L'extension implémente pourtant un vrai semi-masque
+/// (`query_hnsw_index.cpp`, « Pre-append semi mask before projection »). Ce
+/// test dit ce qu'il en est **aujourd'hui, dans ce build**, plutôt que de
+/// faire confiance à un commentaire écrit un autre jour.
+#[test]
+#[ignore]
+fn does_the_projected_graph_actually_mask_the_vector_index() {
+    use rag3weaver::code::analyze;
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+
+    let _ = cat.execute_raw("CALL DROP_PROJECTED_GRAPH('_probe', skip_if_not_exists := true)");
+    let filter = "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN n";
+    // Mêmes échappements que `search_vector_hnsw_filtered`.
+    let escaped = filter.replace('\'', "\\'");
+    cat.execute_raw(&format!("CALL PROJECT_GRAPH_CYPHER('_probe', '{escaped}')")).expect("projection");
+
+    let dim = 64;
+    let zeros = (0..dim).map(|_| "0.0").collect::<Vec<_>>().join(",");
+    let q = format!(
+        "CALL QUERY_VECTOR_INDEX('_probe', 'Scope_Chunk_vec', [{zeros}], 20) \
+         WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
+    );
+    match cat.execute_raw(&q) {
+        Ok(r) => {
+            let mut names: Vec<String> = r.rows.iter().filter_map(|x| x.first()?.as_str().map(String::from)).collect();
+            names.sort();
+            names.dedup();
+            eprintln!("[masque vectoriel] {names:?}");
+            eprintln!(
+                "[verdict] {}",
+                if names.iter().any(|n| n.contains("beta")) {
+                    "LE MASQUE FUIT — des nœuds hors projection sortent"
+                } else {
+                    "le masque tient — la compensation par post-filtre est de la ceinture et bretelles"
+                }
+            );
+        }
+        Err(e) => eprintln!("[masque vectoriel] la requête échoue : {e}"),
+    }
+}

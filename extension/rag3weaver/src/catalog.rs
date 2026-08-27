@@ -2012,6 +2012,68 @@ impl Catalog {
     ///             ←|trigger| chunk_insert.done
     ///     →|done:trigger| FlushNode("flush_fts", tables=["{Entity}"])
     /// ```
+    /// **Le filtre du chemin vectoriel** : `(WHERE, paramètres, MATCH)`.
+    ///
+    /// Le vecteur ne se pré-filtre pas par offsets comme le plein texte — le
+    /// HNSW ne connaît pas nos identités. Il se filtre par du Cypher, sur
+    /// l'entité **parente**, et le moteur choisit ensuite entre index et
+    /// balayage selon la sélectivité.
+    ///
+    /// La clause de cellule est ajoutée ici, pas chez l'appelant : le HNSW
+    /// est par table, donc l'isolation multi-locataire **vient de ce filtre**
+    /// (doc 37 §3). L'oublier ne rend pas moins de résultats, il en rend
+    /// d'autres locataires.
+    ///
+    /// Extrait de `search` pour que les nœuds de graphe l'appellent aussi.
+    pub fn compile_filter_for_vector(
+        &self,
+        entity: &str,
+        condition: Option<&FilterCondition>,
+    ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
+        // `n` est la table de **chunks** : c'est elle que le HNSW indexe. Un
+        // filtre porte pourtant sur les champs du **parent** (`file_path`,
+        // `repo`, `language`…), qui n'existent pas sur un chunk. On compile
+        // donc la condition sur un alias `p`, et on joint.
+        //
+        // Sans cette jointure, un filtre sur un champ parent ne rendait pas
+        // moins de résultats : il **plantait**, « Cannot find property
+        // file_path for n » — sur `Catalog::search` comme sur le nœud. Trouvé
+        // le 27 août en câblant le domaine de travail au chemin vectoriel.
+        let (where_str, mut params, match_str) = match condition {
+            Some(cond) => {
+                let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
+                let parsed = parser
+                    .parse_condition(cond, entity, "p")
+                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+                let w = (!parsed.where_clauses.is_empty()).then(|| parsed.combine_where());
+                let mut clauses: Vec<String> = Vec::new();
+                if w.is_some() {
+                    clauses.push(format!("MATCH (n)-[:{entity}_CHUNKED_FROM]->(p:{entity})"));
+                }
+                clauses.extend(parsed.match_clauses.iter().cloned());
+                let m = (!clauses.is_empty()).then(|| clauses.join(" "));
+                (w, parsed.params, m)
+            }
+            None => (None, vec![], None),
+        };
+
+        if !self.multi_cell {
+            return Ok((where_str, params, match_str));
+        }
+        let scope_where = format!(
+            "n.{} = $_scope_org AND n.{} = $_scope_project",
+            crate::scope::ORG_COLUMN,
+            crate::scope::PROJECT_COLUMN
+        );
+        params.push(QueryParam::new("_scope_org", CypherValue::String(self.scope.org.clone())));
+        params.push(QueryParam::new("_scope_project", CypherValue::String(self.scope.project.clone())));
+        let combined = match where_str {
+            Some(w) => format!("({w}) AND {scope_where}"),
+            None => scope_where,
+        };
+        Ok((Some(combined), params, match_str))
+    }
+
     /// **Le pré-filtre** : résoudre une condition de filtre en offsets
     /// lucivy, ce que `search_bm25` et le sparse appellent `allowed_ids`.
     ///
@@ -3534,6 +3596,56 @@ impl Catalog {
         Ok(hits.into_iter().filter(|h| keep.contains(&h.uuid)).collect())
     }
 
+    /// **Le post-filtre du chemin vectoriel.**
+    ///
+    /// `QUERY_VECTOR_INDEX` sur un graphe projeté rend des nœuds **hors** de
+    /// la projection — bug du fork, canari dans `e2e_scope`. Le `WHERE`
+    /// compilé pour le vecteur n'est donc pas une garantie, c'est une
+    /// indication : il faut repasser derrière. C'est exactement le remède de
+    /// [`Self::scope_post_filter`], généralisé à n'importe quelle condition.
+    ///
+    /// Réservé aux entités simples : une base de connaissances filtre par une
+    /// entité de titre (`filter_indirection`) et suit un autre chemin.
+    pub fn vector_post_filter(
+        &self,
+        entity: &str,
+        chunk_table: &str,
+        condition: &FilterCondition,
+        hits: Vec<search::SearchResult>,
+    ) -> Result<Vec<search::SearchResult>, CatalogError> {
+        if hits.is_empty() {
+            return Ok(hits);
+        }
+        let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
+        let parsed = parser
+            .parse_condition(condition, entity, "p")
+            .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+        if parsed.where_clauses.is_empty() {
+            return Ok(hits);
+        }
+        let mut params = parsed.params.clone();
+        params.push(QueryParam::new(
+            "_pf_uuids",
+            CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect()),
+        ));
+        let joins = if parsed.match_clauses.is_empty() { String::new() } else { format!(" {}", parsed.match_clauses.join(" ")) };
+        let stmt = format!(
+            "MATCH (c:{chunk_table})-[:{entity}_CHUNKED_FROM]->(p:{entity}){joins} \
+             WHERE list_contains($_pf_uuids, c._uuid) AND ({}) RETURN c._uuid",
+            parsed.combine_where()
+        );
+        let res = self
+            .conn
+            .execute_with_params(&stmt, &params)
+            .map_err(|e| CatalogError::DbError(format!("post-filtre vectoriel : {e}")))?;
+        let keep: std::collections::HashSet<String> = res
+            .rows
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from))
+            .collect();
+        Ok(hits.into_iter().filter(|h| keep.contains(&h.uuid)).collect())
+    }
+
     /// Fan-out sur plusieurs cellules : une recherche par cellule, fusion par
     /// rang (RRF, k = 60) — les scores BM25 de deux index ne sont pas
     /// comparables (IDF distincts), les rangs le sont. Sur-fetch de
@@ -3698,44 +3810,8 @@ impl Catalog {
             None
         };
 
-        // For vector search: compile ALL filters to Cypher WHERE (already pre-filter)
-        let (filter_where, filter_params, filter_match) = if let Some(ref cond) = condition {
-            let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
-            let parsed = parser
-                .parse_condition(cond, &entity, "n")
-                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-            let where_str = if parsed.where_clauses.is_empty() {
-                None
-            } else {
-                Some(parsed.combine_where())
-            };
-            let match_str = if parsed.match_clauses.is_empty() {
-                None
-            } else {
-                Some(parsed.match_clauses.join(" "))
-            };
-            (where_str, parsed.params, match_str)
-        } else {
-            (None, vec![], None)
-        };
-        // Multi-tenant : le HNSW est par table, l'isolation vectorielle vient
-        // du filtre sur les colonnes de scope (doc 37 §3). Mono-tenant : rien.
-        let (filter_where, filter_params) = if self.multi_cell {
-            let scope_where = format!(
-                "n.{} = $_scope_org AND n.{} = $_scope_project",
-                crate::scope::ORG_COLUMN, crate::scope::PROJECT_COLUMN
-            );
-            let mut params = filter_params;
-            params.push(QueryParam::new("_scope_org", CypherValue::String(self.scope.org.clone())));
-            params.push(QueryParam::new("_scope_project", CypherValue::String(self.scope.project.clone())));
-            let where_str = match filter_where {
-                Some(w) => format!("({w}) AND {scope_where}"),
-                None => scope_where,
-            };
-            (Some(where_str), params)
-        } else {
-            (filter_where, filter_params)
-        };
+        // Le filtre du chemin vectoriel : du Cypher, pas des offsets.
+        let (filter_where, filter_params, filter_match) = self.compile_filter_for_vector(&entity, condition.as_ref())?;
 
         // Le pré-filtre : les filtres deviennent des offsets lucivy.
         let allowed_ids = match condition {
@@ -3812,7 +3888,10 @@ impl Catalog {
         // de scope ne suffit donc pas. Sur-fetch, puis post-filtre par colonnes.
         // Toujours collectés (`meta.warnings`) : moteur, attribution de chunks, scope.
         let mut search_warnings: Vec<String> = Vec::new();
-        let vector_limit = if self.multi_cell { (search_limit * 4).max(50) } else { search_limit };
+        // Sur-fetch dès qu'un filtre est en jeu : le graphe projeté laisse
+        // passer des nœuds qu'il devrait exclure, et le post-filtre en retire.
+        let filtered_vector = condition.is_some() && target.filter_indirection.is_none();
+        let vector_limit = if self.multi_cell || filtered_vector { (search_limit * 4).max(50) } else { search_limit };
         let vector_results = if need_dense {
             let hits = search::search_vector_via_backend(
                 self.search_backend.as_ref().unwrap().as_ref(),
@@ -3823,6 +3902,10 @@ impl Catalog {
                 &filter_params,
                 filter_match.as_deref(),
             )?;
+            let hits = match (&condition, filtered_vector) {
+                (Some(cond), true) => self.vector_post_filter(&entity, vector_entity, cond, hits)?,
+                _ => hits,
+            };
             if self.multi_cell {
                 let fetched = hits.len();
                 let kept = self.scope_post_filter(vector_entity, hits)?;
