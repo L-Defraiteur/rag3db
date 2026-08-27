@@ -81,11 +81,24 @@ pub trait ToolBox {
     fn tool_defs(&self) -> Vec<ToolDef> {
         Vec::new()
     }
+
+    /// Cet outil rend-il un **accusé** tout de suite, son résultat plus tard ?
+    ///
+    /// Déclaré par la fiche (`%% async: true`), jamais deviné : ni le modèle
+    /// ni un seuil de durée n'en décident, sinon le même outil répondrait
+    /// tantôt d'un coup tantôt en deux temps, et le modèle n'apprendrait rien
+    /// ([doc 10](../docs/26-aout-2026-20h29/10-outils-asynchrones.md) §4.1).
+    fn is_async(&self, _tool: &str) -> bool {
+        false
+    }
 }
 
 impl<T: ToolBox + ?Sized> ToolBox for &T {
     fn call(&self, call: &ToolCall) -> Turn {
         (**self).call(call)
+    }
+    fn is_async(&self, tool: &str) -> bool {
+        (**self).is_async(tool)
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         (**self).call_in(call, run)
@@ -98,6 +111,9 @@ impl<T: ToolBox + ?Sized> ToolBox for &T {
 impl<T: ToolBox + ?Sized> ToolBox for Arc<T> {
     fn call(&self, call: &ToolCall) -> Turn {
         (**self).call(call)
+    }
+    fn is_async(&self, tool: &str) -> bool {
+        (**self).is_async(tool)
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         (**self).call_in(call, run)
@@ -148,6 +164,10 @@ impl ToolBox for GraphToolBox<'_> {
         layer.register("parent_run", run.to_string());
         self.tools
             .call_with_policy(call, self.nodes, Arc::new(layer), &self.policy)
+    }
+
+    fn is_async(&self, tool: &str) -> bool {
+        self.tools.get(tool).is_some_and(|t| t.is_async())
     }
 
     /// Les fiches, résolues contre le catalogue des services quand il y en a
@@ -340,7 +360,7 @@ impl TokenSink for TeeSink<'_> {
 /// Un modèle, un outillage, des bornes.
 pub struct Agent<'a> {
     llm: &'a dyn Llm,
-    tools: &'a dyn ToolBox,
+    tools: &'a (dyn ToolBox + Sync),
     opts: GenOptions,
     limits: AgentLimits,
     /// Le bus où la boucle publie ce qu'elle fait — sans jamais l'attendre.
@@ -363,7 +383,7 @@ impl<'a> Agent<'a> {
     /// Les options de génération partent des défauts, **avec les outils de
     /// l'outillage déjà déclarés** : oublier de les annoncer est la faute
     /// qu'on ne veut pas avoir à diagnostiquer.
-    pub fn new(llm: &'a dyn Llm, tools: &'a dyn ToolBox) -> Self {
+    pub fn new(llm: &'a dyn Llm, tools: &'a (dyn ToolBox + Sync)) -> Self {
         Self {
             llm,
             tools,
@@ -417,6 +437,52 @@ impl<'a> Agent<'a> {
     }
 
     /// Les messages en attente dans la boîte, en tours `user`. Rend combien.
+    /// Lance un appel d'outil **sous un run enfant**, dans un fil de portée,
+    /// et poste son résultat dans la boîte de l'agent.
+    ///
+    /// Le fil est *scoped* : il emprunte l'outillage sans exiger `'static`,
+    /// et il est joint quand le run de l'agent se termine. Un outil
+    /// asynchrone travaille donc **pendant** que la boucle parle, et aucun
+    /// résultat ne peut survivre à l'agent qui l'a demandé.
+    ///
+    /// Le résultat arrive comme un message ordinaire, préfixé de sa poignée :
+    /// c'est ce qui permet au modèle de le rattacher à sa demande, trois
+    /// tours plus tard s'il le faut.
+    fn spawn_async_tool<'s>(
+        &'s self,
+        call: &ToolCall,
+        run_id: &str,
+        handle: &str,
+        scope: &'s std::thread::Scope<'s, '_>,
+    ) {
+        let Some(bus) = self.events.clone() else { return };
+        let call = call.clone();
+        let inbox = run_id.to_string();
+        let child = crate::events::new_run_id(&call.name);
+        let handle = handle.to_string();
+        let tools = self.tools;
+        let agent = self.name.clone();
+        scope.spawn(move || {
+            let started = std::time::Instant::now();
+            let result = tools.call_in(&call, &child);
+            // `send_message` publie **sur la boîte du destinataire** en plus
+            // du sujet des messages ; `emit` seul irait dans `messages` et
+            // l'agent ne le verrait jamais.
+            bus.send_message(
+                &child,
+                &format!("outil {handle}"),
+                &inbox,
+                &format!(
+                    "{handle} ({}) a rendu après {} ms :\n{}",
+                    call.name,
+                    started.elapsed().as_millis(),
+                    result.content
+                ),
+            );
+            let _ = &agent;
+        });
+    }
+
     fn read_inbox(&self, run_id: &str, turns: &mut Vec<Turn>) -> usize {
         let Some(bus) = &self.events else { return 0 };
         if !self.inbox {
@@ -538,6 +604,11 @@ impl<'a> Agent<'a> {
         let mut last_error: Option<(String, String)> = None;
         let mut last_finish = Finish::eos();
 
+        // Un fil de portée pour toute la boucle : les outils asynchrones y
+        // travaillent pendant qu'on parle, et il est joint quand le run se
+        // termine. Aucun résultat ne peut donc survivre à l'agent qui l'a
+        // demandé — c'est le même choix qu'au runtime dataflow.
+        let interrupted: Result<(), LlmError> = std::thread::scope(|scope| {
         loop {
             if run.iterations >= self.limits.max_iterations {
                 run.stop = StopReason::MaxIterations;
@@ -673,7 +744,26 @@ impl<'a> Agent<'a> {
                     arguments: call.arguments.clone(),
                 });
                 let started = std::time::Instant::now();
-                let result = self.tools.call_in(call, run_id);
+                // **Asynchrone** : on rend un accusé tout de suite et le vrai
+                // résultat arrive plus tard dans la boîte (doc 10). Le
+                // protocole impose une réponse à chaque appel dans le même
+                // tour — « plus tard » ne peut donc pas vouloir dire « pas de
+                // réponse », mais « une réponse qui dit que ça travaille ».
+                let result = if self.tools.is_async(&call.name) && self.events.is_some() {
+                    let handle = format!("#{}-{}", call.name, run.tool_calls + 1);
+                    self.spawn_async_tool(call, run_id, &handle, scope);
+                    Turn::tool_result(
+                        call.id.clone(),
+                        call.name.clone(),
+                        format!(
+                            "{{\"handle\": \"{handle}\", \"statut\": \"en cours\", \"outil\": \"{}\", \
+                             \"suite\": \"le résultat arrivera comme message ; tu peux parler en attendant\"}}",
+                            call.name
+                        ),
+                    )
+                } else {
+                    self.tools.call_in(call, run_id)
+                };
                 run.tool_calls += 1;
                 if self.events.is_some() {
                     let error_kind = error_kind(&result.content);
@@ -710,6 +800,13 @@ impl<'a> Agent<'a> {
                 break;
             }
         }
+        Ok(())
+        }); // fin du fil de portée : les outils asynchrones sont joints ici
+        interrupted?;
+
+        // Une dernière lecture : un résultat arrivé pendant le dernier tour,
+        // ou juste après, est **dans l'historique** plutôt que perdu.
+        run.messages += self.read_inbox(run_id, turns);
 
         run.closed_orphans +=
             close_orphan_tool_calls(turns, &self.limits.interrupted_tool_result);
@@ -785,6 +882,70 @@ mod tests {
             };
             step.generate(turns, opts, sink)
         })
+    }
+
+
+    /// **Un outil asynchrone rend un accusé, pas un résultat** — et l'agent
+    /// peut parler pendant qu'il travaille (doc 10).
+    ///
+    /// Trois choses vérifiées d'un coup : l'accusé porte une poignée et se
+    /// distingue d'un résultat ; le vrai résultat arrive plus tard **dans la
+    /// boîte**, préfixé de cette poignée ; et l'agent a produit du texte
+    /// entre les deux, ce qui est tout l'objet de l'exercice.
+    #[test]
+    fn an_async_tool_answers_with_a_handle_and_the_result_comes_later() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        static STARTED: AtomicBool = AtomicBool::new(false);
+        struct SlowBox(Vec<ToolDef>);
+        impl ToolBox for SlowBox {
+            fn call(&self, call: &ToolCall) -> Turn {
+                STARTED.store(true, Ordering::SeqCst);
+                std::thread::sleep(std::time::Duration::from_millis(30));
+                Turn::tool_result(call.id.clone(), call.name.clone(), "trouvé : port.rs:101".to_string())
+            }
+            fn is_async(&self, tool: &str) -> bool {
+                tool == "cherche"
+            }
+            fn tool_defs(&self) -> Vec<ToolDef> {
+                self.0.clone()
+            }
+        }
+
+        let tools = SlowBox(vec![ToolDef {
+            name: "cherche".to_string(),
+            description: "d".to_string(),
+            parameters: serde_json::json!({"type": "object", "properties": {}}),
+        }]);
+        let llm = scripted(vec![
+            MockLlm::new("").with_tool_calls(vec![("cherche", "{}")]),
+            MockLlm::new("je regarde, deux secondes"),
+        ]);
+        let bus = crate::events::EventBus::new(64);
+        let agent = Agent::new(&llm, &tools).with_events(bus.clone()).with_inbox();
+
+        let mut turns = vec![Turn::user("où est merge_port_values ?")];
+        let mut sink = StringSink::default();
+        let run = agent.run(&mut turns, &mut sink).unwrap();
+
+        // 1. L'accusé : une poignée, et un statut qui ne se confond pas avec
+        //    un résultat. Sans ça le modèle raconterait « voilà » pour « c'est
+        //    parti », et il aurait l'air de mentir.
+        let ack = turns.iter().find(|t| t.tool_call_id.is_some()).expect("un résultat d'outil");
+        eprintln!("[accusé] {}", ack.content);
+        assert!(ack.content.contains("#cherche-1"), "{}", ack.content);
+        assert!(ack.content.contains("en cours"), "{}", ack.content);
+        assert!(!ack.content.contains("port.rs:101"), "l'accusé n'est pas le résultat : {}", ack.content);
+
+        // 2. L'agent a parlé pendant ce temps.
+        assert!(run.text.contains("je regarde"), "{}", run.text);
+
+        // 3. Le vrai résultat est arrivé, dans la boîte, sous sa poignée.
+        let late = turns.iter().find(|t| t.content.contains("port.rs:101"));
+        eprintln!("[tardif] {:?}", late.map(|t| t.content.clone()));
+        let late = late.expect("le résultat doit finir par arriver");
+        assert!(late.content.contains("#cherche-1"), "rattachable à la demande : {}", late.content);
+        assert!(STARTED.load(Ordering::SeqCst));
     }
 
     /// Outillage qui rend ce qu'on lui dit, par nom d'outil.

@@ -779,6 +779,14 @@ pub struct GraphTool {
     on: Vec<String>,
     /// Quand réagir (`%% policy:`), si `on` n'est pas vide.
     policy: super::reactor::ReactPolicy,
+    /// `%% async: true` — un appel rend **tout de suite** un accusé avec une
+    /// poignée, et le vrai résultat arrive plus tard dans la boîte de
+    /// l'agent ([doc 10](../../docs/26-aout-2026-20h29/10-outils-asynchrones.md)).
+    ///
+    /// C'est une propriété de l'outil, connue d'avance : ni le modèle ni un
+    /// seuil de durée ne décident. Un outil qui répondrait tantôt d'un coup,
+    /// tantôt en deux temps, n'apprendrait rien à personne.
+    is_async: bool,
     template: GraphDefinition,
     result_node: String,
     result_port: String,
@@ -818,6 +826,7 @@ impl GraphTool {
             untyped,
             on: Vec::new(),
             policy: super::reactor::ReactPolicy::Each,
+            is_async: false,
             template,
             result_node: result_node.to_string(),
             result_port: result_port.to_string(),
@@ -1074,7 +1083,19 @@ impl GraphTool {
             tool.policy = policy;
         }
         tool.on = header.on;
+        tool.is_async = header.is_async;
         Ok(tool)
+    }
+
+    /// L'outil rend-il un accusé tout de suite, le résultat plus tard ?
+    pub fn is_async(&self) -> bool {
+        self.is_async
+    }
+
+    /// Déclarer l'asynchronie depuis Rust (le pendant de `%% async:`).
+    pub fn with_async(mut self, is_async: bool) -> Self {
+        self.is_async = is_async;
+        self
     }
 
     /// Réagir à ces sujets (voir [`super::reactor::Reactor`]).
@@ -1172,6 +1193,9 @@ impl GraphTool {
             if let Some(choices) = &p.choices {
                 out.push_str(&format!("%% choices: {} = {}\n", p.name, choices.spec()));
             }
+        }
+        if self.is_async {
+            out.push_str("%% async: true\n");
         }
         if !self.on.is_empty() {
             out.push_str(&format!("%% on: {}\n", self.on.join(", ")));
@@ -1319,6 +1343,7 @@ struct Header {
     choices: Vec<(String, Choices)>,
     on: Vec<String>,
     policy: Option<super::reactor::ReactPolicy>,
+    is_async: bool,
     result: String,
 }
 
@@ -1335,6 +1360,7 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
     let mut choices = Vec::new();
     let mut on = Vec::new();
     let mut policy = None;
+    let mut is_async = false;
     let mut result = None;
 
     for raw in source.lines() {
@@ -1365,6 +1391,12 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
             on = v.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
         } else if let Some(v) = body.strip_prefix("policy:") {
             policy = Some(super::reactor::ReactPolicy::parse(v.trim()).map_err(spec)?);
+        } else if let Some(v) = body.strip_prefix("async:") {
+            is_async = match v.trim() {
+                "true" | "oui" => true,
+                "false" | "non" => false,
+                other => return Err(spec(format!("'%% async: {other}' : true | false"))),
+            };
         } else if let Some(v) = body.strip_prefix("result:") {
             result = Some(v.trim().to_string());
         }
@@ -1378,6 +1410,7 @@ fn parse_header(source: &str) -> Result<Header, GraphToolError> {
         untyped,
         choices,
         on,
+        is_async,
         policy,
         result: result.ok_or_else(|| spec("en-tête sans directive '%% result:'".into()))?,
     })

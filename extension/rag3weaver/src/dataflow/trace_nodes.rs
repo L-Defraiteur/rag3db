@@ -87,9 +87,12 @@ pub fn trace_config() -> EntityConfig {
     fields.insert("ms".into(), f(FieldType::Integer));
     fields.insert("tokens".into(), f(FieldType::Integer));
     fields.insert("at_ms".into(), f(FieldType::Integer));
+    // Le même instant, lisible — voir `iso8601_utc`. **À lire, jamais à
+    // filtrer** : voir la note sur `at_ms` dans `message_config`.
+    fields.insert("at".into(), f(FieldType::String));
     EntityConfig {
         fields,
-        return_fields: Some(vec!["kind".into(), "run_id".into(), "parent_run_id".into(), "agent".into(), "tool".into(), "call_id".into(), "node".into(), "ok".into(), "ms".into(), "tokens".into(), "at_ms".into()]),
+        return_fields: Some(vec!["at".into(), "kind".into(), "run_id".into(), "parent_run_id".into(), "agent".into(), "tool".into(), "call_id".into(), "node".into(), "ok".into(), "ms".into(), "tokens".into(), "at_ms".into()]),
         ..Default::default()
     }
 }
@@ -123,10 +126,23 @@ pub fn message_config() -> EntityConfig {
     fields.insert("run_id".into(), f(FieldType::String));
     fields.insert("seq".into(), f(FieldType::String));
     fields.insert("at_ms".into(), f(FieldType::Integer));
+    // Le même instant, lisible : « qu'est-ce qui s'est dit hier ? » ne se
+    // répond pas avec un nombre de millisecondes.
+    //
+    // **On lit `at`, on filtre `at_ms`.** La tentation est grande d'écrire
+    // `at starts_with "2026-08-27"` — c'est commode et c'est **faux**. `at`
+    // est en UTC ; « hier » est local ; les deux diffèrent du décalage, donc
+    // le préfixe rate le début de la journée locale et attrape la fin de la
+    // veille. À Paris en été, deux heures de messages mal rangés par jour.
+    //
+    // La seule façon juste : traduire une journée locale en **intervalle
+    // d'instants** et filtrer `at_ms` dessus ([`local_day_range`]). Le fuseau
+    // n'apparaît alors qu'à un seul endroit, celui qui pose la question.
+    fields.insert("at".into(), f(FieldType::String));
     EntityConfig {
         fields,
         hashsafe: Some(vec!["run_id".into(), "to".into(), "seq".into()]),
-        return_fields: Some(vec!["from".into(), "to".into(), "run_id".into(), "at_ms".into()]),
+        return_fields: Some(vec!["at".into(), "from".into(), "to".into(), "run_id".into(), "at_ms".into()]),
         ..Default::default()
     }
 }
@@ -224,6 +240,8 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 d.insert("run_id".into(), CypherValue::String(run.clone()));
                 d.insert("seq".into(), CypherValue::String(format!("{at_ms}-{i}")));
                 d.insert("at_ms".into(), CypherValue::Int(at_ms));
+    d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
+                d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
                 let msg_uuid = cat.entity_uuid(MESSAGE_ENTITY, &d).map_err(|e| e.to_string())?;
                 cat.ingest_entities(MESSAGE_ENTITY, vec![d]).map_err(|e| e.to_string())?;
                 messages += 1;
@@ -292,6 +310,7 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     d.insert("ms".into(), CypherValue::Int(i("ms")));
     d.insert("tokens".into(), CypherValue::Int(i("tokens")));
     d.insert("at_ms".into(), CypherValue::Int(at_ms));
+    d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
     d
 }
 
@@ -300,6 +319,94 @@ fn now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// **Le fuseau dans lequel on *lit*** — jamais celui dans lequel on stocke.
+///
+/// Même principe que la lentille de chemins (doc 04 §5) : on garde l'absolu,
+/// on affiche un point de vue. Un instant est un instant ; l'heure locale est
+/// une manière de le dire.
+///
+/// Par ordre : `RAG3WEAVER_TIMEZONE`, puis `TZ`, puis le fuseau du système.
+/// Rien de tout ça : `UTC`.
+pub fn display_zone() -> jiff::tz::TimeZone {
+    for var in ["RAG3WEAVER_TIMEZONE", "TZ"] {
+        if let Ok(name) = std::env::var(var) {
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            match jiff::tz::TimeZone::get(name) {
+                Ok(tz) => return tz,
+                Err(e) => eprintln!("[rag3weaver] {var}='{name}' : {e} — fuseau du système"),
+            }
+        }
+    }
+    jiff::tz::TimeZone::system()
+}
+
+/// **Une journée locale, en intervalle d'instants** — la seule façon juste de
+/// filtrer une date.
+///
+/// `day` s'écrit `AAAA-MM-JJ` et vaut dans `tz`. Rend `[début, fin)` en
+/// millisecondes d'époque, à passer à un filtre sur `at_ms`.
+///
+/// Pourquoi ça existe plutôt que `at starts_with "2026-08-27"` : `at` est en
+/// UTC. À Paris en été, la journée locale commence deux heures **avant**
+/// minuit UTC — le préfixe raterait les deux premières heures et attraperait
+/// les deux dernières de la veille.
+///
+/// Et la journée ne fait pas toujours 24 h : aux changements d'heure elle en
+/// fait 23 ou 25. C'est exactement ce qu'on ne savait pas calculer à la main,
+/// et pourquoi la base de fuseaux vaut sa dépendance.
+pub fn local_day_range(day: &str, tz: &jiff::tz::TimeZone) -> Option<(i64, i64)> {
+    let date: jiff::civil::Date = day.parse().ok()?;
+    let start = tz.to_zoned(date.to_datetime(jiff::civil::Time::midnight())).ok()?;
+    let end = tz.to_zoned(date.tomorrow().ok()?.to_datetime(jiff::civil::Time::midnight())).ok()?;
+    Some((start.timestamp().as_millisecond(), end.timestamp().as_millisecond()))
+}
+
+/// L'instant, écrit dans un fuseau : `2026-08-27T00:30:00+02:00[Europe/Paris]`.
+pub fn iso8601_in(at_ms: i64, tz: &jiff::tz::TimeZone) -> String {
+    match jiff::Timestamp::from_millisecond(at_ms) {
+        Ok(t) => t.to_zoned(tz.clone()).to_string(),
+        Err(_) => iso8601_utc(at_ms),
+    }
+}
+
+/// **Le même instant, écrit pour être lu** : `2026-08-27T03:14:22Z`.
+///
+/// `at_ms` est un nombre de millisecondes — exact, calculable, et illisible.
+/// Un humain ne peut pas le dater d'un coup d'œil, et un modèle à qui on
+/// demande « qu'est-ce qui s'est dit hier ? » ne peut rien en faire. On garde
+/// donc les deux : **un pour compter, un pour lire**.
+///
+/// Et l'ISO-8601 en UTC a une propriété qu'on utilise : il se **trie comme le
+/// temps**. `starts_with("2026-08-27")` donne la journée, `"2026-08"` le mois,
+/// sans arithmétique.
+///
+/// Calculé à la main plutôt qu'avec une dépendance de dates : le calendrier
+/// grégorien tient en quinze lignes, et une caisse de plus pour ça serait
+/// payée par tout le monde.
+pub fn iso8601_utc(at_ms: i64) -> String {
+    let secs = at_ms.div_euclid(1000);
+    let ms = at_ms.rem_euclid(1000);
+    let days = secs.div_euclid(86_400);
+    let rest = secs.rem_euclid(86_400);
+    let (h, mi, sec) = (rest / 3600, (rest % 3600) / 60, rest % 60);
+
+    // Algorithme civil de Howard Hinnant : jours depuis l'époque → date.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}T{h:02}:{mi:02}:{sec:02}.{ms:03}Z")
 }
 
 // ─── EventSourceNode ────────────────────────────────────────────────────────
@@ -617,4 +724,79 @@ impl NodeFactory for SendMessageNodeFactory {
             ],
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// L'aller-retour, et les bornes qui font mal ailleurs.
+    #[test]
+    fn an_instant_reads_as_a_date() {
+        assert_eq!(iso8601_utc(0), "1970-01-01T00:00:00.000Z");
+        // Une année bissextile et le lendemain du 29 février — la ligne où
+        // les calendriers faits à la main se trompent.
+        assert!(iso8601_utc(1_772_323_200_000).starts_with("2026-03-01"), "{}", iso8601_utc(1_772_323_200_000));
+        // Avant l'époque : division euclidienne, pas troncature.
+        assert_eq!(iso8601_utc(-1), "1969-12-31T23:59:59.999Z");
+    }
+
+    /// **Le piège que ces fonctions existent pour éviter.**
+    ///
+    /// Filtrer une date par préfixe sur `at` est commode et faux : `at` est
+    /// en UTC, « hier » est local, et les deux diffèrent du décalage. Ce test
+    /// mesure l'erreur au lieu de la décrire.
+    #[test]
+    fn filtering_a_local_day_by_prefix_would_be_wrong_by_the_offset() {
+        let paris = jiff::tz::TimeZone::get("Europe/Paris").unwrap();
+        let (start, end) = local_day_range("2026-08-27", &paris).unwrap();
+
+        // La journée locale commence **avant** minuit UTC.
+        assert_eq!(iso8601_utc(start), "2026-08-26T22:00:00.000Z");
+        assert_eq!(end - start, 86_400_000, "un jour d'été ordinaire fait 24 h");
+
+        // Un message envoyé à 00 h 30 à Paris est dans la journée locale…
+        let minuit_trente = start + 30 * 60_000;
+        assert!(minuit_trente >= start && minuit_trente < end);
+        // …et le préfixe naïf le manque, parce qu'en UTC il est la veille.
+        assert!(iso8601_utc(minuit_trente).starts_with("2026-08-26"), "{}", iso8601_utc(minuit_trente));
+
+        // À l'inverse, 23 h 30 UTC le 27 est déjà demain à Paris : le préfixe
+        // l'attraperait à tort.
+        let tard = end + 90 * 60_000;
+        assert!(iso8601_utc(tard).starts_with("2026-08-27"), "{}", iso8601_utc(tard));
+        assert!(tard >= end, "et pourtant hors de la journée locale");
+
+        // En UTC, intervalle et préfixe coïncident — c'est pour ça que le
+        // bogue passe inaperçu tant qu'on ne sort pas de Greenwich.
+        let (s0, _) = local_day_range("2026-08-27", &jiff::tz::TimeZone::UTC).unwrap();
+        assert_eq!(iso8601_utc(s0), "2026-08-27T00:00:00.000Z");
+    }
+
+    /// **Ce qu'on ne savait pas calculer à la main, et pourquoi la dépendance
+    /// vaut son prix** : aux changements d'heure, une journée ne fait pas
+    /// 24 heures.
+    #[test]
+    fn a_day_is_not_always_twenty_four_hours() {
+        let paris = jiff::tz::TimeZone::get("Europe/Paris").unwrap();
+        // Dernier dimanche de mars 2026 : on saute de 2 h à 3 h.
+        let (s, e) = local_day_range("2026-03-29", &paris).unwrap();
+        assert_eq!(e - s, 23 * 3_600_000, "23 h au passage à l'heure d'été");
+        // Dernier dimanche d'octobre : 3 h redevient 2 h.
+        let (s, e) = local_day_range("2026-10-25", &paris).unwrap();
+        assert_eq!(e - s, 25 * 3_600_000, "25 h au retour à l'heure d'hiver");
+        // Un décalage déclaré à la main se serait trompé ces deux jours-là,
+        // et personne ne l'aurait vu.
+    }
+
+    #[test]
+    fn an_instant_reads_in_its_zone() {
+        let paris = jiff::tz::TimeZone::get("Europe/Paris").unwrap();
+        let (start, _) = local_day_range("2026-08-27", &paris).unwrap();
+        let written = iso8601_in(start + 30 * 60_000, &paris);
+        eprintln!("[lu à Paris] {written}");
+        assert!(written.starts_with("2026-08-27T00:30:00"), "{written}");
+        assert!(written.contains("+02:00") && written.contains("Europe/Paris"), "{written}");
+    }
+
 }
