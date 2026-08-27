@@ -185,3 +185,86 @@ Deux principes se sont vérifiés assez souvent pour être écrits :
 
 > **Rendre lisible, c'est rendre vérifiable.** Le rendu compact a révélé
 > deux défauts que personne ne cherchait.
+
+---
+
+# 27 août — la suite, en une nuit
+
+Le rapport ci-dessus s'arrêtait au 26 à 20 h 29. Voici ce qui a suivi, court,
+parce que les documents 04 à 12 disent le détail.
+
+## Ce qui a été livré
+
+| | |
+|---|---|
+| **Les trois pistes « immédiates »** du §4 | faites, chiffrées : index en masse 21,3 s → 6,2 s ; court-circuit de l'inchangé 19,5 s → 2,1 s ; les entrantes se refont après un `edit` |
+| **L'identité d'un scope** | ne dépend plus ni de sa signature ni de son contenu — un `edit` ne détruit plus rien |
+| **L'identité d'un fichier** | `(source, chemin absolu)`, après trois versions ([doc 04](04-une-racine-est-un-point-de-vue.md)) ; deux racines, un fichier |
+| **Les coordonnées** | `repo`/`repo_path`/`revision` par fournisseurs souscrits — deux clones se reconnaissent sans rien déclarer |
+| **La lentille de chemins** | le stockage est absolu, l'affichage est un point de vue |
+| **Le domaine de travail** | `WorkDomain`, une sélection et pas un contenant, câblée par le registre de services |
+| **Le pré-filtre** | exact sur les trois signaux (voir plus bas) |
+| **Les outils asynchrones** | accusé + poignée tout de suite, résultat plus tard dans la boîte ([doc 10](10-outils-asynchrones.md)) |
+| **Les dates** | `at` lisible à côté d'`at_ms`, fuseau réel par `jiff` |
+| **La machine** | `jobs = -2`, build confiné dans un cgroup, `unswap.sh` |
+
+Tests : **33 suites, ~276 E2E**, 851 unitaires.
+
+## Ce qu'on a trouvé sans le chercher, la suite
+
+Le §3 en listait neuf ; en voici six de plus, tous du même genre — **une
+promesse tenue à moitié, et rien qui le dise**.
+
+10. **Le chemin par signal jetait les `SearchOptions`.** `KBSearchNode` les
+    honorait, `BM25SearchNode` et les autres les ignoraient : un graphe
+    filtrait ou non selon le nœud branché, sans rien dire.
+11. **Un filtre vectoriel sur un champ parent *plantait*** — « Cannot find
+    property file_path for n » — sur l'API publique. Le HNSW indexe les
+    chunks, le filtre était compilé sur cet alias.
+12. **Le semi-masque du HNSW ne servait à rien.** Il était parfaitement
+    construit ; `searchFromUnCheckpointed` ne le consultait pas. Sur un index
+    créé puis rempli, aucune ligne n'est checkpointée — donc le filtre ne
+    filtrait jamais. **Une ligne** dans `hnsw_index.cpp`.
+13. **Une référence résolue dans le lot ne laissait aucune trace.** `CONSUMES`
+    n'était pas une vue matérialisée mais une arête sans mémoire.
+14. **`e2e_highlight_long_text` ne compilait plus**, et la passe complète
+    rendait « 0 passed, 33 suites non lancées » avec un code de sortie 0.
+15. **8 Go de cache de prompts en RAM hôte** chez `llama-server`, et
+    `vm.swappiness = 150` : le poste ramait à 3 % de CPU, avec 51 Go libres.
+
+## Trois canaris ont chanté
+
+C'est le dispositif qui a le mieux marché, et il mérite d'être nommé : des
+tests qui **affirment un défaut**, avec le mode d'emploi de leur propre mort.
+
+- `the_same_file_seen_from_two_roots_is_two_identities_today` → tombé douze
+  heures après avoir été écrit.
+- `canary_kuzu_projected_graph_vector_filter_is_ignored` → écrit par une
+  session précédente, il portait ses instructions (« retirer
+  `scope_post_filter` et ce canari »). Suivies.
+- `the_per_signal_path_drops_the_search_options_today` → devenu un test de
+  propriété deux heures plus tard.
+
+## Ce qui s'est passé de mieux, et ce n'est pas du code
+
+Une session lucivy a répondu à notre cahier des charges **et livré** L3 et
+L5 dans la nuit. Notre question sur la sélectivité du filtre a trouvé chez
+eux une régression que leurs tests ne voyaient pas — *ils vérifiaient les
+réponses, pas le chemin* — et une accélération de ×27.
+
+Ils ont retiré trois chiffres faux, dont un mesuré **pendant que notre
+machine saturait**. Leur phrase, qu'on garde :
+
+> **Une explication convaincante d'un artefact est plus dangereuse que
+> l'artefact.**
+
+Et la leçon vaut pour nous : nos rapports (24×, 16 892 → 101 ms) survivent
+au bruit ; nos **valeurs absolues** ne valent pas mieux que ±30 %, et on ne
+l'avait pas écrit.
+
+## La suite
+
+`Conversation` : les messages pendent à un `run_id`, pas à un fil avec des
+participants — donc les postures du [doc 12](12-conversations-a-plusieurs.md)
+n'ont pas où s'inscrire, et « de quoi a-t-on parlé hier dans ce fil » n'a pas
+de sujet. C'est l'objet qui manque **sous** tout ce qu'on vient d'écrire.
