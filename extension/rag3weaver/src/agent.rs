@@ -453,6 +453,9 @@ pub struct Agent<'a> {
     run_id: Option<String>,
     /// Lire sa boîte (`run.<id>.inbox`) entre deux tours.
     inbox: bool,
+    /// Les postures de la session : où s'inscrit une pause, et où se lit un
+    /// blocage. Partagées — c'est tout l'intérêt.
+    postures: Option<Arc<crate::postures::Postures>>,
 }
 
 /// Le curseur sous lequel un agent lit sa boîte. Un message envoyé **avant**
@@ -475,7 +478,18 @@ impl<'a> Agent<'a> {
             name: "agent".to_string(),
             run_id: None,
             inbox: false,
+            postures: None,
         }
+    }
+
+    /// Partager les postures de la session.
+    ///
+    /// Sans elles, une pause s'arrête à ce run : personne ne peut voir qui
+    /// attend qui, donc personne ne peut voir un blocage. C'est l'objet
+    /// **commun** qui rend l'attente circulaire détectable.
+    pub fn with_postures(mut self, postures: Arc<crate::postures::Postures>) -> Self {
+        self.postures = Some(postures);
+        self
     }
 
     /// Remplace les options de génération. **L'appelant reprend alors la
@@ -595,6 +609,30 @@ impl<'a> Agent<'a> {
                     serde_json::to_string(&kind).unwrap_or_default()
                 ),
             });
+        }
+
+        // La posture s'inscrit dans la session : c'est l'objet **commun** qui
+        // rend l'attente circulaire détectable. Sans lui, une pause s'arrête
+        // à ce run et personne ne peut voir qui attend qui.
+        if let Some(postures) = &self.postures {
+            postures.record(
+                &self.name,
+                crate::postures::Posture { with: with.clone(), kind: kind.clone(), reason: reason.clone() },
+            );
+            // Et si ça ferme une boucle, on le **dit** : un blocage annoncé
+            // est un problème, un blocage silencieux est une panne.
+            for cycle in postures.deadlocks() {
+                if cycle.iter().any(|n| n == &self.name) {
+                    let phrase = format!("blocage : {} s'attendent mutuellement", cycle.join(" → "));
+                    eprintln!("[rag3weaver] {phrase}");
+                    if let Some(bus) = &self.events {
+                        bus.emit(crate::events::CatalogEvent::Error {
+                            context: "postures".to_string(),
+                            message: phrase,
+                        });
+                    }
+                }
+            }
         }
 
         let acquitte = format!(
@@ -872,6 +910,15 @@ impl<'a> Agent<'a> {
                 finish: format!("{:?}", finish.reason),
                 tool_calls: finish.tool_calls.len(),
             });
+
+            // Parler lève sa propre pause : on ne peut pas être en pause et
+            // répondre en même temps (doc 12 §2.1). C'est ce qui permet à un
+            // pair de réengager sans cérémonie.
+            if let Some(postures) = &self.postures {
+                if !text.is_empty() || finish.has_tool_calls() {
+                    postures.speak(&self.name);
+                }
+            }
 
             // ── Pas d'outil demandé : c'est fini ────────────────────────
             if !finish.has_tool_calls() {
@@ -1218,6 +1265,40 @@ mod tests {
 
         // Et un genre inconnu rend la liste exacte, comme les fiches.
         assert!(PauseKind::parse("waiting", None).unwrap_err().contains("waiting_for_peer"));
+    }
+
+    /// **Deux agents qui s'attendent** : chacun se tait poliment, personne
+    /// n'est en faute, et rien ne se passe. Le blocage est détecté et **dit**.
+    #[test]
+    fn two_agents_waiting_on_each_other_are_told_they_are_stuck() {
+        let postures = Arc::new(crate::postures::Postures::new());
+        let tools = toolbox(vec![]);
+
+        let pause_toward = |peer: &'static str| {
+            scripted(vec![MockLlm::new("").with_tool_calls(vec![(
+                PAUSE_DIALOGUE,
+                Box::leak(
+                    format!(r#"{{"avec":"{peer}","genre":"waiting_for_peer","attend":"{peer}","raison":"à toi"}}"#)
+                        .into_boxed_str(),
+                ) as &'static str,
+            )])])
+        };
+
+        for (me, peer) in [("a", "b"), ("b", "a")] {
+            let llm = pause_toward(peer);
+            let agent = Agent::new(&llm, &tools).with_name(me).with_postures(postures.clone());
+            let mut turns = vec![Turn::user("?")];
+            let run = agent.run(&mut turns, &mut StringSink::default()).unwrap();
+            assert!(matches!(run.stop, StopReason::Paused { .. }), "{:?}", run.stop);
+        }
+
+        let blocages = postures.deadlocks();
+        eprintln!("[blocages] {blocages:?}");
+        assert_eq!(blocages, vec![vec!["a".to_string(), "b".to_string()]]);
+
+        // Et l'un des deux reparle : le blocage tombe, sans cérémonie.
+        assert!(postures.speak("a"));
+        assert!(postures.deadlocks().is_empty());
     }
 
     /// Le genre décide de ce qui réveille, donc de ce qui peut se bloquer.

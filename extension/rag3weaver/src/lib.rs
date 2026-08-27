@@ -140,6 +140,7 @@ pub mod dataflow;
 pub mod query;
 pub mod refs;
 pub mod schema;
+pub mod postures;
 pub mod scope;
 pub mod work_domain;
 pub mod tools;
