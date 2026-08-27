@@ -1426,3 +1426,111 @@ fn does_the_projected_graph_actually_mask_the_vector_index() {
         Err(e) => eprintln!("[masque vectoriel] la requête échoue : {e}"),
     }
 }
+
+/// **Où en est le vrai pré-filtre vectoriel** — trois formes de projection,
+/// et ce qu'elles donnent aujourd'hui.
+///
+/// L'extension a tout ce qu'il faut : un `LogicalSemiMasker` alimenté par le
+/// plan de filtre, un `HNSWSearchState::semiMask`, et trois stratégies de
+/// recherche filtrée choisies par sélectivité (`BLIND_TWO_HOP`,
+/// `DIRECTED_TWO_HOP`, `ONE_HOP_FILTERED`). Ce n'est pas un oubli, c'est
+/// écrit et pensé.
+///
+/// Et pourtant le masque ne tient pas. Deux hypothèses écartées ici : ce
+/// n'est pas la jointure (un filtre à un seul `MATCH` fuit pareil), et ce
+/// n'est pas un vecteur de norme nulle (on interroge avec un vrai vecteur).
+///
+/// Ce test **imprime son verdict** au lieu d'affirmer. Le jour où le masque
+/// tiendra, il nous le dira, et on pourra retirer le post-filtre et le
+/// sur-fetch de `Catalog::search` — c'est-à-dire passer de l'approché à
+/// l'exact sur le chemin vectoriel.
+///
+/// Prochaine étape pour aller plus loin : une compilation de l'extension en
+/// **Debug**, pour que les `KU_ASSERT` du planificateur parlent. En Release
+/// ils sont compilés à néant, donc une forme de plan inattendue passe sans
+/// bruit — et c'est le suspect n° 1.
+#[test]
+#[ignore]
+fn where_the_vector_pre_filter_stands_today() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::embedder::HashEmbedder;
+
+    let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+
+    // Les uuid des scopes d'alpha — ce que la résolution du filtre produirait.
+    let rows = cat
+        .execute_raw("MATCH (p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN p._uuid")
+        .unwrap();
+    let uuids: Vec<String> = rows.rows.iter().filter_map(|r| r.first()?.as_str().map(String::from)).collect();
+    assert!(!uuids.is_empty());
+    let list = uuids.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join(",");
+
+    let probe = |name: &str, filter: &str| {
+        let _ = cat.execute_raw(&format!("CALL DROP_PROJECTED_GRAPH('{name}', skip_if_not_exists := true)"));
+        let escaped = filter.replace('\'', "\\'");
+        cat.execute_raw(&format!("CALL PROJECT_GRAPH_CYPHER('{name}', '{escaped}')")).expect("projection");
+        // Un **vrai** vecteur : en métrique cosinus, une norme nulle n'a pas
+        // de sens et le moteur peut rendre n'importe quoi. Un zéro partout
+        // aurait été une sonde qui teste sa propre erreur.
+        let v = rag3weaver::embedder::Embedder::embed(&HashEmbedder::new(64), &["boot".to_string()]).unwrap();
+        let coords = v[0].iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(",");
+        let q = format!(
+            "CALL QUERY_VECTOR_INDEX('{name}', 'Scope_Chunk_vec', [{coords}], 20) \
+             WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
+        );
+        let r = cat.execute_raw(&q).expect("requête vectorielle");
+        let mut names: Vec<String> = r.rows.iter().filter_map(|x| x.first()?.as_str().map(String::from)).collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+
+    // Un seul MATCH, la condition portée par le chunk lui-même.
+    let single = probe(
+        "_probe_single",
+        &format!("MATCH (n:Scope_Chunk) WHERE list_contains([{list}], n._parent_uuid) RETURN n"),
+    );
+    eprintln!("[un seul MATCH] {single:?}");
+
+    // Deux MATCH, la condition portée par le parent — ce qu'on fait aujourd'hui.
+    let joined = probe(
+        "_probe_join",
+        "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN n",
+    );
+    eprintln!("[avec jointure] {joined:?}");
+
+    // Et la forme **native** de projection, que le C++ traite par un chemin
+    // séparé (`ParsedNativeGraphEntry`, une seule table et un prédicat).
+    let _ = cat.execute_raw("CALL DROP_PROJECTED_GRAPH('_probe_native', skip_if_not_exists := true)");
+    let native = cat
+        .execute_raw(&format!(
+            "CALL PROJECT_GRAPH('_probe_native', {{'Scope_Chunk': 'list_contains([{list}], n._parent_uuid)'}}, {{}})"
+        ))
+        .map(|_| {
+            let v = rag3weaver::embedder::Embedder::embed(&HashEmbedder::new(64), &["boot".to_string()]).unwrap();
+            let coords = v[0].iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(",");
+            let r = cat
+                .execute_raw(&format!(
+                    "CALL QUERY_VECTOR_INDEX('_probe_native', 'Scope_Chunk_vec', [{coords}], 20) \
+                     WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
+                ))
+                .expect("requête vectorielle native");
+            let mut names: Vec<String> = r.rows.iter().filter_map(|x| x.first()?.as_str().map(String::from)).collect();
+            names.sort();
+            names.dedup();
+            names
+        });
+    eprintln!("[projection native] {native:?}");
+
+    let verdict = |v: &[String]| if v.iter().any(|n| n.contains("beta")) { "FUIT" } else { "masque" };
+    eprintln!(
+        "[verdict] un seul MATCH : {} · avec jointure : {} · native : {}",
+        verdict(&single),
+        verdict(&joined),
+        match &native { Ok(v) => verdict(v), Err(_) => "refusée" },
+    );
+}
