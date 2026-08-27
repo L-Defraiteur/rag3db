@@ -70,7 +70,8 @@ llama.cpp :
 ```sh
 ~/git_workspaces/llama.cpp/build/bin/llama-server \
   -m ~/ML/models/Qwen3-Coder-30B-abliterated-Q6_K/*.gguf \
-  --device Vulkan1 -ngl 99 --host 127.0.0.1 --port 8080 -c 32768 --jinja
+  --device Vulkan1 -ngl 99 --host 127.0.0.1 --port 8080 --jinja \
+  -c 131072 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --cache-ram 2048
 
 RAG3WEAVER_LOCAL_LLM=http://127.0.0.1:8080/v1 RAG3WEAVER_LOCAL_MODEL=qwen3-coder-30b \
   ./run_e2e.sh --features openai-llm --test e2e_cloud_code_agent
@@ -80,6 +81,37 @@ RAG3WEAVER_LOCAL_LLM=http://127.0.0.1:8080/v1 RAG3WEAVER_LOCAL_MODEL=qwen3-coder
   discussion, donc pas d'appels d'outils convertis.
 - `--device Vulkan1` : la carte qui **ne** pilote **pas** l'écran (vérifier
   avec `llama-server --list-devices` et `rocm-smi --showmeminfo vram`).
+
+### Ce que ça coûte en VRAM, mesuré le 27 août
+
+Le modèle est **Qwen3-Coder-30B-A3B** en `Q6_K` : 25,09 Go de poids, et
+*trente milliards de paramètres dont trois actifs par jeton*. C'est ça qui le
+rend rapide — un modèle dense de 30 Go ferait passer tous ses poids par la
+bande passante à chaque jeton ; celui-ci n'en touche qu'un dixième. En
+revanche tous les experts doivent être résidents : on paye la **mémoire** de
+30 milliards et la **vitesse** de trois.
+
+| contexte | cache KV | VRAM | libre sur 34,21 Go |
+|---|---|---|---|
+| 32 768 | f16 | 28,30 Go | 5,91 |
+| 65 536 | f16 | 31,55 Go | 2,66 |
+| **131 072** | **q8_0** | **32,02 Go** | **2,19** |
+
+**Quadrupler le contexte coûte 3,7 Go**, parce que quantifier le cache le
+divise par deux et compense le doublement. `q8_0` perd un peu de précision —
+c'est un compromis, pas un repas gratuit.
+
+Deux choses que le log dit et qu'on aurait cherchées longtemps :
+
+- `n_ctx_train = 262144` — le modèle est entraîné pour **256k**. Rester à
+  32k n'utilisait qu'un huitième de sa capacité. 256k demanderait encore
+  ~6 Go et ne rentre pas avec les poids en Q6.
+- `prompt cache is enabled, size limit: 8192 MiB` — un cache de prompts de
+  **8 Go en RAM hôte**, pas en VRAM. C'est une bonne part de ce que le serveur
+  laissait partir en zram (voir « Ménage de la machine » plus bas).
+  `--cache-ram 2048` le borne, `--cache-ram 0` le supprime.
+- `n_parallel = 4, kv_unified = true` : les quatre slots **partagent** un
+  seul cache. Sans ça, 128k en demanderait quatre fois plus.
 
 ## 5. Mesurer
 
