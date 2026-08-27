@@ -106,6 +106,18 @@ Reprises de ses mots, avec où elles sont écrites.
     personne n'avait voulus** (`src/code.rs:180`). Il a piégé des gens qui
     connaissent le système ; un modèle ne fera pas mieux.
 
+13. **« Un terminal multi-agent, ma vengeance de la schizophrénie. »** Des
+    personnages — Alma l'architecte, Zed le reviewer sécu — à qui on parle et
+    qui répondent à plusieurs, qu'on peut interpeller un par un. Analysée au
+    [doc 09](09-le-terminal-a-plusieurs.md), avec sa phrase qui tient tout :
+    *« un prompt devrait être agnostique de personnalité et de rôle, et lié à
+    la tâche »*. D'où trois choses à ne pas confondre — **identité** (dans le
+    graphe, faite le 27), **rôle** (une enveloppe de capacités, vérifiable) et
+    **personnalité** (qui n'a le droit de porter que le registre). Plus le
+    **tour de parole** : couper la parole existe déjà comme mécanisme
+    (`Flow::Stop`), à condition que la préséance se **dérive** au lieu de se
+    stocker.
+
 ## 3. Les ambitions — celles que je vois
 
 Ce que je pousserais, et pourquoi.
@@ -166,4 +178,6 @@ le zram, pas le CPU).
 | Réputation, promotion sur preuve | [`23-aout/49`](../23-aout-2026-20h33/49-vision-le-catalogue-comme-graphe-outils-tags-memoire.md), [`23-aout/51`](../23-aout-2026-20h33/51-vision-le-chaos-controle.md), [`05`](05-la-reputation-des-abstractions.md) ici |
 | Identité d'agent, mémoire, commits, concepts | [`06`](06-le-tamagotchi-et-le-compilateur.md) ici |
 | Langage de déclaration, schéma-programme | [`07`](07-le-langage-de-declaration.md) ici |
+| Compteur, coût, unités | [`08`](08-le-compteur.md) ici |
+| Terminal à plusieurs, identité/rôle/personnalité | [`09`](09-le-terminal-a-plusieurs.md) ici |
 | Commandes, mémo | [`26-aout/03`](../26-aout-2026-20h29/03-commandes.md), et [`03`](03-knowledge-dump.md) ici |
