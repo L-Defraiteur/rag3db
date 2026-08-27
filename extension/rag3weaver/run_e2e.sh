@@ -164,10 +164,49 @@ export RAG3DB_LIBRARY_DIR="$BUILD/src"
 export RAG3DB_INCLUDE_DIR="$BUILD/src"
 export RAG3DB_ROOT="$ROOT"
 
+# **Toute passe laisse son journal**, résumé ou non.
+#
+# Il vivait dans un `mktemp` effacé à la sortie, et seulement dans la branche
+# `--summary` : une suite qui cassait ne laissait que des compteurs, et savoir
+# *quel* test avait cassé demandait de tout relancer — une demi-heure pour
+# retrouver une ligne qu'on avait déjà eue sous les yeux.
+#
+# Écrire d'abord, filtrer ensuite. Un appelant qui réduit la sortie à trois
+# lignes (`| tail | grep`) ne détruit plus rien : le texte entier est ici.
+E2E_LOG="${RAG3WEAVER_E2E_LOG:-$WEAVER/target/e2e-last.log}"
+mkdir -p "$(dirname "$E2E_LOG")"
+
+# **L'incrémental ne sert à rien ici, et il coûte cher.**
+#
+# Il paie sur le *deuxième* build de la *même* cible : on change une ligne, on
+# rebuild, il réutilise. Une passe construit 34 binaires de test, chacun une
+# fois — elle **écrit** le cache et ne le relit pratiquement jamais. C'est
+# pourquoi `CARGO_INCREMENTAL=0` est le réglage de toute CI, et une passe E2E
+# est de la CI. La boucle d'édition, elle, le garde : c'est là qu'il rapporte.
+#
+# Mesuré le 27 août 2026 : 124 Go d'incrémental accumulés en trois jours.
+export CARGO_INCREMENTAL=0
+
+# **Le ménage passe avant, pas « de temps en temps ».**
+#
+# Cargo suffixe chaque artefact d'une empreinte et ne supprime jamais les
+# anciennes : à trois passes par jour, une centaine de gigas quotidiens. Ici,
+# les périmés ne vivent jamais plus d'une passe. `RAG3WEAVER_NO_GC=1` l'évite.
+if [ -z "${RAG3WEAVER_NO_GC:-}" ] && [ -x "$WEAVER/menage_target.py" ]; then
+  "$WEAVER/menage_target.py" "$WEAVER/target" || true
+fi
+
 if [ "$SUMMARY" = true ]; then
-  # Capture output, show summary at the end
-  TMPLOG=$(mktemp)
-  trap 'rm -f "$TMPLOG"' EXIT
+  # Capture output, show summary at the end.
+  #
+  # **Le journal survit à la passe.** Il vivait dans un `mktemp` effacé à la
+  # sortie : quand une suite échouait, il ne restait que des compteurs, et
+  # savoir *quel* test avait cassé demandait de tout relancer — une demi-heure
+  # pour retrouver une ligne qu'on avait déjà eue sous les yeux.
+  #
+  # Une passe qui échoue doit laisser de quoi regarder. C'est la même règle
+  # que partout ici : rendre visible ce dont l'absence ne se voit pas.
+  TMPLOG="$E2E_LOG"
   set +e
   confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
   EXIT_CODE=${PIPESTATUS[0]}
@@ -200,6 +239,17 @@ if [ "$SUMMARY" = true ]; then
     fi
   done
 
+  # **Nommer ce qui a cassé.** Un compteur dit qu'il y a un problème ; il ne
+  # dit pas lequel, et c'est justement ce qu'on vient chercher.
+  mapfile -t FAILED_NAMES < <(grep -oP '^test \K[\w:]+(?= \.\.\. FAILED)' "$TMPLOG" | sort -u)
+  if [ ${#FAILED_NAMES[@]} -gt 0 ]; then
+    echo ""
+    echo "  échecs :"
+    for t in "${FAILED_NAMES[@]}"; do
+      printf "    · %s\n" "$t"
+    done
+  fi
+
   # Les suites demandées qui n'ont pas rendu de résultat (compilation en
   # échec, abandon) : le total n'est pas un total.
   NOT_RUN=0
@@ -226,9 +276,15 @@ if [ "$SUMMARY" = true ]; then
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
   echo "═══════════════════════════════════════════════"
+  echo "  journal complet : $E2E_LOG"
   exit "$EXIT_CODE"
 else
-  confined cargo test "${CARGO_ARGS[@]}"
+  set +e
+  confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$E2E_LOG"
+  EXIT_CODE=${PIPESTATUS[0]}
+  set -e
   echo ""
+  echo "Journal complet : $E2E_LOG"
   echo "Tip: run with --summary for a per-suite results table."
+  exit "$EXIT_CODE"
 fi

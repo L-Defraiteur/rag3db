@@ -27,6 +27,24 @@ heure perdue à chercher un bogue qui n'existe pas.
 ./run_e2e.sh --features openai-llm --test e2e_cloud_code_agent
 ```
 
+**Le journal survit à la passe** — depuis le 27 août au soir :
+
+```sh
+./run_e2e.sh --summary                             # affiche le résumé…
+less extension/rag3weaver/target/e2e-last.log      # …et tout est encore là
+RAG3WEAVER_E2E_LOG=/ailleurs/passe.log ./run_e2e.sh --summary
+```
+
+Il tenait dans un `mktemp` effacé à la sortie, et seulement en mode
+`--summary`. Une suite qui cassait ne laissait que des compteurs : retrouver
+*quel* test coûtait une demi-heure de relance pour une ligne qu'on avait déjà
+eue sous les yeux. Le résumé **nomme** maintenant les tests en échec.
+
+> **Écrire d'abord, filtrer ensuite.** La règle vaut pour tout ce qui est long,
+> pas seulement pour cette commande : `2>&1 | tee journal.log`, puis le `grep`
+> qu'on veut. Un appelant qui réduit la sortie à trois lignes ne doit jamais
+> être le seul endroit où elle a existé.
+
 **Une passe à la fois.** Vérifier d'abord :
 
 ```sh
@@ -124,15 +142,27 @@ existe.
 
 1. `cargo test --test e2e_*` à la main → `undefined symbol`.
 2. Deux passes en parallèle → durées fausses, contention du dossier de build.
-3. Filtrer une date par préfixe sur `at` → faux du décalage de fuseau.
-4. Croire un commentaire plutôt que mesurer.
-5. Publier une durée absolue mesurée pendant qu'autre chose tourne (±30 %).
-6. Oublier `--jinja` sur `llama-server`.
-7. Ajouter un champ à une entité et casser un `EntityConfig { .. }` littéral
+   **Et n'importe quelle compilation pendant une passe compte comme une
+   deuxième** : même `target/`, même verrou cargo. Les suites tardives ne
+   testent alors plus le même code que les premières — *une passe incohérente
+   est pire qu'une passe absente*, elle donne un vert auquel on croit.
+3. Ne garder qu'une sortie filtrée d'une commande longue : le jour où elle
+   casse, ce qu'on cherche est exactement ce qu'on a jeté (§2).
+4. Filtrer une date par préfixe sur `at` → faux du décalage de fuseau.
+5. Croire un commentaire plutôt que mesurer.
+6. Publier une durée absolue mesurée pendant qu'autre chose tourne (±30 %).
+7. Oublier `--jinja` sur `llama-server`.
+8. Ajouter un champ à une entité et casser un `EntityConfig { .. }` littéral
    ailleurs — la passe complète devient muette (« 0 passed, 33 non lancées »).
-8. Un `%% param:` sans type reste à lier ; sans `%% choices:`, le modèle
+9. Un `%% param:` sans type reste à lier ; sans `%% choices:`, le modèle
    invente des valeurs.
-9. Chercher `Symbol` par vecteur : il n'a pas de chunk, donc pas d'embedding.
+10. Chercher `Symbol` par vecteur : il n'a pas de chunk, donc pas d'embedding.
+11. Laisser `target/` grossir : 100 Go par jour de binaires périmés, cargo ne
+    ramasse jamais. Le disque à 94 %, c'était ça. **Corrigé le 27 au soir** :
+    `run_e2e.sh` fait le ménage avant chaque passe (`menage_target.py`,
+    `RAG3WEAVER_NO_GC=1` pour l'éviter) et met `CARGO_INCREMENTAL=0` — il ne
+    rapporte rien sur 34 binaires construits une fois, et coûtait 124 Go en
+    trois jours. La boucle d'édition, elle, garde l'incrémental.
 
 ## 9. Où regarder quand ça casse
 
