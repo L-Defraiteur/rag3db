@@ -2012,6 +2012,64 @@ impl Catalog {
     ///             ←|trigger| chunk_insert.done
     ///     →|done:trigger| FlushNode("flush_fts", tables=["{Entity}"])
     /// ```
+    /// **Le pré-filtre** : résoudre une condition de filtre en offsets
+    /// lucivy, ce que `search_bm25` et le sparse appellent `allowed_ids`.
+    ///
+    /// Ce n'est pas un filtrage après coup : le jeu d'ids descend jusqu'aux
+    /// résolveurs, la `doc_freq` est comptée sur le sous-ensemble et le `N`
+    /// suit (`with_subset_docs` côté lucivy, depuis leur 3.0.4). Un document
+    /// score donc comme si l'index ne contenait que ce qui est autorisé —
+    /// c'est ce qui rend un domaine de travail juste et pas seulement
+    /// esthétique.
+    ///
+    /// Extrait de `search` pour que le chemin par signal (les nœuds de
+    /// graphe) puisse l'appeler aussi : il jetait les options en silence.
+    pub fn resolve_filter_to_ids(
+        &self,
+        entity: &str,
+        condition: &FilterCondition,
+        target: &crate::search::SearchTarget,
+    ) -> Result<Option<Vec<u64>>, CatalogError> {
+        let (filter_entity, filter_alias, join_from): (&str, &str, Option<(&str, &str, &str)>) =
+            if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
+                (title_entity.as_str(), "t", Some(("t", title_entity.as_str(), in_rel.as_str())))
+            } else {
+                (entity, "n", None)
+            };
+
+        let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
+        let parsed = parser
+            .parse_condition(condition, filter_entity, filter_alias)
+            .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+
+        if parsed.where_clauses.is_empty() {
+            return Ok(None);
+        }
+
+        let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
+        let query = self.dialect.filter_resolve_offsets(
+            entity,
+            resolve_alias,
+            &parsed.match_clauses,
+            &parsed.combine_where(),
+            join_from,
+        );
+        let result = if parsed.params.is_empty() {
+            self.conn.execute(&query).map_err(|e| CatalogError::DbError(e.to_string()))?
+        } else {
+            self.conn
+                .execute_with_params(&query, &parsed.params)
+                .map_err(|e| CatalogError::DbError(e.to_string()))?
+        };
+        Ok(Some(
+            result
+                .rows
+                .iter()
+                .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
+                .collect(),
+        ))
+    }
+
     /// Le court-circuit de l'inchangé
     /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md) §6).
     ///
@@ -3679,50 +3737,10 @@ impl Catalog {
             (filter_where, filter_params)
         };
 
-        // For BM25 search: resolve ALL filters to allowed_ids.
-        // KB: filters resolved via title entity (e.g. Directory) JOINed to {KB}_Index.
-        // Simple: filters resolved directly on the entity table.
-        let allowed_ids = if let Some(ref cond) = condition {
-            let (filter_entity, filter_alias, join_from): (&str, &str, Option<(&str, &str, &str)>) =
-                if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
-                    (title_entity.as_str(), "t", Some(("t", title_entity.as_str(), in_rel.as_str())))
-                } else {
-                    (entity, "n", None)
-                };
-
-            let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
-            let parsed = parser
-                .parse_condition(cond, filter_entity, filter_alias)
-                .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-
-            if !parsed.where_clauses.is_empty() {
-                let resolve_table = if join_from.is_some() { entity } else { entity };
-                let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
-                let query = self.dialect.filter_resolve_offsets(
-                    resolve_table,
-                    resolve_alias,
-                    &parsed.match_clauses,
-                    &parsed.combine_where(),
-                    join_from,
-                );
-                let result = if parsed.params.is_empty() {
-                    self.conn.execute(&query)
-                        .map_err(|e| CatalogError::DbError(e.to_string()))?
-                } else {
-                    self.conn.execute_with_params(&query, &parsed.params)
-                        .map_err(|e| CatalogError::DbError(e.to_string()))?
-                };
-                let ids: Vec<u64> = result
-                    .rows
-                    .iter()
-                    .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                    .collect();
-                Some(ids)
-            } else {
-                None
-            }
-        } else {
-            None
+        // Le pré-filtre : les filtres deviennent des offsets lucivy.
+        let allowed_ids = match condition {
+            Some(ref cond) => self.resolve_filter_to_ids(entity, cond, &target)?,
+            None => None,
         };
 
         // Both KB and simple entities always have chunks

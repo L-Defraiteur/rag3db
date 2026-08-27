@@ -213,7 +213,7 @@ impl Node for VectorSearchNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let (query_str, target) = extract_query_and_target(ctx, "VectorSearchNode")?;
+        let (query_str, target, options) = extract_query_and_target(ctx, "VectorSearchNode")?;
 
         let conn = ctx
             .service::<ConnService>("conn")
@@ -222,6 +222,15 @@ impl Node for VectorSearchNode {
         let embedder = ctx
             .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
+
+        // `search_vector` filtre par un `WHERE` Cypher (`extra_where`), pas
+        // par des offsets : le pré-filtre du BM25 ne s'y branche pas tel
+        // quel. Tant que ce n'est pas fait, on le **dit** — une restriction
+        // qu'on ignore en silence rend plus de résultats que demandé, et
+        // personne ne peut le voir.
+        if options.filter_condition.is_some() {
+            ctx.warn("VectorSearchNode: le filtre demandé n'est pas appliqué sur ce chemin (il passe par un WHERE Cypher, pas par des offsets) — résultats non restreints");
+        }
 
         let mut cache = HashMap::new();
         let embedding = embed_query(&*embedder, &query_str, &mut cache)
@@ -362,7 +371,7 @@ impl Node for BM25SearchNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let (query_str, target) = extract_query_and_target(ctx, "BM25SearchNode")?;
+        let (query_str, target, options) = extract_query_and_target(ctx, "BM25SearchNode")?;
 
         let conn = ctx
             .service::<ConnService>("conn")
@@ -395,6 +404,8 @@ impl Node for BM25SearchNode {
             None => &target.bm25_fields,
         };
 
+        let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options);
+
         let mut node_warnings: Vec<String> = Vec::new();
         let results = search_bm25_chunked(
             &*conn,
@@ -404,7 +415,7 @@ impl Node for BM25SearchNode {
             self.mode,
             self.fuzzy_distance,
             self.limit,
-            None,
+            allowed.as_deref(),
             &target.enrich_fields,
             self.result_mode,
             None,
@@ -490,12 +501,19 @@ impl Node for SparseSearchNode {
         }]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let (query_str, target) = extract_query_and_target(ctx, "SparseSearchNode")?;
+        let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
 
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("SparseSearchNode: 'conn' service not found")?
             .0.clone();
+
+        // `search_sparse` ne prend aucun filtre ; `search_sparse_via_backend`
+        // accepte des `allowed_ids`, et c'est là que ça se branchera. En
+        // attendant, on le dit plutôt que de rendre trop large en silence.
+        if options.filter_condition.is_some() {
+            ctx.warn("SparseSearchNode: le filtre demandé n'est pas appliqué sur ce chemin (search_sparse ne prend pas d'allowed_ids) — résultats non restreints");
+        }
 
         // Try dual embedder first, then sparse embedder
         let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
@@ -1038,13 +1056,48 @@ impl Node for ResolveParentNode {
 fn extract_query_and_target(
     ctx: &mut NodeContext,
     node_type: &str,
-) -> Result<(String, SearchTarget), String> {
+) -> Result<(String, SearchTarget, crate::search::SearchOptions), String> {
     let qp = ctx.take_input("query")
         .and_then(|pv| take_or_clone::<QueryPayload>(pv))
         .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
     match qp.target {
-        Some(t) => Ok((qp.query, t)),
+        // Les options **voyagent avec la requête**. Elles étaient jetées ici
+        // jusqu'au 27 août : un graphe composé à la main filtrait ou ne
+        // filtrait pas selon le nœud branché, sans rien dire
+        // (`e2e_code::the_per_signal_path_drops_the_search_options_today`).
+        Some(t) => Ok((qp.query, t, qp.options)),
         None => Err(format!("{node_type}: Query has no resolved SearchTarget (use SearchSourceNode upstream)")),
+    }
+}
+
+/// **Le pré-filtre du chemin par signal.**
+///
+/// La condition portée par la requête — celle de l'appelant, ou celle qu'un
+/// domaine de travail a posée — devient des offsets lucivy. Ce n'est pas un
+/// tri après coup : le jeu d'ids descend jusqu'aux résolveurs, et la
+/// `doc_freq` est comptée sur le sous-ensemble. Un document score donc comme
+/// si l'index ne contenait que ce qui est autorisé.
+///
+/// Sans catalogue dans le registre, on ne peut pas résoudre : on le **dit**
+/// plutôt que de rendre un résultat trop large en silence.
+fn allowed_ids_for(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+) -> Option<Vec<u64>> {
+    let condition = options.filter_condition.as_ref()?;
+    let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() else {
+        ctx.warn(&format!("{node_type}: un filtre est demandé mais le service 'catalog' manque — la recherche n'est pas restreinte"));
+        return None;
+    };
+    let resolved = catalog.lock().unwrap().resolve_filter_to_ids(&target.name, condition, target);
+    match resolved {
+        Ok(ids) => ids,
+        Err(e) => {
+            ctx.warn(&format!("{node_type}: filtre non résolu ({e}) — la recherche n'est pas restreinte"));
+            None
+        }
     }
 }
 

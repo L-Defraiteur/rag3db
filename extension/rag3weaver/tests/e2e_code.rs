@@ -1209,23 +1209,21 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
     assert!(vu.contains("vision : /projets/alpha"), "{vu}");
 }
 
-/// **Test de constat, pas de souhait.** `QueryPayload` transporte des
-/// `SearchOptions` — filtres, cohérence, mode BM25 — et deux chemins les
-/// traitent différemment :
+/// Le chemin **par signal** honore maintenant le filtre porté par la
+/// requête — donc le domaine de travail.
 ///
-/// - `KBSearchNode` les passe à `Catalog::search`, qui les honore ;
-/// - les nœuds **par signal** (`BM25SearchNode`, `VectorSearchNode`,
-///   `SparseSearchNode`) les **jettent** : `extract_query_and_target` ne rend
-///   que la chaîne et la cible.
+/// Il le jetait : `extract_query_and_target` ne rendait que la chaîne et la
+/// cible, si bien qu'un graphe composé à la main filtrait ou ne filtrait pas
+/// selon le nœud branché, sans rien dire. La condition devient des offsets
+/// lucivy (`Catalog::resolve_filter_to_ids`), que `search_bm25` prend comme
+/// pré-filtre : le jeu d'ids descend jusqu'aux résolveurs et la `doc_freq`
+/// est comptée sur le sous-ensemble.
 ///
-/// Donc un graphe composé à la main filtre ou ne filtre pas selon le nœud
-/// qu'on a branché, **sans rien dire**. Ce test fige le comportement
-/// d'aujourd'hui pour qu'on voie le jour où il change — le correctif étant
-/// de résoudre le filtre en `allowed_ids`, que `search_bm25` accepte déjà et
-/// que lucivy tient pour un vrai pré-filtre depuis la 3.0.4.
+/// Le vecteur et le sparse ne l'appliquent **pas encore** — leurs chemins ne
+/// prennent pas d'offsets — mais ils le **disent** par un avertissement.
 #[test]
 #[ignore]
-fn the_per_signal_path_drops_the_search_options_today() {
+fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     use rag3weaver::code::analyze;
     use rag3weaver::dataflow::{DataflowGraph, DataflowRuntime, ServiceRegistry};
     use rag3weaver::work_domain::{Selector, WorkDomain, WORK_DOMAIN_SERVICE};
@@ -1273,8 +1271,5 @@ fn the_per_signal_path_drops_the_search_options_today() {
         .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(String::from))
         .collect();
     eprintln!("[par signal, domaine posé] {names:?}");
-    assert!(
-        names.iter().any(|n| n == "boot_beta"),
-        "aujourd'hui le chemin par signal ignore le filtre du domaine : {names:?}"
-    );
+    assert_eq!(names, vec!["boot_alpha".to_string()], "le domaine restreint aussi le chemin par signal : {names:?}");
 }
