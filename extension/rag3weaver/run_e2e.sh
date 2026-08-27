@@ -187,6 +187,16 @@ mkdir -p "$(dirname "$E2E_LOG")"
 # Mesuré le 27 août 2026 : 124 Go d'incrémental accumulés en trois jours.
 export CARGO_INCREMENTAL=0
 
+# **Une pile à la première occasion, pas à la relance.**
+#
+# Sans ça, un panic obscur ne donne que son fichier:ligne — celui de la macro
+# `panic!`, pas le chemin qui y a mené — et il faut relancer la passe pour
+# apprendre ce qu'on aurait pu lire du premier coup. Une demi-heure pour une
+# information qui était disponible gratuitement.
+#
+# `full` ne s'impose pas : la pile courte suffit et reste lisible.
+export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
+
 # **Le ménage passe avant, pas « de temps en temps ».**
 #
 # Cargo suffixe chaque artefact d'une empreinte et ne supprime jamais les
@@ -207,15 +217,24 @@ if [ "$SUMMARY" = true ]; then
   # Une passe qui échoue doit laisser de quoi regarder. C'est la même règle
   # que partout ici : rendre visible ce dont l'absence ne se voit pas.
   TMPLOG="$E2E_LOG"
+
+  # **Le résumé va au journal, lui aussi.**
+  #
+  # `tee` ne capture que la sortie de cargo ; le bloc SUMMARY est écrit après,
+  # directement à l'écran. Le journal s'arrêtait donc pile avant la partie qui
+  # dit si la passe est verte — l'endroit exact où on regarde en premier.
+  #
+  # Deux `printf` plutôt qu'un pipe : pas de sous-shell, donc les compteurs
+  # restent ceux du script, et pas de course à la fermeture du tube.
+  say() { printf "$@"; printf "$@" >> "$E2E_LOG"; }
   set +e
   confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
 
-  echo ""
-  echo "═══════════════════════════════════════════════"
-  echo "  SUMMARY"
-  echo "═══════════════════════════════════════════════"
+  say "\n═══════════════════════════════════════════════\n"
+  say "  SUMMARY\n"
+  say "═══════════════════════════════════════════════\n"
 
   TOTAL_PASSED=0
   TOTAL_FAILED=0
@@ -233,9 +252,9 @@ if [ "$SUMMARY" = true ]; then
     TOTAL_FAILED=$((TOTAL_FAILED + ${failed:-0}))
 
     if [ "${failed:-0}" -eq 0 ]; then
-      printf "  %-30s %3d passed\n" "$suite" "$passed"
+      say "  %-30s %3d passed\n" "$suite" "$passed"
     else
-      printf "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
+      say "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
     fi
   done
 
@@ -243,10 +262,9 @@ if [ "$SUMMARY" = true ]; then
   # dit pas lequel, et c'est justement ce qu'on vient chercher.
   mapfile -t FAILED_NAMES < <(grep -oP '^test \K[\w:]+(?= \.\.\. FAILED)' "$TMPLOG" | sort -u)
   if [ ${#FAILED_NAMES[@]} -gt 0 ]; then
-    echo ""
-    echo "  échecs :"
+    say "\n  échecs :\n"
     for t in "${FAILED_NAMES[@]}"; do
-      printf "    · %s\n" "$t"
+      say "    · %s\n" "$t"
     done
   fi
 
@@ -259,23 +277,23 @@ if [ "$SUMMARY" = true ]; then
       found=false
       for s in "${SUITE_NAMES[@]}"; do [ "$s" = "$expected" ] && found=true && break; done
       if [ "$found" = false ]; then
-        printf "  %-30s NOT RUN\n" "$expected"
+        say "  %-30s NOT RUN\n" "$expected"
         NOT_RUN=$((NOT_RUN + 1))
       fi
     fi
   done
 
-  echo "───────────────────────────────────────────────"
+  say "───────────────────────────────────────────────\n"
   if [ "$TOTAL_FAILED" -eq 0 ]; then
-    printf "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
+    say "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
   else
-    printf "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
+    say "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
   fi
   if [ "$NOT_RUN" -gt 0 ]; then
-    printf "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
+    say "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
-  echo "═══════════════════════════════════════════════"
+  say "═══════════════════════════════════════════════\n"
   echo "  journal complet : $E2E_LOG"
   exit "$EXIT_CODE"
 else

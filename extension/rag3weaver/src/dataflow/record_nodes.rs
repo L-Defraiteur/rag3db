@@ -523,6 +523,51 @@ impl KBEmbedNode {
 }
 
 /// Internal work item for embedding.
+/// Budget de texte par forward, en **caractères**.
+///
+/// Mesuré le 27 août 2026 sur BGE-M3 / Radeon R9700
+/// (`examples/burn_throughput.rs`) : le débit culmine autour de **2 048 jetons
+/// par passe**, quelle que soit la répartition — 64×32, 16×128 et 4×512 jetons
+/// donnent 7 550, 7 417 et 6 210 tok/s. Au-delà il **redescend** : 5 507 à
+/// 8 192 jetons, 5 378 à 32 768. Ce n'est donc pas « plus gros c'est mieux ».
+///
+/// Le budget est en caractères et pas en jetons parce que **le tokenizer vit
+/// dans l'embedder, pas ici** : le lui demander coûterait une passe avant la
+/// passe. Quatre caractères par jeton est l'ordre de grandeur de ce corpus —
+/// c'est un garde-fou, pas une science, et c'est pour ça qu'il est large.
+const EMBED_CHAR_BUDGET: usize = 8_192;
+
+/// Découpe une liste de travaux en sous-lots bornés **par la quantité de
+/// texte**, et pas seulement par le nombre d'éléments.
+///
+/// Un compte fixe de documents est structurellement faux sur un corpus
+/// hétérogène : « 32 » vaut six cents jetons pour des titres et trente mille
+/// pour des pages. Le premier lot passe inaperçu, le second demande d'un coup
+/// une allocation que la carte n'a pas — et le symptôme n'est pas une erreur
+/// claire, c'est un poste qui s'écroule.
+///
+/// **Un élément seul dépassant le budget forme son propre lot** : on ne peut
+/// pas le couper ici sans changer ce qui est embarqué, donc on le laisse
+/// passer plutôt que de mentir sur le contenu.
+fn budget_batches(lens: &[usize], max_items: usize, max_chars: usize) -> Vec<std::ops::Range<usize>> {
+    let mut out: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut start = 0usize;
+    let mut chars = 0usize;
+    for i in 0..lens.len() {
+        let plein = i > start && (i - start >= max_items || chars + lens[i] > max_chars);
+        if plein {
+            out.push(start..i);
+            start = i;
+            chars = 0;
+        }
+        chars += lens[i];
+    }
+    if start < lens.len() {
+        out.push(start..lens.len());
+    }
+    out
+}
+
 struct EmbedWork {
     uuid: String,
     text: String,
@@ -708,16 +753,31 @@ impl Node for KBEmbedNode {
 
         // ── Dense embedding ──
         if !dense_works.is_empty() {
-            let texts: Vec<String> = dense_works.iter().map(|w| w.text.clone()).collect();
-            let vectors = embedder
-                .embed(&texts)
-                .map_err(|e| format!("dense embedding failed: {e}"))?;
-
-            if vectors.len() != dense_works.len() {
-                return Err(format!(
-                    "embedder returned {} vectors for {} texts",
-                    vectors.len(), dense_works.len()
-                ));
+            // **Par lots bornés**, comme le chemin dual juste en dessous.
+            //
+            // Un forward tient tout le lot dans un seul tenseur `[batch, seq]` :
+            // sans borne, un drain de plusieurs centaines de chunks longs
+            // demande d'un coup une allocation que la carte n'a pas, et le
+            // remède n'est pas une erreur claire mais un poste qui s'écroule.
+            //
+            // Le dual bornait déjà, le dense et le sparse non — dans le même
+            // nœud (27 août 2026, en cherchant pourquoi l'embedding faisait
+            // ramer la machine).
+            let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(dense_works.len());
+            let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
+            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                let chunk = &dense_works[plage];
+                let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                let part = embedder
+                    .embed(&texts)
+                    .map_err(|e| format!("dense embedding failed: {e}"))?;
+                if part.len() != chunk.len() {
+                    return Err(format!(
+                        "embedder returned {} vectors for {} texts",
+                        part.len(), chunk.len()
+                    ));
+                }
+                vectors.extend(part);
             }
 
             // Group by (entity_name, embedding_col)
@@ -762,16 +822,22 @@ impl Node for KBEmbedNode {
         let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned();
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
-                let texts: Vec<String> = sparse_works.iter().map(|w| w.text.clone()).collect();
-                let sparse_vecs = sparse_emb
-                    .embed_sparse(&texts)
-                    .map_err(|e| format!("sparse embedding failed: {e}"))?;
-
-                if sparse_vecs.len() != sparse_works.len() {
-                    return Err(format!(
-                        "sparse embedder returned {} vectors for {} texts",
-                        sparse_vecs.len(), sparse_works.len()
-                    ));
+                // Borné comme le dense : même tenseur, même risque.
+                let mut sparse_vecs: Vec<SparseVector> = Vec::with_capacity(sparse_works.len());
+                let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                    let chunk = &sparse_works[plage];
+                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let part = sparse_emb
+                        .embed_sparse(&texts)
+                        .map_err(|e| format!("sparse embedding failed: {e}"))?;
+                    if part.len() != chunk.len() {
+                        return Err(format!(
+                            "sparse embedder returned {} vectors for {} texts",
+                            part.len(), chunk.len()
+                        ));
+                    }
+                    sparse_vecs.extend(part);
                 }
 
                 let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &SparseVector)>> =
@@ -833,7 +899,9 @@ impl Node for KBEmbedNode {
                 let mut dense_results: Vec<(&EmbedWork, Vec<f32>)> = Vec::with_capacity(dual_works.len());
                 let mut sparse_results: Vec<(&EmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
 
-                for chunk in dual_works.chunks(self.gpu_batch_size) {
+                let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                    let chunk = &dual_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
@@ -1679,7 +1747,9 @@ impl Node for EmbedNode {
 
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {
-            for chunk in dense_works.chunks(self.gpu_batch_size) {
+            let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
+            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                let chunk = &dense_works[plage];
                 let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                 let vectors = embedder
                     .embed(&texts)
@@ -1731,7 +1801,9 @@ impl Node for EmbedNode {
         let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned();
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
-                for chunk in sparse_works.chunks(self.gpu_batch_size) {
+                let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                    let chunk = &sparse_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let sparse_vecs = sparse_emb
                         .embed_sparse(&texts)
@@ -1801,7 +1873,9 @@ impl Node for EmbedNode {
                 let mut dense_results: Vec<(&SimpleEmbedWork, Vec<f32>)> = Vec::with_capacity(dual_works.len());
                 let mut sparse_results: Vec<(&SimpleEmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
 
-                for chunk in dual_works.chunks(self.gpu_batch_size) {
+                let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                    let chunk = &dual_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
@@ -3708,12 +3782,22 @@ impl Node for UpdateRecordNode {
                 .map_err(|e| e.to_string())?;
 
             let mut old_hashes: HashMap<String, String> = HashMap::new();
+            // L'état d'avant, quand l'entité en déclare un. C'est **le seul
+            // endroit** où on l'a : vérifier plus tôt demanderait une lecture
+            // de plus et mentirait sur les mises à jour du même lot.
+            let lifecycle = entity_configs.get(entity_name).and_then(|c| c.lifecycle.as_ref());
+            let mut old_states: HashMap<String, String> = HashMap::new();
             for row in &old_result.rows {
                 if let Some(CypherValue::Map(props)) = row.first() {
                     if let (Some(uuid), Some(hash)) = (
                         props.get("_uuid").and_then(|v| v.as_str()),
                         props.get("_content_hash").and_then(|v| v.as_str()),
                     ) {
+                        if let Some(lc) = lifecycle {
+                            if let Some(etat) = props.get(&lc.field).and_then(|v| v.as_str()) {
+                                old_states.insert(uuid.to_string(), etat.to_string());
+                            }
+                        }
                         old_hashes.insert(uuid.to_string(), hash.to_string());
                         // Strip internal rag3db properties (_id, _label)
                         let clean: BTreeMap<String, CypherValue> = props.iter()
@@ -3734,6 +3818,62 @@ impl Node for UpdateRecordNode {
                         "{entity_name} with uuid '{}' not found, update is a no-op",
                         items[i].uuid
                     ));
+                }
+            }
+
+            // 1 bis. **Une transition non déclarée ne passe pas.**
+            //
+            // Jusqu'ici `Lifecycle` était vérifié à la déclaration et
+            // n'empêchait rien à l'écriture — une déclaration vérifiée mais
+            // non appliquée est un piège si on l'oublie.
+            //
+            // Trois cas laissés passer, chacun pour une raison :
+            //
+            // - la mise à jour ne touche pas au champ d'état : ce n'est pas
+            //   une transition ;
+            // - l'état ne change pas : écrire `draft` sur `draft` n'est pas
+            //   un passage ;
+            // - **on ne connaît pas l'état d'avant** — ligne absente, ou
+            //   champ vide parce que la machine a été déclarée après coup.
+            //   Refuser bloquerait toutes les lignes existantes le jour où on
+            //   ajoute un `Lifecycle` à une entité qui tourne. On le dit, et
+            //   on laisse passer.
+            if let Some(lc) = lifecycle {
+                for &i in entity_indices {
+                    let rec = &items[i];
+                    let Some(vers) = rec.data.get(&lc.field).and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    let Some(depuis) = old_states.get(&rec.uuid) else {
+                        if old_hashes.contains_key(&rec.uuid) {
+                            ctx.warn(&format!(
+                                "{entity_name} '{}' : état d'avant inconnu, transition vers '{vers}' non vérifiée",
+                                rec.uuid
+                            ));
+                        }
+                        continue;
+                    };
+                    if depuis == vers {
+                        continue;
+                    }
+                    if lc.allows(depuis, vers).is_none() {
+                        // Dire ce qui **est** permis : sans ça, l'erreur est un
+                        // mur, et l'appelant doit aller relire la déclaration.
+                        let permis: Vec<String> = lc
+                            .next_from(depuis)
+                            .iter()
+                            .map(|t| format!("{} → {}", t.name, t.to))
+                            .collect();
+                        let permis = if permis.is_empty() {
+                            format!("'{depuis}' est un état terminal")
+                            } else {
+                            format!("depuis '{depuis}' : {}", permis.join(", "))
+                        };
+                        return Err(format!(
+                            "{entity_name} '{}' : transition '{depuis}' → '{vers}' non déclarée ({permis})",
+                            rec.uuid
+                        ));
+                    }
                 }
             }
 
@@ -4467,5 +4607,66 @@ mod tests {
         assert_eq!(node.outputs().len(), 1); // done
         assert_eq!(node.inputs()[0].name, "entities");
         assert_eq!(node.outputs()[0].name, "done");
+    }
+
+    // ── Le budget de lot (doc 08) ───────────────────────────────────────
+
+    fn plages(lens: &[usize], max_items: usize, max_chars: usize) -> Vec<(usize, usize)> {
+        budget_batches(lens, max_items, max_chars)
+            .into_iter()
+            .map(|r| (r.start, r.end))
+            .collect()
+    }
+
+    #[test]
+    fn le_budget_ferme_le_lot_sur_le_texte_pas_sur_le_nombre() {
+        // Quatre textes de 3 000 caractères : le compte en autoriserait 32,
+        // le budget n'en laisse passer que deux (3 × 3 000 = 9 000 > 8 192).
+        // C'est tout l'objet du changement.
+        let lens = [3_000, 3_000, 3_000, 3_000];
+        assert_eq!(plages(&lens, 32, 8_192), vec![(0, 2), (2, 4)]);
+    }
+
+    #[test]
+    fn le_compte_reste_une_borne_dure() {
+        // Des textes minuscules : c'est le nombre qui ferme, pas le budget.
+        let lens = [10; 10];
+        assert_eq!(plages(&lens, 4, 8_192), vec![(0, 4), (4, 8), (8, 10)]);
+    }
+
+    #[test]
+    fn un_element_seul_trop_gros_forme_son_lot() {
+        // On ne peut pas le couper sans changer ce qui est embarqué : il passe
+        // seul plutôt qu'on mente sur le contenu.
+        let lens = [100, 99_999, 100];
+        assert_eq!(plages(&lens, 32, 8_192), vec![(0, 1), (1, 2), (2, 3)]);
+    }
+
+    #[test]
+    fn rien_a_faire_ne_fait_rien() {
+        assert!(plages(&[], 32, 8_192).is_empty());
+    }
+
+    #[test]
+    fn les_plages_couvrent_tout_sans_trou_ni_recouvrement() {
+        // L'invariant qui compte vraiment : aucun texte perdu, aucun embarqué
+        // deux fois. Un découpage qui saute une entrée la laisse sans vecteur,
+        // et rien ne le dirait.
+        for max_items in [1usize, 3, 7, 64] {
+            for max_chars in [1usize, 500, 8_192] {
+                let lens: Vec<usize> = (0..37).map(|i| (i * 137) % 4_000).collect();
+                let p = plages(&lens, max_items, max_chars);
+                assert_eq!(p.first().map(|r| r.0), Some(0), "{max_items}/{max_chars}");
+                assert_eq!(p.last().map(|r| r.1), Some(lens.len()), "{max_items}/{max_chars}");
+                for w in p.windows(2) {
+                    assert_eq!(w[0].1, w[1].0, "trou ou recouvrement : {p:?}");
+                }
+                assert!(p.iter().all(|r| r.1 > r.0), "lot vide : {p:?}");
+                assert!(
+                    p.iter().all(|r| r.1 - r.0 <= max_items),
+                    "borne de compte dépassée : {p:?}"
+                );
+            }
+        }
     }
 }

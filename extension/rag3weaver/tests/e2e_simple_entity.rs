@@ -1285,3 +1285,108 @@ fn simple_batch_update_multiple() {
         .unwrap();
     assert!(!response3.results.is_empty(), "Beta original content should still be findable");
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L'état et ses transitions (doc 07 §4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn ticket_config() -> EntityConfig {
+    use rag3weaver::config::{Lifecycle, Transition};
+    let mut fields = HashMap::new();
+    fields.insert("title".to_string(), SimpleFieldDef {
+        field_type: FieldType::String, is_title: true, ..Default::default()
+    });
+    fields.insert("body".to_string(), SimpleFieldDef {
+        field_type: FieldType::Text, is_content: true, ..Default::default()
+    });
+    fields.insert("status".to_string(), SimpleFieldDef {
+        field_type: FieldType::String, ..Default::default()
+    });
+    let t = |name: &str, from: &str, to: &str| Transition {
+        name: name.into(), from: from.into(), to: to.into(),
+    };
+    EntityConfig {
+        fields,
+        signals: SearchSignals::BM25,
+        hashsafe: Some(vec!["title".into()]),
+        lifecycle: Some(Lifecycle {
+            field: "status".into(),
+            initial: "open".into(),
+            transitions: vec![t("start", "open", "in_progress"), t("close", "in_progress", "closed")],
+        }),
+        ..Default::default()
+    }
+}
+
+fn ticket_status(catalog: &Catalog) -> String {
+    catalog
+        .execute_raw("MATCH (t:Ticket) RETURN t.status")
+        .unwrap()
+        .rows
+        .first()
+        .and_then(|r| r.first().and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .unwrap_or_default()
+}
+
+/// **Une déclaration vérifiée mais non appliquée est un piège.**
+///
+/// `Lifecycle` était contrôlé à l'enregistrement et n'empêchait rien à
+/// l'écriture. Ce test exerce la garde là où elle vit — au drain, seul endroit
+/// où l'**ancien** état est connu.
+#[test]
+#[ignore]
+fn une_transition_non_declaree_ne_passe_pas() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.register_entity("Ticket", ticket_config()).unwrap();
+
+    let mut data = BTreeMap::new();
+    data.insert("title".to_string(), CypherValue::String("Le masque HNSW".into()));
+    data.insert("body".to_string(), CypherValue::String("Le balayage ignorait le masque".into()));
+    data.insert("status".to_string(), CypherValue::String("open".into()));
+    catalog.ingest_entities("Ticket", vec![data]).unwrap();
+    let uuid = catalog
+        .execute_raw("MATCH (t:Ticket) RETURN t._uuid")
+        .unwrap()
+        .rows[0][0]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(ticket_status(&catalog), "open");
+
+    // Déclarée : elle passe.
+    let mut vers = BTreeMap::new();
+    vers.insert("status".to_string(), CypherValue::String("in_progress".into()));
+    catalog.update("Ticket", &uuid, vers).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "transition déclarée : {flush:?}");
+    assert_eq!(ticket_status(&catalog), "in_progress");
+
+    // Non déclarée : `in_progress -> open` n'existe pas. Ce qui compte est
+    // moins le compteur d'échecs que **l'état, qui ne doit pas avoir bougé**.
+    let mut retour = BTreeMap::new();
+    retour.insert("status".to_string(), CypherValue::String("open".into()));
+    catalog.update("Ticket", &uuid, retour).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(ticket_status(&catalog), "in_progress", "la transition interdite ne doit rien écrire");
+    // L'état d'abord — un compteur peut être juste pendant que la donnée est
+    // fausse — mais le refus doit aussi **se voir** : un drain qui rejette en
+    // silence laisserait croire à l'appelant que sa mise à jour a eu lieu.
+    assert_eq!((flush.processed, flush.failed), (0, 1), "le refus doit se voir : {flush:?}");
+
+    // Un champ ordinaire n'est pas concerné : ce n'est pas une transition.
+    let mut corps = BTreeMap::new();
+    corps.insert("body".to_string(), CypherValue::String("Une ligne suffisait".into()));
+    catalog.update("Ticket", &uuid, corps).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "une mise à jour hors état passe : {flush:?}");
+    assert_eq!(ticket_status(&catalog), "in_progress");
+
+    // Écrire l'état qu'on a déjà n'est pas un passage.
+    let mut idem = BTreeMap::new();
+    idem.insert("status".to_string(), CypherValue::String("in_progress".into()));
+    catalog.update("Ticket", &uuid, idem).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "état inchangé : {flush:?}");
+    assert_eq!(ticket_status(&catalog), "in_progress");
+}

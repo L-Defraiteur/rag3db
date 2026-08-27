@@ -149,8 +149,14 @@ fn dump_real_bge_m3_sparse_vectors_for_lucivy() {
     }
     assert!(docs.len() > 1000 && queries.len() >= 200, "{} docs, {} requêtes", docs.len(), queries.len());
 
-    let (doc_vectors, doc_ms) = encode("docs", &docs, 16);
-    let (query_vectors, query_ms) = encode("requêtes", &queries, 16);
+    // Lots dimensionnés par le **texte**, pas par le nombre — même raison que
+    // `budget_batches` côté ingestion : le débit de BGE-M3 culmine vers 2 048
+    // jetons par passe et redescend au-delà (mesuré le 27 août,
+    // `examples/burn_throughput.rs`). Un scope de code fait quelques centaines
+    // de jetons, donc huit d'un coup est déjà le bon ordre ; les requêtes sont
+    // courtes et supportent bien plus.
+    let (doc_vectors, doc_ms) = encode("docs", &docs, 8);
+    let (query_vectors, query_ms) = encode("requêtes", &queries, 32);
 
     describe("docs", &doc_vectors);
     describe("requêtes", &query_vectors);
