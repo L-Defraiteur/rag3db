@@ -53,16 +53,71 @@ Reprises de ses mots, avec où elles sont écrites.
 9. **Les ponts entre projets** — relations multi-projets, projet-pont, ou
    `policyDomain` par entité. Noté au [doc 05 §10.4](../26-aout-2026-20h29/05-origine-cellule-domaine.md),
    **non tranché**, et aucune des trois voies ne demande de migration.
+10. **La réputation des abstractions** — apportée le 27 après-midi
+    (`inspi-chatgpt.md`), analysée au [doc 05](05-la-reputation-des-abstractions.md).
+    Les capacités gagnent ou perdent du crédit **par expérience accumulée**,
+    et non par ancienneté. Ça enrichit directement la promotion sur preuve du
+    [doc 49](../23-aout-2026-20h33/49-vision-le-catalogue-comme-graphe-outils-tags-memoire.md),
+    dont le critère unique (`n >= 5 AND echecs = 0`) est justement le piège de
+    l'inertie. Quatre apports à prendre — séparer popularité et confiance,
+    politique de sélection par contexte, avis cherchables, diversité des
+    contextes — et deux à corriger : **pas de score agrégé stocké**, et
+    **pas d'auto-notation** (une étoile est l'opinion que le doc 51 refuse ;
+    les signaux forts sont ceux que personne ne tape).
+
+11. **L'agent est une identité, pas une session** — apportée le 27 après-midi
+    (`Résumé de projet Tony Stark.md`), analysée au
+    [doc 06](06-le-tamagotchi-et-le-compilateur.md). La mémoire appartient à
+    l'agent, pas au workspace ; le workspace est **le lieu où il travaille**.
+    À trois fils de ce qui existe : `Run`, `Message`, `Conversation`,
+    `Participant` sont livrés, il manque **une identité au-dessus du run**.
+    Ça referme une asymétrie qu'on n'avait pas vue — le fil est cherchable,
+    celui qui parle ne l'est pas. Avec elle viennent l'**axe agent** de la
+    mémoire (le cinquième, à côté d'org/cellule/origine/domaine) et le
+    **commit comme souvenir vérifiable** : on stocke l'acte, pas la phrase sur
+    l'acte.
+12. **« Qu'un backend soit facile à poser quelque part et à écrire par les
+    agents m'importe beaucoup. »** Le schéma comme programme
+    ([doc 06 §1.4 et §2.1 bis](06-le-tamagotchi-et-le-compilateur.md)). Le
+    modèle produit une **représentation intermédiaire contrainte** — entités,
+    signaux, relations, politiques, transitions — et le compilateur descend
+    vers le stockage, la recherche, les graphes, les événements, la surface.
+    On a déjà la forme (`register_entity`, `drain()`, `choices`,
+    `NodeTypePolicy`) : un graphe-outil **est** une RI compilée.
+
+    Ce qui rend l'ambition atteignable par étapes plutôt que d'un bond : la
+    frontière ne sépare pas les applications simples des compliquées, elle
+    sépare **les invariants exprimables dans la déclaration de ceux qui ne le
+    sont pas**. On ne la déplace donc pas en rendant l'agent plus malin, mais
+    **en agrandissant le langage de déclaration** — et chaque tranche est
+    utile toute seule. Le vrai mur n'est pas la v1, c'est **la v2** : le
+    changement de schéma avec des données dedans. Là on a un avantage réel —
+    un schéma étant une donnée versionnée, une migration peut être **dérivée**.
+    Première tranche : **l'état et ses transitions**, et le premier backend
+    ainsi décrit sera le nôtre.
+
+    Et la contrainte de conception qui décide de tout, dans ses mots :
+    *« faut éviter d'encourager que tout soit systématiquement embedded, et
+    s'assurer que les index et les relations soient bien foutus, encourager
+    les bons comportements en connaissance du natif »*. Le
+    [doc 07](07-le-langage-de-declaration.md) en tire quatre règles. La
+    première n'est pas hypothétique : `EntityConfig::default()` vaut
+    `HYBRID`, et ce défaut **a déjà fait calculer 3 275 embeddings que
+    personne n'avait voulus** (`src/code.rs:180`). Il a piégé des gens qui
+    connaissent le système ; un modèle ne fera pas mieux.
 
 ## 3. Les ambitions — celles que je vois
 
 Ce que je pousserais, et pourquoi.
 
-1. **La session comme graphe** ([doc 13](../25-aout-2026-18h58/13-la-session-comme-graphe.md)).
-   C'est la pièce qui manque **deux fois** : le bloc d'attentes doit y être
-   injecté, et l'`absorb` y vit. Garder le markdown entier d'un `read` au
-   tour 8, c'est le payer huit fois. **Le plus gros gain mesurable qui
-   dorme** — chiffre de vérité : dix tours, jetons avec et sans.
+1. ~~**La session comme graphe**~~ — **faite le 27 après-midi**, dans sa
+   moitié qui payait ([doc 04](04-la-session-tient-l-invite.md)) :
+   `Absorb` (`Whole` par défaut, `Bounded`, `Stale`), la table de renvois et
+   l'outil `recall` qui les résout, et le bloc d'attentes enfin injecté au
+   moment d'assembler. Le chiffre de vérité demandé par le doc 13 §9.4 existe
+   et tourne à chaque `cargo test` : **900 180 → 37 567 caractères sur dix
+   tours, facteur 24**, sans rien perdre. Reste l'entité `Turn` liée `IN_RUN`
+   (doc 13, étape 3), qui vaut d'elle-même.
 2. **`Origin` comme entité du graphe**, avec `local_path` par poste. Débloque
    le cloud, et la fiche de promotion du [doc 16](../25-aout-2026-18h58/16-le-monde-est-ouvert.md)
    (« tu touches souvent à ce dépôt, je l'ingère ? »).
@@ -102,10 +157,13 @@ le zram, pas le CPU).
 | Index vectoriel, coût, différé | [`25-aout/18`](../25-aout-2026-18h58/18-index-vectoriel-differe.md) |
 | Identité d'un fichier | [`25-aout/15`](../25-aout-2026-18h58/15-identite-d-un-fichier.md), [`26-aout/04`](../26-aout-2026-20h29/04-une-racine-est-un-point-de-vue.md) |
 | Monde ouvert, politiques de lecture | [`25-aout/16`](../25-aout-2026-18h58/16-le-monde-est-ouvert.md) |
-| Session comme graphe, poignées | [`25-aout/13`](../25-aout-2026-18h58/13-la-session-comme-graphe.md) |
+| Session comme graphe, poignées | [`25-aout/13`](../25-aout-2026-18h58/13-la-session-comme-graphe.md) (dessin), [`04`](04-la-session-tient-l-invite.md) ici (fait, et mesuré) |
 | Tout est écoutable | [`25-aout/14`](../25-aout-2026-18h58/14-tout-est-ecoutable.md) |
 | Origine / cellule / domaine | [`26-aout/05`](../26-aout-2026-20h29/05-origine-cellule-domaine.md) |
 | Cahier des charges lucivy, et leurs réponses | [`26-aout/06`](../26-aout-2026-20h29/06-cahier-des-charges-lucivy-partage.md), `07`, `08`, `09` |
 | Outils asynchrones | [`26-aout/10`](../26-aout-2026-20h29/10-outils-asynchrones.md) |
 | Se taire, raccrocher, conversations | [`26-aout/11`](../26-aout-2026-20h29/11-le-droit-de-se-taire.md), [`12`](../26-aout-2026-20h29/12-conversations-a-plusieurs.md) |
+| Réputation, promotion sur preuve | [`23-aout/49`](../23-aout-2026-20h33/49-vision-le-catalogue-comme-graphe-outils-tags-memoire.md), [`23-aout/51`](../23-aout-2026-20h33/51-vision-le-chaos-controle.md), [`05`](05-la-reputation-des-abstractions.md) ici |
+| Identité d'agent, mémoire, commits, concepts | [`06`](06-le-tamagotchi-et-le-compilateur.md) ici |
+| Langage de déclaration, schéma-programme | [`07`](07-le-langage-de-declaration.md) ici |
 | Commandes, mémo | [`26-aout/03`](../26-aout-2026-20h29/03-commandes.md), et [`03`](03-knowledge-dump.md) ici |

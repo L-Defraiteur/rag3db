@@ -49,6 +49,7 @@ avait confondu quatre sous le mot « racine » :
 | Réaction à des événements | `dataflow/reactor.rs` (`%% on:`, `%% policy:`) |
 | Boucle d'agent | `agent.rs` (`ToolBox`, `PauseKind`, asynchrone) |
 | Postures et blocages | `postures.rs` |
+| Ce qu'on garde d'un tour à l'autre | `session.rs` (`Absorb`, renvois, `recall`) |
 | Identité d'un fichier | `origin.rs` |
 | Vision d'un agent | `work_domain.rs` |
 | Code → graphe | `code.rs`, `code_tools.rs`, `codeparsers/` |
