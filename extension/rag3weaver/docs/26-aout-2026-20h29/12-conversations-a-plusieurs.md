@@ -181,3 +181,149 @@ seule situation qui ne peut pas se résoudre toute seule.
 Les postures se rangent dans la session, les notifications sont des
 événements du bus, les participants sont ceux du fil : **toujours aucune
 pièce nouvelle**. Il manque les verbes, et un graphe d'attente à regarder.
+
+## 8. La raison est un couple : un genre, et un texte
+
+Proposition de Lucie : « tu peux pauser peut-être avec un arg enum en plus de
+la raison texte — `finished`, `waiting for` + run id, `waiting for
+instruction`… ». Oui, et c'est la même discipline que les `%% choices:` du 26
+août : **une liste exacte plutôt qu'un champ libre**, parce qu'un moteur ne
+peut rien faire d'une phrase.
+
+```
+pause_dialogue(avec: B, genre: waiting_for_run("#search-3"),
+               raison: "je cherche d'où vient ce symbole")
+```
+
+- le **genre** est lu par le moteur ;
+- le **texte** est lu par un humain, ou par le pair.
+
+### 8.1 Le critère d'admission d'une variante
+
+Il en faut un, sinon la liste enfle jusqu'à ne plus rien vouloir dire :
+
+> **Le genre est la condition de réveil.** Deux genres qui se réveillent
+> pareil sont un seul genre.
+
+Ça tranche tout de suite : « poliment terminé » et « travail fini » se
+réveillent pareil (un nouveau message), donc c'est le même genre. La nuance
+appartient au texte.
+
+### 8.2 Les six
+
+| Genre | Ce qui réveille | Fait une arête d'attente ? |
+|---|---|---|
+| `finished` | un nouveau message qui m'est adressé | non |
+| `waiting_for_run(id)` | ce run se termine | **oui** — vers un run |
+| `waiting_for_peer(qui)` | ce participant parle | **oui** — vers un participant |
+| `waiting_for_instruction` | n'importe quel message humain | non |
+| `waiting_until(quand)` | l'horloge | non |
+| `blocked` | **rien** — il faut le dire | non |
+
+Deux commentaires qui justifient la liste :
+
+**`blocked` n'est pas `finished`.** L'un a la forme d'un succès, l'autre d'un
+échec, et les confondre cacherait exactement ce qu'on veut voir. Un agent
+`blocked` ne se réveille pas tout seul : c'est **le seul genre qui doit
+remonter**, tout de suite, à qui peut le débloquer. Se taire parce qu'on a
+fini et se taire parce qu'on est coincé, ce n'est pas la même chose.
+
+**`waiting_for_instruction` n'est pas `waiting_for_peer(humain)`.** Le second
+attend *quelqu'un en particulier* et entre dans le graphe d'attente ; le
+premier attend *une direction, de qui voudra*. Et un humain ne fait jamais
+partie d'un cycle : il n'attend pas, il vit sa vie.
+
+### 8.3 Ce que le genre achète, concrètement
+
+- **Le réveil sans invention** : plus de « quand faut-il rappeler cet
+  agent ? ». Le genre le dit.
+- **Le graphe d'attente exact** (§4) : seuls `waiting_for_run` et
+  `waiting_for_peer` créent une arête. Un cycle ne peut donc se former
+  qu'entre des attentes réelles — jamais parce que quelqu'un attend un
+  humain, ce qui aurait produit de faux blocages tous les quarts d'heure.
+- **La liste exacte au modèle**, avec le « vouliez-vous dire » qu'on a déjà :
+  `Choices::Fixed` et `GraphToolError::BadChoice` sont écrits depuis hier,
+  il n'y a qu'à s'en servir.
+- **Un état de session lisible** : « 3 agents, dont 1 `blocked` » se
+  répond d'un coup d'œil ; « 3 agents en pause » ne dit rien.
+
+### 8.4 Le piège du réveil manqué
+
+Il faut le nommer parce qu'il est classique et qu'il ne pardonne pas :
+`waiting_for_run("#search-3")` posé **après** que le run se soit terminé.
+L'événement est passé, la pause ne se réveillera jamais.
+
+Donc l'enregistrement d'une pause **vérifie sa condition tout de suite** :
+si le run est déjà fini, on ne se met pas en pause du tout. C'est du niveau,
+pas du front — et c'est la seule façon que ce soit juste sans verrou.
+
+## 9. Ce qui attend doit se **voir**, pas se rappeler
+
+Lucie encore : « au pause peut-être dire "attention, l'agent machin attend
+toujours votre réponse", ou un flag dans le contexte du système prompt
+persistant, indépendant de l'agent ».
+
+Les deux formes sont possibles, et **elles ne valent pas la même chose**.
+
+### 9.1 Un message se perd, un état se lit
+
+Dire une fois « A attend ta réponse » est une **prise de parole** : ça
+défile, ça se noie, et le répéter devient du harcèlement. On aurait alors le
+choix entre oublier et insister — les deux mauvais.
+
+Un **bloc d'état dans le contexte** est autre chose : il est là à chaque
+tour tant que l'attente dure, et il **disparaît tout seul** quand elle cesse.
+Ce n'est pas une notification, c'est une lecture.
+
+C'est exactement le remède qu'on applique depuis trois jours à la même
+famille de défauts : *rendre visible ce dont l'absence ne se voit pas*. Un
+agent qui attend est invisible par nature — il ne fait rien, il ne dit rien.
+
+### 9.2 Il est **dérivé**, jamais écrit
+
+Le bloc n'est pas un texte que quelqu'un compose et range quelque part. Il
+est **calculé au moment d'assembler l'invite**, à partir des postures :
+
+```
+en attente de vous :
+  · rechercheur (#run-12) — waiting_for_peer, « il me faut le chemin exact »
+  · indexeur   (#run-9)  — blocked, « aucune racine autorisée pour /tmp »
+```
+
+Trois conséquences, toutes bonnes :
+
+- **Il ne peut pas être périmé.** Une projection d'un état ne ment pas ; un
+  message archivé, si.
+- **Il disparaît sans qu'on y pense.** La pause tombe, la ligne s'en va. Rien
+  à nettoyer, donc rien à oublier de nettoyer.
+- **Il est le même pour tout le monde** — c'est la même fonction, avec un
+  destinataire différent.
+
+### 9.3 Indépendant de l'agent, et c'est le point
+
+Lucie insiste là-dessus et elle a raison : **ce n'est pas à l'agent de dire
+qu'on l'attend.** S'il devait le faire, il faudrait qu'il pense à le faire,
+et un agent en pause est justement celui qui ne fait rien.
+
+Le bloc appartient donc à la **session** — au graphe qui assemble le tour
+(doc [13](../25-aout-2026-18h58/13-la-session-comme-graphe.md), `assemble`).
+L'agent est une **donnée** de ce calcul, pas son auteur.
+
+### 9.4 Adressé, et compact
+
+- **Adressé** : chacun voit ce qui attend **de lui**. Montrer à Lucie que
+  l'agent A attend l'agent B ne sert qu'à l'encombrer — sauf si c'est un
+  cycle (§4), et là c'est justement à elle qu'il faut le dire.
+- **Compact** : ça vit dans l'invite système, donc ça se paie à chaque tour.
+  Une ligne par attente, et **rien du tout** quand il n'y a rien. Un bloc
+  toujours présent, même vide, apprend au modèle à ne plus le lire.
+
+### 9.5 Ce qu'on n'en fait pas
+
+- **Pas un rappel qui se répète.** Le bloc est là parce que l'état est là ;
+  il n'insiste pas, il constate.
+- **Pas un ordre.** « A attend ta réponse » n'oblige à rien : on peut
+  décider que A attendra. Ce qu'on ne peut plus faire, c'est ne pas le
+  savoir.
+- **Pas un journal.** Ce qui a été attendu puis obtenu appartient à la trace
+  du bus, pas à l'invite. L'invite dit **ce qui est**, jamais ce qui fut.
