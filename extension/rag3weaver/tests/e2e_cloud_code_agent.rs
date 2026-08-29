@@ -7,7 +7,9 @@
 //! `GOOGLE_CLOUD_PROJECT`.
 //!
 //! Run with: ./run_e2e.sh --test e2e_cloud_code_agent --features openai-llm
-#![cfg(all(feature = "rag3db-native", feature = "openai-llm", feature = "code"))]
+#![cfg(all(feature = "rag3db-native", feature = "openai-llm", feature = "burn-embedder", feature = "code"))]
+
+mod common;
 
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -16,7 +18,7 @@ use rag3weaver::agent::{Agent, AgentLimits, GraphToolBox, ToolBox};
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
 use rag3weaver::code_tools::{FileSource, WorkingTree, FILE_SOURCE_SERVICE};
 use rag3weaver::dataflow::{builtin_graph_tools, ConnService, ServiceRegistry};
-use rag3weaver::embedder::{Embedder, HashEmbedder};
+use rag3weaver::embedder::{DualEmbedder, Embedder, HashEmbedder};
 use rag3weaver::llm::{dangling_tool_results, orphan_tool_calls, GenOptions, StringSink, ToolChoice, Turn};
 use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -34,9 +36,13 @@ fn setup_on(source: Arc<dyn FileSource>) -> Arc<ServiceRegistry> {
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
-    let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 64, ..Default::default() };
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
+    // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des
+    // étapes en plus, et un agent qui le boude a raison de le bouder.
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
     catalog.initialize().unwrap();
+    let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
+    catalog.set_dual_embedder(bge);
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
     let t = Instant::now();
     let analysis = analyze_source(source.as_ref()).unwrap();
@@ -45,7 +51,7 @@ fn setup_on(source: Arc<dyn FileSource>) -> Arc<ServiceRegistry> {
     let conn_arc = catalog.conn_arc();
     let fts_handles = catalog.fts_handles().clone();
     let sparse_handles = catalog.sparse_handles().clone();
-    let embedder: Arc<dyn Embedder> = Arc::new(HashEmbedder::new(64));
+    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
     let mut services = ServiceRegistry::new();
     services.register("catalog", Arc::new(Mutex::new(catalog)));
     services.register("conn", ConnService(conn_arc));
@@ -79,9 +85,13 @@ fn setup() -> Arc<ServiceRegistry> {
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
-    let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 64, ..Default::default() };
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
+    // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des
+    // étapes en plus, et un agent qui le boude a raison de le bouder.
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
     catalog.initialize().unwrap();
+    let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
+    catalog.set_dual_embedder(bge);
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
     let root = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(&root));
@@ -92,7 +102,7 @@ fn setup() -> Arc<ServiceRegistry> {
     let conn_arc = catalog.conn_arc();
     let fts_handles = catalog.fts_handles().clone();
     let sparse_handles = catalog.sparse_handles().clone();
-    let embedder: Arc<dyn Embedder> = Arc::new(HashEmbedder::new(64));
+    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
     let mut services = ServiceRegistry::new();
     services.register("catalog", Arc::new(Mutex::new(catalog)));
     services.register("conn", ConnService(conn_arc));
@@ -158,7 +168,7 @@ const SYSTEM: &str = "You are a code agent working on a Rust project (a dataflow
 `grep` (regex over the source files; each hit tells the function/struct it belongs to), \
 `read` (read a file by path and line offset), \
 `search` (full-text search; target=\"Scope\" for functions/structs/methods, target=\"File\" for file names), \
-`search_expand` (search, then follow a relation such as CONSUMED_BY, CONSUMES, PARENT_OF, DEFINED_IN from the results). \
+give `search` a `relation` (CONSUMED_BY, CONSUMES, PARENT_OF, DEFINED_IN…) to follow the graph from each result. \
 Use the tools to establish facts, then answer concisely, citing file paths and line numbers. Do not guess.";
 
 const QUESTIONS: [&str; 3] = [
@@ -232,7 +242,7 @@ const EDIT_SYSTEM: &str = "You are a code agent working on a Rust project (a dat
 `list` (files under a prefix, with index state), `grep` (regex; each hit names the function/struct it belongs to), \
 `read` (a file by path and line offset — lines are prefixed `00042| `), \
 `edit` (replace ONE unique occurrence: old → new, copied exactly from read, prefixes tolerated; or write a whole file with content), \
-`search` / `search_expand` (graph search; target=\"Scope\"). \
+`search` (graph search; target=\"Scope\", optional `relation`). \
 Work method: locate with grep or list, read the exact lines, then edit with a unique `old`. After editing, read the changed region back to verify. \
 Paths are relative to the project root as shown by list and grep. When done, answer with what you changed and where.";
 

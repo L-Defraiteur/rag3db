@@ -464,6 +464,9 @@ pub struct Agent<'a> {
     /// dans tous les cas ; celui-ci sert à totaliser **dans la session**, sans
     /// avoir à rejouer la trace.
     meter: Option<Arc<crate::meter::Meter>>,
+    /// Le domaine de travail déclaré — ce que cet agent regarde, et donc ce
+    /// qu'il ne regarde pas. Vide : aucun.
+    domain: String,
     /// Le slug sous lequel cet agent consomme. Vide : dérivé du modèle.
     /// Paramétrable parce que c'est lui qu'une table de prix résoudra un jour,
     /// et que le nom du modèle n'est pas toujours le nom du produit vendu.
@@ -504,6 +507,7 @@ impl<'a> Agent<'a> {
             postures: None,
             session: None,
             meter: None,
+            domain: String::new(),
             resource: None,
             provider: "unknown".to_string(),
         }
@@ -516,6 +520,70 @@ impl<'a> Agent<'a> {
     /// **commun** qui rend l'attente circulaire détectable.
     pub fn with_postures(mut self, postures: Arc<crate::postures::Postures>) -> Self {
         self.postures = Some(postures);
+        // Se taire n'est une décision que si le modèle sait qu'elle existe.
+        for def in Self::dialogue_tools() {
+            if !self.opts.tools.iter().any(|d| d.name == def.name) {
+                self.opts.tools.push(def);
+            }
+        }
+        self
+    }
+
+    /// Les deux outils de dialogue, **annoncés au modèle**.
+    ///
+    /// La boucle les traite depuis le 26 au soir ; personne ne les déclarait,
+    /// donc aucun modèle ne pouvait les appeler — les tests scriptaient
+    /// l'appel, ce qui masquait exactement ça. Quatrième mécanisme construit
+    /// et non branché de la journée, et le seul qu'une **expérience** pouvait
+    /// révéler plutôt qu'une relecture.
+    ///
+    /// Annoncés seulement quand les postures sont partagées : c'est le signal
+    /// explicite qu'on est à plusieurs, et un agent seul n'a personne envers
+    /// qui se taire.
+    fn dialogue_tools() -> Vec<crate::tools::ToolDef> {
+        let avec = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "avec": { "type": "string", "description": "L'interlocuteur. Vide : le fil entier." },
+                "genre": {
+                    "type": "string",
+                    "enum": ["finished", "waiting_for_run", "waiting_for_peer", "waiting_for_instruction", "blocked"],
+                    "description": "Pourquoi vous vous taisez."
+                },
+                "raison": { "type": "string", "description": "En une phrase, ce que l'autre a besoin de savoir." }
+            },
+            "required": ["genre", "raison"],
+        });
+        vec![
+            crate::tools::ToolDef {
+                name: PAUSE_DIALOGUE.to_string(),
+                description: "Se taire. À appeler quand vous n'avez rien à ajouter, que vous attendez \
+                              un résultat, ou qu'une consigne vous manque — plutôt que de meubler. \
+                              L'interlocuteur est prévenu, et n'a pas à répondre."
+                    .to_string(),
+                parameters: avec.clone(),
+            },
+            crate::tools::ToolDef {
+                name: CONFIRM_PAUSE.to_string(),
+                description: "Accuser réception d'une pause et s'arrêter là. Ce n'est pas une réplique : \
+                              rien n'appelle de réponse, et c'est ce qui empêche une boucle de politesses."
+                    .to_string(),
+                parameters: avec,
+            },
+        ]
+    }
+
+    /// **Le rôle : ce que cet agent regarde.**
+    ///
+    /// Un rôle écrit en prose ne contraint rien — « tu es un reviewer sécu »
+    /// n'empêche personne d'effacer une entité. Un rôle est une **enveloppe de
+    /// capacités**, et son premier volet est le domaine
+    /// ([doc 09 §2](../docs/27-aout-2026-13h01/09-le-terminal-a-plusieurs.md)).
+    ///
+    /// Il est publié sur le run, pas sur l'identité : un même agent peut
+    /// travailler ailleurs demain, et son rôle se **lit dans ce qu'il a fait**.
+    pub fn with_domain(mut self, domain: impl Into<String>) -> Self {
+        self.domain = domain.into();
         self
     }
 
@@ -668,6 +736,7 @@ impl<'a> Agent<'a> {
                     if confirming { "pause confirmée" } else { "pause" },
                     serde_json::to_string(&kind).unwrap_or_default()
                 ),
+                conversation: String::new(),
             });
         }
 
@@ -837,6 +906,7 @@ impl<'a> Agent<'a> {
             parent: None,
             kind: "agent".to_string(),
             name: self.name.clone(),
+            domain: self.domain.clone(),
             scope: self.events.as_ref().map(|b| b.scope().clone()),
         });
         let outcome = self.run_inner(turns, sink, &run_id);
@@ -981,8 +1051,49 @@ impl<'a> Agent<'a> {
             self.absorb_history(turns);
             self.refresh_waiting_block(turns);
             let mut tee = TeeSink { inner: sink, text: String::new() };
-            let generated = self.llm.generate(turns, &opts, &mut tee);
-            let text = std::mem::take(&mut tee.text);
+            let mut generated = self.llm.generate(turns, &opts, &mut tee);
+            let mut text = std::mem::take(&mut tee.text);
+
+            // **Une fenêtre refusée n'est pas une fin de course.** Si une
+            // session tient les contenus entiers, on serre d'un cran — tout
+            // résultat d'outil devient son renvoi d'une ligne — et on
+            // redemande. Rien n'est perdu : le magasin garde l'intégralité, et
+            // `recall` la rend si le modèle la redemande. Sans ce rattrapage,
+            // un agent sur un petit modèle s'arrêtait au troisième tour avec
+            // une erreur qu'il avait pourtant de quoi éviter (28 août 2026,
+            // Qwen2.5-0,5B : 2 225 jetons pour une fenêtre de 2 048).
+            //
+            // Une seule fois par tour : si le serrage maximal ne suffit pas,
+            // c'est l'invite elle-même qui est trop grande, et le redire cent
+            // fois ne la rétrécira pas.
+            if let (Err(LlmError::ContextOverflow { max, got }), Some(session)) =
+                (&generated, &self.session)
+            {
+                let (max, got) = (*max, *got);
+                let c = session.absorb_under(
+                    Some(crate::session::Absorb::Stale { max_chars: 0, after_turns: 0 }),
+                    turns,
+                );
+                if !c.is_noop() {
+                    self.emit(crate::events::CatalogEvent::Warning {
+                        context: format!("agent:{}", self.name),
+                        message: format!(
+                            "fenêtre dépassée ({got} > {max}) : {} résultat(s) réduit(s) à leur renvoi, nouvel essai",
+                            c.rewritten
+                        ),
+                    });
+                    self.emit(crate::events::CatalogEvent::TurnCompacted {
+                        run: run_id.to_string(),
+                        rewritten: c.rewritten,
+                        kept: c.kept,
+                        dropped: c.dropped,
+                    });
+                    let mut tee = TeeSink { inner: sink, text: String::new() };
+                    generated = self.llm.generate(turns, &opts, &mut tee);
+                    text = std::mem::take(&mut tee.text);
+                }
+            }
+
             let (finish, usage) = match generated {
                 Ok(ok) => ok,
                 Err(e) => {
@@ -2125,5 +2236,64 @@ mod tests {
         // Et rien n'est perdu.
         assert_eq!(session.recall("#read-1").map(|c| c.len()), Some(20_000));
         eprintln!("[dix tours] sans absorption {sans} caractères, avec {avec}");
+    }
+
+    /// **Une fenêtre refusée n'est pas une fin de course.**
+    ///
+    /// Le modèle refuse tant que l'invite dépasse sa fenêtre ; l'agent serre
+    /// d'un cran et redemande. Ce qui est vérifié ici : il redemande **une**
+    /// fois, la deuxième invite est vraiment plus petite, le tour aboutit, et
+    /// le contenu entier reste rappelable — l'absorption est une vue, pas une
+    /// perte.
+    #[test]
+    fn une_fenetre_refusee_fait_serrer_puis_reessayer() {
+        use crate::session::{Absorb, Session, SessionTools};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let inner = gros_read();
+        let session = Arc::new(Session::new().with_policy(Absorb::Whole));
+        // La fenêtre, en caractères pour rester lisible : le mock refuse tout
+        // ce qui la dépasse, exactement comme `BurnLlm::generate`.
+        const FENETRE: usize = 5_000;
+        let essais = Arc::new(AtomicUsize::new(0));
+        let tailles = Arc::new(Mutex::new(Vec::new()));
+
+        let llm = {
+            let essais = essais.clone();
+            let tailles = tailles.clone();
+            CallbackLlm::new("mock", 4096, move |turns: &[Turn], opts: &GenOptions, sink: &mut dyn TokenSink| {
+                let taille: usize = turns.iter().map(|t| t.content.len()).sum();
+                tailles.lock().unwrap().push(taille);
+                if taille > FENETRE {
+                    return Err(LlmError::ContextOverflow { max: FENETRE, got: taille });
+                }
+                match essais.fetch_add(1, Ordering::SeqCst) {
+                    0 => MockLlm::new("").with_tool_calls(vec![("read", "{}")]).generate(turns, opts, sink),
+                    _ => MockLlm::new("fini").generate(turns, opts, sink),
+                }
+            })
+        };
+
+        let tools = SessionTools::new(&inner, session.clone());
+        let mut turns = start();
+        let run = Agent::new(&llm, &tools)
+            .with_session(session.clone())
+            .with_limits(AgentLimits { max_iterations: 6, ..Default::default() })
+            .run(&mut turns, &mut StringSink::default())
+            .expect("le tour doit aboutir après le serrage");
+        assert_eq!(run.text, "fini");
+
+        // Trois invites : la première (courte, appelle l'outil), la deuxième
+        // (refusée — le résultat de 20 000 caractères est entier), la
+        // troisième (le même tour, serré, acceptée).
+        let tailles = tailles.lock().unwrap().clone();
+        assert_eq!(tailles.len(), 3, "{tailles:?}");
+        assert!(tailles[1] > FENETRE, "la deuxième doit être refusée : {tailles:?}");
+        assert!(tailles[2] <= FENETRE, "la troisième doit passer : {tailles:?}");
+        assert!(tailles[2] * 10 < tailles[1], "le serrage doit être franc : {tailles:?}");
+
+        // Et rien n'est perdu : le magasin garde l'intégralité.
+        assert_eq!(session.recall("#read-1").map(|c| c.len()), Some(20_000));
     }
 }

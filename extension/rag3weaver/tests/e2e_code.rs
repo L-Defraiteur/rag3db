@@ -247,12 +247,14 @@ fn read_and_grep_as_graph_tools() {
     let (nodes, tools) = builtin_graph_tools().unwrap();
     let defs = rag3weaver::tools::graph_tool_defs(&tools);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-    assert_eq!(names, vec!["edit", "grep", "list", "read", "search", "search_expand"]);
+    // Un seul outil de recherche depuis le 28 août 2026 : `search_expand` était
+    // appelé zéro fois sur quarante, la relation est devenue un paramètre.
+    assert_eq!(names, vec!["edit", "grep", "list", "read", "search"]);
 
     // Résolues contre le catalogue, les fiches bornent cibles et relations
     // à ce qui existe : un modèle ne peut plus inventer `HAS_SIGNALS`.
     let bound = rag3weaver::tools::graph_tool_defs_with(&tools, Some(&catalog.lock().unwrap()));
-    let expand = bound.iter().find(|d| d.name == "search_expand").unwrap();
+    let expand = bound.iter().find(|d| d.name == "search").unwrap();
     let targets = expand.parameters["properties"]["target"]["enum"].as_array().unwrap().clone();
     assert!(targets.contains(&serde_json::json!("Scope")) && targets.contains(&serde_json::json!("File")), "{targets:?}");
     let relations = expand.parameters["properties"]["relation"]["enum"].as_array().unwrap();
@@ -311,10 +313,13 @@ fn read_and_grep_as_graph_tools() {
         uuids.dedup();
         assert_eq!(uuids.len(), before, "un scope ne doit sortir qu'une fois : {json}");
     }
-    assert!(markdown.starts_with("**"), "{markdown}");
-    assert!(markdown.contains("`merge_port_values`"), "{markdown}");
+    assert!(markdown.starts_with("# Search:") || markdown.starts_with("**"), "{markdown}");
+    // **Une correspondance exacte reste en tête.** Depuis que `search` est
+    // hybride, le vecteur peut noyer un identifiant sous ce qui lui ressemble ;
+    // les poids de la fusion penchent vers le plein texte pour cette raison.
+    assert!(markdown.contains("merge_port_values"), "{markdown}");
     // Le lien fichier, actionnable tel quel : `read(path, offset)`.
-    assert!(markdown.contains(" · port.rs:"), "{markdown}");
+    assert!(markdown.contains("port.rs:"), "{markdown}");
     assert!(!markdown.contains("file_path=") && !markdown.contains("start_line="), "{markdown}");
     assert!(!markdown.contains("_content_hash") && !markdown.contains("uuid"), "{markdown}");
     assert!(
@@ -331,11 +336,116 @@ fn read_and_grep_as_graph_tools() {
     assert!(bad.contains("error"), "an unknown file is a tool error the model can read: {bad}");
 
     // La relation inventée du doc 06 : refusée avant le graphe, avec la liste.
-    let invented = call("search_expand", serde_json::json!({"target": "Scope", "query": "merge_port_values", "relation": "HAS_SIGNALS"}));
-    eprintln!("[search_expand HAS_SIGNALS]\n{invented}");
+    let invented = call("search", serde_json::json!({"target": "Scope", "query": "merge_port_values", "relation": "HAS_SIGNALS"}));
+    eprintln!("[search HAS_SIGNALS]\n{invented}");
     assert!(invented.contains("\"bad_choice\"") && invented.contains("CONSUMED_BY"), "{invented}");
     let wrong_target = call("search", serde_json::json!({"target": "FuseResultsNode", "query": "signals"}));
     assert!(wrong_target.contains("\"bad_choice\"") && wrong_target.contains("Scope"), "{wrong_target}");
+
+    // ── `grep` suit le graphe, si on le lui demande ─────────────────────
+    //
+    // Mesuré le 28 août 2026 : sur quarante appels d'outils, `grep` 10 et
+    // l'outil de graphe séparé **0**. Le graphe doit se greffer là où les
+    // agents vont déjà, pas les attendre ailleurs.
+    let nu = call("grep", serde_json::json!({"pattern": "fn merge_port_values", "extension": "rs"}));
+    assert!(!nu.contains("## Graphe"), "sans relation, grep reste un grep : {nu}");
+
+    let avec = call("grep", serde_json::json!({
+        "pattern": "fn merge_port_values", "extension": "rs", "relation": "CONSUMES",
+    }));
+    eprintln!("[grep + CONSUMES]\n{avec}");
+    assert!(avec.starts_with("**Pattern:**"), "{avec}");
+    assert!(avec.contains("## Graphe"), "{avec}");
+    assert!(avec.contains("└── [CONSUMES]"), "{avec}");
+    assert!(avec.contains("merge_port_values"), "{avec}");
+
+    // Une relation inventée est refusée **avec la liste**, comme partout.
+    let faux = call("grep", serde_json::json!({
+        "pattern": "fn merge_port_values", "extension": "rs", "relation": "HAS_SIGNALS",
+    }));
+    assert!(faux.contains("bad_choice") || faux.contains("inconnue"), "{faux}");
+
+    // ── Les chemins, par rapport à où l'agent se tient ──────────────────
+    //
+    // `read`, `grep`, `list` et `edit` parlent en chemins relatifs à la source
+    // depuis toujours ; `search` rendait l'absolu du catalogue. L'agent devait
+    // traduire de tête entre ce qu'on lui montrait et ce qu'il avait le droit
+    // d'écrire — et chaque ligne portait soixante caractères de préfixe payés
+    // en jetons (mesuré dans `fil-search-repare.md`, 28 août 2026).
+    let releve = call("search", serde_json::json!({"target": "Scope", "query": "merge_port_values", "limit": 3}));
+    assert!(!releve.contains("/home/"), "aucun chemin de disque dans une fiche : {releve}");
+    // Et ce qu'on montre se recolle tel quel dans `read`.
+    assert!(releve.contains("📍 `port.rs:"), "{releve}");
+    let relu = call("read", serde_json::json!({"path": "port.rs", "offset": 192, "limit": 3}));
+    assert!(!relu.contains("error"), "le chemin montré doit se lire tel quel : {relu}");
+
+    // ── L'arbre de dépendances, sur du vrai code ────────────────────────
+    //
+    // C'est la seconde moitié de la maquette d'origine
+    // (`brain_search_example_output.md`) : après la liste, les voisins
+    // groupés par relation, en arbre ASCII. On le vérifie ici plutôt que sur
+    // une donnée fabriquée, parce que ce qu'on veut savoir n'est pas « le
+    // gabarit sait dessiner un arbre » mais « le graphe qu'on a ingéré a bien
+    // les arêtes qu'on croit ».
+    {
+        // **Une arête qui vise un fichier existe vraiment.**
+        //
+        // Elle n'existait pas : `File` s'identifie par `["source", "path"]`
+        // depuis le doc 04 v3, et la résolution des relations ne posait que
+        // `path`. L'uuid dérivé de la clé partielle ne tombait jamais sur
+        // celui du nœud inséré, donc **toutes** les arêtes `DEFINED_IN`
+        // étaient perdues en silence — et l'arbre de dépendances, qui est la
+        // seconde moitié de la fiche, était vide sur tout code réel.
+        //
+        // Rien n'échouait : `Scope` et `Library` ont une clé à un seul champ,
+        // donc `CONSUMES` et `HAS_PARENT` marchaient. Seule la relation qui
+        // vise un fichier tombait, et personne ne la vérifiait.
+        let cat = catalog.lock().unwrap();
+        let compte = |q: &str| match cat.execute_raw(q).unwrap().rows.first() {
+            Some(row) => match row.first() {
+                Some(rag3weaver::connection::CypherValue::Int(n)) => *n,
+                _ => -1,
+            },
+            None => -1,
+        };
+        let scopes = compte("MATCH (s:Scope) RETURN count(s)");
+        let definis = compte("MATCH (s:Scope)-[:DEFINED_IN]->(f:File) RETURN count(s)");
+        let documentes = compte("MATCH (s:Scope) WHERE s.docstring <> '' RETURN count(s)");
+        eprintln!("[graphe] {scopes} scopes, {definis} DEFINED_IN, {documentes} documentés");
+        assert_eq!(definis, scopes, "chaque scope est défini dans un fichier");
+
+        // **La documentation arrive jusqu'au graphe.** Elle n'arrivait pas :
+        // le parseur Rust posait `docstring: None` à ses sept points de
+        // construction, comme C, C++, C# et Go — seuls Python et JS/TS
+        // extrayaient la leur. La ligne `📝` de la fiche, celle qui dit en une
+        // phrase *ce que fait* un scope avant qu'on ouvre le fichier, ne
+        // pouvait donc exister sur aucun code que nous écrivons.
+        assert!(documentes > 0, "port.rs est documenté : {documentes} scopes avec docstring");
+    }
+    let arbre = call("search", serde_json::json!({
+        "target": "Scope", "query": "merge_port_values", "relation": "DEFINED_IN", "limit": 3,
+    }));
+    eprintln!("[arbre DEFINED_IN]\n{arbre}");
+    assert!(arbre.contains("## Dependency Graph"), "{arbre}");
+    assert!(arbre.contains("[DEFINED_IN]"), "{arbre}");
+    assert!(arbre.contains("port.rs (File)"), "le voisin est le fichier réel : {arbre}");
+    // Les branches de l'arbre, pas des puces : la forme de la maquette.
+    assert!(arbre.contains("└── ") || arbre.contains("├── "), "{arbre}");
+    // Un fichier a pour titre son chemin : ne pas l'écrire deux fois.
+    assert!(!arbre.contains("port.rs (File) @ port.rs"), "{arbre}");
+
+    // Et la même chose vers l'amont : qui appelle ce scope.
+    let amont = call("search", serde_json::json!({
+        "target": "Scope", "query": "merge_port_values", "relation": "CONSUMED_BY", "limit": 3,
+    }));
+    eprintln!("[arbre CONSUMED_BY]\n{amont}");
+    // L'en-tête est là même avec une relation : `RenderResultsNode` laisse
+    // passer la requête comme il laisse passer les résultats, donc l'étage
+    // extérieur sait ce qu'on a cherché. Sans ce passe-plat, `source.query`
+    // reste consommé dans le sous-graphe et invisible du dehors.
+    assert!(amont.starts_with("# Search:") || amont.starts_with("**No results."), "{amont}");
+    // Ce qui compte est là : les voisins, sans les champs internes.
+    assert!(!amont.contains("content_hash"), "une empreinte de 64 caractères ne dit rien : {amont}");
 }
 
 /// `edit` sur un instantané indexé : le fichier est réécrit, ré-ingéré —

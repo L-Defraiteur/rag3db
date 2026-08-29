@@ -2838,6 +2838,52 @@ impl BaseScopeExtractionParser {
     /// Extract JSDoc comment preceding a node (TypeScript/JavaScript)
     /// Looks for JSDoc comments (starting with slash-star-star) immediately before the node
 
+    /// Le commentaire de documentation **au-dessus** d'un élément, pour les
+    /// langages qui documentent par lignes : Rust (`///`, `//!`), C, C++, C#
+    /// (`///`), Go (`//`).
+    ///
+    /// On remonte depuis la ligne de l'élément et on collecte les lignes de
+    /// doc, en sautant les attributs (`#[derive(...)]` en Rust, `[Obsolete]`
+    /// en C#) qui s'intercalent légitimement entre la doc et ce qu'elle
+    /// documente. Toute autre ligne arrête la remontée : une doc n'est une doc
+    /// que si elle touche son élément.
+    ///
+    /// Pourquoi par lignes et pas par nœuds : les grammaires tree-sitter ne
+    /// s'accordent pas sur la place des commentaires de doc — nœud frère,
+    /// nœud interne, ou `line_comment` ordinaire selon la version. Le texte,
+    /// lui, ne change pas.
+    pub fn extract_line_doc(&self, node: SyntaxNode, content: &str, prefixes: &[&str]) -> Option<String> {
+        let start_row = node.start_position().row;
+        if start_row == 0 {
+            return None;
+        }
+        let lines: Vec<&str> = content.split('\n').collect();
+        let mut collected: Vec<String> = Vec::new();
+        let min_row = start_row.saturating_sub(40);
+        for i in (min_row..start_row).rev() {
+            let line = lines.get(i).map(|l| l.trim()).unwrap_or("");
+            if line.is_empty() && collected.is_empty() {
+                // Une ligne vide avant toute doc : rien ne documente cet
+                // élément.
+                return None;
+            }
+            // Un attribut s'intercale sans rompre le lien.
+            if line.starts_with("#[") || line.starts_with("#![") || (line.starts_with('[') && line.ends_with(']')) {
+                continue;
+            }
+            match prefixes.iter().find(|p| line.starts_with(**p)) {
+                Some(prefix) => collected.push(line[prefix.len()..].trim().to_string()),
+                None => break,
+            }
+        }
+        if collected.is_empty() {
+            return None;
+        }
+        collected.reverse();
+        let doc = collected.join("\n").trim().to_string();
+        if doc.is_empty() { None } else { Some(doc) }
+    }
+
     pub fn extract_js_doc(&self, node: SyntaxNode, content: &str) -> Option<String> {
         // Get previous sibling, skipping decorators
         let mut prev = node.prev_sibling();

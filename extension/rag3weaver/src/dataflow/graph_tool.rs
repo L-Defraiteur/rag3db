@@ -669,6 +669,18 @@ pub fn check_choices(
     for p in params {
         let Some(choices) = &p.choices else { continue };
         let Some(Value::String(value)) = resolved.get(p.name) else { continue };
+        // **Le défaut d'un paramètre est admissible par définition.** Sans
+        // cette ligne, `relation` — dont le défaut vide veut dire « pas
+        // d'expansion » — se faisait refuser au motif qu'il n'est pas une
+        // relation du schéma, et l'outil devenait inappelable sans elle
+        // (28 août 2026, en fusionnant `search_expand` dans `search`).
+        //
+        // C'est la contrepartie exacte de `check_choices_fit`, qui refuse
+        // qu'une fiche annonce un défaut hors liste : une fiche promet son
+        // défaut, donc on l'accepte.
+        if p.default.as_ref() == Some(&Value::String(value.clone())) {
+            continue;
+        }
         let Some((values, _)) = choices.resolve(catalog) else { continue };
         if !values.contains(value) {
             return Err(GraphToolError::BadChoice {
@@ -689,8 +701,11 @@ fn check_choices_fit(p: &ConfigParam, choices: &Choices) -> Result<(), GraphTool
     if p.param_type != ConfigParamType::String {
         return Err(spec(format!("choices '{}' : seul un paramètre string se borne", p.name)));
     }
+    // Un défaut **vide** est le cas « ce paramètre est facultatif » : il ne
+    // désigne aucune valeur, il en désigne l'absence. `check_choices` le
+    // laisse passer pour la même raison.
     if let (Choices::Fixed(values), Some(Value::String(d))) = (choices, &p.default) {
-        if !values.contains(d) {
+        if !d.is_empty() && !values.contains(d) {
             return Err(spec(format!(
                 "choices '{}' : le défaut '{d}' n'est pas dans la liste ({})",
                 p.name,
@@ -1121,6 +1136,7 @@ impl GraphTool {
     pub fn name(&self) -> &str {
         &self.name
     }
+
     pub fn description(&self) -> &str {
         &self.description
     }
@@ -1517,16 +1533,34 @@ impl GraphToolRegistry {
         Self::default()
     }
 
-    /// Enregistre un outil. Un nom déjà pris est **refusé** : deux outils
-    /// homonymes rendraient un `ToolCall` ambigu.
+    /// Enregistre un outil sous son propre nom. Un nom déjà pris est
+    /// **refusé** : deux outils homonymes rendraient un `ToolCall` ambigu.
     pub fn register(&mut self, tool: GraphTool) -> Result<(), GraphToolError> {
-        if self.tools.contains_key(&tool.name) {
-            return Err(GraphToolError::Spec(format!(
-                "outil '{}' déjà enregistré",
-                tool.name
-            )));
+        let nom = tool.name.clone();
+        self.attach(&nom, Arc::new(tool))
+    }
+
+    /// **Attacher un gabarit sous le nom qu'on lui donne.**
+    ///
+    /// Le nom vit sur l'**attachement**, pas sur le gabarit — c'est une
+    /// propriété de l'arête, pas du nœud. Un gabarit n'est donc pas cloné pour
+    /// être renommé : le même `Arc` est atteint par deux clés si deux agents
+    /// l'ont adopté sous deux noms.
+    ///
+    /// Deux raisons, et la seconde est celle qui compte :
+    ///
+    /// 1. Un gabarit peut exister pour être **composé** sans jamais être
+    ///    offert — `search_base` est le type de nœud dont `search` se sert, et
+    ///    aucun agent n'a à le connaître.
+    /// 2. Un agent qui **adopte** un outil depuis un catalogue doit pouvoir le
+    ///    nommer : c'est son vocabulaire, et c'est ce nom qui apparaîtra dans
+    ///    sa trace. Le `%% tool:` d'une fiche reste l'identité du gabarit — ce
+    ///    qu'il *est* — pas ce qu'on en voit.
+    pub fn attach(&mut self, display: &str, tool: Arc<GraphTool>) -> Result<(), GraphToolError> {
+        if self.tools.contains_key(display) {
+            return Err(GraphToolError::Spec(format!("outil '{display}' déjà enregistré")));
         }
-        self.tools.insert(tool.name.clone(), Arc::new(tool));
+        self.tools.insert(display.to_string(), tool);
         Ok(())
     }
 
@@ -1541,6 +1575,12 @@ impl GraphToolRegistry {
     }
     pub fn tools(&self) -> impl Iterator<Item = &Arc<GraphTool>> {
         self.tools.values()
+    }
+    /// Les attachements : **le nom vu par l'agent** et le gabarit derrière.
+    /// C'est cette paire qu'il faut pour écrire une fiche, pas le gabarit seul
+    /// — lui ne connaît que son propre nom.
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &Arc<GraphTool>)> {
+        self.tools.iter().map(|(k, v)| (k.as_str(), v))
     }
     pub fn len(&self) -> usize {
         self.tools.len()
@@ -1629,6 +1669,12 @@ impl GraphToolRegistry {
 // ─── Graphes-outils fournis ─────────────────────────────────────────────────
 
 /// `search` — requête + limite → résultats. Trois nœuds, une fiche.
+/// **Le gabarit de base**, jamais offert : il devient le type de nœud
+/// `SearchTool`, que `search` contient. Son `%% tool: search_base` est son
+/// identité, pas un nom d'outil.
+pub const SEARCH_BASE_MERMAID: &str = include_str!("../../templates/tools/search_base.mmd");
+/// `search` — la surface offerte : la recherche hybride **plus** l'expansion
+/// de graphe quand `relation` est donnée.
 pub const SEARCH_TOOL_MERMAID: &str = include_str!("../../templates/tools/search.mmd");
 
 /// `search_expand` — `search` **contenu** dans un graphe qui étend chaque
@@ -1646,43 +1692,48 @@ pub const EDIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/edit.mmd
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 6] = ["edit", "grep", "list", "read", "search", "search_expand"];
+pub const BUILTIN_TOOL_NAMES: [&str; 5] = ["edit", "grep", "list", "read", "search"];
 #[cfg(not(feature = "code"))]
-pub const BUILTIN_TOOL_NAMES: [&str; 2] = ["search", "search_expand"];
+pub const BUILTIN_TOOL_NAMES: [&str; 1] = ["search"];
 
-pub const SEARCH_EXPAND_TOOL_MERMAID: &str =
-    include_str!("../../templates/tools/search_expand.mmd");
 
 /// Le type de nœud sous lequel `search` est enregistré pour être contenu.
 pub const SEARCH_TOOL_NODE_TYPE: &str = "SearchTool";
 
 /// Les deux registres prêts à l'emploi : les nœuds (28 fournis + `SearchTool`)
-/// et les graphes-outils (`search`, `search_expand`).
+/// et les graphes-outils offerts à un agent.
 ///
-/// Le registre de nœuds rendu contient `SearchTool`, ce qui rend `search`
-/// **contenable** : `search_expand` s'en sert comme d'un nœud ordinaire.
+/// **Un gabarit n'est pas forcément un outil.** `search_base` est lié, devient
+/// le type de nœud `SearchTool` — ce qui rend la recherche *contenable* — et
+/// n'est **jamais enregistré comme outil** : aucun agent n'a à le connaître.
+/// C'est `search` qui le contient et qui est offert, avec son expansion de
+/// graphe en option.
+///
+/// Il y avait deux outils de recherche jusqu'au 28 août 2026, et le second
+/// (`search_expand`) n'a jamais été appelé une seule fois par un agent — zéro
+/// sur quarante appels d'outils. Un agent qui hésite entre deux outils proches
+/// en prend zéro ; la relation est devenue un paramètre.
 pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphToolError> {
-    // Le registre que verra le sous-graphe de `search` : les nœuds de base.
+    // Le registre que verra le sous-graphe de base : les nœuds fournis.
     let inner = {
         let mut r = NodeRegistry::new();
         super::node_factories::register_builtins(&mut r);
         Arc::new(r)
     };
 
-    // Chaque fiche est **liée** au registre qu'elle voit : `search` hérite
-    // de `SearchSourceNode` (les cibles), puis devient le nœud `SearchTool`
-    // avec ses paramètres complets, dont `search_expand` hérite à son tour.
-    let search = GraphTool::from_mermaid(SEARCH_TOOL_MERMAID)?.bind(&inner)?;
+    // Chaque fiche est **liée** au registre qu'elle voit : la base hérite de
+    // `SearchSourceNode` (les cibles), puis devient le nœud `SearchTool` avec
+    // ses paramètres complets, dont `search` hérite à son tour.
+    let base = GraphTool::from_mermaid(SEARCH_BASE_MERMAID)?.bind(&inner)?;
 
     let mut nodes = NodeRegistry::new();
     super::node_factories::register_builtins(&mut nodes);
     nodes.register(Box::new(
-        search.as_node_factory(SEARCH_TOOL_NODE_TYPE, inner)?,
+        base.as_node_factory(SEARCH_TOOL_NODE_TYPE, inner)?,
     ));
-    let expand = GraphTool::from_mermaid(SEARCH_EXPAND_TOOL_MERMAID)?.bind(&nodes)?;
 
     let mut tools = GraphToolRegistry::new();
-    tools.register(search)?;
+    tools.register(GraphTool::from_mermaid(SEARCH_TOOL_MERMAID)?.bind(&nodes)?)?;
     #[cfg(feature = "code")]
     {
         tools.register(GraphTool::from_mermaid(READ_TOOL_MERMAID)?.bind(&nodes)?)?;
@@ -1690,7 +1741,6 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
         tools.register(GraphTool::from_mermaid(LIST_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(EDIT_TOOL_MERMAID)?.bind(&nodes)?)?;
     }
-    tools.register(expand)?;
     Ok((nodes, tools))
 }
 
@@ -1721,7 +1771,7 @@ mod tests {
         ConfigParam { name, param_type, required, default, description, choices: None, json_schema: None }
     }
 
-    /// Le même outil que `templates/tools/search.mmd`, construit en Rust.
+    /// Le même gabarit que `templates/tools/search_base.mmd`, construit en Rust.
     fn search_in_rust() -> GraphTool {
         let template = GraphDefinition {
             nodes: vec![
@@ -1736,6 +1786,21 @@ mod tests {
                     config: json!({"limit": "$limit"}),
                 },
                 NodeDef {
+                    name: "vector".into(),
+                    node_type: "VectorSearchNode".into(),
+                    config: json!({"limit": "$limit"}),
+                },
+                NodeDef {
+                    name: "fuse".into(),
+                    node_type: "FuseResultsNode".into(),
+                    config: json!({"weights": "bm25:0.6,vector:0.4"}),
+                },
+                NodeDef {
+                    name: "rerank".into(),
+                    node_type: "RerankNode".into(),
+                    config: json!({"candidates": "$rerank", "keep_signal": true}),
+                },
+                NodeDef {
                     name: "resolve".into(),
                     node_type: "ResolveParentNode".into(),
                     config: json!({}),
@@ -1748,18 +1813,25 @@ mod tests {
             ],
             edges: vec![
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "bm25".into(), to_port: "query".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "vector".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "resolve".into(), to_port: "query".into() },
-                EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "render".into(), to_port: "query".into() },
+                EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "bm25".into() },
+                EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "rerank".into(), to_port: "query".into() },
+                EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
+                EdgeDef { from_node: "rerank".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
                 EdgeDef { from_node: "resolve".into(), from_port: "results".into(), to_node: "render".into(), to_port: "results".into() },
             ],
         };
         GraphTool::new(
-            "search",
+            "search_base",
             "Cherche dans une entité ou une base de connaissances.",
             vec![
                 p("target", ConfigParamType::String, true, None, "Nom de l'entité ou de la KB."),
                 p("query", ConfigParamType::String, true, None, "Texte de la requête."),
                 p("limit", ConfigParamType::Int, false, Some(json!(10)), "Nombre maximum de résultats."),
+                p("rerank", ConfigParamType::Int, false, Some(json!(0)), "Cross-encoder sur les N premiers ; 0 = éteint."),
             ],
             template,
             "render.text",
@@ -1772,9 +1844,9 @@ mod tests {
     #[test]
     fn build_from_rust() {
         let t = search_in_rust();
-        assert_eq!(t.name(), "search");
+        assert_eq!(t.name(), "search_base");
         assert_eq!(t.result(), ("render", "text"));
-        assert_eq!(t.params().len(), 3);
+        assert_eq!(t.params().len(), 4);
     }
 
     #[test]
@@ -1783,7 +1855,7 @@ mod tests {
         assert_eq!(t.name(), "search");
         assert_eq!(t.result(), ("render", "text"));
         let names: Vec<&str> = t.params().iter().map(|p| p.name).collect();
-        assert_eq!(names, vec!["target", "query", "limit"]);
+        assert_eq!(names, vec!["target", "query", "limit", "rerank", "relation", "direction", "expand_limit"]);
         assert!(t.params()[1].required);
         assert_eq!(t.params()[2].default, Some(json!(10)));
         assert_eq!(t.params()[2].param_type, ConfigParamType::Int);
@@ -1793,8 +1865,11 @@ mod tests {
     fn rust_and_mermaid_agree() {
         // Les deux voies de construction donnent le même outil — à la lettre
         // des descriptions près, que le fichier soigne davantage.
+        // Le pendant en Rust est celui du **gabarit de base** : c'est lui le
+        // graphe plat. `search` y ajoute l'étage de graphe, écrit en Mermaid
+        // seulement — un seul des deux chemins a besoin d'être complet.
         let a = search_in_rust();
-        let b = GraphTool::from_mermaid(SEARCH_TOOL_MERMAID).unwrap();
+        let b = GraphTool::from_mermaid(SEARCH_BASE_MERMAID).unwrap();
         assert_eq!(a.name(), b.name());
         assert_eq!(a.result(), b.result());
         for (x, y) in a.params().iter().zip(b.params()) {
@@ -1818,19 +1893,19 @@ mod tests {
         // `parse_mermaid` ignore les `%%` : la fiche ne gêne personne.
         // (Avec les `$var` substitués, comme n'importe quel gabarit.)
         let mut vars = HashMap::new();
-        for (k, v) in [("target", "Product"), ("query", "rust"), ("limit", "10")] {
+        for (k, v) in [("target", "Product"), ("query", "rust"), ("limit", "10"), ("rerank", "0")] {
             vars.insert(k.to_string(), v.to_string());
         }
-        let def = parse_mermaid_template(SEARCH_TOOL_MERMAID, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 4);
-        assert_eq!(def.edges.len(), 4);
+        let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
+        assert_eq!(def.nodes.len(), 7);
+        assert_eq!(def.edges.len(), 10);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
 
     #[test]
     fn mermaid_roundtrip_keeps_the_spec() {
-        for source in [SEARCH_TOOL_MERMAID, SEARCH_EXPAND_TOOL_MERMAID] {
+        for source in [SEARCH_BASE_MERMAID, SEARCH_TOOL_MERMAID] {
             let t = GraphTool::from_mermaid(source).unwrap();
             let emitted = t.to_mermaid();
             let back = GraphTool::from_mermaid(&emitted).unwrap();
@@ -1862,8 +1937,8 @@ mod tests {
     fn rust_built_tool_also_roundtrips() {
         let t = search_in_rust();
         let back = GraphTool::from_mermaid(&t.to_mermaid()).unwrap();
-        assert_eq!(back.name(), "search");
-        assert_eq!(back.params().len(), 3);
+        assert_eq!(back.name(), "search_base");
+        assert_eq!(back.params().len(), 4);
         assert_eq!(back.to_mermaid(), t.to_mermaid());
     }
 
@@ -1942,7 +2017,7 @@ mod tests {
         assert_eq!(required, vec!["target", "query"]);
         // Aucun paramètre de plomberie n'a fuité.
         let props = d.parameters["properties"].as_object().unwrap();
-        assert_eq!(props.len(), 3);
+        assert_eq!(props.len(), 7);
         assert!(!props.contains_key("fuzzy_distance"));
         assert!(!props.contains_key("result_mode"));
     }
@@ -1967,10 +2042,35 @@ mod tests {
         assert_eq!(choices(&back, "direction"), choices(&t, "direction"));
     }
 
+    /// **Le défaut d'un paramètre passe la validation, quoi qu'en dise la
+    /// liste.** `relation` a pour défaut le vide — « pas d'expansion » — qui
+    /// n'est pas une relation du schéma. Sans cette règle, `search` devenait
+    /// inappelable sans relation, c'est-à-dire dans son usage le plus courant.
+    #[test]
+    fn a_default_is_admissible_by_definition() {
+        let (_, tools) = builtin_graph_tools().unwrap();
+        let t = tools.get("search").unwrap();
+
+        // Sans relation : c'est le défaut, et il passe.
+        assert!(t.validate_arguments(&json!({"target": "Scope", "query": "x"})).is_ok());
+        assert!(t.validate_arguments(&json!({"target": "Scope", "query": "x", "relation": ""})).is_ok());
+
+        // Une relation nommée passe aussi : sans catalogue, `@relations` reste
+        // une chaîne libre — c'est le catalogue qui borne, à l'instant où la
+        // fiche part vers le modèle (`e2e_code` le vérifie contre une vraie
+        // base : `HAS_SIGNALS` y est refusé avec la liste).
+        assert!(t.validate_arguments(&json!({"target": "Scope", "query": "x", "relation": "CONSUMES"})).is_ok());
+
+        // Le défaut vide n'a pas fui dans la liste annoncée au modèle.
+        let d = t.tool_def();
+        assert_eq!(d.parameters["properties"]["relation"]["default"], json!(""));
+        assert!(!d.parameters["required"].as_array().unwrap().iter().any(|v| v == "relation"));
+    }
+
     #[test]
     fn a_fixed_list_becomes_an_enum_and_bounds_the_call() {
         let (_, tools) = builtin_graph_tools().unwrap();
-        let t = tools.get("search_expand").unwrap();
+        let t = tools.get("search").unwrap();
         let d = t.tool_def();
         assert_eq!(d.parameters["properties"]["direction"]["enum"], json!(["Outgoing", "Incoming"]));
         // Sans catalogue, les listes `@…` restent des chaînes libres.
@@ -2001,11 +2101,11 @@ mod tests {
         assert_eq!(find(search, "target").choices, Some(Choices::Targets));
         assert_eq!(find(search, "query").choices, None);
 
-        // `search_expand` : `target` traverse `SearchTool` ; `relation` et
+        // `search` : `target` traverse `SearchTool` ; `relation` et
         // `direction` viennent de `FetchRelatedNode` — et `direction` n'a
         // pas de type dans la fiche : il prend celui du nœud, son défaut,
         // sa liste.
-        let expand = tools.get("search_expand").unwrap();
+        let expand = tools.get("search").unwrap();
         assert_eq!(find(expand, "target").choices, Some(Choices::Targets));
         assert_eq!(find(expand, "relation").choices, Some(Choices::Relations));
         let direction = find(expand, "direction");
@@ -2013,7 +2113,7 @@ mod tests {
         assert_eq!(direction.default, Some(json!("Outgoing")));
         assert!(!direction.required);
         assert_eq!(direction.choices, Some(Choices::fixed(["Outgoing", "Incoming"])));
-        assert_eq!(direction.description, "Sens de parcours depuis chaque résultat.");
+        assert_eq!(direction.description, "Sens de parcours, quand 'relation' est donnée.");
 
         let d = expand.tool_def();
         assert_eq!(d.parameters["properties"]["direction"]["enum"], json!(["Outgoing", "Incoming"]));
@@ -2147,9 +2247,9 @@ mod tests {
     #[test]
     fn tool_order_is_stable_across_runs() {
         let mut a = GraphToolRegistry::new();
-        a.register(GraphTool::from_mermaid(SEARCH_EXPAND_TOOL_MERMAID).unwrap()).unwrap();
+        a.register(GraphTool::from_mermaid(SEARCH_BASE_MERMAID).unwrap()).unwrap();
         a.register(GraphTool::from_mermaid(SEARCH_TOOL_MERMAID).unwrap()).unwrap();
-        assert_eq!(a.names(), vec!["search", "search_expand"]);
+        assert_eq!(a.names(), vec!["search", "search_base"]);
     }
 
     #[test]
@@ -2204,7 +2304,9 @@ mod tests {
         let t = search_in_rust();
         let args = t.validate_arguments(&json!({"target": "P", "query": "q"})).unwrap();
         assert_eq!(args["limit"], 10);
-        assert_eq!(args.len(), 3);
+        // Le cross-encoder est éteint tant qu'on ne le demande pas.
+        assert_eq!(args["rerank"], 0);
+        assert_eq!(args.len(), 4);
     }
 
     // ── Substitution ────────────────────────────────────────────────
@@ -2247,23 +2349,44 @@ mod tests {
 
     // ── Construction du graphe (sans base) ──────────────────────────
 
+    /// **Le gabarit de base est hybride** — il ne l'a pas toujours été :
+    /// jusqu'au 27 août 2026 ce graphe n'avait que `bm25`, et l'outil que les
+    /// agents tenaient dans la main ne touchait jamais l'embedder du moteur.
+    ///
+    /// Il n'est pas offert comme outil : c'est le type de nœud `SearchTool`
+    /// que `search` contient. On le construit ici par ce chemin-là.
     #[test]
-    fn search_builds_a_valid_graph() {
-        let (nodes, tools) = builtin_graph_tools().unwrap();
-        let g = tools
-            .get("search")
-            .unwrap()
-            .build(&nodes, &json!({"target": "Product", "query": "rust"}))
-            .unwrap();
+    fn the_base_graph_is_hybrid() {
+        let inner = {
+            let mut r = NodeRegistry::new();
+            crate::dataflow::node_factories::register_builtins(&mut r);
+            std::sync::Arc::new(r)
+        };
+        let base = GraphTool::from_mermaid(SEARCH_BASE_MERMAID).unwrap().bind(&inner).unwrap();
+        assert_eq!(base.name(), "search_base", "un gabarit, pas un outil offert");
+        let g = base.build(&inner, &json!({"target": "Product", "query": "rust"})).unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["bm25", "render", "resolve", "source"]);
+        assert_eq!(names, vec!["bm25", "fuse", "render", "rerank", "resolve", "source", "vector"]);
+    }
+
+    /// **`search_base` n'est offert à personne.** Un gabarit peut exister pour
+    /// être composé sans être un outil : le `%% tool:` d'une fiche est son
+    /// identité, pas ce qu'un agent en voit.
+    #[test]
+    fn the_base_template_is_never_offered_as_a_tool() {
+        let (nodes, tools) = builtin_graph_tools().unwrap();
+        assert!(tools.get("search_base").is_none(), "{:?}", tools.names());
+        assert!(tools.get("search_expand").is_none(), "fusionné dans `search`");
+        assert_eq!(tools.names(), BUILTIN_TOOL_NAMES);
+        // Mais il est bien là, comme **type de nœud**.
+        assert!(nodes.schema(SEARCH_TOOL_NODE_TYPE).is_some());
     }
 
     #[test]
-    fn search_expand_contains_search() {
+    fn search_contains_the_base_graph() {
         let (nodes, tools) = builtin_graph_tools().unwrap();
-        let expand = tools.get("search_expand").unwrap();
+        let expand = tools.get("search").unwrap();
         // Le graphe extérieur contient bien un nœud du type de l'autre outil.
         assert!(expand
             .template()
@@ -2284,11 +2407,11 @@ mod tests {
 
     #[test]
     fn the_contained_tool_receives_its_arguments() {
-        // `search_expand` passe ses propres paramètres au `SearchTool` qu'il
+        // `search` passe ses propres paramètres au `SearchTool` qu'il
         // contient : la substitution traverse les deux niveaux.
         let (nodes, tools) = builtin_graph_tools().unwrap();
         let def = tools
-            .get("search_expand")
+            .get("search")
             .unwrap()
             .instantiate(&json!({"target": "Product", "query": "rust", "limit": 4, "relation": "HAS_VARIANT"}))
             .unwrap();
@@ -2302,7 +2425,7 @@ mod tests {
             .unwrap();
         let outs: Vec<&str> = node.outputs().iter().map(|p| p.name).collect();
         // Le nœud de rendu laisse passer les résultats : c'est ce port-là
-        // qui reste libre, et c'est par lui que `search_expand` compose.
+        // qui reste libre, et c'est par lui que `search` compose.
         assert!(outs.contains(&"render.results"), "ports libres : {outs:?}");
         assert!(outs.contains(&"render.text"), "ports libres : {outs:?}");
     }
@@ -2323,7 +2446,7 @@ mod tests {
         let (nodes, _) = builtin_graph_tools().unwrap();
         let schema = nodes.schema(SEARCH_TOOL_NODE_TYPE).unwrap();
         let names: Vec<&str> = schema.config_params.iter().map(|p| p.name).collect();
-        assert_eq!(names, vec!["target", "query", "limit"]);
+        assert_eq!(names, vec!["target", "query", "limit", "rerank"]);
     }
 
     // ── Appel d'outil → Turn ────────────────────────────────────────

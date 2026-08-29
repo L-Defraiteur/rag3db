@@ -1,0 +1,33 @@
+{#-
+  Le gabarit **compact** : une ligne par résultat, tout sur la même.
+
+  C'est la forme d'origine du moteur, gardée parce qu'elle est trois fois
+  moins chère en jetons que la fiche par défaut. Un flux qui paie ses
+  résultats au jeton la demande par `RenderResultsNode(template="compact")`.
+-#}
+{%- if count == 0 -%}
+**No results.**
+{%- else -%}
+**{{ count }} result{{ "" if count == 1 else "s" }}**
+{% for r in results -%}
+{%- if r.group %}
+`{{ r.group.title }}` · {{ r.group.file }} — {{ r.group.count }} matches
+{% endif %}
+{{ r.rank }}. `{{ r.title }}` — {{ r.entity }} · {{ r.score }}{% if r.location %} · {{ r.location }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}{% if r.signal %} · {{ r.signal }}{% endif %}
+{% if r.fields %}   {{ r.fields | join(" · ") }}
+{% endif -%}
+{%- for s in r.snippets %}   > {{ s }}
+{% endfor -%}
+{%- if r.more_snippets %}   > … {{ r.more_snippets }} more chunks
+{% endif -%}
+{%- for g in r.relations -%}
+{%- for n in g.items %}   ↳ {{ g.relation }} {{ n.entity }} `{{ n.title }}`{% if n.location %} {{ n.location }}{% endif %}{% if n.fields %} ({{ n.fields | join(" · ") }}){% endif %}
+{% endfor -%}
+{%- endfor -%}
+{%- for m in r.matched %}   ↳ {{ m.entity }} `{{ m.title }}` · {{ m.score }}
+{% endfor -%}
+{%- endfor -%}
+{%- if domain %}
+_{{ domain }}_
+{% endif -%}
+{%- endif -%}

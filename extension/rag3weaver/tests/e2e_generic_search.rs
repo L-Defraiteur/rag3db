@@ -795,7 +795,9 @@ fn generic_two_field_branches_weights_decide_order() {
     assert_eq!(desc_first.len(), 2, "one hit per branch");
     assert_eq!(name_of(&desc_first[0]), "Rust Book", "description branch wins");
     assert_eq!(name_of(&det_first[0]), "Python Cookbook", "details branch wins");
-    assert!(desc_first.iter().all(|r| r.signal.as_deref() == Some("fuse")));
+    // La fusion garde la provenance : un résultat sort en disant quelle
+    // branche l'a trouvé, pas le nom du nœud qui les a mêlées (27 août 2026).
+    assert!(desc_first.iter().all(|r| matches!(r.signal.as_deref(), Some("desc") | Some("det") | Some("desc+det"))), "{:?}", desc_first.iter().map(|r| r.signal.clone()).collect::<Vec<_>>());
 }
 
 /// `fields` doit nommer un champ indexé : l'erreur est explicite, pas un
@@ -945,5 +947,5 @@ fn generic_rerank_as_boost_signal_inside_fusion() {
     // Les deux autres gardent l'ordre BM25 : le boost ne les a pas touchés
     // (score × (1 + 5 × 0)).
     assert_eq!(&names[1..], &ref_names[..2]);
-    assert!(fused.iter().all(|r| r.signal.as_deref() == Some("fuse")));
+    assert!(fused.iter().all(|r| r.signal.is_some()), "chaque résultat garde sa provenance");
 }

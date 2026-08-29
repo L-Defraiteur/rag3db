@@ -15,6 +15,12 @@ use crate::scope_extraction::types::ScopeFileAnalysis;
 use crate::scope_extraction::types::ScopeInfo;
 use crate::scope_extraction::types::ScopeInfoType;
 
+/// Les préfixes qui font une ligne de documentation en Rust.
+///
+/// `//!` d'abord : `///` en est un préfixe, et tester dans l'autre ordre
+/// couperait le `!` de la documentation de module.
+const RUST_DOC_PREFIXES: &[&str] = &["//!", "///"];
+
 use std::collections::HashSet;
 
 pub const RUST_STOP_WORDS: &[&str] = &[
@@ -361,7 +367,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -486,7 +492,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -582,7 +588,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -715,7 +721,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -803,7 +809,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -949,7 +955,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -1122,7 +1128,7 @@ impl RustScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, RUST_DOC_PREFIXES),
             decorators: None,
             value: None,
         }

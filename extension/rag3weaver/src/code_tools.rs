@@ -31,6 +31,9 @@ pub const MAX_LINE_CHARS: usize = 2000;
 pub const DEFAULT_GREP_LIMIT: usize = 50;
 pub const MAX_GREP_LIMIT: usize = 500;
 pub const MAX_CONTEXT_LINES: usize = 5;
+/// Voisins rendus par scope quand `grep` suit une relation.
+pub const DEFAULT_RELATION_LIMIT: usize = 5;
+pub const MAX_RELATION_LIMIT: usize = 20;
 pub const MAX_MATCH_CHARS: usize = 200;
 /// Au-delà, un fichier n'est pas lu par `grep` (binaire ou généré).
 pub const MAX_GREP_FILE_BYTES: usize = 2 * 1024 * 1024;
@@ -167,6 +170,14 @@ pub struct ScopeRef {
     pub scope_type: String,
     pub start_line: usize,
     pub end_line: usize,
+    /// L'identité du scope dans le graphe, quand il y est.
+    ///
+    /// `None` pour un scope analysé à la volée — un fichier lu hors index a
+    /// des scopes réels, mais aucun voisin : on ne peut pas suivre une
+    /// relation depuis quelque chose qui n'est pas dans le graphe, et le dire
+    /// vaut mieux que de rendre vide.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
 }
 
 impl ScopeRef {
@@ -214,7 +225,7 @@ pub fn indexed_name(source: &dyn FileSource, path: &str) -> (String, String) {
 fn scopes_of(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
     let Some(catalog) = catalog else { return Ok(vec![]) };
     let rows = catalog
-        .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "source"])
+        .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "source", "_uuid"])
         .map_err(|e| e.to_string())?;
     let mut scopes: Vec<ScopeRef> = rows
         .iter()
@@ -227,6 +238,7 @@ fn scopes_of(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Vec<
                 scope_type: col(r, "scope_type")?.as_str()?.to_string(),
                 start_line: col(r, "start_line")?.as_i64()? as usize,
                 end_line: col(r, "end_line")?.as_i64()? as usize,
+                uuid: col(r, "_uuid").and_then(|v| v.as_str()).map(str::to_string),
             })
         })
         .collect();
@@ -406,6 +418,9 @@ fn scopes_on_the_fly(path: &str, content: &str) -> Vec<ScopeRef> {
             scope_type: s.scope_type.clone(),
             start_line: s.start_line,
             end_line: s.end_line,
+            // Analysé à la volée, donc pas dans le graphe : pas d'identité,
+            // et pas de voisins à suivre.
+            uuid: None,
         })
         .collect()
 }
@@ -553,6 +568,19 @@ pub struct GrepOptions {
     pub case_insensitive: bool,
     pub max_results: usize,
     pub context_lines: usize,
+    /// **Suivre le graphe depuis les scopes trouvés.**
+    ///
+    /// Une relation déclarée dans le schéma (`CONSUMES`, `CONSUMED_BY`…).
+    /// `None` : `grep` rend ses lignes et rien d'autre, comme avant.
+    ///
+    /// Pourquoi ici et pas dans un outil séparé : mesuré le 28 août 2026,
+    /// trois agents, quarante appels — `grep` 10, l'outil de graphe **0**. Le
+    /// graphe doit se greffer là où les agents vont, pas les attendre
+    /// ailleurs. C'est ce que faisait déjà `grep_files({analyze})` dans la
+    /// maquette d'origine (`ragforge-core/src/tools/fs-tools.ts`).
+    pub relation: Option<String>,
+    /// Voisins rendus par scope (0 = le défaut, 5).
+    pub relation_limit: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -581,6 +609,21 @@ pub struct GrepResult {
     /// Renseigné quand un préfixe ne rend aucun fichier — voir [`prefix_hint`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
+    /// Les voisins des scopes trouvés, quand `relation` était demandée.
+    /// Un scope par entrée, dans l'ordre où `grep` l'a rencontré.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub related: Vec<RelatedScope>,
+}
+
+/// Ce à quoi un scope trouvé par `grep` est relié.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelatedScope {
+    /// Le scope de départ, tel que `grep` l'a nommé.
+    pub from: String,
+    /// La relation suivie.
+    pub relation: String,
+    /// Les voisins : `(nom, type, fichier:lignes)`.
+    pub to: Vec<(String, String, String)>,
 }
 
 fn escape_md(s: &str) -> String {
@@ -623,6 +666,25 @@ impl GrepResult {
             for c in &m.context_after {
                 out.push_str(&format!("|  | ↓ | | `{}` |\n", escape_md(c.trim())));
             }
+        }
+
+        // **Ce à quoi mène ce qu'on vient de trouver.** Une section, après le
+        // tableau : `grep` reste un grep, et le voisinage ne se paie que si on
+        // l'a demandé.
+        if !self.related.is_empty() {
+            out.push_str("\n## Graphe\n\n```\n");
+            for r in &self.related {
+                out.push_str(&format!("{}\n", r.from));
+                out.push_str(&format!("└── [{}]\n", r.relation));
+                let dernier = r.to.len().saturating_sub(1);
+                for (i, (nom, genre, ou)) in r.to.iter().enumerate() {
+                    let branche = if i == dernier { "└── " } else { "├── " };
+                    let genre = if genre.is_empty() { String::new() } else { format!(" ({genre})") };
+                    let ou = if ou.is_empty() { String::new() } else { format!(" @ {ou}") };
+                    out.push_str(&format!("    {branche}{nom}{genre}{ou}\n"));
+                }
+            }
+            out.push_str("```\n");
         }
         out
     }
@@ -721,6 +783,14 @@ pub fn grep_files(
         Some(prefix) if files_searched == 0 => Some(prefix_hint(source, prefix)?),
         _ => None,
     };
+    // **Le graphe, depuis ce qu'on vient de trouver.** Après les lignes, pas
+    // à leur place : `grep` reste un grep, et le voisinage est une section de
+    // plus qu'on ne paie que si on la demande.
+    let related = match opts.relation.as_deref() {
+        Some(rel) if !rel.trim().is_empty() => voisins_des_scopes(catalog, &matches, rel, opts.relation_limit)?,
+        _ => Vec::new(),
+    };
+
     Ok(GrepResult {
         pattern: pattern.to_string(),
         cursor: source.cursor(),
@@ -730,7 +800,71 @@ pub fn grep_files(
         returned: matches.len(),
         matches,
         hint,
+        related,
     })
+}
+
+/// Les voisins des scopes distincts qu'un `grep` a rencontrés.
+///
+/// **Distincts**, et dans l'ordre de la première rencontre : dix lignes dans
+/// la même fonction ne demandent qu'une fois ses voisins. Un scope sans
+/// identité — analysé à la volée, donc hors index — n'a pas de voisins et
+/// n'est pas interrogé.
+fn voisins_des_scopes(
+    catalog: Option<&Catalog>,
+    matches: &[GrepMatch],
+    relation: &str,
+    limit: usize,
+) -> Result<Vec<RelatedScope>, String> {
+    let Some(catalog) = catalog else { return Ok(Vec::new()) };
+    let limit = if limit == 0 { DEFAULT_RELATION_LIMIT } else { limit.min(MAX_RELATION_LIMIT) };
+
+    // Un nom de relation part dans du Cypher : on n'accepte que ce que le
+    // schéma déclare. Sans cette porte, `grep` deviendrait une injection.
+    if !crate::code::RELATIONS.iter().any(|(r, _, _)| *r == relation) {
+        return Err(format!(
+            "relation '{relation}' inconnue ; déclarées : {}",
+            crate::code::RELATIONS.iter().map(|(r, _, _)| *r).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    let mut vus: Vec<(String, String)> = Vec::new(); // (uuid, nom)
+    for m in matches {
+        let Some(scope) = &m.scope else { continue };
+        let Some(uuid) = &scope.uuid else { continue };
+        if !vus.iter().any(|(u, _)| u == uuid) {
+            vus.push((uuid.clone(), scope.name.clone()));
+        }
+    }
+
+    let mut out = Vec::new();
+    for (uuid, nom) in vus {
+        let cypher = format!(
+            "MATCH (n {{_uuid: $uuid}})-[:{relation}]->(m) \
+             RETURN m.name, m.scope_type, m.file_path, m.start_line, m.end_line LIMIT {limit}"
+        );
+        let rows = catalog
+            .execute_raw_with_params(&cypher, &[crate::connection::QueryParam::new("uuid", CypherValue::String(uuid))])
+            .map_err(|e| e.to_string())?;
+        let to: Vec<(String, String, String)> = rows
+            .rows
+            .iter()
+            .filter_map(|r| {
+                let nom = r.first()?.as_str()?.to_string();
+                let genre = r.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let ou = match (r.get(2).and_then(|v| v.as_str()), r.get(3).and_then(|v| v.as_i64())) {
+                    (Some(f), Some(l)) => format!("{f}:{l}"),
+                    (Some(f), None) => f.to_string(),
+                    _ => String::new(),
+                };
+                Some((nom, genre, ou))
+            })
+            .collect();
+        if !to.is_empty() {
+            out.push(RelatedScope { from: nom, relation: relation.to_string(), to });
+        }
+    }
+    Ok(out)
 }
 
 // ─── list ────────────────────────────────────────────────────────────────────
@@ -1296,5 +1430,175 @@ mod tests {
         assert!(wt.read("Cargo.toml").unwrap().is_some());
         assert!(wt.read("does-not-exist.rs").unwrap().is_none());
         assert!(wt.cursor().starts_with("worktree:"));
+    }
+}
+
+// ─── Le répertoire courant ───────────────────────────────────────────────────
+
+/// Le service qui porte le répertoire courant : `Arc<Cwd>`.
+pub const CWD_SERVICE: &str = "cwd";
+
+/// **Où l'agent se tient.** Un chemin absolu, comme dans un vrai terminal.
+///
+/// C'est la quatrième notion qu'on appelait « racine », et la seule qui bouge
+/// pendant un tour (`render_nodes::PathLens` documente les trois autres). Elle
+/// ne restreint rien : c'est [`RootPolicy`] qui dit ce qu'on peut toucher et
+/// `WorkDomain` ce qu'on voit dans l'index. Elle dit seulement **par rapport à
+/// quoi un chemin s'écrit et se lit**.
+///
+/// **Absolu, et jamais réécrit.** Une première version gardait un chemin
+/// relatif à la source et faisait de sa racine « le monde » : `cd ~` y
+/// ramenait à la racine de la source, et `cd ..` depuis la racine était refusé
+/// au motif qu'« il n'y a rien au-dessus ». Les deux étaient des **mensonges**.
+/// Un agent à qui on ment sur sa position ne peut pas raisonner sur ce qu'il
+/// voit. `cd ~` doit aller à `$HOME` et, si `$HOME` n'est pas autorisé, dire
+/// *« vous n'y avez pas accès »* — pas prétendre y être allé. Et `~/x/y/src`
+/// qui retombe dans une racine permise doit marcher : c'est ce que
+/// [`RootPolicy::resolve`] fait déjà, en canonisant **avant** d'autoriser.
+///
+/// Ce que ça répare, mesuré : `read`, `grep`, `list` et `edit` parlent en
+/// chemins relatifs à la source, tandis que `search` rendait l'absolu du
+/// catalogue (le stockage est absolu depuis le doc 04 v3). Chaque ligne de
+/// résultat portait soixante caractères de préfixe payés en jetons, et
+/// l'agent devait traduire de tête (`fil-search-repare.md`, 28 août 2026).
+#[derive(Debug)]
+pub struct Cwd {
+    ou: std::sync::Mutex<PathBuf>,
+}
+
+impl Cwd {
+    /// Au départ, quelque part. En pratique : la racine de la source.
+    pub fn at(depart: impl Into<PathBuf>) -> Self {
+        Self { ou: std::sync::Mutex::new(depart.into()) }
+    }
+
+    pub fn get(&self) -> PathBuf {
+        self.ou.lock().map(|g| g.clone()).unwrap_or_default()
+    }
+
+    /// **Se déplacer, si c'est permis.**
+    ///
+    /// `~` est `$HOME`, un chemin absolu est absolu, un relatif part d'ici.
+    /// La permission est celle de `permis` — la source **plus** les racines
+    /// que l'opérateur a ouvertes. Le refus porte la liste : on n'apprend pas
+    /// sa frontière en s'y cognant.
+    pub fn cd(&self, ou: &str, permis: &RootPolicy) -> Result<PathBuf, String> {
+        let vise = self.expand(ou.trim());
+        let cible = permis.resolve(&vise.to_string_lossy())?;
+        if !cible.is_dir() {
+            return Err(format!("'{ou}' n'est pas un répertoire"));
+        }
+        if let Ok(mut g) = self.ou.lock() {
+            *g = cible.clone();
+        }
+        Ok(cible)
+    }
+
+    /// Ce que l'utilisateur a tapé, en chemin de système de fichiers — sans
+    /// encore rien autoriser. La canonisation et la permission sont l'affaire
+    /// de [`RootPolicy::resolve`], et dans cet ordre.
+    fn expand(&self, ou: &str) -> PathBuf {
+        let maison = || std::env::var("HOME").map(PathBuf::from).unwrap_or_default();
+        if ou.is_empty() || ou == "~" {
+            return maison();
+        }
+        if let Some(reste) = ou.strip_prefix("~/") {
+            return maison().join(reste);
+        }
+        let p = Path::new(ou);
+        if p.is_absolute() { p.to_path_buf() } else { self.get().join(p) }
+    }
+
+    /// La ligne que l'agent lit dans son invite.
+    ///
+    /// Relative à la source quand on est dedans — c'est le cas courant et
+    /// c'est plus court — absolue sinon, parce qu'alors le dire est
+    /// justement l'information.
+    pub fn describe(&self, racine: &Path) -> String {
+        let ou = self.get();
+        match ou.strip_prefix(racine) {
+            Ok(reste) if reste.as_os_str().is_empty() => format!("répertoire courant : {} (racine)", racine.display()),
+            Ok(reste) => format!("répertoire courant : {}/", reste.display()),
+            Err(_) => format!("répertoire courant : {} (hors de la source)", ou.display()),
+        }
+    }
+}
+
+impl RootPolicy {
+    /// Les racines permises, telles qu'on les montre à un agent.
+    ///
+    /// Un agent doit pouvoir **demander** sa frontière, pas seulement la
+    /// découvrir en s'y cognant. `*` et « rien » sont des réponses, pas des
+    /// cas d'erreur.
+    pub fn describe(&self) -> String {
+        if self.anywhere {
+            return "tout le système de fichiers (`*`)".to_string();
+        }
+        if self.roots.is_empty() {
+            return "rien hors de la source".to_string();
+        }
+        self.roots.iter().map(|r| r.display().to_string()).collect::<Vec<_>>().join(", ")
+    }
+
+    /// Les racines, telles quelles.
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+}
+
+#[cfg(test)]
+mod cwd_tests {
+    use super::*;
+
+    fn ici() -> PathBuf {
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+    }
+
+    /// **On se déplace où on a le droit, et on s'entend dire non ailleurs.**
+    ///
+    /// Le point de la manche : `cd ~` ne doit pas mentir. Il ne ramène pas à
+    /// la racine de la source en faisant semblant ; il dit qu'on n'y a pas
+    /// accès, **et ce à quoi on en a**.
+    #[test]
+    fn cd_ne_ment_pas_sur_ou_on_est() {
+        let racine = ici();
+        let permis = RootPolicy::under([racine.clone()]);
+        let c = Cwd::at(&racine);
+
+        // Descendre : relatif à là où on est.
+        let dans = c.cd("src/dataflow", &permis).unwrap();
+        assert!(dans.ends_with("src/dataflow"), "{dans:?}");
+        assert_eq!(c.describe(&racine), "répertoire courant : src/dataflow/");
+
+        // Remonter : autorisé tant qu'on reste dans une racine permise.
+        c.cd("..", &permis).unwrap();
+        assert_eq!(c.describe(&racine), "répertoire courant : src/");
+
+        // `~` va vraiment à la maison — et se fait refuser, **avec la liste**.
+        let e = c.cd("~", &permis).unwrap_err();
+        assert!(e.contains("hors des racines autorisées"), "{e}");
+        assert!(e.contains(&racine.display().to_string()), "le refus porte la liste : {e}");
+        assert!(c.get().ends_with("src"), "un refus ne déplace pas : {:?}", c.get());
+
+        // Un détour par la maison qui **retombe** dans le permis est permis :
+        // c'est la canonisation qui décide, pas la forme écrite.
+        let par_la_maison = format!("{}/..{}", racine.display(), "/rag3weaver/src");
+        c.cd(&par_la_maison, &permis).unwrap();
+        assert!(c.get().ends_with("src"), "{:?}", c.get());
+
+        // Et sortir par le haut se fait refuser comme le reste — pas
+        // « il n'y a rien au-dessus », qui serait faux.
+        let e = c.cd("/etc", &permis).unwrap_err();
+        assert!(e.contains("hors des racines autorisées"), "{e}");
+    }
+
+    /// Un agent peut demander sa frontière au lieu de la deviner.
+    #[test]
+    fn les_racines_permises_se_disent() {
+        assert_eq!(RootPolicy::anywhere().describe(), "tout le système de fichiers (`*`)");
+        assert_eq!(RootPolicy::closed().describe(), "rien hors de la source");
+        let p = RootPolicy::under([PathBuf::from("/a"), PathBuf::from("/b")]);
+        assert_eq!(p.describe(), "/a, /b");
+        assert_eq!(p.roots().len(), 2);
     }
 }

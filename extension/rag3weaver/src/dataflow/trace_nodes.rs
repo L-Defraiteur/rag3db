@@ -136,10 +136,18 @@ pub fn run_config() -> EntityConfig {
     fields.insert("parent_run_id".into(), f(FieldType::String));
     fields.insert("ms".into(), f(FieldType::Integer));
     fields.insert("ok".into(), f(FieldType::Boolean));
+    // **Le domaine appartient au run, pas à l'identité.**
+    //
+    // Un agent peut travailler dans des domaines différents selon les moments ;
+    // l'inscrire sur la personne forcerait un rôle unique et définitif. Ici le
+    // rôle se **lit dans ce qu'il a fait** — `(p:Participant)-[:PERFORMED]->(r:Run)`
+    // filtré par domaine — ce qui est la seule forme vérifiable
+    // ([doc 09 §4](../docs/27-aout-2026-13h01/09-le-terminal-a-plusieurs.md)).
+    fields.insert("domain".into(), f(FieldType::String));
     EntityConfig {
         fields,
         hashsafe: Some(vec!["run_id".into()]),
-        return_fields: Some(vec!["kind".into(), "name".into(), "parent_run_id".into(), "ms".into(), "ok".into()]),
+        return_fields: Some(vec!["kind".into(), "name".into(), "domain".into(), "parent_run_id".into(), "ms".into(), "ok".into()]),
         ..Default::default()
     }
 }
@@ -387,6 +395,7 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 let mut d = run_key(&run_id);
                 d.insert("name".into(), CypherValue::String(s(e, "name")));
                 d.insert("kind".into(), CypherValue::String(s(e, "run_kind")));
+                d.insert("domain".into(), CypherValue::String(s(e, "domain")));
                 d.insert("parent_run_id".into(), CypherValue::String(parent.clone()));
                 if cat.exists(RUN_ENTITY, &uuid).map_err(|e| e.to_string())? {
                     cat.update(RUN_ENTITY, &uuid, d).map_err(|e| e.to_string())?;
@@ -438,8 +447,13 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 // Le fil : dérivé de la paire, créé au premier message. Une
                 // conversation existe dès que deux parties se parlent — on
                 // n'a rien à ouvrir, et rien ne se ferme.
-                if !from_id.is_empty() && !to.is_empty() {
-                    let conv = conversation_id(&from_id, &to);
+                let dit = s(e, "conversation");
+                if !dit.is_empty() || (!from_id.is_empty() && !to.is_empty()) {
+                    // Le fil **dit** l'emporte sur le fil **dérivé** : à plus
+                    // de deux, la paire ne peut plus le porter — trois
+                    // participants font trois paires, donc trois fils dont
+                    // aucun ne contient tout le monde.
+                    let conv = if dit.is_empty() { conversation_id(&from_id, &to) } else { dit };
                     let conv_uuid = ensure_conversation(cat, &conv, at_ms, &mut seen)?;
                     links.push((IN_CONVERSATION, msg_uuid.clone(), conv_uuid.clone()));
                     for who in [&from_id, &to] {
@@ -574,6 +588,23 @@ pub fn display_zone() -> jiff::tz::TimeZone {
         }
     }
     jiff::tz::TimeZone::system()
+}
+
+/// **L'heure, pour nommer un fichier.**
+///
+/// `2026-08-28-14h19` — dans le fuseau d'affichage, triable par ordre
+/// alphabétique, et lisible sans décoder. C'est ce qu'on colle au nom d'un
+/// artefact produit par le moteur.
+///
+/// Pourquoi ici et pas dans l'appelant : un test d'intégration ne voit que
+/// l'API publique du crate, `jiff` n'est pas dans ses dépendances, et surtout
+/// la façon dont le moteur date ce qu'il produit lui appartient. Un appelant
+/// choisit le **nom** ; l'heure n'est pas un choix.
+pub fn horodatage() -> String {
+    jiff::Zoned::now()
+        .with_time_zone(display_zone())
+        .strftime("%Y-%m-%d-%Hh%M")
+        .to_string()
 }
 
 /// **Un instant local, écrit aussi court qu'on veut.**

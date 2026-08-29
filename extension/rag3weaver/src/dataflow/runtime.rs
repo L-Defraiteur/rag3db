@@ -773,6 +773,8 @@ impl DataflowRuntime {
             kind: "graph".to_string(),
             name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
             // La cellule du bus qui reçoit : c'est celle où ce run tourne.
+            // Un graphe n'a pas de domaine de travail : il fait ce qu'on lui demande.
+            domain: String::new(),
             scope: self
                 .services
                 .get::<Arc<crate::events::EventBus>>("event_bus")

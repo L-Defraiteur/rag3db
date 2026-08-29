@@ -537,6 +537,76 @@ impl KBEmbedNode {
 /// c'est un garde-fou, pas une science, et c'est pour ça qu'il est large.
 const EMBED_CHAR_BUDGET: usize = 8_192;
 
+/// **La longueur d'une saccade**, en caractères de texte par appel GPU
+/// (`RAG3WEAVER_EMBED_CHAR_BUDGET`).
+///
+/// Le défaut, 8 192 (~2 048 jetons), est l'optimum de débit mesuré le 27 août
+/// 2026. Il coûte des rafales GPU de 295 ms en moyenne et 560 ms au pire
+/// (mesuré le 28) : pendant ce temps la carte ne rend pas la main, et si elle
+/// porte aussi l'affichage, ça se voit.
+///
+/// **Le plancher est un chunk**, pas ce nombre. `budget_batches` met un
+/// élément qui dépasse le budget dans son propre lot — on ne peut pas couper
+/// un chunk ici sans changer ce qui est embarqué. Avec un `max_size` de 1 500
+/// (256 pour le titre préfixé), descendre sous 1 500 ne raccourcit donc plus
+/// rien. La plage qui a un effet va de la taille de chunk au défaut.
+///
+/// À distinguer de `RAG3WEAVER_GPU_DUTY`, qui écarte les rafales sans les
+/// raccourcir : l'un règle *combien de temps* la carte t'appartient, l'autre
+/// *combien de temps d'affilée* elle ne t'appartient pas.
+fn embed_char_budget() -> usize {
+    std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(EMBED_CHAR_BUDGET)
+}
+
+/// **Le rapport cyclique du GPU, en pourcentage** (`RAG3WEAVER_GPU_DUTY`).
+///
+/// `100` (le défaut) : on enchaîne les lots, la carte est à 99 % et c'est ce
+/// qu'on veut sur une machine dédiée. `70` : après chaque lot on dort assez
+/// pour que la carte soit occupée sept dixièmes du temps — le reste va au
+/// compositeur, à la fenêtre qu'on déplace, à la vidéo qu'on regarde pendant
+/// l'ingestion.
+///
+/// **Pourquoi une pause et pas un quota.** Ni wgpu ni Vulkan n'exposent de
+/// priorité de file ni de part garantie ; `VK_EXT_global_priority` existe dans
+/// Vulkan, wgpu ne le remonte pas. Le seul levier qui reste à un programme est
+/// de *ne pas soumettre* — et il est honnête : on ne prétend pas partager la
+/// carte, on lui laisse des trous.
+///
+/// Ça marche parce que `embed()` rend des vecteurs, donc il lit le tenseur en
+/// retour, donc il attend vraiment la carte. Une pause après lui est un vrai
+/// trou, pas une file qui continue de se remplir derrière.
+fn gpu_duty() -> u32 {
+    std::env::var("RAG3WEAVER_GPU_DUTY")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .map(|v| v.clamp(5, 100))
+        .unwrap_or(100)
+}
+
+/// Dort ce qu'il faut après un lot de `travail` pour tenir le rapport cyclique.
+///
+/// Rendue séparément de `gpu_duty()` pour être testable sans toucher au GPU :
+/// c'est une règle de trois, et c'est tout ce qu'on veut vérifier.
+fn pause_pour(travail: std::time::Duration, duty: u32) -> std::time::Duration {
+    if duty >= 100 {
+        return std::time::Duration::ZERO;
+    }
+    travail.mul_f64(f64::from(100 - duty) / f64::from(duty))
+}
+
+/// Le tour complet : chronomètre l'appel, puis souffle.
+fn souffler(travail: std::time::Duration) {
+    let pause = pause_pour(travail, gpu_duty());
+    if !pause.is_zero() {
+        std::thread::sleep(pause);
+    }
+}
+
+
 /// Découpe une liste de travaux en sous-lots bornés **par la quantité de
 /// texte**, et pas seulement par le nombre d'éléments.
 ///
@@ -765,12 +835,14 @@ impl Node for KBEmbedNode {
             // ramer la machine).
             let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(dense_works.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
-            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                 let chunk = &dense_works[plage];
                 let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                let t = std::time::Instant::now();
                 let part = embedder
                     .embed(&texts)
                     .map_err(|e| format!("dense embedding failed: {e}"))?;
+                souffler(t.elapsed());
                 if part.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -825,12 +897,14 @@ impl Node for KBEmbedNode {
                 // Borné comme le dense : même tenseur, même risque.
                 let mut sparse_vecs: Vec<SparseVector> = Vec::with_capacity(sparse_works.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &sparse_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let t = std::time::Instant::now();
                     let part = sparse_emb
                         .embed_sparse(&texts)
                         .map_err(|e| format!("sparse embedding failed: {e}"))?;
+                    souffler(t.elapsed());
                     if part.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -900,12 +974,14 @@ impl Node for KBEmbedNode {
                 let mut sparse_results: Vec<(&EmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &dual_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let t = std::time::Instant::now();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
                         .map_err(|e| format!("dual embed failed: {e}"))?;
+                    souffler(t.elapsed());
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
@@ -1748,12 +1824,14 @@ impl Node for EmbedNode {
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
-            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                 let chunk = &dense_works[plage];
                 let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                let t = std::time::Instant::now();
                 let vectors = embedder
                     .embed(&texts)
                     .map_err(|e| format!("dense embedding failed: {e}"))?;
+                souffler(t.elapsed());
 
                 if vectors.len() != chunk.len() {
                     return Err(format!(
@@ -1802,12 +1880,14 @@ impl Node for EmbedNode {
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &sparse_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let t = std::time::Instant::now();
                     let sparse_vecs = sparse_emb
                         .embed_sparse(&texts)
                         .map_err(|e| format!("sparse embedding failed: {e}"))?;
+                    souffler(t.elapsed());
 
                     if sparse_vecs.len() != chunk.len() {
                         return Err(format!(
@@ -1874,12 +1954,14 @@ impl Node for EmbedNode {
                 let mut sparse_results: Vec<(&SimpleEmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), EMBED_CHAR_BUDGET) {
+                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &dual_works[plage];
                     let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
+                    let t = std::time::Instant::now();
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
                         .map_err(|e| format!("dual embed failed: {e}"))?;
+                    souffler(t.elapsed());
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
@@ -4275,6 +4357,38 @@ fn reindex_fts_rows(
 
 #[cfg(test)]
 mod tests {
+    /// **Le rapport cyclique, en règle de trois.**
+    ///
+    /// 99 % d'occupation n'est pas un défaut en soi ; c'en est un quand la
+    /// carte porte aussi l'affichage. Ni wgpu ni Vulkan n'exposent de quota,
+    /// donc le seul levier honnête est de ne pas soumettre : on chronomètre
+    /// le lot, on dort la fraction qui manque.
+    #[test]
+    fn le_rapport_cyclique_est_une_regle_de_trois() {
+        use std::time::Duration;
+        let lot = Duration::from_millis(100);
+
+        // 100 % : on n'attend pas. C'est le défaut, et il ne coûte rien —
+        // ni appel d'horloge inutile, ni branchement au milieu d'une boucle.
+        assert_eq!(pause_pour(lot, 100), Duration::ZERO);
+
+        // 70 % voulu : 100 ms de calcul veulent 43 ms de pause, parce que
+        // 100 / 143 ≈ 0,70.
+        let p = pause_pour(lot, 70);
+        assert_eq!(p.as_millis(), 42);
+        let cycle = lot + p;
+        let obtenu = 100.0 * lot.as_secs_f64() / cycle.as_secs_f64();
+        assert!((obtenu - 70.0).abs() < 1.0, "obtenu {obtenu:.1} %");
+
+        // 50 % : autant de pause que de calcul.
+        assert_eq!(pause_pour(lot, 50), lot);
+
+        // Un lot court donne une pause courte : la règle est proportionnelle,
+        // donc elle ne dépend pas de la taille des lots — c'est ce qui la rend
+        // composable avec le budget en caractères.
+        assert_eq!(pause_pour(Duration::from_millis(10), 50).as_millis(), 10);
+    }
+
     use super::*;
     use crate::config::{EntityConfig, SimpleFieldDef, FieldType};
     use crate::chunker::{Chunker, ChunkerConfig};

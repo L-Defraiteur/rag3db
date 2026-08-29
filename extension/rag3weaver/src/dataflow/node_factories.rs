@@ -1053,10 +1053,12 @@ impl NodeFactory for RerankNodeFactory {
     ) -> Result<Box<dyn super::node::Node>, String> {
         let mut node = RerankNode::new(name);
         if let Some(n) = config.get("candidates") {
+            // **`0` est légal, et veut dire « passe ».** Il était refusé, ce
+            // qui obligeait un graphe à choisir une fois pour toutes s'il
+            // portait un cross-encoder. Un graphe-outil n'a pas de
+            // conditionnelle : c'est le zéro qui la remplace, et il permet à
+            // l'appelant d'allumer le tri par phrase au coup par coup.
             let n = n.as_u64().ok_or("RerankNode: 'candidates' must be an integer")? as usize;
-            if n == 0 {
-                return Err("RerankNode: 'candidates' must be at least 1".into());
-            }
             node = node.with_candidates(n);
         }
         if let Some(svc) = config.get("service").and_then(|v| v.as_str()) {
@@ -1064,6 +1066,9 @@ impl NodeFactory for RerankNodeFactory {
         }
         if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
             node = node.with_signal(sig);
+        }
+        if let Some(k) = config.get("keep_signal").and_then(|v| v.as_bool()) {
+            node = node.with_keep_signal(k);
         }
         Ok(Box::new(node))
     }
@@ -1087,7 +1092,16 @@ impl NodeFactory for RerankNodeFactory {
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(RerankNode::DEFAULT_CANDIDATES)),
-                    description: "Taille du pool re-scoré",
+                    description: "Taille du pool re-scoré ; 0 = passe-plat exact (ni service consulté, ni étiquette touchée)",
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "keep_signal",
+                    param_type: ConfigParamType::Bool,
+                    required: false,
+                    default: Some(serde_json::json!(false)),
+                    description: "Garder l'étiquette d'origine des résultats (leur provenance) au lieu de la remplacer par le nom de ce nœud",
                     choices: None,
                     json_schema: None,
                 },

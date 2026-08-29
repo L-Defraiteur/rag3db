@@ -1,0 +1,82 @@
+{#-
+  Le gabarit **par défaut** d'une liste de résultats.
+
+  Forme reprise de `BRAIN_SEARCH_OUTPUT_PROPOSAL.md` et de
+  `brain_search_example_output.md` (LR_CodeRag, la maquette d'origine) : une
+  fiche par résultat, le lieu sur sa propre ligne pour être copiable, la
+  documentation plutôt que le corps, le graphe de dépendances à part, et un
+  décompte par type à la fin.
+
+  Tout ce qui est ici est **modifiable sans recompiler** : ce fichier est le
+  défaut, `RenderResultsNode(template=...)` en accepte un autre — un nom
+  fourni (`default`, `compact`), un chemin de fichier, ou la source elle-même.
+
+  Le contexte que voit ce gabarit : `ResultsView`, dans
+  `src/dataflow/render_nodes.rs`.
+-#}
+{%- if count == 0 -%}
+**No results.**
+{%- else -%}
+{%- if query %}# Search: "{{ query }}"{% if target %} — `{{ target }}`{% endif %}
+
+{% endif -%}
+**Results:** {{ count }}
+
+---
+
+## Results
+{% for r in results %}
+{%- if r.group %}
+**{{ r.group.title }}** · `{{ r.group.file }}` — {{ r.group.count }} matches
+{% endif %}
+### {{ r.rank }}. {{ r.title }}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.signal %} · {{ r.signal }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}
+{% if r.location %}📍 `{{ r.location }}`
+{% endif -%}
+{%- if r.signature %}🔹 `{{ r.signature }}`
+{% endif -%}
+{%- if r.doc %}📝 {{ r.doc }}
+{% endif -%}
+{%- if r.fields %}· {{ r.fields | join(" · ") }}
+{% endif -%}
+{%- for s in r.snippets %}> {{ s }}
+{% endfor -%}
+{%- if r.more_snippets %}> … {{ r.more_snippets }} more chunks
+{% endif -%}
+{%- for m in r.matched %}↳ {{ m.entity }} `{{ m.title }}` ★ {{ m.score }}
+{% endfor -%}
+{%- endfor -%}
+{%- if has_graph %}
+---
+
+## Dependency Graph
+
+```
+{% for r in results -%}
+{%- if r.relations -%}
+{{ r.title }}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.path %} @ {{ r.path }}{% endif %}
+{% for g in r.relations -%}
+{{ "└── " if loop.last else "├── " }}[{{ g.relation }}]
+{%- set pipe = "    " if loop.last else "│   " %}
+{% for n in g.items -%}
+{{ pipe }}{{ "└── " if loop.last else "├── " }}{{ n.title }} ({{ n.entity }}){% if n.location %} @ {{ n.location }}{% endif %}{% if n.fields %} · {{ n.fields | join(" · ") }}{% endif %}
+{% endfor -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+```
+{% endif -%}
+{%- if types %}
+---
+
+## Node Types Summary
+
+| Type | Count |
+|------|-------|
+{% for t in types -%}
+| {{ t.name }} | {{ t.count }} |
+{% endfor -%}
+{%- endif -%}
+{%- if domain %}
+_{{ domain }}_
+{% endif -%}
+{%- endif -%}

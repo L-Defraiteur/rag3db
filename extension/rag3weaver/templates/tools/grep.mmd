@@ -5,7 +5,20 @@
 %% param: extension string = "" -- Ne chercher que cette extension, sans le point (ex. 'rs').
 %% param: max_results int = 50 -- Lignes rendues (plafond 500) ; toutes sont comptées.
 %% param: context_lines int = 0 -- Lignes de contexte avant et après (plafond 5).
+%% param: relation string = "" -- Relation du schéma à suivre depuis les scopes trouvés, pour voir à quoi ils mènent : CONSUMES (ce qu'ils utilisent), CONSUMED_BY (qui les utilise), PARENT_OF / HAS_PARENT, IMPLEMENTS, INHERITS_FROM, USES_LIBRARY. Vide = les lignes seules.
+%% param: relation_limit int = 5 -- Voisins rendus par scope (plafond 20).
 %% result: grep.result
+%%
+%% **Le graphe se greffe sur l'outil que le modèle utilise déjà.** Mesuré le
+%% 28 août 2026 sur quarante appels de trois agents : `grep` 10, l'outil de
+%% graphe séparé **0**. Un agent fait son `grep` — son réflexe — et lève un
+%% drapeau quand il veut les relations ; il n'a jamais à choisir entre deux
+%% outils. C'est ce que faisait `grep_files({analyze})` dans la maquette
+%% d'origine, et qu'on n'avait pas reporté.
+%%
+%% Un scope analysé à la volée — fichier hors index — n'a pas de voisins :
+%% il n'est pas dans le graphe, et on ne peut suivre une relation que depuis
+%% ce qui y est.
 
 graph LR
-    grep["GrepNode(pattern=$pattern, path_prefix=$path_prefix, extension=$extension, max_results=$max_results, context_lines=$context_lines)"]
+    grep["GrepNode(pattern=$pattern, path_prefix=$path_prefix, extension=$extension, max_results=$max_results, context_lines=$context_lines, relation=$relation, relation_limit=$relation_limit)"]

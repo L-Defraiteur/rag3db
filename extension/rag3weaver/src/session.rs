@@ -178,10 +178,22 @@ impl Session {
     /// deux passages au même tour rendent le même texte, et un passage à un
     /// tour plus tardif ne peut que réduire davantage.
     pub fn absorb(&self, turns: &mut [Turn]) -> Compaction {
+        self.absorb_under(None, turns)
+    }
+
+    /// **Le tour de vis**, quand la fenêtre a déjà refusé l'invite.
+    ///
+    /// Même absorption, mais sous une politique donnée pour ce passage-ci
+    /// seulement : la politique de la session n'est pas touchée. Ce qui rend
+    /// la chose sûre est l'invariant du fichier — toute forme réduite est
+    /// calculée depuis le contenu **entier** mis de côté, jamais depuis ce qui
+    /// est actuellement dans l'historique. Serrer puis desserrer ne perd donc
+    /// rien.
+    pub fn absorb_under(&self, policy: Option<Absorb>, turns: &mut [Turn]) -> Compaction {
         let Ok(mut g) = self.inner.lock() else {
             return Compaction::default();
         };
-        let policy = g.policy;
+        let policy = policy.unwrap_or(g.policy);
         let now = g.turn;
         let mut out = Compaction::default();
 

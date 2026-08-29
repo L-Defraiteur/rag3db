@@ -214,8 +214,12 @@ fn the_agent_really_calls_the_search_graph_tool() {
 
     // Le contenu du résultat vient de la base, pas d'un mock.
     eprintln!("[agent] résultat réinjecté :\n{}", turns[3].content);
-    assert!(turns[3].content.starts_with("**1 result**"), "le livre Rust doit sortir : {}", turns[3].content);
-    assert!(turns[3].content.contains("`Rust Book` — Product"), "{}", turns[3].content);
+    // **`search` est hybride depuis le 27 août 2026** : le nombre de résultats
+    // n'est plus celui du seul plein texte — le vecteur ramène aussi ce qui
+    // ressemble sans reprendre les mots. On vérifie donc le premier, pas le
+    // compte.
+    assert!(turns[3].content.starts_with("# Search: \"programming language\""), "{}", turns[3].content);
+    assert!(turns[3].content.contains("### 1. Rust Book"), "le livre Rust doit sortir : {}", turns[3].content);
     assert_well_formed(&turns);
 }
 
@@ -261,7 +265,7 @@ fn a_bad_call_is_corrected_on_the_next_turn() {
     let detail = v["detail"].as_str().unwrap();
     assert!(detail.contains("Licorne") && detail.contains("Product"), "{detail}");
     // Le deuxième appel a bien rendu des résultats.
-    assert!(turns[4].content.starts_with("**1 result**"), "{}", turns[4].content);
+    assert!(turns[4].content.contains("### 1. Rust Book"), "{}", turns[4].content);
     assert_well_formed(&turns);
 }
 
@@ -423,12 +427,15 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
 
     // Le run de l'agent (début, fin), 3 appels au modèle, 2 appels d'outil
     // (début + fin), et sous le premier : le run du graphe `search` (début,
-    // fin) et ses 3 nœuds — le second appel est refusé avant le graphe.
+    // fin) et ses nœuds — le second appel est refusé avant le graphe.
     let mut cat = catalog.lock().unwrap();
     assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
-    // Le graphe `search` a un nœud de plus depuis le rendu compact, et chaque
-    // appel au modèle est suivi de sa consommation (3).
-    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 4, "{n} événements tracés");
+    // `search` **contient** le graphe de base depuis le 28 août 2026 : quatre
+    // nœuds extérieurs (inner, fetch, compose, render), et le `SearchTool`
+    // qu'il contient est un run à lui seul — son début, sa fin, et ses sept
+    // nœuds (source, bm25, vector, fuse, rerank, resolve, render). Treize en
+    // tout. Chaque appel au modèle est suivi de sa consommation (3).
+    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 13, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -472,8 +479,34 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
         .map(|r| field(r, "run_id"))
         .expect("un RunStarted de graphe sous run-demo");
     assert!(graph_run.starts_with("graph-"), "{graph_run}");
+
+    // **Deux étages, et ça se voit.** Depuis que `search` contient le graphe
+    // de base (28 août 2026), il y a un second run de graphe **sous** le
+    // premier : celui du `SearchTool`. C'est précisément ce qu'on veut lire
+    // dans une trace — quel outil a appelé quel outil — et c'est ce qu'un
+    // graphe aplati aurait fait disparaître.
+    let contenu = graph_runs
+        .results
+        .iter()
+        .find(|r| field(r, "kind") == "RunStarted" && field(r, "parent_run_id") == graph_run)
+        .map(|r| field(r, "run_id"))
+        .expect("un RunStarted de graphe sous le graphe de l'outil");
+    assert!(contenu.starts_with("graph-") && contenu != graph_run, "{contenu}");
+
+    // Chaque nœud porte le run de **son** graphe, pas celui du plus haut.
     let node_rows = cat.search(TRACE_ENTITY, "NodeRun", opts.clone()).unwrap();
-    assert!(node_rows.results.iter().filter(|r| field(r, "kind") == "NodeRun").all(|r| field(r, "run_id") == graph_run), "les nœuds portent le run du graphe");
+    let porteurs: Vec<String> = node_rows
+        .results
+        .iter()
+        .filter(|r| field(r, "kind") == "NodeRun")
+        .map(|r| field(r, "run_id"))
+        .collect();
+    assert!(
+        porteurs.iter().all(|r| *r == graph_run || *r == contenu),
+        "un nœud appartient à l'un des deux graphes : {porteurs:?}"
+    );
+    assert!(porteurs.iter().any(|r| *r == graph_run), "l'étage extérieur a des nœuds");
+    assert!(porteurs.iter().any(|r| *r == contenu), "l'étage contenu aussi");
     drop(cat);
 
     // Pas d'écho : l'écriture de la trace a publié sur `catalog`, que ce
@@ -500,7 +533,7 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
 /// arrive **pendant** le premier appel au modèle. L'agent voit le premier
 /// avant son premier tour, le second avant le suivant — jamais au milieu.
 /// Puis le graphe de trace écrit `Run` et `Message` liés, et
-/// `search_expand(target = "Message", relation = "SENT_TO")` retrouve `run-b`.
+/// `search(target = "Message", relation = "SENT_TO")` retrouve `run-b`.
 #[test]
 #[ignore]
 fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
@@ -576,16 +609,17 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     // 4. Par l'outil : Message —SENT_TO→ Run, et le run s'appelle run-b.
     let call = rag3weaver::llm::ToolCall {
         id: "c1".into(),
-        name: "search_expand".into(),
+        name: "search".into(),
         arguments: serde_json::json!({"target": "Message", "query": "couteau", "relation": "SENT_TO"}).to_string(),
         provider_extra: None,
     };
     let turn = graph_tools.call(&call, &nodes, services.clone());
-    eprintln!("[search_expand] {}", turn.content.chars().take(600).collect::<String>());
+    eprintln!("[search + relation] {}", turn.content.chars().take(600).collect::<String>());
     assert!(!turn.content.starts_with("{\"error\""), "{}", turn.content);
     // Markdown compact : le voisin est une ligne, pas un objet de trente
     // colonnes dont vingt-huit nulles.
-    assert!(turn.content.contains("↳ SENT_TO Run"), "{}", turn.content);
+    // Le voisin est dans le graphe de dépendances, groupé par relation.
+    assert!(turn.content.contains("[SENT_TO]"), "{}", turn.content);
     assert!(turn.content.contains("run_id=run-b"), "{}", turn.content);
     assert!(turn.content.contains("kind=agent"), "{}", turn.content);
     assert!(!turn.content.contains("null"), "aucun champ nul : {}", turn.content);
@@ -699,9 +733,11 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     let run = agent.run(&mut turns, &mut sink).unwrap();
     assert_eq!(run.stop, StopReason::Finished(FinishReason::Eos));
 
-    // 2 (run) + 2 (modèle) + 2 (consommation) + 2 (outil) + 2 (run du graphe
-    // search) + 4 (nœuds).
-    let expected = 14;
+    // 2 (run) + 2 (modèle) + 2 (consommation) + 2 (outil) + 2 (run de `search`)
+    // + 4 (ses nœuds : inner, fetch, compose, render) + 2 (run du `SearchTool`
+    // contenu) + 7 (les siens). Contenir un outil dans un autre se voit dans
+    // la trace, et c'est voulu : on veut pouvoir lire les deux étages.
+    let expected = 23;
     let start = Instant::now();
     loop {
         let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();

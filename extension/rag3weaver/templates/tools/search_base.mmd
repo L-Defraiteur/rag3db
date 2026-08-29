@@ -1,0 +1,65 @@
+%% tool: search_base
+%% description: Cherche dans une entité ou une base de connaissances, par mots-clés **et** par sens : une requête en langue naturelle ('comment un nœud signale son échec') trouve ce qui en parle sans en reprendre les mots. Les chunks trouvés sont résolus vers leur entité parente.
+%% param: target string! -- Nom de l'entité ou de la base de connaissances où chercher (ex. 'Product').
+%% param: query string! -- Texte de la requête : un identifiant exact, ou une vraie phrase si vous mettez 'rerank'.
+%% param: limit int = 10 -- Nombre maximum de résultats.
+%% param: rerank int = 0 -- Faire relire les N premiers résultats par un cross-encoder qui compare votre requête à chacun, phrase contre phrase, et les remet dans l'ordre. Ne le demandez que si 'query' est une vraie question en langue naturelle — sur un identifiant il ne sert à rien et coûte cher. 20 est une bonne valeur ; 0 le désactive.
+%% result: render.text
+%%
+%% **Un gabarit qui n'est pas un outil.** Celui-ci n'est jamais offert à un
+%% agent : il est enregistré comme **type de nœud** (`SearchTool`), et c'est
+%% `search.mmd` qui le contient et qui, lui, est offert. Le `%% tool:` d'une
+%% fiche est l'identité du gabarit — ce qu'il *est* — pas ce qu'on en montre ;
+%% le nom vu par un agent vit sur l'attachement (`GraphToolRegistry::attach`).
+%%
+%% **Hybride, et c'est le point.** Jusqu'au 27 août 2026 ce graphe n'avait
+%% qu'un nœud BM25 : le moteur pouvait porter un vrai embedder, l'outil que
+%% les agents tenaient dans la main n'y touchait jamais. On l'a vu dans une
+%% trace — 34 résultats, tous étiquetés `bm25`, et « node failure » sans
+%% réponse — et les agents avaient raison de lui préférer `grep`.
+%%
+%% Une cible qui ne déclare pas `vector` (un `Symbol`, une entité `declared()`)
+%% ne casse pas ce graphe : le nœud vectoriel rend vide et le dit dans les
+%% journaux, la fusion continue avec la seule liste qu'elle a.
+%%
+%% **Les poids penchent vers le plein texte**, contre le défaut de
+%% `FusionConfig` (vector 0,7 / bm25 0,3). Ce défaut est fait pour de la prose ;
+%% ici on cherche aussi — souvent — un identifiant, et une correspondance
+%% exacte doit gagner. Avec le défaut, `search(Scope, "merge_port_values")`
+%% rendait trois `impl PortValue` trouvés par le seul vecteur avant la fonction
+%% demandée : le rang 1 vectoriel (0,7/61) passait devant le rang 1 plein texte
+%% (0,3/61). Mesuré le 27 août 2026 en réparant ce graphe.
+%%
+%% **Le cross-encoder est éteint par défaut, et allumé par l'appelant.** Un
+%% graphe-outil n'a pas de conditionnelle ; c'est `candidates=0` qui en tient
+%% lieu — passe-plat exact, sans service consulté ni journal. Pourquoi pas
+%% « dès qu'on utilise le vecteur » : le vecteur est maintenant *toujours* là,
+%% donc ce serait un cross-encoder à chaque appel, sur des requêtes qui sont
+%% souvent un nom de fonction — là où il n'a rien à dire. Le rendre explicite
+%% oblige à la seule chose qui le rend utile : poser une vraie question.
+%%
+%% `keep_signal` : le rerank est ici la dernière étape avant le rendu, donc la
+%% provenance (`bm25+vector`) vaut plus que le nom du dernier nœud traversé.
+%%
+%% La fiche reste la même surface : `fuzzy_distance`, `result_mode`, les
+%% poids de fusion et les `return_fields` de la résolution restent en dedans.
+
+graph LR
+    source["SearchSourceNode(target_name=$target, query=$query)"]
+    bm25["BM25SearchNode(limit=$limit)"]
+    vector["VectorSearchNode(limit=$limit)"]
+    fuse["FuseResultsNode(weights='bm25:0.6,vector:0.4')"]
+    rerank["RerankNode(candidates=$rerank, keep_signal=true)"]
+    resolve["ResolveParentNode"]
+    render["RenderResultsNode"]
+
+    source -->|query| bm25
+    source -->|query| vector
+    source -->|query| rerank
+    source -->|query| resolve
+    source -->|query| render
+    bm25 -->|results:bm25| fuse
+    vector -->|results:vector| fuse
+    fuse -->|results| rerank
+    rerank -->|results| resolve
+    resolve -->|results| render

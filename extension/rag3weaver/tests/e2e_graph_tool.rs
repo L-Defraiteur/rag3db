@@ -7,7 +7,7 @@
 //! contenu est le port de résultat sérialisé.
 //!
 //! Le second test fait la même chose avec un graphe-outil qui en **contient**
-//! un autre : `search_expand` instancie `search` comme un nœud ordinaire.
+//! un autre : `search` instancie `search_base` comme un nœud ordinaire.
 //!
 //! Run with: ./run_e2e.sh --test e2e_graph_tool
 
@@ -95,7 +95,7 @@ fn variant(label: &str) -> BTreeMap<String, CypherValue> {
 }
 
 /// Deux produits, deux variantes, une relation. Assez pour que `search`
-/// trouve et que `search_expand` ait quelque chose à étendre.
+/// trouve et que l'expansion ait quelque chose à étendre.
 fn setup_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
@@ -189,8 +189,8 @@ fn a_tool_call_runs_a_graph_against_a_real_catalog() {
     // Markdown compact, pas de JSON : ni uuid, ni hash, ni champ nul —
     // c'est ce que le modèle lit (doc 11).
     eprintln!("[search]\n{}", turn.content);
-    assert!(turn.content.starts_with("**1 result**"), "{}", turn.content);
-    assert!(turn.content.contains("`Rust Book` — Product · 0."), "{}", turn.content);
+    assert!(turn.content.starts_with("# Search:"), "{}", turn.content);
+    assert!(turn.content.contains("### 1. Rust Book ★ 0."), "{}", turn.content);
     assert!(turn.content.contains("description=A comprehensive guide"), "{}", turn.content);
     assert!(!turn.content.contains("uuid"), "pas d'uuid pour le modèle : {}", turn.content);
     assert!(!turn.content.contains("_content_hash"), "{}", turn.content);
@@ -210,19 +210,26 @@ fn a_tool_graph_that_contains_another_one_runs_too() {
 
     let call = ToolCall::new(
         "call_expand_1",
-        "search_expand",
+        "search",
         r#"{"target": "Product", "query": "programming language", "relation": "HAS_VARIANT"}"#,
     );
     let turn = tools.call(&call, &nodes, services);
     assert_eq!(turn.tool_call_id.as_deref(), Some("call_expand_1"));
 
-    eprintln!("[search_expand]\n{}", turn.content);
-    assert!(turn.content.starts_with("**"), "réponse vide ou en erreur : {}", turn.content);
+    eprintln!("[search + relation]\n{}", turn.content);
+    assert!(turn.content.starts_with("# Search:") || turn.content.starts_with("**"), "réponse vide ou en erreur : {}", turn.content);
 
     // Le sous-graphe `search` a tourné, et l'étage d'expansion a attaché les
-    // variantes du livre : une ligne `↳ HAS_VARIANT` par voisin.
-    let expanded = turn.content.matches("↳ HAS_VARIANT").count();
-    eprintln!("[search_expand] {expanded} voisins attachés");
+    // variantes du livre. Depuis le gabarit par défaut (27 août 2026), les
+    // voisins vivent dans la section « Dependency Graph », groupés par
+    // relation : une entête `[HAS_VARIANT]`, puis une ligne d'arbre par voisin.
+    assert!(turn.content.contains("[HAS_VARIANT]"), "{}", turn.content);
+    let expanded = turn
+        .content
+        .lines()
+        .filter(|l| (l.contains("└── ") || l.contains("├── ")) && !l.contains('['))
+        .count();
+    eprintln!("[search + relation] {expanded} voisins attachés");
     assert!(
         expanded >= 2,
         "les deux variantes doivent être attachées : {}",

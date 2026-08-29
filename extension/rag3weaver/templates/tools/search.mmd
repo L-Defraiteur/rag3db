@@ -1,21 +1,47 @@
 %% tool: search
-%% description: Cherche dans une entité ou une base de connaissances et rend les résultats, les chunks trouvés étant résolus vers leur entité parente.
-%% param: target string! -- Nom de l'entité ou de la base de connaissances où chercher (ex. 'Product').
-%% param: query string! -- Texte de la requête, en langue naturelle.
+%% description: Cherche dans une entité ou une base de connaissances, par mots-clés **et** par sens : une requête en langue naturelle ('comment un nœud signale son échec') trouve ce qui en parle sans en reprendre les mots. Donnez en plus 'relation' pour suivre le graphe depuis chaque résultat et obtenir ses voisins en arbre — pour du code : CONSUMES (ce que ce scope utilise), CONSUMED_BY (qui l'utilise), PARENT_OF / HAS_PARENT (méthodes d'une classe et inversement), IMPLEMENTS, INHERITS_FROM, USES_LIBRARY.
+%% param: target string! -- Nom de l'entité ou de la base de connaissances où chercher (ex. 'Scope', 'File', 'Product').
+%% param: query string! -- Texte de la requête : un identifiant exact, ou une vraie phrase si vous mettez 'rerank'.
 %% param: limit int = 10 -- Nombre maximum de résultats.
+%% param: rerank int = 0 -- Faire relire les N premiers résultats par un cross-encoder qui compare votre requête à chacun, phrase contre phrase, et les remet dans l'ordre. Ne le demandez que si 'query' est une vraie question en langue naturelle — sur un identifiant il ne sert à rien et coûte cher. 20 est une bonne valeur ; 0 le désactive.
+%% param: relation string = "" -- Relation du graphe à suivre depuis chaque résultat, pour obtenir ses voisins. Vide = pas d'expansion.
+%% param: direction -- Sens de parcours, quand 'relation' est donnée.
+%% param: expand_limit int = 5 -- Nombre maximum de voisins par résultat (0 = illimité).
 %% result: render.text
 %%
-%% Trois nœuds, dont deux que le modèle n'a pas à connaître : la fiche
-%% ci-dessus est toute la surface. `fuzzy_distance`, `result_mode` et les
-%% `return_fields` de la résolution restent en dedans.
+%% **Un seul outil de recherche, avec un paramètre de plus.** Il y en avait
+%% deux : `search` et `search_expand`. Mesuré le 28 août 2026 sur quarante
+%% appels d'outils de trois agents — `read` 22, `grep` 10, `search` 4,
+%% `search_expand` **0**. Pas une fois, alors que c'est le seul qui rend le
+%% graphe de dépendances. Réparer `search` l'avait fait passer de 3 à 4 appels :
+%% la qualité n'était pas le problème, **le choix** l'était. Un agent qui hésite
+%% entre deux outils proches en prend zéro.
+%%
+%% `relation` vide est un passe-plat exact : `FetchRelatedNode` rend un port
+%% `children` vide sans même consulter la connexion. Troisième usage du même
+%% motif ce jour-là, après `RerankNode(candidates=0)` — un graphe-outil n'a pas
+%% de conditionnelle, c'est la valeur neutre qui en tient lieu.
+%%
+%% Pas de `%% choices:` ici : `target` hérite des cibles de `SearchTool`
+%% (qui les tient de `SearchSourceNode`), `relation` et `direction` de
+%% `FetchRelatedNode` — `direction` n'a même pas de type déclaré, il prend
+%% celui du nœud, avec son défaut et sa liste (voir `GraphTool::bind`).
+%%
+%% La composition : `inner` n'est pas un nœud de base, c'est le graphe-outil
+%% `search` enregistré comme type de nœud (`SearchTool`). Ses paramètres sont
+%% ceux de sa propre fiche, et ils reçoivent ici les paramètres de celle-ci —
+%% la substitution traverse les deux niveaux. Son port libre `resolve.results`
+%% est `render.results` : le nœud de rendu laisse passer les résultats, et
+%% c'est ce qui permet de continuer à composer par-dessus lui.
 
 graph LR
-    source["SearchSourceNode(target_name=$target, query=$query)"]
-    bm25["BM25SearchNode(limit=$limit)"]
-    resolve["ResolveParentNode"]
+    inner["SearchTool(target=$target, query=$query, limit=$limit, rerank=$rerank)"]
+    fetch["FetchRelatedNode(relation=$relation, direction=$direction, limit=$expand_limit)"]
+    compose["ComposeNode"]
     render["RenderResultsNode"]
 
-    source -->|query| bm25
-    source -->|query| resolve
-    bm25 -->|results| resolve
-    resolve -->|results| render
+    inner -->|render.results:results| fetch
+    inner -->|render.results:results| compose
+    inner -->|render.query:query| render
+    fetch -->|children| compose
+    compose -->|results| render

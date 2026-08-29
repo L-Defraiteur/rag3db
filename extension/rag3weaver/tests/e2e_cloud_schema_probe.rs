@@ -57,7 +57,7 @@ fn which_tool_schemas_does_vertex_accept() {
         defs.into_iter().map(|mut d| { f(&mut d.parameters); d }).collect()
     };
     let variants: Vec<(&str, Vec<ToolDef>)> = vec![
-        ("4 outils (grep read search search_expand)", only(&["grep", "read", "search", "search_expand"])),
+        ("3 outils (grep read search)", only(&["grep", "read", "search"])),
         ("6 outils tels quels", all.clone()),
         ("list seul", only(&["list"])),
         ("edit seul", only(&["edit"])),

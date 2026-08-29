@@ -215,6 +215,20 @@ impl Node for VectorSearchNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target, options) = extract_query_and_target(ctx, "VectorSearchNode")?;
 
+        // Une cible sans vecteurs n'est pas une panne, c'est une cible sans
+        // vecteurs. On rend une liste vide en le disant, plutôt que d'échouer :
+        // sinon un outil hybride serait inutilisable sur `Symbol`, déclaré
+        // BM25 seul, et le seul recours serait de rendre `search` borgne pour
+        // tout le monde — ce qu'on a fait pendant des mois sans le voir.
+        if !declares(&target, &options, "vector") {
+            ctx.warn(&format!(
+                "VectorSearchNode: '{}' ne déclare pas le signal 'vector' — aucun résultat vectoriel",
+                target.name
+            ));
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+            return Ok(());
+        }
+
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("VectorSearchNode: 'conn' service not found")?
@@ -517,6 +531,17 @@ impl Node for SparseSearchNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
 
+        // Même règle que pour le vecteur : une cible qui ne déclare pas
+        // `sparse` rend vide, elle ne casse pas le graphe qui la traverse.
+        if !declares(&target, &options, "sparse") {
+            ctx.warn(&format!(
+                "SparseSearchNode: '{}' ne déclare pas le signal 'sparse' — aucun résultat épars",
+                target.name
+            ));
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+            return Ok(());
+        }
+
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("SparseSearchNode: 'conn' service not found")?
@@ -779,10 +804,20 @@ impl Node for FuseResultsNode {
             ctx.metric(&format!("signal.{label}"), v.len() as f64);
         }
 
-        // Build a lookup from all input results to preserve rich data
+        // Build a lookup from all input results to preserve rich data, **et
+        // qui l'a trouvé**. Jusqu'au 27 août 2026 la fusion écrasait
+        // `signal` par son propre nom : la provenance mourait ici, et une
+        // trace ne pouvait plus dire si un résultat venait du plein texte,
+        // du vecteur, ou des deux. C'est exactement la question qu'on s'est
+        // posée en relisant un artefact.
         let mut all_by_uuid: HashMap<String, UnifiedResult> = HashMap::new();
-        for (_, v) in groups {
+        let mut from_by_uuid: HashMap<String, Vec<String>> = HashMap::new();
+        for (label, v) in groups {
             for r in v {
+                let seen = from_by_uuid.entry(r.uuid.clone()).or_default();
+                if !seen.iter().any(|l| *l == label) {
+                    seen.push(label.clone());
+                }
                 all_by_uuid.entry(r.uuid.clone()).or_insert(r);
             }
         }
@@ -796,7 +831,16 @@ impl Node for FuseResultsNode {
                     .cloned()
                     .unwrap_or_else(|| UnifiedResult::from(sr.clone()));
                 u.score = sr.score;
-                u.signal = Some(label_out.clone());
+                // Une étiquette explicite est un choix de l'appelant et prime.
+                // Sinon : les signaux qui ont contribué, dans l'ordre des
+                // listes — `bm25+vector` se lit tout seul.
+                u.signal = Some(match &self.signal {
+                    Some(explicit) => explicit.clone(),
+                    None => match from_by_uuid.get(&sr.uuid) {
+                        Some(labels) if !labels.is_empty() => labels.join("+"),
+                        _ => label_out.clone(),
+                    },
+                });
                 u
             })
             .collect();
@@ -824,6 +868,7 @@ pub struct RerankNode {
     candidates: usize,
     service: String,
     signal: Option<String>,
+    keep_signal: bool,
 }
 
 impl RerankNode {
@@ -835,12 +880,29 @@ impl RerankNode {
             candidates: Self::DEFAULT_CANDIDATES,
             service: "reranker".to_string(),
             signal: None,
+            keep_signal: false,
         }
     }
 
     /// Taille du pool re-scoré (le reste passe inchangé).
+    ///
+    /// **`0` est un passe-plat exact** : ni service consulté, ni étiquette
+    /// touchée, ni journal. C'est ce qui permet à un graphe figé de porter un
+    /// cross-encoder que l'appelant allume ou non — un graphe-outil n'a pas de
+    /// conditionnelle, mais un nœud peut avoir un zéro qui veut dire « passe ».
     pub fn with_candidates(mut self, n: usize) -> Self {
         self.candidates = n;
+        self
+    }
+
+    /// Garder l'étiquette d'origine des résultats au lieu de la remplacer.
+    ///
+    /// Par défaut le nœud ré-étiquette (c'est ce qui permet à une fusion en
+    /// aval de le reconnaître par son nom et de l'utiliser en `boost`). Dans
+    /// une chaîne où le rerank est la dernière étape, la provenance —
+    /// `bm25+vector` — vaut plus que le nom du dernier nœud traversé.
+    pub fn with_keep_signal(mut self, keep: bool) -> Self {
+        self.keep_signal = keep;
         self
     }
 
@@ -869,6 +931,7 @@ impl Node for RerankNode {
             "candidates": self.candidates,
             "service": self.service,
             "signal": self.signal,
+            "keep_signal": self.keep_signal,
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
@@ -899,6 +962,15 @@ impl Node for RerankNode {
         let qp = ctx.take_input("query")
             .and_then(|pv| take_or_clone::<QueryPayload>(pv))
             .ok_or("RerankNode: missing 'query' input")?;
+
+        // Zéro candidat : on ne fait rien, et on ne dit rien non plus. Pas de
+        // service consulté, pas d'avertissement, pas d'étiquette changée —
+        // sinon un outil qui porte un cross-encoder éteint remplirait ses
+        // journaux d'une absence voulue.
+        if self.candidates == 0 {
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        }
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
 
         let reranker = ctx.service::<Arc<dyn Reranker>>(&self.service).cloned();
@@ -907,7 +979,9 @@ impl Node for RerankNode {
                 "RerankNode: aucun service '{}' — ordre d'entrée conservé",
                 self.service
             ));
-            retag(&mut results, &label);
+            if !self.keep_signal {
+                retag(&mut results, &label);
+            }
             ctx.set_output("results", PortValue::new(results));
             return Ok(());
         };
@@ -922,7 +996,9 @@ impl Node for RerankNode {
         if !passages.is_empty() && passages.iter().all(|p| p.is_empty()) {
             ctx.warn("RerankNode: aucun texte de passage disponible (ni chunk, ni _content) — ordre d'entrée conservé");
             results.extend(tail);
-            retag(&mut results, &label);
+            if !self.keep_signal {
+                retag(&mut results, &label);
+            }
             ctx.set_output("results", PortValue::new(results));
             return Ok(());
         }
@@ -965,7 +1041,9 @@ impl Node for RerankNode {
                 results.extend(tail);
             }
         }
-        retag(&mut results, &label);
+        if !self.keep_signal {
+            retag(&mut results, &label);
+        }
         ctx.set_output("results", PortValue::new(results));
         Ok(())
     }
@@ -1141,6 +1219,19 @@ fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult> {
     ctx.take_input(port)
         .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
         .unwrap_or_default()
+}
+
+/// **Ce que la cible déclare**, options du tour comprises.
+///
+/// `SearchOptions.signals` prime sur `SearchTarget.default_signals` — l'appelant
+/// a le dernier mot, le schéma a le mot par défaut.
+fn declares(target: &SearchTarget, options: &SearchOptions, signal: &str) -> bool {
+    let signals = options.signals.unwrap_or(target.default_signals);
+    match signal {
+        "vector" => signals.vector(),
+        "sparse" => signals.sparse(),
+        _ => signals.bm25(),
+    }
 }
 
 /// Finition commune des nœuds de signal : résolution vers l'entité source si
@@ -1361,6 +1452,61 @@ mod tests {
             .clone()
     }
 
+    /// **Le cross-encoder éteint est un passe-plat exact.**
+    ///
+    /// C'est ce qui permet à `search` — un graphe figé, sans conditionnelle —
+    /// de porter un `RerankNode` que l'appelant allume au coup par coup avec
+    /// `rerank=N`. Éteint, il ne consulte pas le service, ne ré-étiquette
+    /// rien, et n'écrit pas dans les journaux : une absence voulue n'est pas
+    /// un incident.
+    #[test]
+    fn a_cross_encoder_at_zero_changes_nothing_at_all() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("results", PortValue::new(vec![tagged("a", 0.9, "bm25+vector"), tagged("b", 0.5, "vector")]));
+        ctx.set_input("query", PortValue::new(QueryPayload {
+            target_name: "Product".into(),
+            query: "comment un nœud signale son échec".into(),
+            options: SearchOptions::default(),
+            target: None,
+        }));
+        let mut node = RerankNode::new("rerank").with_candidates(0);
+        node.execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].uuid, "a");
+        // La provenance traverse : elle n'est pas remplacée par « rerank ».
+        assert_eq!(out[0].signal.as_deref(), Some("bm25+vector"));
+        assert_eq!(out[1].signal.as_deref(), Some("vector"));
+    }
+
+    /// Sans service de rerank, l'ordre est conservé — et `keep_signal` décide
+    /// si la provenance l'est aussi. C'est ce que `search` demande : le rerank
+    /// y est la dernière étape, donc « qui a trouvé ça » vaut mieux que « quel
+    /// nœud est passé en dernier ».
+    #[test]
+    fn keep_signal_decides_whether_provenance_survives_the_reranker() {
+        let payload = || QueryPayload {
+            target_name: "Product".into(),
+            query: "une vraie question".into(),
+            options: SearchOptions::default(),
+            target: None,
+        };
+
+        let mut ctx = NodeContext::new();
+        ctx.set_input("results", PortValue::new(vec![tagged("a", 0.9, "bm25+vector")]));
+        ctx.set_input("query", PortValue::new(payload()));
+        RerankNode::new("rerank").with_candidates(20).with_keep_signal(true).execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx)[0].signal.as_deref(), Some("bm25+vector"));
+
+        // Le défaut ré-étiquette : c'est ce qui permet à une fusion en aval de
+        // reconnaître le rerank par son nom et de s'en servir en `boost`.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("results", PortValue::new(vec![tagged("a", 0.9, "bm25+vector")]));
+        ctx.set_input("query", PortValue::new(payload()));
+        RerankNode::new("rerank").with_candidates(20).execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx)[0].signal.as_deref(), Some("rerank"));
+    }
+
     /// Le port `signals` regroupe par étiquette : deux branches BM25 arrivent
     /// concaténées et sont pesées séparément. Poids 0 sur une branche = elle
     /// ne compte plus.
@@ -1382,7 +1528,27 @@ mod tests {
         assert_eq!(out[0].uuid, "a");
         assert_eq!(out[1].uuid, "b");
         assert!(out[2].score == 0.0 && out[3].score == 0.0, "body branch weighs nothing");
-        assert!(out.iter().all(|r| r.signal.as_deref() == Some("fuse")), "output is retagged");
+        // **La provenance survit à la fusion.** Sans étiquette explicite sur le
+        // nœud, un résultat sort en disant quels signaux l'ont trouvé, pas le
+        // nom du nœud qui les a mêlés — sinon une trace ne peut plus répondre
+        // à « est-ce le plein texte ou le vecteur qui a vu ça ? ».
+        assert_eq!(out[0].signal.as_deref(), Some("title"));
+        assert_eq!(out[2].signal.as_deref(), Some("body"));
+
+        // Un même document trouvé des deux côtés les porte tous les deux.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("a", 0.9, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("a", 0.7, "vector")]));
+        let mut node = FuseResultsNode::new("fuse");
+        node.execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx)[0].signal.as_deref(), Some("vector+bm25"));
+
+        // Une étiquette demandée reste un choix de l'appelant et prime.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("a", 0.9, "bm25")]));
+        let mut node = FuseResultsNode::new("fuse").with_signal("hybride");
+        node.execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx)[0].signal.as_deref(), Some("hybride"));
     }
 
     /// Une étiquette en `boost` ne participe pas à la fusion : elle module.

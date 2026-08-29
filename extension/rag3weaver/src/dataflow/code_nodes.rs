@@ -506,6 +506,8 @@ impl NodeFactory for GrepNodeFactory {
             case_insensitive: config.get("case_insensitive").and_then(|v| v.as_bool()).unwrap_or(false),
             max_results: usize_param(config, "max_results", "GrepNode")?.unwrap_or(DEFAULT_GREP_LIMIT),
             context_lines: usize_param(config, "context_lines", "GrepNode")?.unwrap_or(0),
+            relation: config.get("relation").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(String::from),
+            relation_limit: usize_param(config, "relation_limit", "GrepNode")?.unwrap_or(0),
         };
         let format = match config.get("format").and_then(|v| v.as_str()) {
             Some(f) => ToolFormat::parse(f).map_err(|e| format!("GrepNode: {e}"))?,
@@ -529,6 +531,10 @@ impl NodeFactory for GrepNodeFactory {
                 ConfigParam { name: "case_insensitive", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse", choices: None, json_schema: None },
                 ConfigParam { name: "max_results", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés", choices: None, json_schema: None },
                 ConfigParam { name: "context_lines", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)", choices: None, json_schema: None },
+                // **Le graphe se greffe là où les agents vont.** Mesuré le
+                // 28 août 2026 : `grep` 10 appels, l'outil de graphe séparé 0.
+                ConfigParam { name: "relation", param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion", choices: Some(Choices::Relations), json_schema: None },
+                ConfigParam { name: "relation_limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_RELATION_LIMIT)), description: "Voisins rendus par scope (plafond 20)", choices: None, json_schema: None },
                 format_param(),
             ],
         }

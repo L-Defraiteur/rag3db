@@ -56,7 +56,7 @@ pub use node_registry::{Choices, NodeSchema, NodeFactory, NodeRegistry, ConfigPa
 pub use reactor::{as_message, doorbell_cursor, ReactPolicy, Reactor, ReactorHandle};
 pub use render_nodes::{render_results_markdown, RenderResultsNode, RenderResultsNodeFactory};
 pub use trace_nodes::{
-    drain_events, message_config, record_runs_and_messages, register_trace_schema, run_config, trace_config,
+    drain_events, horodatage, message_config, record_runs_and_messages, register_trace_schema, run_config, trace_config,
     trace_record, EventSourceNode, EventSourceNodeFactory, SendMessageNode, SendMessageNodeFactory, TraceSinkNode,
     TraceSinkNodeFactory, CHILD_OF, DEFAULT_CURSOR, DEFAULT_TOPICS, EVENTS_SERVICE, MESSAGE_ENTITY, RUN_ENTITY, SENT_BY,
     SENT_TO, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
@@ -65,7 +65,7 @@ pub use graph_node::{GraphNode, GraphNodeFactory};
 pub use graph_tool::{
     build_definition, builtin_graph_tools, check_choices, execute_definition, execute_definition_as, param_type_name, resolve_params,
     run_definition_as_tool_content, substitute_definition, template_vars, validate_node_types,
-    GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_EXPAND_TOOL_MERMAID,
+    GraphTool, GraphToolError, GraphToolRegistry, NodeTypePolicy, SEARCH_BASE_MERMAID,
     SEARCH_TOOL_MERMAID, SEARCH_TOOL_NODE_TYPE,
 };
 pub use migration_nodes::{CypherNode, CypherNodeFactory, ValidateNode, ValidateNodeFactory, Assertion};

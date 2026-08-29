@@ -152,7 +152,16 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         chunking,
         hashsafe: Some(vec!["key".into()]),
         // Ce qu'un résultat de recherche doit dire pour qu'on puisse le lire.
-        return_fields: Some(vec!["file_path".into(), "start_line".into(), "end_line".into(), "scope_type".into(), "parent_name".into()]),
+        // **La documentation fait partie de ce qu'un résultat doit dire.** Elle
+        // manquait : la fiche rendue n'avait donc jamais sa ligne `📝`, celle
+        // qui, dans la maquette d'origine, dit en une phrase *ce que fait* le
+        // scope — la seule ligne qu'on lit avant de décider d'ouvrir le
+        // fichier. Elle est bornée au rendu (`max_chars`), pas ici.
+        return_fields: Some(vec![
+            "file_path".into(), "start_line".into(), "end_line".into(),
+            "scope_type".into(), "parent_name".into(),
+            "docstring".into(), "signature".into(),
+        ]),
         ..Default::default()
     }
 }
@@ -901,13 +910,30 @@ impl LibraryRecord {
 }
 
 /// Champ `hashsafe` d'une entité de code → sa clé dans une [`CodeRelation`].
-fn key_data(entity: &str, key: &str) -> BTreeMap<String, CypherValue> {
-    let field = match entity {
-        FILE => "path",
-        SCOPE => "key",
-        _ => "name",
-    };
-    BTreeMap::from([(field.to_string(), s(key))])
+/// **La clé d'identité d'une entité, entière.**
+///
+/// Entière, et c'est tout le sujet : `File` s'identifie par
+/// `["source", "path"]` depuis le doc 04 v3 — « le même nom absolu dans deux
+/// sources, ce sont deux fichiers ». Cette fonction ne posait que `path`, donc
+/// l'uuid dérivé de la clé partielle ne tombait jamais sur celui du nœud
+/// inséré, et **toutes les arêtes `DEFINED_IN` étaient silencieusement
+/// perdues** — `link` posait une arête vers un uuid qui n'existait pas.
+///
+/// Trouvé le 28 août 2026 en cherchant pourquoi l'arbre de dépendances était
+/// vide sur notre propre code : 36 scopes, 37 `CONSUMES`, 15 `HAS_PARENT`, et
+/// zéro `DEFINED_IN`. `Scope` et `Library` ont une clé à un champ, donc eux
+/// n'ont jamais rien perdu — l'ajout de `source` à l'identité d'un fichier
+/// avait cassé la seule relation qui vise un fichier, sans faire échouer un
+/// seul test.
+fn key_data(entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
+    match entity {
+        FILE => BTreeMap::from([
+            ("source".to_string(), s(source)),
+            ("path".to_string(), s(key)),
+        ]),
+        SCOPE => BTreeMap::from([("key".to_string(), s(key))]),
+        _ => BTreeMap::from([("name".to_string(), s(key))]),
+    }
 }
 
 impl Catalog {
@@ -931,9 +957,22 @@ impl Catalog {
         report.entities_ms = phase.elapsed().as_millis();
         let phase = std::time::Instant::now();
 
+        // La source des fichiers de ce lot : elle fait partie de leur identité,
+        // et une relation ne la porte pas — elle nomme un fichier par son
+        // chemin. On la retrouve donc ici, par chemin, avec un repli sur la
+        // source commune du lot pour un chemin qu'on n'aurait pas ingéré.
+        let source_of: std::collections::HashMap<&str, &str> = analysis
+            .files
+            .iter()
+            .map(|f| (f.path.as_str(), f.source.as_str()))
+            .collect();
+        let source_commune = analysis.files.first().map(|f| f.source.as_str()).unwrap_or("");
+
         for r in &analysis.relations {
-            let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key))?;
-            let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key))?;
+            let from_src = source_of.get(r.from_key.as_str()).copied().unwrap_or(source_commune);
+            let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
+            let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
+            let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
             self.link(&r.rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
         }
         let linked = self.drain();
@@ -990,12 +1029,12 @@ impl Catalog {
 
         // Ce que le lot offre, et ce qu'il attend.
         for sc in &analysis.scopes {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key))?;
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
             self.link("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
         }
         for (scope_key, name, kind) in &analysis.pending {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key))?;
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera.

@@ -219,6 +219,21 @@ impl Node for FetchRelatedNode {
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        // **Pas de relation : on ne fait rien, et sans le dire.**
+        //
+        // C'est ce qui permet à `search` — un graphe figé, sans conditionnelle
+        // — de porter l'étage de graphe et de ne le payer que quand l'appelant
+        // le demande. Même motif que `RerankNode(candidates=0)` : un
+        // graphe-outil n'a pas de `if`, c'est la valeur neutre qui en tient
+        // lieu (28 août 2026).
+        //
+        // On rend un port `children` vide plutôt que rien : un `ComposeNode`
+        // en aval doit trouver quelque chose à composer.
+        if self.relation.trim().is_empty() {
+            ctx.set_output("children", PortValue::new(HashMap::<String, Vec<ChildSummary>>::new()));
+            return Ok(());
+        }
+
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("FetchRelatedNode: 'conn' service not found")?

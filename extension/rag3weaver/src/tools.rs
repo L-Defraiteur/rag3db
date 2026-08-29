@@ -156,7 +156,19 @@ pub fn graph_tool_defs_with(
     registry: &crate::dataflow::GraphToolRegistry,
     catalog: Option<&crate::catalog::Catalog>,
 ) -> Vec<ToolDef> {
-    registry.tools().map(|t| t.tool_def_with(catalog)).collect()
+    // **Le nom vient de l'attachement, pas du gabarit.** Un même gabarit peut
+    // être offert sous deux noms ; c'est celui sous lequel l'agent l'a adopté
+    // qu'il doit lire, et qu'il emploiera dans son appel.
+    registry
+        .entries()
+        .map(|(nom, t)| {
+            let mut def = t.tool_def_with(catalog);
+            if def.name != nom {
+                def.name = nom.to_string();
+            }
+            def
+        })
+        .collect()
 }
 
 /// Les mêmes, prêts à être envoyés (`tools` d'une API compatible OpenAI).

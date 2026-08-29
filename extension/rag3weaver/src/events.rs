@@ -112,6 +112,13 @@ pub enum Event {
         parent: Option<String>,
         kind: String,
         name: String,
+        /// Le **domaine de travail** sous lequel ce run tourne — ce que
+        /// l'agent regarde, et donc ce qu'il ne regarde pas.
+        ///
+        /// Vide : aucun domaine déclaré. Il vit ici plutôt que sur l'identité
+        /// parce qu'un même agent peut travailler ailleurs demain : le rôle se
+        /// lit dans ce qu'il a fait, il ne se décrète pas sur sa personne.
+        domain: String,
         /// La cellule où ce run tourne — les autres événements appartiennent
         /// à un run, donc ne la répètent pas.
         scope: Option<crate::scope::Scope>,
@@ -229,6 +236,17 @@ pub enum Event {
         from: String,
         to: String,
         content: String,
+        /// **Le fil, quand il est dit.**
+        ///
+        /// Vide : le fil se dérive de la paire `(from, to)`, ce qui suffisait
+        /// tant qu'on était deux. À plus de deux, la paire ne peut plus le
+        /// porter — trois participants font trois paires, donc trois fils, et
+        /// personne ne voit la même conversation.
+        ///
+        /// L'identifiant est donc **dit par celui qui parle**, pas deviné : un
+        /// fil est une intention, et deux agents peuvent très bien en ouvrir
+        /// deux distincts sans que rien dans leurs noms ne le laisse voir.
+        conversation: String,
     },
 
     // ── Entity lifecycle ─────────────────────────────────────────────────
@@ -306,8 +324,9 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::RunStarted { run, parent, kind, name, scope } => json!({
+            Self::RunStarted { run, parent, kind, name, domain, scope } => json!({
                 "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
+                "domain": domain,
                 "org": scope.as_ref().map(|s| s.org.clone()),
                 "project": scope.as_ref().map(|s| s.project.clone()),
             }),
@@ -342,8 +361,9 @@ impl Event {
                 "kind": "NodeRun", "run": run, "node": node, "node_type": node_type, "ms": ms, "ok": error.is_none(), "error": error,
             }),
             Self::WatchAcrossScopes { by } => json!({ "kind": "WatchAcrossScopes", "by": by }),
-            Self::Message { run, from, to, content } => json!({
+            Self::Message { run, from, to, content, conversation } => json!({
                 "kind": "Message", "run": run, "from": from, "to": to, "content": content,
+                "conversation": conversation,
             }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
@@ -574,14 +594,41 @@ impl EventBus {
     /// Le message part sur sa boîte (`run.<to>.inbox`) et,
     /// par [`Self::emit`], sur `messages` et `run.<run>`. Fire and forget.
     pub fn send_message(&self, run: &str, from: &str, to: &str, content: &str) {
+        self.send_in(run, from, to, content, "");
+    }
+
+    /// Le même, **dans un fil nommé**.
+    ///
+    /// C'est ce qui permet à plus de deux de se parler : sans identifiant dit,
+    /// le fil se dérive de la paire, et trois participants produisent trois
+    /// conversations distinctes dont aucune ne contient tout le monde.
+    pub fn send_in(&self, run: &str, from: &str, to: &str, content: &str, conversation: &str) {
         let event = Event::Message {
             run: run.to_string(),
             from: from.to_string(),
             to: to.to_string(),
             content: content.to_string(),
+            conversation: conversation.to_string(),
         };
         self.emit_on(&inbox_topic(to), event.clone());
         self.emit(event);
+    }
+
+    /// **Poser quelque chose dans un fil**, pour tous ceux qui y sont.
+    ///
+    /// La liste des destinataires est donnée par l'appelant, et c'est
+    /// volontaire : le bus ne connaît pas les fils, c'est le graphe qui sait
+    /// qui participe. Lui faire deviner l'un depuis l'autre coudrait ensemble
+    /// deux choses qui n'ont pas le même rythme.
+    ///
+    /// Chacun reçoit **le même contenu sous le même fil**, dans sa propre
+    /// boîte : c'est ce qui permet à chacun de décider seul s'il a quelque
+    /// chose à dire — le droit de se taire n'a de sens que si la question a
+    /// été posée à tous.
+    pub fn broadcast(&self, run: &str, from: &str, to: &[&str], content: &str, conversation: &str) {
+        for dest in to {
+            self.send_in(run, from, dest, content, conversation);
+        }
     }
 
     /// Publie sur un sujet choisi — `messages.<destinataire>`, par exemple.
@@ -611,9 +658,9 @@ mod tests {
         assert!(matches!(agent.try_recv(), Err(TryRecvError::Empty)));
 
         // Un sujet inconnu naît à la demande, et sans abonné il jette tout.
-        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "hi".into() });
+        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "hi".into(), conversation: String::new() });
         let mut bob = bus.subscribe("messages.bob");
-        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "again".into() });
+        bus.emit_on("messages.bob", Event::Message { run: "r1".into(), from: "a".into(), to: "bob".into(), content: "again".into(), conversation: String::new() });
         assert!(matches!(bob.try_recv().unwrap(), Event::Message { content, .. } if content == "again"));
         // `run.r1` est né avec le ToolCallStarted du run r1.
         assert_eq!(bus.topics(), vec!["agent", "catalog", "messages.bob", "run.r1"]);
@@ -642,7 +689,7 @@ mod tests {
         let mut all = bus.subscribe(topic::AGENT);
         let mut mine = bus.subscribe(&run_topic("r1"));
         let mut other = bus.subscribe(&run_topic("r2"));
-        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), scope: None });
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None });
         assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
@@ -724,5 +771,46 @@ mod tests {
         bus.emit(Event::EntityPrepared { entity: "Doc".into(), uuid: "abc-123".into() });
         assert!(matches!(rx1.try_recv().unwrap(), Event::EntityPrepared { .. }));
         assert!(matches!(rx2.try_recv().unwrap(), Event::EntityPrepared { .. }));
+    }
+
+    /// **Trois participants, un seul fil.**
+    ///
+    /// Sans identifiant dit, le fil se dérive de la paire : trois personnes
+    /// produisent trois conversations dont aucune ne les contient toutes, et
+    /// personne ne voit la même discussion. C'est ce que `conversation` règle.
+    #[test]
+    fn un_fil_a_plus_de_deux_est_dit_pas_devine() {
+        let bus = EventBus::new(16);
+        let mut a = bus.subscribe(&inbox_topic("alma"));
+        let mut z = bus.subscribe(&inbox_topic("zed"));
+
+        bus.broadcast("run-lucie", "lucie", &["alma", "zed"], "on migre le schéma ?", "revue-du-27");
+
+        for boite in [&mut a, &mut z] {
+            match boite.try_recv().unwrap() {
+                Event::Message { content, conversation, from, .. } => {
+                    // Le même contenu, sous le même fil, dans chaque boîte :
+                    // c'est ce qui permet à chacun de décider seul s'il a
+                    // quelque chose à dire.
+                    assert_eq!(content, "on migre le schéma ?");
+                    assert_eq!(conversation, "revue-du-27");
+                    assert_eq!(from, "lucie");
+                }
+                autre => panic!("{autre:?}"),
+            }
+        }
+    }
+
+    /// L'ancien chemin ne change pas : sans fil dit, il est vide et le
+    /// traceur le dérivera de la paire, comme avant.
+    #[test]
+    fn sans_fil_dit_rien_ne_change() {
+        let bus = EventBus::new(16);
+        let mut b = bus.subscribe(&inbox_topic("bob"));
+        bus.send_message("r1", "alice", "bob", "salut");
+        match b.try_recv().unwrap() {
+            Event::Message { conversation, .. } => assert!(conversation.is_empty()),
+            autre => panic!("{autre:?}"),
+        }
     }
 }
