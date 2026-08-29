@@ -45,9 +45,13 @@ fn servir() -> Result<(), String> {
     let modele = Arc::new(modele);
     eprintln!("  chargé en {:?}", debut.elapsed());
 
-    // Le même objet des deux côtés : BGE-M3 rend dense et creux en une passe,
+    // Le même objet des trois côtés : BGE-M3 rend dense et creux en une passe,
     // c'est tout son intérêt — le démon n'a aucune raison de le couper en deux.
-    let demon = EmbedDaemon::new(modele.clone()).avec_dual(modele);
+    // Le creux seul est offert aussi, pour qui n'a pas besoin du dense : c'est
+    // du trafic en moins sur le fil, pas du calcul en moins.
+    let demon = EmbedDaemon::new(modele.clone())
+        .avec_dual(modele.clone())
+        .avec_sparse(modele);
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
     demon.servir(&adresse).map_err(|e| e.to_string())
 }

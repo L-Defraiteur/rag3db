@@ -18,6 +18,7 @@
 //!   dimension, **et si je suis factice**.
 //! - `POST /embed` `{"texts":[…]}` → `{"vectors":[[…]]}`.
 //! - `POST /embed_dual` → `{"dense":[[…]],"sparse":[{"indices":[…],"values":[…]}]}`.
+//! - `POST /embed_sparse` → `{"sparse":[{"indices":[…],"values":[…]}]}`.
 //!
 //! # Le factice doit traverser
 //!
@@ -32,7 +33,7 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
-use crate::embedder::{DualEmbedder, EmbedError, Embedder};
+use crate::embedder::{DualEmbedder, EmbedError, Embedder, SparseEmbedder};
 use crate::serveur::{Fin, Serveur};
 use crate::sparse_index::SparseVector;
 
@@ -52,6 +53,9 @@ pub struct Identite {
     pub dim: usize,
     /// Sait-il faire `embed_dual` (dense + creux en une passe) ?
     pub dual: bool,
+    /// Sait-il rendre le creux seul ?
+    #[serde(default)]
+    pub sparse: bool,
     /// **Est-ce un embedder factice ?** Relayé tel quel jusqu'au catalogue.
     pub factice: bool,
 }
@@ -62,6 +66,7 @@ pub struct Identite {
 pub struct EmbedDaemon {
     embedder: Arc<dyn Embedder>,
     dual: Option<Arc<dyn DualEmbedder>>,
+    sparse: Option<Arc<dyn SparseEmbedder>>,
     fils: usize,
     /// La carte est unique : une passe à la fois. Voir l'en-tête.
     passe: Mutex<()>,
@@ -70,12 +75,19 @@ pub struct EmbedDaemon {
 impl EmbedDaemon {
     /// Un démon qui sert cet embedder.
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self { embedder, dual: None, fils: 4, passe: Mutex::new(()) }
+        Self { embedder, dual: None, sparse: None, fils: 4, passe: Mutex::new(()) }
     }
 
     /// Le même modèle sait aussi rendre le creux en une passe : on l'expose.
     pub fn avec_dual(mut self, dual: Arc<dyn DualEmbedder>) -> Self {
         self.dual = Some(dual);
+        self
+    }
+
+    /// Et le creux seul, pour qui n'a pas besoin du dense — c'est une passe
+    /// avant du modèle en moins de trafic sur le fil, pas en moins de calcul.
+    pub fn avec_sparse(mut self, sparse: Arc<dyn SparseEmbedder>) -> Self {
+        self.sparse = Some(sparse);
         self
     }
 
@@ -92,6 +104,7 @@ impl EmbedDaemon {
             modele: self.embedder.name().to_string(),
             dim: self.embedder.dim(),
             dual: self.dual.is_some(),
+            sparse: self.sparse.is_some(),
             factice: self.embedder.is_mock(),
         }
     }
@@ -139,6 +152,23 @@ impl Service for EmbedDaemon {
                             200,
                             serde_json::json!({
                                 "dense": dense,
+                                "sparse": creux.iter().map(sparse_json).collect::<Vec<_>>(),
+                            })
+                            .to_string(),
+                        ),
+                        Err(e) => (500, erreur(&e.to_string())),
+                    }
+                }
+            },
+            ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
+                (None, _) => (404, erreur("ce démon ne sert pas le creux seul")),
+                (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some(sp), Ok(t)) => {
+                    let _passe = self.passe.lock();
+                    match sp.embed_sparse(&t.texts) {
+                        Ok(creux) => (
+                            200,
+                            serde_json::json!({
                                 "sparse": creux.iter().map(sparse_json).collect::<Vec<_>>(),
                             })
                             .to_string(),
@@ -224,6 +254,11 @@ impl DaemonEmbedder {
         self.identite.dual
     }
 
+    /// Sait-il rendre le creux seul ?
+    pub fn sait_sparse(&self) -> bool {
+        self.identite.sparse
+    }
+
     fn envoyer(&self, route: &str, textes: &[String]) -> Result<serde_json::Value, EmbedError> {
         let corps = serde_json::json!({ "texts": textes }).to_string();
         let texte = poster(&self.agent, &self.base, route, corps)
@@ -253,6 +288,34 @@ impl Embedder for DaemonEmbedder {
     }
 }
 
+/// Les vecteurs creux d'une réponse. Partagé par `/embed_dual` et
+/// `/embed_sparse` : une seule lecture, donc une seule façon de se tromper.
+fn creux_de(v: &serde_json::Value) -> Result<Vec<SparseVector>, EmbedError> {
+    v["sparse"]
+        .as_array()
+        .ok_or_else(|| EmbedError::ProviderError("champ 'sparse' absent".into()))?
+        .iter()
+        .map(|s| {
+            let indices: Vec<u32> = serde_json::from_value(s["indices"].clone())
+                .map_err(|e| EmbedError::ProviderError(format!("'indices' : {e}")))?;
+            let values: Vec<f32> = serde_json::from_value(s["values"].clone())
+                .map_err(|e| EmbedError::ProviderError(format!("'values' : {e}")))?;
+            if indices.len() != values.len() {
+                return Err(EmbedError::ProviderError(
+                    "vecteur creux mal formé : indices et valeurs de longueurs différentes".into(),
+                ));
+            }
+            Ok(SparseVector::new(indices, values))
+        })
+        .collect()
+}
+
+impl SparseEmbedder for DaemonEmbedder {
+    fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+        creux_de(&self.envoyer("/embed_sparse", texts)?)
+    }
+}
+
 impl DualEmbedder for DaemonEmbedder {
     fn embed_dual(
         &self,
@@ -261,24 +324,7 @@ impl DualEmbedder for DaemonEmbedder {
         let v = self.envoyer("/embed_dual", texts)?;
         let dense: Vec<Vec<f32>> = serde_json::from_value(v["dense"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'dense' : {e}")))?;
-        let creux = v["sparse"]
-            .as_array()
-            .ok_or_else(|| EmbedError::ProviderError("champ 'sparse' absent".into()))?
-            .iter()
-            .map(|s| {
-                let indices: Vec<u32> = serde_json::from_value(s["indices"].clone())
-                    .map_err(|e| EmbedError::ProviderError(format!("'indices' : {e}")))?;
-                let values: Vec<f32> = serde_json::from_value(s["values"].clone())
-                    .map_err(|e| EmbedError::ProviderError(format!("'values' : {e}")))?;
-                if indices.len() != values.len() {
-                    return Err(EmbedError::ProviderError(
-                        "vecteur creux mal formé : indices et valeurs de longueurs différentes".into(),
-                    ));
-                }
-                Ok(SparseVector::new(indices, values))
-            })
-            .collect::<Result<Vec<_>, EmbedError>>()?;
-        Ok((dense, creux))
+        Ok((dense, creux_de(&v)?))
     }
 
     fn dim(&self) -> usize {
@@ -323,6 +369,15 @@ mod tests {
         }
         fn dim(&self) -> usize {
             self.0
+        }
+    }
+
+    impl SparseEmbedder for Regle {
+        fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+            Ok(texts
+                .iter()
+                .map(|t| SparseVector::new(vec![t.len() as u32], vec![0.5]))
+                .collect())
         }
     }
 
@@ -386,6 +441,17 @@ mod tests {
     }
 
     #[test]
+    fn le_creux_seul_traverse_le_fil() {
+        let regle = Arc::new(Regle(3));
+        let adresse = demon(EmbedDaemon::new(regle.clone()).avec_sparse(regle));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert!(c.sait_sparse());
+        assert!(!c.sait_dual(), "le creux seul n'implique pas le dual");
+        let creux = c.embed_sparse(&["abcd".to_string()]).expect("sparse");
+        assert_eq!(creux, vec![SparseVector::new(vec![4], vec![0.5])]);
+    }
+
+    #[test]
     fn demander_le_creux_a_qui_ne_le_sert_pas_se_dit() {
         let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))));
         let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
@@ -446,10 +512,15 @@ mod tests {
         panic!("le démon de base n'a jamais répondu");
     }
 
+    /// **Pas d'adresse en dur ici.** `127.0.0.1:7878` est devenu l'adresse
+    /// conventionnelle du démon des suites E2E : un test qui affirme que
+    /// personne n'y écoute échoue dès qu'un démon tourne pour de vrai — ce qui
+    /// est justement le cas normal sur un poste de développement.
     #[test]
     fn la_description_porte_la_sonde() {
-        let s = DaemonEmbedder::serveur("127.0.0.1:7878", "/bin/true");
-        assert_eq!(s.adresse(), "127.0.0.1:7878");
+        let adresse = port_libre();
+        let s = DaemonEmbedder::serveur(&adresse, "/bin/true");
+        assert_eq!(s.adresse(), adresse);
         assert_eq!(s.etat(), crate::serveur::Etat::Absent);
     }
 
