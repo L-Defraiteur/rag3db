@@ -149,7 +149,7 @@ vulkan = ["burn/vulkan"]
 # Au-delà des tests, c'est la première brique de ce qu'un terminal interrogera,
 # et de « savoir démarrer un serveur » — ce dont la boucle étrange aura besoin
 # pour qu'un agent monte un backend (doc 08).
-daemon = ["dep:tiny_http", "dep:ureq"]
+daemon = ["dep:tiny_http", "dep:ureq", "dep:base64"]
 # LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
 # (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
@@ -172,6 +172,14 @@ tempfile = "3"
 name = "rag3weaver-embeddings"
 path = "src/bin/rag3weaver-embeddings.rs"
 required-features = ["daemon", "burn-embedder"]
+
+# **rag3daemon.** Le processus qui tient la base et la sert — voir
+# `src/daemon/db.rs`. Une base rag3db ne s'ouvre que par un processus à la fois ;
+# celui-ci est ce processus, mis derrière une adresse.
+[[bin]]
+name = "rag3daemon"
+path = "src/bin/rag3daemon.rs"
+required-features = ["daemon", "rag3db-native"]
 
 [[example]]
 name = "tei_reqwest"

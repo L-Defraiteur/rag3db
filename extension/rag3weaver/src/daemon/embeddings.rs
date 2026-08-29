@@ -15,8 +15,7 @@
 //! # Ce qui traverse le fil
 //!
 //! - `GET /sante` → l'identité ([`Identite`]) : qui je suis, quel modèle, quelle
-//!   dimension, **et si je suis factice**. C'est ce que [`crate::serveur::Sonde`]
-//!   cherche pour distinguer ce démon de n'importe qui d'autre sur le port.
+//!   dimension, **et si je suis factice**.
 //! - `POST /embed` `{"texts":[…]}` → `{"vectors":[[…]]}`.
 //! - `POST /embed_dual` → `{"dense":[[…]],"sparse":[{"indices":[…],"values":[…]}]}`.
 //!
@@ -32,16 +31,13 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
 use crate::embedder::{DualEmbedder, EmbedError, Embedder};
-use crate::serveur::{Fin, Serveur, Sonde};
+use crate::serveur::{Fin, Serveur};
 use crate::sparse_index::SparseVector;
 
-/// Le nom que ce démon se donne. C'est l'identité que la sonde cherche : un
-/// autre serveur sur le même port ne le prononcera pas.
+/// Le nom que ce démon se donne.
 pub const SERVICE: &str = "rag3weaver-embeddings";
-
-/// Le chemin de la sonde.
-pub const SANTE: &str = "/sante";
 
 /// Ce que `GET /sante` rend. **Tout ce qu'un client a besoin de savoir avant
 /// d'envoyer quoi que ce soit** : la dimension pour se câbler, le caractère
@@ -60,47 +56,6 @@ pub struct Identite {
     pub factice: bool,
 }
 
-/// Ce qui peut mal se passer, des deux côtés du fil.
-#[derive(Debug)]
-pub enum DaemonError {
-    /// L'adresse n'a pas pu être écoutée.
-    Ecoute { adresse: String, cause: String },
-    /// Le démon n'a pas répondu, ou a répondu autre chose.
-    Injoignable { adresse: String, cause: String },
-    /// Ce qui répond n'est pas ce démon.
-    Etranger { adresse: String, service: String },
-    /// Le démon a répondu une erreur.
-    Refus { statut: u16, corps: String },
-    /// La réponse n'avait pas la forme attendue.
-    Reponse(String),
-    /// Le lancement lui-même a échoué (voir [`crate::serveur::ServeurError`]).
-    Lancement(crate::serveur::ServeurError),
-}
-
-impl std::fmt::Display for DaemonError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ecoute { adresse, cause } => write!(f, "impossible d'écouter sur {adresse} : {cause}"),
-            Self::Injoignable { adresse, cause } => write!(f, "{adresse} ne répond pas : {cause}"),
-            Self::Etranger { adresse, service } => write!(
-                f,
-                "{adresse} répond, mais se dit « {service} » et non « {SERVICE} »"
-            ),
-            Self::Refus { statut, corps } => write!(f, "le démon a refusé ({statut}) : {corps}"),
-            Self::Reponse(d) => write!(f, "réponse illisible : {d}"),
-            Self::Lancement(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl std::error::Error for DaemonError {}
-
-impl From<crate::serveur::ServeurError> for DaemonError {
-    fn from(e: crate::serveur::ServeurError) -> Self {
-        Self::Lancement(e)
-    }
-}
-
 // ─── Le serveur ──────────────────────────────────────────────────────────────
 
 /// **Le démon** : il tient le modèle et répond aux embarquements.
@@ -108,12 +63,14 @@ pub struct EmbedDaemon {
     embedder: Arc<dyn Embedder>,
     dual: Option<Arc<dyn DualEmbedder>>,
     fils: usize,
+    /// La carte est unique : une passe à la fois. Voir l'en-tête.
+    passe: Mutex<()>,
 }
 
 impl EmbedDaemon {
     /// Un démon qui sert cet embedder.
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self { embedder, dual: None, fils: 4 }
+        Self { embedder, dual: None, fils: 4, passe: Mutex::new(()) }
     }
 
     /// Le même modèle sait aussi rendre le creux en une passe : on l'expose.
@@ -122,12 +79,7 @@ impl EmbedDaemon {
         self
     }
 
-    /// Combien de fils **répondent** (défaut 4).
-    ///
-    /// Ce n'est pas le parallélisme de calcul : les embarquements se
-    /// sérialisent sur un verrou. C'est pour que `GET /sante` réponde tout de
-    /// suite pendant qu'un gros lot occupe la carte — sinon la sonde d'un
-    /// client conclurait à tort que le port est tenu par un étranger.
+    /// Combien de fils répondent (défaut 4). Voir [`super::servir`].
     pub fn fils(mut self, n: usize) -> Self {
         self.fils = n.max(1);
         self
@@ -146,72 +98,43 @@ impl EmbedDaemon {
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
     pub fn servir(self, adresse: &str) -> Result<(), DaemonError> {
-        let serveur = tiny_http::Server::http(adresse).map_err(|e| DaemonError::Ecoute {
-            adresse: adresse.to_string(),
-            cause: e.to_string(),
-        })?;
-        let serveur = Arc::new(serveur);
-        let etat = Arc::new(EtatServi {
-            identite: self.identite(),
-            embedder: self.embedder,
-            dual: self.dual,
-            // La carte est unique : une passe à la fois. Voir l'en-tête.
-            passe: Mutex::new(()),
-        });
-
-        let mut fils = Vec::new();
-        for i in 0..self.fils {
-            let serveur = serveur.clone();
-            let etat = etat.clone();
-            fils.push(
-                std::thread::Builder::new()
-                    .name(format!("rag3weaver-embeddings-{i}"))
-                    .spawn(move || {
-                        while let Ok(req) = serveur.recv() {
-                            etat.repondre(req);
-                        }
-                    })
-                    .map_err(|e| DaemonError::Ecoute {
-                        adresse: adresse.to_string(),
-                        cause: e.to_string(),
-                    })?,
-            );
-        }
-        for f in fils {
-            let _ = f.join();
-        }
-        Ok(())
+        let fils = self.fils;
+        super::servir(Arc::new(self), adresse, fils)
     }
 }
 
-struct EtatServi {
-    identite: Identite,
-    embedder: Arc<dyn Embedder>,
-    dual: Option<Arc<dyn DualEmbedder>>,
-    passe: Mutex<()>,
+#[derive(Deserialize)]
+struct Textes {
+    texts: Vec<String>,
 }
 
-impl EtatServi {
-    fn repondre(&self, mut req: tiny_http::Request) {
-        let route = (req.method().as_str().to_string(), chemin(req.url()));
-        let (statut, corps) = match (route.0.as_str(), route.1.as_str()) {
-            ("GET", SANTE) => (200, serde_json::to_string(&self.identite).unwrap_or_default()),
-            ("POST", "/embed") => match lire_textes(&mut req) {
+impl Service for EmbedDaemon {
+    fn nom(&self) -> &'static str {
+        SERVICE
+    }
+
+    fn identite(&self) -> serde_json::Value {
+        serde_json::to_value(EmbedDaemon::identite(self)).unwrap_or_default()
+    }
+
+    fn repondre(&self, methode: &str, chemin: &str, req: &mut tiny_http::Request) -> (u16, String) {
+        match (methode, chemin) {
+            ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
-                Ok(textes) => {
+                Ok(t) => {
                     let _passe = self.passe.lock();
-                    match self.embedder.embed(&textes) {
+                    match self.embedder.embed(&t.texts) {
                         Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
                         Err(e) => (500, erreur(&e.to_string())),
                     }
                 }
             },
-            ("POST", "/embed_dual") => match (&self.dual, lire_textes(&mut req)) {
+            ("POST", "/embed_dual") => match (&self.dual, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(d), Ok(textes)) => {
+                (Some(d), Ok(t)) => {
                     let _passe = self.passe.lock();
-                    match d.embed_dual(&textes) {
+                    match d.embed_dual(&t.texts) {
                         Ok((dense, creux)) => (
                             200,
                             serde_json::json!({
@@ -225,39 +148,12 @@ impl EtatServi {
                 }
             },
             _ => (404, erreur("route inconnue")),
-        };
-
-        let reponse = tiny_http::Response::from_string(corps)
-            .with_status_code(statut)
-            .with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
-                    .expect("en-tête littéral"),
-            );
-        let _ = req.respond(reponse);
+        }
     }
-}
-
-fn chemin(url: &str) -> String {
-    url.split('?').next().unwrap_or(url).to_string()
-}
-
-fn erreur(message: &str) -> String {
-    serde_json::json!({ "error": message }).to_string()
 }
 
 fn sparse_json(v: &SparseVector) -> serde_json::Value {
     serde_json::json!({ "indices": v.indices, "values": v.values })
-}
-
-fn lire_textes(req: &mut tiny_http::Request) -> Result<Vec<String>, String> {
-    #[derive(Deserialize)]
-    struct Corps {
-        texts: Vec<String>,
-    }
-    let mut brut = String::new();
-    std::io::Read::read_to_string(req.as_reader(), &mut brut).map_err(|e| e.to_string())?;
-    let corps: Corps = serde_json::from_str(&brut).map_err(|e| e.to_string())?;
-    Ok(corps.texts)
 }
 
 // ─── Le client ───────────────────────────────────────────────────────────────
@@ -270,9 +166,8 @@ pub struct DaemonEmbedder {
     base: String,
     agent: ureq::Agent,
     identite: Identite,
-    /// L'attache est gardée pour sa politique de fin ; on ne s'en sert pas
-    /// autrement. Sans ce champ, un démon lancé en `Fin::Arreter` mourrait
-    /// aussitôt après avoir été assuré.
+    /// Gardée pour sa politique de fin ; sans ce champ, un démon lancé en
+    /// `Fin::Arreter` mourrait aussitôt après avoir été assuré.
     _attache: Option<crate::serveur::Attache>,
 }
 
@@ -287,33 +182,26 @@ impl std::fmt::Debug for DaemonEmbedder {
 
 impl DaemonEmbedder {
     /// La description d'un démon d'embedding à cette adresse, lancé par ce
-    /// programme — **avec la bonne sonde déjà réglée**, pour que personne n'ait
-    /// à réinventer comment on le reconnaît.
+    /// programme — **avec la bonne sonde déjà réglée**.
     pub fn serveur(adresse: impl Into<String>, programme: impl Into<String>) -> Serveur {
         let adresse = adresse.into();
-        Serveur::new("rag3weaver-embeddings", adresse.clone(), programme)
-            .sonde(Sonde::Http {
-                chemin: SANTE.to_string(),
-                contient: format!("\"service\":\"{SERVICE}\""),
-            })
+        Serveur::new(SERVICE, adresse.clone(), programme)
+            .sonde(sonde(SERVICE))
             .arg("--adresse")
             .arg(adresse)
-            // Un démon sert à survivre au processus qui l'a lancé : le suivant
-            // doit le retrouver debout. C'est toute l'économie.
+            // Un démon sert à survivre au processus qui l'a lancé.
             .fin(Fin::Laisser)
             // Charger 2,2 Go et compiler les noyaux prend bien plus que dix
             // secondes sur une carte froide.
             .attente(std::time::Duration::from_secs(300))
     }
 
-    /// S'attacher à un démon qui **répond déjà**. Échoue s'il n'est pas là :
-    /// c'est le verbe de qui ne veut rien lancer.
+    /// S'attacher à un démon qui **répond déjà**.
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
         Self::depuis(adresse, None)
     }
 
-    /// **Le verbe courant** : s'il répond on s'y attache, sinon on le lance et
-    /// on attend. L'appelant n'a pas à savoir qui a payé le chargement.
+    /// **Le verbe courant** : s'il répond on s'y attache, sinon on le lance.
     pub fn assurer(serveur: &Serveur) -> Result<Self, DaemonError> {
         let attache = serveur.assurer()?;
         let adresse = attache.adresse().to_string();
@@ -321,30 +209,9 @@ impl DaemonEmbedder {
     }
 
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
-        let base = format!("http://{}", adresse.trim_start_matches("http://"));
-        let agent = ureq::Agent::new_with_config(
-            ureq::Agent::config_builder().http_status_as_error(false).build(),
-        );
-        let mut reponse = agent
-            .get(format!("{base}{SANTE}"))
-            .call()
-            .map_err(|e| DaemonError::Injoignable {
-                adresse: adresse.to_string(),
-                cause: e.to_string(),
-            })?;
-        let corps = reponse
-            .body_mut()
-            .read_to_string()
-            .map_err(|e| DaemonError::Reponse(e.to_string()))?;
-        let identite: Identite =
-            serde_json::from_str(&corps).map_err(|e| DaemonError::Reponse(format!("{e} — {corps}")))?;
-        if identite.service != SERVICE {
-            return Err(DaemonError::Etranger {
-                adresse: adresse.to_string(),
-                service: identite.service,
-            });
-        }
-        Ok(Self { base, agent, identite, _attache: attache })
+        let agent = agent();
+        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        Ok(Self { base: base_url(adresse), agent, identite, _attache: attache })
     }
 
     /// Ce que le démon déclare être.
@@ -357,29 +224,17 @@ impl DaemonEmbedder {
         self.identite.dual
     }
 
-    fn poster(&self, route: &str, textes: &[String]) -> Result<serde_json::Value, EmbedError> {
+    fn envoyer(&self, route: &str, textes: &[String]) -> Result<serde_json::Value, EmbedError> {
         let corps = serde_json::json!({ "texts": textes }).to_string();
-        let mut reponse = self
-            .agent
-            .post(format!("{}{route}", self.base))
-            .header("content-type", "application/json")
-            .send(corps)
-            .map_err(|e| EmbedError::ProviderError(format!("démon injoignable : {e}")))?;
-        let statut = reponse.status().as_u16();
-        let texte = reponse
-            .body_mut()
-            .read_to_string()
+        let texte = poster(&self.agent, &self.base, route, corps)
             .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
-        if statut != 200 {
-            return Err(EmbedError::ProviderError(format!("démon {statut} : {texte}")));
-        }
         serde_json::from_str(&texte).map_err(|e| EmbedError::ProviderError(e.to_string()))
     }
 }
 
 impl Embedder for DaemonEmbedder {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let v = self.poster("/embed", texts)?;
+        let v = self.envoyer("/embed", texts)?;
         serde_json::from_value(v["vectors"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'vectors' : {e}")))
     }
@@ -403,7 +258,7 @@ impl DualEmbedder for DaemonEmbedder {
         &self,
         texts: &[String],
     ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
-        let v = self.poster("/embed_dual", texts)?;
+        let v = self.envoyer("/embed_dual", texts)?;
         let dense: Vec<Vec<f32>> = serde_json::from_value(v["dense"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'dense' : {e}")))?;
         let creux = v["sparse"]
@@ -437,8 +292,8 @@ mod tests {
     use crate::embedder::MockEmbedder;
     use std::net::TcpListener;
 
-    /// Un embedder reconnaissable : le i-ème texte donne un vecteur rempli de
-    /// sa longueur, pour qu'un test distingue les réponses.
+    /// Un embedder reconnaissable : chaque texte donne un vecteur rempli de sa
+    /// longueur, pour qu'un test distingue les réponses.
     #[derive(Debug)]
     struct Regle(usize);
 
@@ -562,8 +417,35 @@ mod tests {
         }
     }
 
-    /// La description porte déjà la sonde : un appelant ne réinvente pas
-    /// comment on reconnaît ce démon.
+    /// **On ne se trompe pas de démon.** Le démon de base répond à la même
+    /// route, avec une autre identité : le client doit le refuser franchement.
+    #[test]
+    fn s_attacher_au_mauvais_demon_se_dit() {
+        let adresse = port_libre();
+        let a = adresse.clone();
+        std::thread::spawn(move || {
+            let _ = super::super::db::DbDaemon::new(Arc::new(
+                crate::connection::CallbackConnection::new(|_, _| {
+                    Ok(crate::connection::QueryResult::default())
+                }),
+            ))
+            .servir(&a);
+        });
+        for _ in 0..200 {
+            match DaemonEmbedder::joindre(&adresse) {
+                Err(DaemonError::Etranger { trouve, .. }) => {
+                    assert_eq!(trouve, super::super::db::SERVICE);
+                    return;
+                }
+                Err(DaemonError::Injoignable { .. }) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
+                autre => panic!("attendu Etranger, obtenu {autre:?}"),
+            }
+        }
+        panic!("le démon de base n'a jamais répondu");
+    }
+
     #[test]
     fn la_description_porte_la_sonde() {
         let s = DaemonEmbedder::serveur("127.0.0.1:7878", "/bin/true");

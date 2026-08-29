@@ -153,12 +153,14 @@ pub mod agent;
 pub use agent::{
     Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
 };
-/// **Un modèle chargé une fois, servi à plusieurs** : le démon d'embedding et
-/// son client, qui se fait passer pour un [`Embedder`] ordinaire.
+/// **Des processus qui tiennent une ressource rare, et la servent** : un modèle
+/// chargé une fois (`daemon::embeddings`), et la base qu'un seul processus peut
+/// ouvrir (`daemon::db`, alias rag3daemon). Leurs clients se font passer pour un
+/// [`Embedder`] et une [`connection::DbConnection`] ordinaires.
 #[cfg(feature = "daemon")]
 pub mod daemon;
 #[cfg(feature = "daemon")]
-pub use daemon::{DaemonEmbedder, EmbedDaemon, Identite};
+pub use daemon::{DaemonConnection, DaemonEmbedder, DbDaemon, EmbedDaemon};
 /// **Démarrer un serveur, et savoir s'il est déjà là.** Le démon d'embedding,
 /// le terminal à plusieurs, et le backend que la boucle étrange devra faire
 /// tourner passent tous par là.

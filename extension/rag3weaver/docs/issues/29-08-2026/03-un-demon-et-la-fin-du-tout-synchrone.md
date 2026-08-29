@@ -199,3 +199,43 @@ reprise par nœud pour gagner quatre champs et un service à faire tourner.
 Mauvais échange. Si un jour plusieurs machines entrent en jeu — le critère de
 déclenchement, et il n'est pas rempli — ce serait `pgmq` ou `apalis-sql` sur le
 Postgres déjà déclaré, pas Redis : zéro service en plus.
+
+## 9. rag3daemon — le processus qui tient la base
+
+Décidé le 29 au soir : **pas Postgres.** Ce n'est pas ce qu'on recommandera, et
+le brancher après coup n'est pas difficile — `DbConnection` et `SchemaDialect`
+sont la couture, et `PostgresDialect` fait déjà 944 lignes qui compilent (sans
+aucun test E2E, ce qui reste à savoir un jour). On garde la base embarquée et on
+enlève sa contrainte au bon endroit.
+
+**La contrainte, et la réponse.** Une base rag3db ne s'ouvre que par un
+processus : `F_WRLCK` en `F_SETLK`, refus immédiat pour le second. C'est la
+propriété d'une base embarquée, pas un défaut — SQLite et DuckDB font pareil, et
+la réponse est la leur : **mettre le processus qui tient le verrou derrière une
+adresse**. Un seul écrivain, plusieurs programmes qui lui parlent.
+
+- `src/daemon/mod.rs` — la plomberie partagée : le trait `Service`, `servir`,
+  la sonde, le client. **`/sante` est répondue par la plomberie, pas par le
+  démon** : c'est la route dont dépend `Serveur` pour trancher entre `Repond` et
+  `Occupe`, et elle doit répondre même quand la ressource est occupée. Un démon
+  qui embarque un gros lot ne doit pas paraître mort.
+- `src/daemon/db.rs` — rag3daemon et son client `DaemonConnection`, qui
+  implémente `DbConnection` : un `Catalog` le prend tel quel, rien dans le
+  moteur ne sait que la base est ailleurs.
+- `src/bin/rag3daemon.rs` — `--adresse`, `--base <chemin|:memoire:>`.
+
+**Une valeur de fil, et pourquoi.** `CypherValue` est `#[serde(untagged)]` et sa
+variante `Blob` est `#[serde(skip)]` : un blob **ne traverserait pas**, en
+silence à la lecture. Ce codage sert la configuration, où les types se devinent ;
+un fil de base demande l'inverse. D'où `ValeurFil`, étiquetée, blobs en base64,
+et un test qui fait passer les huit variantes par le démon.
+
+**Mesuré** (`tests/e2e_rag3daemon.rs`) : deux processus, quarante travaux,
+**20 / 20**, aucun doublon — et dans le même test, l'ouverture directe de la
+base pendant que le démon la tient est toujours **refusée**. C'est la scène
+exacte de `e2e_prise_atomique.rs`, rejouée avec le démon au milieu.
+
+**Ce que ça débloque.** L'arbitre de la file existe maintenant : un processus
+unique qui tient la base et à qui tout le monde parle. Les quatre manques du §8
+— état « déposé », bail, essais, réveil — sont du bookkeeping à l'intérieur de
+ce processus.
