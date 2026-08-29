@@ -133,3 +133,69 @@ l'occasion : c'est la forme que ce code a déjà choisie une fois.
 `async-trait` est déclarée dans le `Cargo.toml` et **utilisée nulle part** ; et
 `src/events.rs:3` dit encore « `async_broadcast` for WASM-compatible
 broadcasting ».
+
+## 8. La file, c'est le DAG — et la question d'atomicité se dissout
+
+Lucie, le 29 au soir : *« nos pipelines dag peuvent pas representer assez bien
+une queue async ? parcequ'on a la persistence je crois déja sur l'execution
+d'un dag »*. Oui — et plus que « assez bien ».
+
+### Ce qui existe déjà, et qui est la moitié difficile
+
+`src/dataflow/checkpoint.rs` et `checkpoint_store.rs`, branchés, utilisés par le
+drain du catalogue. Un `ExecutionCheckpoint` persisté (`CypherCheckpointStore`)
+porte le statut du run, **le statut de chaque nœud** (`Pending` / `Completed` /
+`Failed`), **les sorties sérialisées** des nœuds terminés, les `initial_inputs`,
+un `graph_hash` qui refuse une reprise si le graphe a changé, et un
+`undo_context` par nœud. Et `find_incomplete()` — exposé sous
+`Catalog::check_pending_checkpoints`, avec `drain_resume()` en face.
+
+**Le travail, c'est le DAG.** Et il y a là une propriété qu'aucune file du
+commerce ne peut avoir : BullMQ, Celery et `apalis` rejouent un travail **depuis
+le début**, parce qu'ils ne savent pas ce qu'il contient. Nous reprenons au
+premier nœud incomplet, sorties précédentes restaurées. C'est strictement mieux,
+et c'est tout l'intérêt d'un graphe plutôt que d'une fermeture opaque.
+
+### La question ouverte, tranchée par l'expérience
+
+`tests/e2e_prise_atomique.rs` — deux faits mesurés, pas déduits :
+
+- **Huit fils, une connexion, quarante travaux : 40 prises, 40 travaux
+  distincts, 0 doublon, 0 erreur.** L'atomicité vient de ce que le moteur C++
+  sérialise les appels traversant une `rag3db::Connection` — pas d'une
+  isolation transactionnelle. C'est le cas facile, et il marche.
+- **Un second processus ne peut pas ouvrir la même base** : l'enfant rend 3
+  (refusé). `LocalFileSystem::openFile` pose un `F_WRLCK` en `F_SETLK`, non
+  bloquant, donc échec immédiat.
+
+Et dans le moteur, `TransactionManager::beginTransaction` **refuse** une seconde
+transaction d'écriture : `enableMultiWrites` vaut `false`, et le seul réglage
+qui le relâche s'appelle `debug_enable_multi_writes` — le nom dit son statut.
+Côté Rust, `Rag3dbConnection` n'expose même pas de quoi ouvrir une seconde
+connexion sur la même base.
+
+**Donc la question se dissout.** Il ne *peut pas* y avoir deux preneurs
+concurrents sur notre base. Une file adossée au `CheckpointStore` n'a besoin
+d'aucune atomicité en base : elle a besoin d'un **arbitre unique**, et c'est un
+processus — celui du §7, qu'on sait maintenant lancer, retrouver, et reconnaître
+en tant que lui.
+
+### Ce qui reste à faire, et c'est du bookkeeping
+
+Dans un processus mono-écrivain, les quatre manques deviennent faciles :
+
+1. **Un état « déposé »** — `CheckpointExecutionStatus` n'a que `Running`,
+   `Completed`, `Failed` ; il manque le travail créé avant que quiconque le
+   prenne. Une variante d'enum.
+2. **Le bail** — `Running` ne se distingue pas de « tournait sur un processus
+   mort ». Propriétaire + échéance, et le battement de cœur est gratuit puisque
+   l'arbitre est vivant.
+3. **Le compteur d'essais et le rebut** — sans quoi un graphe empoisonné se
+   rejoue indéfiniment.
+4. **Le réveil** — presque fait : `reactor.rs` a déjà minuteurs et sonnettes.
+
+**Et donc pas de file du commerce.** Une file externe nous ferait perdre la
+reprise par nœud pour gagner quatre champs et un service à faire tourner.
+Mauvais échange. Si un jour plusieurs machines entrent en jeu — le critère de
+déclenchement, et il n'est pas rempli — ce serait `pgmq` ou `apalis-sql` sur le
+Postgres déjà déclaré, pas Redis : zéro service en plus.
