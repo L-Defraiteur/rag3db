@@ -1,6 +1,6 @@
 # Vision et feuille de route — août 2026
 
-Six documents écrits le 25 août 2026 (et un septième le 26), à la fin d'une journée où beaucoup de
+Six documents écrits le 25 août 2026, un septième le 26, un huitième le 29 — à la fin d'une journée où beaucoup de
 choses ont été décidées oralement. Ils existent pour que ces décisions ne se
 perdent pas, et pour qu'on puisse les attaquer plutôt que se les rappeler.
 
@@ -13,6 +13,7 @@ perdent pas, et pour qu'on puisse les attaquer plutôt que se les rappeler.
 | [05 — Ce qui a tenu depuis février](05-ce-qui-a-tenu-depuis-fevrier.md) | Archéologie : ce qu'on a redressé, ce qu'on a perdu sans décider |
 | [06 — La feuille de route](06-la-feuille-de-route.md) | L'ordre réel du travail, et les dettes nommées |
 | [07 — Événements, runs et boucles](07-evenements-runs-et-boucles.md) | Un bus à sujets, l'identité des runs, et quand une boucle peut réagir — écrit le 26 août |
+| [08 — Des catalogues de gabarits](08-des-catalogues-de-gabarits.md) | Ne pas leur faire tout coder : entités, graphes et composants prêts à poser, à adopter, à modifier — écrit le 29 août |
 
 **Ce qu'ils remplacent** : rien. Les documents datés de
 `23-aout-2026-20h33/` restent la trace chronologique du travail (état des

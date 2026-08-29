@@ -164,6 +164,110 @@ coupé tout le temps, c'est un filtre avec des étapes en plus. Ce qui vaut, ce
 n'est pas d'avoir écarté du bruit — c'est l'information transportée : *tu
 parlais hors de ton tour, à propos de ceci*.
 
+## 5 ter. Où l'agent se tient, et jusqu'où il peut aller
+
+Idée de Lucie, en lisant la première trace : *« faudrait un système pour qu'ils
+aient accès à tels répertoires, genre comme un gitignore et un répertoire
+parent maximal — ils essaient de toucher quelque chose pas à eux, ou de faire
+cd dans un répertoire pas à eux, ça marche pas. Et donc leur donner un cd. »*
+
+### Ce que la trace disait déjà
+
+Les agents **se cadraient d'eux-mêmes**, sans qu'on le leur demande :
+
+```json
+{"pattern":"node.*fail|fail.*node","path_prefix":"src/dataflow/"}
+{"path":"src/dataflow/runtime.rs"}
+```
+
+La racine de leur `FileSource` **était** `src/dataflow`. Leurs chemins partaient
+donc de la racine du dépôt et tombaient dans le vide.
+
+> Le problème n'est pas qu'ils débordent. C'est qu'**ils ignorent où ils se
+> tiennent** — et personne ne le leur a dit.
+
+C'est la même faute que partout ailleurs ici : un état que le système connaît
+et ne projette pas.
+
+### Trois choses, et elles existent déjà séparément
+
+| Ce qu'il faut | Ce que c'est déjà |
+|---|---|
+| un parent maximal, infranchissable | la racine du `FileSource` |
+| ce qui est retiré à l'intérieur | `WorkDomain.exclude` (des `Selector`) |
+| ce qui est en vision | `WorkDomain.include` |
+
+Autrement dit : **l'enveloppe de fichiers, c'est le `WorkDomain` appliqué à la
+source de fichiers.** Le rôle du §2 cesse d'être une prose et devient ce que
+les outils rendent — ce qui est précisément le manque que l'expérience a
+démontré, puisque trois agents aux domaines déclarés différents ont convergé
+sur le même fichier.
+
+### Le `cd`, et pourquoi il change le reste
+
+Un répertoire courant est de l'**état de session** : il survit au tour, il est
+mutable, plusieurs outils s'en servent. Il va donc au service `"session"`, pas
+dans un port — c'est le partage du [doc 13 §4](../25-aout-2026-18h58/13-la-session-comme-graphe.md).
+
+Et il doit se **voir**, sinon on reproduit exactement le défaut ci-dessus :
+
+```
+vous travaillez dans src/dataflow (racine autorisée : src/)
+```
+
+Une ligne, dérivée, dans le bloc d'assemblage — au même titre que les attentes
+(§6). C'est ce qui aurait épargné les cinq tours perdus de la première trace.
+
+### Refuser en nommant la frontière
+
+`read` fait déjà la bonne chose et mérite d'être copié :
+
+```
+no such file in worktree:…/src/dataflow: src/dataflow/runtime.rs
+  — did you mean: runtime.rs
+```
+
+L'erreur **contient la réponse**. Que l'agent ne l'ait pas prise est un second
+défaut, distinct, et il ne se corrige pas par un meilleur message : voir §5
+quater.
+
+Un refus de frontière doit dire la même chose : ce qui est demandé, où passe la
+limite, et ce qui est accessible à la place. *« Accès refusé »* seul transforme
+un agent en tâtonneur.
+
+### Plus tard : sortir demande un humain
+
+*« pas sans human approval »* — et le mécanisme est déjà là. Un agent qui a
+besoin de franchir la frontière ne devine pas, il **se tait en le disant** :
+`pause_dialogue(genre: waiting_for_instruction, raison: …)`. La demande apparaît
+alors dans le bloc d'attentes de Lucie, avec ce qu'il voulait atteindre.
+
+Rien de neuf à construire pour ça : c'est une pause, et les pauses sont
+visibles depuis hier soir.
+
+## 5 quater. Ce que la première expérience a montré
+
+Quarante secondes, trois agents, dix-sept appels d'outils. **Aucun n'a conclu**,
+et c'est le rapport le plus utile de la journée.
+
+| Ce qu'on a vu | Ce que ça dit |
+|---|---|
+| zed (catalogue) et maurice (recherche) cherchent le **même** fichier | **le rôle en prose ne porte rien** — le critère du §3 se déclenche |
+| zéro appel à `pause_dialogue`, alors qu'il est déclaré et demandé | déclarer un outil ne suffit pas à le rendre atteignable |
+| `read` refuse, dit « did you mean: runtime.rs », l'agent réessaie **à l'identique** | un message d'erreur juste ne se lit pas tout seul |
+| deux agents arrêtés par `MaxIterations` à six tours | une limite basse ne produit pas une réponse courte, elle produit une phrase coupée |
+| la question portait sur le catalogue, la racine ne contenait que `src/dataflow` | **le montage contredisait sa propre question** |
+
+Le dernier est de moi, et c'est le plus instructif : une expérience mal montée
+produit des symptômes qui ressemblent à des défauts du moteur. Il faut lire la
+trace avant d'accuser le code.
+
+Et le troisième mérite qu'on s'y arrête. Le modèle a reçu la bonne réponse dans
+le texte de l'erreur et a renvoyé le même appel. Ce n'est **pas** un problème de
+formulation : c'est que rien ne l'oblige à traiter un échec autrement qu'un
+résultat. La garde d'erreur répétée l'a arrêté au deuxième — elle a fait son
+travail, mais elle arrête au lieu de corriger.
+
 ## 6. L'invite système devient une projection du graphe
 
 C'est la conséquence la plus intéressante de la phrase de Lucie, et elle est à
