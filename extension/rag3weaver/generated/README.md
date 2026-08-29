@@ -877,130 +877,46 @@ défaut wgpu. Boîtes identiques, texte identique des deux côtés :
 par PIL côté oracle (resize ×6 : jusqu'à un niveau de gris d'écart), la carte bouge de
 0.1 sur les bords et les probas rec de 1.9e-3 — même texte. Backend au moment du test :
 Burn + wgpu/Vulkan sur AMD Radeon AI PRO R9700 via RADV.
+## `qwen2_5_0_5b_onnx.rs` — **retiré le 28 août 2026**
 
-## `qwen2_5_0_5b_onnx.rs`
+Ce fichier n'existe plus. Avec lui sont partis `src/burn_llm.rs`, la feature
+`burn-llm`, la dépendance `hf-chat-template`, le rôle `BurnRole::Llm` et les
+suites `e2e_burn_llm`, `e2e_burn_agent`, `e2e_burn_code_agent` — 16 782 lignes.
 
-Traduction mécanique, par `burn-onnx`, du graphe ONNX de
-**[Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct)**
-(décodeur causal : 24 couches, hidden 896, 14 têtes Q / **2 têtes KV** (GQA),
-head_dim 64, vocab 151 936, contexte 32 768, `tie_word_embeddings`). C'est le
-premier **modèle génératif** du dossier — les six précédents sont des encodeurs.
+**Pourquoi**, pour que personne ne refasse le chemin :
 
-**Ce n'est pas notre modèle.** Licence **Apache-2.0** (fiche du modèle), tout le
-mérite revient à l'équipe Qwen (Alibaba Cloud). L'export ONNX fp32 vient de
-[onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct)
-(Transformers.js). Nous n'avons fait que changer le format pour pouvoir le
-charger depuis Rust.
+Notre moteur fait l'**embedding**, le **rerank**, l'**OCR** — bientôt le TTS et
+le STT. Ce sont des passages courts, à modèle fixe, où un graphe burn local a
+un sens : pas de serveur à tenir, pas de protocole, et le résultat entre dans
+le catalogue sans quitter le processus.
 
-| | |
-|---|---|
-| Source | `onnx/model.onnx` (1 993 796 793 octets, sha256 `373b18ccddcf62f765516663f957866ce8a63e885abd1d2878cc464c5f7e25d7`) de onnx-community/Qwen2.5-0.5B-Instruct |
-| Outil | `burn-onnx 0.22.0-pre.1`, `LoadStrategy::File` |
-| Taille | 14 851 lignes |
-| Poids | **non inclus** — 1,99 Go |
+L'inférence d'un LLM n'a rien de commun avec ça. Elle veut un cache KV, du
+batching, de la quantification, un ordonnanceur — des années de travail que
+`llama.cpp` a déjà faites, et mieux. Nous n'avions pas de raison de refaire ce
+chemin, et une bonne raison de ne pas le refaire : **le modèle qu'on peut
+porter soi-même n'est pas celui qui produit de beaux artefacts.** Un 0,5 B
+répondait déjà « The `signals` input port is used to pass signals to the `on`
+method », ce qui ne veut rien dire.
 
-### Le point qui décide de tout : cet export-ci, pas un autre
+Le LLM vient donc de `llama.cpp` (API compatible OpenAI, feature `openai-llm`)
+ou d'un fournisseur distant. C'est ce serveur-là qui choisit sa carte, pas
+nous — d'où la disparition de `RAG3WEAVER_BURN_DEVICE_LLM`.
 
-`burn-onnx 0.22.0-pre.1` **ne sait pas importer** les exports HuggingFace
-récents des décodeurs. Ceux-ci passent par les ops fusionnées `com.microsoft`
-d'ONNX Runtime GenAI, absentes des 216 variantes de `NodeType` d'`onnx-ir` :
-
-| ONNX | ops | résultat |
-|---|---|---|
-| `onnx-community/Qwen3-0.6B-ONNX` | `GroupQueryAttention`, `SkipSimplifiedLayerNormalization`, `SimplifiedLayerNormalization`, `RotaryEmbedding` | **panique** `Unknown node type: VariantNotFound` (`onnx-ir/src/proto_conversion.rs:607`) |
-| `HuggingFaceTB/SmolLM2-135M` et `-360M` | idem | **panique** |
-| **`onnx-community/Qwen2.5-0.5B-Instruct`** | ops standard décomposées (`Trilu`, `ScatterND`, `Where`, `Range`, `Expand`, `Neg`/`Pow`/`ReduceMean`/`Sqrt` = RMSNorm et RoPE décomposés) | **✅** |
-| `onnx-community/Qwen2.5-1.5B-Instruct` | idem | ✅ (ops vérifiées, non converti) |
-
-Autrement dit : le choix du modèle est aujourd'hui contraint par la
-**disponibilité d'un export décomposé**, pas par ses mérites. Pour un modèle
-qui n'en a pas, il faut réexporter hors ligne avec
-`torch.onnx.export(opset_version=16, use_cache=True)`.
-
-Bonne surprise en revanche : la passe de simplification de `burn-onnx`
-**recoud l'attention toute seule** — le code généré contient 24 appels à
-`burn::tensor::module::attention(...)` (le noyau fusionné de `cubek-attention`)
-et **un seul** `.matmul()` brut.
-
-### ⚠ Ne pas prendre `model_fp16.onnx`
-
-L'export fp16 d'onnx-community pour ce modèle est **numériquement dégradé**.
-Il est deux fois plus rapide et deux fois plus petit (996 Mo), il charge, il
-tourne, ses tenseurs ont les bonnes formes, il passe même un test d'induction
-sur motif répété — et il produit du texte faux :
+**Le défaut qui a précipité la décision**, gardé ici parce qu'il vaut pour tout
+export ONNX de décodeur qu'on tenterait plus tard : la traduction `burn-onnx`
+paniquait dans l'expansion GQA au-delà d'environ 2 000 jetons —
 
 ```
-poids fp16 :  "The capital of France is" -> " is is is isis is is is is is"
-poids f32  :  "The capital of France is" -> " Paris. It is the largest city in Europe and"
+attendu :  [1, 2,    7, seq, 64]  →  [1, 14, seq, 64]
+obtenu  :  [1, 2,  seq, seq, 64]  →  panique Reshape
 ```
 
-Le symptôme est discret : les logits sont finis, dans une plage normale
-(−12,8 … +20,7), mais dominés par les jetons de contrôle (`<|im_end|>` en tête),
-si bien qu'un prompt de chat se termine immédiatement. C'est ce qu'attrape le
-test `raw_completions_are_numerically_sane` de `tests/e2e_burn_llm.rs` — trois
-complétions brutes dont la suite est évidente. **Toute future bascule de
-quantification doit repasser par ce test.** `RAG3WEAVER_QWEN_DTYPE=f16` force la
-précision de calcul en fp16 (les poids, eux, restent ceux du `.bpk`), pour le
-jour où un export fp16 sain existera.
+Le facteur de répétition (7 = 14 têtes Q / 2 têtes KV) prenait la longueur de
+séquence à sa place. Le vrai Qwen2.5-0.5B fait 32 768 jetons ; c'était notre
+traduction qui était fausse, pas le modèle. Ce genre de bug se corrige à la
+source (l'export, ou `burn-onnx`), jamais dans le fichier généré.
 
-### La rustine
-
-Une seule, appliquée à la main en tête du fichier, comme pour les autres :
-
-1. le chemin `ScatterND` de `burn-onnx 0.22.0-pre.1` émet `alloc::vec::Vec`
-   **sans déclarer le crate** → `extern crate alloc;`.
-
-(L'export fp16, si on y revient un jour, en demande une seconde : il émet
-`half::f16::from_f64(..)` sans déclarer `half`. `burn::tensor::f16` étant déjà
-le `half::f16` réexporté, un `mod half { pub use burn::tensor::f16; }` suffit et
-évite une dépendance de plus.)
-
-### La recette
-
-```bash
-# 1. l'ONNX f32 (le fichier porte ses poids, pas de données externes)
-curl -L -o model.onnx \
-  https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct/resolve/main/onnx/model.onnx
-
-# 2. conversion (binaire fourni par burn-onnx)
-cargo install --version 0.22.0-pre.1 burn-onnx --bin onnx2burn
-onnx2burn model.onnx out/ --no-development
-
-# 3. en-tête scrubbé + la rustine ci-dessus, puis
-#    out/model.rs -> generated/qwen2_5_0_5b_onnx.rs
-#    out/model.bpk -> ~/.cache/rag3weaver/qwen2.5-0.5b-instruct/model.bpk
-```
-
-### Les poids
-
-```
-model.bpk               1 993 019 392 octets
-sha256      a2fae654920c7d7ad17e0b11ddb791ed22391c874e9f912c37d4b0b3ed01a834
-tokenizer.json              7 031 645 octets
-sha256      c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539
-tokenizer_config.json           7 305 octets
-sha256      5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583
-```
-
-`tokenizer_config.json` est **obligatoire** ici, contrairement aux encodeurs :
-c'est lui qui porte le `chat_template` Jinja, rendu par `hf-chat-template`. Le
-bloc `tools` de Qwen2.5 est natif — on ne l'injecte pas, on le remplit.
-
-```bash
-mkdir -p ~/.cache/rag3weaver/qwen2.5-0.5b-instruct
-# model.bpk : produit par la recette ci-dessus
-curl -L -o ~/.cache/rag3weaver/qwen2.5-0.5b-instruct/tokenizer.json \
-  https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/tokenizer.json
-curl -L -o ~/.cache/rag3weaver/qwen2.5-0.5b-instruct/tokenizer_config.json \
-  https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/tokenizer_config.json
-```
-
-Chemins remplaçables par `RAG3WEAVER_QWEN_DIR`, ou finement par
-`RAG3WEAVER_QWEN_BPK` / `_TOKENIZER` / `_TOKENIZER_CONFIG`.
-
-### Empreinte mémoire
-
-Poids f32 1,99 Go, plus le cache KV : `2 × 24 couches × 2 têtes KV × 64 ×
-seq × 4 octets`, soit **192 Mio à 8 k jetons**. Le GQA très agressif de ce
-modèle (2 têtes KV de 64) est ce qui rend son cache minuscule — Qwen3-0.6B, avec
-8 têtes KV de 128, en demanderait **neuf fois plus**.
+Pour le ressusciter : `git show <commit>^:extension/rag3weaver/generated/qwen2_5_0_5b_onnx.rs`.
+La recette d'export, les empreintes des poids et l'inventaire des exports ONNX
+essayés (Qwen3-0.6B refusé pour `GroupQueryAttention`, Qwen2.5-1.5B vérifié)
+sont dans l'historique de ce fichier.

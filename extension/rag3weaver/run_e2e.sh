@@ -44,6 +44,28 @@ confined() {
   systemd-run --user --scope --quiet --collect -p MemoryHigh="$high" -- "$@"
 }
 
+# ── Tracer la charge, pendant la compilation comme pendant les tests ───────
+#
+# « Ma machine recommence à galérer » n'est pas une mesure. Un échantillon
+# toutes les cinq secondes dans un TSV en est une, et elle survit à la passe :
+# on peut y revenir le lendemain pour savoir *quand* ça a basculé.
+#
+# Ça démarre ici, avant le build, parce que c'est le build C++ qui coûte le
+# plus cher — et c'est justement celui qu'on ne voyait pas.
+#
+# `RAG3WEAVER_CHARGE=0` désactive ; `RAG3WEAVER_CHARGE_INTERVALLE` change le pas.
+CHARGE_LOG="${RAG3WEAVER_CHARGE_LOG:-$WEAVER/target/charge-last.tsv}"
+CHARGE_PID=""
+if [ "${RAG3WEAVER_CHARGE:-1}" != "0" ] && [ -x "$WEAVER/charge.py" ]; then
+  mkdir -p "$(dirname "$CHARGE_LOG")"
+  : > "$CHARGE_LOG"
+  "$WEAVER/charge.py" --sortie "$CHARGE_LOG" \
+    --intervalle "${RAG3WEAVER_CHARGE_INTERVALLE:-5}" &
+  CHARGE_PID=$!
+  trap '[ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true' EXIT
+  echo "▸ Charge tracée dans $CHARGE_LOG (tail -f pour suivre)"
+fi
+
 # Parse flags
 BUILD_ONLY=false
 FORCE_BUILD=false
@@ -104,6 +126,12 @@ fi
 
 if [ "$BUILD_ONLY" = true ]; then
   echo "✓ Build complete: $BUILD/src/librag3db.so"
+  if [ -n "$CHARGE_PID" ]; then
+    kill "$CHARGE_PID" 2>/dev/null || true
+    CHARGE_PID=""
+    echo "CHARGE"
+    "$WEAVER/charge.py" --resume "$CHARGE_LOG" || true
+  fi
   exit 0
 fi
 
@@ -115,10 +143,14 @@ cd "$WEAVER"
 # Chemin produit : burn (wgpu — AMD/NVIDIA/Apple, un seul code). candle n'est
 # plus une feature des E2E ; --no-cuda est accepté pour compatibilité et sans effet.
 # Tout l'arsenal burn est dans le jeu : une suite qui ne tourne pas n'existe
-# pas. burn-llm (Qwen2.5-0.5B, 996 Mo) et burn-ocr (PP-OCRv6 tiny) chargent
-# leurs poids depuis ~/.cache/rag3weaver/ — téléchargés au premier passage.
+# pas. burn-embedder (BGE-M3) et burn-ocr (PP-OCRv6 tiny) chargent leurs poids
+# depuis ~/.cache/rag3weaver/ — téléchargés au premier passage.
 # `--features a,b` ajoute au jeu.
-FEATURES="rag3db-native,burn-embedder,burn-llm,burn-ocr,code${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+#
+# **Plus de `burn-llm`** (28 août 2026) : notre moteur ne fait pas d'inférence
+# de LLM. Il fait l'embedding, le rerank, l'OCR — ce pour quoi un graphe burn
+# local a un sens. Un LLM vient de llama.cpp ou d'un fournisseur distant.
+FEATURES="rag3db-native,burn-embedder,burn-ocr,code${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
 CARGO_ARGS=(
   --features "$FEATURES"
@@ -294,6 +326,17 @@ if [ "$SUMMARY" = true ]; then
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
   say "═══════════════════════════════════════════════\n"
+
+  # **Ce que la passe a coûté à la machine.** Un total de tests verts ne dit
+  # pas si le poste était inutilisable pendant une demi-heure.
+  if [ -n "$CHARGE_PID" ]; then
+    kill "$CHARGE_PID" 2>/dev/null || true
+    CHARGE_PID=""
+    echo ""
+    echo "  CHARGE"
+    "$WEAVER/charge.py" --resume "$CHARGE_LOG" || true
+    echo "  journal de charge : $CHARGE_LOG"
+  fi
   echo "  journal complet : $E2E_LOG"
   exit "$EXIT_CODE"
 else
@@ -302,6 +345,13 @@ else
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
   echo ""
+  if [ -n "$CHARGE_PID" ]; then
+    kill "$CHARGE_PID" 2>/dev/null || true
+    CHARGE_PID=""
+    echo "CHARGE"
+    "$WEAVER/charge.py" --resume "$CHARGE_LOG" || true
+    echo "Journal de charge : $CHARGE_LOG"
+  fi
   echo "Journal complet : $E2E_LOG"
   echo "Tip: run with --summary for a per-suite results table."
   exit "$EXIT_CODE"

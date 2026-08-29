@@ -6,6 +6,16 @@
 use burn::prelude::*;
 
 /// Which GPU burn should run on.
+///
+/// **Deux piles, pas une.** `DiscreteGpu`/`IntegratedGpu` passent par wgpu
+/// (compilateur SPIR-V, feature `vulkan`) : portable, c'est ce qui tourne sur
+/// n'importe quelle carte. `Rocm` passe par HIP, sans wgpu du tout — le chemin
+/// natif d'une carte AMD, disponible seulement si la feature `burn-rocm` est
+/// active et si ROCm est installé.
+///
+/// `Device` de burn 0.22 dispatche à l'exécution, donc les deux piles
+/// cohabitent dans le même binaire : le choix reste une variable
+/// d'environnement, pas une recompilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BurnDevice {
     /// Best available device (discrete GPU if present).
@@ -15,20 +25,29 @@ pub enum BurnDevice {
     DiscreteGpu(usize),
     /// Integrated GPU.
     IntegratedGpu(usize),
+    /// Nième carte AMD par HIP/ROCm. L'index est celui de ROCm (`rocminfo`),
+    /// qui n'a aucune raison de coïncider avec celui de wgpu — à vérifier
+    /// comme le reste, en regardant la VRAM bouger.
+    Rocm(usize),
     /// CPU fallback. Correct but slow; handy for reproducible reference output.
     Cpu,
 }
 
-/// À quoi sert un modèle. Le rôle décide de la carte, parce qu'un LLM et un
-/// embedder n'ont pas du tout la même empreinte : Qwen3-Coder-30B occupe
-/// 32 Go en permanence, BGE-M3 en prend 2,2 le temps d'un passage. Les mettre
-/// sur la même carte marche jusqu'au jour où ça ne marche plus.
+/// À quoi sert un modèle. Le rôle décide de la carte, parce que trois modèles
+/// n'ont pas la même empreinte ni la même durée de vie : BGE-M3 prend 2,2 Go
+/// le temps d'un passage, l'OCR quelques centaines de Mo, le reranker de même.
+/// Les mettre tous sur celle qui porte l'affichage marche jusqu'au jour où ça
+/// ne marche plus.
+///
+/// **Pas de rôle `Llm` :** notre moteur ne fait pas d'inférence de LLM
+/// (décision du 28 août 2026). Un LLM vient de `llama.cpp` ou d'un
+/// fournisseur distant, et c'est ce serveur-là qui choisit sa carte — pas
+/// nous. `RAG3WEAVER_BURN_DEVICE_LLM` n'existe donc plus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BurnRole {
     Embedder,
     Reranker,
     Ocr,
-    Llm,
 }
 
 impl BurnRole {
@@ -38,8 +57,35 @@ impl BurnRole {
             Self::Embedder => "RAG3WEAVER_BURN_DEVICE_EMBEDDER",
             Self::Reranker => "RAG3WEAVER_BURN_DEVICE_RERANKER",
             Self::Ocr => "RAG3WEAVER_BURN_DEVICE_OCR",
-            Self::Llm => "RAG3WEAVER_BURN_DEVICE_LLM",
         }
+    }
+}
+
+/// **SPIR-V épinglé, pas choisi à l'exécution.**
+///
+/// `Device::wgpu()` passe par l'`AutoCompiler` de burn, qui choisit WGSL,
+/// SPIR-V ou MSL *au lancement, selon les features activées*.
+/// `Device::vulkan()` épingle SPIR-V à la compilation et court-circuite ce
+/// choix.
+///
+/// On active la feature `vulkan` depuis le début — pour SPIR-V — et on
+/// appelait `Device::wgpu()`, donc l'`AutoCompiler`. Ça se voyait le jour où
+/// l'ajout d'un autre backend (`burn-rocm`) a changé le jeu de features et
+/// donc son choix : le même `drain` de 12 documents passait de **3,1 s à
+/// 71 s** sans qu'une ligne de notre code ne bouge (28 août 2026). Un choix
+/// fait à l'exécution d'après les features est un choix qu'on ne contrôle
+/// pas.
+///
+/// Sans la feature `vulkan`, on retombe sur l'`AutoCompiler` — c'est alors le
+/// bon comportement, il n'y a rien à épingler.
+fn wgpu_pinned(kind: DeviceKind) -> Device {
+    #[cfg(feature = "vulkan")]
+    {
+        Device::vulkan(kind)
+    }
+    #[cfg(not(feature = "vulkan"))]
+    {
+        Device::wgpu(kind)
     }
 }
 
@@ -58,10 +104,13 @@ impl BurnDevice {
         if let Some(n) = s.strip_prefix("igpu:") {
             return n.parse().map(Self::IntegratedGpu).map_err(|_| format!("device '{s}' : après 'igpu:' il faut un entier"));
         }
+        if let Some(n) = s.strip_prefix("rocm:") {
+            return n.parse().map(Self::Rocm).map_err(|_| format!("device '{s}' : après 'rocm:' il faut un entier"));
+        }
         match s {
             "default" | "" => Ok(Self::Default),
             "cpu" => Ok(Self::Cpu),
-            other => Err(format!("device '{other}' inconnu (default | cpu | gpu:N | igpu:N)")),
+            other => Err(format!("device '{other}' inconnu (default | cpu | gpu:N | igpu:N | rocm:N)")),
         }
     }
 
@@ -114,9 +163,22 @@ impl BurnDevice {
     pub(crate) fn resolve(self) -> Device {
         match self {
             BurnDevice::Default => Device::default(),
-            BurnDevice::DiscreteGpu(i) => Device::wgpu(DeviceKind::DiscreteGpu(i)),
-            BurnDevice::IntegratedGpu(i) => Device::wgpu(DeviceKind::IntegratedGpu(i)),
-            BurnDevice::Cpu => Device::wgpu(DeviceKind::Cpu),
+            BurnDevice::DiscreteGpu(i) => wgpu_pinned(DeviceKind::DiscreteGpu(i)),
+            BurnDevice::IntegratedGpu(i) => wgpu_pinned(DeviceKind::IntegratedGpu(i)),
+            BurnDevice::Cpu => wgpu_pinned(DeviceKind::Cpu),
+            #[cfg(feature = "burn-rocm")]
+            BurnDevice::Rocm(i) => Device::rocm(i),
+            // **Demander ROCm sans l'avoir compilé n'est pas une panne.** On le
+            // dit et on prend le défaut : la même règle que pour une variable
+            // illisible. Un modèle sur la mauvaise pile reste préférable à un
+            // modèle qui ne tourne pas.
+            #[cfg(not(feature = "burn-rocm"))]
+            BurnDevice::Rocm(i) => {
+                eprintln!(
+                    "[rag3weaver] rocm:{i} demandé, mais la feature `burn-rocm` n'est pas active — carte wgpu par défaut"
+                );
+                Device::default()
+            }
         }
     }
 }
@@ -124,6 +186,41 @@ impl BurnDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Le chiffre qui décide de ne pas activer ROCm.**
+    ///
+    /// Mesuré le 28 août 2026, même test, mêmes 12 documents, `drain` seul :
+    ///
+    /// | | gpu:0 | gpu:1 | rocm:0 | rocm:1 |
+    /// |---|---|---|---|---|
+    /// | `AutoCompiler`, rocm compilé | 60,4 s | 71,5 s | 7,5 s | 35,3 s |
+    /// | SPIR-V épinglé, rocm compilé | 40,7 s | 40,7 s | 7,9 s | 7,5 s |
+    /// | **SPIR-V épinglé, sans rocm** | **2,94 s** | **2,99 s** | — | — |
+    ///
+    /// Trois choses, dans l'ordre de ce qu'elles coûtent :
+    ///
+    /// 1. **ROCm marche** — 4 tests verts sur les deux cartes — et il est
+    ///    **2,6× plus lent** que wgpu/SPIR-V ici (7,5 s contre 2,94 s). Le
+    ///    chemin natif d'une carte AMD n'est pas le plus rapide sur ce travail.
+    /// 2. **Compiler `burn-rocm` dégrade le chemin wgpu d'un facteur 14**
+    ///    (2,94 s → 40,7 s) sans qu'une ligne de notre code ne change. Ce n'est
+    ///    donc pas une feature qu'on peut laisser dormir « au cas où » : elle
+    ///    est exclusive en pratique.
+    /// 3. **Épingler SPIR-V** vaut de toute façon : ça retire la variance
+    ///    entre cartes (60/71 s devenus 40,7/40,7) et gagne 6 % sur le chemin
+    ///    normal.
+    ///
+    /// Conclusion : le code ROCm reste — vingt lignes, il fonctionne, et la
+    /// question se reposera à la prochaine version de burn. La feature reste
+    /// **éteinte**.
+    #[test]
+    fn rocm_is_a_measured_choice_not_a_default() {
+        // `rocm:N` se lit toujours, feature ou non : c'est `resolve()` qui
+        // décide quoi en faire, et qui le dit quand il ne peut rien.
+        assert_eq!(BurnDevice::parse("rocm:1"), Ok(BurnDevice::Rocm(1)));
+        assert!(BurnDevice::parse("rocm:x").is_err());
+        assert!(BurnDevice::parse("rocm").unwrap_err().contains("rocm:N"));
+    }
 
     #[test]
     fn a_card_is_read_from_a_short_form() {
@@ -138,16 +235,17 @@ mod tests {
 
     #[test]
     fn each_role_has_its_own_variable() {
-        let vars: Vec<&str> = [BurnRole::Embedder, BurnRole::Reranker, BurnRole::Ocr, BurnRole::Llm]
+        let vars: Vec<&str> = [BurnRole::Embedder, BurnRole::Reranker, BurnRole::Ocr]
             .iter()
             .map(|r| r.env_var())
             .collect();
-        // Quatre rôles, quatre variables distinctes — sinon en placer un
-        // déplacerait les autres.
+        // Trois rôles, trois variables distinctes — sinon en placer un
+        // déplacerait les autres. (Il y en avait quatre : `Llm` est parti avec
+        // l'inférence locale, le 28 août 2026.)
         let mut sorted = vars.clone();
         sorted.sort_unstable();
         sorted.dedup();
-        assert_eq!(sorted.len(), 4, "{vars:?}");
+        assert_eq!(sorted.len(), 3, "{vars:?}");
         assert!(vars.iter().all(|v| v.starts_with("RAG3WEAVER_BURN_DEVICE_")));
     }
 }

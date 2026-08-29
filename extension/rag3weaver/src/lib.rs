@@ -17,7 +17,7 @@ pub mod candle_embedder;
 /// Modèle BGE-M3 généré par burn-onnx depuis l'ONNX de BAAI — code machine, non édité.
 /// Voir `generated/README.md` pour la provenance et la régénération.
 /// Périphérique burn partagé (embedders, rerankers, OCR).
-#[cfg(any(feature = "burn-embedder", feature = "burn-ocr", feature = "burn-llm"))]
+#[cfg(any(feature = "burn-embedder", feature = "burn-ocr"))]
 pub mod burn_device;
 #[cfg(feature = "burn-embedder")]
 #[path = "../generated/bge_m3_onnx.rs"]
@@ -70,18 +70,6 @@ pub mod bge_reranker_v2_m3_onnx;
 pub mod burn_xlmr_reranker;
 #[cfg(feature = "burn-embedder")]
 pub use burn_xlmr_reranker::{BurnBgeRerankerV2M3, BurnMMiniLmReranker};
-/// Qwen2.5-0.5B-Instruct (fp16) généré par burn-onnx depuis l'ONNX
-/// d'onnx-community — code machine, deux rustines en tête, non édité au-delà.
-/// Voir `generated/README.md`.
-#[cfg(feature = "burn-llm")]
-#[path = "../generated/qwen2_5_0_5b_onnx.rs"]
-#[allow(clippy::all, dead_code, unused_imports)]
-pub mod qwen2_5_0_5b_onnx;
-#[cfg(feature = "burn-llm")]
-pub mod burn_llm;
-#[cfg(feature = "burn-llm")]
-pub use burn_llm::{BurnLlm, QwenConfig};
-
 /// PP-OCRv6_tiny_det (DBNet, PPLCNetV4 + RepLKFPN) généré par burn-onnx depuis
 /// l'ONNX officiel de PaddlePaddle — code machine, non édité. Voir `generated/README.md`.
 #[cfg(feature = "burn-ocr")]

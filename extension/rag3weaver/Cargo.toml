@@ -24,6 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
 thiserror = "2"
+# Le rendu des résultats est un **gabarit**, pas du `format!` en dur : la
+# forme d'une fiche de recherche est une question de goût qui change plus vite
+# que le moteur, et elle doit pouvoir être remplacée sans recompiler la
+# logique. Voir `templates/render/`.
+minijinja = { version = "2", default-features = false, features = ["builtins", "loop_controls", "serde"] }
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
@@ -36,32 +41,28 @@ candle-transformers = { version = "0.8", optional = true }
 tokenizers = { version = "0.21", optional = true, default-features = false, features = ["fancy-regex"] }
 hf-hub = { version = "0.4", optional = true }
 
-# lucivy_core — v3 (ShardedHandle, BlobShardStorage, SFX v3).
-# Dépendance par chemin en attendant la publication de 2.1.0 sur crates.io.
-# ⚠️ le v3 vit sur la branche `v3-recovery` du repo lucivy.
-lucivy-core = { path = "../../../lucivy/lucivy_core" }
+# lucivy — **publié**, 3.0.8 (29 août 2026). C'était une dépendance par chemin
+# tant que la v3 n'était pas sur crates.io : l'usage naïf de rag3weaver la
+# validait, et l'arbre a bougé huit fois pendant ce temps. Maintenant qu'elle
+# est publiée, on prend la version — un `cargo build` ne dépend plus d'un dépôt
+# voisin, et ce qu'on compile est ce que tout le monde compile.
+lucivy-core = "3.0.8"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { path = "../../../lucivy", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "3.0.8", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
-# sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant, voir
-# son NOTICE), persistance via lucistore. Vit dans le workspace lucivy depuis le
-# 24 août (e344b93) ; même règle que lucivy-core : l'arbre vivant, par chemin.
-sparse-vector = { path = "../../../lucivy/sparse_vector" }
+# sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
+# voir son NOTICE), persistance via lucistore. Publié avec le reste en 3.0.8.
+sparse-vector = "3.0.8"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
 
 # burn (GPU-agnostique : Vulkan/WebGPU/Metal/CUDA — feature flag)
-burn = { version = "0.22.0-pre.2", optional = true, default-features = false, features = ["std", "wgpu", "vulkan"] }
+burn = { version = "0.22.0-pre.2", optional = true, default-features = false, features = ["std", "wgpu"] }
 burn-store = { version = "0.22.0-pre.2", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
-# Chat templates Jinja de HuggingFace, pour le chemin LOCAL uniquement : c'est
-# nous le serveur, donc c'est nous qui rendons le template. minijinja nu rend 6
-# des 9 templates réels mesurés (doc 50 §4) ; celui-ci les rend 9 sur 9, pour
-# 16 crates, sans tokio ni getrandom.
-hf-chat-template = { version = "1", optional = true }
 # Parseurs de code (tree-sitter, 12 langages) : entités File / Scope et
 # relations résolues. Crate du dépôt, feature `code`.
 codeparsers = { path = "codeparsers", optional = true }
@@ -102,20 +103,32 @@ postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types",
 # Embedder BGE-M3 via burn — pas de candle, pas de CUDA, pas de hf-hub.
 # Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
 # depuis un .bpk fourni par l'appelant (cf generated/README.md).
-burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers"]
+burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan"]
 # OCR : décodage d'images (PNG/JPEG/WebP…) pour `OcrImage::decode` et le nœud
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
 # PP-OCRv6 sur burn est sous `burn-ocr`.
 ocr = ["dep:image"]
 code = ["dep:codeparsers", "dep:regex"]
-# Qwen2.5-0.5B-Instruct (décodeur, fp16) sur burn — génération locale.
-# Le graphe généré vit dans generated/qwen2_5_0_5b_onnx.rs ; les poids (.bpk) et
-# le tokenizer se chargent depuis un dossier (cf generated/README.md).
-burn-llm = ["dep:burn", "dep:burn-store", "dep:tokenizers", "dep:hf-chat-template"]
 # PP-OCRv6 tiny (détection DB + reconnaissance CTC) sur burn — sans tokenizers.
 # Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
 # poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).
-burn-ocr = ["ocr", "dep:burn", "dep:burn-store"]
+burn-ocr = ["ocr", "dep:burn", "dep:burn-store", "vulkan"]
+# **HIP/ROCm : le chemin natif d'une carte AMD**, à côté de wgpu et non à sa
+# place. `Device` de burn 0.22 dispatche à l'exécution, donc les deux piles
+# tiennent dans le même binaire et le choix se fait par `rocm:N` dans
+# `RAG3WEAVER_BURN_DEVICE_*`.
+#
+# Demande ROCm installé (`/opt/rocm`, `libhsa-runtime64`, `hipcc`) — d'où la
+# feature séparée : personne ne doit avoir à l'installer pour compiler.
+burn-rocm = ["dep:burn", "dep:burn-store", "burn/rocm"]
+# **SPIR-V épinglé.** Une feature de *notre* crate, pas seulement de `burn` :
+# `burn_device.rs` teste `cfg(feature = "vulkan")` pour appeler
+# `Device::vulkan()` au lieu de `Device::wgpu()`. Déclarée seulement sur la
+# dépendance, ce `cfg` aurait été faux en silence — et on serait resté sur
+# l'`AutoCompiler`, qui choisit son langage de shader à l'exécution d'après les
+# features présentes. C'est ce choix invisible qui faisait passer un `drain` de
+# 3,1 s à 71 s dès qu'on ajoutait un autre backend (28 août 2026).
+vulkan = ["burn/vulkan"]
 # LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
 # (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
@@ -202,3 +215,28 @@ required-features = ["burn-ocr"]
 [[example]]
 name = "openai_llm_stream"
 required-features = ["openai-llm"]
+
+# ─── Ce que la compilation écrit sur le disque ───────────────────────────────
+#
+# **La vraie cause du poste qui rame**, trouvée le 28 août 2026 en regardant
+# `/proc/pressure/io` au lieu du CPU : pendant l'édition de liens, `full` monte
+# à 60 % — soixante pour cent du temps, *aucune* tâche n'avance, tout le monde
+# attend le disque. Le CPU est à 11 %, la pression mémoire à zéro.
+#
+# Pourquoi : CachyOS plafonne `vm.dirty_bytes` à 256 Mo
+# (`/usr/lib/sysctl.d/70-cachyos-settings.conf`) — un réglage de latence pour
+# un bureau, qui suppose de petites écritures. Une passe en écrivait 48 Go :
+# 34 binaires de test à 1,4 Go, presque entièrement du DWARF que le linker
+# recopie depuis les `.o`. Au-delà du plafond, chaque `write()` bloque
+# jusqu'au vidage — et tout le monde attend dans la même file, Chrome et
+# l'éditeur compris.
+#
+# `unpacked` laisse le DWARF dans les `.o` : le linker n'a plus rien à recopier.
+# `line-tables-only` garde ce dont on se sert vraiment — `RUST_BACKTRACE=1` et
+# ses `fichier:ligne` — et jette ce qu'on ne lit jamais depuis un test.
+[profile.test]
+split-debuginfo = "unpacked"
+debug = "line-tables-only"
+
+[profile.dev]
+split-debuginfo = "unpacked"
