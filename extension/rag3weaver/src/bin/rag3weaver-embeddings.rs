@@ -12,12 +12,15 @@
 //! `RAG3WEAVER_BGE_M3_BPK` et `RAG3WEAVER_BGE_M3_TOKENIZER`, ou à défaut
 //! `~/.cache/rag3weaver/bge-m3/` — la même convention que les tests E2E, pour
 //! que le démon serve exactement les poids qu'ils servaient eux-mêmes. La carte
-//! se choisit par `RAG3WEAVER_BURN_DEVICE`.
+//! se choisit par `RAG3WEAVER_BURN_DEVICE_EMBEDDER` (ou `RAG3WEAVER_BURN_DEVICE`
+//! pour tous les rôles) — et il faut s'en servir : un démon qui vit des heures
+//! sur la carte d'affichage rend le poste inutilisable.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
+use rag3weaver::burn_bge_m3_embedder::BurnBgeM3Embedder;
+use rag3weaver::burn_device::{BurnDevice, BurnRole};
 use rag3weaver::daemon::EmbedDaemon;
 
 fn main() -> std::process::ExitCode {
@@ -40,7 +43,13 @@ fn servir() -> Result<(), String> {
     let debut = std::time::Instant::now();
     eprintln!("▸ chargement de BGE-M3 depuis {}", bpk.display());
     let octets = std::fs::read(&bpk).map_err(|e| format!("lecture de {} : {e}", bpk.display()))?;
-    let modele = BurnBgeM3Embedder::from_bytes(&octets, &tokenizer, BurnDevice::default())
+    // **Le rôle, pas le défaut.** Un démon qui vit des heures et tient 2,2 Go
+    // sur la carte qui porte l'affichage rend le poste inutilisable — mesuré
+    // le 29 août : carte d'affichage à 100 % et 18,9 Go de VRAM pendant une
+    // passe. `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:N` le déplace ; sans elle on
+    // reste sur le défaut, comme avant.
+    let carte = BurnDevice::for_role(BurnRole::Embedder);
+    let modele = BurnBgeM3Embedder::from_bytes(&octets, &tokenizer, carte)
         .map_err(|e| format!("construction du modèle : {e}"))?;
     let modele = Arc::new(modele);
     eprintln!("  chargé en {:?}", debut.elapsed());

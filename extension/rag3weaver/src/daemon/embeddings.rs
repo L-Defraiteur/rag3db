@@ -33,7 +33,10 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
-use crate::embedder::{DualEmbedder, EmbedError, Embedder, SparseEmbedder};
+use crate::embedder::{
+    budget_batches, embed_char_budget, souffler, DualEmbedder, EmbedError, Embedder,
+    SparseEmbedder,
+};
 use crate::serveur::{Fin, Serveur};
 use crate::sparse_index::SparseVector;
 
@@ -68,6 +71,9 @@ pub struct EmbedDaemon {
     dual: Option<Arc<dyn DualEmbedder>>,
     sparse: Option<Arc<dyn SparseEmbedder>>,
     fils: usize,
+    /// Plafond d'éléments par appel GPU. Le budget de texte
+    /// ([`embed_char_budget`]) ferme le lot avant lui la plupart du temps.
+    lot_max: usize,
     /// La carte est unique : une passe à la fois. Voir l'en-tête.
     passe: Mutex<()>,
 }
@@ -75,7 +81,7 @@ pub struct EmbedDaemon {
 impl EmbedDaemon {
     /// Un démon qui sert cet embedder.
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self { embedder, dual: None, sparse: None, fils: 4, passe: Mutex::new(()) }
+        Self { embedder, dual: None, sparse: None, fils: 4, lot_max: 32, passe: Mutex::new(()) }
     }
 
     /// Le même modèle sait aussi rendre le creux en une passe : on l'expose.
@@ -95,6 +101,44 @@ impl EmbedDaemon {
     pub fn fils(mut self, n: usize) -> Self {
         self.fils = n.max(1);
         self
+    }
+
+    /// Plafond d'éléments par appel GPU (défaut 32).
+    pub fn lot_max(mut self, n: usize) -> Self {
+        self.lot_max = n.max(1);
+        self
+    }
+
+    /// **Découper, embarquer lot par lot, souffler entre deux.**
+    ///
+    /// Trois choses qui comptent, dans cet ordre :
+    ///
+    /// - **Découper** : un client peut poster mille textes d'un coup. Sans
+    ///   borne, c'est une seule série de noyaux que rien ne préempte, et un
+    ///   bureau qui se fige — mesuré le 29 août 2026, carte d'affichage à
+    ///   100 % pendant une passe entière.
+    /// - **Rendre le verrou entre deux lots** : sinon un gros envoi bloque
+    ///   tous les autres clients du début à la fin. La file reste, mais elle
+    ///   s'entrelace.
+    /// - **Souffler hors du verrou** : dormir en le tenant reviendrait à
+    ///   refuser la carte à tout le monde pendant qu'on ne s'en sert pas.
+    fn par_lots<T>(
+        &self,
+        textes: &[String],
+        embarquer: impl Fn(&[String]) -> Result<Vec<T>, EmbedError>,
+    ) -> Result<Vec<T>, EmbedError> {
+        let lens: Vec<usize> = textes.iter().map(|t| t.len()).collect();
+        let mut out = Vec::with_capacity(textes.len());
+        for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
+            let debut = std::time::Instant::now();
+            let lot = {
+                let _passe = self.passe.lock();
+                embarquer(&textes[plage])
+            }?;
+            souffler(debut.elapsed());
+            out.extend(lot);
+        }
+        Ok(out)
     }
 
     /// L'identité qu'il déclare.
@@ -134,48 +178,47 @@ impl Service for EmbedDaemon {
         match (methode, chemin) {
             ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
-                Ok(t) => {
-                    let _passe = self.passe.lock();
-                    match self.embedder.embed(&t.texts) {
-                        Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
-                        Err(e) => (500, erreur(&e.to_string())),
-                    }
-                }
+                Ok(t) => match self.par_lots(&t.texts, |lot| self.embedder.embed(lot)) {
+                    Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
+                    Err(e) => (500, erreur(&e.to_string())),
+                },
             },
             ("POST", "/embed_dual") => match (&self.dual, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(d), Ok(t)) => {
-                    let _passe = self.passe.lock();
-                    match d.embed_dual(&t.texts) {
-                        Ok((dense, creux)) => (
+                // Les deux moitiés voyagent appariées : on découpe une fois,
+                // et chaque lot rend ses paires, qu'on sépare à la fin.
+                (Some(d), Ok(t)) => match self.par_lots(&t.texts, |lot| {
+                    d.embed_dual(lot).map(|(dense, creux)| dense.into_iter().zip(creux).collect())
+                }) {
+                    Ok(paires) => {
+                        let (dense, creux): (Vec<Vec<f32>>, Vec<SparseVector>) =
+                            paires.into_iter().unzip();
+                        (
                             200,
                             serde_json::json!({
                                 "dense": dense,
                                 "sparse": creux.iter().map(sparse_json).collect::<Vec<_>>(),
                             })
                             .to_string(),
-                        ),
-                        Err(e) => (500, erreur(&e.to_string())),
+                        )
                     }
-                }
+                    Err(e) => (500, erreur(&e.to_string())),
+                },
             },
             ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux seul")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(sp), Ok(t)) => {
-                    let _passe = self.passe.lock();
-                    match sp.embed_sparse(&t.texts) {
-                        Ok(creux) => (
-                            200,
-                            serde_json::json!({
-                                "sparse": creux.iter().map(sparse_json).collect::<Vec<_>>(),
-                            })
-                            .to_string(),
-                        ),
-                        Err(e) => (500, erreur(&e.to_string())),
-                    }
-                }
+                (Some(sp), Ok(t)) => match self.par_lots(&t.texts, |lot| sp.embed_sparse(lot)) {
+                    Ok(creux) => (
+                        200,
+                        serde_json::json!({
+                            "sparse": creux.iter().map(sparse_json).collect::<Vec<_>>(),
+                        })
+                        .to_string(),
+                    ),
+                    Err(e) => (500, erreur(&e.to_string())),
+                },
             },
             _ => (404, erreur("route inconnue")),
         }
@@ -525,6 +568,53 @@ mod tests {
     }
 
     /// Plusieurs clients à la fois : c'est le cas d'usage entier.
+    /// **Un gros envoi est découpé, pas soumis d'un bloc.**
+    ///
+    /// C'est la différence entre « le GPU est à 100 % » et « le GPU est pris
+    /// pour 800 ms d'affilée » : la seconde fige le bureau, parce qu'une
+    /// série de noyaux ne se préempte pas. Le 29 août 2026, une passe tenait
+    /// la carte d'affichage à 100 % et 18,9 Go — le découpage existait, mais
+    /// seulement sur le chemin d'ingestion, et le démon le contournait.
+    #[test]
+    fn un_gros_envoi_est_decoupe_en_lots() {
+        /// Note la taille de chaque appel reçu.
+        #[derive(Debug, Default)]
+        struct Compteur(Mutex<Vec<usize>>);
+
+        impl Embedder for Compteur {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                self.0.lock().unwrap().push(texts.len());
+                Ok(texts.iter().map(|t| vec![t.len() as f32]).collect())
+            }
+            fn dim(&self) -> usize {
+                1
+            }
+            fn name(&self) -> &str {
+                "compteur"
+            }
+        }
+
+        let compteur = Arc::new(Compteur::default());
+        let adresse = demon(EmbedDaemon::new(compteur.clone()).lot_max(8));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+
+        // Cent textes courts : c'est le plafond de compte qui ferme les lots,
+        // pas le budget de caractères.
+        let textes: Vec<String> = (0..100).map(|i| "x".repeat(i % 5 + 1)).collect();
+        let v = c.embed(&textes).expect("embed");
+
+        let appels = compteur.0.lock().unwrap().clone();
+        assert!(appels.len() >= 13, "cent textes par lots de 8 : {appels:?}");
+        assert!(appels.iter().all(|n| *n <= 8), "lot trop gros : {appels:?}");
+        assert_eq!(appels.iter().sum::<usize>(), 100, "des textes ont été perdus");
+
+        // Et le découpage ne change rien à ce que le client reçoit.
+        assert_eq!(v.len(), 100);
+        for (i, t) in textes.iter().enumerate() {
+            assert_eq!(v[i], vec![t.len() as f32], "ordre rompu au rang {i}");
+        }
+    }
+
     #[test]
     fn plusieurs_clients_en_meme_temps() {
         let adresse = demon(EmbedDaemon::new(Arc::new(Regle(4))).fils(4));

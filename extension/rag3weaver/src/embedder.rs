@@ -646,3 +646,240 @@ mod tests {
         assert_eq!(sparse.len(), 1);
     }
 }
+
+// ─── À quel rythme on prend la carte ─────────────────────────────────────────
+//
+// **Pourquoi ici et pas dans `burn_device`** — qui serait le foyer naturel :
+// ce module-là n'est compilé que sous `burn-embedder` ou `burn-ocr`, alors que
+// l'ingestion, elle, tourne avec n'importe quel `Embedder`. Une pause après un
+// appel qui attend vraiment la carte vaut quel que soit le fournisseur.
+//
+// **Hissé depuis `dataflow::record_nodes` le 29 août 2026.** Ces deux leviers
+// n'étaient branchés que sur le chemin d'ingestion : le démon d'embedding et
+// tout appelant direct de `Embedder::embed` les contournaient. Mesuré ce
+// jour-là, une passe E2E tenait la carte d'affichage à 100 % et 18,9 Go pour
+// cette raison exacte. Le mécanisme était bon ; il était juste au mauvais
+// étage.
+
+/// **Le rapport cyclique du GPU, en pourcentage** (`RAG3WEAVER_GPU_DUTY`).
+///
+/// `100` (le défaut) : on enchaîne les lots, la carte est à 99 % et c'est ce
+/// qu'on veut sur une machine dédiée. `70` : après chaque lot on dort assez
+/// pour que la carte soit occupée sept dixièmes du temps — le reste va au
+/// compositeur, à la fenêtre qu'on déplace, à la vidéo qu'on regarde pendant
+/// l'ingestion.
+///
+/// **Pourquoi une pause et pas un quota.** Ni wgpu ni Vulkan n'exposent de
+/// priorité de file ni de part garantie ; `VK_EXT_global_priority` existe dans
+/// Vulkan, wgpu ne le remonte pas. Le seul levier qui reste à un programme est
+/// de *ne pas soumettre* — et il est honnête : on ne prétend pas partager la
+/// carte, on lui laisse des trous.
+///
+/// Ça marche parce que `embed()` rend des vecteurs, donc il lit le tenseur en
+/// retour, donc il attend vraiment la carte. Une pause après lui est un vrai
+/// trou, pas une file qui continue de se remplir derrière.
+pub fn gpu_duty() -> u32 {
+    std::env::var("RAG3WEAVER_GPU_DUTY")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .map(|v| v.clamp(5, 100))
+        .unwrap_or(100)
+}
+
+/// Dort ce qu'il faut après un lot de `travail` pour tenir le rapport cyclique.
+///
+/// Rendue séparément de `gpu_duty()` pour être testable sans toucher au GPU :
+/// c'est une règle de trois, et c'est tout ce qu'on veut vérifier.
+pub fn pause_pour(travail: std::time::Duration, duty: u32) -> std::time::Duration {
+    if duty >= 100 {
+        return std::time::Duration::ZERO;
+    }
+    travail.mul_f64(f64::from(100 - duty) / f64::from(duty))
+}
+
+/// Le tour complet : chronomètre l'appel, puis souffle.
+pub fn souffler(travail: std::time::Duration) {
+    let pause = pause_pour(travail, gpu_duty());
+    if !pause.is_zero() {
+        std::thread::sleep(pause);
+    }
+}
+
+// ─── La taille d'un lot ──────────────────────────────────────────────────────
+//
+// **Hissé depuis `dataflow::record_nodes` le 29 août 2026**, pour la même
+// raison que le rythme dans `burn_device` : borner les lots ne servait qu'à
+// l'ingestion, alors que c'est la carte qu'on protège — et le démon la prend
+// par un autre chemin. Voir `crate::burn_device::souffler` pour l'autre moitié :
+// celle-ci règle *combien de temps d'affilée* la carte ne t'appartient pas,
+// l'autre *combien de temps* elle t'appartient.
+
+/// Internal work item for embedding.
+/// Budget de texte par forward, en **caractères**.
+///
+/// Mesuré le 27 août 2026 sur BGE-M3 / Radeon R9700
+/// (`examples/burn_throughput.rs`) : le débit culmine autour de **2 048 jetons
+/// par passe**, quelle que soit la répartition — 64×32, 16×128 et 4×512 jetons
+/// donnent 7 550, 7 417 et 6 210 tok/s. Au-delà il **redescend** : 5 507 à
+/// 8 192 jetons, 5 378 à 32 768. Ce n'est donc pas « plus gros c'est mieux ».
+///
+/// Le budget est en caractères et pas en jetons parce que **le tokenizer vit
+/// dans l'embedder, pas ici** : le lui demander coûterait une passe avant la
+/// passe. Quatre caractères par jeton est l'ordre de grandeur de ce corpus —
+/// c'est un garde-fou, pas une science, et c'est pour ça qu'il est large.
+pub const EMBED_CHAR_BUDGET: usize = 8_192;
+
+/// **La longueur d'une saccade**, en caractères de texte par appel GPU
+/// (`RAG3WEAVER_EMBED_CHAR_BUDGET`).
+///
+/// Le défaut, 8 192 (~2 048 jetons), est l'optimum de débit mesuré le 27 août
+/// 2026. Il coûte des rafales GPU de 295 ms en moyenne et 560 ms au pire
+/// (mesuré le 28) : pendant ce temps la carte ne rend pas la main, et si elle
+/// porte aussi l'affichage, ça se voit.
+///
+/// **Le plancher est un chunk**, pas ce nombre. `budget_batches` met un
+/// élément qui dépasse le budget dans son propre lot — on ne peut pas couper
+/// un chunk ici sans changer ce qui est embarqué. Avec un `max_size` de 1 500
+/// (256 pour le titre préfixé), descendre sous 1 500 ne raccourcit donc plus
+/// rien. La plage qui a un effet va de la taille de chunk au défaut.
+///
+/// À distinguer de `RAG3WEAVER_GPU_DUTY`, qui écarte les rafales sans les
+/// raccourcir : l'un règle *combien de temps* la carte t'appartient, l'autre
+/// *combien de temps d'affilée* elle ne t'appartient pas.
+pub fn embed_char_budget() -> usize {
+    std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(EMBED_CHAR_BUDGET)
+}
+
+/// Découpe une liste de travaux en sous-lots bornés **par la quantité de
+/// texte**, et pas seulement par le nombre d'éléments.
+///
+/// Un compte fixe de documents est structurellement faux sur un corpus
+/// hétérogène : « 32 » vaut six cents jetons pour des titres et trente mille
+/// pour des pages. Le premier lot passe inaperçu, le second demande d'un coup
+/// une allocation que la carte n'a pas — et le symptôme n'est pas une erreur
+/// claire, c'est un poste qui s'écroule.
+///
+/// **Un élément seul dépassant le budget forme son propre lot** : on ne peut
+/// pas le couper ici sans changer ce qui est embarqué, donc on le laisse
+/// passer plutôt que de mentir sur le contenu.
+pub fn budget_batches(lens: &[usize], max_items: usize, max_chars: usize) -> Vec<std::ops::Range<usize>> {
+    let mut out: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut start = 0usize;
+    let mut chars = 0usize;
+    for i in 0..lens.len() {
+        let plein = i > start && (i - start >= max_items || chars + lens[i] > max_chars);
+        if plein {
+            out.push(start..i);
+            start = i;
+            chars = 0;
+        }
+        chars += lens[i];
+    }
+    if start < lens.len() {
+        out.push(start..lens.len());
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests_rythme_et_lots {
+    use super::*;
+
+    /// **Le rapport cyclique, en règle de trois.**
+    ///
+    /// 99 % d'occupation n'est pas un défaut en soi ; c'en est un quand la
+    /// carte porte aussi l'affichage. Ni wgpu ni Vulkan n'exposent de quota,
+    /// donc le seul levier honnête est de ne pas soumettre : on chronomètre
+    /// le lot, on dort la fraction qui manque.
+    #[test]
+    fn le_rapport_cyclique_est_une_regle_de_trois() {
+        use std::time::Duration;
+        let lot = Duration::from_millis(100);
+
+        // 100 % : on n'attend pas. C'est le défaut, et il ne coûte rien —
+        // ni appel d'horloge inutile, ni branchement au milieu d'une boucle.
+        assert_eq!(pause_pour(lot, 100), Duration::ZERO);
+
+        // 70 % voulu : 100 ms de calcul veulent 43 ms de pause, parce que
+        // 100 / 143 ≈ 0,70.
+        let p = pause_pour(lot, 70);
+        assert_eq!(p.as_millis(), 42);
+        let cycle = lot + p;
+        let obtenu = 100.0 * lot.as_secs_f64() / cycle.as_secs_f64();
+        assert!((obtenu - 70.0).abs() < 1.0, "obtenu {obtenu:.1} %");
+
+        // 50 % : autant de pause que de calcul.
+        assert_eq!(pause_pour(lot, 50), lot);
+
+        // Un lot court donne une pause courte : la règle est proportionnelle,
+        // donc elle ne dépend pas de la taille des lots — c'est ce qui la rend
+        // composable avec le budget en caractères.
+        assert_eq!(pause_pour(Duration::from_millis(10), 50).as_millis(), 10);
+    }
+
+    fn plages(lens: &[usize], max_items: usize, max_chars: usize) -> Vec<(usize, usize)> {
+        budget_batches(lens, max_items, max_chars)
+            .into_iter()
+            .map(|r| (r.start, r.end))
+            .collect()
+    }
+
+    #[test]
+    fn le_budget_ferme_le_lot_sur_le_texte_pas_sur_le_nombre() {
+        // Quatre textes de 3 000 caractères : le compte en autoriserait 32,
+        // le budget n'en laisse passer que deux (3 × 3 000 = 9 000 > 8 192).
+        // C'est tout l'objet du changement.
+        let lens = [3_000, 3_000, 3_000, 3_000];
+        assert_eq!(plages(&lens, 32, 8_192), vec![(0, 2), (2, 4)]);
+    }
+
+    #[test]
+    fn le_compte_reste_une_borne_dure() {
+        // Des textes minuscules : c'est le nombre qui ferme, pas le budget.
+        let lens = [10; 10];
+        assert_eq!(plages(&lens, 4, 8_192), vec![(0, 4), (4, 8), (8, 10)]);
+    }
+
+    #[test]
+    fn un_element_seul_trop_gros_forme_son_lot() {
+        // On ne peut pas le couper sans changer ce qui est embarqué : il passe
+        // seul plutôt qu'on mente sur le contenu.
+        let lens = [100, 99_999, 100];
+        assert_eq!(plages(&lens, 32, 8_192), vec![(0, 1), (1, 2), (2, 3)]);
+    }
+
+    // ── Le budget de lot (doc 08) ───────────────────────────────────────
+
+
+    #[test]
+    fn rien_a_faire_ne_fait_rien() {
+        assert!(plages(&[], 32, 8_192).is_empty());
+    }
+
+    #[test]
+    fn les_plages_couvrent_tout_sans_trou_ni_recouvrement() {
+        // L'invariant qui compte vraiment : aucun texte perdu, aucun embarqué
+        // deux fois. Un découpage qui saute une entrée la laisse sans vecteur,
+        // et rien ne le dirait.
+        for max_items in [1usize, 3, 7, 64] {
+            for max_chars in [1usize, 500, 8_192] {
+                let lens: Vec<usize> = (0..37).map(|i| (i * 137) % 4_000).collect();
+                let p = plages(&lens, max_items, max_chars);
+                assert_eq!(p.first().map(|r| r.0), Some(0), "{max_items}/{max_chars}");
+                assert_eq!(p.last().map(|r| r.1), Some(lens.len()), "{max_items}/{max_chars}");
+                for w in p.windows(2) {
+                    assert_eq!(w[0].1, w[1].0, "trou ou recouvrement : {p:?}");
+                }
+                assert!(p.iter().all(|r| r.1 > r.0), "lot vide : {p:?}");
+                assert!(
+                    p.iter().all(|r| r.1 - r.0 <= max_items),
+                    "borne de compte dépassée : {p:?}"
+                );
+            }
+        }
+    }
+}
