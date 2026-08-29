@@ -121,21 +121,43 @@ impl BurnDevice {
     /// on le dit et on prend le défaut — un modèle qui tourne sur la mauvaise
     /// carte reste préférable à un modèle qui ne tourne pas.
     pub fn for_role(role: BurnRole) -> Self {
-        let raw = std::env::var(role.env_var())
-            .or_else(|_| std::env::var("RAG3WEAVER_BURN_DEVICE"))
-            .unwrap_or_default();
-        if raw.is_empty() {
+        // **Dire d'où vient le choix, pas seulement lequel.** Le message existe
+        // pour qu'un humain vérifie ; nommer la mauvaise source le rend pire
+        // qu'absent — on chercherait une variable que personne n'a posée.
+        let depuis = |v: String, source: &'static str| (v, source);
+        let choix = std::env::var(role.env_var())
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(|v| depuis(v, role.env_var()))
+            .or_else(|| {
+                std::env::var("RAG3WEAVER_BURN_DEVICE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .map(|v| depuis(v, "RAG3WEAVER_BURN_DEVICE"))
+            })
+            // **Le régime, en dernier recours et pour l'embarqueur seul.**
+            // C'est lui qui tient le modèle des heures durant : un reranker ou
+            // un OCR prennent la carte le temps d'un appel, l'embarqueur la
+            // garde. Voir `crate::regime`.
+            .or_else(|| match role {
+                BurnRole::Embedder => crate::regime::Regime::courant()
+                    .carte_embedder()
+                    .map(|v| depuis(v, "la carte la moins chargée, régime confort")),
+                _ => None,
+            });
+
+        let Some((raw, source)) = choix else {
             return Self::Default;
-        }
+        };
         match Self::parse(&raw) {
             Ok(d) => {
                 // Dire ce qu'on a choisi : sans ça, placer trois modèles sur
                 // deux cartes se fait à l'aveugle.
-                eprintln!("[rag3weaver] {:?} sur {} ({})", role, raw, role.env_var());
+                eprintln!("[rag3weaver] {role:?} sur {raw} ({source})");
                 d
             }
             Err(e) => {
-                eprintln!("[rag3weaver] {} : {e} — carte par défaut", role.env_var());
+                eprintln!("[rag3weaver] {source} : {e} — carte par défaut");
                 Self::Default
             }
         }

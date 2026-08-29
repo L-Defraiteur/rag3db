@@ -128,6 +128,10 @@ pub mod dataflow;
 pub mod query;
 pub mod refs;
 pub mod schema;
+/// **Le régime de travail** : un nom pour la composition « carte, rythme,
+/// rafale » qui décide si le poste reste utilisable pendant qu'on travaille.
+pub mod regime;
+pub use regime::Regime;
 pub mod postures;
 pub mod meter;
 pub use meter::{Consumption, Meter, Unit};

@@ -683,7 +683,7 @@ pub fn gpu_duty() -> u32 {
         .ok()
         .and_then(|v| v.trim().parse::<u32>().ok())
         .map(|v| v.clamp(5, 100))
-        .unwrap_or(100)
+        .unwrap_or_else(|| crate::regime::Regime::courant().duty())
 }
 
 /// Dort ce qu'il faut après un lot de `travail` pour tenir le rapport cyclique.
@@ -751,7 +751,9 @@ pub fn embed_char_budget() -> usize {
         .ok()
         .and_then(|v| v.trim().parse::<usize>().ok())
         .filter(|v| *v > 0)
-        .unwrap_or(EMBED_CHAR_BUDGET)
+        // Le régime après la variable, jamais devant : un réglage explicite
+        // gagne toujours (`crate::regime`).
+        .unwrap_or_else(|| crate::regime::Regime::courant().budget_caracteres())
 }
 
 /// Découpe une liste de travaux en sous-lots bornés **par la quantité de
