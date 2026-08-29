@@ -1762,9 +1762,13 @@ fn setup_dual_catalog() -> Catalog {
 
     let config = make_sparse_config();
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
-    // Still need a dense embedder for Catalog::new (required param),
-    // but DualEmbedBatchNode will be used instead for KBs with vector+sparse.
-    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+    // **Le même modèle des deux côtés.** Il y avait ici un `MockEmbedder`
+    // « juste pour satisfaire la signature » — mais c'est lui qui embarquait
+    // les **requêtes**, pendant que le dual indexait les documents. Deux
+    // espaces vectoriels sans rapport, des scores plausibles et faux
+    // (`docs/issues/29-08-2026/01`).
+    let dense: Arc<dyn rag3weaver::embedder::Embedder> = BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.set_dual_embedder(dual);
     catalog.initialize().unwrap();
 

@@ -808,6 +808,18 @@ impl Default for FlushConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CatalogConfig {
+
+    /// **Assumer un embedder factice.**
+    ///
+    /// Un `HashEmbedder` rend des vecteurs déterministes sans aucun sens : il
+    /// éprouve la plomberie, pas la recherche. Le catalogue refuse par défaut
+    /// les montages où il servirait à embarquer les requêtes pendant qu'un
+    /// vrai modèle indexe les documents — ça produit des scores plausibles et
+    /// faux, ce qui est pire qu'une panne (issue du 29 août 2026).
+    ///
+    /// Un test qui veut vraiment le factice des deux côtés le déclare ici.
+    #[serde(default)]
+    pub allow_mock_embedder: bool,
     pub name: Option<String>,
 
     pub entities: HashMap<String, EntityDef>,
@@ -835,6 +847,8 @@ impl Default for CatalogConfig {
             embedding_dim: 384,
             embedding: None,
             flush: FlushConfig::default(),
+            // Le défaut refuse : un montage qui veut vraiment le factice le dit.
+            allow_mock_embedder: false,
         }
     }
 }

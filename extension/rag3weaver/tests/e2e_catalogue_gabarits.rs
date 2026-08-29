@@ -21,7 +21,7 @@ mod common;
 
 use std::sync::Arc;
 
-use rag3weaver::embedder::{DualEmbedder, HashEmbedder};
+use rag3weaver::embedder::DualEmbedder;
 use rag3weaver::search::SearchOptions;
 use rag3weaver::template::{
     builtin_root, register_template_schema, scan, Family, TEMPLATE_ENTITY,
@@ -44,10 +44,18 @@ fn setup() -> Catalog {
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
 
+    // **Le même embedder des deux côtés.** `Catalog::search` embarque la
+    // requête avec l'embedder **du catalogue** (`catalog.rs:3812`), tandis que
+    // `set_dual_embedder` ne change que ce qui indexe les documents. Passer un
+    // `HashEmbedder` ici et BGE-M3 en dual compare deux espaces vectoriels sans
+    // rapport : l'ordre devient quasi constant, les scores tournent autour de
+    // zéro, et rien ne le dit. Mesuré le 29 août 2026 — voir
+    // `docs/issues/29-08-2026/01`.
     let config = CatalogConfig { name: Some("gabarits".into()), embedding_dim: 1024, ..Default::default() };
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
-    catalog.initialize().unwrap();
     let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
+    let dense: Arc<dyn rag3weaver::embedder::Embedder> = common::burn::BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
+    catalog.initialize().unwrap();
     catalog.set_dual_embedder(bge);
     register_template_schema(&mut catalog).unwrap();
     catalog
@@ -112,6 +120,42 @@ fn brique_1_le_cosinus_nu_dit_il_la_verite() {
     // juste et que la recherche ne l'est pas, le défaut est dans le moteur ;
     // s'il est faux, il n'y a rien à corriger en aval.
     assert_eq!(justes, 3, "l'embedder doit reconnaître ses propres descriptions");
+}
+
+/// **Brique 3 : qu'est-ce qui est réellement découpé et embarqué ?**
+///
+/// `score = 1.0 - distance` avec une métrique cosinus devrait rendre la
+/// similarité — donc ~0,60 pour `user` sur sa question (brique 1). On lit
+/// 0,068. Avant d'accuser le calcul, on regarde **le texte** qui a été
+/// embarqué : si ce n'est pas la description, il n'y a rien à corriger dans la
+/// recherche.
+#[test]
+#[ignore]
+fn brique_3_quel_texte_est_embarque() {
+    let mut catalog = setup();
+    let fiches = scan(&builtin_root()).unwrap();
+    catalog
+        .ingest_entities(TEMPLATE_ENTITY, fiches.iter().map(|f| f.data()).collect())
+        .unwrap();
+
+    // Les tables que le catalogue a créées pour cette entité.
+    for q in [
+        "MATCH (c:Template_Chunk) RETURN count(c)",
+        "MATCH (t:Template) RETURN count(t)",
+    ] {
+        eprintln!("[stock] {q} → {:?}", catalog.execute_raw(q).map(|r| r.rows));
+    }
+
+    // Le texte de chaque chunk, tronqué : c'est lui qui a été embarqué.
+    let rows = catalog
+        .execute_raw("MATCH (c:Template_Chunk) RETURN c._title, c._text LIMIT 12")
+        .expect("lire les chunks");
+    for r in &rows.rows {
+        let titre = r.first().and_then(|v| v.as_str()).unwrap_or("");
+        let texte = r.get(1).and_then(|v| v.as_str()).unwrap_or("");
+        let coupe: String = texte.chars().take(120).collect();
+        eprintln!("[chunk] titre={titre:?} texte={coupe:?}");
+    }
 }
 
 /// **Brique 2 : le vecteur seul, à travers le moteur.**

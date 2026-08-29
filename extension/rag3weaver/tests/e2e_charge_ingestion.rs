@@ -34,7 +34,7 @@ use std::time::Instant;
 
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
 use rag3weaver::code_tools::{FileSource, WorkingTree};
-use rag3weaver::embedder::{DualEmbedder, HashEmbedder};
+use rag3weaver::embedder::DualEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 fn rag3db_root() -> String {
@@ -83,7 +83,11 @@ fn ingerer_notre_propre_source_avec_le_vrai_embedder() {
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
 
     let config = CatalogConfig { name: Some("charge".into()), embedding_dim: 1024, ..Default::default() };
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
+    // Le même modèle des deux côtés — même si ce banc ne cherche pas, le
+    // montage se copie, et c'est comme ça qu'il s'est propagé à quatre
+    // fichiers (`docs/issues/29-08-2026/01`).
+    let dense: Arc<dyn rag3weaver::embedder::Embedder> = common::burn::BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.initialize().unwrap();
     let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
     catalog.set_dual_embedder(bge);

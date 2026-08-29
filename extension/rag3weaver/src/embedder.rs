@@ -46,6 +46,47 @@ pub trait Embedder: Send + Sync {
 
     /// The output dimension of the embedding model.
     fn dim(&self) -> usize;
+
+    /// **Est-ce un embedder factice ?**
+    ///
+    /// Un factice rend des vecteurs déterministes tirés d'un hash : parfait
+    /// pour éprouver la plomberie, sans aucun sens sémantique. Le savoir
+    /// permet au catalogue de refuser deux montages qui produisent des scores
+    /// **plausibles et faux** — c'est la famille de défauts la plus coûteuse,
+    /// puisque rien n'échoue.
+    ///
+    /// Défaut `false` : un embedder qui ne dit rien est supposé vrai.
+    fn is_mock(&self) -> bool {
+        false
+    }
+
+    /// Comment il s'appelle, pour les journaux et les refus.
+    fn name(&self) -> &str {
+        "?"
+    }
+}
+
+/// **Un embedder partagé en est un.**
+///
+/// `Catalog::new` prend un `Box<dyn Embedder>` tandis qu'un modèle chargé une
+/// fois vit derrière un `Arc`. Sans ce pont, un appelant qui veut le **même**
+/// modèle pour indexer et pour chercher devait écrire une façade — et la
+/// plupart ont préféré passer un factice « juste pour satisfaire la
+/// signature », ce qui a produit exactement le montage que le catalogue refuse
+/// maintenant (issue du 29 août 2026).
+impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        (**self).embed(texts)
+    }
+    fn dim(&self) -> usize {
+        (**self).dim()
+    }
+    fn is_mock(&self) -> bool {
+        (**self).is_mock()
+    }
+    fn name(&self) -> &str {
+        (**self).name()
+    }
 }
 
 /// Mock embedder for testing. Returns zero vectors of the configured dimension.
@@ -61,7 +102,19 @@ impl MockEmbedder {
 }
 
 
+impl MockEmbedder {
+    /// Il se déclare : voir [`Embedder::is_mock`].
+    pub const NAME: &'static str = "MockEmbedder";
+}
+
 impl Embedder for MockEmbedder {
+    fn is_mock(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &str {
+        Self::NAME
+    }
+
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         Ok(texts.iter().map(|_| vec![0.0_f32; self.dim]).collect())
     }
@@ -113,7 +166,19 @@ impl HashEmbedder {
     }
 }
 
+impl HashEmbedder {
+    /// Il se déclare : voir [`Embedder::is_mock`].
+    pub const NAME: &'static str = "HashEmbedder";
+}
+
 impl Embedder for HashEmbedder {
+    fn is_mock(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &str {
+        Self::NAME
+    }
+
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         Ok(texts.iter().map(|t| self.vector(t)).collect())
     }

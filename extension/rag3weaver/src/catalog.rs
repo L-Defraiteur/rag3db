@@ -289,8 +289,52 @@ impl Catalog {
     /// Set the dual embedder (optional). When set, both dense and sparse embeddings
     /// are computed in a single forward pass via `DualEmbedProcessor`.
     /// Must be called before `initialize()`.
+    /// **Le même modèle des deux côtés, ou rien.**
+    ///
+    /// `set_dual_embedder` change ce qui indexe les **documents** ; les
+    /// **requêtes** restent embarquées par l'embedder du catalogue
+    /// (`embed_query(self.embedder…)`). Un factice d'un côté et un vrai modèle
+    /// de l'autre compare deux espaces vectoriels sans rapport — et le pire
+    /// est que ça **marche** : pas d'erreur, pas d'avertissement, des scores
+    /// plausibles, un classement qui ne veut rien dire.
+    ///
+    /// Trouvé le 29 août 2026 après trois briques de dichotomie
+    /// (`docs/issues/29-08-2026/01`). On refuse désormais au montage : c'est
+    /// le seul endroit où l'erreur est encore lisible.
+    ///
+    /// Un montage qui veut vraiment ça — éprouver la plomberie du dual sans
+    /// charger un modèle — le déclare par `CatalogConfig.allow_mock_embedder`.
     pub fn set_dual_embedder(&mut self, embedder: Arc<dyn DualEmbedder>) {
         self.dual_embedder = Some(embedder);
+        self.warn_mock_query_embedder();
+    }
+
+    /// **Le même modèle des deux côtés, quand la requête passe par le factice.**
+    ///
+    /// `Catalog::search` n'embarque la requête avec le **dual** que si les deux
+    /// signaux denses sont demandés (`vector` *et* `sparse`) — c'est le seul
+    /// cas où un passage suffit pour les deux. Partout ailleurs, `bm25+vector`
+    /// compris, elle passe par l'embedder du catalogue.
+    ///
+    /// Donc un factice en primaire n'est fautif que pour les entités qui ne
+    /// demandent pas les deux : leurs documents seraient indexés par le vrai
+    /// modèle et leurs requêtes par le factice — deux espaces vectoriels sans
+    /// rapport, des scores plausibles et faux, aucune erreur (issue du 29 août
+    /// 2026, trouvée après trois briques de dichotomie).
+    ///
+    /// On ne peut pas trancher au moment où le dual est posé : les entités se
+    /// déclarent après. On refuse donc **à l'enregistrement de l'entité**, où
+    /// ses signaux sont connus.
+    fn warn_mock_query_embedder(&self) {
+        if !self.embedder.is_mock() || self.dual_embedder.is_none() {
+            return;
+        }
+        eprintln!(
+            "[rag3weaver] embedder du catalogue : '{}' (factice). Les requêtes passeront par \
+             lui pour toute entité qui ne demande pas `vector`+`sparse` ensemble — voir \
+             `register_entity`.",
+            self.embedder.name()
+        );
     }
 
     /// Set a custom checkpoint store. Must be called before `initialize()`.
@@ -795,6 +839,32 @@ impl Catalog {
 
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
+
+        // **Le même modèle des deux côtés, ou rien.**
+        //
+        // `Catalog::search` n'embarque la requête avec le dual que si `vector`
+        // **et** `sparse` sont demandés — un seul passage sert alors les deux.
+        // Partout ailleurs, `bm25+vector` compris, la requête passe par
+        // l'embedder du catalogue. Un factice là, un vrai modèle pour indexer :
+        // deux espaces vectoriels sans rapport, des scores plausibles et faux,
+        // et **aucune erreur**. Trouvé le 29 août 2026 après trois briques de
+        // dichotomie (`docs/issues/29-08-2026/01`) ; le montage était copié
+        // dans quatre fichiers de tests.
+        //
+        // C'est ici qu'on peut trancher, et pas quand le dual est posé : les
+        // signaux d'une entité ne sont connus qu'à sa déclaration.
+        let requete_par_le_dual = config.signals.vector() && config.signals.sparse();
+        if config.signals.vector()
+            && !requete_par_le_dual
+            && self.dual_embedder.is_some()
+            && self.embedder.is_mock()
+            && !self.config.allow_mock_embedder
+        {
+            return Err(CatalogError::SchemaError(format!(
+                "'{entity_name}' demande le signal `vector` sans `sparse` : ses requêtes seront                  embarquées par '{}', l'embedder factice du catalogue, pendant que l'embedder                  dual indexera ses documents. Deux espaces vectoriels sans rapport — les scores                  seraient plausibles et faux. Passer le même modèle à `Catalog::new` (un                  `Arc<dyn Embedder>` convient), ou déclarer `allow_mock_embedder: true`.",
+                self.embedder.name()
+            )));
+        }
 
         if self.kb_metadata.contains_key(entity_name) {
             return Err(CatalogError::SchemaError(

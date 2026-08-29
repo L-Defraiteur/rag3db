@@ -398,8 +398,10 @@ fn setup_bgem3_kb() -> Catalog {
     load_extensions(boxed.as_ref());
 
     let config = make_kb_config();
+    // Le même modèle des deux côtés : le factice embarquait les requêtes.
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
-    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+    let dense: Arc<dyn rag3weaver::embedder::Embedder> = BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.set_dual_embedder(dual);
     catalog.initialize().unwrap();
     catalog
@@ -418,8 +420,10 @@ fn setup_bgem3_simple() -> Catalog {
         embedding_dim: 1024,
         ..Default::default()
     };
+    // Le même modèle des deux côtés : le factice embarquait les requêtes.
     let dual: Arc<dyn DualEmbedder> = BGE_M3.clone();
-    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(1024)), config);
+    let dense: Arc<dyn rag3weaver::embedder::Embedder> = BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.set_dual_embedder(dual);
     catalog.initialize().unwrap();
 
