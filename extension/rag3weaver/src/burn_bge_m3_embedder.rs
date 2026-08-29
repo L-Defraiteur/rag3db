@@ -274,6 +274,13 @@ impl Embedder for BurnBgeM3Embedder {
     fn dim(&self) -> usize {
         HIDDEN_SIZE
     }
+
+    /// Le nom devient porteur dès qu'un démon le sert : c'est ce que
+    /// `GET /sante` déclare, et ce sur quoi un client vérifie qu'il parle bien
+    /// au modèle qu'il croit (`crate::daemon`).
+    fn name(&self) -> &str {
+        "bge-m3"
+    }
 }
 
 impl SparseEmbedder for BurnBgeM3Embedder {

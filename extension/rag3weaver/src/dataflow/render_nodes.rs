@@ -617,6 +617,7 @@ impl RenderResultsNode {
     /// Rien de tout ça n'est obligatoire — sans `FileSource` dans le registre,
     /// on retombe sur `Origin`, qui est le bon défaut pour un catalogue qu'on
     /// interroge de l'extérieur.
+    #[cfg(feature = "code")]
     fn lens_du_travail(&self, ctx: &mut NodeContext) -> PathLens {
         let Some(source) = ctx
             .service::<std::sync::Arc<dyn crate::code_tools::FileSource>>(crate::code_tools::FILE_SOURCE_SERVICE)
@@ -635,6 +636,15 @@ impl RenderResultsNode {
             .map(|c| c.get().to_string_lossy().to_string())
             .unwrap_or(racine);
         PathLens::From(prefixe)
+    }
+
+    /// Sans la feature `code`, il n'y a ni source de fichiers ni répertoire
+    /// courant : la lentille du poste de travail n'existe pas, et `Origin` est
+    /// exactement le bon défaut — un catalogue interrogé de l'extérieur écrit
+    /// ses chemins par rapport à leur dépôt.
+    #[cfg(not(feature = "code"))]
+    fn lens_du_travail(&self, _ctx: &mut NodeContext) -> PathLens {
+        PathLens::Origin
     }
 }
 

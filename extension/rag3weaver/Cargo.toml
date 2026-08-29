@@ -77,6 +77,17 @@ regex = { version = "1", optional = true }
 # voudra N appels cloud sans N fils, ce sera un client async sur tokio, pas
 # une « simplification » de celui-ci.
 ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
+# Serveur HTTP **bloquant**, pour le démon d'embedding.
+#
+# La première justification écrite ici — « symétrique d'`ureq`, parce que le
+# moteur est synchrone par choix » — était fausse : le synchrone n'est plus un
+# principe depuis l'abandon de wasm, seulement un état de fait (issue 03 du
+# 29 août). Voici celle qui tient : **le travail de ce serveur est du calcul
+# GPU pour peu de clients**. L'async sert ce qui *attend* ; ici tout calcule,
+# et les embarquements se sérialisent de toute façon sur une carte unique. Un
+# runtime n'achèterait rien. Les quelques fils de `tiny_http` servent à ce que
+# la sonde `/sante` réponde pendant qu'un lot occupe la carte.
+tiny_http = { version = "0.12", optional = true }
 # Déjà dans l'arbre via ureq (rustls→ring) : déclarés pour que `gcp_auth`
 # puisse signer un JWT RS256 sans ajouter le moindre crate.
 ring = { version = "0.17", optional = true }
@@ -129,6 +140,16 @@ burn-rocm = ["dep:burn", "dep:burn-store", "burn/rocm"]
 # features présentes. C'est ce choix invisible qui faisait passer un `drain` de
 # 3,1 s à 71 s dès qu'on ajoutait un autre backend (28 août 2026).
 vulkan = ["burn/vulkan"]
+# **Le démon** : un modèle chargé une fois, servi à plusieurs.
+#
+# Mesuré le 29 août 2026 : une passe E2E rechargeait BGE-M3 sept fois, et sept
+# chargements concurrents prenaient 531, 465, 341, 280… secondes là où un seul
+# en prend cinq. Ce n'est pas le chargement qui est lent, c'est la concurrence.
+#
+# Au-delà des tests, c'est la première brique de ce qu'un terminal interrogera,
+# et de « savoir démarrer un serveur » — ce dont la boucle étrange aura besoin
+# pour qu'un agent monte un backend (doc 08).
+daemon = ["dep:tiny_http", "dep:ureq"]
 # LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
 # (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
@@ -143,6 +164,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
 tempfile = "3"
+
+# **Le démon d'embedding.** Un modèle chargé une fois, servi à plusieurs — voir
+# `src/daemon.rs`. `required-features` plutôt qu'un `cfg` dans le fichier : un
+# binaire qui ne compile pas faute de feature doit être *absent*, pas cassé.
+[[bin]]
+name = "rag3weaver-embeddings"
+path = "src/bin/rag3weaver-embeddings.rs"
+required-features = ["daemon", "burn-embedder"]
 
 [[example]]
 name = "tei_reqwest"
