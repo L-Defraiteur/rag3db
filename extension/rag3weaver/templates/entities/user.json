@@ -1,0 +1,37 @@
+{
+  "template": {
+    "category": "auth",
+    "description": "Un compte utilisateur : son adresse e-mail, le nom qu'il affiche, une courte présentation, et la date de son inscription. Sert à savoir qui se connecte, qui écrit, à qui appartient quoi.",
+    "note": "Volontairement pauvre : un projet ajoute ce qui lui est propre, il ne retire pas."
+  },
+  "entity": {
+    "fields": {
+      "email": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "displayName": {
+        "fieldType": "string"
+      },
+      "bio": {
+        "fieldType": "text",
+        "isContent": true
+      },
+      "createdAt": {
+        "fieldType": "string"
+      }
+    },
+    "hashsafe": [
+      "email"
+    ],
+    "chunked": false,
+    "signals": [
+      "bm25"
+    ],
+    "returnFields": [
+      "email",
+      "displayName",
+      "createdAt"
+    ]
+  }
+}

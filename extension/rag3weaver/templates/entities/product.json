@@ -1,0 +1,37 @@
+{
+  "template": {
+    "category": "commerce",
+    "description": "Un article vendu : sa référence, son nom, ce qu'il est, son prix et sa devise. Sert à un catalogue de boutique, un panier, une commande.",
+    "note": "La description est le champ de contenu, donc c'est elle que la recherche par sens trouve."
+  },
+  "entity": {
+    "fields": {
+      "sku": {
+        "fieldType": "string"
+      },
+      "name": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "description": {
+        "fieldType": "text",
+        "isContent": true
+      },
+      "price": {
+        "fieldType": "double"
+      },
+      "currency": {
+        "fieldType": "string"
+      }
+    },
+    "hashsafe": [
+      "sku"
+    ],
+    "returnFields": [
+      "sku",
+      "name",
+      "price",
+      "currency"
+    ]
+  }
+}

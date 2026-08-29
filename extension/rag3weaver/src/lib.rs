@@ -134,6 +134,10 @@ pub use meter::{Consumption, Meter, Unit};
 pub mod session;
 pub use session::{Absorb, Compaction, Session, SessionTools};
 pub mod scope;
+/// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
+/// entités, des graphes, des composants, et des motifs qui s'appliquent aux
+/// trois. Voir `docs/vision_roadmap_08_2026/08-des-catalogues-de-gabarits.md`.
+pub mod template;
 pub mod work_domain;
 pub mod tools;
 pub mod reranker;

@@ -84,6 +84,53 @@ substrat.
 le suivant le trouvera. C'est la phrase du doc 01 — *les usages sont des
 données qu'il fabrique et retrouve* — sous sa forme la plus terre à terre.
 
+## 2 bis. Deux axes pour ranger, et une palette pour travailler
+
+**La famille et la catégorie ne disent pas la même chose**, et les confondre
+ferait un champ qui répond à deux questions — la faute qu'on passe nos journées
+à défaire.
+
+- La **famille** est structurelle : entité, graphe, composant, motif. Elle dit
+  *ce qu'on peut en faire* — on ne pose pas un motif comme on pose une entité.
+  Elle est fermée, le moteur la connaît.
+- La **catégorie** est thématique : `auth`, `commerce`, `messagerie`, `contenu`,
+  `observabilité`. Elle dit *de quoi ça parle*. Elle est ouverte, elle vient de
+  qui écrit le gabarit, et elle sert à filtrer une recherche.
+
+Un `user` est de famille « entité » et de catégorie `auth` ; un formulaire de
+connexion est de famille « composant » et de la même catégorie. C'est
+exactement ce qui permet de demander « tout ce qui touche à l'authentification »
+et d'obtenir le schéma **et** l'écran.
+
+**Et la palette.** (Lucie, même jour :) *« workpalette aussi, les templates que
+t'as sous la main »*.
+
+Le catalogue est la boutique ; la palette est ce qui est posé sur la table.
+C'est une quatrième notion, à côté des trois qu'on a déjà séparées — et la
+séparation est la même discipline :
+
+| notion | la question à laquelle elle répond |
+|---|---|
+| `RootPolicy` | qu'est-ce que j'ai le droit de **toucher** |
+| `WorkDomain` | qu'est-ce que je **vois** dans l'index |
+| `Cwd` | **où** je me tiens |
+| **`WorkPalette`** | qu'est-ce que j'ai **sous la main** |
+
+La palette n'est pas une permission : le catalogue reste cherchable, et y
+prendre quelque chose est un acte. Elle est ce qui est **chargé**, donc ce qui
+occupe l'invite et ce qu'un modèle peut employer sans rien demander. C'est la
+différence entre « je peux trouver un marteau » et « j'ai un marteau ».
+
+Deux conséquences immédiates :
+
+- **`attach` est déjà l'acte de poser sur la palette.** On l'a écrit hier pour
+  les outils sans le nommer ainsi : adopter un gabarit sous un nom, c'est
+  exactement ça.
+- **Une palette a une taille.** C'est elle qui décide du coût en jetons de
+  chaque tour, et donc le vrai argument pour ne pas tout charger : un agent
+  avec trente outils n'en choisit aucun — mesuré le 28 août, deux outils
+  proches et le second jamais pris.
+
 ## 3. Les quatre verbes
 
 Un catalogue ne vaut que par ce qu'on peut en faire. Quatre actes, et ils sont

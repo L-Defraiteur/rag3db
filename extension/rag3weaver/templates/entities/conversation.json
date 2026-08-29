@@ -1,0 +1,35 @@
+{
+  "template": {
+    "category": "messagerie",
+    "description": "Un fil de discussion entre plusieurs personnes : son sujet, son état, la date à laquelle il a commencé. Les messages échangés sont une entité à part, reliée à celui-ci.",
+    "note": "Un fil qui porterait ses messages en colonne ne se chercherait pas."
+  },
+  "entity": {
+    "fields": {
+      "title": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "summary": {
+        "fieldType": "text",
+        "isContent": true
+      },
+      "startedAt": {
+        "fieldType": "string"
+      },
+      "status": {
+        "fieldType": "string"
+      }
+    },
+    "hashsafe": [
+      "title",
+      "startedAt"
+    ],
+    "chunked": false,
+    "returnFields": [
+      "title",
+      "status",
+      "startedAt"
+    ]
+  }
+}

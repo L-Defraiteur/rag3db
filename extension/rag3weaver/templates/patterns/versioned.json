@@ -1,0 +1,15 @@
+{
+  "template": {
+    "category": "identité",
+    "description": "Une entité par révision au lieu d'une par chose. Ne change aucun mécanisme : `hashsafe` EST la politique d'identité, et ce motif consiste à y ajouter la révision. La courante devient une vue, pas une ligne."
+  },
+  "pattern": {
+    "applies_to": "entity",
+    "adds_fields": {
+      "revision": { "fieldType": "string" },
+      "supersedes": { "fieldType": "string" }
+    },
+    "hashsafe_append": ["revision"],
+    "note": "Un `File` versionné, c'est hashsafe [repo, revision, repo_path] au lieu de [source, path]. Même moteur, même schéma, autre configuration — doc 04."
+  }
+}
