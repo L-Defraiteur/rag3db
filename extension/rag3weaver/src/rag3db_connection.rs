@@ -40,6 +40,21 @@ impl Rag3dbConnection {
         Self::with_config(path, Self::default_config())
     }
 
+    /// **Ouvrir une base en lecture seule.**
+    ///
+    /// Le verrou posé est alors *partagé* (`F_RDLCK`) et non exclusif : à la
+    /// différence de [`new`](Self::new), **plusieurs processus peuvent ouvrir
+    /// la même base ainsi en même temps**. C'est la seule forme de partage que
+    /// le moteur offre nativement — aucun d'eux ne peut écrire, et aucun ne
+    /// peut l'ouvrir tant qu'un écrivain la tient (un verrou partagé et un
+    /// verrou exclusif s'excluent).
+    ///
+    /// Pour lire *et* écrire à plusieurs, c'est `rag3daemon` :
+    /// [`crate::daemon::db`].
+    pub fn read_only(path: impl AsRef<Path>) -> Result<Self, DbError> {
+        Self::with_config(path, Self::default_config().read_only(true))
+    }
+
     /// Create an in-memory database.
     pub fn in_memory() -> Result<Self, DbError> {
         let db = Arc::new(

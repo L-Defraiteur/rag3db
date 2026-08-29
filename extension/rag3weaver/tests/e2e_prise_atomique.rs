@@ -180,3 +180,93 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
         String::from_utf8_lossy(&sortie.stderr)
     );
 }
+
+/// **Ce que le moteur partage nativement : la lecture.**
+///
+/// Le verrou d'une base ouverte en lecture seule est un `F_RDLCK` — *partagé*.
+/// Plusieurs processus peuvent donc lire la même base en même temps, y compris
+/// depuis plusieurs machines sur un montage commun. Ce qu'ils ne peuvent pas,
+/// c'est écrire ; et aucun ne peut ouvrir tant qu'un écrivain tient la base,
+/// puisqu'un verrou partagé et un verrou exclusif s'excluent.
+///
+/// Les deux moitiés sont vérifiées ici, parce que c'est leur conjonction qui
+/// décrit ce qu'on peut vraiment faire à plusieurs machines.
+#[test]
+fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
+    const LECTEUR: &str = "RAG3WEAVER_ENFANT_LECTEUR";
+    const ECRIVAIN_TIENT: &str = "RAG3WEAVER_ENFANT_PENDANT_ECRITURE";
+
+    // Rôles enfants : ouvrir en lecture seule, et dire ce qui s'est passé.
+    for marque in [LECTEUR, ECRIVAIN_TIENT] {
+        if let Ok(dossier) = std::env::var(marque) {
+            match Rag3dbConnection::read_only(&dossier) {
+                Ok(conn) => {
+                    // Ouvrir ne suffit pas : il faut pouvoir lire.
+                    let r = conn
+                        .execute("MATCH (t:Travail) RETURN count(t) AS n")
+                        .expect("lire");
+                    match r.rows.first().and_then(|l| l.first()) {
+                        Some(CypherValue::Int(n)) if *n == TRAVAUX as i64 => std::process::exit(7),
+                        autre => {
+                            eprintln!("lu {autre:?}");
+                            std::process::exit(9)
+                        }
+                    }
+                }
+                Err(_) => std::process::exit(3),
+            }
+        }
+    }
+
+    let dossier = std::env::temp_dir().join(format!(
+        "rag3weaver-lecteurs-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    // Écrire, puis **lâcher** la base : c'est la condition du partage.
+    {
+        let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
+        ecrivain
+            .execute("CREATE NODE TABLE Travail(id INT64, statut STRING, preneur STRING, PRIMARY KEY(id))")
+            .expect("table");
+        for i in 0..TRAVAUX {
+            ecrivain
+                .execute(&format!("CREATE (:Travail {{id: {i}, statut: 'libre', preneur: ''}})"))
+                .expect("insertion");
+        }
+    }
+
+    let enfant = |marque: &str| -> Option<i32> {
+        std::process::Command::new(std::env::current_exe().expect("current_exe"))
+            .args(["--exact", "plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient"])
+            .env(marque, &dossier)
+            .output()
+            .expect("lancer l'enfant")
+            .status
+            .code()
+    };
+
+    // ── Deux lecteurs, personne n'écrit ───────────────────────────────────
+    let lecteur_parent = Rag3dbConnection::read_only(&dossier).expect("le parent lit");
+    let code = enfant(LECTEUR);
+    println!("▸ second lecteur pendant qu'un lecteur tient : {code:?} (7 = a lu)");
+    assert_eq!(code, Some(7), "deux lecteurs doivent pouvoir partager la base");
+    drop(lecteur_parent);
+
+    // ── Un écrivain tient : plus personne n'entre ─────────────────────────
+    let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
+    let code = enfant(ECRIVAIN_TIENT);
+    println!("▸ lecteur pendant qu'un écrivain tient  : {code:?} (3 = refusé)");
+    assert_eq!(
+        code,
+        Some(3),
+        "un lecteur ne doit pas entrer pendant qu'un écrivain tient la base"
+    );
+    drop(ecrivain);
+
+    let _ = std::fs::remove_dir_all(&dossier);
+}
