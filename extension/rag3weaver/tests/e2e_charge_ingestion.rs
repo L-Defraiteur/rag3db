@@ -70,9 +70,17 @@ fn cartes() -> Vec<String> {
 #[test]
 #[ignore]
 fn ingerer_notre_propre_source_avec_le_vrai_embedder() {
-    let budget = std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET").unwrap_or_else(|_| "8192 (défaut)".into());
-    let duty = std::env::var("RAG3WEAVER_GPU_DUTY").unwrap_or_else(|_| "100 (défaut)".into());
-    eprintln!("[charge] budget par lot = {budget} · rapport cyclique = {duty} %");
+    // **Demander au moteur, pas à l'environnement.** Cette ligne lisait les
+    // variables elle-même, avec ses propres valeurs de repli — donc elle
+    // annonçait « 8192 (défaut) · 100 (défaut) » alors que le régime avait
+    // décidé 2048 et 60. Une mesure de charge qui se trompe sur ses propres
+    // réglages est pire qu'absente : on l'aurait crue.
+    eprintln!(
+        "[charge] régime = {:?} · budget par lot = {} · rapport cyclique = {} %",
+        rag3weaver::Regime::courant(),
+        rag3weaver::embedder::embed_char_budget(),
+        rag3weaver::embedder::gpu_duty(),
+    );
 
     let dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("src");
     let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(&dir));

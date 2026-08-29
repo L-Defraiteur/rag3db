@@ -329,6 +329,12 @@ impl Embedder for DaemonEmbedder {
     fn name(&self) -> &str {
         &self.identite.modele
     }
+
+    /// **Oui, et c'est ce qui empêche les pauses de se multiplier.** Voir
+    /// [`Embedder::distant`].
+    fn distant(&self) -> bool {
+        true
+    }
 }
 
 /// Les vecteurs creux d'une réponse. Partagé par `/embed_dual` et
@@ -354,12 +360,21 @@ fn creux_de(v: &serde_json::Value) -> Result<Vec<SparseVector>, EmbedError> {
 }
 
 impl SparseEmbedder for DaemonEmbedder {
+    fn distant(&self) -> bool {
+        true
+    }
+
     fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
         creux_de(&self.envoyer("/embed_sparse", texts)?)
     }
 }
 
 impl DualEmbedder for DaemonEmbedder {
+    fn distant(&self) -> bool {
+        true
+    }
+
+
     fn embed_dual(
         &self,
         texts: &[String],
@@ -613,6 +628,28 @@ mod tests {
         for (i, t) in textes.iter().enumerate() {
             assert_eq!(v[i], vec![t.len() as f32], "ordre rompu au rang {i}");
         }
+    }
+
+    /// **Un embarqueur distant se déclare distant**, sur les trois traits.
+    ///
+    /// C'est ce qui empêche les rapports cycliques de se multiplier : le
+    /// démon souffle entre ses lots, et l'appelant ne doit pas souffler
+    /// par-dessus, sur un temps qui contient déjà ces pauses. Mesuré le
+    /// 29 août 2026 : 60 % des deux côtés donnaient 36 % effectifs.
+    #[test]
+    fn un_embarqueur_distant_se_declare_distant() {
+        let regle = Arc::new(Regle(3));
+        let adresse = demon(EmbedDaemon::new(regle.clone()).avec_dual(regle.clone()).avec_sparse(regle.clone()));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert!(Embedder::distant(&c));
+        assert!(DualEmbedder::distant(&c));
+        assert!(SparseEmbedder::distant(&c));
+
+        // Et un modèle chargé ici ne l'est pas — c'est le défaut du trait,
+        // donc `Regle` n'a rien eu à déclarer.
+        assert!(!Embedder::distant(regle.as_ref()));
+        assert!(!DualEmbedder::distant(regle.as_ref()));
+        assert!(!SparseEmbedder::distant(regle.as_ref()));
     }
 
     #[test]

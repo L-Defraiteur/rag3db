@@ -735,7 +735,10 @@ impl Node for KBEmbedNode {
                 let part = embedder
                     .embed(&texts)
                     .map_err(|e| format!("dense embedding failed: {e}"))?;
-                souffler(t.elapsed());
+                // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
+                if !embedder.distant() {
+                    souffler(t.elapsed());
+                }
                 if part.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -797,7 +800,9 @@ impl Node for KBEmbedNode {
                     let part = sparse_emb
                         .embed_sparse(&texts)
                         .map_err(|e| format!("sparse embedding failed: {e}"))?;
-                    souffler(t.elapsed());
+                    if !sparse_emb.distant() {
+                        souffler(t.elapsed());
+                    }
                     if part.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -874,7 +879,9 @@ impl Node for KBEmbedNode {
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
                         .map_err(|e| format!("dual embed failed: {e}"))?;
-                    souffler(t.elapsed());
+                    if !dual_emb.distant() {
+                        souffler(t.elapsed());
+                    }
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
@@ -1854,7 +1861,9 @@ impl Node for EmbedNode {
                     let (dense_vecs, sparse_vecs) = dual_emb
                         .embed_dual(&texts)
                         .map_err(|e| format!("dual embed failed: {e}"))?;
-                    souffler(t.elapsed());
+                    if !dual_emb.distant() {
+                        souffler(t.elapsed());
+                    }
 
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(

@@ -64,6 +64,21 @@ pub trait Embedder: Send + Sync {
     fn name(&self) -> &str {
         "?"
     }
+
+    /// **Le modèle vit-il ailleurs ?**
+    ///
+    /// Sert à une règle et une seule : **celui qui touche la carte souffle**
+    /// ([`souffler`]). Un appelant dont l'embarqueur est distant n'a rien
+    /// soumis au GPU — c'est le démon qui l'a fait, et qui a déjà espacé ses
+    /// rafales. S'il soufflait quand même, il le ferait sur un temps qui
+    /// *contient déjà* les pauses d'en face : les rapports cycliques se
+    /// multiplieraient au lieu de se choisir.
+    ///
+    /// Mesuré le 29 août 2026, à 60 % des deux côtés : 36 % effectifs, et une
+    /// ingestion six fois plus longue que prévu.
+    fn distant(&self) -> bool {
+        false
+    }
 }
 
 /// **Un embedder partagé en est un.**
@@ -86,6 +101,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn name(&self) -> &str {
         (**self).name()
+    }
+    fn distant(&self) -> bool {
+        (**self).distant()
     }
 }
 
@@ -254,6 +272,21 @@ impl Embedder for CallbackEmbedder {
 pub trait SparseEmbedder: Send + Sync {
     /// Embed a batch of texts into sparse vectors.
     fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError>;
+
+    /// **Le modèle vit-il ailleurs ?**
+    ///
+    /// Sert à une règle et une seule : **celui qui touche la carte souffle**
+    /// ([`souffler`]). Un appelant dont l'embarqueur est distant n'a rien
+    /// soumis au GPU — c'est le démon qui l'a fait, et qui a déjà espacé ses
+    /// rafales. S'il soufflait quand même, il le ferait sur un temps qui
+    /// *contient déjà* les pauses d'en face : les rapports cycliques se
+    /// multiplieraient au lieu de se choisir.
+    ///
+    /// Mesuré le 29 août 2026, à 60 % des deux côtés : 36 % effectifs, et une
+    /// ingestion six fois plus longue que prévu.
+    fn distant(&self) -> bool {
+        false
+    }
 }
 
 /// Mock sparse embedder for testing.
@@ -353,6 +386,21 @@ pub trait DualEmbedder: Send + Sync {
 
     /// The output dimension of the dense embedding.
     fn dim(&self) -> usize;
+
+    /// **Le modèle vit-il ailleurs ?**
+    ///
+    /// Sert à une règle et une seule : **celui qui touche la carte souffle**
+    /// ([`souffler`]). Un appelant dont l'embarqueur est distant n'a rien
+    /// soumis au GPU — c'est le démon qui l'a fait, et qui a déjà espacé ses
+    /// rafales. S'il soufflait quand même, il le ferait sur un temps qui
+    /// *contient déjà* les pauses d'en face : les rapports cycliques se
+    /// multiplieraient au lieu de se choisir.
+    ///
+    /// Mesuré le 29 août 2026, à 60 % des deux côtés : 36 % effectifs, et une
+    /// ingestion six fois plus longue que prévu.
+    fn distant(&self) -> bool {
+        false
+    }
 }
 
 /// Mock dual embedder for testing. Returns zero dense vectors + word-hash sparse vectors.
