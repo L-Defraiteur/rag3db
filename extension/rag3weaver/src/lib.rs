@@ -130,6 +130,10 @@ pub mod refs;
 pub mod schema;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,
 /// rafale » qui décide si le poste reste utilisable pendant qu'on travaille.
+/// **Exécuter une commande sans donner la machine** : la porte, les faits, le
+/// verdict et ce que la session a acquis. Voir
+/// `docs/30-aout-2026-04h00/03-donner-des-commandes-a-un-agent.md`.
+pub mod commande;
 pub mod regime;
 pub use regime::Regime;
 pub mod postures;
