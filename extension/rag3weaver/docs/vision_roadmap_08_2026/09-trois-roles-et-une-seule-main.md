@@ -92,19 +92,72 @@ raisonnement — et un agent qui redérive son but de ses propres traces dérive
 Il ne se trompe pas d'un coup : il glisse, et chaque tour rend le glissement
 plus cohérent avec le précédent.
 
-D'où une politique de plus, à côté des trois existantes :
+### L'unité n'est pas le tour, c'est la manche
+
+Lucie, en précisant : *« on peut se permettre les deux dernières paroles design
+— enfin les deux derniers vrais tours où il y a eu : parole design, vraies
+actions entreprises par l'agent code (donc tool calls), et réponse à nouveau
+design »*.
+
+Une **manche** est donc bornée par deux paroles de design et **contient au moins
+une action réelle**. Ce dernier point n'est pas un détail : deux paroles de
+design qui se suivent sans que rien ne soit tenté ne forment pas une manche, et
+ne consomment donc pas de mémoire. Ce qui compte n'est pas qu'on ait parlé,
+c'est qu'on ait essayé.
 
 ```rust
-Absorb::JusquAuCap  // ne réduire que ce qui précède la dernière parole de design
+Absorb::DernieresManches { n: usize }  // n = 2 par défaut
 ```
 
-Elle est **mécaniquement vérifiable**, ce qui est rare pour une règle de ce
-genre : on connaît le rôle de chaque tour, donc on sait où on a le droit de
-couper. Pas de jugement, pas de modèle : une borne.
+### Pourquoi deux, et pas une
 
-Et elle a un effet de bord qu'on veut : **le design a intérêt à parler.** Une
-session qui n'a pas de parole de design ne peut pas oublier, donc grossit,
-donc coûte. Le cadran pousse dans le bon sens.
+Avec une seule manche, l'agent de code voit l'objectif courant et rien d'autre.
+Il ne sait pas ce qui vient d'être tenté et écarté — donc il le repropose. Avec
+deux, il voit **l'objectif précédent et comment il a bougé** : c'est la
+trajectoire qui rend un objectif stable, pas sa simple présence.
+
+Trois coûteraient plus pour n'ajouter qu'un écho.
+
+### Borner par la structure, pas par la taille
+
+C'est là que la règle se distingue de ce que font les agents répandus, et
+Lucie le dit sans détour : *« ça reste BEAUCOUP plus léger que ce que font
+actuellement les agents populaires — attendre 1 M de contexte par exemple »*.
+
+Un plafond en jetons compacte **quand on a mal** : il attend la douleur, et le
+moment de la coupe est décidé par un accident — quel outil a rendu quoi. Une
+borne en manches coupe **là où le sens le permet**, et le poids d'un résultat
+d'outil ne déplace jamais la frontière.
+
+Les deux mécanismes ne se remplacent pas, ils se composent :
+
+- `Absorb::Stale` réduit **à l'intérieur** d'une manche — un gros résultat
+  ancien devient une ligne, sans que la manche bouge.
+- `DernieresManches` borne **entre** les manches.
+
+Sans le premier, une manche où l'agent fait deux cents appels d'outils pèserait
+autant qu'un contexte d'un million. Sans le second, on couperait au hasard.
+
+### La parole de design ne se réduit jamais
+
+C'est ce qui rend le reste sûr. Une manche peut être compactée agressivement à
+l'intérieur — mais les **paroles de design elles-mêmes sont épinglées**, jamais
+réduites, même quand leur manche sort de la fenêtre. L'objectif ne peut donc
+pas disparaître par accumulation, quel que soit le silence du design.
+
+C'est aussi ce qui protège du cas dégénéré : si le design se tait longtemps, il
+n'y a qu'une manche ouverte et la mémoire grossirait — mais ce qui grossit est
+réductible, et ce qui ne l'est pas tient en quelques lignes.
+
+### L'effet de bord qu'on veut
+
+**Le design a intérêt à parler.** Une session sans parole de design ne peut pas
+clore de manche, donc ne peut pas oublier, donc coûte. Le cadran pousse dans le
+bon sens sans qu'on ait à l'imposer.
+
+Et la règle reste **mécaniquement vérifiable** : on connaît le rôle de chaque
+tour et on sait lesquels portent des appels d'outils, donc on sait où on a le
+droit de couper. Pas de jugement, pas de modèle — une borne.
 
 ## 5. Ce que chaque rôle **possède**
 
@@ -151,7 +204,7 @@ suivant** ». Ça se mesure : on peut regarder si le tour d'après cite ce qui a
 | Traces cherchables comme un document | **existe** (`search(target="Trace")`) |
 | La porte des commandes, et ses modes | **existe** (`commande.rs`, 30 août) |
 | Une notion de **rôle** | manque |
-| `Absorb::JusquAuCap` — la coupe au tour de design | manque |
+| `Absorb::DernieresManches` — la coupe à la manche de design | manque |
 | Le souffleur : quand parler | manque |
 | Les gabarits de fin de session | manque |
 
