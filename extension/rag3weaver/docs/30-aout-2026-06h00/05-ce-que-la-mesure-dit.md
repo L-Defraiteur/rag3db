@@ -16,6 +16,10 @@ DETAIL=1 cargo run --example couverture -- ...     # la 1re erreur de chaque fic
 FORCER=cpp cargo run --example couverture -- ...   # .c/.h avec la grammaire C++
 ```
 
+Sur le dépôt entier : **1 min 57 s**, 3 918 fichiers parsés. Elle ne suit pas
+les liens symboliques — `tools/rust_api/rag3db-src` pointe sur `../..`, c'est
+la racine du dépôt, et le suivre boucle sans fin.
+
 ## 1. Les craintes du §5, vérifiées
 
 | crainte | verdict |
@@ -51,6 +55,32 @@ trois le disent.
 
 ## 3. Par langage — la lecture qu'on n'avait jamais eue
 
+### 3.0 Le dépôt entier
+
+3 918 fichiers, 40,7 Mo. C'est le tableau du §6 du cahier des charges, et il
+est déjà lisible.
+
+| ext | fich. | octets | pavage | recouvr. | arbre en erreur | `ast_valid` faux | scopes | oct. sous `ERROR` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `h` | 1 541 | 10 706 740 | 99,4 % | 371 | **1 470** | 64 | 8 181 | **2 725 816 (25 %)** |
+| `cpp` | 1 208 | 10 041 851 | 95,3 % | 0 | 106 | 2 | 19 111 | 911 985 (9 %) |
+| `rs` | 861 | 13 249 997 | 99,5 % | 0 | 9 | 0 | 29 415 | 354 (0 %) |
+| `c` | 71 | 3 913 212 | 99,0 % | 0 | 60 | 1 | 2 591 | **2 767 575 (71 %)** |
+| `py` | 95 | 649 647 | 90,1 % | 0 | 0 | 0 | 1 225 | 0 |
+| `js` | 71 | 467 842 | 99,1 % | 1 124 | 0 | 0 | 1 804 | 0 |
+| `hpp` | 47 | 1 293 835 | 99,5 % | 0 | 7 | 1 | 2 059 | 55 749 (4 %) |
+| `mjs` | 16 | 58 062 | 98,3 % | 171 | 0 | 0 | 400 | 0 |
+| `ts` | 4 | 40 027 | 96,3 % | 0 | 0 | 0 | 36 | 0 |
+| `cc` | 3 | 165 631 | 98,5 % | 0 | 1 | 1 | 324 | **158 198 (96 %)** |
+| `hxx` | 1 | 152 995 | 100,0 % | 0 | 1 | 0 | 413 | **151 577 (99 %)** |
+| **total** | **3 918** | **40 739 839** | **98,2 %** | 1 666 | **1 654** | **69** | **65 559** | **6 771 254 (17 %)** |
+
+**Dix-sept pour cent du dépôt n'est pas compris. 1 654 fichiers le savent,
+69 le disent.** Et `.hxx` est la caricature du défaut : un fichier, 413 scopes
+extraits, 100 % de pavage — et 99 % de ses octets sous un `ERROR`.
+
+### 3.1 Le détail, sur les extensions
+
 Corpus : `extension/{fts,vector,llm,lucivy,algo}`.
 
 | ext | fich. | octets | pavage | recouvr. | arbre en erreur | `ast_valid` faux | scopes | oct. sous `ERROR` |
@@ -67,28 +97,41 @@ Corpus : `extension/{fts,vector,llm,lucivy,algo}`.
 C'est le tableau du §6 du cahier des charges, et il est déjà lisible. Il dit
 deux choses que personne ne savait.
 
-### 3.1 `.h` est envoyé à la grammaire C, et ce sont des en-têtes C++
+### 3.2 `.h` est envoyé à la grammaire C, et ce sont des en-têtes C++
 
 `EXTENSION_TO_LANGUAGE` (`parallel/project_parser.rs`) mappe `.h` sur
 `SupportedLanguage::C`. Les en-têtes de nos extensions sont du C++ :
 `namespace`, `std::string`, `::common`. D'où 76 fichiers sur 78 en erreur.
 
-Avec la grammaire C++ sur les mêmes fichiers :
+Avec la grammaire C++ sur les mêmes fichiers, aux deux échelles :
 
 | | `.h` → C (aujourd'hui) | `.h` → C++ |
 |---|---:|---:|
+| **extensions** (78 fichiers) | | |
 | fichiers en erreur | 76 / 78 | **32 / 78** |
 | octets sous `ERROR` | 51 673 (41 %) | **0** |
 | scopes extraits | 331 | **688** |
+| **dépôt entier** (1 541 fichiers) | | |
+| fichiers en erreur | 1 470 / 1 541 | **577 / 1 541** |
+| octets sous `ERROR` | 2 725 816 (25 %) | **996 186 (9 %)** |
+| scopes extraits | 8 181 | **22 192** |
 
-Le nombre de scopes double. C'est un changement d'une ligne, mesurable, et il
-est indépendant du reste du chantier.
+**Les scopes des en-têtes sont multipliés par 2,7, et 1,7 Mo d'octets sortent
+de l'erreur.** C'est un changement d'une ligne dans `EXTENSION_TO_LANGUAGE`,
+mesurable, et indépendant du reste du chantier.
 
-*(Les 32 fichiers restants n'ont que des nœuds `MISSING` de largeur nulle —
-`has_error()` est vrai, aucun octet n'est perdu. Distinguer les deux est
+*(Les fichiers restants n'ont souvent que des nœuds `MISSING` de largeur nulle
+— `has_error()` est vrai, aucun octet n'est perdu. Distinguer les deux est
 exactement ce que la sonde apporte.)*
 
-### 3.2 `.c` : 98 % du corpus dans **un seul** nœud `ERROR`
+Et le même essai sur `.c` donne le contre-exemple qui justifie tout le §6.1 :
+les fichiers en erreur passent de 60 à **62** — c'est pire — tandis que les
+octets sous `ERROR` tombent de 2 767 575 (71 %) à **1 777 226 (45 %)** — c'est
+un mégaoctet regagné. **Le booléen et les octets pointent en sens contraire.**
+Un critère de réussite écrit sur le booléen aurait rejeté un changement qui
+récupère un quart du corpus C.
+
+### 3.3 `.c` : 98 % du corpus dans **un seul** nœud `ERROR`
 
 Tous les `.c` sont les stemmers Snowball de `extension/fts/third_party`. Chacun
 commence par :
@@ -112,7 +155,7 @@ Et pourtant : 1 666 scopes extraits, 99,8 % de pavage, zéro fichier signalé.
 C'est *le* cas d'école du cahier des charges — un fichier qu'on ne comprend
 pas à 98 % et qui compte comme un succès.
 
-### 3.3 Nos quatre fichiers Rust « en erreur » s'appellent `raw`
+### 3.4 Nos quatre fichiers Rust « en erreur » s'appellent `raw`
 
 `burn_device.rs:152`, `gcp_auth.rs:118`, `dataflow/mermaid.rs:253`,
 `markdown_parser.rs:193` — tous `match Self::parse(&raw)` ou `&raw[1..]`.
@@ -127,26 +170,37 @@ ligne verte.
 
 ## 4. Le volume : ce qui n'entre pas dans l'index
 
-Sur le même corpus : **798 fichiers dans l'index, 640 hors index.** En octets,
-93 % du corpus est dehors — mais le chiffre est trompeur, il est dominé par un
-`.luce` de 67 Mo, 26 Mo de JSON et 29 Mo de binaires.
+Sur le dépôt entier : **3 918 fichiers dans l'index, 3 067 hors index.** En
+octets, 536 Mo dehors contre 41 Mo dedans — mais le chiffre ne veut rien dire
+tel quel : il est dominé par 272 Mo de CSV de test, 57 Mo de Parquet, un
+`.luce` de 67 Mo et 12 Mo de bases.
 
-Ce qui entrerait honnêtement avec le §3.5 du cahier :
+Ce qui entrerait honnêtement avec le §3.5 du cahier — du texte, écrit par
+quelqu'un, qu'une question pourrait viser :
 
 | | fichiers | octets |
 |---|---:|---:|
-| `.md` | 440 | 8 759 031 |
-| `.txt` | 30 | 1 109 285 |
-| `.test` | 58 | 377 070 |
-| `.toml` | 29 | 24 008 |
-| `.yml` | 6 | 18 925 |
-| `.sh` | 2 | 4 921 |
-| **total** | **565** | **≈ 10,3 Mo** |
+| `.md` | 945 | 13 239 484 |
+| `.txt` | 279 | 4 596 655 |
+| `.test` | 573 | 2 937 764 |
+| `.cypher` | 171 | 2 194 034 |
+| `.yml` | 42 | 172 956 |
+| `.java` | 30 | 159 673 |
+| `.toml`, `.sh`, … | ~80 | ~60 000 |
+| **total** | **≈ 2 120** | **≈ 23,4 Mo** |
 
-**Le corpus double.** 798 fichiers / 10,4 Mo aujourd'hui, ~1 360 fichiers /
-20,7 Mo après. Ce n'est pas 2 %, ce n'est pas 200 % : c'est ×2, et c'est
-exactement le genre de chiffre qu'il fallait avoir avant de commencer, pas
-après.
+**Le corpus grossit de moitié en octets et se met à compter deux fois plus de
+fichiers.** 3 918 fichiers / 40,7 Mo aujourd'hui, ≈ 6 040 fichiers / 64 Mo
+après. Ce n'est pas 2 %, ce n'est pas 200 % : c'est le genre de chiffre qu'il
+fallait avoir avant de commencer, pas après.
+
+Deux entrées de cette liste méritent leur propre décision, et ni l'une ni
+l'autre n'est du « texte non rattaché » :
+
+- **`.cypher`, 171 fichiers** — c'est le langage de requête de la base. Des
+  requêtes nommées et cherchables valent mieux qu'un bloc de texte.
+- **`.java`, 30 fichiers** — `tools/java_api`. Il n'y a pas de parseur Java,
+  et ce n'est pas un défaut de couverture : c'est un langage absent.
 
 ## 5. Ce que le code fait déjà, et qu'il ne faut pas réécrire
 
