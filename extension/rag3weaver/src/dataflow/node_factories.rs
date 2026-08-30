@@ -717,7 +717,7 @@ fn parse_result_mode(config: &serde_json::Value, node: &str) -> Result<crate::se
 }
 
 /// Liste de chaînes, soit un tableau JSON, soit `"a,b,c"`.
-fn parse_str_list(v: &serde_json::Value, node: &str, key: &str) -> Result<Vec<String>, String> {
+pub(super) fn parse_str_list(v: &serde_json::Value, node: &str, key: &str) -> Result<Vec<String>, String> {
     match v {
         serde_json::Value::Array(a) => a
             .iter()
@@ -1223,12 +1223,13 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::code_nodes::GrepNodeFactory));
         registry.register(Box::new(super::code_nodes::ListFilesNodeFactory));
         registry.register(Box::new(super::code_nodes::EditFileNodeFactory));
+        registry.register(Box::new(super::template_nodes::PlaceTemplateNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 6 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 7 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

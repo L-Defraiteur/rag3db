@@ -25,6 +25,8 @@ pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;
 pub mod search_nodes;
+#[cfg(feature = "code")]
+pub mod template_nodes;
 pub mod generic_search_nodes;
 pub mod reactor;
 pub mod render_nodes;

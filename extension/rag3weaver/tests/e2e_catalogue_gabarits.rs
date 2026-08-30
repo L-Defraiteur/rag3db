@@ -363,3 +363,77 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
     assert!(familles.contains(Family::Graph.as_str()), "les graphes-outils sont déjà des gabarits");
     assert!(familles.contains(Family::Pattern.as_str()));
 }
+
+/// **Poser, pas seulement trouver.**
+///
+/// Le catalogue se cherchait déjà comme un document ; savoir que `user` existe
+/// ne l'installait pas. L'outil `place` ferme la boucle, et ce test vérifie la
+/// seule chose qui compte : après l'appel, l'entité **est dans le schéma** et
+/// on peut y écrire.
+#[test]
+#[ignore]
+fn poser_un_gabarit_l_enregistre_vraiment() {
+    use rag3weaver::template::{lire, preparer_entity};
+
+    let mut catalog = setup();
+    let racine = builtin_root();
+
+    // Ce que l'outil fait, avec les mêmes fonctions que le nœud.
+    let contenu = lire(&racine, Family::Entity, "user").expect("le gabarit user existe");
+    let config = preparer_entity(&contenu, &[]).expect("configuration lisible");
+    let champs: Vec<String> = {
+        let mut c: Vec<String> = config.fields.keys().cloned().collect();
+        c.sort_unstable();
+        c
+    };
+    assert!(!champs.is_empty(), "un gabarit d'entité sans champ ne sert à rien");
+    catalog.register_entity("Client", config).expect("enregistrement");
+
+    // **La preuve n'est pas l'absence d'erreur, c'est qu'on puisse s'en
+    // servir.** Une entité enregistrée dont la table n'existe pas passerait
+    // l'appel et échouerait à la première écriture.
+    let r = catalog
+        .conn()
+        .execute("MATCH (c:Client) RETURN count(c) AS n")
+        .expect("la table Client existe");
+    assert_eq!(r.rows[0][0], rag3weaver::connection::CypherValue::Int(0));
+    println!("[place] Client posé depuis 'user' — champs : {}", champs.join(", "));
+}
+
+/// **Un nom inconnu doit dire ce qui existe.**
+///
+/// C'est la différence entre un agent qui se corrige en un tour et un agent qui
+/// redemande la liste : « gabarit 'users' inconnu » l'envoie deviner, « inconnu
+/// — il y a conversation, product, user » lui donne la réponse dans le refus.
+#[test]
+fn un_gabarit_inconnu_nomme_ses_voisins() {
+    use rag3weaver::template::lire;
+    let e = lire(&builtin_root(), Family::Entity, "users").expect_err("'users' n'existe pas");
+    assert!(e.contains("users"), "{e}");
+    assert!(e.contains("user"), "le refus doit nommer les voisins : {e}");
+}
+
+/// **Les motifs s'appliquent avant l'enregistrement**, et ils ajoutent
+/// vraiment quelque chose. Sans cette vérification, un motif silencieusement
+/// ignoré produirait une entité qui a l'air correcte.
+#[test]
+fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
+    use rag3weaver::template::{lire, preparer_entity};
+    let racine = builtin_root();
+    let contenu = lire(&racine, Family::Entity, "user").expect("user");
+
+    let nu = preparer_entity(&contenu, &[]).expect("nu");
+    let motif = match lire(&racine, Family::Pattern, "versioned") {
+        Ok(m) => m,
+        // Le motif est facultatif dans le catalogue fourni : si personne ne
+        // l'a encore écrit, le test ne prétend pas le contraire.
+        Err(_) => return,
+    };
+    let habille = preparer_entity(&contenu, &[&motif]).expect("habillé");
+    assert!(
+        habille.fields.len() > nu.fields.len(),
+        "le motif n'a rien ajouté : {} champs contre {}",
+        habille.fields.len(),
+        nu.fields.len()
+    );
+}

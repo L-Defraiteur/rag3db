@@ -1688,11 +1688,16 @@ pub const GREP_TOOL_MERMAID: &str = include_str!("../../templates/tools/grep.mmd
 pub const LIST_TOOL_MERMAID: &str = include_str!("../../templates/tools/list.mmd");
 #[cfg(feature = "code")]
 pub const EDIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/edit.mmd");
+/// `place` : poser un gabarit du catalogue dans le schéma vivant. Sous la
+/// feature `code` comme les autres verbes d'atelier — c'est là que vivent les
+/// agents qui construisent.
+#[cfg(feature = "code")]
+pub const PLACE_TOOL_MERMAID: &str = include_str!("../../templates/tools/place.mmd");
 
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 5] = ["edit", "grep", "list", "read", "search"];
+pub const BUILTIN_TOOL_NAMES: [&str; 6] = ["edit", "grep", "list", "place", "read", "search"];
 #[cfg(not(feature = "code"))]
 pub const BUILTIN_TOOL_NAMES: [&str; 1] = ["search"];
 
@@ -1740,6 +1745,7 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
         tools.register(GraphTool::from_mermaid(GREP_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(LIST_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(EDIT_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(PLACE_TOOL_MERMAID)?.bind(&nodes)?)?;
     }
     Ok((nodes, tools))
 }

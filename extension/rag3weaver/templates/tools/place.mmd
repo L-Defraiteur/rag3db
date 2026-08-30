@@ -1,0 +1,30 @@
+%% tool: place
+%% description: Pose un gabarit du catalogue dans le schéma vivant : une entité toute faite (user, product, conversation…) avec ses champs et ses signaux de recherche, plutôt qu'une configuration à écrire à la main. Cherchez d'abord le gabarit avec search(target='Template').
+%% param: template string! -- Nom du gabarit à poser, tel que la recherche l'a rendu (ex. 'user').
+%% param: as string = "" -- Nom sous lequel l'enregistrer. Vide = celui du gabarit. Un 'user' posé en 'Client' reste un user, avec les mêmes champs.
+%% param: patterns string = "" -- Motifs à appliquer avant l'enregistrement, séparés par des virgules (ex. 'versioned'). Un motif s'ajoute à l'entité ; il ne la remplace pas.
+%% result: place.result
+%%
+%% **Trouver ne suffit pas.** Le catalogue de gabarits se cherche comme un
+%% document depuis le 29 août — c'est tout son argument, un seul mécanisme pour
+%% trouver un document et pour trouver un modèle. Mais savoir que `user` existe
+%% ne l'installe pas : sans cet outil, un agent recopiait la configuration à la
+%% main, c'est-à-dire refaisait le travail que le gabarit existe pour éviter.
+%%
+%% **Les motifs s'appliquent avant l'enregistrement**, et c'est structurel :
+%% un motif change l'identité de l'entité (`hashsafe`). L'appliquer après
+%% reviendrait à migrer un schéma qu'on vient de créer, avec des données déjà
+%% écrites sous l'ancienne identité.
+%%
+%% **L'outil rend ce qu'il a posé**, pas « c'est fait » : le nom, les signaux,
+%% la liste des champs. Un outil qui confirme sans montrer oblige à une seconde
+%% requête pour savoir ce qu'on vient de créer — et un agent qui doit demander
+%% deux fois finit par ne plus demander.
+%%
+%% **Seule la famille `entity` se pose ici.** Un graphe s'exécute, un composant
+%% s'écrit dans un fichier : ce sont d'autres verbes, et les confondre
+%% produirait une erreur de désérialisation trois étages plus bas au lieu d'un
+%% refus lisible.
+
+graph LR
+    place["PlaceTemplateNode(template=$template, family=entity, as=$as, patterns=$patterns)"]

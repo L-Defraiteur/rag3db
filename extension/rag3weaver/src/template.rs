@@ -368,6 +368,17 @@ pub fn place_entity_with(
     motifs: &[&str],
     sous_le_nom: &str,
 ) -> Result<(), String> {
+    let config = preparer_entity(contenu, motifs)?;
+    catalog.register_entity(sous_le_nom, config).map_err(|e| e.to_string())
+}
+
+/// **Ce qu'on va poser, avant de le poser.**
+///
+/// Séparé de l'enregistrement pour une raison précise : celui qui pose doit
+/// pouvoir *dire ce qu'il a posé* — combien de champs, lesquels, quels signaux.
+/// Un outil qui répond « c'est fait » sans montrer le résultat oblige son
+/// appelant à une seconde requête pour savoir ce qu'il vient de créer.
+pub fn preparer_entity(contenu: &str, motifs: &[&str]) -> Result<EntityConfig, String> {
     let v: serde_json::Value = serde_json::from_str(contenu).map_err(|e| format!("gabarit illisible : {e}"))?;
     let config = v.get("entity").ok_or("gabarit d'entité sans clé 'entity'")?;
     let mut config: EntityConfig = serde_json::from_value(config.clone())
@@ -376,7 +387,35 @@ pub fn place_entity_with(
         let motif = Pattern::parse(m)?;
         config = motif.apply(config)?;
     }
-    catalog.register_entity(sous_le_nom, config).map_err(|e| e.to_string())
+    Ok(config)
+}
+
+/// **Retrouver un gabarit par sa famille et son nom**, avec son contenu.
+///
+/// L'erreur dit ce qui existe. C'est ce qui fait la différence entre un agent
+/// qui se corrige en un tour et un agent qui redemande la liste : « gabarit
+/// 'users' inconnu » l'envoie deviner, « inconnu — il y a conversation,
+/// product, user » lui donne la réponse dans le refus.
+pub fn lire(root: &Path, family: Family, nom: &str) -> Result<String, String> {
+    let refs = scan(root)?;
+    match refs.iter().find(|r| r.family == family && r.name == nom) {
+        Some(r) => std::fs::read_to_string(root.join(&r.path))
+            .map_err(|e| format!("gabarit '{}' illisible : {e}", r.path)),
+        None => {
+            let mut voisins: Vec<&str> =
+                refs.iter().filter(|r| r.family == family).map(|r| r.name.as_str()).collect();
+            voisins.sort_unstable();
+            if voisins.is_empty() {
+                Err(format!("aucun gabarit de famille '{}' sous {}", family.as_str(), root.display()))
+            } else {
+                Err(format!(
+                    "gabarit '{nom}' inconnu dans la famille '{}' — il y a {}",
+                    family.as_str(),
+                    voisins.join(", ")
+                ))
+            }
+        }
+    }
 }
 
 /// La racine des gabarits fournis, à côté du crate.
