@@ -2066,6 +2066,10 @@ const POIDS_TRIGRAMME: f64 = 0.35;
 /// `Contains`, `ContainsSplit` et `Parse`.
 const POIDS_JARO: f64 = 0.65;
 
+/// Le champ où vit le texte d'un chunk, sur les deux familles de tables de
+/// chunks (`{Entité}_Chunk` et `{KB}_Index_Chunk`).
+const CHAMP_TEXTE_CHUNK: &str = "_text";
+
 /// Combien de candidats demander à la base pour en garder `limit`.
 ///
 /// Le rappel est large exprès : c'est l'ordonnancement fin qui décide, et il ne
@@ -2089,19 +2093,27 @@ pub fn search_texte_natif(
     backend: &dyn crate::search_backend::SearchBackend,
     target: &SearchTarget,
     query: &str,
-    fields: &[String],
     limit: usize,
     return_fields: &[String],
     result_mode: ResultMode,
     diagnostics: Option<&mut SearchDiagnostics>,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    if fields.is_empty() {
-        return Ok(vec![]);
-    }
-    let table = &target.parent_table;
+    // **On cherche dans les chunks, pas dans l'entité.**
+    //
+    // lucivy indexe la table parente et rend des spans de surlignage qu'il faut
+    // ensuite rattacher au bon chunk. Le trigramme ne rend pas de spans — mais
+    // il n'en a pas besoin si l'unité indexée *est* le chunk : l'extrait, c'est
+    // le texte du chunk lui-même.
+    //
+    // Et ça répare autre chose au passage. Le vecteur classe des chunks ; BM25
+    // classait des entités. La fusion RRF mélangeait donc deux granularités,
+    // en rangeant côte à côte des objets qui ne sont pas comparables. Ici les
+    // deux signaux classent **les mêmes objets**.
+    let table = &target.chunk_table;
+    let champs_texte = [CHAMP_TEXTE_CHUNK.to_string()];
 
-    let bruts = match backend.text_search(table, fields, query, limit * FACTEUR_RAPPEL) {
+    let bruts = match backend.text_search(table, &champs_texte, query, limit * FACTEUR_RAPPEL) {
         Some(Ok(v)) => v,
         Some(Err(e)) => {
             return Err(CatalogError::DbError(format!(
@@ -2125,66 +2137,111 @@ pub fn search_texte_natif(
         return Ok(vec![]);
     }
 
-    let mut classes: Vec<(u64, f64, String)> = bruts
+    // Ordre fin : le trigramme a rapporté large, Jaro-Winkler tranche.
+    let mut classes: Vec<(u64, f64)> = bruts
         .into_iter()
         .map(|h| {
             let fin = crate::jaro::meilleur_par_mot(query, &h.texte);
-            let score = POIDS_TRIGRAMME * h.score + POIDS_JARO * fin;
-            // Highlights vides : le trigramme ne rend pas de spans. Les chunks
-            // seront attribués sans eux, et `finish_bm25_chunked` le sait.
-            (h.offset, score, "{}".to_string())
+            (h.offset, POIDS_TRIGRAMME * h.score + POIDS_JARO * fin)
         })
         .collect();
     classes.sort_by(|a, b| b.1.total_cmp(&a.1));
-    classes.truncate(limit);
+    classes.truncate(limit * FACTEUR_RAPPEL);
 
-    // La mise en forme ne passe **pas** par `finish_bm25_chunked` : celle-ci
-    // résout les décalages avec du Cypher écrit en dur (`MATCH (n:T) WHERE
-    // OFFSET(id(n)) IN [...]`), ce qui n'a de sens que sur rag3db. Le backend,
-    // lui, sait résoudre ses propres décalages — c'est précisément ce que
-    // `resolve_offsets` fait, et il est backend-agnostique par construction.
-    //
-    // Ce que ça coûte, et qu'il faut dire : le trigramme ne rend pas de spans,
-    // donc pas d'appariement highlight ↔ chunk. Les résultats sont au niveau
-    // de l'entité. `ResultMode::Detailed` sur ce chemin rendra donc des
-    // entités sans chunks attribués, et le dit ici plutôt que de laisser
-    // croire à un défaut.
-    if result_mode == ResultMode::Detailed {
-        warnings.push(
-            "plein texte natif : pas de spans de surlignage, donc pas de chunks \
-             attribués — les résultats sont au niveau de l'entité"
-                .to_string(),
-        );
+    let par_decalage: std::collections::HashMap<u64, f64> = classes.iter().copied().collect();
+    let decalages: Vec<u64> = classes.iter().map(|(o, _)| *o).collect();
+
+    // Le chunk porte son texte **et** ses bornes : de quoi rendre un extrait
+    // sans rien recalculer.
+    let champs_chunk = [
+        CHAMP_TEXTE_CHUNK,
+        "_parent_uuid",
+        "_index",
+        "_start_char",
+        "_end_char",
+        "_start_line",
+        "_end_line",
+    ];
+    let lignes = backend
+        .resolve_offsets(table, &decalages, &champs_chunk)
+        .map_err(|e| CatalogError::DbError(format!("résolution des chunks de '{table}': {e}")))?;
+
+    let entier = |d: &BTreeMap<String, CypherValue>, k: &str| -> usize {
+        d.get(k).and_then(|v| v.as_i64()).unwrap_or(0).max(0) as usize
+    };
+
+    // Chunk → parent, puis les données du parent en un seul aller.
+    let mut par_parent: Vec<(String, ChunkInfo, f64)> = Vec::new();
+    for l in lignes {
+        let Some(d) = l.data else { continue };
+        let Some(parent) = d.get("_parent_uuid").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let score = par_decalage.get(&l.offset).copied().unwrap_or(0.0);
+        par_parent.push((
+            parent.to_string(),
+            ChunkInfo {
+                uuid: l.uuid,
+                text: d.get(CHAMP_TEXTE_CHUNK).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                index: entier(&d, "_index"),
+                score,
+                start_line: entier(&d, "_start_line"),
+                end_line: entier(&d, "_end_line"),
+                start_char: entier(&d, "_start_char"),
+                end_char: entier(&d, "_end_char"),
+            },
+            score,
+        ));
     }
 
-    let par_decalage: std::collections::HashMap<u64, f64> =
-        classes.iter().map(|(o, s, _)| (*o, *s)).collect();
-    let decalages: Vec<u64> = classes.iter().map(|(o, _, _)| *o).collect();
+    if par_parent.is_empty() {
+        warnings.push(format!(
+            "{} chunk(s) trouvé(s) dans '{table}' mais aucun ne porte de `_parent_uuid` — \
+             la remontée vers l'entité est impossible",
+            decalages.len()
+        ));
+        return Ok(vec![]);
+    }
 
+    // **Agrégé : une ligne par entité, son meilleur chunk.** C'est le mode qui
+    // répond « quelles entités » ; les autres répondent « quels passages », et
+    // gardent donc un résultat par chunk.
+    if result_mode == ResultMode::Aggregated {
+        let mut vus: std::collections::HashSet<String> = std::collections::HashSet::new();
+        par_parent.retain(|(p, _, _)| vus.insert(p.clone()));
+    }
+    par_parent.sort_by(|a, b| b.2.total_cmp(&a.2));
+    par_parent.truncate(limit);
+
+    let uuids: Vec<&str> = {
+        let mut v: Vec<&str> = par_parent.iter().map(|(p, _, _)| p.as_str()).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
     let champs: Vec<&str> = return_fields.iter().map(|f| f.as_str()).collect();
-    let lignes = backend
-        .resolve_offsets(&target.parent_table, &decalages, &champs)
+    let parents = backend
+        .fetch_entities(&target.parent_table, &uuids, &champs)
         .map_err(|e| {
             CatalogError::DbError(format!(
-                "résolution des décalages sur '{}': {e}",
+                "lecture des entités de '{}': {e}",
                 target.parent_table
             ))
         })?;
+    let donnees: std::collections::HashMap<String, BTreeMap<String, CypherValue>> =
+        parents.into_iter().map(|r| (r.uuid, r.data)).collect();
 
-    // L'ordre vient de nous, pas de la base : `resolve_offsets` rend les lignes
-    // dans l'ordre où le backend les trouve, qui n'est pas celui du classement.
-    let mut sortie: Vec<SearchResult> = lignes
+    let sortie: Vec<SearchResult> = par_parent
         .into_iter()
-        .map(|l| SearchResult {
-            uuid: l.uuid,
-            score: par_decalage.get(&l.offset).copied().unwrap_or(0.0),
+        .map(|(parent, chunk, score)| SearchResult {
+            data: donnees.get(&parent).cloned(),
+            uuid: parent,
+            score,
             entity: Some(target.parent_table.clone()),
-            data: l.data,
-            chunk: None,
+            chunk: Some(chunk),
             chunks: None,
         })
         .collect();
-    sortie.sort_by(|a, b| b.score.total_cmp(&a.score));
 
     if let Some(d) = diagnostics {
         d.engine_warnings.extend(warnings.iter().cloned());

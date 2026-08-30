@@ -3112,7 +3112,16 @@ impl Catalog {
                         // L'index vit avec les données : rien à ouvrir, rien à
                         // tenir à jour à côté, rien à écrire sur disque en
                         // double. On pose seulement l'index une fois.
-                        self.poser_index(self.dialect.text_search_indexes(&table, &fields));
+                        //
+                        // Et sur la table de **chunks**, pas sur l'entité : le
+                        // trigramme ne rend pas de spans, donc l'unité indexée
+                        // doit être celle qu'on veut montrer. C'est aussi celle
+                        // que le vecteur classe, ce qui rend la fusion honnête.
+                        let chunks = target.chunk_table.clone();
+                        self.poser_index(
+                            self.dialect.text_search_indexes(&chunks, &["_text".to_string()]),
+                        );
+                        let _ = &fields;
                     } else {
                         self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
                     }
@@ -4100,7 +4109,7 @@ impl Catalog {
                 // main à la même mise en forme.
                 search::search_texte_natif(
                     self.search_backend.as_ref().unwrap().as_ref(),
-                    &target, query, bm25_fields, search_limit,
+                    &target, query, search_limit,
                     enrich_fields, options.result_mode,
                     diag.as_mut(), &mut search_warnings,
                 )?

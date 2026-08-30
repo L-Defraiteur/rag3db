@@ -471,7 +471,6 @@ impl Node for BM25SearchNode {
                 backend.as_ref(),
                 &target,
                 &query_str,
-                fields,
                 self.limit,
                 &target.enrich_fields,
                 self.result_mode,

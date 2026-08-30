@@ -353,7 +353,15 @@ fn le_plein_texte_trouve() {
         eprintln!("  {:.4} — {:?}", r.score, r.data.as_ref().and_then(|d| d.get("name")));
     }
 
-    assert!(reponse.meta.bm25_count > 0, "lucivy n'a rien indexé sur postgres");
+    // L'extrait vient du chunk lui-même : le trigramme cherche dans les
+    // chunks, donc chaque résultat en porte un, sans aucun appariement de spans.
+    for r in &reponse.results {
+        let c = r.chunk.as_ref().expect("un résultat sans chunk : l'extrait est perdu");
+        eprintln!("  extrait [{}..{}] : {}", c.start_char, c.end_char, c.text);
+        assert!(!c.text.is_empty(), "chunk vide");
+    }
+
+    assert!(reponse.meta.bm25_count > 0, "le plein texte natif n'a rien rendu");
     assert!(!reponse.results.is_empty(), "aucun résultat plein texte");
     // Le couteau ne parle pas de langage de programmation : s'il sort premier,
     // c'est que la résolution des décalages rend n'importe quelle ligne.
