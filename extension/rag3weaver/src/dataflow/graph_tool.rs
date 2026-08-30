@@ -1704,11 +1704,20 @@ pub const PLACE_TOOL_MERMAID: &str = include_str!("../../templates/tools/place.m
 /// gagner à chaque fois.
 #[cfg(feature = "code")]
 pub const ADOPT_TOOL_MERMAID: &str = include_str!("../../templates/tools/adopt.mmd");
+/// `run`, `run_bg`, `wait` : le verbe qui manquait à l'agent de code, et de
+/// quoi ne pas attendre bêtement. `run_bg` est le **premier usager** du
+/// mécanisme asynchrone, complet depuis le 26 août et que personne ne déclarait.
+#[cfg(feature = "code")]
+pub const RUN_TOOL_MERMAID: &str = include_str!("../../templates/tools/run.mmd");
+#[cfg(feature = "code")]
+pub const RUN_BG_TOOL_MERMAID: &str = include_str!("../../templates/tools/run_bg.mmd");
+#[cfg(feature = "code")]
+pub const WAIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/wait.mmd");
 
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 7] = ["adopt", "edit", "grep", "list", "place", "read", "search"];
+pub const BUILTIN_TOOL_NAMES: [&str; 10] = ["adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "search", "wait"];
 #[cfg(not(feature = "code"))]
 pub const BUILTIN_TOOL_NAMES: [&str; 1] = ["search"];
 
@@ -1758,6 +1767,9 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
         tools.register(GraphTool::from_mermaid(EDIT_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(PLACE_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(ADOPT_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(RUN_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(RUN_BG_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(WAIT_TOOL_MERMAID)?.bind(&nodes)?)?;
     }
     Ok((nodes, tools))
 }

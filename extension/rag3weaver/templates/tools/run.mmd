@@ -1,0 +1,23 @@
+%% tool: run
+%% description: Exécute une commande dans le projet et rend son résultat : code de sortie, durée, sortie. Pour compiler, lancer les tests, lire l'état de git. La sortie entière est gardée dans un journal dont le chemin est rendu — vous pouvez la relire ou la filtrer ensuite, sans relancer la commande.
+%% param: command string! -- La ligne à exécuter, ex. 'cargo test --lib'. Les enchaînements && ; || et les tuyaux sont acceptés et chaque commande est jugée séparément. Les substitutions $(…), les redirections > et les jokers * sont refusés : donnez les chemins.
+%% param: timeout_s int = 60 -- Secondes avant d'abandonner. Au-delà d'une minute ou deux, préférez `run_bg` qui vous rend la main tout de suite.
+%% param: max_output int = 20000 -- Caractères rendus par flux. Ce n'est pas une perte : le reste est dans le journal.
+%% result: run.result
+%%
+%% **Rien ne s'exécute sans passer par la porte** (`crate::commande`). La ligne
+%% est d'abord réduite en argv par un parseur bash, puis **chaque** commande
+%% qu'elle contient est jugée. `git status && rm -rf /` n'est pas « une commande
+%% qui commence par git status » : ce sont deux commandes, et la seconde décide.
+%%
+%% Un refus est un **résultat**, pas une erreur : il dit ce qui a bloqué et
+%% pourquoi, pour que vous changiez de plan plutôt que de relancer.
+%%
+%% Ce qui n'est jamais permis, quel que soit le mode : l'élévation de
+%% privilèges. Ce qui demande toujours : un shell (`sh -c`, ou un tuyau vers
+%% un shell), parce que sa famille ne dit rien de ce qu'il fera. Ce qui ne
+%% s'autorise jamais pour la suite : l'irréversible — on ne demande pas
+%% cinquante fois pour lire, on demande à chaque fois pour détruire.
+
+graph LR
+    run["RunCommandNode(command=$command, timeout_s=$timeout_s, max_output=$max_output)"]

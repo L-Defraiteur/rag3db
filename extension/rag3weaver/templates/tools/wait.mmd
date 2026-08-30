@@ -1,0 +1,21 @@
+%% tool: wait
+%% description: Attend qu'une ligne apparaisse dans le journal d'une commande lancée en fond, et vous la rend dès qu'elle sort. Pour savoir qu'un serveur écoute, qu'une compilation a fini, qu'un test a échoué — sans attendre la fin de tout.
+%% param: journal string! -- Le chemin de journal rendu par `run` ou `run_bg`.
+%% param: pattern string! -- Expression régulière cherchée ligne par ligne, ex. 'Listening on|error\[E'.
+%% param: timeout_s int = 60 -- Secondes d'attente avant de rendre « pas encore ».
+%% result: wait.result
+%%
+%% **Ce n'est pas un `grep`, et la différence compte.** `grep` cherche dans une
+%% source : le fichier est là, entier, et « absent » veut dire absent. Un
+%% journal est un **flux** — il grandit pendant qu'on le lit, et « pas encore »
+%% n'est pas « non ». Un agent qui confondrait les deux conclurait à l'échec en
+%% regardant trop tôt.
+%%
+%% C'est pourquoi le délai rend « pas encore » et non « rien trouvé » : la
+%% commande tourne peut-être toujours, et vous pouvez redemander.
+%%
+%% On n'attend que sur ses propres journaux. Le reste du dossier temporaire
+%% appartient aux autres programmes de la machine.
+
+graph LR
+    wait["WaitOutputNode(journal=$journal, pattern=$pattern, timeout_s=$timeout_s)"]

@@ -1225,12 +1225,14 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::code_nodes::EditFileNodeFactory));
         registry.register(Box::new(super::template_nodes::PlaceTemplateNodeFactory));
         registry.register(Box::new(super::template_nodes::AdoptTemplateNodeFactory));
+        registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
+        registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 8 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

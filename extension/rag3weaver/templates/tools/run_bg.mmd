@@ -1,0 +1,22 @@
+%% tool: run_bg
+%% description: Lance une commande longue et vous rend la main immédiatement. Vous recevrez son résultat comme message quand elle aura fini, et vous pouvez parler, lire ou lancer autre chose en attendant. Pour une suite de tests complète, une compilation lourde, un serveur qui démarre.
+%% param: command string! -- La ligne à exécuter. Mêmes règles que `run`.
+%% param: timeout_s int = 600 -- Secondes avant d'abandonner (plafond 1800).
+%% param: max_output int = 20000 -- Caractères rendus par flux ; le reste est dans le journal.
+%% async: true
+%% result: run.result
+%%
+%% **Le même nœud que `run`, une seule chose change : vous n'attendez pas.**
+%% L'appel rend un accusé avec un identifiant ; le vrai résultat arrive plus
+%% tard dans votre boîte, comme un message.
+%%
+%% Ce que ça vous permet, et qui n'existe pas avec `run` : continuer à
+%% travailler pendant que ça tourne, lire les messages qui arrivent, décider
+%% d'attendre ou de répondre à quelqu'un. Une compilation de cinq minutes ne
+%% vous fait plus perdre cinq minutes.
+%%
+%% Et pendant qu'elle tourne, son journal grandit : `wait` vous prévient dès
+%% qu'une ligne y correspond à ce que vous cherchez, sans attendre la fin.
+
+graph LR
+    run["RunCommandNode(command=$command, timeout_s=$timeout_s, max_output=$max_output)"]
