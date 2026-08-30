@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! rag3weaver-embeddings --adresse 127.0.0.1:7878
+//! rag3weaver-embeddings --adresse 0.0.0.0:7878 --exposer   # voir l'issue 05
 //! ```
 //!
 //! Personne n'a normalement à le lancer à la main : `DaemonEmbedder::assurer`
@@ -34,7 +35,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn servir() -> Result<(), String> {
-    let adresse = adresse()?;
+    let (adresse, expose) = adresse()?;
     let bpk = artefact("RAG3WEAVER_BGE_M3_BPK", "model.bpk")?;
     let tokenizer = artefact("RAG3WEAVER_BGE_M3_TOKENIZER", "tokenizer.json")?;
 
@@ -60,24 +61,32 @@ fn servir() -> Result<(), String> {
     // du trafic en moins sur le fil, pas du calcul en moins.
     let demon = EmbedDaemon::new(modele.clone())
         .avec_dual(modele.clone())
-        .avec_sparse(modele);
+        .avec_sparse(modele)
+        .expose(expose);
+    // **Refuser avant d'annoncer.** Sinon le journal dit « à l'écoute sur
+    // 0.0.0.0 » juste avant d'échouer, et c'est la ligne qu'on croira.
+    if !expose && !rag3weaver::daemon::est_local(&adresse) {
+        return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.to_string());
+    }
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
     demon.servir(&adresse).map_err(|e| e.to_string())
 }
 
 /// `--adresse <hôte:port>`, ou `127.0.0.1:7878`.
-fn adresse() -> Result<String, String> {
+fn adresse() -> Result<(String, bool), String> {
     let mut args = std::env::args().skip(1);
     let mut adresse = "127.0.0.1:7878".to_string();
+    let mut expose = false;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--adresse" => {
                 adresse = args.next().ok_or("--adresse attend une valeur")?;
             }
+            "--exposer" => expose = true,
             autre => return Err(format!("argument inconnu : {autre}")),
         }
     }
-    Ok(adresse)
+    Ok((adresse, expose))
 }
 
 /// Un artefact du modèle : la variable d'environnement si elle est là, sinon

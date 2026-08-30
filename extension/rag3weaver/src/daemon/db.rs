@@ -149,12 +149,15 @@ pub struct DbDaemon {
     conn: Arc<dyn DbConnection>,
     base: String,
     fils: usize,
+    /// Servir hors de la boucle locale, en connaissance de cause. Voir
+    /// [`super::est_local`].
+    expose: bool,
 }
 
 impl DbDaemon {
     /// Un démon qui sert cette connexion.
     pub fn new(conn: Arc<dyn DbConnection>) -> Self {
-        Self { conn, base: ":memoire:".to_string(), fils: 8 }
+        Self { conn, base: ":memoire:".to_string(), fils: 8, expose: false }
     }
 
     /// Le chemin de la base, pour que son identité le dise.
@@ -173,6 +176,13 @@ impl DbDaemon {
         self
     }
 
+    /// **Servir hors de la boucle locale**, en sachant que ce démon exécute ce
+    /// qu'on lui envoie sans authentification (issue 05).
+    pub fn expose(mut self, oui: bool) -> Self {
+        self.expose = oui;
+        self
+    }
+
     /// L'identité qu'il déclare.
     pub fn identite(&self) -> Identite {
         Identite { service: SERVICE.to_string(), base: self.base.clone() }
@@ -180,8 +190,8 @@ impl DbDaemon {
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
     pub fn servir(self, adresse: &str) -> Result<(), DaemonError> {
-        let fils = self.fils;
-        super::servir(Arc::new(self), adresse, fils)
+        let (fils, expose) = (self.fils, self.expose);
+        super::servir(Arc::new(self), adresse, fils, expose)
     }
 
     fn cypher(&self, r: RequeteFil) -> Result<ResultatFil, String> {

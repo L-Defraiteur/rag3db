@@ -47,6 +47,8 @@ pub const SANTE: &str = "/sante";
 pub enum DaemonError {
     /// L'adresse n'a pas pu être écoutée.
     Ecoute { adresse: String, cause: String },
+    /// On a demandé à servir hors de la boucle locale sans le dire.
+    Exposition { adresse: String },
     /// Le démon n'a pas répondu.
     Injoignable { adresse: String, cause: String },
     /// Ce qui répond n'est pas le démon attendu.
@@ -63,6 +65,12 @@ impl std::fmt::Display for DaemonError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Ecoute { adresse, cause } => write!(f, "impossible d'écouter sur {adresse} : {cause}"),
+            Self::Exposition { adresse } => write!(
+                f,
+                "{adresse} n'est pas sur la boucle locale, et ce démon exécute ce qu'on lui \
+                 envoie sans authentification. Ajoutez --exposer si c'est voulu, en sachant \
+                 que quiconque atteint ce port a les droits du démon."
+            ),
             Self::Injoignable { adresse, cause } => write!(f, "{adresse} ne répond pas : {cause}"),
             Self::Etranger { adresse, attendu, trouve } => write!(
                 f,
@@ -104,14 +112,47 @@ pub trait Service: Send + Sync + 'static {
     ) -> (u16, String);
 }
 
+/// **Sert-on hors de la boucle locale ?**
+///
+/// Sur `127.0.0.0/8` ou `::1`, la frontière de confiance est **exactement celle
+/// du fichier** : qui peut joindre le port pouvait déjà ouvrir la base ou la
+/// carte. Le démon n'ouvre rien de neuf, et c'est pour ça qu'il n'a ni jeton ni
+/// TLS.
+///
+/// Ailleurs, cette frontière disparaît — et la seule chose qui séparait les deux
+/// mondes était **un argument de ligne de commande**. C'est le genre de bascule
+/// qu'on fait un mardi pour essayer et qu'on oublie. Elle demande donc à être
+/// dite (issue 05 du 29 août 2026).
+///
+/// Une adresse illisible est traitée comme non locale : dans le doute, on
+/// refuse plutôt que d'ouvrir.
+pub fn est_local(adresse: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    match adresse.to_socket_addrs() {
+        Ok(mut addrs) => addrs.all(|a| a.ip().is_loopback()),
+        Err(_) => false,
+    }
+}
+
 /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
+///
+/// `expose` : servir hors de la boucle locale, en connaissance de cause. Voir
+/// [`est_local`].
 ///
 /// `fils` n'est pas du parallélisme de calcul : la ressource servie est unique
 /// et se sérialise de toute façon (un verrou pour la carte, une connexion pour
 /// la base). C'est pour que `/sante` réponde tout de suite pendant qu'un gros
 /// travail occupe la ressource — sinon la sonde d'un client conclurait à tort
 /// que le port est tenu par un étranger.
-pub fn servir(service: Arc<dyn Service>, adresse: &str, fils: usize) -> Result<(), DaemonError> {
+pub fn servir(
+    service: Arc<dyn Service>,
+    adresse: &str,
+    fils: usize,
+    expose: bool,
+) -> Result<(), DaemonError> {
+    if !expose && !est_local(adresse) {
+        return Err(DaemonError::Exposition { adresse: adresse.to_string() });
+    }
     let ecoute = tiny_http::Server::http(adresse).map_err(|e| DaemonError::Ecoute {
         adresse: adresse.to_string(),
         cause: e.to_string(),
@@ -259,4 +300,32 @@ pub fn poster(
         return Err(DaemonError::Refus { statut, corps: texte });
     }
     Ok(texte)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **La boucle locale, et rien d'autre.** `0.0.0.0` n'est pas locale : elle
+    /// écoute sur toutes les interfaces, y compris celle du réseau.
+    #[test]
+    fn on_reconnait_la_boucle_locale() {
+        assert!(est_local("127.0.0.1:7878"));
+        assert!(est_local("127.0.0.2:7878"));
+        assert!(est_local("localhost:7878"));
+        assert!(est_local("[::1]:7878"));
+
+        assert!(!est_local("0.0.0.0:7878"));
+        assert!(!est_local("192.168.1.10:7878"));
+        assert!(!est_local("[::]:7878"));
+    }
+
+    /// **Dans le doute, on refuse.** Une adresse qu'on ne sait pas résoudre
+    /// pourrait être n'importe quoi ; la traiter comme locale ouvrirait le port
+    /// sur une erreur de frappe.
+    #[test]
+    fn une_adresse_illisible_n_est_pas_locale() {
+        assert!(!est_local("pas une adresse"));
+        assert!(!est_local(""));
+    }
 }

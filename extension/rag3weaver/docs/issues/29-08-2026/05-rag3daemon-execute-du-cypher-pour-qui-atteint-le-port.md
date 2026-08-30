@@ -1,5 +1,8 @@
 # rag3daemon exécute du Cypher pour quiconque atteint le port
 
+> **Point 1 fait le 29 août 2026 au soir** : la bascule silencieuse est fermée.
+> Les points 2 à 4 restent ouverts.
+
 **Ouvert le 29 août 2026**, le jour même où rag3daemon est né
 ([issue 03 §9](03-un-demon-et-la-fin-du-tout-synchrone.md)).
 
@@ -29,9 +32,13 @@ réplication.
 
 ## Ce qu'il faudrait, par ordre de coût
 
-1. **Refuser de servir hors boucle locale sans le dire.** Si l'adresse n'est pas
-   sur `127.0.0.0/8`, exiger un drapeau explicite (`--exposer`) et un jeton.
-   Quelques heures, et ça ferme la bascule silencieuse.
+1. ~~**Refuser de servir hors boucle locale sans le dire.**~~ **Fait.**
+   `daemon::est_local` et le drapeau `--exposer`, sur les deux démons. Une
+   adresse qu'on ne sait pas résoudre est traitée comme non locale : dans le
+   doute on refuse, plutôt que d'ouvrir un port sur une faute de frappe. Le
+   refus arrive **avant** l'annonce d'écoute — sinon le journal dit « à l'écoute
+   sur 0.0.0.0 » juste avant d'échouer, et c'est cette ligne-là qu'on croirait.
+   Le jeton, lui, reste au point 2.
 2. **Un jeton partagé**, en en-tête, comparé en temps constant. Un jour.
 3. **TLS**, ou un tunnel — `rustls` est déjà dans l'arbre via `ureq`.
 4. **Lecture seule par client** : un jeton qui ne donne que `read_only`. Le

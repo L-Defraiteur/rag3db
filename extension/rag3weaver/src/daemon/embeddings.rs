@@ -71,6 +71,9 @@ pub struct EmbedDaemon {
     dual: Option<Arc<dyn DualEmbedder>>,
     sparse: Option<Arc<dyn SparseEmbedder>>,
     fils: usize,
+    /// Servir hors de la boucle locale, en connaissance de cause. Voir
+    /// [`super::est_local`].
+    expose: bool,
     /// Plafond d'éléments par appel GPU. Le budget de texte
     /// ([`embed_char_budget`]) ferme le lot avant lui la plupart du temps.
     lot_max: usize,
@@ -81,7 +84,15 @@ pub struct EmbedDaemon {
 impl EmbedDaemon {
     /// Un démon qui sert cet embedder.
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self { embedder, dual: None, sparse: None, fils: 4, lot_max: 32, passe: Mutex::new(()) }
+        Self {
+            embedder,
+            dual: None,
+            sparse: None,
+            fils: 4,
+            lot_max: 32,
+            expose: false,
+            passe: Mutex::new(()),
+        }
     }
 
     /// Le même modèle sait aussi rendre le creux en une passe : on l'expose.
@@ -141,6 +152,13 @@ impl EmbedDaemon {
         Ok(out)
     }
 
+    /// **Servir hors de la boucle locale**, en sachant que ce démon exécute ce
+    /// qu'on lui envoie sans authentification (issue 05).
+    pub fn expose(mut self, oui: bool) -> Self {
+        self.expose = oui;
+        self
+    }
+
     /// L'identité qu'il déclare.
     pub fn identite(&self) -> Identite {
         Identite {
@@ -155,8 +173,8 @@ impl EmbedDaemon {
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
     pub fn servir(self, adresse: &str) -> Result<(), DaemonError> {
-        let fils = self.fils;
-        super::servir(Arc::new(self), adresse, fils)
+        let (fils, expose) = (self.fils, self.expose);
+        super::servir(Arc::new(self), adresse, fils, expose)
     }
 }
 
