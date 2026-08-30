@@ -15,6 +15,20 @@ use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryRes
 /// PostgreSQL connection backed by a connection pool.
 pub struct PostgresConnection {
     pool: Pool,
+    /// **Le runtime, tenu et non deviné.**
+    ///
+    /// `execute` est synchrone et doit pourtant piloter du code async. La
+    /// version précédente demandait `Handle::current()` *au moment de
+    /// l'appel* — c'est-à-dire qu'elle exigeait de l'appelant qu'il soit dans
+    /// un contexte tokio. Or les appelants ne le sont pas tous : lucivy écrit
+    /// ses segments depuis **ses propres fils d'ordonnancement**, qui ne
+    /// savent rien de tokio. Résultat : « there is no reactor running », au
+    /// milieu d'un commit d'index, avec des verrous laissés empoisonnés.
+    ///
+    /// La connexion capture donc le handle à sa construction — elle est née
+    /// dans le runtime, elle en garde l'adresse — et n'impose plus rien à qui
+    /// l'appelle.
+    handle: tokio::runtime::Handle,
 }
 
 impl PostgresConnection {
@@ -26,7 +40,16 @@ impl PostgresConnection {
 
         let mut pool_config = Config::new();
         pool_config.dbname = config.get_dbname().map(|s| s.to_string());
-        pool_config.host = config.get_hosts().first().map(|h| format!("{h:?}"));
+        // `Host` est une énumération : son `Debug` rend `Tcp("localhost")`, pas
+        // `localhost`. Formaté ainsi, le nom d'hôte partait tel quel à la
+        // résolution DNS et **aucune connexion n'était possible** — le genre de
+        // défaut qu'aucun test unitaire ne voit, parce qu'il ne se manifeste
+        // qu'en parlant à une vraie base.
+        pool_config.host = config.get_hosts().first().map(|h| match h {
+            tokio_postgres::config::Host::Tcp(name) => name.clone(),
+            #[cfg(unix)]
+            tokio_postgres::config::Host::Unix(path) => path.to_string_lossy().into_owned(),
+        });
         pool_config.port = config.get_ports().first().copied();
         pool_config.user = config.get_user().map(|s| s.to_string());
         pool_config.password = config.get_password().map(|p| String::from_utf8_lossy(p).to_string());
@@ -41,7 +64,10 @@ impl PostgresConnection {
             .await
             .map_err(|e| DbError::ConnectionError(format!("connection failed: {e}")))?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            handle: tokio::runtime::Handle::current(),
+        })
     }
 
     /// Create from explicit parameters.
@@ -171,13 +197,36 @@ fn pg_row_to_cypher(row: &tokio_postgres::Row) -> Vec<CypherValue> {
 }
 
 impl PostgresConnection {
+    /// **Dire ce que la base a dit.**
+    ///
+    /// Le `Display` d'une erreur tokio-postgres est `"db error"` — trois mots,
+    /// sans le message du serveur, sans le code SQLSTATE, sans la position.
+    /// Tel quel, un échec de DDL était indiscernable d'un autre. Le détail est
+    /// dans `as_db_error()` ; on le déplie, et on rappelle la requête.
+    fn dire(e: tokio_postgres::Error, sql: &str) -> DbError {
+        let court: String = sql.chars().take(400).collect();
+        match e.as_db_error() {
+            Some(db) => {
+                let mut m = format!("{}: {}", db.code().code(), db.message());
+                if let Some(d) = db.detail() {
+                    m.push_str(&format!(" — détail: {d}"));
+                }
+                if let Some(h) = db.hint() {
+                    m.push_str(&format!(" — piste: {h}"));
+                }
+                DbError::QueryError(format!("{m}\n  sql: {court}"))
+            }
+            None => DbError::QueryError(format!("{e}\n  sql: {court}")),
+        }
+    }
+
     /// Internal async execute, called from sync DbConnection via block_on.
     async fn execute_async(&self, sql: &str) -> Result<QueryResult, DbError> {
         let conn = self.pool.get().await
             .map_err(|e| DbError::ConnectionError(e.to_string()))?;
 
         let rows = conn.query(sql, &[]).await
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| Self::dire(e, sql))?;
 
         let columns = if let Some(first) = rows.first() {
             first.columns().iter().map(|c| c.name().to_string()).collect()
@@ -212,7 +261,7 @@ impl PostgresConnection {
             .map_err(|e| DbError::ConnectionError(e.to_string()))?;
 
         let rows = conn.query(&translated_sql, &param_refs).await
-            .map_err(|e| DbError::QueryError(format!("{e} — sql: {translated_sql}")))?;
+            .map_err(|e| Self::dire(e, &translated_sql))?;
 
         let columns = if let Some(first) = rows.first() {
             first.columns().iter().map(|c| c.name().to_string()).collect()
@@ -229,7 +278,7 @@ impl PostgresConnection {
     }
 
     fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        tokio::runtime::Handle::current().block_on(future)
+        self.handle.block_on(future)
     }
 }
 

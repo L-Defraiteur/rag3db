@@ -11,11 +11,16 @@ use lucivy_core::blob_store::BlobStore;
 /// Keys are `{index_name}/{file_name}`, values are BYTEA blobs.
 /// Uses a sync connection (SyncDbConnection) since BlobStore trait is sync.
 pub struct PostgresBlobStore {
-    conn: std::sync::Arc<dyn crate::connection::SyncDbConnection>,
+    conn: std::sync::Arc<dyn crate::connection::DbConnection>,
 }
 
 impl PostgresBlobStore {
-    pub fn new(conn: std::sync::Arc<dyn crate::connection::SyncDbConnection>) -> Self {
+    /// `DbConnection` et non `SyncDbConnection` : depuis la migration sync les
+    /// deux ont la même surface, mais ce sont **deux objets-traits distincts**
+    /// sans conversion automatique — et c'est `Arc<dyn DbConnection>` que le
+    /// catalogue sait rendre (`conn_arc()`). Demander l'autre rendait ce
+    /// magasin inatteignable depuis un `Catalog`.
+    pub fn new(conn: std::sync::Arc<dyn crate::connection::DbConnection>) -> Self {
         Self { conn }
     }
 }

@@ -73,6 +73,28 @@ pub trait SchemaDialect: Send + Sync {
     /// Statements to run before any DDL (e.g. CREATE SCHEMA, CREATE EXTENSION).
     fn setup_statements(&self) -> Vec<String> { vec![] }
 
+    /// **Ce dialecte parle-t-il Cypher ?**
+    ///
+    /// Deux organes du catalogue sont encore écrits en Cypher **en dur**, sans
+    /// passer par ce trait : le magasin de checkpoints
+    /// (`CypherCheckpointStore`) et le magasin de blobs (`CypherBlobStore`).
+    ///
+    /// `initialize()` ne les monte d'office que là où ils peuvent tourner.
+    /// Ailleurs, l'appelant fournit l'équivalent (`set_checkpoint_store`,
+    /// `set_blob_store`) — et s'il ne le fait pas, le catalogue **le dit** par
+    /// un `CatalogEvent::Warning` au lieu de démarrer amputé en silence.
+    ///
+    /// Vrai par défaut : c'était l'hypothèse implicite de tout le code
+    /// existant, et un dialecte qui ne se prononce pas ne doit rien changer.
+    fn speaks_cypher(&self) -> bool { true }
+
+    /// Poser le nœud d'une cellule (`_Org`, `_Project`) s'il n'y est pas.
+    ///
+    /// Créer sans écraser : un `name` déjà renseigné ne doit pas retomber sur
+    /// l'identifiant. Le paramètre sert **deux fois** — identité et nom par
+    /// défaut — et c'est voulu.
+    fn upsert_scope_node(&self, table: &str, id_param: &str) -> String;
+
     // ── Row identity ──────────────────────────────────────────────────
 
     /// Expression to get the stable row offset for a matched node.
@@ -366,6 +388,10 @@ pub trait SchemaDialect: Send + Sync {
 pub struct Rag3dbDialect;
 
 impl SchemaDialect for Rag3dbDialect {
+    fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
+        format!("MERGE (n:{table} {{_uuid: ${id_param}}}) ON CREATE SET n.name = ${id_param}")
+    }
+
     fn name(&self) -> &'static str {
         "rag3db"
     }
@@ -933,6 +959,15 @@ impl SchemaDialect for PostgresDialect {
             "CREATE EXTENSION IF NOT EXISTS vector".into(),
             "CREATE SCHEMA IF NOT EXISTS rag3weaver".into(),
         ]
+    }
+
+    fn speaks_cypher(&self) -> bool { false }
+
+    fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
+        format!(
+            "INSERT INTO {table} (_uuid, name) VALUES (${id_param}, ${id_param}) \
+             ON CONFLICT (_uuid) DO NOTHING"
+        )
     }
 
     fn type_name(&self, ct: &ColumnType) -> String {

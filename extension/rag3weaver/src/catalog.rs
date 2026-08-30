@@ -246,6 +246,20 @@ impl Catalog {
         self.search_backend = Some(backend);
     }
 
+    /// **Le magasin de blobs**, où vivent les index lucivy et sparse.
+    ///
+    /// À appeler avant `initialize()`. Sans lui, `initialize()` monte un
+    /// [`CypherBlobStore`] — qui parle **Cypher**, et n'a donc rien à faire
+    /// devant un backend SQL. Le troisième organe qu'un backend doit fournir,
+    /// avec le dialecte et le backend de recherche.
+    ///
+    /// Il n'est **pas** enveloppé dans un [`BufferedBlobStore`] ici : à
+    /// l'appelant de le faire s'il le veut, puisque lui seul sait si son
+    /// magasin sait déjà grouper ses écritures.
+    pub fn set_blob_store(&mut self, store: Arc<dyn BlobStore>) {
+        self.blob_store = Some(store);
+    }
+
     /// Replace the dense embedder with a shared Arc.
     /// Use this to share a single model instance between dense and sparse roles.
     /// Branche un reranker (cross-encoder). Activé par requête via
@@ -733,21 +747,56 @@ impl Catalog {
         self.warm_chunker_cache();
 
         // 7. Initialize checkpoint store for crash-recovery (unless already set by tests)
+        //
+        // `CypherCheckpointStore` porte son dialecte dans son nom : ses DDL et
+        // ses MERGE sont du Cypher en dur. Devant un backend SQL il échoue dès
+        // le `CREATE NODE TABLE` — on ne le monte donc que là où il tourne, et
+        // on dit ce qui manque quand on ne le monte pas.
         if self.checkpoint_store.is_none() {
-            let cp_store: Arc<dyn CheckpointStore> =
-                Arc::new(CypherCheckpointStore::new(self.conn.clone()));
-            cp_store
-                .initialize()
-                .map_err(|e| CatalogError::DbError(e))?;
-            self.checkpoint_store = Some(cp_store);
+            if self.dialect.speaks_cypher() {
+                let cp_store: Arc<dyn CheckpointStore> =
+                    Arc::new(CypherCheckpointStore::new(self.conn.clone()));
+                cp_store
+                    .initialize()
+                    .map_err(|e| CatalogError::DbError(e))?;
+                self.checkpoint_store = Some(cp_store);
+            } else {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "initialize".into(),
+                    message: format!(
+                        "aucun magasin de checkpoints : le seul disponible parle Cypher, \
+                         et le dialecte est « {} ». La reprise après incident est \
+                         indisponible ; fournis-en un avec set_checkpoint_store().",
+                        self.dialect.name()
+                    ),
+                });
+            }
         }
 
         // 8. Initialize blob store for lucivy/sparse index persistence
         //    Must be before ensure_sparse_handle() which needs blob_store.
-        if self.blob_store.is_none() {
-            let blob_ddl = self.dialect.create_blob_table();
-            self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        //
+        // La **table** vient du dialecte, donc elle se pose partout — y compris
+        // quand l'appelant a fourni son propre magasin, qui écrit dedans.
+        let blob_ddl = self.dialect.create_blob_table();
+        self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
+        if self.blob_store.is_none() && !self.dialect.speaks_cypher() {
+            // Même raison qu'en 7 : `CypherBlobStore` parle Cypher. Sans
+            // magasin, les index FTS et sparse ne se posent nulle part — ce
+            // qui se voit *plus tard*, sous forme de recherche vide. On le dit
+            // maintenant.
+            self.emit_event(CatalogEvent::Warning {
+                context: "initialize".into(),
+                message: format!(
+                    "aucun magasin de blobs : le seul disponible parle Cypher, et le \
+                     dialecte est « {} ». Les index FTS et sparse ne seront pas \
+                     persistés ; fournis-en un avec set_blob_store().",
+                    self.dialect.name()
+                ),
+            });
+        }
+        if self.blob_store.is_none() && self.dialect.speaks_cypher() {
             // `sync_conn` est un vestige de l'époque async : depuis la migration
             // sync, `self.conn` EST une connexion synchrone, et
             // `from_sync_connection` prend justement un `Arc<dyn DbConnection>`.
@@ -982,7 +1031,7 @@ impl Catalog {
         entity_def: &crate::config::EntityDef,
     ) -> Result<(), CatalogError> {
         // 1. Entity node table (always)
-        let entity_ddl = crate::schema::generate_node_table_ddl(entity_name, entity_def)
+        let entity_ddl = crate::schema::generate_node_table_ddl_with_dialect(entity_name, entity_def, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&entity_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -993,14 +1042,14 @@ impl Catalog {
         }
 
         // 2. Chunk table
-        let chunk_ddl = crate::schema::generate_simple_chunk_table_ddl(
-            entity_name, config, self.config.embedding_dim,
+        let chunk_ddl = crate::schema::generate_simple_chunk_table_ddl_with_dialect(
+            entity_name, config, self.config.embedding_dim, self.dialect.as_ref(),
         ).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 3. CHUNKED_FROM relation
-        let rel_ddl = crate::schema::generate_simple_chunk_rel_ddl(entity_name)
+        let rel_ddl = crate::schema::generate_simple_chunk_rel_ddl_with_dialect(entity_name, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&rel_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -1015,9 +1064,7 @@ impl Catalog {
         if config.signals.vector() {
             let chunk_table = format!("{entity_name}_Chunk");
             let idx_name = format!("{entity_name}_Chunk_vec");
-            let vec_ddl = crate::schema::generate_vector_index_ddl(
-                &chunk_table, "embedding", &idx_name,
-            );
+            let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
             let _ = self.conn.execute(&vec_ddl);
         }
 
@@ -1395,13 +1442,13 @@ impl Catalog {
                 // Without them the aggregation drain died on
                 // `Table {Entity}_SOURCED_{KB} does not exist`. Both DDLs are
                 // IF NOT EXISTS, so replaying them for every member is free.
-                let in_ddl = crate::schema::generate_index_rel_ddl(&info.title_entity, kb_name)
+                let in_ddl = crate::schema::generate_index_rel_ddl_with_dialect(&info.title_entity, kb_name, self.dialect.as_ref())
                     .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
                 self.conn.execute(&in_ddl)
                     .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
                 for entity_name in &kb_entities {
-                    let source_ddl = crate::schema::generate_source_rel_ddl(entity_name, kb_name)
+                    let source_ddl = crate::schema::generate_source_rel_ddl_with_dialect(entity_name, kb_name, self.dialect.as_ref())
                         .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
                     self.conn.execute(&source_ddl)
                         .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -1460,32 +1507,32 @@ impl Catalog {
         let embedding_dim = self.config.embedding_dim;
 
         // 1. {KB}_Index table
-        let idx_ddl = crate::schema::generate_index_table_ddl(kb_name, kb_config, embedding_dim)
+        let idx_ddl = crate::schema::generate_index_table_ddl_with_dialect(kb_name, kb_config, embedding_dim, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&idx_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 2. {KB}_Index_Chunk table
-        let chunk_ddl = crate::schema::generate_index_chunk_table_ddl(kb_name, kb_config, embedding_dim)
+        let chunk_ddl = crate::schema::generate_index_chunk_table_ddl_with_dialect(kb_name, kb_config, embedding_dim, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 3. {KB}_Index_HAS_CHUNK rel
-        let has_chunk_ddl = crate::schema::generate_index_chunk_rel_ddl(kb_name)
+        let has_chunk_ddl = crate::schema::generate_index_chunk_rel_ddl_with_dialect(kb_name, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&has_chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 4. {TitleEntity}_IN_{KB} rel
-        let in_ddl = crate::schema::generate_index_rel_ddl(&kb_info.title_entity, kb_name)
+        let in_ddl = crate::schema::generate_index_rel_ddl_with_dialect(&kb_info.title_entity, kb_name, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&in_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
         // 5. {Entity}_SOURCED_{KB} rels (one per contributing entity)
         for entity_name in kb_entities {
-            let source_ddl = crate::schema::generate_source_rel_ddl(entity_name, kb_name)
+            let source_ddl = crate::schema::generate_source_rel_ddl_with_dialect(entity_name, kb_name, self.dialect.as_ref())
                 .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
             self.conn.execute(&source_ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -1498,7 +1545,7 @@ impl Catalog {
             let chunk_table = format!("{kb_name}_Index_Chunk");
             let emb_col = format!("{kb_name}_embedding");
             let idx_name = format!("{kb_name}_Index_Chunk_vec");
-            let vec_ddl = crate::schema::generate_vector_index_ddl(&chunk_table, &emb_col, &idx_name);
+            let vec_ddl = self.dialect.create_vector_index(&chunk_table, &emb_col, &idx_name);
             let _ = self.conn.execute(&vec_ddl);
         }
 
@@ -1744,7 +1791,7 @@ impl Catalog {
     fn count_scope_nodes(&self) -> Result<usize, CatalogError> {
         let mut max = 0usize;
         for table in [crate::scope::ORG_TABLE, crate::scope::PROJECT_TABLE] {
-            let res = self.conn.execute(&format!("MATCH (n:{table}) RETURN count(n)"))
+            let res = self.conn.execute(&self.dialect.count_rows(table))
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
             let n = res.rows.first().and_then(|r| r.get(0)).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
             max = max.max(n);
@@ -1758,9 +1805,7 @@ impl Catalog {
             (crate::scope::ORG_TABLE, &self.scope.org),
             (crate::scope::PROJECT_TABLE, &self.scope.project),
         ] {
-            let stmt = format!(
-                "MERGE (n:{table} {{_uuid: $id}}) ON CREATE SET n.name = $id"
-            );
+            let stmt = self.dialect.upsert_scope_node(table, "id");
             self.conn.execute_with_params(
                 &stmt,
                 &[QueryParam::new("id", CypherValue::String(id.clone()))],
