@@ -437,3 +437,100 @@ fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
         nu.fields.len()
     );
 }
+
+/// **Adopter, puis reposer.** Le pendant de `place` : ce qui a marché une fois
+/// se repose sans le réécrire. Le test fait l'aller-retour complet dans une
+/// racine de projet jetable.
+#[test]
+fn un_gabarit_adopte_se_repose() {
+    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
+
+    let projet = tempfile::tempdir().expect("tempdir");
+    let racine = projet.path();
+
+    // Une entité comme un agent en construirait une : partie d'un gabarit
+    // fourni, elle a divergé.
+    let base = lire_dans(&racines(None), Family::Entity, "user").expect("user fourni");
+    let mut config = preparer_entity(&base, &[]).expect("config");
+    config.fields.insert(
+        "avatarUrl".into(),
+        rag3weaver::config::SimpleFieldDef {
+            field_type: rag3weaver::config::FieldType::String,
+            ..Default::default()
+        },
+    );
+
+    let header = Header {
+        category: "auth".into(),
+        description: "Un compte avec son portrait : de quoi afficher qui parle.".into(),
+        note: "Adopté par un test.".into(),
+    };
+    let chemin = ecrire_entity(racine, "user_avec_portrait", &config, &header).expect("écriture");
+    assert!(chemin.exists(), "le gabarit n'a pas été écrit : {}", chemin.display());
+
+    // Et il se relit par les mêmes chemins que les gabarits fournis.
+    let toutes = racines(Some(racine));
+    let relu = lire_dans(&toutes, Family::Entity, "user_avec_portrait").expect("relecture");
+    let config2 = preparer_entity(&relu, &[]).expect("config relue");
+    assert!(config2.fields.contains_key("avatarUrl"), "le champ ajouté a survécu à l'aller-retour");
+    assert_eq!(config2.fields.len(), config.fields.len());
+}
+
+/// **À nom égal, le projet gagne.** Un dépôt doit pouvoir remplacer un gabarit
+/// fourni sans demander la permission, et sans que le nom change — sinon toute
+/// la chaîne (recherche, `place`, documentation) parle d'autre chose.
+#[test]
+fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
+    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, scan_racines, Header};
+
+    let projet = tempfile::tempdir().expect("tempdir");
+    let racine = projet.path();
+
+    let fourni = lire_dans(&racines(None), Family::Entity, "user").expect("user fourni");
+    let mut config = preparer_entity(&fourni, &[]).expect("config");
+    config.fields.clear();
+    config.fields.insert(
+        "seulementCeci".into(),
+        rag3weaver::config::SimpleFieldDef {
+            field_type: rag3weaver::config::FieldType::String,
+            is_title: true,
+            ..Default::default()
+        },
+    );
+    ecrire_entity(
+        racine,
+        "user",
+        &config,
+        &Header {
+            category: "auth".into(),
+            description: "La version de ce projet, volontairement différente.".into(),
+            note: String::new(),
+        },
+    )
+    .expect("écriture");
+
+    let toutes = racines(Some(racine));
+    let relu = preparer_entity(&lire_dans(&toutes, Family::Entity, "user").unwrap(), &[]).unwrap();
+    assert!(relu.fields.contains_key("seulementCeci"), "c'est celui du projet qui doit gagner");
+    assert!(!relu.fields.contains_key("email"), "celui de la bibliothèque ne doit pas transparaître");
+
+    // Et il n'apparaît qu'une fois dans le catalogue : masquer n'est pas
+    // ajouter. Deux fiches de même nom rendraient la recherche ambiguë.
+    let fiches = scan_racines(&toutes).unwrap();
+    let users: Vec<_> = fiches.iter().filter(|f| f.family == Family::Entity && f.name == "user").collect();
+    assert_eq!(users.len(), 1, "un seul 'user' visible, pas deux");
+    assert_eq!(users[0].description, "La version de ce projet, volontairement différente.");
+}
+
+/// **Une description vide est refusée.** C'est le champ embarqué : sans lui, le
+/// gabarit existe sur le disque et reste introuvable — un agent enterrerait son
+/// propre travail sans le savoir.
+#[test]
+fn un_gabarit_sans_description_est_refuse() {
+    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
+    let projet = tempfile::tempdir().expect("tempdir");
+    let config = preparer_entity(&lire_dans(&racines(None), Family::Entity, "user").unwrap(), &[]).unwrap();
+    let e = ecrire_entity(projet.path(), "muet", &config, &Header::default())
+        .expect_err("une description vide doit être refusée");
+    assert!(e.contains("description"), "{e}");
+}

@@ -1693,11 +1693,15 @@ pub const EDIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/edit.mmd
 /// agents qui construisent.
 #[cfg(feature = "code")]
 pub const PLACE_TOOL_MERMAID: &str = include_str!("../../templates/tools/place.mmd");
+/// `adopt` : le pendant de `place`. Poser fait gagner une fois, adopter fait
+/// gagner à chaque fois.
+#[cfg(feature = "code")]
+pub const ADOPT_TOOL_MERMAID: &str = include_str!("../../templates/tools/adopt.mmd");
 
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 6] = ["edit", "grep", "list", "place", "read", "search"];
+pub const BUILTIN_TOOL_NAMES: [&str; 7] = ["adopt", "edit", "grep", "list", "place", "read", "search"];
 #[cfg(not(feature = "code"))]
 pub const BUILTIN_TOOL_NAMES: [&str; 1] = ["search"];
 
@@ -1746,6 +1750,7 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
         tools.register(GraphTool::from_mermaid(LIST_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(EDIT_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(PLACE_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(ADOPT_TOOL_MERMAID)?.bind(&nodes)?)?;
     }
     Ok((nodes, tools))
 }

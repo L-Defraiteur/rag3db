@@ -358,8 +358,15 @@ mod tests {
         ctx.set_input("prompt", PortValue::new("q".to_string()));
         node.execute(&mut ctx).unwrap();
         let text = ctx.drain_outputs().remove("text").and_then(take_or_clone::<String>).unwrap();
-        // 29 nœuds enregistrés, triés : le premier est BM25SearchNode.
-        assert_eq!(text, format!("{} outils, premier=BM25SearchNode", crate::dataflow::node_factories::BUILTIN_NODE_COUNT));
+        // Les nœuds enregistrés, **triés par nom** — l'ordre doit être stable
+        // d'une exécution à l'autre, sinon le préfixe du prompt change et la
+        // mise en cache tombe. Le premier suit donc l'alphabet, pas l'ordre
+        // d'enregistrement : `AdoptTemplateNode` depuis le 30 août 2026.
+        let premier = if cfg!(feature = "code") { "AdoptTemplateNode" } else { "BM25SearchNode" };
+        assert_eq!(
+            text,
+            format!("{} outils, premier={premier}", crate::dataflow::node_factories::BUILTIN_NODE_COUNT)
+        );
     }
 
     #[test]

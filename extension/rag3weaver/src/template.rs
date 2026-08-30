@@ -43,7 +43,7 @@ pub const TEMPLATE_ENTITY: &str = "Template";
 
 /// **Ce qu'on peut faire d'un gabarit.** Fermée : le moteur la connaît, et
 /// chaque famille a son verbe « poser ».
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Family {
     /// Un `EntityConfig` : champs, signaux, découpage, cycle de vie. Posé =
@@ -421,6 +421,99 @@ pub fn lire(root: &Path, family: Family, nom: &str) -> Result<String, String> {
 /// La racine des gabarits fournis, à côté du crate.
 pub fn builtin_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates")
+}
+
+/// **Où un projet range ses propres gabarits**, sous la racine de sa source.
+///
+/// Les gabarits fournis sont une bibliothèque : on les lit, on ne les modifie
+/// pas. Ceux qu'un agent adopte appartiennent au projet — les écrire dans le
+/// crate reviendrait à faire grossir la bibliothèque de tout le monde avec ce
+/// qui n'intéresse qu'un dépôt.
+pub const DOSSIER_PROJET: &str = ".rag3weaver/templates";
+
+/// Les racines à consulter, **du plus proche au plus lointain** : celle du
+/// projet d'abord, la bibliothèque ensuite.
+///
+/// L'ordre décide qui gagne quand un nom existe des deux côtés, et il gagne
+/// dans le bon sens : un projet doit pouvoir remplacer un gabarit fourni sans
+/// demander la permission, et sans que le nom change.
+pub fn racines(projet: Option<&Path>) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(p) = projet {
+        out.push(p.join(DOSSIER_PROJET));
+    }
+    out.push(builtin_root());
+    out
+}
+
+/// [`scan`] sur plusieurs racines, le premier trouvé l'emportant.
+pub fn scan_racines(racines: &[PathBuf]) -> Result<Vec<TemplateRef>, String> {
+    let mut vus: std::collections::HashSet<(Family, String)> = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for r in racines {
+        for t in scan(r)? {
+            if vus.insert((t.family, t.name.clone())) {
+                out.push(t);
+            }
+        }
+    }
+    out.sort_by(|a, b| (a.family.as_str(), &a.name).cmp(&(b.family.as_str(), &b.name)));
+    Ok(out)
+}
+
+/// [`lire`] sur plusieurs racines.
+pub fn lire_dans(racines: &[PathBuf], family: Family, nom: &str) -> Result<String, String> {
+    let mut voisins: Vec<String> = Vec::new();
+    for r in racines {
+        match lire(r, family, nom) {
+            Ok(c) => return Ok(c),
+            Err(_) => {
+                for t in scan(r).unwrap_or_default() {
+                    if t.family == family {
+                        voisins.push(t.name);
+                    }
+                }
+            }
+        }
+    }
+    voisins.sort_unstable();
+    voisins.dedup();
+    if voisins.is_empty() {
+        Err(format!("aucun gabarit de famille '{}' n'est visible", family.as_str()))
+    } else {
+        Err(format!(
+            "gabarit '{nom}' inconnu dans la famille '{}' — il y a {}",
+            family.as_str(),
+            voisins.join(", ")
+        ))
+    }
+}
+
+/// **Écrire un gabarit d'entité**, avec son en-tête, sous une racine de projet.
+///
+/// La description est **obligatoire**, et ce n'est pas une formalité : c'est le
+/// champ embarqué, donc celui qui décide de ce qu'une recherche par sens
+/// trouve. Un gabarit sans description est un gabarit qu'on ne retrouvera pas,
+/// et l'accepter reviendrait à laisser un agent enterrer son propre travail.
+pub fn ecrire_entity(
+    racine_projet: &Path,
+    nom: &str,
+    config: &EntityConfig,
+    header: &Header,
+) -> Result<PathBuf, String> {
+    if header.description.trim().is_empty() {
+        return Err("un gabarit sans description ne se retrouve pas : donnez la phrase qui dit ce qu'il modélise".into());
+    }
+    if nom.trim().is_empty() || nom.contains('/') || nom.contains("..") {
+        return Err(format!("nom de gabarit refusé : '{nom}'"));
+    }
+    let dir = racine_projet.join(DOSSIER_PROJET).join(Family::Entity.dir());
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+    let contenu = serde_json::json!({ "template": header, "entity": config });
+    let texte = serde_json::to_string_pretty(&contenu).map_err(|e| e.to_string())?;
+    let chemin = dir.join(format!("{nom}.json"));
+    std::fs::write(&chemin, texte).map_err(|e| format!("{} : {e}", chemin.display()))?;
+    Ok(chemin)
 }
 
 #[cfg(test)]

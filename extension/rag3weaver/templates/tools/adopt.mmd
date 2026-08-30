@@ -1,0 +1,28 @@
+%% tool: adopt
+%% description: Enregistre une entité que vous venez de construire comme gabarit du projet, réutilisable ensuite avec place. Ce qui a marché une fois se repose sans le réécrire.
+%% param: entity string! -- Nom de l'entité enregistrée à adopter.
+%% param: description string! -- Ce que la chose modélise, en une phrase. C'est ce qui sera cherché : dites le domaine, pas vos choix de conception.
+%% param: as string = "" -- Nom du gabarit. Vide = celui de l'entité.
+%% param: category string = "" -- Thématique, ouverte : auth, commerce, messagerie… Sert à filtrer, pas à chercher.
+%% param: note string = "" -- Pourquoi ce gabarit est ce qu'il est. Lisible par qui l'ouvre, invisible à la recherche.
+%% result: adopt.result
+%%
+%% **Le pendant de `place`.** Poser un gabarit fait gagner une fois ; en adopter
+%% un fait gagner à chaque fois. C'est ce qui transforme une bibliothèque figée
+%% en catalogue qui apprend du projet.
+%%
+%% **Le gabarit appartient au projet, pas à la bibliothèque.** Il s'écrit sous
+%% `.rag3weaver/templates/` à la racine de la source. Écrire dans les gabarits
+%% fournis ferait grossir la bibliothèque de tout le monde avec ce qui
+%% n'intéresse qu'un dépôt — et un projet doit pouvoir remplacer un gabarit
+%% fourni sans demander la permission : à nom égal, c'est le sien qui gagne.
+%%
+%% **La description est obligatoire, et ce n'est pas une formalité.** C'est le
+%% champ embarqué, donc celui qui décide de ce qu'une recherche par sens
+%% retrouve. Le 29 août 2026, des descriptions qui mélangeaient le domaine et un
+%% commentaire de conception ont fait arriver `user` **dernier** sur « de quoi
+%% savoir qui est connecté ». Le commentaire va dans `note`, qui n'est pas
+%% embarqué.
+
+graph LR
+    adopt["AdoptTemplateNode(entity=$entity, description=$description, as=$as, category=$category, note=$note)"]
