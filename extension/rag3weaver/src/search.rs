@@ -2106,10 +2106,15 @@ pub fn search_texte_natif(
     // il n'en a pas besoin si l'unité indexée *est* le chunk : l'extrait, c'est
     // le texte du chunk lui-même.
     //
-    // Et ça répare autre chose au passage. Le vecteur classe des chunks ; BM25
-    // classait des entités. La fusion RRF mélangeait donc deux granularités,
-    // en rangeant côte à côte des objets qui ne sont pas comparables. Ici les
-    // deux signaux classent **les mêmes objets**.
+    // **Ce n'est pas un défaut du chemin lucivy.** Là-bas le contrat est tenu :
+    // l'index porte sur la table parente, mais un span de surlignage est
+    // rattaché au chunk qu'il recouvre, donc un hit *vaut* un chunk — et les
+    // échecs d'attribution sont nommés un par un (`NoOverlap`, `NoChunks`…)
+    // plutôt que dilués. Les deux signaux y classent déjà les mêmes objets.
+    //
+    // Le trigramme arrive simplement au même endroit par l'autre bout : sans
+    // spans, on ne peut pas rattacher après coup, donc on indexe l'unité qu'on
+    // veut rendre.
     let table = &target.chunk_table;
     let champs_texte = [CHAMP_TEXTE_CHUNK.to_string()];
 
