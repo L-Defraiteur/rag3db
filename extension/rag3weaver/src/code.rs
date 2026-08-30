@@ -64,6 +64,87 @@ pub const RELATIONS: [(&str, &str, &str); 11] = [
 /// Répertoires qu'on ne parse jamais.
 pub const SKIPPED_DIRS: [&str; 8] = ["target", "node_modules", ".git", "dist", "build", ".venv", "venv", "__pycache__"];
 
+/// **Extensions qu'on n'ingère jamais** — artefacts de build, données, binaires.
+///
+/// La couche la moins chère des trois : elle se décide sur le **nom**, donc
+/// avant d'ouvrir le fichier. Mesurée sur ce dépôt le 30 août 2026 : 494
+/// fichiers, 365 Mo, dont 260 Mo de `.csv` de test.
+///
+/// Ce qui n'est pas ici n'est pas innocent pour autant : `.json` est parfois
+/// une configuration écrite à la main et parfois un corpus de 21 Mo. C'est
+/// [`TEXT_MAX_BYTES`] qui tranche ce que l'extension ne peut pas trahir.
+pub const SKIPPED_EXTENSIONS: [&str; 28] = [
+    // verrous et sorties de compilation
+    "lock", "d", "o", "a", "so", "dylib", "rlib", "rmeta", "pyc", "class", "map",
+    // journaux
+    "log",
+    // données
+    "csv", "parquet", "npy", "db", "sqlite", "arrow",
+    // binaires et médias
+    "wasm", "node", "png", "jpg", "jpeg", "gif", "pdf", "gz", "zip", "bin",
+];
+
+/// Motifs de nom qu'on n'ingère jamais : minifiés et verrous de dépendances,
+/// que l'extension seule ne distingue pas de leur source.
+pub const SKIPPED_NAME_PATTERNS: [&str; 4] = [".min.js", ".min.css", "-lock.json", ".generated."];
+
+/// **Au-delà, un fichier texte n'est plus de la prose.**
+///
+/// Un seuil est un proxy, et il sera faux un jour — une spécification écrite à
+/// la main de 300 Kio serait écartée. Il est retenu parce que la mesure du
+/// 30 août 2026 le rend franc : sur ce dépôt, les 26 fichiers texte au-dessus
+/// sont des corpus de banc, des dictionnaires, des `consoledump` et du Cypher
+/// généré, **sans exception**, tandis que le plus gros document écrit par
+/// quelqu'un fait 72 Kio.
+///
+/// Ce qui rend le proxy acceptable n'est pas sa justesse : c'est que ce qu'il
+/// écarte se **compte** dans `CodeAnalysis::skipped`, au lieu de disparaître.
+pub const TEXT_MAX_BYTES: usize = 128 * 1024;
+
+/// Ce qu'on fait d'un fichier — le fait, pas encore la conséquence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// Une grammaire existe : scopes, imports, relations.
+    Code,
+    /// Aucune grammaire, mais quelqu'un l'a écrit : **un** scope
+    /// `texte_brut` couvrant tout le fichier.
+    Texte,
+    /// Hors index, avec la raison — jamais en silence.
+    Ecarte(&'static str),
+}
+
+/// **La politique, en un seul endroit.** codeparsers rend des faits ; c'est
+/// ici qu'on décide, et la décision se dit.
+///
+/// L'ordre compte : la liste noire d'abord parce qu'elle est gratuite, le
+/// seuil ensuite parce qu'il demande la taille.
+pub fn verdict(path: &str, size: usize) -> Verdict {
+    let nom = Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if SKIPPED_NAME_PATTERNS.iter().any(|m| nom.contains(m)) {
+        return Verdict::Ecarte("généré ou minifié");
+    }
+    let ext = Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if SKIPPED_EXTENSIONS.contains(&ext.as_str()) {
+        return Verdict::Ecarte("artefact de build ou données");
+    }
+    if is_code_parser_supported(path) {
+        return Verdict::Code;
+    }
+    // Un fichier sans extension est presque toujours un outil ou un artefact
+    // (`Makefile` mis à part), et sans extension on ne peut rien en dire.
+    if ext.is_empty() {
+        return Verdict::Ecarte("sans extension");
+    }
+    if size > TEXT_MAX_BYTES {
+        return Verdict::Ecarte("texte trop gros pour être de la prose");
+    }
+    Verdict::Texte
+}
+
 // ─── Schéma ──────────────────────────────────────────────────────────────────
 
 fn field(t: FieldType) -> SimpleFieldDef {
@@ -374,9 +455,14 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
     let virtual_source = source != LOCAL_SOURCE;
     let registry = crate::origin::CoordinateRegistry::default();
     let mut named: HashMap<String, (String, BTreeMap<String, String>)> = HashMap::new();
+    // Les fichiers sans grammaire, gardés de côté : ils ne passent pas par
+    // `parse_project` — il n'y a rien à résoudre — mais ils entrent dans
+    // l'index. `(chemin relatif, chemin absolu, contenu)`.
+    let mut textes: Vec<(String, String, String)> = Vec::new();
     for (rel, content) in sources {
-        if !is_code_parser_supported(&rel) {
-            skipped.push((rel, "unsupported extension".to_string()));
+        let genre = verdict(&rel, content.len());
+        if let Verdict::Ecarte(raison) = genre {
+            skipped.push((rel, raison.to_string()));
             continue;
         }
         let abs = Path::new(root).join(&rel).to_string_lossy().to_string();
@@ -389,8 +475,14 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         };
         named.insert(rel.clone(), (name, coords));
         sizes.insert(abs.clone(), content.len());
-        content_map.insert(abs.clone(), content);
-        files.push(abs);
+        match genre {
+            Verdict::Code => {
+                content_map.insert(abs.clone(), content);
+                files.push(abs);
+            }
+            Verdict::Texte => textes.push((rel, abs, content)),
+            Verdict::Ecarte(_) => unreachable!("écarté plus haut"),
+        }
     }
     let identity_of = |rel: &str| -> (String, BTreeMap<String, String>) {
         named.get(rel).cloned().unwrap_or_else(|| (rel.to_string(), BTreeMap::new()))
@@ -440,6 +532,65 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             cursor: String::new(),
         });
     }
+    // ── Les fichiers sans grammaire ─────────────────────────────────────
+    //
+    // Un `File`, **un** `Scope` `texte_brut` qui couvre tout, et l'arête qui
+    // les relie. Rien d'autre : pas d'import à résoudre, pas de référence à
+    // rapprocher, pas de symbole à définir. Ils ne passent donc pas par le
+    // résolveur, et leur clé est forgée ici — au même format que
+    // [`stable_scope_keys`] pour un scope sans parent et sans homonyme.
+    for (rel, abs, content) in &textes {
+        let fa = codeparsers::parallel::parser_worker::analyser_texte_brut(rel, content);
+        let (name, coordinates) = identity_of(rel);
+        let repo = coordinates.get("repo").cloned().unwrap_or_default();
+        let repo_path = coordinates.get("repo_path").cloned().unwrap_or_default();
+        // Le langage d'un fichier texte est son extension : « unknown »
+        // effacerait la seule chose qu'on sait de lui.
+        let language = Path::new(rel.as_str())
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_else(|| "texte".to_string());
+        analysis.files.push(FileRecord {
+            path: name.clone(),
+            source: source.clone(),
+            coordinates,
+            absolute_path: abs.clone(),
+            language: language.clone(),
+            lines_of_code: fa.total_lines,
+            size_bytes: fa.octets,
+            content_hash: fa.content_hash.clone().unwrap_or_default(),
+            cursor: String::new(),
+        });
+        let sc = &fa.scopes[0];
+        let key = format!("{source}#{name}#{}:texte_brut", sc.name);
+        analysis.scopes.push(ScopeRecord {
+            key: key.clone(),
+            source: source.clone(),
+            repo,
+            repo_path,
+            name: sc.name.clone(),
+            scope_type: "texte_brut".to_string(),
+            signature: String::new(),
+            content: sc.content.clone(),
+            docstring: String::new(),
+            file_path: name.clone(),
+            parent_name: String::new(),
+            language,
+            start_line: sc.scope_start_line,
+            end_line: sc.scope_end_line,
+            start_byte: sc.scope_start_byte,
+            end_byte: sc.scope_end_byte,
+        });
+        analysis.relations.push(CodeRelation {
+            rel: "DEFINED_IN".to_string(),
+            from_entity: SCOPE.to_string(),
+            from_key: key,
+            to_entity: FILE.to_string(),
+            to_key: name,
+        });
+    }
+
     analysis.files.sort_by(|a, b| a.path.cmp(&b.path));
 
     let Some(rels) = result.relationships else {
@@ -742,6 +893,7 @@ fn scope_type_name(t: &ScopeInfoType) -> &'static str {
         ScopeInfoType::Lambda => "lambda",
         ScopeInfoType::Constant => "constant",
         ScopeInfoType::Block => "block",
+        ScopeInfoType::TexteBrut => "texte_brut",
     }
 }
 
@@ -777,7 +929,10 @@ pub fn analyze_source(source: &dyn crate::code_tools::FileSource) -> Result<Code
     };
     let mut sources = Vec::new();
     for path in source.list()? {
-        if !is_code_parser_supported(&path) {
+        // Le tri fin est celui d'`analyze_with`, qui a la taille et qui **dit**
+        // ce qu'il écarte. Ici on ne retire que ce qui se juge au nom seul,
+        // pour ne pas lire un `.parquet` de 50 Mo afin de le jeter ensuite.
+        if matches!(verdict(&path, 0), Verdict::Ecarte(_)) {
             continue;
         }
         if let Some(content) = source.read(&path)? {
@@ -795,33 +950,65 @@ pub fn analyze_source(source: &dyn crate::code_tools::FileSource) -> Result<Code
     Ok(analysis)
 }
 
-/// Lit les sources d'un répertoire : extensions supportées, [`SKIPPED_DIRS`]
-/// ignorés, fichiers non-UTF-8 écartés. Chemins relatifs à `root`, triés.
+/// [`read_sources_report`], sans le compte rendu.
 pub fn read_sources(root: &str) -> std::io::Result<Vec<(String, String)>> {
-    fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) -> std::io::Result<()> {
+    Ok(read_sources_report(root)?.0)
+}
+
+/// Lit les sources d'un répertoire — code **et** texte — en rendant compte de
+/// ce qui a été écarté : `(sources, (chemin, raison))`.
+///
+/// [`SKIPPED_DIRS`] est ignoré, et le [`verdict`] est appliqué **sur la
+/// taille du fichier lue au passage**, avant d'ouvrir quoi que ce soit : un
+/// `.parquet` de 50 Mo n'a pas à être lu pour être jeté.
+///
+/// Le compte rendu existe parce que sans lui, remplacer « on jette les
+/// fichiers sans parseur » par « on jette les gros fichiers » serait le même
+/// mensonge avec un autre critère.
+pub fn read_sources_report(root: &str) -> std::io::Result<(Vec<(String, String)>, Vec<(String, String)>)> {
+    fn walk(
+        dir: &Path,
+        root: &Path,
+        out: &mut Vec<(String, String)>,
+        skipped: &mut Vec<(String, String)>,
+    ) -> std::io::Result<()> {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
-            if path.is_dir() {
+            let genre = entry.file_type()?;
+            if genre.is_symlink() {
+                // Un lien peut désigner la racine du dépôt ; le suivre boucle.
+                continue;
+            }
+            if genre.is_dir() {
                 if SKIPPED_DIRS.contains(&name.as_str()) || name.starts_with('.') {
                     continue;
                 }
-                walk(&path, root, out)?;
-            } else if is_code_parser_supported(&path.to_string_lossy()) {
-                let rel = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    out.push((rel, content));
-                }
+                walk(&path, root, out, skipped)?;
+                continue;
+            }
+            let rel = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
+            let taille = entry.metadata().map(|m| m.len() as usize).unwrap_or(0);
+            match verdict(&rel, taille) {
+                Verdict::Ecarte(raison) => skipped.push((rel, raison.to_string())),
+                _ => match std::fs::read_to_string(&path) {
+                    Ok(content) => out.push((rel, content)),
+                    // Un fichier non-UTF-8 est refusé franchement : des
+                    // offsets d'octets sur un encodage inconnu seraient faux.
+                    Err(_) => skipped.push((rel, "illisible ou non-UTF-8".to_string())),
+                },
             }
         }
         Ok(())
     }
     let root_path = Path::new(root);
     let mut out = Vec::new();
-    walk(root_path, root_path, &mut out)?;
+    let mut skipped = Vec::new();
+    walk(root_path, root_path, &mut out, &mut skipped)?;
     out.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(out)
+    skipped.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok((out, skipped))
 }
 
 // ─── Ingestion ───────────────────────────────────────────────────────────────
