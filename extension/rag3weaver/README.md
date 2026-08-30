@@ -433,4 +433,4 @@ src/
 
 ## License
 
-[Luciform Research Source License (LRSL) v1.2](../../../../LICENSE)
+[Luciform Research Source License (LRSL) v1.2](LICENSE)
