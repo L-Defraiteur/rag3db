@@ -23,6 +23,86 @@ impl PostgresSearchBackend {
 
 
 impl SearchBackend for PostgresSearchBackend {
+    fn sert_le_plein_texte(&self) -> bool { true }
+
+    /// Plein texte par trigrammes, servi par la base.
+    ///
+    /// **`<%` et pas `%`.** L'opérateur `%` compare deux chaînes *entières* :
+    /// chercher « programming language » dans une description de cent
+    /// caractères donne une similarité basse, parce que la longueur écrase le
+    /// score — c'est le piège classique de `pg_trgm`. `<%` (et
+    /// `word_similarity`) pose la bonne question : « la requête a-t-elle une
+    /// correspondance proche **quelque part dans** ce texte ». L'index GIN
+    /// `gin_trgm_ops` sert les deux.
+    ///
+    /// Le rappel s'arrête là. L'ordre du sommet se décide chez nous, sur le
+    /// texte rapporté — voir [`crate::jaro`].
+    fn text_search(
+        &self,
+        table: &str,
+        fields: &[String],
+        query: &str,
+        limit: usize,
+    ) -> Option<Result<Vec<TextHit>, String>> {
+        if fields.is_empty() {
+            return Some(Ok(Vec::new()));
+        }
+
+        let ou = fields
+            .iter()
+            .map(|f| format!("$q <% {f}"))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let meilleur = fields
+            .iter()
+            .map(|f| format!("word_similarity($q, {f})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        // `concat_ws` plutôt que le champ gagnant : l'ordonnancement fin
+        // travaille mot à mot, il n'a pas besoin de savoir *quel* champ a
+        // répondu, seulement de voir tout le texte candidat.
+        let texte = fields
+            .iter()
+            .map(|f| f.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let sql = format!(
+            "SELECT _uuid, _row_id, GREATEST({meilleur}) AS score, \
+                    concat_ws(' ', {texte}) AS texte \
+             FROM {table} WHERE {ou} \
+             ORDER BY score DESC LIMIT {limit}"
+        );
+
+        let params = vec![QueryParam::new(
+            "q",
+            crate::connection::CypherValue::String(query.to_string()),
+        )];
+        let resultat = match self.conn.execute_with_params(&sql, &params) {
+            Ok(r) => r,
+            // Une erreur est une erreur, pas une absence : `Some(Err)` pour que
+            // l'appelant ne se replie pas en silence sur lucivy.
+            Err(e) => return Some(Err(e.to_string())),
+        };
+
+        Some(Ok(resultat
+            .rows
+            .iter()
+            .filter_map(|row| {
+                Some(TextHit {
+                    uuid: row.first()?.as_str()?.to_string(),
+                    offset: row.get(1)?.as_i64()? as u64,
+                    score: row.get(2).and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    texte: row
+                        .get(3)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                })
+            })
+            .collect()))
+    }
+
     fn vector_search(
         &self,
         table: &str,

@@ -34,7 +34,7 @@ use rag3weaver::dialect::PostgresDialect;
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::postgres_connection::PostgresConnection;
 use rag3weaver::postgres_search_backend::PostgresSearchBackend;
-use rag3weaver::search::SearchSignals;
+use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, SimpleFieldDef};
 
 // ─── Le socle ────────────────────────────────────────────────────────────────
@@ -292,4 +292,136 @@ fn le_vecteur_classe() {
         eprintln!("  {} → {:.4}", h.uuid, h.score);
     }
     assert!(!hits.is_empty(), "pgvector ne renvoie rien");
+}
+
+// ═══ 4. Le plein texte trouve ════════════════════════════════════════════════
+//
+// Le pari à vérifier : lucivy vit **à côté** de la base, ses index passent par
+// le magasin de blobs, donc le plein texte devrait être indifférent au backend.
+// C'est exactement le genre de « devrait » que cette soirée a puni trois fois.
+
+#[test]
+fn le_plein_texte_trouve() {
+    let (_ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit(
+                    "Rust Book",
+                    "A comprehensive guide to the Rust programming language: ownership, \
+                     lifetimes and concurrency.",
+                    49.99,
+                ),
+                produit(
+                    "Python Cookbook",
+                    "Recipes for the Python programming language: data science, web \
+                     development, automation.",
+                    39.99,
+                ),
+                produit(
+                    "French Chef Knife",
+                    "A professional kitchen knife forged from high-carbon stainless steel.",
+                    129.99,
+                ),
+            ],
+        )
+        .unwrap();
+
+    let reponse = catalog
+        .search(
+            "Product",
+            "programming language",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche BM25 sur postgres");
+
+    eprintln!(
+        "BM25 : {} résultats, bm25_count={}",
+        reponse.results.len(),
+        reponse.meta.bm25_count
+    );
+    for a in &reponse.meta.warnings {
+        eprintln!("  avertissement : {a}");
+    }
+    for r in &reponse.results {
+        eprintln!("  {:.4} — {:?}", r.score, r.data.as_ref().and_then(|d| d.get("name")));
+    }
+
+    assert!(reponse.meta.bm25_count > 0, "lucivy n'a rien indexé sur postgres");
+    assert!(!reponse.results.is_empty(), "aucun résultat plein texte");
+    // Le couteau ne parle pas de langage de programmation : s'il sort premier,
+    // c'est que la résolution des décalages rend n'importe quelle ligne.
+    let premier = reponse.results[0]
+        .data
+        .as_ref()
+        .and_then(|d| d.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        premier.contains("Rust") || premier.contains("Python"),
+        "premier résultat inattendu : {premier}"
+    );
+}
+
+// ═══ 5. Les deux signaux fusionnent ══════════════════════════════════════════
+
+#[test]
+fn l_hybride_fusionne() {
+    let (_ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Rust Book", "Ownership, lifetimes and concurrency in Rust.", 49.99),
+                produit("Python Cookbook", "Data science and automation in Python.", 39.99),
+                produit("French Chef Knife", "A forged kitchen knife for slicing.", 129.99),
+            ],
+        )
+        .unwrap();
+
+    let reponse = catalog
+        .search(
+            "Product",
+            "Ownership, lifetimes and concurrency in Rust.",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::HYBRID),
+                result_mode: ResultMode::SourceResolved,
+                ..Default::default()
+            },
+        )
+        .expect("recherche hybride sur postgres");
+
+    eprintln!(
+        "hybride : {} résultats, bm25={} vecteur={}",
+        reponse.results.len(),
+        reponse.meta.bm25_count,
+        reponse.meta.vector_count
+    );
+    for a in &reponse.meta.warnings {
+        eprintln!("  avertissement : {a}");
+    }
+
+    assert!(reponse.meta.bm25_count > 0, "signal BM25 muet");
+    assert!(reponse.meta.vector_count > 0, "signal vectoriel muet");
+    assert!(!reponse.results.is_empty(), "la fusion ne rend rien");
+
+    // `SourceResolved` remonte du chunk à son entité : c'est le chemin qui
+    // joint la relation sur `to_uuid` — celui qui n'avait aucun index avant ce
+    // soir, et qui rendrait silencieusement vide si la jointure échouait.
+    let premier = reponse.results[0]
+        .data
+        .as_ref()
+        .and_then(|d| d.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert_eq!(premier, "Rust Book", "la remontée chunk → entité s'est perdue");
 }

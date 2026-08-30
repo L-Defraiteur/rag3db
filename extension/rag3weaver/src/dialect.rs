@@ -173,6 +173,12 @@ pub trait SchemaDialect: Send + Sync {
     /// test est en `en_US.utf8` et le plan est un balayage séquentiel.
     fn blob_store_indexes(&self, _table: &str) -> Vec<String> { vec![] }
 
+    /// Index de recherche plein texte, s'il y en a un à poser côté base.
+    ///
+    /// Vide par défaut : un backend qui laisse lucivy s'en charger n'a rien à
+    /// indexer. PostgreSQL, lui, pose un GIN trigramme par champ cherché.
+    fn text_search_indexes(&self, _table: &str, _fields: &[String]) -> Vec<String> { vec![] }
+
     /// Drop a vector similarity index — le pendant du précédent, pour charger
     /// en masse puis reconstruire (doc 18).
     fn drop_vector_index(&self, table: &str, index_name: &str) -> String;
@@ -984,6 +990,9 @@ impl SchemaDialect for PostgresDialect {
     fn setup_statements(&self) -> Vec<String> {
         vec![
             "CREATE EXTENSION IF NOT EXISTS vector".into(),
+            // Trigrammes : le plein texte servi par la base elle-même, sans
+            // second corpus à stocker à côté.
+            "CREATE EXTENSION IF NOT EXISTS pg_trgm".into(),
             "CREATE SCHEMA IF NOT EXISTS rag3weaver".into(),
         ]
     }
@@ -1094,6 +1103,19 @@ impl SchemaDialect for PostgresDialect {
             // qu'un scope est posé.
             format!("CREATE INDEX IF NOT EXISTS {court}_cellule_idx ON {table} (_org, _project)"),
         ]
+    }
+
+    fn text_search_indexes(&self, table: &str, fields: &[String]) -> Vec<String> {
+        let court = table.replace('.', "_");
+        fields
+            .iter()
+            .map(|f| {
+                format!(
+                    "CREATE INDEX IF NOT EXISTS {court}_{f}_trgm_idx \
+                     ON {table} USING gin ({f} gin_trgm_ops)"
+                )
+            })
+            .collect()
     }
 
     fn blob_store_indexes(&self, table: &str) -> Vec<String> {

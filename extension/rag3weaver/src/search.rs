@@ -2052,6 +2052,146 @@ pub fn search_bm25_chunked(
     finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics, warnings)
 }
 
+/// **Part du rappel** dans le score final. Le trigramme dit « ce texte contient
+/// quelque chose d'approchant » ; il le dit bien, et il le dit *mal* pour
+/// ordonner — sa similarité ignore l'ordre des caractères.
+const POIDS_TRIGRAMME: f64 = 0.35;
+
+/// **Part de l'ordre.** Jaro-Winkler regarde les transpositions et prime le
+/// préfixe commun, ce qui correspond à la façon dont on cherche un nom ou un
+/// identifiant.
+///
+/// Les deux poids sont un **premier réglage, pas une mesure** : le banc qui les
+/// tranchera est celui de `e2e_phase0b`, qui a déjà servi à départager
+/// `Contains`, `ContainsSplit` et `Parse`.
+const POIDS_JARO: f64 = 0.65;
+
+/// Combien de candidats demander à la base pour en garder `limit`.
+///
+/// Le rappel est large exprès : c'est l'ordonnancement fin qui décide, et il ne
+/// peut pas repêcher ce que la base n'a pas rapporté.
+const FACTEUR_RAPPEL: usize = 5;
+
+/// Plein texte servi par le **backend**, ordonné chez nous.
+///
+/// Deux étages, et c'est le point : la base fait le rappel (index trigramme
+/// GIN, rapide et indexé), nous faisons l'ordre (Jaro-Winkler, sur quelques
+/// dizaines de lignes). Aucun second corpus à stocker, aucun index à tenir à
+/// jour à côté des données.
+///
+/// La suite — résolution des décalages, appariement aux chunks, mise en forme —
+/// est **exactement** celle du chemin lucivy : `finish_bm25_chunked`. C'est ce
+/// qui rend les deux chemins comparables plutôt que cousins.
+#[allow(clippy::too_many_arguments)]
+pub fn search_texte_natif(
+    // Pas de connexion : tout passe par le backend, qui sait résoudre ses
+    // propres décalages. C'est ce qui rend ce chemin indépendant du dialecte.
+    backend: &dyn crate::search_backend::SearchBackend,
+    target: &SearchTarget,
+    query: &str,
+    fields: &[String],
+    limit: usize,
+    return_fields: &[String],
+    result_mode: ResultMode,
+    diagnostics: Option<&mut SearchDiagnostics>,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    if fields.is_empty() {
+        return Ok(vec![]);
+    }
+    let table = &target.parent_table;
+
+    let bruts = match backend.text_search(table, fields, query, limit * FACTEUR_RAPPEL) {
+        Some(Ok(v)) => v,
+        Some(Err(e)) => {
+            return Err(CatalogError::DbError(format!(
+                "recherche plein texte native sur '{table}': {e}"
+            )))
+        }
+        None => {
+            return Err(CatalogError::DbError(format!(
+                "le backend ne sert pas le plein texte, et lucivy n'a pas été \
+                 sollicitée pour '{table}' — c'est un défaut de câblage, pas une \
+                 absence de résultats"
+            )))
+        }
+    };
+
+    if bruts.is_empty() {
+        warnings.push(format!(
+            "aucun trigramme commun entre « {query} » et {table} — sous le seuil de \
+             pg_trgm, une requête plus longue ou plus proche du texte rapportera"
+        ));
+        return Ok(vec![]);
+    }
+
+    let mut classes: Vec<(u64, f64, String)> = bruts
+        .into_iter()
+        .map(|h| {
+            let fin = crate::jaro::meilleur_par_mot(query, &h.texte);
+            let score = POIDS_TRIGRAMME * h.score + POIDS_JARO * fin;
+            // Highlights vides : le trigramme ne rend pas de spans. Les chunks
+            // seront attribués sans eux, et `finish_bm25_chunked` le sait.
+            (h.offset, score, "{}".to_string())
+        })
+        .collect();
+    classes.sort_by(|a, b| b.1.total_cmp(&a.1));
+    classes.truncate(limit);
+
+    // La mise en forme ne passe **pas** par `finish_bm25_chunked` : celle-ci
+    // résout les décalages avec du Cypher écrit en dur (`MATCH (n:T) WHERE
+    // OFFSET(id(n)) IN [...]`), ce qui n'a de sens que sur rag3db. Le backend,
+    // lui, sait résoudre ses propres décalages — c'est précisément ce que
+    // `resolve_offsets` fait, et il est backend-agnostique par construction.
+    //
+    // Ce que ça coûte, et qu'il faut dire : le trigramme ne rend pas de spans,
+    // donc pas d'appariement highlight ↔ chunk. Les résultats sont au niveau
+    // de l'entité. `ResultMode::Detailed` sur ce chemin rendra donc des
+    // entités sans chunks attribués, et le dit ici plutôt que de laisser
+    // croire à un défaut.
+    if result_mode == ResultMode::Detailed {
+        warnings.push(
+            "plein texte natif : pas de spans de surlignage, donc pas de chunks \
+             attribués — les résultats sont au niveau de l'entité"
+                .to_string(),
+        );
+    }
+
+    let par_decalage: std::collections::HashMap<u64, f64> =
+        classes.iter().map(|(o, s, _)| (*o, *s)).collect();
+    let decalages: Vec<u64> = classes.iter().map(|(o, _, _)| *o).collect();
+
+    let champs: Vec<&str> = return_fields.iter().map(|f| f.as_str()).collect();
+    let lignes = backend
+        .resolve_offsets(&target.parent_table, &decalages, &champs)
+        .map_err(|e| {
+            CatalogError::DbError(format!(
+                "résolution des décalages sur '{}': {e}",
+                target.parent_table
+            ))
+        })?;
+
+    // L'ordre vient de nous, pas de la base : `resolve_offsets` rend les lignes
+    // dans l'ordre où le backend les trouve, qui n'est pas celui du classement.
+    let mut sortie: Vec<SearchResult> = lignes
+        .into_iter()
+        .map(|l| SearchResult {
+            uuid: l.uuid,
+            score: par_decalage.get(&l.offset).copied().unwrap_or(0.0),
+            entity: Some(target.parent_table.clone()),
+            data: l.data,
+            chunk: None,
+            chunks: None,
+        })
+        .collect();
+    sortie.sort_by(|a, b| b.score.total_cmp(&a.score));
+
+    if let Some(d) = diagnostics {
+        d.engine_warnings.extend(warnings.iter().cloned());
+    }
+    Ok(sortie)
+}
+
 
 /// Partie commune aux deux chemins BM25 (Rust direct et extension C++) :
 /// résolution des offsets, appariement highlights↔chunks, mise en forme.

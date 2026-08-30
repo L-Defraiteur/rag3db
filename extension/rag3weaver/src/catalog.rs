@@ -21,6 +21,7 @@ use crate::node_id_cache::NodeIdCache;
 use crate::records::{AggregateRecord, DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
 use crate::refs::{EntityRef, RelationRef};
 use crate::schema::{generate_full_schema_with_dialect, resolve_entity_kbs};
+use crate::search_backend::MoteurTexte;
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
 use crate::validator::{validate_schema, KBFieldRef};
@@ -181,6 +182,8 @@ pub struct Catalog {
     dialect: Arc<dyn crate::dialect::SchemaDialect>,
     /// Search backend for multi-backend search operations.
     search_backend: Option<Arc<dyn crate::search_backend::SearchBackend>>,
+    /// Qui sert le plein texte. Voir [`MoteurTexte`].
+    moteur_texte: MoteurTexte,
 
     // Déclaré en dernier : voir la note d'ordre de drop en tête de struct.
     conn: Arc<dyn DbConnection>,
@@ -231,6 +234,7 @@ impl Catalog {
             fail_node: None,
             dialect: Arc::new(crate::dialect::Rag3dbDialect),
             search_backend: None,
+            moteur_texte: MoteurTexte::Auto,
         }
     }
 
@@ -244,6 +248,31 @@ impl Catalog {
     /// If not set, a `Rag3dbSearchBackend` is created automatically in `initialize()`.
     pub fn set_search_backend(&mut self, backend: Arc<dyn crate::search_backend::SearchBackend>) {
         self.search_backend = Some(backend);
+    }
+
+    /// **Qui sert le plein texte** : le backend, ou lucivy.
+    ///
+    /// `Auto` (le défaut) demande au backend. Les deux autres valeurs forcent,
+    /// dans un sens comme dans l'autre — c'est une **option**, pas un
+    /// remplacement : lucivy reste là et redevient choisissable dès qu'on la
+    /// préfère, sur n'importe quel backend qui sait faire les deux.
+    ///
+    /// À poser avant `initialize()` : c'est à l'ingestion que la décision
+    /// coûte, puisqu'elle détermine si un index lucivy s'écrit sur disque.
+    pub fn set_moteur_texte(&mut self, moteur: MoteurTexte) {
+        self.moteur_texte = moteur;
+    }
+
+    /// Le plein texte passe-t-il par le backend ?
+    pub fn plein_texte_natif(&self) -> bool {
+        match self.moteur_texte {
+            MoteurTexte::Lucivy => false,
+            MoteurTexte::Natif => true,
+            MoteurTexte::Auto => self
+                .search_backend
+                .as_ref()
+                .is_some_and(|b| b.sert_le_plein_texte()),
+        }
     }
 
     /// **Le magasin de blobs**, où vivent les index lucivy et sparse.
@@ -1660,8 +1689,11 @@ impl Catalog {
         //
         // `reindex` veut dire « reconstruire », donc on indexe chaque ligne
         // sans condition, depuis les valeurs qu'on vient de lire.
+        // Un index GIN se reconstruit tout seul à l'écriture : « réindexer »
+        // n'a de sens que pour un corpus tenu à côté.
+        let natif = self.plein_texte_natif();
         if let Ok(target) = self.resolve_search_target(entity_name) {
-            if target.default_signals.bm25() {
+            if target.default_signals.bm25() && !natif {
                 let table = target.parent_table.clone();
                 let fields = target.bm25_fields.clone();
                 if let Some(handle) = self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields()) {
@@ -2571,6 +2603,16 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Le plein texte servi par la base : présent **seulement** si c'est le
+        // chemin choisi. Passer par un service et non par le catalogue est
+        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
+        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
+        // c'est-à-dire un repli silencieux sur lucivy.
+        if self.plein_texte_natif() {
+            if let Some(b) = self.search_backend.clone() {
+                services.register("texte_natif", b);
+            }
+        }
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
             services.register("sparse_embedder", sparse_emb.clone());
@@ -3066,7 +3108,14 @@ impl Catalog {
                 if target.default_signals.bm25() {
                     let table = target.parent_table.clone();
                     let fields = target.bm25_fields.clone();
-                    self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
+                    if self.plein_texte_natif() {
+                        // L'index vit avec les données : rien à ouvrir, rien à
+                        // tenir à jour à côté, rien à écrire sur disque en
+                        // double. On pose seulement l'index une fois.
+                        self.poser_index(self.dialect.text_search_indexes(&table, &fields));
+                    } else {
+                        self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
+                    }
                 }
             }
         }
@@ -3276,6 +3325,16 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Le plein texte servi par la base : présent **seulement** si c'est le
+        // chemin choisi. Passer par un service et non par le catalogue est
+        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
+        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
+        // c'est-à-dire un repli silencieux sur lucivy.
+        if self.plein_texte_natif() {
+            if let Some(b) = self.search_backend.clone() {
+                services.register("texte_natif", b);
+            }
+        }
 
         // Shared services for delete/update nodes
         services.register("pending_aggregates", pending_aggregates);
@@ -3537,6 +3596,16 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Le plein texte servi par la base : présent **seulement** si c'est le
+        // chemin choisi. Passer par un service et non par le catalogue est
+        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
+        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
+        // c'est-à-dire un repli silencieux sur lucivy.
+        if self.plein_texte_natif() {
+            if let Some(b) = self.search_backend.clone() {
+                services.register("texte_natif", b);
+            }
+        }
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();
@@ -3871,7 +3940,10 @@ impl Catalog {
         // Ouverture paresseuse de l'index FTS : c'est ici qu'on connaît à la fois
         // la table et ses champs BM25. Volontairement pas à `register_entity`,
         // qui paierait la rematérialisation complète de l'index au démarrage.
-        if target.default_signals.bm25() {
+        // Rien à ouvrir quand la base sert le plein texte : son index se tient
+        // à jour tout seul, et ouvrir un handle lucivy ici rematérialiserait un
+        // index vide — puis chercherait dedans, et rendrait zéro sans rien dire.
+        if target.default_signals.bm25() && !self.plein_texte_natif() {
             let table = target.parent_table.clone();
             let fields = target.bm25_fields.clone();
             self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
@@ -4022,7 +4094,17 @@ impl Catalog {
         // Always collected, unlike `diag`: the engine's own warnings plus our
         // chunk-attribution anomalies ride back in `meta.warnings`.
         let bm25_results = if signals.bm25() {
-            if is_chunked {
+            if self.plein_texte_natif() {
+                // Le chemin natif ne distingue pas « chunké » ou non : il
+                // interroge la table parente comme lucivy le fait, et rend la
+                // main à la même mise en forme.
+                search::search_texte_natif(
+                    self.search_backend.as_ref().unwrap().as_ref(),
+                    &target, query, bm25_fields, search_limit,
+                    enrich_fields, options.result_mode,
+                    diag.as_mut(), &mut search_warnings,
+                )?
+            } else if is_chunked {
                 search::search_bm25_chunked(
                     self.conn.as_ref(), &target, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,

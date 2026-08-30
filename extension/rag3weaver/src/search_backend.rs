@@ -65,15 +65,79 @@ pub struct VectorHit {
     pub entity: Option<String>,
 }
 
+/// **Qui sert le plein texte.**
+///
+/// `Auto` demande au backend (`sert_le_plein_texte`). Les deux autres forcent.
+///
+/// Ce n'est pas un remplacement de lucivy mais un **choix par défaut** : sur
+/// PostgreSQL, un index GIN trigramme vit avec les données, là où lucivy
+/// demande un second corpus stocké dans le magasin de blobs — trop cher en
+/// espace disque pour de la production aujourd'hui. Le jour où ça change, un
+/// appel à `set_moteur_texte(MoteurTexte::Lucivy)` suffit à revenir.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MoteurTexte {
+    /// Le backend s'il sait, lucivy sinon.
+    #[default]
+    Auto,
+    /// lucivy, même si le backend sait faire.
+    Lucivy,
+    /// Le backend, et une erreur nommée s'il ne sait pas.
+    Natif,
+}
+
+/// Un candidat rendu par la recherche plein texte **du backend**.
+///
+/// `texte` accompagne le score parce que le rappel et l'ordre ne se font pas
+/// au même endroit : la base rapporte largement (index trigramme), et c'est
+/// chez nous qu'on décide qui monte — sur le texte, qu'il faut donc avoir.
+#[derive(Debug, Clone)]
+pub struct TextHit {
+    pub uuid: String,
+    /// Décalage de ligne, la monnaie d'échange des signaux de recherche.
+    pub offset: u64,
+    /// Score du backend (trigramme). Comparable entre lignes d'une même
+    /// requête, pas entre requêtes.
+    pub score: f64,
+    /// Le champ qui a le mieux répondu, pour l'ordonnancement fin.
+    pub texte: String,
+}
+
 // ─── SearchBackend trait ─────────────────────────────────────────────────────
 
 /// Trait for database-specific search operations.
 ///
 /// Abstracts over vector search, offset resolution, and entity enrichment.
-/// BM25 (lucivy) and sparse (SparseHandle) search are NOT part of this trait —
-/// they use Rust handles directly and are already backend-agnostic.
-
+///
+/// Le plein texte y est **facultatif** : `text_search` rend `None` par défaut,
+/// et l'appelant reste alors sur lucivy. Un backend qui sait chercher du texte
+/// tout seul le dit en l'implémentant — c'est le cas de PostgreSQL avec
+/// `pg_trgm`, où l'index vit avec les données au lieu d'être un second corpus
+/// à stocker et à tenir à jour.
 pub trait SearchBackend: Send + Sync {
+    /// Recherche plein texte servie par le backend lui-même.
+    ///
+    /// `None` = ce backend n'en sert pas, l'appelant reste sur lucivy. C'est
+    /// **trois** réponses et non deux : « je ne sais pas faire », « je sais et
+    /// voilà », « je sais et ça a échoué » — la troisième ne doit pas se
+    /// confondre avec la première, sinon un backend cassé se replierait
+    /// silencieusement et personne ne saurait pourquoi c'est lent.
+    /// Ce backend sert-il le plein texte lui-même ?
+    ///
+    /// Se déclare séparément de `text_search` parce qu'il faut le savoir
+    /// **avant** de chercher : c'est ce qui décide si on ouvre un index lucivy
+    /// à l'ingestion — donc si on écrit, ou non, un second corpus sur disque.
+    fn sert_le_plein_texte(&self) -> bool { false }
+
+    fn text_search(
+        &self,
+        _table: &str,
+        _fields: &[String],
+        _query: &str,
+        _limit: usize,
+    ) -> Option<Result<Vec<TextHit>, String>> {
+        None
+    }
+
     /// Vector similarity search (top-K nearest neighbors).
     ///
     /// Returns UUIDs + similarity scores (higher = more similar).

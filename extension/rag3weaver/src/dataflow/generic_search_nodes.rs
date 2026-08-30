@@ -450,6 +450,65 @@ impl Node for BM25SearchNode {
         let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options);
 
         let mut node_warnings: Vec<String> = Vec::new();
+
+        // **Le plein texte servi par la base**, quand elle sait le faire.
+        //
+        // On demande au catalogue plutôt qu'au service `fts_handles` : c'est
+        // lui qui porte l'option (`MoteurTexte`), et c'est la même décision
+        // qu'à l'ingestion — sinon on chercherait dans un index qu'on n'a pas
+        // écrit.
+        // Le service n'existe que si le catalogue a choisi ce chemin. S'il
+        // manque alors qu'il devrait être là, la retombée sur lucivy échoue
+        // bruyamment — « aucun index FTS ouvert » — parce qu'on n'aura pas
+        // ouvert d'index non plus. Le défaut de câblage se voit au lieu de se
+        // déguiser en zéro résultat.
+        let natif = ctx
+            .service::<Arc<dyn crate::search_backend::SearchBackend>>("texte_natif")
+            .cloned();
+
+        if let Some(backend) = natif {
+            let results = crate::search::search_texte_natif(
+                backend.as_ref(),
+                &target,
+                &query_str,
+                fields,
+                self.limit,
+                &target.enrich_fields,
+                self.result_mode,
+                None,
+                &mut node_warnings,
+            )
+            .map_err(|e| format!("BM25SearchNode: recherche native: {e}"))?;
+            for w in &node_warnings {
+                ctx.warn(w);
+            }
+            let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+            let unified =
+                finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode, &label)?;
+            let nombre = unified.len();
+            ctx.set_output("results", PortValue::new(unified));
+            ctx.set_output(
+                "meta",
+                PortValue::new(crate::search::SearchMeta {
+                    query: query_str.clone(),
+                    target: target.name.clone(),
+                    signals: crate::search::SearchSignals::BM25,
+                    consistency: options.consistency,
+                    partial: false,
+                    pending_count: 0,
+                    vector_count: 0,
+                    bm25_count: nombre,
+                    sparse_count: 0,
+                    fused_count: nombre,
+                    reranked_count: 0,
+                    warnings: node_warnings.clone(),
+                    search_time_ms: debut.elapsed().as_millis() as u64,
+                    diagnostics: None,
+                }),
+            );
+            return Ok(());
+        }
+
         let results = search_bm25_chunked(
             &*conn,
             &target,

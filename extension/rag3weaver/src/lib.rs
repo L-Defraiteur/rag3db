@@ -176,6 +176,8 @@ pub mod serveur;
 pub use serveur::{Attache, Etat, Fin, Serveur, ServeurError, Sonde};
 pub mod search;
 pub mod search_backend;
+/// Jaro et Jaro-Winkler : ordonner un sommet rapporté large par un index.
+pub mod jaro;
 pub mod search_strategy;
 pub mod sparse_index;
 pub mod uuid;
