@@ -249,7 +249,21 @@ fn read_and_grep_as_graph_tools() {
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     // Un seul outil de recherche depuis le 28 août 2026 : `search_expand` était
     // appelé zéro fois sur quarante, la relation est devenue un paramètre.
-    assert_eq!(names, vec!["edit", "grep", "list", "read", "search"]);
+    //
+    // Onze verbes depuis le 30 août, en quatre familles — la liste est épinglée
+    // en entier pour qu'un ajout se voie ici plutôt que chez un modèle :
+    //
+    // - lire et écrire du code : `read`, `grep`, `list`, `edit`, `search` ;
+    // - poser du connu : `place`, `adopt` (catalogue de gabarits) ;
+    // - agir : `run`, `run_bg`, `wait` (commandes, avec la porte de `commande.rs`) ;
+    // - voir : `schema` (la carte du catalogue, pas son DDL).
+    assert_eq!(
+        names,
+        vec![
+            "adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "schema",
+            "search", "wait",
+        ]
+    );
 
     // Résolues contre le catalogue, les fiches bornent cibles et relations
     // à ce qui existe : un modèle ne peut plus inventer `HAS_SIGNALS`.
