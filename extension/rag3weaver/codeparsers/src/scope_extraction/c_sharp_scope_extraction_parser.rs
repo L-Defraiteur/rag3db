@@ -14,6 +14,10 @@ use crate::scope_extraction::types::ImportReference;
 use crate::scope_extraction::types::ParameterInfo;
 use crate::scope_extraction::types::ScopeFileAnalysis;
 use crate::scope_extraction::types::ScopeInfo;
+
+/// C# documente en `///` (XML). Un `//` ordinaire n'est pas de la doc, et
+/// le prendre pour telle remplirait le champ de notes de travail.
+const CSHARP_DOC_PREFIXES: &[&str] = &["///"];
 use crate::scope_extraction::types::ScopeInfoType;
 
 pub const CSHARP_STOP_WORDS: &[&str] = &[
@@ -342,7 +346,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -447,7 +451,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -557,7 +561,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -659,7 +663,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -742,7 +746,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -892,7 +896,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -996,7 +1000,7 @@ impl CSharpScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CSHARP_DOC_PREFIXES),
             decorators: None,
             value: None,
         }

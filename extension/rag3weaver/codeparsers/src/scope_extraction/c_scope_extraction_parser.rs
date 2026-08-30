@@ -14,6 +14,12 @@ use crate::scope_extraction::types::ScopeFileAnalysis;
 use crate::scope_extraction::types::ScopeInfo;
 use crate::scope_extraction::types::ScopeInfoType;
 
+
+/// Les deux conventions de C : `///` et `//!` quand on suit Doxygen,
+/// `//` sinon — dans les faits, la plupart des bases écrivent `//`.
+/// L'ordre compte : le plus long d'abord, sinon `///` se ferait manger par
+/// `//` et la doc garderait une barre oblique de trop.
+const C_DOC_PREFIXES: &[&str] = &["///", "//!", "//"];
 use std::collections::HashSet;
 
 pub const C_STOP_WORDS: &[&str] = &[
@@ -374,7 +380,8 @@ impl CScopeExtractionParser {
             lines_of_code,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, C_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -532,7 +539,8 @@ impl CScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, C_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -667,7 +675,8 @@ impl CScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, C_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -860,7 +869,8 @@ impl CScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, C_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }

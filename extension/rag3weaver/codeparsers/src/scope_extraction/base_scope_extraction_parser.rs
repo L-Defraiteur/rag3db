@@ -2884,6 +2884,76 @@ impl BaseScopeExtractionParser {
         if doc.is_empty() { None } else { Some(doc) }
     }
 
+    /// Le commentaire de documentation **en bloc** au-dessus d'un élément :
+    /// `/** … */` et `/*! … */`, la convention Doxygen de C et C++.
+    ///
+    /// Complément de [`Self::extract_line_doc`], pas remplacement : les deux
+    /// styles cohabitent dans un même fichier, souvent dans un même en-tête.
+    /// On lit par lignes pour la même raison — les grammaires tree-sitter ne
+    /// s'accordent pas sur la place d'un commentaire, le texte si.
+    ///
+    /// Un bloc `/* … */` **ordinaire** est ignoré : deux étoiles ou une
+    /// exclamation, sinon ce n'est pas de la documentation, c'est du code mis
+    /// de côté.
+    pub fn extract_block_doc(&self, node: SyntaxNode, content: &str) -> Option<String> {
+        let start_row = node.start_position().row;
+        if start_row == 0 {
+            return None;
+        }
+        let lines: Vec<&str> = content.split('\n').collect();
+
+        // La ligne juste au-dessus doit fermer un bloc. Les attributs et une
+        // ligne vide ne sont pas tolérés ici : un bloc Doxygen touche ce qu'il
+        // documente.
+        let mut fin = start_row.checked_sub(1)?;
+        loop {
+            let ligne = lines.get(fin).map(|l| l.trim()).unwrap_or("");
+            if ligne.starts_with('[') && ligne.ends_with(']') {
+                fin = fin.checked_sub(1)?;
+                continue;
+            }
+            if !ligne.ends_with("*/") {
+                return None;
+            }
+            break;
+        }
+
+        let min = fin.saturating_sub(200);
+        let mut debut = None;
+        for i in (min..=fin).rev() {
+            let ligne = lines.get(i).map(|l| l.trim()).unwrap_or("");
+            if ligne.starts_with("/**") || ligne.starts_with("/*!") {
+                debut = Some(i);
+                break;
+            }
+            // Un autre bloc s'ouvre avant : celui-ci n'est pas de la doc.
+            if ligne.starts_with("/*") {
+                return None;
+            }
+        }
+        let debut = debut?;
+
+        let mut collectees: Vec<String> = Vec::new();
+        for i in debut..=fin {
+            let mut ligne = lines.get(i).map(|l| l.trim()).unwrap_or("");
+            for ouverture in ["/**", "/*!"] {
+                if let Some(reste) = ligne.strip_prefix(ouverture) {
+                    ligne = reste.trim_start();
+                }
+            }
+            if let Some(reste) = ligne.strip_suffix("*/") {
+                ligne = reste.trim_end();
+            }
+            // La colonne d'étoiles de continuation.
+            if let Some(reste) = ligne.strip_prefix('*') {
+                ligne = reste.trim_start();
+            }
+            collectees.push(ligne.trim().to_string());
+        }
+        let doc = collectees.join("\n").trim().to_string();
+        if doc.is_empty() { None } else { Some(doc) }
+    }
+
     pub fn extract_js_doc(&self, node: SyntaxNode, content: &str) -> Option<String> {
         // Get previous sibling, skipping decorators
         let mut prev = node.prev_sibling();

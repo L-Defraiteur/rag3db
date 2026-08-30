@@ -16,6 +16,11 @@ use crate::scope_extraction::types::ScopeFileAnalysis;
 use crate::scope_extraction::types::ScopeInfo;
 use crate::scope_extraction::types::ScopeInfoType;
 
+
+/// Go n'a qu'une convention, et c'est `//` : un commentaire collé au-dessus
+/// d'une déclaration **est** sa documentation. Pas de préfixe spécial à
+/// chercher, et pas de faux positif à craindre — c'est la règle du langage.
+const GO_DOC_PREFIXES: &[&str] = &["//"];
 use std::collections::HashSet;
 
 pub const GO_STOP_WORDS: &[&str] = &[
@@ -339,7 +344,7 @@ impl GoScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, GO_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -600,7 +605,7 @@ impl GoScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, GO_DOC_PREFIXES),
             decorators: None,
             value: None,
         }
@@ -737,7 +742,7 @@ impl GoScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent: effective_parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, GO_DOC_PREFIXES),
             decorators: None,
             value: None,
         }

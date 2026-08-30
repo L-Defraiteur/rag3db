@@ -18,6 +18,10 @@ use crate::scope_extraction::types::ScopeInfo;
 use crate::scope_extraction::types::ScopeInfoType;
 use crate::scope_extraction::types::EnumMemberInfo;
 
+
+/// Comme en C. La base sur laquelle ce moteur est bâti commente en `//` :
+/// c'est le style qu'il faut attraper, pas seulement le Doxygen canonique.
+const CPP_DOC_PREFIXES: &[&str] = &["///", "//!", "//"];
 use std::collections::HashSet;
 
 pub const CPP_STOP_WORDS: &[&str] = &[
@@ -548,7 +552,8 @@ impl CppScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CPP_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -646,7 +651,8 @@ impl CppScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CPP_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -843,7 +849,8 @@ impl CppScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CPP_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -994,7 +1001,8 @@ impl CppScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CPP_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
@@ -1129,7 +1137,8 @@ impl CppScopeExtractionParser {
             lines_of_code: end_line - start_line + 1,
             parent,
             depth,
-            docstring: None,
+            docstring: self.base.extract_line_doc(node, content, CPP_DOC_PREFIXES)
+                .or_else(|| self.base.extract_block_doc(node, content)),
             decorators: None,
             value: None,
         }
