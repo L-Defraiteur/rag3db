@@ -53,10 +53,36 @@ le code qu'ils spécifient. Ils sont partis avec lui, avec un `00-index.md` côt
 codeparsers et un `README.md` ici qui dit où. **Déplacés, pas copiés** : deux
 exemplaires d'une spécification, c'est deux vérités qui divergent.
 
+### Faire entrer le texte dans l'index
+
+Un fichier sans grammaire était ignoré ; il produit désormais un `File`, **un**
+`Scope` `texte_brut` couvrant tout, et l'arête qui les relie. Rien d'autre : ni
+import à résoudre, ni référence à rapprocher, ni symbole — il ne passe donc pas
+par le résolveur.
+
+Côté codeparsers (`6c9e4b1`) : `ScopeInfoType::TexteBrut` et
+`analyser_texte_brut`, plus les octets du fichier dans `ScopeFileAnalysis`. Des
+**faits** ; la politique est chez le consommateur.
+
+Côté rag3weaver (`40cca2f1f`) : `verdict(chemin, taille)` en un seul endroit,
+en trois couches du moins cher au plus cher — la liste noire qui se décide sur
+le nom sans ouvrir le fichier, la grammaire si elle existe, puis le seuil de
+128 Kio.
+
+| | fichiers | octets |
+|---|---:|---:|
+| code | 3 929 | 40,2 Mo |
+| **texte brut** | **2 326** | **12,2 Mo** |
+| écarté, avec sa raison | 700 | |
+
+`e2e_code` : toutes les suites d'ingestion passent sans qu'un compteur ait eu
+besoin d'être touché.
+
 ### Ce qui n'a pas été fait
 
-Le chantier du cahier des charges lui-même n'est pas commencé, et la chaîne
-non-code n'est pas câblée. Voir le §3.
+Le chantier du cahier des charges lui-même — les deux autres genres de scope,
+le pavage des trous, la couverture dérivée. Et la remesure de la pondération,
+qui est maintenant **due** : voir le §3.
 
 ## 2. Ce que la mesure a trouvé
 
@@ -110,9 +136,23 @@ Par ordre de rapport sur effort.
 1. ~~**`.h` → C++.**~~ **Fait** (`91c3ef1`) : +14 041 scopes, 893 fichiers
    sortis de l'erreur. C'est la ligne de base contre laquelle le chantier de
    couverture doit désormais se mesurer.
-2. **Câbler la chaîne non-code.** `.md` a un parseur de 1 057 lignes qui n'est
-   jamais appelé. C'est 945 fichiers et 13 Mo qui entrent dans l'index sans
-   écrire un parseur.
+2. ~~**Câbler la chaîne non-code.**~~ **Fait** (`40cca2f1f`), mais pas comme
+   prévu : plutôt que d'appeler le parseur Markdown, un genre `texte_brut`
+   commun à tous les fichiers sans grammaire. Un parseur par format aurait
+   voulu dire un chemin d'ingestion par format ; un genre veut dire un seul
+   mécanisme, et le Markdown reste disponible pour plus tard si on veut des
+   scopes par section.
+
+   **Et le chiffre annoncé était faux** : 2 326 fichiers, pas 945 ; 12,2 Mo,
+   pas 13 ; et le corpus grossit de **31 %**, pas du double. Les 945 ne
+   comptaient que les `.md`, et le double ne comptait pas les garde-fous.
+
+2 bis. **La pondération, à remesurer — c'est dû maintenant.** 2 326 passages de
+   texte libre viennent d'entrer dans un index où BM25 comme le vecteur les
+   avantagent : ils ressemblent à de la prose, et les requêtes sont en prose.
+   Le banc existe (`e2e_catalogue_gabarits`, trois questions françaises avec
+   `product 3,85 · user 7,23 · conversation 7,30`). Tant qu'il n'est pas
+   repassé, on ne sait pas si les vraies réponses ont reculé.
 3. **Le chantier lui-même** — les deux genres de scope, `Couverture` dérivée,
    et surtout *cesser de jeter* : `has_meaningful_content` supprime les trous
    purement commentaires, `create_file_scope` les type `Module`.
@@ -162,3 +202,24 @@ session, elle a été préservée volontairement hors de ses deux commits.
   connaître le point de départ. À reposer une fois `.h` corrigé.
 - Le README de codeparsers avoue les limites du crate plutôt que de le vendre.
   C'est un choix, sur un dépôt public, qui n'a pas été validé.
+- **Le seuil de 128 Kio est un proxy**, et il sera faux un jour : une
+  spécification écrite à la main de 300 Kio serait écartée, un fichier généré
+  de 50 Kio passerait. Ce qui le rend acceptable n'est pas sa justesse mais le
+  fait qu'il s'avoue — les 700 écartés se comptent avec leur raison. Si le
+  proxy se met à mentir souvent, c'est la liste des écartés qui le dira.
+- **Le `texte_brut` est découpé comme du code, pas comme un document.** La
+  crainte du §2 du [doc en aval](02-ce-que-ca-change-en-aval.md) — « un scope de
+  20 000 lignes ne doit pas produire **un** chunk » — ne se réalise pas : le
+  découpage est déclaré sur l'entité `Scope` (`default_scope_chunking`, 1000 /
+  100), donc il s'applique à tous les scopes, texte compris.
+
+  Mais il s'applique avec `ChunkStrategy::Semantic`, réglé pour du code, alors
+  qu'un `ChunkStrategy::Markdown` existe et « respecte les titres, les blocs de
+  code et les listes ». **945 des 2 326 fichiers texte sont du Markdown**, et
+  ils sont découpés sans que leurs titres comptent.
+
+  Et il n'y a pas de porte de sortie évidente : le découpage se déclare **par
+  entité**, pas par enregistrement. Découper le texte autrement voudrait dire
+  soit une seconde entité — ce que le §1 du même document interdit, avec de
+  bonnes raisons — soit un découpage par enregistrement, qui n'existe pas.
+  C'est le seul point où le cahier des charges n'avait pas vu la contrainte.
