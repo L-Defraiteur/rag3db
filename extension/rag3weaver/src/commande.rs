@@ -557,6 +557,189 @@ impl Garde {
     }
 }
 
+// ─── Exécuter, et seulement ce qui a été autorisé ────────────────────────────
+
+/// **Le laissez-passer.** Son champ est privé : hors de ce module, on ne peut
+/// pas en fabriquer un.
+///
+/// C'est la garantie *structurelle* que rien ne s'exécute sans verdict. Elle
+/// remplace une discipline — « penser à appeler `juger` avant » — par une
+/// impossibilité : [`executer`] ne prend que ça, et seul [`Garde::autoriser`]
+/// en produit.
+///
+/// Conséquence voulue pour les tests : on peut juger `rm -rf /` autant qu'on
+/// veut, le verdict est un refus, donc il n'existe aucun chemin qui l'exécute.
+#[derive(Debug)]
+pub struct Autorisee(Commande);
+
+impl Autorisee {
+    pub fn commande(&self) -> &Commande {
+        &self.0
+    }
+}
+
+/// Les conditions dans lesquelles on exécute.
+#[derive(Debug, Clone)]
+pub struct Atelier {
+    /// Le répertoire de travail. **Obligatoire** : hériter de celui du
+    /// processus appelant ferait dépendre le résultat d'où l'agent a été
+    /// lancé.
+    pub cwd: std::path::PathBuf,
+    /// Au-delà, on tue. Un agent qui attend indéfiniment ne rapporte rien, et
+    /// c'est pire qu'un échec.
+    pub delai: std::time::Duration,
+    /// Caractères de sortie gardés, par flux.
+    pub max_sortie: usize,
+}
+
+impl Atelier {
+    pub fn dans(cwd: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            cwd: cwd.into(),
+            delai: std::time::Duration::from_secs(120),
+            max_sortie: 100_000,
+        }
+    }
+    pub fn avec_delai(mut self, d: std::time::Duration) -> Self {
+        self.delai = d;
+        self
+    }
+    pub fn avec_max_sortie(mut self, n: usize) -> Self {
+        self.max_sortie = n;
+        self
+    }
+}
+
+/// Ce qu'une exécution a produit.
+#[derive(Debug, Clone)]
+pub struct Sortie {
+    /// `None` si tuée par un signal ou par le délai.
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+    pub duree: std::time::Duration,
+    /// Le délai a expiré : on a tué. **À dire**, parce qu'une sortie tronquée
+    /// par un `kill` ressemble à une sortie complète.
+    pub expiree: bool,
+    /// Un des flux a dépassé `max_sortie`.
+    pub tronquee: bool,
+}
+
+impl Sortie {
+    pub fn a_reussi(&self) -> bool {
+        self.code == Some(0) && !self.expiree
+    }
+}
+
+/// Ce qui empêche d'exécuter.
+#[derive(Debug)]
+pub enum ExecErreur {
+    /// Le répertoire de travail n'existe pas, ou sort du domaine.
+    Atelier(String),
+    /// Le lancement lui-même a échoué.
+    Lancement(String),
+}
+
+impl std::fmt::Display for ExecErreur {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Atelier(m) => write!(f, "atelier : {m}"),
+            Self::Lancement(m) => write!(f, "lancement : {m}"),
+        }
+    }
+}
+
+impl Garde {
+    /// **La seule façon d'obtenir un laissez-passer.**
+    ///
+    /// Rend le verdict en cas de refus ou de demande — un `Demande` n'est pas
+    /// un laissez-passer : quelqu'un doit d'abord répondre, et c'est à
+    /// l'appelant de le faire puis de redemander avec le contexte à jour.
+    pub fn autoriser(&self, c: &Commande, ctx: &Contexte) -> Result<Autorisee, Verdict> {
+        let v = self.juger(c, ctx);
+        if v.decision == Decision::Autorise {
+            Ok(Autorisee(c.clone()))
+        } else {
+            Err(v)
+        }
+    }
+}
+
+/// **Exécuter par argv, jamais par un shell.**
+///
+/// Les flux sont lus par deux fils pendant que le processus tourne. Ce n'est
+/// pas une élégance : un tube qu'on ne lit qu'après `wait` se remplit, et le
+/// processus se fige à son premier gros message — un blocage qui ressemble à
+/// une commande lente, ce qui est la pire forme de panne. Même leçon que
+/// `crate::serveur`, tirée le 29 août.
+pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+
+    if !atelier.cwd.is_dir() {
+        return Err(ExecErreur::Atelier(format!("{} n'est pas un dossier", atelier.cwd.display())));
+    }
+
+    let debut = std::time::Instant::now();
+    let mut enfant = Command::new(&a.0.programme)
+        .args(&a.0.args)
+        .current_dir(&atelier.cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
+
+    let lire = |mut flux: Option<Box<dyn Read + Send>>, max: usize| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(f) = flux.as_mut() {
+                let _ = f.take(max as u64 + 1).read_to_end(&mut buf);
+            }
+            buf
+        })
+    };
+    let out = lire(enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie);
+    let err = lire(enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie);
+
+    let mut expiree = false;
+    let code = loop {
+        match enfant.try_wait() {
+            Ok(Some(statut)) => break statut.code(),
+            Ok(None) => {}
+            Err(e) => return Err(ExecErreur::Lancement(e.to_string())),
+        }
+        if debut.elapsed() >= atelier.delai {
+            let _ = enfant.kill();
+            let _ = enfant.wait();
+            expiree = true;
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+
+    let brut = |j: std::thread::JoinHandle<Vec<u8>>| j.join().unwrap_or_default();
+    let (o, e) = (brut(out), brut(err));
+    let tronquee = o.len() > atelier.max_sortie || e.len() > atelier.max_sortie;
+    let couper = |v: Vec<u8>, max: usize| {
+        let mut s = String::from_utf8_lossy(&v).to_string();
+        if s.len() > max {
+            s.truncate(max);
+            s.push_str("\n… (sortie tronquée)");
+        }
+        s
+    };
+
+    Ok(Sortie {
+        code,
+        stdout: couper(o, atelier.max_sortie),
+        stderr: couper(e, atelier.max_sortie),
+        duree: debut.elapsed(),
+        expiree,
+        tronquee,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -793,6 +976,122 @@ mod tests {
         assert_eq!(g.juger(&cmd("sudo", &["ls"]), &accorde).decision, Decision::Refuse);
         assert_eq!(g.juger(&cmd("sh", &["-c", "x"]), &accorde).decision, Decision::Demande);
         assert_eq!(g.juger(&cmd("rm", &["x"]), &accorde).portee, Portee::CetteFois);
+    }
+
+    // ── L'exécution ─────────────────────────────────────────────────────
+    //
+    // **Aucun test de ce module n'exécute quoi que ce soit de dangereux.**
+    // Les commandes dangereuses n'apparaissent que dans les tests de
+    // *jugement*, qui sont des fonctions pures — elles construisent une
+    // `Commande` et lisent un verdict, sans jamais toucher à `executer`.
+    //
+    // Et ce n'est pas qu'une discipline : `executer` ne prend qu'une
+    // `Autorisee`, dont le champ est privé et que seul `Garde::autoriser`
+    // produit. Un refus ne rend donc pas de laissez-passer, et il n'existe
+    // aucun chemin qui exécute ce qui a été refusé.
+    //
+    // Ce qui s'exécute ici : `/bin/echo`, `/bin/true`, `/bin/false`,
+    // `/bin/sleep`. Rien d'autre.
+
+    fn atelier() -> Atelier {
+        Atelier::dans(std::env::temp_dir()).avec_delai(std::time::Duration::from_secs(10))
+    }
+
+    /// **La garantie structurelle.** Un refus ne rend pas de laissez-passer,
+    /// donc il n'y a rien à exécuter — pas même par erreur.
+    #[test]
+    fn ce_qui_est_refuse_ne_donne_aucun_laissez_passer() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+
+        // Deux interdits que même un « oui » de l'utilisateur ne lève pas.
+        for c in [cmd("sudo", &["ls"]), cmd("sh", &["-c", "echo x"])] {
+            let v = g.autoriser(&c, &accorde).expect_err(&format!("{} ne doit pas passer", c.lisible()));
+            assert_ne!(v.decision, Decision::Autorise);
+        }
+
+        // Et un programme inconnu **que personne n'a permis**. Avec un « oui »
+        // il passerait, et c'est voulu : l'utilisateur a le droit d'autoriser
+        // ce que la sentinelle ne connaît pas. C'est le silence qui bloque,
+        // pas l'ignorance.
+        let v = g
+            .autoriser(&cmd("programme_inconnu", &[]), &Contexte::default())
+            .expect_err("sans accord, un inconnu ne passe pas");
+        assert_eq!(v.fondement, Fondement::JugeeInoffensive);
+    }
+
+    #[test]
+    fn ce_qui_est_autorise_s_execute_et_rapporte() {
+        let g = Garde::new(Mode::Auto);
+        let c = Commande::new("/bin/echo", ["bonjour"]);
+        let laissez = g
+            .autoriser(&c, &Contexte { accorde_par_l_utilisateur: true, ..Default::default() })
+            .expect("autorisé par l'utilisateur");
+        let s = executer(laissez, &atelier()).expect("exécution");
+        assert!(s.a_reussi(), "{s:?}");
+        assert_eq!(s.stdout.trim(), "bonjour");
+        assert!(!s.expiree);
+    }
+
+    /// **Un échec est une information, pas une erreur.** `/bin/false` rend 1 ;
+    /// l'appel doit réussir et le code doit remonter — c'est ce qui permet à
+    /// un agent de lire le résultat de ses tests.
+    #[test]
+    fn un_code_de_retour_non_nul_remonte_sans_erreur() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let laissez = g.autoriser(&Commande::new("/bin/false", [] as [&str; 0]), &accorde).unwrap();
+        let s = executer(laissez, &atelier()).expect("exécution");
+        assert_eq!(s.code, Some(1));
+        assert!(!s.a_reussi());
+    }
+
+    /// **Le délai tue, et le dit.** Une sortie tronquée par un `kill`
+    /// ressemble à une sortie complète : sans `expiree`, un agent conclurait
+    /// que la commande a fini.
+    #[test]
+    fn le_delai_tue_et_se_declare() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let laissez = g.autoriser(&Commande::new("/bin/sleep", ["30"]), &accorde).unwrap();
+        let t0 = std::time::Instant::now();
+        let s = executer(laissez, &atelier().avec_delai(std::time::Duration::from_millis(300)))
+            .expect("exécution");
+        assert!(s.expiree, "le délai doit être signalé");
+        assert!(!s.a_reussi());
+        assert!(t0.elapsed() < std::time::Duration::from_secs(5), "on n'a pas attendu 30 s");
+    }
+
+    /// **Une grosse sortie ne fige rien.** Un tube qu'on ne lit qu'après
+    /// `wait` se remplit et bloque le processus — la panne qui ressemble à de
+    /// la lenteur.
+    #[test]
+    fn une_grosse_sortie_est_lue_pendant_et_tronquee() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        // Par un fichier, pas par un argument : la ligne de commande a sa
+        // propre limite, et ce n'est pas elle qu'on teste ici.
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let gros = dossier.path().join("gros.txt");
+        std::fs::write(&gros, "x".repeat(200_000)).expect("écriture");
+        let laissez = g
+            .autoriser(&Commande::new("/bin/cat", [gros.to_string_lossy().as_ref()]), &accorde)
+            .unwrap();
+        let s = executer(laissez, &atelier().avec_max_sortie(1_000)).expect("exécution");
+        assert!(s.tronquee, "la troncature doit être dite");
+        assert!(s.stdout.len() < 2_000, "gardé {} caractères", s.stdout.len());
+        assert!(s.stdout.contains("tronquée"));
+    }
+
+    /// Le répertoire de travail est obligatoire et vérifié : hériter de celui
+    /// de l'appelant ferait dépendre le résultat d'où l'agent a été lancé.
+    #[test]
+    fn un_atelier_inexistant_est_refuse_avant_de_lancer() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let laissez = g.autoriser(&Commande::new("/bin/true", [] as [&str; 0]), &accorde).unwrap();
+        let e = executer(laissez, &Atelier::dans("/n/existe/pas")).expect_err("atelier absent");
+        assert!(matches!(e, ExecErreur::Atelier(_)), "{e}");
     }
 
     /// **Le verdict se sérialise.** C'est ce qui permet de le tracer, de le
