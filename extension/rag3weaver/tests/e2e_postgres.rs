@@ -27,7 +27,11 @@ use std::sync::Arc;
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::{CypherValue, DbConnection};
 use rag3weaver::dialect::PostgresDialect;
-use rag3weaver::embedder::MockEmbedder;
+// `HashEmbedder` et pas `MockEmbedder` : le second rend des vecteurs **nuls**,
+// et la distance cosinus d'un vecteur nul est `NaN` — pgvector trie alors sur
+// du NaN et son index HNSW ne rend rien. Un montage qui « marche » avec des
+// zéros ne prouve rien du chemin vectoriel.
+use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::postgres_connection::PostgresConnection;
 use rag3weaver::postgres_search_backend::PostgresSearchBackend;
 use rag3weaver::search::SearchSignals;
@@ -163,7 +167,7 @@ fn catalogue(dim: usize) -> (Contexte, Catalog) {
             .expect("seconde connexion"),
     );
 
-    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config_vide(dim));
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(dim)), config_vide(dim));
     let partagee = catalog.conn_arc();
     catalog.set_dialect(Arc::new(PostgresDialect));
     catalog.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));
@@ -276,7 +280,7 @@ fn le_vecteur_classe() {
         .unwrap();
 
     let backend = catalog.search_backend().expect("backend de recherche");
-    let requete = MockEmbedder::new(8);
+    let requete = HashEmbedder::new(8);
     use rag3weaver::embedder::Embedder;
     let vecteur = requete.embed(&["Ownership, lifetimes and concurrency in Rust.".to_string()]).unwrap();
 

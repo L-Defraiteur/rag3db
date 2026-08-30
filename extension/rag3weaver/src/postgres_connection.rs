@@ -102,6 +102,54 @@ fn translate_params(query: &str, params: &[QueryParam]) -> (String, Vec<CypherVa
     (translated, values)
 }
 
+/// **Une valeur en JSON**, pour les paramètres qui portent des lignes.
+///
+/// Le chemin d'écriture en lot envoie une `List<Map>` — les lignes à insérer.
+/// PostgreSQL sait les déplier (`jsonb_to_recordset`,
+/// `jsonb_populate_recordset`), mais il lui faut du JSON.
+///
+/// Un `Blob` devient la notation hexadécimale d'entrée de `bytea` (`\xdeadbeef`)
+/// : c'est ce que PostgreSQL relira si la colonne visée est un `bytea`, et une
+/// chaîne lisible sinon. Un flottant non fini n'a pas de JSON — il devient
+/// `null`, parce qu'un `NaN` silencieusement changé en zéro serait pire.
+fn cypher_to_json(value: &CypherValue) -> serde_json::Value {
+    use serde_json::Value as J;
+    match value {
+        CypherValue::String(s) => J::String(s.clone()),
+        CypherValue::Int(i) => J::from(*i),
+        CypherValue::Float(f) => serde_json::Number::from_f64(*f).map_or(J::Null, J::Number),
+        CypherValue::Bool(b) => J::Bool(*b),
+        CypherValue::Null => J::Null,
+        CypherValue::Blob(b) => {
+            let mut s = String::with_capacity(2 + b.len() * 2);
+            s.push_str("\\x");
+            for octet in b {
+                s.push_str(&format!("{octet:02x}"));
+            }
+            J::String(s)
+        }
+        CypherValue::List(items) => J::Array(items.iter().map(cypher_to_json).collect()),
+        CypherValue::Map(m) => {
+            J::Object(m.iter().map(|(k, v)| (k.clone(), cypher_to_json(v))).collect())
+        }
+    }
+}
+
+/// Une liste porte-t-elle des lignes, ou des identifiants ?
+///
+/// Les deux formes traversent le même paramètre `$items`/`$uuids` :
+/// - `List<String|Int>` → un tableau SQL, pour les motifs `= ANY($1)` ;
+/// - dès qu'un `Map` ou une liste imbriquée s'y trouve, ce sont des **lignes**,
+///   et ça part en JSON.
+///
+/// Deviner d'après le contenu plutôt que d'après le nom du paramètre : c'est le
+/// contenu qui décide de la forme SQL qui saura le lire.
+fn est_liste_de_lignes(items: &[CypherValue]) -> bool {
+    items
+        .iter()
+        .any(|v| matches!(v, CypherValue::Map(_) | CypherValue::List(_)))
+}
+
 /// Convert CypherValue to a tokio-postgres parameter.
 fn cypher_to_pg_param(value: &CypherValue) -> Box<dyn tokio_postgres::types::ToSql + Sync + Send> {
     match value {
@@ -112,18 +160,24 @@ fn cypher_to_pg_param(value: &CypherValue) -> Box<dyn tokio_postgres::types::ToS
         CypherValue::Null => Box::new(Option::<String>::None),
         CypherValue::Blob(b) => Box::new(b.clone()),
         CypherValue::List(items) => {
-            // Convert List<String> to Vec<String> for ANY($1) patterns
-            let strings: Vec<String> = items
-                .iter()
-                .filter_map(|v| match v {
-                    CypherValue::String(s) => Some(s.clone()),
-                    CypherValue::Int(i) => Some(i.to_string()),
-                    _ => None,
-                })
-                .collect();
-            Box::new(strings)
+            if est_liste_de_lignes(items) {
+                // Des lignes. Le SQL les recevra par `$items::jsonb`.
+                Box::new(cypher_to_json(value).to_string())
+            } else {
+                // Des identifiants. Tableau de texte, pour `= ANY($1)`.
+                let strings: Vec<String> = items
+                    .iter()
+                    .filter_map(|v| match v {
+                        CypherValue::String(s) => Some(s.clone()),
+                        CypherValue::Int(i) => Some(i.to_string()),
+                        _ => None,
+                    })
+                    .collect();
+                Box::new(strings)
+            }
         }
-        CypherValue::Map(_) => Box::new(Option::<String>::None), // Maps not supported as params
+        // Une map isolée est une ligne unique : même traitement, en JSON.
+        CypherValue::Map(_) => Box::new(cypher_to_json(value).to_string()),
     }
 }
 

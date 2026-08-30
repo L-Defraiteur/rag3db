@@ -963,6 +963,28 @@ impl SchemaDialect for PostgresDialect {
 
     fn speaks_cypher(&self) -> bool { false }
 
+    // ── Les lots passent par JSON ────────────────────────────────────────
+    //
+    // Un lot arrive en un seul paramètre `$items` portant une liste de lignes.
+    // Le code d'origine écrivait `unnest($items) AS v(colonnes)` : `unnest` ne
+    // fait pas ça. Il déplie **un** tableau en **une** colonne ; il ne
+    // reconstruit pas des lignes à plusieurs champs. Aucune des treize
+    // requêtes en lot n'a jamais pu s'exécuter.
+    //
+    // Deux formes le font, selon ce qu'on sait des types :
+    //
+    // - `jsonb_to_recordset($items::text::jsonb) AS v(a TEXT, b TEXT)` quand la
+    //   requête déclare déjà ses colonnes et leurs types ;
+    // - `jsonb_populate_recordset(NULL::{table}, ...)` quand elle ne les
+    //   déclare pas — **le type de la table les fournit**, ce qui évite au
+    //   dialecte de tenir un catalogue de types en double.
+    //
+    // Le `::text::jsonb` n'est pas une coquetterie. Écrit `$1::jsonb`,
+    // PostgreSQL infère le paramètre comme `jsonb`, et le pilote refuse d'y
+    // sérialiser une `String` Rust (`error serializing parameter 0`). En
+    // passant par `text`, le paramètre est du texte — ce qu'on envoie
+    // réellement — et la base fait la conversion.
+
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
         format!(
             "INSERT INTO {table} (_uuid, name) VALUES (${id_param}, ${id_param}) \
@@ -1082,7 +1104,7 @@ impl SchemaDialect for PostgresDialect {
         let id_expr = self.node_id_expr(table);
         format!(
             "INSERT INTO {table} ({col_list}) \
-             SELECT {val_refs} FROM unnest($items) AS v({col_list}) \
+             SELECT {val_refs} FROM jsonb_populate_recordset(NULL::{table}, $items::text::jsonb) AS v \
              ON CONFLICT (_uuid) DO UPDATE SET {} \
              RETURNING {id_expr}, _uuid",
             update_set.join(", ")
@@ -1115,7 +1137,7 @@ impl SchemaDialect for PostgresDialect {
         };
         format!(
             "INSERT INTO {rel_table} ({col_list}) \
-             SELECT {val_refs} FROM unnest($items) AS v({col_list}) \
+             SELECT {val_refs} FROM jsonb_populate_recordset(NULL::{rel_table}, $items::text::jsonb) AS v \
              ON CONFLICT (from_uuid, to_uuid) {conflict_update}"
         )
     }
@@ -1124,13 +1146,12 @@ impl SchemaDialect for PostgresDialect {
         let assigns: Vec<String> = field_columns.iter()
             .map(|c| format!("{c} = v.{c}"))
             .collect();
-        let mut cols = vec!["_uuid"];
-        cols.extend(field_columns.iter().copied());
-        let col_list = cols.join(", ");
-        let _val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        // Plus de liste de colonnes à construire : le type de la table les
+        // fournit toutes, avec leurs types. Ce que le JSON ne porte pas devient
+        // NULL, et on ne référence que ce qu'on assigne.
         format!(
             "UPDATE {table} SET {} \
-             FROM unnest($items) AS v({col_list}) \
+             FROM jsonb_populate_recordset(NULL::{table}, $items::text::jsonb) AS v \
              WHERE {table}._uuid = v._uuid",
             assigns.join(", ")
         )
@@ -1150,22 +1171,22 @@ impl SchemaDialect for PostgresDialect {
         let assigns: Vec<String> = set_columns.iter()
             .map(|c| format!("{c} = v.{c}"))
             .collect();
-        let mut cols = vec!["_uuid"];
-        cols.extend(set_columns.iter().copied());
-        let col_list = cols.join(", ");
         // Map rag3db expressions to PostgreSQL equivalents
         let returns: Vec<String> = return_exprs.iter()
             .map(|(expr, alias)| {
-                // Translate OFFSET(id(n)) → {table}.id (assumes BIGSERIAL id column)
+                // `OFFSET(id(n))` devient l'expression de décalage du dialecte,
+                // et pas `{table}.id` écrit en dur : la colonne s'appelle
+                // `_row_id` ici, et le nom en dur désignait une colonne qui
+                // n'existe dans aucune table qu'on crée.
                 let pg_expr = expr
-                    .replace("OFFSET(id(n))", &format!("{table}.id"))
+                    .replace("OFFSET(id(n))", &self.node_offset_expr(table))
                     .replace("item.", "v.");
                 if pg_expr == *alias { pg_expr } else { format!("{pg_expr} AS {alias}") }
             })
             .collect();
         format!(
             "UPDATE {table} SET {} \
-             FROM unnest($items) AS v({col_list}) \
+             FROM jsonb_populate_recordset(NULL::{table}, $items::text::jsonb) AS v \
              WHERE {table}._uuid = v._uuid \
              RETURNING {}",
             assigns.join(", "),
@@ -1192,7 +1213,7 @@ impl SchemaDialect for PostgresDialect {
     fn batch_delete_relation(&self, rel_table: &str) -> String {
         format!(
             "DELETE FROM {rel_table} \
-             USING unnest($items) AS v(from_uuid TEXT, to_uuid TEXT) \
+             USING jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT) \
              WHERE {rel_table}.from_uuid = v.from_uuid AND {rel_table}.to_uuid = v.to_uuid"
         )
     }
@@ -1207,7 +1228,7 @@ impl SchemaDialect for PostgresDialect {
         let cols = return_fields.join(", ");
         format!(
             "SELECT {cols} FROM {table} \
-             INNER JOIN unnest($items) AS v({match_field} TEXT) \
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
              ON {table}.{table_match_col} = v.{match_field}"
         )
     }
@@ -1314,7 +1335,7 @@ impl SchemaDialect for PostgresDialect {
     fn embed_check_hashes(&self, table: &str) -> String {
         format!(
             "SELECT _uuid, _embed_hash FROM {table} \
-             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid \
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid \
              WHERE _embed_hash IS NOT NULL"
         )
     }
@@ -1322,7 +1343,7 @@ impl SchemaDialect for PostgresDialect {
     fn embed_set(&self, table: &str, embedding_col: &str) -> String {
         format!(
             "UPDATE {table} SET {embedding_col} = v.emb, _embed_hash = v.hash \
-             FROM unnest($items) AS v(uuid TEXT, emb vector, hash TEXT) \
+             FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, emb vector, hash TEXT) \
              WHERE {table}._uuid = v.uuid"
         )
     }
@@ -1331,7 +1352,7 @@ impl SchemaDialect for PostgresDialect {
         let offset = self.node_offset_expr(table);
         format!(
             "UPDATE {table} SET _embed_hash = v.hash \
-             FROM unnest($items) AS v(uuid TEXT, hash TEXT) \
+             FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, hash TEXT) \
              WHERE {table}._uuid = v.uuid \
              RETURNING v.uuid, {offset} AS offset"
         )
@@ -1341,7 +1362,7 @@ impl SchemaDialect for PostgresDialect {
         let offset = self.node_offset_expr(table);
         format!(
             "SELECT v.uuid, {offset} AS offset FROM {table} \
-             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
         )
     }
 
@@ -1352,7 +1373,7 @@ impl SchemaDialect for PostgresDialect {
             .join(", ");
         format!(
             "SELECT {returns} FROM {table} \
-             INNER JOIN unnest($items) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
         )
     }
 
@@ -1371,7 +1392,7 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "SELECT {returns} FROM {content_entity} \
              INNER JOIN {rel} ON {rel}.to_uuid = {content_entity}._uuid \
-             INNER JOIN unnest($items) AS v(uuid TEXT) ON {rel}.from_uuid = v.uuid"
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {rel}.from_uuid = v.uuid"
         )
     }
 
@@ -1385,7 +1406,11 @@ impl SchemaDialect for PostgresDialect {
             .chain(all_fields.iter().copied())
             .collect::<Vec<_>>()
             .join(", ");
-        let val_refs = std::iter::once("v.uuid".to_string())
+        // `e->>'uuid'` et non `v.uuid` : la clé de l'élément s'appelle `uuid`
+        // alors que la colonne s'appelle `_uuid`. Le type de la table fournit
+        // les types de tous les champs, mais il ne connaît pas `uuid` — on le
+        // lit donc dans l'objet JSON lui-même, à côté.
+        let val_refs = std::iter::once("e->>'uuid'".to_string())
             .chain(all_fields.iter().map(|f| format!("v.{f}")))
             .collect::<Vec<_>>()
             .join(", ");
@@ -1395,7 +1420,9 @@ impl SchemaDialect for PostgresDialect {
             .join(", ");
         format!(
             "INSERT INTO {index_table} ({col_list}) \
-             SELECT {val_refs} FROM unnest($items) AS v(uuid TEXT, {col_list}) \
+             SELECT {val_refs} \
+             FROM jsonb_array_elements($items::text::jsonb) AS e, \
+                  LATERAL jsonb_populate_record(NULL::{index_table}, e) AS v \
              ON CONFLICT (_uuid) DO UPDATE SET {update_set}"
         )
     }
@@ -1595,7 +1622,10 @@ mod tests {
         let d = PostgresDialect;
         let stmt = d.batch_upsert("document", &["_uuid", "title", "body"]);
         assert!(stmt.contains("INSERT INTO document"));
-        assert!(stmt.contains("unnest($items)"));
+        // Le type de la table fournit les types des colonnes : c'est ce qui
+        // permet de déplier des lignes sans que le dialecte les connaisse.
+        assert!(stmt.contains("jsonb_populate_recordset(NULL::document, $items::text::jsonb)"));
+        assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
         assert!(stmt.contains("ON CONFLICT (_uuid)"));
     }
 
@@ -1698,7 +1728,8 @@ mod tests {
         let stmt = d.batch_update_fields("document", &["title", "_embed_hash"]);
         assert!(stmt.contains("UPDATE document SET"));
         assert!(stmt.contains("title = v.title"));
-        assert!(stmt.contains("FROM unnest($items)"));
+        assert!(stmt.contains("FROM jsonb_populate_recordset(NULL::document, $items::text::jsonb)"));
+        assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
         assert!(stmt.contains("WHERE document._uuid = v._uuid"));
     }
 
@@ -1758,7 +1789,10 @@ mod tests {
         assert!(stmt.contains("UPDATE document SET"));
         assert!(stmt.contains("_embed_hash = v._embed_hash"));
         assert!(stmt.contains("RETURNING"));
-        assert!(stmt.contains("document.id AS offset"));
+        // `_row_id` et pas `id` : c'est la colonne que `create_table` pose
+        // réellement. L'assertion précédente épinglait un nom de colonne qui
+        // n'existait dans aucune table — elle garantissait la faute.
+        assert!(stmt.contains("document._row_id AS offset"));
         assert!(stmt.contains("v.uuid AS uuid"));
     }
 
@@ -1793,7 +1827,9 @@ mod tests {
         let d = PostgresDialect;
         let stmt = d.batch_delete_relation("authored_by");
         assert!(stmt.contains("DELETE FROM authored_by"));
-        assert!(stmt.contains("unnest($items)"));
+        // Types déclarés sur place : `jsonb_to_recordset` suffit.
+        assert!(stmt.contains("jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT)"));
+        assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
     }
 
     #[test]
@@ -1810,7 +1846,8 @@ mod tests {
         let d = PostgresDialect;
         let stmt = d.batch_select("kb_index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
         assert!(stmt.contains("SELECT _uuid, _title, _content FROM kb_index"));
-        assert!(stmt.contains("JOIN unnest($items)"));
+        assert!(stmt.contains("JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT)"));
+        assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
     }
 
     #[test]
