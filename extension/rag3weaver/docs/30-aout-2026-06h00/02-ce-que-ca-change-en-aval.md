@@ -1,6 +1,7 @@
 # Ce que ça change en aval
 
-Suite du [cahier des charges](01-cahier-des-charges-tout-le-fichier-est-couvert.md).
+Suite du [cahier des charges](../../codeparsers/docs/30-aout-2026-06h00/01-cahier-des-charges-tout-le-fichier-est-couvert.md),
+passé dans le dépôt `codeparsers` avec le code qu'il spécifie.
 Celui-ci décrit ce qui bouge **hors de `codeparsers`** — dans l'ingestion, dans
 le schéma, dans la recherche et dans le rendu. À lire avant d'implémenter :
 plusieurs de ces points changent la forme de ce que `codeparsers` doit rendre.
