@@ -150,7 +150,12 @@ cd "$WEAVER"
 # **Plus de `burn-llm`** (28 août 2026) : notre moteur ne fait pas d'inférence
 # de LLM. Il fait l'embedding, le rerank, l'OCR — ce pour quoi un graphe burn
 # local a un sens. Un LLM vient de llama.cpp ou d'un fournisseur distant.
-FEATURES="rag3db-native,burn-embedder,burn-ocr,code${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+# `daemon` fait partie du socle depuis le 29 août : `tests/common/mod.rs` choisit
+# entre BGE-M3 chargé ici et le démon qui le sert, et son type `Bge` référence
+# `DaemonEmbedder` sans condition. Sans la feature, **aucune suite utilisant
+# burn ne compile** — l'oubli a survécu parce que les suites qui n'y touchent
+# pas (e2e_code) passaient très bien.
+FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
 CARGO_ARGS=(
   --features "$FEATURES"
