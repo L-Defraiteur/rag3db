@@ -86,6 +86,33 @@ pub fn parse_mermaid_template(
 
         // Try edge first (contains -->)
         if line.contains("-->") {
+            // **Les nœuds peuvent être déclarés dans la ligne d'arête.**
+            // `a["A()"] -->|p| b["B()"]` est du Mermaid courant, et c'est ce
+            // qu'un modèle écrit spontanément — mesuré le 30 août 2026, où
+            // gemini a produit deux arêtes et zéro nœud déclaré, donc un
+            // graphe inutilisable. Les chercher ici coûte une ligne et évite
+            // d'exiger une forme que nous seuls connaissons.
+            for morceau in [
+                line.split("-->").next().unwrap_or(""),
+                line.split("-->").nth(1).unwrap_or(""),
+            ] {
+                let morceau = morceau.trim().trim_start_matches('|');
+                let morceau = match morceau.find('|') {
+                    Some(i) => morceau[i + 1..].trim(),
+                    None => morceau,
+                };
+                // La forme à tirets laisse l'étiquette collée au nœud source.
+                let morceau = match morceau.rfind("--") {
+                    Some(i) if morceau[..i].contains("[\"") => morceau[..i].trim(),
+                    _ => morceau,
+                };
+                if morceau.contains("[\"") {
+                    let node = parse_node(morceau, line_num, vars)?;
+                    if !nodes.iter().any(|n: &NodeDef| n.name == node.name) {
+                        nodes.push(node);
+                    }
+                }
+            }
             let edge = parse_edge(line, line_num)?;
             edges.push(edge);
             continue;
@@ -311,7 +338,15 @@ fn substitute_vars(
     Ok(result)
 }
 
-/// Parse `from -->|port| to` or `from -->|from_port:to_port| to`.
+/// Parse `from -->|port| to`, `from -->|from_port:to_port| to`, ou la seconde
+/// orthographe de Mermaid : `from -- port --> to`.
+///
+/// **Les deux formes sont du Mermaid valide**, et un modèle écrit l'une ou
+/// l'autre. Mesuré le 30 août 2026 : à qui on demandait un graphe étiqueté,
+/// `gemini-3.5-flash` a produit `source["…"] -- results --> filtre["…"]` — du
+/// Mermaid correct que notre parseur refusait. Le défaut était chez nous, pas
+/// chez lui : n'accepter qu'une des deux orthographes d'une langue qu'on n'a
+/// pas inventée, c'est demander à l'autre de deviner laquelle.
 fn parse_edge(line: &str, line_num: usize) -> Result<EdgeDef, MermaidError> {
     let err = |detail: &str| MermaidError::InvalidEdge {
         line: line_num,
@@ -319,12 +354,32 @@ fn parse_edge(line: &str, line_num: usize) -> Result<EdgeDef, MermaidError> {
     };
 
     let arrow_pos = line.find("-->").ok_or_else(|| err("missing -->"))?;
-    let from_node = line[..arrow_pos].trim();
+    let mut from_node = line[..arrow_pos].trim();
+
+    // `from -- port --> to` : l'étiquette est entre le tiret et la flèche.
+    // On la déplace là où le reste de la fonction l'attend.
+    let mut etiquette_avant: Option<String> = None;
+    if let Some(tiret) = from_node.rfind("--") {
+        let (avant, apres) = from_node.split_at(tiret);
+        let etiquette = apres[2..].trim();
+        if !etiquette.is_empty() && !avant.trim().is_empty() {
+            etiquette_avant = Some(etiquette.to_string());
+            from_node = avant.trim();
+        }
+    }
     if from_node.is_empty() {
         return Err(err("empty source node"));
     }
 
-    let after_arrow = line[arrow_pos + 3..].trim();
+    let apres_flèche = line[arrow_pos + 3..].trim();
+    let recompose;
+    let after_arrow = match &etiquette_avant {
+        Some(e) => {
+            recompose = format!("|{e}| {apres_flèche}");
+            recompose.as_str()
+        }
+        None => apres_flèche,
+    };
 
     // -->|port| to  or  -->|from:to| to
     if after_arrow.starts_with('|') {
@@ -353,8 +408,11 @@ fn parse_edge(line: &str, line_num: usize) -> Result<EdgeDef, MermaidError> {
             to_port,
         })
     } else {
-        // --> to (no port spec — not supported, ports are required)
-        Err(err("missing port label |port| on edge"))
+        // Ni `-->|port|` ni `-- port -->` : il n'y a pas d'étiquette, et un
+        // port est obligatoire — une arête sans port ne dit pas quoi relier.
+        Err(err(
+            "missing port label — write `a -->|port| b` or `a -- port --> b`",
+        ))
     }
 }
 
@@ -426,6 +484,80 @@ fn format_value(v: &serde_json::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Les deux orthographes de Mermaid, et pourquoi il faut les deux.**
+    ///
+    /// `a -->|p| b` et `a -- p --> b` sont toutes deux valides, et un modèle
+    /// écrit l'une ou l'autre sans qu'on puisse choisir pour lui. Le 30 août
+    /// 2026, à qui on demandait un graphe étiqueté, gemini a produit la
+    /// seconde — que ce parseur refusait. C'était notre défaut.
+    #[test]
+    fn les_deux_orthographes_d_une_arete_etiquetee_se_valent() {
+        let avec_barres = "graph LR\n    a[\"A()\"] -->|results| b[\"B()\"]\n";
+        let avec_tirets = "graph LR\n    a[\"A()\"] -- results --> b[\"B()\"]\n";
+        let d1 = parse_mermaid(avec_barres).expect("forme à barres");
+        let d2 = parse_mermaid(avec_tirets).expect("forme à tirets");
+        let forme = |d: &GraphDefinition| -> Vec<(String, String, String, String)> {
+            d.edges
+                .iter()
+                .map(|e| {
+                    (e.from_node.clone(), e.from_port.clone(), e.to_node.clone(), e.to_port.clone())
+                })
+                .collect()
+        };
+        assert_eq!(forme(&d1), forme(&d2), "les deux doivent produire la même arête");
+        assert_eq!(d1.edges[0].from_port, "results");
+        assert_eq!(d1.edges[0].to_port, "results");
+    }
+
+    /// **Un nœud déclaré dans la ligne d'arête compte comme déclaré.**
+    ///
+    /// `a["A()"] -->|p| b["B()"]` est du Mermaid courant, et c'est la forme
+    /// qu'un modèle écrit spontanément. Le 30 août 2026, gemini a produit deux
+    /// arêtes et **zéro** nœud : un graphe qui parsait et ne se construisait
+    /// pas.
+    #[test]
+    fn les_noeuds_declares_dans_l_arete_sont_trouves() {
+        for ligne in [
+            "    a[\"A()\"] -->|results| b[\"B()\"]",
+            "    a[\"A()\"] -- results --> b[\"B()\"]",
+        ] {
+            let d = parse_mermaid(&format!("graph LR\n{ligne}\n")).expect(ligne);
+            let mut noms: Vec<&str> = d.nodes.iter().map(|n| n.name.as_str()).collect();
+            noms.sort_unstable();
+            assert_eq!(noms, vec!["a", "b"], "pour `{ligne}`");
+            assert_eq!(d.edges.len(), 1);
+        }
+    }
+
+    /// Et un nœud déjà déclaré sur sa propre ligne n'est pas dupliqué.
+    #[test]
+    fn un_noeud_deja_declare_n_est_pas_ajoute_deux_fois() {
+        let d = parse_mermaid(
+            "graph LR\n    a[\"A()\"]\n    b[\"B()\"]\n    a -->|results| b\n",
+        )
+        .expect("déclarations séparées");
+        assert_eq!(d.nodes.len(), 2, "pas de doublon : {:?}", d.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
+    }
+
+    /// Et la forme à tirets accepte aussi `de:vers`, comme l'autre.
+    #[test]
+    fn la_forme_a_tirets_accepte_deux_ports() {
+        let d = parse_mermaid("graph LR\n    a[\"A()\"] -- results:entree --> b[\"B()\"]\n")
+            .expect("deux ports");
+        assert_eq!(d.edges[0].from_port, "results");
+        assert_eq!(d.edges[0].to_port, "entree");
+    }
+
+    /// **Une arête sans étiquette reste refusée**, et le message dit les deux
+    /// façons de la corriger.
+    #[test]
+    fn une_arete_sans_port_dit_les_deux_facons_de_l_ecrire() {
+        let e = parse_mermaid("graph LR\n    a[\"A()\"] --> b[\"B()\"]\n").expect_err("sans port");
+        let m = e.to_string();
+        assert!(m.contains("-->|port|"), "{m}");
+        assert!(m.contains("-- port -->"), "{m}");
+    }
 
     #[test]
     fn parse_simple_graph() {
