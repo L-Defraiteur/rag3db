@@ -269,10 +269,17 @@ fn value_matches(t: &ConfigParamType, v: &Value) -> bool {
         ConfigParamType::Int => v.is_i64() || v.is_u64(),
         ConfigParamType::Float => v.is_number(),
         ConfigParamType::Bool => v.is_boolean(),
-        // `param_schema` annonce `type: object` pour `Json` ; on valide ce
-        // qu'on annonce. (C'est la dette déjà nommée dans `tools.rs` : sans
-        // sous-schéma, un objet libre ne borne rien.)
-        ConfigParamType::Json => v.is_object(),
+        // **`Json` veut dire JSON**, et un tableau en est. La règle disait
+        // `is_object()` parce que `param_schema` annonce `type: object` faute
+        // de sous-schéma — mais un nœud qui *déclare* un `json_schema` de
+        // tableau (`patterns` de `place`) se voyait refuser son propre défaut
+        // `[]`. Valider la forme annoncée reste juste ; l'annonce, elle, n'est
+        // pas toujours « objet ».
+        //
+        // Ce qu'on continue de refuser : une chaîne, un nombre, un booléen —
+        // ceux-là ont leur type à eux, et les accepter ici masquerait une
+        // faute de frappe dans une fiche.
+        ConfigParamType::Json => v.is_object() || v.is_array() || v.is_null(),
     }
 }
 
@@ -2079,6 +2086,27 @@ mod tests {
         let d = t.tool_def();
         assert_eq!(d.parameters["properties"]["relation"]["default"], json!(""));
         assert!(!d.parameters["required"].as_array().unwrap().iter().any(|v| v == "relation"));
+    }
+
+    /// **`json` veut dire JSON**, pas « objet ».
+    ///
+    /// Un nœud qui déclare un sous-schéma de tableau — `patterns` de `place` —
+    /// se voyait refuser son propre défaut `[]`. La règle validait la forme que
+    /// `param_schema` annonce faute de sous-schéma, ce qui était juste tant que
+    /// personne n'en déclarait.
+    #[test]
+    fn un_parametre_json_accepte_un_tableau_pour_defaut() {
+        use crate::dataflow::node_registry::ConfigParamType;
+        assert!(value_matches(&ConfigParamType::Json, &serde_json::json!([])));
+        assert!(value_matches(&ConfigParamType::Json, &serde_json::json!(["versioned"])));
+        assert!(value_matches(&ConfigParamType::Json, &serde_json::json!({})));
+        assert!(value_matches(&ConfigParamType::Json, &serde_json::json!(null)));
+
+        // Ce qu'on refuse toujours : les types qui en ont un à eux. Les
+        // accepter masquerait une faute de frappe dans une fiche.
+        assert!(!value_matches(&ConfigParamType::Json, &serde_json::json!("texte")));
+        assert!(!value_matches(&ConfigParamType::Json, &serde_json::json!(3)));
+        assert!(!value_matches(&ConfigParamType::Json, &serde_json::json!(true)));
     }
 
     #[test]

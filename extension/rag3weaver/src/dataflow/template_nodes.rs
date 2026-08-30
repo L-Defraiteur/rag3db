@@ -213,14 +213,23 @@ impl super::node_registry::NodeFactory for PlaceTemplateNodeFactory {
                     choices: None,
                     json_schema: None,
                 },
+                // **Un tableau, pas une chaîne à virgules.** `parse_str_list`
+                // acceptait déjà les deux ; seule l'annonce disait « string »,
+                // et un modèle qui la lit se voit forcé de formater une liste à
+                // la main là où JSON en a une. Relevé le 30 août 2026 par le
+                // modèle à qui on demandait son avis, et il avait raison : le
+                // moteur savait faire, la fiche mentait.
                 ConfigParam {
                     name: "patterns",
-                    param_type: ConfigParamType::String,
+                    param_type: ConfigParamType::Json,
                     required: false,
                     default: None,
-                    description: "Motifs à appliquer avant l'enregistrement, 'a,b' (ex. 'versioned').",
+                    description: "Motifs à appliquer avant l'enregistrement (ex. [\"versioned\"]). Un motif s'ajoute à l'entité, il ne la remplace pas.",
                     choices: None,
-                    json_schema: None,
+                    json_schema: Some(serde_json::json!({
+                        "type": "array",
+                        "items": { "type": "string" }
+                    })),
                 },
             ],
         }

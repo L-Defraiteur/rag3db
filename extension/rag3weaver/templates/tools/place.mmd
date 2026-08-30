@@ -2,7 +2,7 @@
 %% description: Pose un gabarit du catalogue dans le schéma vivant : une entité toute faite (user, product, conversation…) avec ses champs et ses signaux de recherche, plutôt qu'une configuration à écrire à la main. Cherchez d'abord le gabarit avec search(target='Template').
 %% param: template string! -- Nom du gabarit à poser, tel que la recherche l'a rendu (ex. 'user').
 %% param: as string = "" -- Nom sous lequel l'enregistrer. Vide = celui du gabarit. Un 'user' posé en 'Client' reste un user, avec les mêmes champs.
-%% param: patterns string = "" -- Motifs à appliquer avant l'enregistrement, séparés par des virgules (ex. 'versioned'). Un motif s'ajoute à l'entité ; il ne la remplace pas.
+%% param: patterns json = [] -- Motifs à appliquer avant l'enregistrement, en tableau (ex. ["versioned"]). Un motif s'ajoute à l'entité ; il ne la remplace pas.
 %% result: place.result
 %%
 %% **Trouver ne suffit pas.** Le catalogue de gabarits se cherche comme un
