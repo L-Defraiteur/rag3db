@@ -178,3 +178,75 @@ Elle vaut au-delà du synchrone, et elle s'est vérifiée quatre fois :
 
 > Chaque fois qu'on invoque une contrainte comme raison, vérifier que ce n'est
 > pas juste l'habitude d'une contrainte levée.
+
+---
+
+# Suite — la nuit du 29 au 30 août
+
+Onze commits de plus, en autonomie. `d38c4c443` → `a85407b25`.
+
+## Ce qui a été livré
+
+| | |
+|---|---|
+| Les deux dernières suites passent par le démon | plus **aucun** chargement local |
+| `BM25Mode::Auto` | une phrase se pèse, un identifiant se contient |
+| Les avertissements du moteur remontent | jusqu'à la fiche, même à zéro résultat |
+| `--exposer` | un argument ne suffit plus à ouvrir un port |
+| Docstrings C, C++, C#, Go | quatre langages qui rendaient `None` |
+| `place` | poser un gabarit du catalogue |
+| `adopt` | le catalogue apprend du projet |
+| Les fiches se relisent à chaque tour | trouvé par le modèle lui-même |
+
+**911 tests unitaires verts**, 0 échec, sur trois jeux de features ; 77 dans
+`codeparsers` ; toutes les suites E2E compilent.
+
+## L'issue 02 est résolue, et l'expérience a tranché
+
+Trois questions en français, signal `bm25` seul :
+
+| mode | résultat | scores |
+|---|---|---|
+| `Contains` (l'ancien défaut) | **0/3** | aucun résultat |
+| `ContainsSplit` | **0/3** | −996, −1 992, −4 991 |
+| `Parse` | **3/3** | 3,85 · 7,23 · 7,30 |
+
+`ContainsSplit` combine des clauses « contient » en booléen : **sans IDF**, les
+mots vides pèsent autant que « prix », et une clause non satisfaite coûte une
+pénalité fixe. **Les scores négatifs viennent de là** — c'était l'hypothèse de
+Lucie, et elle visait juste.
+
+## L'avis du modèle, et ce qu'il a trouvé
+
+[Le verbatim](../30-aout-2026-04h00/01-avis-du-modele-sur-nos-outils.md) et
+[ce qu'on en a fait](../30-aout-2026-04h00/02-ce-que-l-avis-a-donne.md).
+
+**Il a trouvé un défaut bloquant que personne n'avait vu** : `Agent::new`
+calculait les fiches une fois, donc l'énumération des cibles de `search` était
+figée. Un agent qui posait une entité avec `place` ne pouvait plus la chercher —
+et comme cette liste contraint le décodage, il ne pouvait pas même prononcer le
+nom. Le défaut était juste sous les deux outils qu'on venait d'ajouter.
+
+Deux leçons de méthode, gravées dans le test : **envoyer la surface réelle**
+(catalogue branché, échec sinon), et **un budget de jetons qui compte la
+réflexion** — le premier essai a rendu 86 caractères qui étaient la queue d'un
+raisonnement, et ça ressemblait à de la concision.
+
+## Les décisions qui t'attendent
+
+Le modèle réclame quatre outils, par ordre d'importance. Ce sont des choix de
+périmètre, pas des correctifs :
+
+1. **`run`** — exécuter une commande. Sa critique n°1, deux fois : *« je code à
+   l'aveugle »*. `src/serveur.rs` a débloqué la moitié (savoir lancer un
+   processus) ; le verbe manque, et il ouvre une question de sûreté.
+2. **`delete_file` / `move_file`** — créer se fait par effet de bord de
+   `edit(content=…)` ; supprimer et déplacer, pas du tout.
+3. **`get_schema`** — on a `generate_full_schema`, non exposé.
+4. **Inspecter un gabarit avant de le poser** — `place` ne dit ce qu'il a posé
+   qu'après.
+
+Restent aussi : l'exclusivité `content`/`old`+`new` de `edit` non exprimée dans
+le schéma (il faudrait un `oneOf`), la file de travaux (§8 de l'issue 03,
+délibérément repoussée faute de consommateur), l'agentique vers Gemini, et
+l'arbitre GPU entre processus.
