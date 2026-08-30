@@ -27,6 +27,11 @@ aide ».
 
 ## 2. Trois rôles, et un seul touche au code
 
+> **Un quatrième rôle s'est ajouté le même jour** : la vision, qui tient le
+> *pourquoi* et parle à l'humain. Voir
+> [doc 10](10-l-agent-vision-et-la-distance.md). Le tableau ci-dessous reste
+> vrai — il décrit les trois rôles qui travaillent, sous celui qui oriente.
+
 | rôle | ce qu'il fait | ce qu'il ne fait **jamais** |
 |---|---|---|
 | **design** | propose, valide, refuse ce qui est fait trop simplement. Tient le cap. | écrire du code |
