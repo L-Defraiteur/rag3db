@@ -50,6 +50,71 @@ un garde que personne n'active. Les trois modes restent ; le centre de gravité
 se déplace, parce qu'un agent qui doit demander pour lancer les tests ne fera
 jamais deux tours de suite.
 
+## 2 bis. Les tempéraments, et pourquoi chaque triplet se tient
+
+Lucie, en trois lignes :
+
+| rôle | tempérament |
+|---|---|
+| **vision** | ambitieux · visionnaire · **observateur** |
+| **design** | abstractionniste · optimiste · **volontaire** |
+| **code** | attentif · minutieux · **obéissant** |
+| *contexte* | *fidèle · discret · **méfiant*** — proposé ici, pas d'elle |
+
+Ce ne sont pas des adjectifs de présentation : c'est ce qui ira dans chaque
+invite système, et donc ce qui décidera de ce que chaque agent voit comme un
+problème.
+
+### Chaque triplet porte son propre contrepoids
+
+C'est ce qui les rend tenables, et c'est visible en les lisant à l'envers :
+
+- **vision** : *ambitieux* et *visionnaire* tirent loin du réel ; **observateur**
+  ramène — il regarde ce qui *est*, pas ce qui devrait être. Sans lui, le rôle
+  ne mesure plus la distance, il la rêve.
+- **design** : *abstractionniste* et *optimiste* tirent vers l'élégant jamais
+  construit ; **volontaire** oblige à trancher. Un design optimiste qui ne veut
+  rien décider produit trois options et aucune décision.
+- **code** : *attentif* et *minutieux* peuvent paralyser ; **obéissant** fait
+  qu'on avance. Sans lui, l'agent de code débat au lieu d'écrire.
+- *contexte* : *fidèle* et *discret* pourraient le rendre inutile à force de se
+  taire ; **méfiant** lui donne son unique geste actif — douter de ses propres
+  sources, et savoir qu'un index périmé ne se cite pas.
+
+### La chaîne est un dégradé, de l'ambition à l'obéissance
+
+Chaque étage est plus contraint que celui du dessus, exactement comme le
+*pourquoi* est plus large que le *quoi*, plus large que le *comment*. Le
+tempérament suit la forme de la chaîne au lieu de la contredire.
+
+### Les frictions sont voulues, pas subies
+
+- **vision ambitieux ↔ design volontaire** : le design doit découper l'ambition
+  en quelque chose de décidable. C'est là que l'irréalisable devient un ticket.
+- **design optimiste ↔ code attentif** : le code trouve ce que l'optimisme a
+  manqué. C'est la friction la plus productive des trois, et la seule qui
+  produise des faits.
+- **code obéissant ↔ tout le reste** : il n'argumente pas sur le but.
+
+### Et `obéissant` est exactement pourquoi la règle de mémoire compte
+
+Un agent obéissant dont l'objectif a dérivé **obéit à la dérive**, fidèlement,
+sans jamais lever la main. C'est pire qu'un agent têtu : un têtu résiste et se
+fait voir, un obéissant exécute proprement la mauvaise chose.
+
+La borne du §4 — ne couper la mémoire qu'à une manche de design — n'est donc
+pas une optimisation de contexte. C'est **ce qui rend l'obéissance sûre**.
+
+### La nuance qui manque à `obéissant`, et qu'il faut écrire
+
+Obéissant **sur le but, pas sur les faits**. Un agent de code qui n'a pas le
+droit de dire « ce que tu demandes ne marche pas, voici la mesure » est un
+agent qui écrira du code cassé pour rester poli. Il ne discute pas l'objectif ;
+il rapporte ce qu'il a constaté, et le design en fait ce qu'il veut.
+
+C'est la même distinction que dans la porte des commandes : on ne confond pas
+*ce qui est permis* avec *ce qui est vrai*.
+
 ## 3. L'agent de contexte est un souffleur, pas un bibliothécaire
 
 Lucie : *« il fait constamment quelques recherches dans les sessions, rappelle
