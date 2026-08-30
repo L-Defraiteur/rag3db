@@ -14,6 +14,10 @@ perdent pas, et pour qu'on puisse les attaquer plutôt que se les rappeler.
 | [06 — La feuille de route](06-la-feuille-de-route.md) | L'ordre réel du travail, et les dettes nommées |
 | [07 — Événements, runs et boucles](07-evenements-runs-et-boucles.md) | Un bus à sujets, l'identité des runs, et quand une boucle peut réagir — écrit le 26 août |
 | [08 — Des catalogues de gabarits](08-des-catalogues-de-gabarits.md) | Ne pas leur faire tout coder : entités, graphes et composants prêts à poser, à adopter, à modifier — écrit le 29 août |
+| [09 — Trois rôles, une seule main](09-trois-roles-et-une-seule-main.md) | Design tient le cap, contexte souffle, code écrit — tempéraments, mémoire bornée par manche, `agentCanAnswer` — écrit le 30 août |
+| [10 — L'agent vision et la distance](10-l-agent-vision-et-la-distance.md) | Le pourquoi, l'intention première jamais perdue, et le registre de ce qui y répond — écrit le 30 août |
+| [11 — Donner des commandes à un agent](11-donner-des-commandes-a-un-agent.md) | Sans lui donner la machine : argv plutôt que shell, trois modes, un verdict qu'on range — copie du 30 août |
+| [12 — Ce qui manque à l'agent de code](12-ce-qui-manque-a-l-agent-de-code.md) | La liste écrite par celui qui s'en sert : exécuter, supprimer, voir le schéma — 30 août |
 
 **Ce qu'ils remplacent** : rien. Les documents datés de
 `23-aout-2026-20h33/` restent la trace chronologique du travail (état des
