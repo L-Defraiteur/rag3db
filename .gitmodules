@@ -7,3 +7,6 @@
 [submodule "extension/lucivy/ld-lucivy"]
 	path = extension/lucivy/ld-lucivy
 	url = git@github.com:L-Defraiteur/lucivy.git
+[submodule "extension/rag3weaver/codeparsers"]
+	path = extension/rag3weaver/codeparsers
+	url = git@github.com:L-Defraiteur/codeparsers.git
