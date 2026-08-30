@@ -138,6 +138,97 @@ conversation et parle sans qu'on lui demande. C'est un rôle, pas une fonction.
   un `grep` à la place. Sans ça, il affirmerait du périmé avec assurance — la
   faute la plus coûteuse pour un souffleur.
 
+### `agentCanAnswer` — la porte avant la réponse
+
+Lucie : *« il pourrait jauger si le contexte semble suffisant pour répondre, et
+préférer mettre en pause l'agent de code pour relire / chercher l'historique
+des conversations ou chercher dans le code. Un outil `agentCanAnswer`,
+true/false + reason ; si false on le relance lui-même avec l'objectif de
+chercher du contexte. »*
+
+C'est le geste actif du souffleur, et c'est exactement là que son tempérament
+**méfiant** sert : il doute d'abord de ce que l'autre a sous les yeux.
+
+#### La sortie doit dire *quoi chercher*, pas seulement « non »
+
+Un `false` sans cible relance le souffleur sans objectif, et il cherchera ce
+qui lui vient. La même discipline que le verdict de commande s'applique :
+
+```rust
+struct PeutRepondre {
+    oui: bool,
+    raison: String,
+    /// Ce qui manque, **et où le chercher**. Vide quand `oui`.
+    manques: Vec<Manque>,
+}
+
+enum Manque {
+    /// Dit plus tôt dans cette session, ou dans une autre.
+    DejaDit { quoi: String },
+    /// Dans le code — mais seulement si l'index est frais pour ces fichiers.
+    DansLeCode { quoi: String, chemins: Vec<String> },
+    /// Déjà tenté, et le résultat compte : `search(target="Trace")`.
+    DejaTente { quoi: String },
+    /// Hors d'ici. **Nouvelle dépendance** : on n'a aucun outil de recherche
+    /// web aujourd'hui.
+    Dehors { quoi: String },
+}
+```
+
+Le relancement a alors un but vérifiable : chaque `Manque` est comblé ou ne
+l'est pas, et le second tour de `agentCanAnswer` peut le dire.
+
+#### La pause existe déjà, et son pire cas est déjà attrapé
+
+`PauseKind::WaitingForPeer` **fait une arête** dans le graphe d'attente, et
+`Postures::deadlocks` trouve les cycles. Donc :
+
+- « mettre en pause l'agent de code » = le souffleur pose une posture ;
+- et si les deux s'attendent l'un l'autre, **c'est détecté**, sans plafond de
+  tours et sans heuristique. Le mécanisme a été écrit le 26 août pour
+  exactement cette situation.
+
+Rien à inventer : le rôle se branche sur ce qui existe.
+
+#### Le privilège, et son contrepoids
+
+*« Il a accès à toutes les conversations de chaque agent, connaît toute la
+hiérarchie, peut faire les outils de lecture qu'il veut. »* C'est le seul rôle
+avec une vue **globale**.
+
+C'est précisément pourquoi il ne décide rien. **Il lit tout, il ne tranche
+rien.** Le jour où le souffleur commencerait à choisir l'objectif parce qu'il
+en sait plus que les autres, il deviendrait un second design — sans en avoir le
+tempérament ni l'artefact.
+
+#### Le défaut doit être « oui », et c'est un argument d'asymétrie
+
+Une porte qui s'exécute avant chaque tour est un impôt sur chaque tour. Et un
+souffleur trouvera toujours quelque chose de plus à chercher : rien ne l'arrête
+de l'intérieur.
+
+**`agentCanAnswer` répond donc `oui` par défaut, et la charge de la preuve est
+sur le blocage.** La raison n'est pas le confort :
+
+- un **faux négatif** — on bloque alors qu'on pouvait répondre — est
+  *invisible*, et il se compose : chaque pause en rend la suivante plus
+  plausible ;
+- un **faux positif** — on répond avec trop peu — se voit dans le résultat, et
+  se rattrape au tour suivant.
+
+Entre une erreur qui se voit et une erreur qui s'accumule en silence, on
+choisit celle qui se voit. C'est la même règle que partout ici.
+
+#### Trois pauses valent un signal de design
+
+Un plafond par manche, et une escalade plutôt qu'un abandon : si le souffleur a
+déjà cherché deux fois et que l'agent de code ne peut toujours pas répondre,
+**le problème n'est probablement pas le contexte, c'est le ticket**. On remonte
+au design, dont c'est le travail.
+
+L'incapacité répétée à répondre est une information sur l'objectif, pas sur la
+mémoire — et sans cette règle, le souffleur boucle en croyant bien faire.
+
 ## 4. La mémoire de l'agent de code, et la règle qui la borne
 
 Lucie : *« l'agent de code n'a que peu de vrais tours complets en mémoire, les
@@ -275,7 +366,8 @@ suivant** ». Ça se mesure : on peut regarder si le tour d'après cite ce qui a
 | La porte des commandes, et ses modes | **existe** (`commande.rs`, 30 août) |
 | Une notion de **rôle** | manque |
 | `Absorb::DernieresManches` — la coupe à la manche de design | manque |
-| Le souffleur : quand parler | manque |
+| Le souffleur : quand parler, et `agentCanAnswer` | manque |
+| Un outil de recherche web | manque — nouvelle dépendance |
 | Les gabarits de fin de session | manque |
 
 La machinerie des agents qui se parlent est là depuis le 26 août. Ce qui manque
