@@ -28,50 +28,24 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
 
+mod common;
+
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
 use rag3weaver::config::{CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::{DualEmbedder, MockEmbedder};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
 
-// ─── Model artifacts ────────────────────────────────────────────────────────
-
-fn cache_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
-        .join(".cache/rag3weaver/bge-m3")
-}
-
-fn artifact(env_var: &str, default_name: &str) -> std::path::PathBuf {
-    let path = std::env::var(env_var)
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| cache_dir().join(default_name));
-    if !path.exists() {
-        panic!(
-            "BGE-M3 artifact not found at: {}\n\
-             Set {env_var}, or fetch it once — see the header of this file.",
-            path.display()
-        );
-    }
-    path
-}
-
-/// Loaded once for the whole binary: 2.2 GB, several seconds of I/O.
-static BURN_BGE_M3: std::sync::LazyLock<Arc<BurnBgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    let t0 = std::time::Instant::now();
-    let bpk = artifact("RAG3WEAVER_BGE_M3_BPK", "model.bpk");
-    let tokenizer = artifact("RAG3WEAVER_BGE_M3_TOKENIZER", "tokenizer.json");
-
-    eprintln!("▸ Loading BGE-M3 on burn (wgpu) from {}...", bpk.display());
-    let bytes = std::fs::read(&bpk).expect("read burnpack");
-    let embedder = BurnBgeM3Embedder::from_bytes(&bytes, &tokenizer, BurnDevice::default())
-        .expect("build BurnBgeM3Embedder");
-    eprintln!("  loaded in {:?}", t0.elapsed());
-    Arc::new(embedder)
-});
+/// **Le modèle vient de `common::burn`**, donc du démon s'il tourne.
+///
+/// Cette suite avait sa propre copie du chargement — 2,2 Go rechargés pour elle
+/// seule, dans son propre processus. C'est exactement ce que le démon existe
+/// pour supprimer : mesuré le 29 août 2026, 4,22 s de chargement contre 1,16 ms
+/// d'attachement.
+use common::burn::BGE_M3 as BURN_BGE_M3;
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 

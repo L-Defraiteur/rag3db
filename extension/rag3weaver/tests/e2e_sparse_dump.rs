@@ -25,34 +25,16 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder", feature = "code"))]
 
-use std::sync::Arc;
+mod common;
+
+
 use std::time::Instant;
 
-use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice};
 use rag3weaver::embedder::SparseEmbedder;
 
-fn cache_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(std::env::var("HOME").expect("HOME")).join(".cache/rag3weaver/bge-m3")
-}
-
-fn artifact(env_var: &str, default_name: &str) -> std::path::PathBuf {
-    let path = std::env::var(env_var)
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| cache_dir().join(default_name));
-    assert!(path.exists(), "BGE-M3 introuvable : {} (voir l'en-tête de e2e_burn_embedder.rs)", path.display());
-    path
-}
-
-static BGE: std::sync::LazyLock<Arc<BurnBgeM3Embedder>> = std::sync::LazyLock::new(|| {
-    let t0 = Instant::now();
-    let bpk = artifact("RAG3WEAVER_BGE_M3_BPK", "model.bpk");
-    let tok = artifact("RAG3WEAVER_BGE_M3_TOKENIZER", "tokenizer.json");
-    eprintln!("▸ chargement de BGE-M3 sur burn (wgpu)…");
-    let bytes = std::fs::read(&bpk).expect("lecture du burnpack");
-    let e = BurnBgeM3Embedder::from_bytes(&bytes, &tok, BurnDevice::default()).expect("BurnBgeM3Embedder");
-    eprintln!("  chargé en {:?}", t0.elapsed());
-    Arc::new(e)
-});
+/// **Le modèle vient de `common::burn`**, donc du démon s'il tourne : cette
+/// suite rechargeait 2,2 Go pour elle seule.
+use common::burn::BGE_M3 as BGE;
 
 /// Une ligne du dump, dans la forme exacte qu'ils ont demandée.
 fn line(node_id: u64, v: &rag3weaver::sparse_index::SparseVector) -> String {
