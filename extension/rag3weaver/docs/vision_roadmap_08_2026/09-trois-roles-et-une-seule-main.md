@@ -178,6 +178,51 @@ enum Manque {
 Le relancement a alors un but vérifiable : chaque `Manque` est comblé ou ne
 l'est pas, et le second tour de `agentCanAnswer` peut le dire.
 
+#### Au moment de juger, il n'a **que** cet outil
+
+Lucie : *« au moment où il décide, peut-être qu'il n'a que ce tool-là — sinon
+il va déjà chercher le contexte pour répondre, il le cherchera deux fois »*.
+
+Exact, et c'est une propriété de la **surface**, pas de la consigne. Un agent à
+qui on donne `search`, `grep` et `read` s'en servira pour répondre
+honnêtement à « peut-il répondre ? » — c'est même la façon sérieuse de le
+savoir. Il trouve alors le contexte, rend `false`, se fait relancer, et
+**cherche une seconde fois ce qu'il vient de trouver**.
+
+On ne corrige pas ça par une instruction. On le corrige en ne donnant pas
+l'outil : au moment de juger, l'outillage ne contient que `agentCanAnswer`.
+C'est le même principe que le `rerank=0` par défaut de `search` — **ce qu'on
+offre décide de ce qui arrive**, pas ce qu'on demande.
+
+#### Alors comment juger sans chercher ? En comparant
+
+C'est la question qu'on se pose aussitôt, et elle a une réponse nette : le
+souffleur n'a pas besoin de chercher, parce qu'il **voit déjà les deux côtés**.
+
+- Ce qu'il sait, lui : toutes les conversations (§ privilège).
+- Ce que l'agent de code voit : deux manches, bornées (§4).
+
+Juger, c'est faire la **différence entre deux vues** — « une chose pertinente a
+été dite, et elle n'est pas dans sa fenêtre ». Ce n'est pas une recherche, c'est
+une comparaison, et elle ne coûte aucun aller-retour d'outil.
+
+Il peut même produire un manque sans en connaître le contenu : *savoir qu'il y
+a eu une longue conversation sur X il y a trois sessions* suffit à écrire
+`Manque::DejaDit { quoi: "X" }`. Connaître l'existence, pas le contenu — c'est
+précisément ce qu'un objectif de recherche demande.
+
+Deux conséquences, et les deux sont bonnes :
+
+1. **On ne cherche qu'une fois**, et seulement ce qui manque vraiment.
+2. **La phase de jugement est bon marché** — pas d'appel d'outil, pas d'attente.
+   L'impôt sur chaque tour redevient supportable, ce qui était la principale
+   objection à mettre une porte là.
+
+Et si le souffleur n'a rien dans sa propre vue qui suggère un manque, il répond
+`oui`. Il ne « va pas voir au cas où » : ce serait rétablir par la porte de
+derrière la double recherche qu'on vient de supprimer, et violer la règle du
+défaut.
+
 #### La pause existe déjà, et son pire cas est déjà attrapé
 
 `PauseKind::WaitingForPeer` **fait une arête** dans le graphe d'attente, et
