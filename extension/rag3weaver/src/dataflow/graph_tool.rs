@@ -1683,6 +1683,9 @@ pub const SEARCH_BASE_MERMAID: &str = include_str!("../../templates/tools/search
 /// `search` — la surface offerte : la recherche hybride **plus** l'expansion
 /// de graphe quand `relation` est donnée.
 pub const SEARCH_TOOL_MERMAID: &str = include_str!("../../templates/tools/search.mmd");
+/// `schema` : la carte du graphe. Hors de la feature `code` comme `search` —
+/// savoir ce qu'on peut chercher n'a rien à voir avec le fait d'éditer.
+pub const SCHEMA_TOOL_MERMAID: &str = include_str!("../../templates/tools/schema.mmd");
 
 /// `search_expand` — `search` **contenu** dans un graphe qui étend chaque
 /// résultat par une relation. La preuve que la composition tient.
@@ -1717,9 +1720,9 @@ pub const WAIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/wait.mmd
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 10] = ["adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "search", "wait"];
+pub const BUILTIN_TOOL_NAMES: [&str; 11] = ["adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "schema", "search", "wait"];
 #[cfg(not(feature = "code"))]
-pub const BUILTIN_TOOL_NAMES: [&str; 1] = ["search"];
+pub const BUILTIN_TOOL_NAMES: [&str; 2] = ["schema", "search"];
 
 
 /// Le type de nœud sous lequel `search` est enregistré pour être contenu.
@@ -1759,6 +1762,7 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
 
     let mut tools = GraphToolRegistry::new();
     tools.register(GraphTool::from_mermaid(SEARCH_TOOL_MERMAID)?.bind(&nodes)?)?;
+    tools.register(GraphTool::from_mermaid(SCHEMA_TOOL_MERMAID)?.bind(&nodes)?)?;
     #[cfg(feature = "code")]
     {
         tools.register(GraphTool::from_mermaid(READ_TOOL_MERMAID)?.bind(&nodes)?)?;

@@ -1,0 +1,21 @@
+%% tool: schema
+%% description: La carte du graphe : ce que vous pouvez chercher, et ce que vous pouvez suivre depuis un résultat. Rendue en Mermaid. Consultez-la avant d'utiliser une relation dans `search` ou `grep` — les noms de relations ne se devinent pas.
+%% param: target string = "" -- Ne détailler que cette cible, avec ses champs et les relations qui la touchent. Vide : tout le schéma.
+%% result: schema.result
+%%
+%% **Ce n'est pas le DDL.** Le moteur sait aussi rendre les instructions qui
+%% créent les tables ; ce n'est pas ce qu'on montre ici, parce qu'un
+%% `CREATE NODE TABLE` ne dit pas ce qu'on peut chercher. Les deux s'appellent
+%% « schéma » et répondent à deux questions différentes.
+%%
+%% **La source est celle qui alimente déjà vos listes de paramètres.** Les
+%% cibles que vous voyez ici sont exactement celles que `search(target=…)`
+%% accepte, et les relations exactement celles que `relation=…` accepte. Pas
+%% de seconde vérité qui pourrait diverger de la première.
+%%
+%% **En Mermaid**, parce que la chose décrite est un graphe et que c'est déjà
+%% la langue dans laquelle les outils sont écrits : vous lisez du Mermaid pour
+%% comprendre un outil, vous n'avez pas une seconde grammaire à apprendre.
+
+graph LR
+    schema["SchemaNode(target=$target)"]

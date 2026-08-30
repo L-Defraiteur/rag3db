@@ -1,0 +1,41 @@
+{#-
+  **La carte du graphe, en Mermaid.**
+
+  En Mermaid parce que la chose décrite *est* un graphe, et parce que c'est
+  déjà la langue des fiches d'outils : un agent qui lit une fiche lit du
+  Mermaid, il n'a pas une seconde grammaire à apprendre.
+
+  Le contexte : `SchemaView`, dans `src/dataflow/schema_nodes.rs`.
+-#}
+{%- if targets %}
+# Schéma — {{ targets | length }} cible{{ "" if targets | length == 1 else "s" }}{% if relations %}, {{ relations | length }} relation{{ "" if relations | length == 1 else "s" }}{% endif %}
+
+```mermaid
+graph LR
+{% for t in targets %}    {{ t.nom }}["{{ t.nom }}{% if t.champs %}<br/>{{ t.champs | join(', ') }}{% endif %}"]
+{% endfor %}
+{%- for r in relations %}    {{ r.de }} -->|{{ r.nom }}| {{ r.vers }}
+{% endfor -%}
+```
+
+## Cibles
+
+| cible | signaux | champs |
+|---|---|---|
+{% for t in targets -%}
+| `{{ t.nom }}` | {{ t.signaux }} | {% if t.champs %}{{ t.champs | join(', ') }}{% else %}—{% endif %} |
+{% endfor -%}
+{%- if relations %}
+
+## Relations
+
+{% for r in relations -%}
+- `{{ r.nom }}` : {{ r.de }} → {{ r.vers }}
+{% endfor -%}
+{%- else %}
+
+_Aucune relation déclarée : rien à suivre depuis un résultat._
+{%- endif %}
+{%- else %}
+**Aucune cible enregistrée.** Rien n'est indexé pour l'instant.
+{%- endif %}

@@ -491,9 +491,18 @@ pub fn builtin_template(name: &str) -> Option<&'static str> {
     match name {
         "" | "default" | "results" => Some(DEFAULT_TEMPLATE),
         "compact" => Some(COMPACT_TEMPLATE),
+        "schema" => Some(SCHEMA_TEMPLATE),
         _ => None,
     }
 }
+
+/// **La carte du graphe, en Mermaid.**
+///
+/// En Mermaid et pas en tableau parce que la chose décrite *est* un graphe, et
+/// parce que c'est déjà la langue dans laquelle les outils sont écrits : un
+/// agent qui lit une fiche d'outil lit du Mermaid, il n'a pas une seconde
+/// grammaire à apprendre.
+pub const SCHEMA_TEMPLATE: &str = include_str!("../../templates/render/schema.md.jinja");
 
 /// Où chercher les gabarits écrits à la main. Défaut : `templates/render/`
 /// depuis le répertoire courant.
@@ -538,11 +547,25 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
 }
 
 /// Rend une vue à travers un gabarit.
-pub fn render_view(view: &ResultsView, template: &str) -> Result<String, String> {
+/// **Rendre n'importe quoi par un gabarit.**
+///
+/// Jusqu'au 30 août, ce mécanisme ne servait qu'à `search` : tous les autres
+/// outils fabriquaient leur affichage à la main, à coups de `push_str`. Douze
+/// endroits, donc douze formes possibles, dont aucune n'était modifiable sans
+/// recompiler — ce qui était pourtant tout l'argument des gabarits.
+///
+/// Lucie, en le voyant venir sur `schema` : *« attention au formatage, faut se
+/// standardiser les affichages pour pas avoir 30 types de sorties
+/// différentes »*.
+pub fn rendre<T: serde::Serialize>(donnees: &T, gabarit: &str) -> Result<String, String> {
     let mut env = minijinja::Environment::new();
-    env.add_template("results", template).map_err(|e| format!("gabarit invalide : {e}"))?;
-    let tpl = env.get_template("results").map_err(|e| format!("gabarit : {e}"))?;
-    let out = tpl.render(view).map_err(|e| format!("gabarit : {e}"))?;
+    env.add_template("vue", gabarit).map_err(|e| format!("gabarit invalide : {e}"))?;
+    let tpl = env.get_template("vue").map_err(|e| format!("gabarit : {e}"))?;
+    tpl.render(donnees).map_err(|e| format!("gabarit : {e}"))
+}
+
+pub fn render_view(view: &ResultsView, template: &str) -> Result<String, String> {
+    let out = rendre(view, template)?;
     Ok(out.trim_end().to_string())
 }
 

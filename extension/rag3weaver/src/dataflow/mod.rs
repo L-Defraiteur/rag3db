@@ -30,6 +30,8 @@ pub mod template_nodes;
 /// **Lancer une commande, et attendre qu'un journal dise quelque chose.**
 #[cfg(feature = "code")]
 pub mod run_nodes;
+/// **La carte du graphe**, en Mermaid, pour qu'un agent cesse d'inventer des relations.
+pub mod schema_nodes;
 pub mod generic_search_nodes;
 pub mod reactor;
 pub mod render_nodes;
