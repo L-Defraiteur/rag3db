@@ -17,6 +17,21 @@ tree-sitter-go = "0.23"
 tree-sitter-c = "0.23"
 tree-sitter-cpp = "0.23"
 tree-sitter-c-sharp = "0.23"
+# **La grammaire bash, pour décider — pas pour indexer.**
+#
+# Elle sert à `shell::decomposer`, qui réduit une ligne de commande en argv
+# afin qu'une politique puisse la juger. Elle est ici et pas dans rag3weaver
+# parce qu'une seule place lie des grammaires tree-sitter : deux voudraient
+# dire deux runtimes C à garder en phase, et on s'est fait avoir le 29 août
+# par une extension construite contre un autre cœur.
+#
+# **0.23, pas 0.25 — et c'est l'ABI qui décide, pas Cargo.** Les grammaires
+# n'exigent que `tree-sitter-language ^0.1` côté dépendances, si bien que 0.25
+# s'installe sans broncher à côté de tree-sitter 0.24 ; mais elle est compilée
+# en ABI 15, et 0.24 refuse au-delà de 14 — « Incompatible language version 15.
+# Expected minimum 13, maximum 14 », à l'exécution et pas à la compilation.
+# C'est un test qui l'a attrapé, pas la lecture des métadonnées (30 août 2026).
+tree-sitter-bash = "0.23"
 tree-sitter-css = "0.23"
 tree-sitter-html = "0.23"
 tree-sitter-scss = "1"

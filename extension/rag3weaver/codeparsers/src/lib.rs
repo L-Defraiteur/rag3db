@@ -1,5 +1,8 @@
 #![allow(unused_imports, dead_code, unused_variables, unused_mut)]
 
+/// **Réduire une ligne de commande en argv — ou refuser en le nommant.**
+/// Produit des faits pour une politique ; ne juge rien.
+pub mod shell;
 pub mod base;
 pub mod c;
 pub mod cpp;
