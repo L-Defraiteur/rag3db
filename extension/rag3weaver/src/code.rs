@@ -150,6 +150,15 @@ pub fn verdict(path: &str, size: usize) -> Verdict {
 fn field(t: FieldType) -> SimpleFieldDef {
     SimpleFieldDef { field_type: t, ..Default::default() }
 }
+/// Un champ indexé **et** son vocabulaire : sans lui, le filtre existe sans
+/// que personne puisse le nommer.
+fn field_values(t: FieldType, values: &[&str]) -> SimpleFieldDef {
+    SimpleFieldDef {
+        field_type: t,
+        values: Some(values.iter().map(|v| v.to_string()).collect()),
+        ..Default::default()
+    }
+}
 fn title_and_content(t: FieldType) -> SimpleFieldDef {
     SimpleFieldDef { field_type: t, is_title: true, is_content: true, ..Default::default() }
 }
@@ -208,7 +217,19 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     fields.insert("signature".into(), content(FieldType::Text));
     fields.insert("content".into(), content(FieldType::Text));
     fields.insert("docstring".into(), content(FieldType::Text));
-    fields.insert("scope_type".into(), field(FieldType::String));
+    // **Le vocabulaire, déclaré.** Les douze premiers viennent de
+    // `ScopeInfoType` ; `texte_brut` est ce qu'on n'a pas essayé de parser.
+    // C'est la réponse à « code ou texte ? » : `scope_type != 'texte_brut'`.
+    fields.insert(
+        "scope_type".into(),
+        field_values(
+            FieldType::String,
+            &[
+                "class", "interface", "function", "method", "enum", "type_alias", "namespace",
+                "module", "variable", "lambda", "constant", "block", "texte_brut",
+            ],
+        ),
+    );
     fields.insert("file_path".into(), field(FieldType::String));
     // La source du fichier qui le contient — le même nom absolu peut exister
     // dans deux sources, ce sont deux fichiers.
@@ -409,6 +430,62 @@ pub struct CodeAnalysis {
     pub relation_ms: u128,
 }
 
+/// **Un seul vocabulaire dans `language`.**
+///
+/// Les fichiers de code y portent le nom du langage — `rust`, `cpp`,
+/// `typescript` — parce que [`language_name`] le dérive de
+/// `SupportedLanguage`. Un fichier texte qui y porterait `md` mettrait deux
+/// vocabulaires dans la même colonne indexée : un agent qui a appris
+/// `language = 'rust'` essaierait `language = 'markdown'` et n'aurait rien.
+///
+/// Un langage qu'on ne sait pas parser garde quand même son nom — un `.java`
+/// est du Java, `scope_type = 'texte_brut'` dit qu'on n'a pas su le lire. Les
+/// deux champs ensemble répondent à « quel langage servons-nous mal ? ».
+fn texte_language_name(path: &str) -> String {
+    let ext = Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "md" | "mdx" | "markdown" => "markdown".to_string(),
+        "txt" | "text" => "texte".to_string(),
+        "rst" => "restructuredtext".to_string(),
+        "toml" => "toml".to_string(),
+        "yml" | "yaml" => "yaml".to_string(),
+        "json" | "jsonc" => "json".to_string(),
+        "xml" => "xml".to_string(),
+        "ini" | "cfg" | "conf" => "config".to_string(),
+        "sh" | "bash" | "zsh" | "fish" => "shell".to_string(),
+        "sql" => "sql".to_string(),
+        "cypher" | "cyp" => "cypher".to_string(),
+        "java" => "java".to_string(),
+        "kt" | "kts" => "kotlin".to_string(),
+        "rb" => "ruby".to_string(),
+        "php" => "php".to_string(),
+        "swift" => "swift".to_string(),
+        "lua" => "lua".to_string(),
+        "r" => "r".to_string(),
+        "pl" | "pm" => "perl".to_string(),
+        "scala" => "scala".to_string(),
+        "hs" => "haskell".to_string(),
+        "ex" | "exs" => "elixir".to_string(),
+        "dart" => "dart".to_string(),
+        "zig" => "zig".to_string(),
+        "vue" => "vue".to_string(),
+        "svelte" => "svelte".to_string(),
+        "css" => "css".to_string(),
+        "scss" | "sass" => "scss".to_string(),
+        "html" | "htm" => "html".to_string(),
+        "test" => "test".to_string(),
+        // Une extension inconnue se rend telle quelle plutôt que « unknown » :
+        // c'est la seule chose qu'on sait du fichier, l'effacer ne sert rien.
+        // (Le cas vide n'arrive pas : `verdict` écarte les fichiers sans
+        // extension avant d'en venir ici.)
+        autre => autre.to_string(),
+    }
+}
+
 fn language_name(path: &str) -> String {
     detect_language_from_path(path)
         .map(|l| format!("{l:?}").to_lowercase())
@@ -544,13 +621,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         let (name, coordinates) = identity_of(rel);
         let repo = coordinates.get("repo").cloned().unwrap_or_default();
         let repo_path = coordinates.get("repo_path").cloned().unwrap_or_default();
-        // Le langage d'un fichier texte est son extension : « unknown »
-        // effacerait la seule chose qu'on sait de lui.
-        let language = Path::new(rel.as_str())
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
-            .unwrap_or_else(|| "texte".to_string());
+        let language = texte_language_name(rel);
         analysis.files.push(FileRecord {
             path: name.clone(),
             source: source.clone(),
@@ -1325,15 +1396,47 @@ mod tests {
 
     #[test]
     fn analyze_yields_files_scopes_and_relations_by_key() {
-        let a = analyze("/virtual", vec![("a.rs".into(), RUST_SRC.into()), ("README.md".into(), "# no".into())]);
-        assert_eq!(a.files.len(), 1);
+        let a = analyze(
+            "/virtual",
+            vec![
+                ("a.rs".into(), RUST_SRC.into()),
+                // Depuis le 30 août 2026, un fichier sans grammaire **entre**.
+                ("README.md".into(), "# un titre\n".into()),
+                // Ce qui sort encore, et pourquoi : un artefact de build.
+                ("Cargo.lock".into(), "[[package]]\n".into()),
+            ],
+        );
+        assert_eq!(a.files.len(), 2, "le code et le texte entrent, l'artefact non");
+        let rs = a.files.iter().find(|f| f.path.ends_with("a.rs")).expect("a.rs");
         // L'identité d'un fichier est son chemin **absolu dans sa source**,
         // pas son chemin relatif à la racine d'analyse (doc 04 v3).
-        assert_eq!(a.files[0].path, "/virtual/a.rs");
-        assert_eq!(a.files[0].source, LOCAL_SOURCE);
-        assert_eq!(a.files[0].language, "rust");
-        assert!(!a.files[0].content_hash.is_empty());
+        assert_eq!(rs.path, "/virtual/a.rs");
+        assert_eq!(rs.source, LOCAL_SOURCE);
+        assert_eq!(rs.language, "rust");
+        assert!(!rs.content_hash.is_empty());
+
+        // ── Le fichier sans grammaire : un File, un Scope, une arête ──────
+        let md = a.files.iter().find(|f| f.path.ends_with("README.md")).expect("README.md entre dans l'index");
+        // Le même vocabulaire que le code : `markdown`, pas `md`.
+        assert_eq!(md.language, "markdown");
+        let texte = a.scopes.iter().find(|s| s.scope_type == "texte_brut").expect("un scope texte_brut");
+        assert_eq!(texte.file_path, "/virtual/README.md");
+        assert_eq!(texte.language, "markdown");
+        assert_eq!(texte.start_byte, 0);
+        assert_eq!(texte.end_byte, "# un titre\n".len(), "le scope couvre tout le fichier");
+        assert!(texte.signature.is_empty(), "pas de signature inventée");
+        assert!(
+            a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == texte.key && r.to_key == "/virtual/README.md"),
+            "le scope texte est relié à son fichier"
+        );
+        // Rien d'autre : pas de rendez-vous, il n'y a aucun nom à résoudre.
+        assert!(!a.pending.iter().any(|(k, _, _)| *k == texte.key), "un texte ne prend pas de rendez-vous");
+
+        // ── Ce qui est écarté le dit ──────────────────────────────────────
         assert_eq!(a.skipped.len(), 1, "{:?}", a.skipped);
+        assert!(a.skipped[0].0.ends_with("Cargo.lock"));
+        assert!(!a.skipped[0].1.is_empty(), "un refus se nomme");
+
         let names: Vec<&str> = a.scopes.iter().map(|s| s.name.as_str()).collect();
         let norm = a.scopes.iter().find(|s| s.name == "norm").unwrap_or_else(|| panic!("norm not in {names:?}"));
         assert_eq!(norm.scope_type, "method");
@@ -1427,5 +1530,65 @@ mod own_source_tests {
         eprintln!("lambda samples: {lambdas:?}");
         eprintln!("CONSUMES by source type: {by_source_type:?}");
         eprintln!("CONSUMES also emitted by an enclosed child scope (nesting duplicates): {dup_through_nesting}");
+    }
+}
+
+#[cfg(test)]
+mod tests_vocabulaire {
+    use super::*;
+
+    /// **Un genre de scope qui n'est pas dans la carte n'est pas filtrable.**
+    ///
+    /// `scope_type` est indexé, donc `search(filter="scope_type != 'texte_brut'")`
+    /// marche — mais seulement pour qui sait que `texte_brut` existe. Ce test
+    /// tient la promesse : ajouter une variante à `ScopeInfoType` sans
+    /// l'annoncer casse ici, pas chez un agent qui filtre dans le vide.
+    #[test]
+    fn le_vocabulaire_de_scope_type_couvre_tous_les_genres() {
+        let cfg = scope_config(default_scope_chunking());
+        let declares = cfg.fields["scope_type"].values.clone().expect("scope_type déclare ses valeurs");
+
+        use codeparsers::scope_extraction::types::ScopeInfoType as T;
+        let tous = [
+            T::Class, T::Interface, T::Function, T::Method, T::Enum, T::TypeAlias,
+            T::Namespace, T::Module, T::Variable, T::Lambda, T::Constant, T::Block,
+            T::TexteBrut,
+        ];
+        for genre in &tous {
+            let nom = scope_type_name(genre);
+            assert!(declares.iter().any(|v| v == nom), "le genre '{nom}' n'est pas dans le vocabulaire déclaré");
+        }
+        assert_eq!(declares.len(), tous.len(), "le vocabulaire annonce un genre qui n'existe pas");
+    }
+
+    /// Les deux vocabulaires de `language` avaient divergé : le code portait des
+    /// noms (`rust`, `cpp`), le texte des extensions brutes (`md`, `sh`). Un
+    /// agent qui a appris l'un échouait silencieusement sur l'autre.
+    #[test]
+    fn language_ne_porte_qu_un_vocabulaire() {
+        assert_eq!(texte_language_name("notes/README.md"), "markdown");
+        assert_eq!(texte_language_name("deploy.sh"), "shell");
+        assert_eq!(texte_language_name("ci.yml"), "yaml");
+        assert_eq!(texte_language_name("q.cypher"), "cypher");
+        // Un langage qu'on ne sait pas parser garde son nom : c'est
+        // `scope_type` qui dit qu'on ne l'a pas lu, pas `language`.
+        assert_eq!(texte_language_name("Value.java"), "java");
+        // Une extension inconnue se rend telle quelle plutôt que « unknown ».
+        assert_eq!(texte_language_name("truc.zzz"), "zzz");
+    }
+
+    /// La politique se lit dans un seul sens, et chaque refus se nomme.
+    #[test]
+    fn le_verdict_dit_toujours_pourquoi() {
+        assert!(matches!(verdict("src/main.rs", 100), Verdict::Code));
+        assert!(matches!(verdict("README.md", 100), Verdict::Texte));
+        assert!(matches!(verdict("Cargo.lock", 100), Verdict::Ecarte(_)));
+        assert!(matches!(verdict("data/big.csv", 100), Verdict::Ecarte(_)));
+        assert!(matches!(verdict("app.min.js", 100), Verdict::Ecarte(_)));
+        assert!(matches!(verdict("Makefile", 100), Verdict::Ecarte(_)));
+        // Le seuil ne s'applique qu'au texte : un fichier de code de 200 Kio
+        // reste du code, on sait le lire.
+        assert!(matches!(verdict("gros.rs", 200 * 1024), Verdict::Code));
+        assert!(matches!(verdict("dump.md", 200 * 1024), Verdict::Ecarte(_)));
     }
 }

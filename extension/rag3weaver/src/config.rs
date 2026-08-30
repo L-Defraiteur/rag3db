@@ -370,6 +370,23 @@ pub struct SimpleFieldDef {
     /// Mutually exclusive with `is_content`.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "content_for")]
     pub content_for: Option<Vec<String>>,
+
+    /// **Le vocabulaire du champ, quand il en a un fermé.**
+    ///
+    /// Un champ indexé se filtre — mais un agent qui voit `scope_type` dans la
+    /// carte du schéma n'a aucun moyen de deviner que `texte_brut` en est une
+    /// valeur. Le filtre existe et reste théorique : il essaie `code`, `text`,
+    /// `markdown`, n'obtient rien, et conclut que le filtre ne marche pas.
+    ///
+    /// Déclaré ici, pas découvert par requête : une liste de valeurs distinctes
+    /// coûte un balayage, se périme, et ne dit pas ce qui est *prévu* — un
+    /// genre légitime qu'aucune ligne ne porte encore disparaîtrait de la
+    /// carte, ce qui est exactement l'inverse du but.
+    ///
+    /// À laisser vide pour un vocabulaire ouvert : `file_path` n'a pas de
+    /// valeurs à énumérer, et en promettre une liste serait mentir.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,
 }
 
 /// Configuration for a simple entity (registerEntity API).

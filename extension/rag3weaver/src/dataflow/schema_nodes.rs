@@ -118,7 +118,16 @@ pub fn construire(catalog: &Catalog, cible: &str) -> SchemaView {
             let (signaux, mut champs) = match catalog.entity_config(n) {
                 Some(cfg) => (
                     format!("{:?}", cfg.signals),
-                    cfg.fields.keys().cloned().collect::<Vec<_>>(),
+                    // **Un champ dit ses valeurs quand il en a.** Sans ça, la
+                    // carte annonce qu'on peut filtrer sur `scope_type` sans
+                    // dire sur quoi : le filtre existe et reste inutilisable.
+                    cfg.fields
+                        .iter()
+                        .map(|(nom, def)| match &def.values {
+                            Some(v) if !v.is_empty() => format!("{nom} ({})", v.join(" | ")),
+                            _ => nom.clone(),
+                        })
+                        .collect::<Vec<_>>(),
                 ),
                 // Une base de connaissances n'a pas de `EntityConfig` : elle
                 // est cherchable sans avoir de champs déclarés ici, et le dire
