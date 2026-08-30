@@ -33,7 +33,7 @@ d'historique conservés. Ajouté ici en sous-module, au même chemin. Commit
 
 `.h` partait à la grammaire C. Corrigé dans les **deux** tables qui
 divergeaient — celle du parseur de projet et celle du résolveur de relations.
-Commit `3814e65` côté codeparsers, 90 tests au vert, et l'avant/après mesuré
+Commit `91c3ef1` côté codeparsers, 90 tests au vert, et l'avant/après mesuré
 sur le dépôt entier :
 
 | | avant | après |
@@ -107,7 +107,7 @@ mappe rien sur `Generic`, et `rag3weaver` n'appelle jamais la chaîne non-code.
 
 Par ordre de rapport sur effort.
 
-1. ~~**`.h` → C++.**~~ **Fait** (`3814e65`) : +14 041 scopes, 893 fichiers
+1. ~~**`.h` → C++.**~~ **Fait** (`91c3ef1`) : +14 041 scopes, 893 fichiers
    sortis de l'erreur. C'est la ligne de base contre laquelle le chantier de
    couverture doit désormais se mesurer.
 2. **Câbler la chaîne non-code.** `.md` a un parseur de 1 057 lignes qui n'est
