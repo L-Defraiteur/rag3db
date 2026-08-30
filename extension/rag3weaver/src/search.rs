@@ -264,11 +264,51 @@ pub enum BM25Mode {
     ///
     /// This is the mode for code: `->`, `};`, `std::sync::Arc<Mutex<T>>`, `c++`.
     Symbol,
+    /// **Le mode se déduit de la requête.** Voir [`BM25Mode::resolve`].
+    ///
+    /// C'est le défaut depuis le 29 août 2026, et c'est un changement de
+    /// comportement assumé : `Contains` l'était avant, et il colle une phrase
+    /// entière en un seul terme.
+    Auto,
+}
+
+impl BM25Mode {
+    /// **Le mode qu'une requête demande vraiment.**
+    ///
+    /// `Contains` cherche la requête comme une sous-chaîne *contiguë*. Sur un
+    /// identifiant — `merge_port_values` — c'est exactement ce qu'on veut. Sur
+    /// une phrase, lucivy colle les mots : « de quoi savoir qui est connecté »
+    /// devient `dequoisavoirquiestconnecté`, aucun document ne le contient, et
+    /// la recherche rend **zéro** sans que rien n'échoue. Le moteur l'annonce
+    /// dans `meta.warnings` (« fuzzy search ignores separators ») ; encore
+    /// fallait-il que quelqu'un le lise.
+    ///
+    /// Mesuré le 29 août 2026 : trois questions en français, signal `bm25`
+    /// seul, sur des textes qui contiennent littéralement les mots cherchés —
+    /// 0/3 en `Contains`.
+    ///
+    /// La règle est donc : **plusieurs mots, plusieurs clauses**. Un seul mot
+    /// garde `Contains`, qui tolère les fautes et les préfixes.
+    pub fn resolve(self, query: &str) -> Self {
+        match self {
+            Self::Auto => {
+                if query.split_whitespace().take(2).count() > 1 {
+                    Self::ContainsSplit
+                } else {
+                    Self::Contains
+                }
+            }
+            explicite => explicite,
+        }
+    }
 }
 
 impl Default for BM25Mode {
+    /// **`Auto`, pas `Contains`.** Un défaut qui rend zéro sur une phrase
+    /// française n'est pas un défaut, c'est un piège — et il ne se voyait pas,
+    /// puisque rien n'échouait.
     fn default() -> Self {
-        Self::Contains
+        Self::Auto
     }
 }
 
@@ -1739,7 +1779,12 @@ pub fn build_bm25_query(
     mode: BM25Mode,
     distance: u8,
 ) -> String {
+    // **Résolu ici, une fois.** C'est le seul point où un mode devient une
+    // requête lucivy : le résoudre ailleurs laisserait un chemin par lequel
+    // `Auto` passerait sans être traduit.
+    let mode = mode.resolve(query);
     let obj = match mode {
+        BM25Mode::Auto => unreachable!("résolu à la ligne précédente"),
         BM25Mode::Parse => {
             // lucivy v3 choisit lui-même la branche selon la valeur (0d70904) :
             // syntaxe booléenne (AND/OR/NOT, guillemets, +/-) -> vrai QueryParser,
@@ -2960,6 +3005,62 @@ mod tests {
     }
 
     // ── build_bm25_query ────────────────────────────────────────────────
+
+    /// **Le mode se déduit de la requête, et c'est le défaut.**
+    ///
+    /// La règle tient en une phrase : plusieurs mots, plusieurs clauses. Sans
+    /// elle, « de quoi savoir qui est connecté » devient un seul terme collé
+    /// et ne trouve rien — sans erreur, ce qui est la pire forme d'échec.
+    #[test]
+    fn auto_choisit_selon_la_forme_de_la_requete() {
+        assert_eq!(BM25Mode::default(), BM25Mode::Auto);
+
+        // Un identifiant : contigu, tolérant aux fautes.
+        assert_eq!(BM25Mode::Auto.resolve("merge_port_values"), BM25Mode::Contains);
+        assert_eq!(BM25Mode::Auto.resolve("foo->bar"), BM25Mode::Contains);
+        assert_eq!(BM25Mode::Auto.resolve(""), BM25Mode::Contains);
+
+        // Une phrase : une clause par mot.
+        assert_eq!(
+            BM25Mode::Auto.resolve("de quoi savoir qui est connecté sur mon site"),
+            BM25Mode::ContainsSplit
+        );
+        assert_eq!(BM25Mode::Auto.resolve("deux mots"), BM25Mode::ContainsSplit);
+
+        // Les espaces de tête et de queue ne font pas une phrase.
+        assert_eq!(BM25Mode::Auto.resolve("  seul  "), BM25Mode::Contains);
+    }
+
+    /// **Un mode explicite n'est jamais réécrit.** C'est la précédence de
+    /// partout : le code l'emporte sur la déduction.
+    #[test]
+    fn un_mode_explicite_survit_a_la_resolution() {
+        for mode in [
+            BM25Mode::Contains,
+            BM25Mode::ContainsSplit,
+            BM25Mode::Regex,
+            BM25Mode::Parse,
+            BM25Mode::Symbol,
+        ] {
+            assert_eq!(mode.resolve("une phrase de plusieurs mots"), mode);
+            assert_eq!(mode.resolve("identifiant"), mode);
+        }
+    }
+
+    /// Et la traduction en requête lucivy passe bien par la résolution : sans
+    /// ça, `Auto` atteindrait le `match` et paniquerait.
+    #[test]
+    fn auto_traverse_la_construction_de_requete() {
+        let fields = vec!["content".to_string()];
+        let une = build_bm25_query("identifiant", &fields, BM25Mode::Auto, 1);
+        let phrase = build_bm25_query("deux mots ici", &fields, BM25Mode::Auto, 1);
+        assert_eq!(une, build_bm25_query("identifiant", &fields, BM25Mode::Contains, 1));
+        assert_eq!(
+            phrase,
+            build_bm25_query("deux mots ici", &fields, BM25Mode::ContainsSplit, 1)
+        );
+        assert_ne!(une, phrase, "les deux formes ne produisent pas la même requête");
+    }
 
     #[test]
     fn build_bm25_query_single_field_contains() {
