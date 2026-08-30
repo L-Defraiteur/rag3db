@@ -225,6 +225,15 @@ pub struct ResultsView {
     pub has_graph: bool,
     /// Ce que le domaine de travail ne montre pas, en une phrase.
     pub domain: Option<String>,
+    /// **Ce que le moteur a dit de cette recherche.** « La recherche floue
+    /// ignore les séparateurs », un regex sans littéral, une attribution de
+    /// chunk douteuse. Vide la plupart du temps ; quand ça ne l'est pas, c'est
+    /// souvent la raison pour laquelle il n'y a aucun résultat.
+    ///
+    /// Sans ce champ, l'avertissement existait — le moteur le remplissait
+    /// fidèlement — et personne ne le lisait (issue 02 du 29 août 2026).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -465,6 +474,7 @@ pub fn build_view(
         types,
         has_graph,
         domain: None,
+        warnings: Vec::new(),
     }
 }
 
@@ -675,6 +685,10 @@ impl Node for RenderResultsNode {
             // cherchait et où. Un graphe qui ne la branche pas rend la même
             // liste, sans l'en-tête.
             PortDef { name: "query", port_type: PortType::Query, required: false },
+            // Facultatif : ce que le moteur a dit de la recherche — ses
+            // avertissements. Un graphe qui ne le branche pas rend la même
+            // fiche, sans la section.
+            PortDef { name: "meta", port_type: PortType::Meta, required: false },
         ]
     }
     fn outputs(&self) -> Vec<PortDef> {
@@ -696,6 +710,8 @@ impl Node for RenderResultsNode {
             .and_then(take_or_clone::<Vec<UnifiedResult>>)
             .unwrap_or_default();
         let query: Option<QueryPayload> = ctx.take_input("query").and_then(take_or_clone::<QueryPayload>);
+        let meta: Option<crate::search::SearchMeta> =
+            ctx.take_input("meta").and_then(take_or_clone::<crate::search::SearchMeta>);
         let text = if self.json {
             serde_json::to_string(&results).map_err(|e| format!("RenderResultsNode: {e}"))?
         } else {
@@ -716,6 +732,12 @@ impl Node for RenderResultsNode {
             if let Some(qp) = &query {
                 view.query = Some(qp.query.clone());
                 view.target = Some(qp.target_name.clone());
+            }
+            // **Distinguer « ça n'existe pas » de « je n'ai pas cherché ce que
+            // tu crois ».** C'est la même règle que le domaine juste en
+            // dessous, appliquée au moteur de recherche.
+            if let Some(m) = &meta {
+                view.warnings = m.warnings.clone();
             }
             // **Le domaine dit ce qu'il ne montre pas.** Sans cette ligne, un
             // agent ne peut pas distinguer « ça n'existe pas » de « ce n'est
@@ -1049,6 +1071,42 @@ mod tests {
 
     /// Les trois façons de nommer un gabarit, et l'erreur quand il n'en est
     /// aucune — dite au montage du graphe, pas au milieu d'un tour d'agent.
+    /// **Zéro résultat doit dire pourquoi.**
+    ///
+    /// C'est le cas qui compte : une recherche qui ne trouve rien et n'explique
+    /// rien laisse un agent conclure « ça n'existe pas », alors que le moteur
+    /// savait qu'il avait cherché autre chose. Le 29 août 2026, trois questions
+    /// en français rendaient zéro et l'avertissement mourait dans un port que
+    /// personne ne branchait.
+    #[test]
+    fn une_recherche_vide_dit_ce_que_le_moteur_a_averti() {
+        let mut view = build_view(&[], 200, true, &PathLens::Origin);
+        view.warnings = vec![
+            "fuzzy search ignores separators: \"de quoi savoir\" is searched as \"dequoisavoir\"".into(),
+        ];
+        for tpl in [DEFAULT_TEMPLATE, COMPACT_TEMPLATE] {
+            let rendu = render_view(&view, tpl).unwrap();
+            assert!(rendu.contains("No results"), "rendu : {rendu}");
+            assert!(
+                rendu.contains("ignores separators"),
+                "l'avertissement doit survivre au rendu vide : {rendu}"
+            );
+        }
+    }
+
+    /// Et sans avertissement, rien ne change : pas de section vide, pas de
+    /// ligne parasite dans la fiche la plus fréquente.
+    #[test]
+    fn sans_avertissement_le_rendu_est_inchange() {
+        let view = build_view(&[], 200, true, &PathLens::Origin);
+        assert!(view.warnings.is_empty());
+        for tpl in [DEFAULT_TEMPLATE, COMPACT_TEMPLATE] {
+            let rendu = render_view(&view, tpl).unwrap();
+            assert!(!rendu.contains("⚠"), "rendu : {rendu}");
+            assert_eq!(rendu.trim(), "**No results.**");
+        }
+    }
+
     #[test]
     fn a_template_is_a_name_a_source_or_a_file() {
         assert_eq!(resolve_template("default").unwrap(), DEFAULT_TEMPLATE);

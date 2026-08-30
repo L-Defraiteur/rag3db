@@ -41,6 +41,14 @@
 %% `keep_signal` : le rerank est ici la dernière étape avant le rendu, donc la
 %% provenance (`bm25+vector`) vaut plus que le nom du dernier nœud traversé.
 %%
+%% **Les avertissements du moteur remontent jusqu'à la fiche.** L'arête
+%% `bm25 -->|meta| render` existe pour une raison précise : sans elle, une
+%% question en français rendait zéro résultat *et* zéro explication, alors que
+%% le moteur avait dit — dans un port que personne ne branchait — qu'il avait
+%% cherché la phrase entière comme un seul mot collé. Distinguer « ça n'existe
+%% pas » de « je n'ai pas cherché ce que tu crois » est la règle n° 3 du
+%% domaine de travail, appliquée ici (issue 02 du 29 août 2026).
+%%
 %% La fiche reste la même surface : `fuzzy_distance`, `result_mode`, les
 %% poids de fusion et les `return_fields` de la résolution restent en dedans.
 
@@ -58,6 +66,7 @@ graph LR
     source -->|query| rerank
     source -->|query| resolve
     source -->|query| render
+    bm25 -->|meta| render
     bm25 -->|results:bm25| fuse
     vector -->|results:vector| fuse
     fuse -->|results| rerank

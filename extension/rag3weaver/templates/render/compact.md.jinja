@@ -7,8 +7,19 @@
 -#}
 {%- if count == 0 -%}
 **No results.**
+{%- if warnings %}
+{% for w in warnings %}
+⚠️ {{ w }}
+{%- endfor %}
+
+_The engine did not search what you may think it did. Rephrase, or set an explicit `bm25_mode`._
+{% endif -%}
 {%- else -%}
 **{{ count }} result{{ "" if count == 1 else "s" }}**
+{%- if warnings %}
+{% for w in warnings %}⚠️ {{ w }}
+{% endfor -%}
+{% endif %}
 {% for r in results -%}
 {%- if r.group %}
 `{{ r.group.title }}` · {{ r.group.file }} — {{ r.group.count }} matches

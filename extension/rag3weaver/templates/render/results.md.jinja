@@ -16,12 +16,23 @@
 -#}
 {%- if count == 0 -%}
 **No results.**
+{%- if warnings %}
+{% for w in warnings %}
+⚠️ {{ w }}
+{%- endfor %}
+
+_The engine did not search what you may think it did. Rephrase, or set an explicit `bm25_mode`._
+{% endif -%}
 {%- else -%}
 {%- if query %}# Search: "{{ query }}"{% if target %} — `{{ target }}`{% endif %}
 
 {% endif -%}
 **Results:** {{ count }}
-
+{%- if warnings %}
+{% for w in warnings %}
+⚠️ {{ w }}
+{%- endfor %}
+{% endif %}
 ---
 
 ## Results

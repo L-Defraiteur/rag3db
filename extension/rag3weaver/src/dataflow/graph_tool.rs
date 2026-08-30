@@ -1817,6 +1817,9 @@ mod tests {
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "resolve".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "render".into(), to_port: "query".into() },
                 EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "bm25".into() },
+                // Les avertissements du moteur jusqu'à la fiche : sans cette
+                // arête, zéro résultat ne dit pas pourquoi (issue 02).
+                EdgeDef { from_node: "bm25".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "rerank".into(), to_port: "query".into() },
                 EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
@@ -1898,7 +1901,7 @@ mod tests {
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
         assert_eq!(def.nodes.len(), 7);
-        assert_eq!(def.edges.len(), 10);
+        assert_eq!(def.edges.len(), 11);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────

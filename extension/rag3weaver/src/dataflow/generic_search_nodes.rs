@@ -392,13 +392,28 @@ impl Node for BM25SearchNode {
         }]
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        vec![
+            PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            },
+            // **Le canal qui manquait.** Les avertissements du moteur — « la
+            // recherche floue ignore les séparateurs », un regex sans littéral,
+            // une attribution de chunk douteuse — partaient dans le journal du
+            // nœud et s'arrêtaient là. Un avertissement qui ne remonte pas est
+            // un avertissement qui n'existe pas : l'agent voyait « aucun
+            // résultat » sans jamais savoir qu'on n'avait pas cherché ce qu'il
+            // croyait (issue 02 du 29 août 2026).
+            PortDef {
+                name: "meta",
+                port_type: PortType::Meta,
+                required: false,
+            },
+        ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "BM25SearchNode")?;
 
         let conn = ctx
@@ -462,7 +477,32 @@ impl Node for BM25SearchNode {
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode, &label)?;
+        let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
+
+        // **Une fiche honnête de ce que *ce* nœud a fait.** Les compteurs des
+        // autres signaux sont à zéro parce qu'il ne les a pas exécutés — c'est
+        // vrai, pas une omission. Le port est facultatif : un graphe qui ne le
+        // branche pas se comporte exactement comme avant.
+        ctx.set_output(
+            "meta",
+            PortValue::new(crate::search::SearchMeta {
+                query: query_str.clone(),
+                target: target.name.clone(),
+                signals: crate::search::SearchSignals::BM25,
+                consistency: options.consistency,
+                partial: false,
+                pending_count: 0,
+                vector_count: 0,
+                bm25_count: nombre,
+                sparse_count: 0,
+                fused_count: nombre,
+                reranked_count: 0,
+                search_time_ms: debut.elapsed().as_millis() as u64,
+                warnings: node_warnings.clone(),
+                diagnostics: None,
+            }),
+        );
         Ok(())
     }
 }
@@ -1305,8 +1345,10 @@ mod tests {
         let node = BM25SearchNode::new("bm25", 10);
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
-        assert_eq!(node.outputs().len(), 1);
+        // Deux sorties : les résultats, et ce que le moteur a dit d'eux.
+        assert_eq!(node.outputs().len(), 2);
         assert_eq!(node.outputs()[0].name, "results");
+        assert_eq!(node.outputs()[1].name, "meta");
         assert_eq!(node.node_type(), "BM25SearchNode");
     }
 

@@ -287,13 +287,27 @@ impl BM25Mode {
     /// seul, sur des textes qui contiennent littéralement les mots cherchés —
     /// 0/3 en `Contains`.
     ///
-    /// La règle est donc : **plusieurs mots, plusieurs clauses**. Un seul mot
-    /// garde `Contains`, qui tolère les fautes et les préfixes.
+    /// **Pourquoi `Parse` et pas `ContainsSplit`.** Les deux découpent la
+    /// phrase ; un seul pondère. `ContainsSplit` combine des clauses
+    /// « contient » en booléen : sans IDF, « des », « avec » et « un » comptent
+    /// autant que « prix », et une clause non satisfaite coûte une pénalité
+    /// fixe et large. Mesuré le 29 août 2026 sur les trois mêmes questions :
+    /// **0/3**, avec des scores de −996, −1 992 et −4 991 — les multiples d'une
+    /// pénalité, pas une mesure de pertinence. (C'était l'hypothèse de Lucie
+    /// sur « les scores négatifs de lucivy » : ils viennent de là, pas d'une
+    /// normalisation fautive chez nous.)
+    ///
+    /// `Parse` est du vrai BM25 terme à terme : l'IDF écarte les mots vides
+    /// tout seul, parce qu'ils sont partout. Mêmes questions, même corpus :
+    /// **3/3**, scores 3,85 / 7,23 / 7,30.
+    ///
+    /// La règle est donc : **une phrase se pèse, un identifiant se contient**.
+    /// Un seul mot garde `Contains`, qui tolère les fautes et les préfixes.
     pub fn resolve(self, query: &str) -> Self {
         match self {
             Self::Auto => {
                 if query.split_whitespace().take(2).count() > 1 {
-                    Self::ContainsSplit
+                    Self::Parse
                 } else {
                     Self::Contains
                 }
@@ -3023,9 +3037,9 @@ mod tests {
         // Une phrase : une clause par mot.
         assert_eq!(
             BM25Mode::Auto.resolve("de quoi savoir qui est connecté sur mon site"),
-            BM25Mode::ContainsSplit
+            BM25Mode::Parse
         );
-        assert_eq!(BM25Mode::Auto.resolve("deux mots"), BM25Mode::ContainsSplit);
+        assert_eq!(BM25Mode::Auto.resolve("deux mots"), BM25Mode::Parse);
 
         // Les espaces de tête et de queue ne font pas une phrase.
         assert_eq!(BM25Mode::Auto.resolve("  seul  "), BM25Mode::Contains);
@@ -3057,7 +3071,7 @@ mod tests {
         assert_eq!(une, build_bm25_query("identifiant", &fields, BM25Mode::Contains, 1));
         assert_eq!(
             phrase,
-            build_bm25_query("deux mots ici", &fields, BM25Mode::ContainsSplit, 1)
+            build_bm25_query("deux mots ici", &fields, BM25Mode::Parse, 1)
         );
         assert_ne!(une, phrase, "les deux formes ne produisent pas la même requête");
     }
