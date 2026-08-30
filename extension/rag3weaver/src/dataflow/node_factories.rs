@@ -862,9 +862,9 @@ impl NodeFactory for BM25SearchNodeFactory {
                     name: "mode",
                     param_type: ConfigParamType::String,
                     required: false,
-                    default: Some(serde_json::json!("contains")),
-                    description: "contains | contains_split | regex | parse | symbol (exact, séparateurs compris)",
-                    choices: Some(Choices::fixed(["contains", "contains_split", "regex", "parse", "symbol"])),
+                    default: Some(serde_json::json!("auto")),
+                    description: "auto (une phrase se pèse en BM25, un identifiant se cherche contigu) | contains | contains_split | regex | parse | symbol (exact, séparateurs compris)",
+                    choices: Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "parse", "symbol"])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1247,7 +1247,7 @@ mod tests {
         let e = refused("BM25SearchNode", serde_json::json!({"result_mode": "Aggregated"}));
         assert!(e.contains("'Aggregated'") && e.contains("aggregated, detailed, source_resolved"), "{e}");
         let e = refused("BM25SearchNode", serde_json::json!({"mode": "containsSplit"}));
-        assert!(e.contains("contains, contains_split, regex, parse, symbol"), "{e}");
+        assert!(e.contains("auto, contains, contains_split, regex, parse, symbol"), "{e}");
         let e = refused("FuseResultsNode", serde_json::json!({"strategy": "RRF"}));
         assert!(e.contains("rrf, weighted"), "{e}");
         // Le parseur lui-même est strict aussi, pas seulement le registre.
@@ -1259,7 +1259,15 @@ mod tests {
         assert!(parse_result_mode(&serde_json::json!({"result_mode": "SourceResolved"}), "n").is_err());
         // Les schémas publient les listes.
         let modes = r.schema("BM25SearchNode").unwrap().config_params.into_iter().find(|p| p.name == "mode").unwrap();
-        assert_eq!(modes.choices, Some(Choices::fixed(["contains", "contains_split", "regex", "parse", "symbol"])));
+        assert_eq!(
+            modes.choices,
+            Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "parse", "symbol"]))
+        );
+        // **Le défaut annoncé doit être le vrai.** Il disait « contains » alors
+        // que `BM25Mode::default()` valait `auto` depuis le correctif de
+        // l'issue 02 : une fiche qui ment sur son défaut envoie l'appelant
+        // choisir explicitement ce qu'il avait déjà.
+        assert_eq!(modes.default, Some(serde_json::json!("auto")));
     }
 
 
