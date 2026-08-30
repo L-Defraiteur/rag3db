@@ -18,6 +18,7 @@ perdent pas, et pour qu'on puisse les attaquer plutôt que se les rappeler.
 | [10 — L'agent vision et la distance](10-l-agent-vision-et-la-distance.md) | Le pourquoi, l'intention première jamais perdue, et le registre de ce qui y répond — écrit le 30 août |
 | [11 — Donner des commandes à un agent](11-donner-des-commandes-a-un-agent.md) | Sans lui donner la machine : argv plutôt que shell, trois modes, un verdict qu'on range — copie du 30 août |
 | [12 — Ce qui manque à l'agent de code](12-ce-qui-manque-a-l-agent-de-code.md) | La liste écrite par celui qui s'en sert : exécuter, supprimer, voir le schéma — 30 août |
+| [13 — Avaler une base existante](13-avaler-une-base-existante.md) | Lire un schéma étranger et en proposer un graphe, en séparant ce qui est déclaré de ce qui est deviné — 30 août |
 
 **Ce qu'ils remplacent** : rien. Les documents datés de
 `23-aout-2026-20h33/` restent la trace chronologique du travail (état des
