@@ -1036,6 +1036,36 @@ impl<'a> Agent<'a> {
             // Dernier appel autorisé : le dire, et retirer les outils.
             let last_call = run.iterations + 1 >= self.limits.max_iterations;
             let mut opts = self.opts.clone();
+            // **Les fiches se relisent à chaque tour.**
+            //
+            // `Agent::new` les calcule une fois, et les listes closes qu'elles
+            // portent — les cibles de `search`, les relations — sont celles du
+            // catalogue **de ce moment-là**. Un agent qui pose une entité avec
+            // `place` ne pouvait donc plus la chercher : son `enum` de cibles
+            // ne la contenait pas, et comme cette même liste sert à contraindre
+            // le décodage, il ne pouvait pas même prononcer le nom.
+            //
+            // Trouvé le 30 août 2026 par le modèle lui-même, à qui on
+            // demandait son avis sur la boîte à outils : *« si j'instancie un
+            // template "Product", je ne peux pas chercher dedans car il ne fait
+            // pas partie de l'enum. C'est bloquant. »* Il avait raison, et le
+            // défaut était juste sous les deux outils qu'on venait d'ajouter.
+            //
+            // Le coût est un assemblage de JSON par tour, contre un appel de
+            // modèle : négligeable. Les outils ajoutés à la main
+            // (`with_tool_def`) survivent, parce qu'ils ne viennent pas de
+            // l'outillage.
+            {
+                let frais = self.tools.tool_defs();
+                let ajoutes: Vec<_> = opts
+                    .tools
+                    .iter()
+                    .filter(|d| !frais.iter().any(|f| f.name == d.name))
+                    .cloned()
+                    .collect();
+                opts.tools = frais;
+                opts.tools.extend(ajoutes);
+            }
             if last_call && run.iterations > 0 {
                 if let Some(nudge) = &self.limits.final_nudge {
                     if !turns.last().is_some_and(|t| t.role == "user" && t.content == *nudge) {
@@ -2245,6 +2275,79 @@ mod tests {
     /// fois, la deuxième invite est vraiment plus petite, le tour aboutit, et
     /// le contenu entier reste rappelable — l'absorption est une vue, pas une
     /// perte.
+    /// **Les fiches se relisent à chaque tour.**
+    ///
+    /// Le défaut, trouvé le 30 août 2026 par le modèle à qui on demandait son
+    /// avis sur la boîte à outils : les listes closes d'une fiche — les cibles
+    /// de `search` — étaient figées à la construction de l'agent. Poser une
+    /// entité avec `place` puis la chercher était donc impossible, et pas
+    /// seulement improbable : cette liste sert aussi à contraindre le décodage,
+    /// donc le modèle ne pouvait pas prononcer le nom.
+    #[test]
+    fn les_fiches_suivent_le_catalogue_qui_bouge() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        /// Une boîte dont la surface grandit entre deux tours, comme le fait
+        /// un catalogue quand l'agent y pose une entité.
+        struct Grandissante {
+            tours: AtomicUsize,
+        }
+        impl ToolBox for Grandissante {
+            fn call(&self, call: &ToolCall) -> Turn {
+                Turn::tool_result(&call.id, &call.name, "{}")
+            }
+            fn tool_defs(&self) -> Vec<ToolDef> {
+                // `Agent::new` lit déjà les fiches une fois : le compteur
+                // avance donc d'un cran avant même le premier tour.
+                let n = self.tours.fetch_add(1, Ordering::Relaxed);
+                let mut defs = vec![ToolDef {
+                    name: "search".into(),
+                    description: "cherche".into(),
+                    parameters: serde_json::json!({"type":"object","properties":{}}),
+                }];
+                if n > 1 {
+                    defs.push(ToolDef {
+                        name: "apparu_ensuite".into(),
+                        description: "posé pendant la course".into(),
+                        parameters: serde_json::json!({"type":"object","properties":{}}),
+                    });
+                }
+                defs
+            }
+        }
+
+        let vus: Arc<std::sync::Mutex<Vec<Vec<String>>>> = Arc::default();
+        let temoin = vus.clone();
+        let llm = CallbackLlm::new("test", 8192, move |turns: &[Turn], opts: &GenOptions, sink: &mut dyn crate::llm::TokenSink| {
+            temoin.lock().unwrap().push(opts.tools.iter().map(|d| d.name.clone()).collect());
+            // Premier tour : un appel d'outil, pour qu'il y en ait un second.
+            if turns.iter().all(|t| !t.is_tool_result()) {
+                let call = crate::llm::ToolCall::new("1", "search", "{}");
+                let fin = Finish::tool_call(vec![call]);
+                sink.on_finish(&fin);
+                return Ok((fin, crate::llm::Usage::default()));
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), crate::llm::Usage::default()))
+        });
+
+        let tools = Grandissante { tours: AtomicUsize::new(0) };
+        let mut agent = Agent::new(&llm, &tools);
+        agent.limits.max_iterations = 4;
+        let mut turns = vec![Turn::user("va")];
+        let mut sink = crate::llm::StringSink::default();
+        let _ = agent.run(&mut turns, &mut sink).expect("course");
+
+        let vus = vus.lock().unwrap().clone();
+        assert!(vus.len() >= 2, "il faut deux tours pour voir la différence : {vus:?}");
+        assert!(!vus[0].contains(&"apparu_ensuite".to_string()), "au premier tour il n'existe pas");
+        assert!(
+            vus[1].contains(&"apparu_ensuite".to_string()),
+            "au second tour l'agent doit le voir : {:?}",
+            vus[1]
+        );
+    }
+
     #[test]
     fn une_fenetre_refusee_fait_serrer_puis_reessayer() {
         use crate::session::{Absorb, Session, SessionTools};
