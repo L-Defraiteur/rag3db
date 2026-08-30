@@ -146,6 +146,33 @@ pub trait SchemaDialect: Send + Sync {
     /// Create a vector similarity index on an embedding column.
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String;
 
+    /// **Les index qu'une table de données réclame au-delà de sa clé primaire.**
+    ///
+    /// La clé primaire est `_uuid`, mais ce n'est pas par là qu'on cherche le
+    /// plus souvent : une recherche BM25 ou sparse rend des **décalages de
+    /// ligne**, et les résout par `_row_id`. Sans index dessus, chaque
+    /// résolution balaie la table entière — sur le chemin le plus chaud du
+    /// moteur.
+    ///
+    /// Vide par défaut : rag3db gère ses index lui-même.
+    fn secondary_indexes(&self, _table: &str) -> Vec<String> { vec![] }
+
+    /// Idem pour une table de relations.
+    ///
+    /// Sa clé primaire est `(from_uuid, to_uuid)`. Un index composite ne sert
+    /// que les requêtes qui commencent par sa **première** colonne : traverser
+    /// dans le sens entrant (`to_uuid` seul) ne peut pas s'en servir, et c'est
+    /// exactement ce que fait toute résolution chunk → parent.
+    fn relation_indexes(&self, _rel_table: &str) -> Vec<String> { vec![] }
+
+    /// Idem pour la table des blobs d'index.
+    ///
+    /// Elle est listée par préfixe (`_key LIKE 'nom/%'`) à chaque ouverture
+    /// d'index lucivy ou sparse — et un btree ordinaire **ne sert pas** un
+    /// `LIKE 'préfixe%'` sous une collation autre que C. Vérifié : la base de
+    /// test est en `en_US.utf8` et le plan est un balayage séquentiel.
+    fn blob_store_indexes(&self, _table: &str) -> Vec<String> { vec![] }
+
     /// Drop a vector similarity index — le pendant du précédent, pour charger
     /// en masse puis reconstruire (doc 18).
     fn drop_vector_index(&self, table: &str, index_name: &str) -> String;
@@ -1050,6 +1077,39 @@ impl SchemaDialect for PostgresDialect {
     fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
         let typ = self.type_name(&col.col_type);
         format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {} {typ} DEFAULT {default_literal}", col.name)
+    }
+
+    fn secondary_indexes(&self, table: &str) -> Vec<String> {
+        let court = table.replace('.', "_");
+        vec![
+            // Le chemin chaud : `resolve_offsets` fait
+            // `WHERE _row_id = ANY(...)` à chaque résolution de recherche.
+            format!("CREATE INDEX IF NOT EXISTS {court}_row_id_idx ON {table} (_row_id)"),
+            // Chunk → parent, et tout `batch_delete_by_field` sur ce champ.
+            // `IF NOT EXISTS` ne suffit pas ici : la colonne n'existe que sur
+            // les tables de chunks, donc l'échec est attendu et absorbé par
+            // l'appelant.
+            format!("CREATE INDEX IF NOT EXISTS {court}_parent_idx ON {table} (_parent_uuid)"),
+            // La cellule : présente sur toute table de données, filtrée dès
+            // qu'un scope est posé.
+            format!("CREATE INDEX IF NOT EXISTS {court}_cellule_idx ON {table} (_org, _project)"),
+        ]
+    }
+
+    fn blob_store_indexes(&self, table: &str) -> Vec<String> {
+        let court = table.replace('.', "_");
+        vec![format!(
+            "CREATE INDEX IF NOT EXISTS {court}_prefixe_idx ON {table} (_key text_pattern_ops)"
+        )]
+    }
+
+    fn relation_indexes(&self, rel_table: &str) -> Vec<String> {
+        let court = rel_table.replace('.', "_");
+        // `from_uuid` est déjà servi par le préfixe de la clé primaire ;
+        // `to_uuid` seul ne l'est pas.
+        vec![format!(
+            "CREATE INDEX IF NOT EXISTS {court}_to_idx ON {rel_table} (to_uuid)"
+        )]
     }
 
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String {

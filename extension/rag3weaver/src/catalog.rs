@@ -780,6 +780,7 @@ impl Catalog {
         // quand l'appelant a fourni son propre magasin, qui écrit dedans.
         let blob_ddl = self.dialect.create_blob_table();
         self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.poser_index(self.dialect.blob_store_indexes(&self.dialect.internal_table("_index_blobs")));
 
         if self.blob_store.is_none() && !self.dialect.speaks_cypher() {
             // Même raison qu'en 7 : `CypherBlobStore` parle Cypher. Sans
@@ -1024,6 +1025,30 @@ impl Catalog {
     /// vector and sparse indexes if the entity has simple pipeline content
     /// fields (is_content=true). KB-only entities get their indexes through
     /// `register_kb()` instead.
+    /// Poser des index secondaires, en absorbant le seul échec attendu.
+    ///
+    /// Le dialecte propose les mêmes index pour toute table de données, dont un
+    /// sur `_parent_uuid` — qui n'existe que sur les tables de chunks. Cet
+    /// échec-là est normal et se tait ; **tout autre remonte**, parce qu'un
+    /// index qui ne se pose pas sans qu'on le sache est une lenteur qu'on
+    /// cherchera ailleurs pendant des heures.
+    fn poser_index(&self, ddls: Vec<String>) {
+        for ddl in ddls {
+            if let Err(e) = self.conn.execute(&ddl) {
+                let msg = e.to_string().to_lowercase();
+                let colonne_absente = msg.contains("does not exist")
+                    || msg.contains("42703")
+                    || msg.contains("not found");
+                if !colonne_absente {
+                    self.emit_event(CatalogEvent::Warning {
+                        context: "index".into(),
+                        message: format!("index non posé — {ddl} : {e}"),
+                    });
+                }
+            }
+        }
+    }
+
     fn create_entity_tables(
         &self,
         entity_name: &str,
@@ -1035,6 +1060,7 @@ impl Catalog {
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&entity_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.poser_index(self.dialect.secondary_indexes(entity_name));
 
         // Skip chunk/FTS/vector/sparse for KB-only entities (no simple pipeline)
         if !config.has_simple_pipeline() {
@@ -1047,12 +1073,14 @@ impl Catalog {
         ).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&chunk_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.poser_index(self.dialect.secondary_indexes(&format!("{entity_name}_Chunk")));
 
         // 3. CHUNKED_FROM relation
         let rel_ddl = crate::schema::generate_simple_chunk_rel_ddl_with_dialect(entity_name, self.dialect.as_ref())
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         self.conn.execute(&rel_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.poser_index(self.dialect.relation_indexes(&format!("{entity_name}_CHUNKED_FROM")));
 
         // 4. Pas d'index FTS C++ : depuis le débranchement du repli, la recherche
         //    passe exclusivement par `ShardedHandle`. En créer un ici revenait à
