@@ -588,8 +588,19 @@ pub struct Atelier {
     /// Au-delà, on tue. Un agent qui attend indéfiniment ne rapporte rien, et
     /// c'est pire qu'un échec.
     pub delai: std::time::Duration,
-    /// Caractères de sortie gardés, par flux.
+    /// Caractères de sortie **rendus à l'appelant**, par flux. Le reste n'est
+    /// pas perdu : il est dans le journal.
     pub max_sortie: usize,
+    /// Où écrire la sortie **entière**, si on veut la garder.
+    ///
+    /// **C'est la discipline de Lucie, rendue à l'agent.** Un agent qui reçoit
+    /// une sortie tronquée et rien d'autre fait ce que font tous les agents :
+    /// il relance la commande avec un `tail` ou un `grep` collé au bout, et
+    /// perd le reste une seconde fois. Écrire d'abord, filtrer ensuite — et
+    /// filtrer avec les outils qu'il a déjà.
+    ///
+    /// `None` : rien n'est gardé, et l'aperçu est tout ce qu'on aura.
+    pub journaux: Option<std::path::PathBuf>,
 }
 
 impl Atelier {
@@ -598,7 +609,14 @@ impl Atelier {
             cwd: cwd.into(),
             delai: std::time::Duration::from_secs(120),
             max_sortie: 100_000,
+            journaux: None,
         }
+    }
+
+    /// Garder la sortie entière dans ce dossier.
+    pub fn avec_journaux(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.journaux = Some(dir.into());
+        self
     }
     pub fn avec_delai(mut self, d: std::time::Duration) -> Self {
         self.delai = d;
@@ -621,8 +639,17 @@ pub struct Sortie {
     /// Le délai a expiré : on a tué. **À dire**, parce qu'une sortie tronquée
     /// par un `kill` ressemble à une sortie complète.
     pub expiree: bool,
-    /// Un des flux a dépassé `max_sortie`.
+    /// Un des flux a dépassé `max_sortie` — l'aperçu est coupé, **pas la
+    /// sortie** : elle est entière dans le journal si on en a demandé un.
     pub tronquee: bool,
+    /// Où la sortie entière a été écrite, si on a demandé un journal.
+    pub journal_stdout: Option<std::path::PathBuf>,
+    pub journal_stderr: Option<std::path::PathBuf>,
+    /// Octets **écrits**, tous flux confondus avec leur propre compte. C'est
+    /// ce qui permet de dire « vous en avez vu 1 000 sur 200 000 » plutôt que
+    /// de laisser croire que c'était tout.
+    pub octets_stdout: usize,
+    pub octets_stderr: usize,
 }
 
 impl Sortie {
@@ -690,17 +717,57 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         .spawn()
         .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
 
-    let lire = |mut flux: Option<Box<dyn Read + Send>>, max: usize| {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
+    // **Chaque flux est lu en entier, dérivé vers son journal, et seuls les
+    // premiers octets sont gardés en mémoire.** Lire *tout* est ce qui évite
+    // le tube plein ; n'en garder qu'un aperçu est ce qui évite de noyer
+    // l'appelant ; le journal est ce qui fait que rien n'est perdu.
+    let lire = |mut flux: Option<Box<dyn Read + Send>>, max: usize, journal: Option<std::path::PathBuf>| {
+        std::thread::spawn(move || -> (Vec<u8>, usize) {
+            let mut apercu = Vec::new();
+            let mut total = 0usize;
+            let mut fichier = journal.and_then(|p| std::fs::File::create(p).ok());
             if let Some(f) = flux.as_mut() {
-                let _ = f.take(max as u64 + 1).read_to_end(&mut buf);
+                let mut tampon = [0u8; 8192];
+                loop {
+                    match f.read(&mut tampon) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            total += n;
+                            if let Some(j) = fichier.as_mut() {
+                                let _ = std::io::Write::write_all(j, &tampon[..n]);
+                            }
+                            if apercu.len() < max {
+                                let reste = max - apercu.len();
+                                apercu.extend_from_slice(&tampon[..n.min(reste)]);
+                            }
+                        }
+                    }
+                }
             }
-            buf
+            (apercu, total)
         })
     };
-    let out = lire(enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie);
-    let err = lire(enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie);
+
+    let (chemin_out, chemin_err) = match &atelier.journaux {
+        Some(dir) => {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| ExecErreur::Atelier(format!("{} : {e}", dir.display())))?;
+            let base = format!("{}-{}", a.0.programme.replace('/', "_"), std::process::id());
+            (Some(dir.join(format!("{base}.out"))), Some(dir.join(format!("{base}.err"))))
+        }
+        None => (None, None),
+    };
+
+    let out = lire(
+        enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>),
+        atelier.max_sortie,
+        chemin_out.clone(),
+    );
+    let err = lire(
+        enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>),
+        atelier.max_sortie,
+        chemin_err.clone(),
+    );
 
     let mut expiree = false;
     let code = loop {
@@ -718,25 +785,39 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
 
-    let brut = |j: std::thread::JoinHandle<Vec<u8>>| j.join().unwrap_or_default();
-    let (o, e) = (brut(out), brut(err));
-    let tronquee = o.len() > atelier.max_sortie || e.len() > atelier.max_sortie;
-    let couper = |v: Vec<u8>, max: usize| {
+    let brut = |j: std::thread::JoinHandle<(Vec<u8>, usize)>| j.join().unwrap_or_default();
+    let ((o, n_out), (e, n_err)) = (brut(out), brut(err));
+    let tronquee = n_out > o.len() || n_err > e.len();
+
+    // **L'aperçu dit ce qu'il ne montre pas.** Une sortie coupée en silence
+    // laisse croire qu'elle était complète — la famille de défauts qu'on
+    // débusque depuis deux jours.
+    let apercu = |v: Vec<u8>, total: usize, journal: &Option<std::path::PathBuf>| {
         let mut s = String::from_utf8_lossy(&v).to_string();
-        if s.len() > max {
-            s.truncate(max);
-            s.push_str("\n… (sortie tronquée)");
+        if total > v.len() {
+            s.push_str(&match journal {
+                Some(p) => format!(
+                    "\n… ({} octets vus sur {total} — la suite est dans {})",
+                    v.len(),
+                    p.display()
+                ),
+                None => format!("\n… ({} octets vus sur {total}, le reste est perdu)", v.len()),
+            });
         }
         s
     };
 
     Ok(Sortie {
+        stdout: apercu(o, n_out, &chemin_out),
+        stderr: apercu(e, n_err, &chemin_err),
         code,
-        stdout: couper(o, atelier.max_sortie),
-        stderr: couper(e, atelier.max_sortie),
         duree: debut.elapsed(),
         expiree,
         tronquee,
+        journal_stdout: chemin_out,
+        journal_stderr: chemin_err,
+        octets_stdout: n_out,
+        octets_stderr: n_err,
     })
 }
 
@@ -1062,6 +1143,55 @@ mod tests {
         assert!(t0.elapsed() < std::time::Duration::from_secs(5), "on n'a pas attendu 30 s");
     }
 
+    /// **La sortie ne se perd plus.** Un agent qui reçoit une sortie tronquée
+    /// et rien d'autre relance la commande avec un `tail` collé au bout, et
+    /// perd le reste une seconde fois. Avec un journal, il filtre après coup,
+    /// avec les outils qu'il a déjà.
+    #[test]
+    fn la_sortie_entiere_va_dans_un_journal_et_l_apercu_le_dit() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let gros = dossier.path().join("gros.txt");
+        std::fs::write(&gros, "y".repeat(50_000)).expect("écriture");
+
+        let laissez = g
+            .autoriser(&Commande::new("/bin/cat", [gros.to_string_lossy().as_ref()]), &accorde)
+            .unwrap();
+        let s = executer(
+            laissez,
+            &atelier().avec_max_sortie(500).avec_journaux(dossier.path().join("journaux")),
+        )
+        .expect("exécution");
+
+        // L'aperçu est court, et il dit qu'il est court **et où est le reste**.
+        assert!(s.stdout.len() < 700, "aperçu de {} octets", s.stdout.len());
+        assert!(s.stdout.contains("50000"), "il doit dire le total : {}", &s.stdout[s.stdout.len().saturating_sub(200)..]);
+        assert!(s.tronquee);
+
+        // Et le journal contient tout, relisible avec n'importe quel outil.
+        let journal = s.journal_stdout.as_ref().expect("un journal a été demandé");
+        assert_eq!(std::fs::metadata(journal).unwrap().len(), 50_000);
+        assert_eq!(s.octets_stdout, 50_000);
+    }
+
+    /// Sans journal, on le dit aussi — « le reste est perdu » plutôt qu'un
+    /// silence qui laisse croire que c'était tout.
+    #[test]
+    fn sans_journal_l_apercu_avoue_la_perte() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let gros = dossier.path().join("gros.txt");
+        std::fs::write(&gros, "z".repeat(20_000)).expect("écriture");
+        let laissez = g
+            .autoriser(&Commande::new("/bin/cat", [gros.to_string_lossy().as_ref()]), &accorde)
+            .unwrap();
+        let s = executer(laissez, &atelier().avec_max_sortie(100)).expect("exécution");
+        assert!(s.stdout.contains("perdu"), "{}", s.stdout);
+        assert!(s.journal_stdout.is_none());
+    }
+
     /// **Une grosse sortie ne fige rien.** Un tube qu'on ne lit qu'après
     /// `wait` se remplit et bloque le processus — la panne qui ressemble à de
     /// la lenteur.
@@ -1080,7 +1210,7 @@ mod tests {
         let s = executer(laissez, &atelier().avec_max_sortie(1_000)).expect("exécution");
         assert!(s.tronquee, "la troncature doit être dite");
         assert!(s.stdout.len() < 2_000, "gardé {} caractères", s.stdout.len());
-        assert!(s.stdout.contains("tronquée"));
+        assert_eq!(s.octets_stdout, 200_000, "tout a été lu, même si peu est rendu");
     }
 
     /// Le répertoire de travail est obligatoire et vérifié : hériter de celui
