@@ -190,11 +190,44 @@ savoir. Il trouve alors le contexte, rend `false`, se fait relancer, et
 **cherche une seconde fois ce qu'il vient de trouver**.
 
 On ne corrige pas ça par une instruction. On le corrige en ne donnant pas
-l'outil : au moment de juger, l'outillage ne contient que `agentCanAnswer`.
-C'est le même principe que le `rerank=0` par défaut de `search` — **ce qu'on
-offre décide de ce qui arrive**, pas ce qu'on demande.
+l'outil. C'est le même principe que le `rerank=0` par défaut de `search` —
+**ce qu'on offre décide de ce qui arrive**, pas ce qu'on demande.
 
-#### Alors comment juger sans chercher ? En comparant
+#### Et même pas un outil : une sortie structurée
+
+Lucie, en précisant : *« peut-être même pas un tool à ce moment-là, il a juste
+une sortie structurée possible ; c'est après, quand on le relance, qu'il a tous
+les tools de recherche »*.
+
+C'est plus juste, et notre propre code le dit déjà. En-tête de `tools.rs` :
+
+> *« La même donnée sert deux fois : mise dans le prompt et compilée en
+> grammaire pour contraindre le décodage — **un appel d'outil n'est qu'une
+> sortie structurée dont le schéma est fixé**. »*
+
+Si tout ce qu'on veut est le verdict, il n'y a aucune raison de l'envelopper
+dans un outil. Un appel d'outil est quelque chose que le modèle **choisit**
+d'émettre : il peut aussi choisir de disserter, ou de ne rien appeler. Une
+sortie structurée est la **forme de la réponse elle-même** — il n'y a rien
+d'autre à produire.
+
+Les deux phases deviennent donc franchement différentes :
+
+| | outils | sortie |
+|---|---|---|
+| **juger** | *aucun* | `response_format` = le schéma de `PeutRepondre` |
+| **chercher** | toute la lecture seule | libre, avec les manques pour objectif |
+
+Le mécanisme existe : `GenOptions::with_response_format`, envoyé tel quel par
+le client cloud (`openai_llm.rs`).
+
+Et une troisième conséquence, qu'on n'avait pas vue : **la phase de jugement
+n'est pas une boucle d'agent.** Sans outil, il n'y a pas de tour à enchaîner —
+c'est un seul `generate`, avec un schéma minuscule. L'impôt par tour tombe à
+une complétion courte, ce qui était la dernière objection sérieuse à mettre une
+porte là.
+
+#### Alors comment juger sans rien appeler ? En comparant
 
 C'est la question qu'on se pose aussitôt, et elle a une réponse nette : le
 souffleur n'a pas besoin de chercher, parce qu'il **voit déjà les deux côtés**.
