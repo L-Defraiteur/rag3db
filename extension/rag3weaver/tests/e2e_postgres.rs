@@ -172,6 +172,14 @@ static VERROU_BASE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// Le catalogue branché sur postgres : dialecte, backend de recherche, et le
 /// magasin de blobs qui va avec — les trois pièces qu'un backend doit fournir.
 fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catalog) {
+    catalogue_avec(dim, rag3weaver::search_backend::MoteurTexte::Auto)
+}
+
+/// Le même montage, moteur de texte imposé.
+fn catalogue_avec(
+    dim: usize,
+    moteur: rag3weaver::search_backend::MoteurTexte,
+) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catalog) {
     let garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
     let (ctx, conn) = Contexte::ouvrir();
     table_rase(conn.as_ref());
@@ -189,6 +197,9 @@ fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catal
     catalog.set_blob_store(Arc::new(
         rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee),
     ));
+    // **Avant `initialize`** : c'est à l'ingestion que la décision coûte,
+    // puisqu'elle détermine si un index lucivy s'écrit sur disque.
+    catalog.set_moteur_texte(moteur);
     catalog.initialize().expect("initialize sur postgres");
     (garde, ctx, catalog)
 }
@@ -1161,5 +1172,99 @@ fn les_poids_du_combo_se_mesurent() {
         jaro_bruit < seuil && seuil < jaro_vraie,
         "SEUIL_CONFIANCE ({seuil:.2}) doit partager ]{jaro_bruit:.4} ; {jaro_vraie:.4}[ \
          — s'il est déplacé sans remesurer, c'est ici que ça se dit"
+    );
+}
+
+// ═══ 12. Les trois moteurs de texte marchent, chacun à sa sauce ══════════════
+
+/// **Le chemin du retour vers lucivy, prouvé plutôt que supposé.**
+///
+/// `MoteurTexte::{Auto, Lucivy, Natif}` est une **option**, pas un
+/// remplacement : le trigramme est le défaut aujourd'hui parce que lucivy pèse
+/// trop sur disque, et lucivy redeviendra le défaut quand elle sera allégée.
+/// Encore faut-il que ce retour marche.
+///
+/// Or `set_moteur_texte` n'avait **aucun appelant** : les trois valeurs
+/// existaient sur le papier. Une option jamais empruntée est une option qui se
+/// dégrade sans bruit — c'est le défaut qu'on a passé la journée à débusquer,
+/// appliqué à une garantie de compatibilité.
+///
+/// Ce test emprunte les deux chemins forcés sur **la même base**, avec le même
+/// corpus, et vérifie qu'ils trouvent tous deux — pas qu'ils trouvent la même
+/// chose : chacun classe à sa sauce, c'est le but.
+#[test]
+fn les_trois_moteurs_de_texte_marchent() {
+    use rag3weaver::search_backend::MoteurTexte;
+
+    let produits = || {
+        vec![
+            produit("Clavecin", "clavecin baroque sautereau registre", 10.0),
+            produit("Sextant", "sextant navigation astronomique horizon", 20.0),
+            produit("Obsidienne", "obsidienne verre volcanique conchoidale", 30.0),
+        ]
+    };
+
+    // ── Le trigramme, forcé ─────────────────────────────────────────────────
+    let noms_natif = {
+        let (_garde, _ctx, mut catalog) = catalogue_avec(8, MoteurTexte::Natif);
+        assert!(catalog.plein_texte_natif(), "Natif doit forcer le backend");
+        catalog.register_entity("Product", config_produit()).unwrap();
+        catalog.ingest_entities("Product", produits()).unwrap();
+        let r = catalog
+            .search(
+                "Product",
+                "navigation astronomique",
+                SearchOptions {
+                    consistency: Consistency::Immediate,
+                    signals: Some(SearchSignals::BM25),
+                    ..Default::default()
+                },
+            )
+            .expect("recherche par le trigramme");
+        r.results
+            .iter()
+            .filter_map(|x| x.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+            .collect::<Vec<_>>()
+    };
+    eprintln!("[natif]  {noms_natif:?}");
+    assert!(
+        noms_natif.contains(&"Sextant".to_string()),
+        "le trigramme doit trouver : {noms_natif:?}"
+    );
+
+    // ── lucivy, forcée, sur le même backend PostgreSQL ──────────────────────
+    //
+    // C'est le cas qui n'avait jamais tourné : l'index lucivy s'écrit dans le
+    // `PostgresBlobStore`, et la recherche passe par `search_bm25_chunked` avec
+    // ses handles — deux organes qui ne se rencontraient nulle part.
+    let noms_lucivy = {
+        let (_garde, _ctx, mut catalog) = catalogue_avec(8, MoteurTexte::Lucivy);
+        assert!(
+            !catalog.plein_texte_natif(),
+            "Lucivy doit forcer lucivy même quand le backend sait faire"
+        );
+        catalog.register_entity("Product", config_produit()).unwrap();
+        catalog.ingest_entities("Product", produits()).unwrap();
+        let r = catalog
+            .search(
+                "Product",
+                "navigation astronomique",
+                SearchOptions {
+                    consistency: Consistency::Immediate,
+                    signals: Some(SearchSignals::BM25),
+                    ..Default::default()
+                },
+            )
+            .expect("recherche par lucivy sur postgres");
+        eprintln!("[lucivy] avertissements : {:?}", r.meta.warnings);
+        r.results
+            .iter()
+            .filter_map(|x| x.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+            .collect::<Vec<_>>()
+    };
+    eprintln!("[lucivy] {noms_lucivy:?}");
+    assert!(
+        noms_lucivy.contains(&"Sextant".to_string()),
+        "lucivy doit trouver sur postgres — c'est le chemin du retour : {noms_lucivy:?}"
     );
 }

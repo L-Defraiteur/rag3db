@@ -400,3 +400,41 @@ la journée se rejoignent là.
 Le test affirme les trois choses : que la falaise existe au plancher par défaut,
 que 0,80 partage bien l'intervalle une fois le rappel ouvert, et qu'une requête
 exacte n'est **pas** marquée.
+
+## 7. Le chemin du retour vers lucivy — il n'existait pas
+
+lucivy pèse trop en espace disque pour de la production aujourd'hui, et sera
+allégée. D'ici là, `MoteurTexte::{Auto, Lucivy, Natif}` doit rester une
+**option** : chaque moteur marche à sa sauce, aucun n'est éliminé.
+
+Or `set_moteur_texte` n'avait **aucun appelant**. Les trois valeurs existaient
+sur le papier. Un test les a empruntées — et lucivy sur PostgreSQL rendait zéro.
+
+Trois défauts en file, chacun caché par le précédent :
+
+| # | ce qui se passait |
+|---|---|
+| 1 | l'insertion rend `ID(n)` (chaîne) sur rag3db et `_row_id` (**entier**) sur PostgreSQL ; le code ne lisait que la chaîne, donc la table uuid→identifiant restait **vide** |
+| 2 | `InternalNodeId::parse` refusait un entier nu — et **un test épinglait ce refus** |
+| 3 | `resolve_and_enrich_chunked` composait son Cypher en dur : lucivy est un index Rust, sa résolution ne parlait que rag3db |
+
+Le premier est le pire : sans table d'identifiants, le cache **et** l'indexation
+lucivy étaient sautés **sans un mot**. Un index se créait, se commitait sans
+erreur, et ne contenait aucun document. La recherche rendait zéro, ce qui
+ressemble à « ça n'existe pas ».
+
+Réparé : la lecture de l'identifiant accepte les deux types et **avertit** quand
+il est illisible ; `parse` accepte le `_row_id` nu (la table est déjà nommée par
+la requête, donc `table_id` vaut 0) ; et la résolution passe par une nouvelle
+méthode de dialecte, `resolve_parents_with_chunks` — `OPTIONAL MATCH` d'un côté,
+`LEFT JOIN ... ON c._parent_uuid = n._uuid` de l'autre. L'ordre des colonnes est
+extrait dans `colonnes_de_chunk`, parce que la lecture qui suit se fait **par
+position** : un ordre divergent ne donnerait pas une erreur mais des champs
+échangés.
+
+**Et une quatrième chose, de la même famille que la journée.** Dix montages de
+services à la main, dans sept fichiers de tests, reconstruisent le registre du
+catalogue — et aucun n'avait le dialecte. Complétés, mais la duplication reste :
+c'est le troisième cas aujourd'hui de deux copies tenues à la main qui divergent,
+après les schémas de nœuds et le miroir Rust de `search_base`. Un
+`Catalog::register_search_services` les fondrait.

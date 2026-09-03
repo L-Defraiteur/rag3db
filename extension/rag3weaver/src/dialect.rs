@@ -52,6 +52,30 @@ impl ColumnType {
 ///
 /// Each method returns one or more SQL/Cypher statements as strings.
 /// The caller executes them via [`DbConnection`](crate::connection::DbConnection).
+/// Les colonnes de chunk, dans **l'ordre que lit `resolve_and_enrich_chunked`**.
+///
+/// Extraites pour que les deux dialectes ne puissent pas diverger : cette
+/// lecture se fait par position, donc un ordre différent ne produirait pas une
+/// erreur mais des champs échangés — un `start_char` lu comme un `index`.
+pub fn colonnes_de_chunk(alias: &str, has_source_refs: bool) -> Vec<String> {
+    let mut v = vec![
+        format!("{alias}._uuid AS c_uuid"),
+        format!("{alias}._text AS c_text"),
+        format!("{alias}._index AS c_idx"),
+        format!("{alias}._parent_field AS c_field"),
+        format!("{alias}._start_char AS c_start"),
+        format!("{alias}._end_char AS c_end"),
+        format!("{alias}._start_line AS c_sline"),
+        format!("{alias}._end_line AS c_eline"),
+        format!("{alias}._content_offset AS c_content_offset"),
+    ];
+    if has_source_refs {
+        v.push(format!("{alias}._source_entity AS c_source_entity"));
+        v.push(format!("{alias}._source_uuid AS c_source_uuid"));
+    }
+    v
+}
+
 pub trait SchemaDialect: Send + Sync {
     /// Backend name for diagnostics (e.g. "rag3db", "postgresql").
     fn name(&self) -> &'static str;
@@ -379,6 +403,56 @@ pub trait SchemaDialect: Send + Sync {
         target_entity: &str,
         forward: bool,
     ) -> String;
+
+    /// **Résoudre des décalages de parents, avec tous leurs chunks**, en une
+    /// requête.
+    ///
+    /// C'est l'étape qui suit un hit lucivy : l'index rend un décalage de la
+    /// table parente, il faut l'entité *et* ses chunks pour rattacher les spans
+    /// de surlignage. La forme des lignes est fixée — `_offset`, `_uuid`, les
+    /// champs demandés, puis neuf colonnes de chunk (plus deux si la cible
+    /// porte des références de source) — parce que c'est elle que
+    /// `resolve_and_enrich_chunked` lit ensuite, position par position.
+    ///
+    /// **Elle était écrite en Cypher en dur.** lucivy est un index Rust, donc
+    /// utilisable sur n'importe quel backend ; sa résolution, elle, ne parlait
+    /// que rag3db. `MoteurTexte::Lucivy` était donc impossible sur PostgreSQL —
+    /// et comme rien ne l'empruntait, personne ne le savait.
+    fn resolve_parents_with_chunks(
+        &self,
+        entity: &str,
+        chunk_table: &str,
+        chunk_rel: &str,
+        chunk_rel_fwd: bool,
+        offsets: &[u64],
+        return_fields: &[String],
+        has_source_refs: bool,
+    ) -> String {
+        let offset_list = offsets
+            .iter()
+            .map(|o| o.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut cols: Vec<String> = vec![
+            "OFFSET(id(n)) AS _offset".to_string(),
+            "n._uuid AS _uuid".to_string(),
+        ];
+        for f in return_fields {
+            cols.push(format!("n.{f} AS {f}"));
+        }
+        cols.extend(colonnes_de_chunk("c", has_source_refs));
+        let jointure = if chunk_rel_fwd {
+            format!("OPTIONAL MATCH (n)-[:{chunk_rel}]->(c:{chunk_table})")
+        } else {
+            format!("OPTIONAL MATCH (n)<-[:{chunk_rel}]-(c:{chunk_table})")
+        };
+        format!(
+            "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
+             {jointure} \
+             RETURN {}",
+            cols.join(", ")
+        )
+    }
 
     /// Joindre un **chunk à son parent**, pour qu'un filtre puisse porter sur
     /// les champs du parent alors que la recherche court sur les chunks.
@@ -1574,6 +1648,40 @@ impl SchemaDialect for PostgresDialect {
                  JOIN {target_entity} AS {target_alias} ON {target_alias}._uuid = _r_{target_alias}.from_uuid"
             )
         }
+    }
+
+    /// Le chunk porte `_parent_uuid` : une jointure gauche suffit, et le
+    /// décalage est `_row_id`. Même forme de lignes que le Cypher — c'est elle
+    /// que la lecture par position exige.
+    fn resolve_parents_with_chunks(
+        &self,
+        entity: &str,
+        chunk_table: &str,
+        _chunk_rel: &str,
+        _chunk_rel_fwd: bool,
+        offsets: &[u64],
+        return_fields: &[String],
+        has_source_refs: bool,
+    ) -> String {
+        let offset_list = offsets
+            .iter()
+            .map(|o| o.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut cols: Vec<String> = vec![
+            "n._row_id AS _offset".to_string(),
+            "n._uuid AS _uuid".to_string(),
+        ];
+        for f in return_fields {
+            cols.push(format!("n.{f} AS {f}"));
+        }
+        cols.extend(colonnes_de_chunk("c", has_source_refs));
+        format!(
+            "SELECT {} FROM {entity} AS n \
+             LEFT JOIN {chunk_table} AS c ON c._parent_uuid = n._uuid \
+             WHERE n._row_id = ANY(ARRAY[{offset_list}]::bigint[])",
+            cols.join(", ")
+        )
     }
 
     /// Le chunk porte `_parent_uuid` : une seule jointure, sur une colonne

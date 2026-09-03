@@ -1408,6 +1408,7 @@ pub struct ChunkRecord {
 /// Prefer `resolve_and_enrich_chunked()` for BM25 chunked searches (Level 1+).
 pub fn resolve_and_enrich_chunked(
     conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
     target: &SearchTarget,
     offsets: &[u64],
     return_fields: &[String],
@@ -1416,49 +1417,18 @@ pub fn resolve_and_enrich_chunked(
         return Ok(HashMap::new());
     }
 
-    let offset_list = offsets
-        .iter()
-        .map(|o| o.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    // Build RETURN clause: parent fields + chunk fields
-    let mut return_cols: Vec<String> = vec![
-        "OFFSET(id(n)) AS _offset".to_string(),
-        "n._uuid AS _uuid".to_string(),
-    ];
-    for f in return_fields {
-        return_cols.push(format!("n.{f} AS {f}"));
-    }
-    // Chunk columns (after parent fields)
-    return_cols.push("c._uuid AS c_uuid".to_string());
-    return_cols.push("c._text AS c_text".to_string());
-    return_cols.push("c._index AS c_idx".to_string());
-    return_cols.push("c._parent_field AS c_field".to_string());
-    return_cols.push("c._start_char AS c_start".to_string());
-    return_cols.push("c._end_char AS c_end".to_string());
-    return_cols.push("c._start_line AS c_sline".to_string());
-    return_cols.push("c._end_line AS c_eline".to_string());
-    return_cols.push("c._content_offset AS c_content_offset".to_string());
-    if target.has_source_refs {
-        return_cols.push("c._source_entity AS c_source_entity".to_string());
-        return_cols.push("c._source_uuid AS c_source_uuid".to_string());
-    }
-    let return_clause = return_cols.join(", ");
-
-    // Build OPTIONAL MATCH for the chunk join using target's relationship info
-    let entity = &target.parent_table;
-    let chunk_entity = &target.chunk_table;
-    let optional_match = if target.chunk_rel_fwd {
-        format!("OPTIONAL MATCH (n)-[:{}]->(c:{})", target.chunk_rel, chunk_entity)
-    } else {
-        format!("OPTIONAL MATCH (n)<-[:{}]-(c:{})", target.chunk_rel, chunk_entity)
-    };
-
-    let cypher = format!(
-        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
-         {optional_match} \
-         RETURN {return_clause}"
+    // La requête est **rendue par le dialecte** : lucivy est un index Rust,
+    // donc utilisable sur n'importe quel backend, et sa résolution doit l'être
+    // aussi. La forme des lignes est fixée par `colonnes_de_chunk`, parce que
+    // la lecture qui suit se fait par position.
+    let cypher = dialect.resolve_parents_with_chunks(
+        &target.parent_table,
+        &target.chunk_table,
+        &target.chunk_rel,
+        target.chunk_rel_fwd,
+        offsets,
+        return_fields,
+        target.has_source_refs,
     );
     let result = conn
         .execute(&cypher)
@@ -1980,6 +1950,10 @@ fn parse_highlights_json(json: &str) -> HashMap<String, Vec<(usize, usize)>> {
 #[allow(clippy::too_many_arguments)]
 pub fn search_bm25_chunked(
     conn: &dyn DbConnection,
+    // Le dialecte, pour la **résolution** : lucivy est un index Rust, donc
+    // utilisable sur n'importe quel backend, et rien ne servirait de la brancher
+    // ailleurs si l'étape d'après ne parlait que Cypher.
+    dialect: &dyn crate::dialect::SchemaDialect,
     target: &SearchTarget,
     query: &str,
     fields: &[String],
@@ -2064,7 +2038,7 @@ pub fn search_bm25_chunked(
     // natif : c'est ce qui rend le nombre comparable d'un backend à l'autre.
     // lucivy rend du BM25, non borné — on ne peut pas y poser de seuil.
     let sortie =
-        finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics, warnings)?;
+        finish_bm25_chunked(conn, dialect, target, hits, return_fields, result_mode, diagnostics, warnings)?;
     marquer_la_confiance(query, &sortie, warnings);
     Ok(sortie)
 }
@@ -2425,6 +2399,7 @@ pub fn search_texte_natif(
 #[allow(clippy::too_many_arguments)]
 fn finish_bm25_chunked(
     conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
     target: &SearchTarget,
     hits: Vec<(u64, f64, String)>,
     return_fields: &[String],
@@ -2439,7 +2414,7 @@ fn finish_bm25_chunked(
 
     // Query 2: resolve offsets + fetch chunks + enrich in one query
     let offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
-    let parents = resolve_and_enrich_chunked(conn, target, &offsets, return_fields)?;
+    let parents = resolve_and_enrich_chunked(conn, dialect, target, &offsets, return_fields)?;
 
     // Match highlights to chunks for each hit
     let mut results: Vec<SearchResult> = Vec::new();

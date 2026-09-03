@@ -4201,7 +4201,7 @@ impl Catalog {
                 )?
             } else if is_chunked {
                 search::search_bm25_chunked(
-                    self.conn.as_ref(), &target, query, bm25_fields,
+                    self.conn.as_ref(), self.dialect.as_ref(), &target, query, bm25_fields,
                     options.bm25_mode, options.fuzzy_distance, search_limit,
                     allowed_ids.as_deref(), enrich_fields, options.result_mode,
                     diag.as_mut(), &mut search_warnings,

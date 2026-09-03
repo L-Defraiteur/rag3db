@@ -165,8 +165,20 @@ impl Node for InsertRecordNode {
             let mut uuid_to_node_id: HashMap<String, String> = HashMap::new();
             for row in &result.rows {
                 if let (Some(id_val), Some(uuid_val)) = (row.first(), row.get(1)) {
-                    if let (Some(id_str), Some(uuid_str)) = (id_val.as_str(), uuid_val.as_str()) {
-                        uuid_to_node_id.insert(uuid_str.to_string(), id_str.to_string());
+                    // **L'identifiant n'a pas le même type selon le backend.**
+                    // `node_id_expr` rend `ID(n)` sur rag3db — une chaîne
+                    // `"table:offset"` — et `_row_id` sur PostgreSQL, un entier.
+                    // Ne lire que la chaîne laissait cette table **vide** sur
+                    // tout backend SQL, et avec elle le cache d'identifiants et
+                    // l'indexation lucivy : un index se créait, se commitait, et
+                    // ne contenait aucun document. `MoteurTexte::Lucivy` était
+                    // donc inutilisable sur PostgreSQL, sans une erreur nulle part.
+                    let id = id_val
+                        .as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| id_val.as_i64().map(|n| n.to_string()));
+                    if let (Some(id_str), Some(uuid_str)) = (id, uuid_val.as_str()) {
+                        uuid_to_node_id.insert(uuid_str.to_string(), id_str);
                     }
                 }
             }
@@ -182,6 +194,17 @@ impl Node for InsertRecordNode {
                     .to_string();
 
                 if let Some(id_str) = uuid_to_node_id.get(&uuid) {
+                    // **Un identifiant illisible n'est pas une absence.** Tout
+                    // ce qui suit en dépend — le cache d'identifiants et
+                    // l'indexation lucivy — et le sauter sans le dire donne un
+                    // index vide qui se commite sans erreur.
+                    if InternalNodeId::parse(id_str).is_none() {
+                        ctx.warn(&format!(
+                            "InsertRecordNode: identifiant « {id_str} » illisible pour \
+                             {entity_name} — ni cache d'identifiants ni index FTS pour \
+                             cette ligne"
+                        ));
+                    }
                     if let Some(node_id) = InternalNodeId::parse(id_str) {
                         if let Ok(mut cache) = node_id_cache.write() {
                             cache.insert(&uuid, node_id);

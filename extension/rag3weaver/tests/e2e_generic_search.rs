@@ -178,6 +178,20 @@ fn build_services(
     // (le registre stocke la valeur sans l'envelopper).
     services.register("catalog", catalog_arc.clone());
     services.register("conn", ConnService(conn_arc));
+    services.register(
+        "dialect",
+        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+    );
+    // **Le dialecte est un service comme les autres.** `BM25SearchNode` en a
+    // besoin pour la résolution : lucivy rend des décalages, et les changer en
+    // entités ne parlait que Cypher jusqu'ici. Le catalogue l'enregistre déjà
+    // dans ses propres registres ; ce montage à la main l'avait oublié.
+    services.register(
+        "dialect",
+        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+    );
     // Les nœuds BM25/sparse cherchent dans les index Rust ouverts par le Catalog.
     services.register("fts_handles", fts_handles);
     services.register("sparse_handles", sparse_handles);

@@ -96,6 +96,11 @@ fn setup() -> (Arc<ServiceRegistry>, Arc<dyn FileSource>) {
     let mut services = ServiceRegistry::new();
     services.register("catalog", Arc::new(Mutex::new(catalog)));
     services.register("conn", rag3weaver::dataflow::services::ConnService(conn_arc));
+    services.register(
+        "dialect",
+        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+    );
     services.register("fts_handles", fts);
     services.register("sparse_handles", sparse);
     services.register::<Arc<dyn Embedder>>("embedder", embedder);

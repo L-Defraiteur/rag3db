@@ -280,6 +280,11 @@ fn read_and_grep_as_graph_tools() {
     {
         let cat = catalog.lock().unwrap();
         services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+        services.register(
+            "dialect",
+            std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+                as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+        );
         services.register("fts_handles", cat.fts_handles().clone());
         services.register::<Arc<dyn rag3weaver::embedder::Embedder>>("embedder", Arc::new(HashEmbedder::new(64)));
     }
@@ -1307,6 +1312,11 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
         {
             let cat = catalog.lock().unwrap();
             services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+            services.register(
+                "dialect",
+                std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+                    as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+            );
             services.register("fts_handles", cat.fts_handles().clone());
             services.register("sparse_handles", cat.sparse_handles().clone());
         }
@@ -1376,6 +1386,11 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     {
         let cat = catalog.lock().unwrap();
         services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+        services.register(
+            "dialect",
+            std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+                as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+        );
         services.register("fts_handles", cat.fts_handles().clone());
         services.register("sparse_handles", cat.sparse_handles().clone());
     }
@@ -1433,6 +1448,11 @@ fn the_vector_path_honours_the_filter_too() {
         {
             let cat = catalog.lock().unwrap();
             services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
+            services.register(
+                "dialect",
+                std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+                    as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+            );
         }
         services.register("catalog", catalog.clone());
         services.register::<std::sync::Arc<dyn rag3weaver::embedder::Embedder>>("embedder", std::sync::Arc::new(HashEmbedder::new(64)));

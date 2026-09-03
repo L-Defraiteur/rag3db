@@ -157,6 +157,11 @@ fn services(catalog: Catalog) -> Arc<ServiceRegistry> {
     let mut services = ServiceRegistry::new();
     services.register("catalog", Arc::new(Mutex::new(catalog)));
     services.register("conn", ConnService(conn_arc));
+    services.register(
+        "dialect",
+        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
+            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
+    );
     services.register("fts_handles", fts_handles);
     services.register("sparse_handles", sparse_handles);
     services.register::<Arc<dyn Embedder>>("embedder", embedder);

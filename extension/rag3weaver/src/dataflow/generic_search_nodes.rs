@@ -528,8 +528,13 @@ impl Node for BM25SearchNode {
         // résoudre pour rien ferait un aller de base par recherche.
         let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options);
 
+        let dialect = ctx
+            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .cloned()
+            .ok_or("BM25SearchNode: 'dialect' service not registered")?;
         let results = search_bm25_chunked(
             &*conn,
+            dialect.as_ref(),
             &target,
             &query_str,
             fields,
