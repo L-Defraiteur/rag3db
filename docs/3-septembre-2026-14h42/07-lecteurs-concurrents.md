@@ -104,11 +104,15 @@ enregistrements pour élargir au maximum la fenêtre :
 **Aucun refus n'a résisté.** Le test exige `perdus == 0` : si un seul refus
 survivait à cinq tentatives, il échouerait.
 
-> **Donc `rag3daemon` peut cesser de relayer les lectures, à deux conditions.**
-> La première est ici : réessayer sur ce refus précis. Une poignée de reprises
-> espacées de quelques millisecondes suffit — ce n'est pas une lecture qui
-> échoue, c'est une lecture qui attend. La seconde est ailleurs, elle n'était pas
-> dans le périmètre de cette mesure, et elle est décrite juste en dessous.
+> **Donc `rag3daemon` peut cesser de relayer les lectures, à deux conditions —
+> et les deux sont désormais tenues.** La première est ici : réessayer sur ce
+> refus précis. Une poignée de reprises espacées de quelques millisecondes suffit
+> — ce n'est pas une lecture qui échoue, c'est une lecture qui attend. La seconde
+> n'était pas dans le périmètre de cette mesure ; elle est décrite juste en
+> dessous, et elle a été construite et éprouvée le soir même.
+>
+> Ce qui reste n'est plus un préalable technique, c'est le retrait lui-même —
+> une décision de conception.
 
 ### La seconde condition : le contrat de cohérence d'ingestion, qui se dégrade en silence
 
@@ -142,18 +146,30 @@ rendait l'accès concurrent *impossible*, pas *ordonné*. On ne perd donc rien
 qu'on avait — on découvre une garantie qui n'a jamais franchi la frontière du
 processus, et qui devient visible maintenant qu'on peut la franchir.
 
-La forme de la réponse est petite : l'écrivain publie son avancement dans la base
-même — une marque d'eau que les deux moteurs de stockage savent déjà écrire — et
-le lecteur qui veut `Strict` attend qu'elle dépasse ce qu'il attend, au lieu
-d'attendre une file qu'il ne peut pas voir. Ce n'est pas construit, et ce n'est
-pas dans ce répertoire.
+**Construit et éprouvé le soir même**, par la session qui tient le crate
+(`25dca75ce`, `de4fe5d5a`). L'écrivain pose une marque `_ingestion/pending/{son
+id}` quand sa file passe de vide à non vide, et l'efface après chaque vidange
+réussie. Un lecteur qui demande `Strict` vide sa propre file, puis attend que
+plus aucun écrivain ne soit marqué.
+
+Les trois façons d'échouer sont nommées et aucune ne se déguise en succès : délai
+expiré, marque périmée au-delà d'une minute — l'attendre transformerait une panne
+en gel — et marques illisibles. La vidange porte en plus un filet : si elle
+trouve du travail sans marque publiée, elle la pose **et le signale**, pour qu'un
+chemin de mise en file oublié demain se voie au lieu de mentir.
+
+Et le test qui compte est à deux vrais processus, contre notre moteur : zéro
+marque au repos, une sous travail non publié, zéro après la vidange. Contre une
+bibliothèque d'avant le correctif de verrou, l'enfant est refusé et le test le
+dit — il ne confond pas « aucune marque » avec « je n'ai pas pu regarder ».
 
 ## Ce que ça change, et ce que ça ne change pas
 
 **Ce qu'on gagne.** Les lectures peuvent sortir du relais. Un processus tiers
 ouvre la base directement, en lecture seule, pendant que l'écrivain travaille —
-et ce qu'il lit est bon, page par page. « Peuvent » et non « sortent » : la
-seconde condition ci-dessus est un préalable, pas une amélioration ultérieure.
+et ce qu'il lit est bon, page par page, et cohérent avec ce qui a été ingéré
+depuis que la marque d'eau existe. « Peuvent » et non « sortent » : le retrait
+lui-même reste à décider.
 
 **Ce qu'on n'a pas pris.** Rien de la couche transactionnelle de Vela : ni leur
 contrôle de concurrence multi-version, ni leur rotation de journal, ni leurs
@@ -309,8 +325,5 @@ ils passent : une mesure qui ne s'affiche pas est une mesure qu'on ne relit pas.
   pose un point de reprise tous les cinq enregistrements. Un usage normal en
   verra beaucoup moins ; personne ne l'a vérifié.
 - **Rien n'a été changé dans `rag3daemon`.** La mesure dit qu'il *peut* cesser de
-  relayer, sous deux conditions. Le faire est un autre chantier, et il appartient
-  à la session qui tient `extension/rag3weaver/`.
-- **La marque d'eau d'ingestion n'existe pas.** Sans elle, un lecteur hors du
-  processus écrivain ne peut pas honorer `Consistency::Strict`. C'est le
-  préalable, et il n'est pas commencé.
+  relayer, sous deux conditions désormais tenues toutes les deux. Le faire reste
+  un autre chantier, et une décision de conception, pas une mesure.
