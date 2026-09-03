@@ -13,6 +13,13 @@
 //! ```bash
 //! cargo test --features rag3db-native --test e2e_prise_atomique -- --nocapture
 //! ```
+//!
+//! **`#[ignore]` sur chacun, comme partout ici.** `run_e2e.sh` ne lance que
+//! les tests ignorés (`-- --ignored`) : sans cet attribut, ces cinq-là étaient
+//! « 5 filtered out » à chaque passe complète, c'est-à-dire jamais joués. Ils
+//! ne tournaient que si quelqu'un appelait cargo à la main — et personne ne le
+//! faisait. Découvert le 3 septembre 2026 en pointant le script sur la
+//! bibliothèque à jour.
 
 #![cfg(feature = "rag3db-native")]
 
@@ -42,6 +49,7 @@ fn prise(qui: &str) -> String {
 /// appels qui la traversent. L'atomicité vient donc de là, pas d'une isolation
 /// transactionnelle : c'est le cas facile, et il marche.
 #[test]
+#[ignore]
 fn deux_travailleurs_ne_prennent_pas_le_meme_travail() {
     let conn: Arc<dyn DbConnection> =
         Arc::new(Rag3dbConnection::in_memory().expect("base en mémoire"));
@@ -141,6 +149,7 @@ fn deux_travailleurs_ne_prennent_pas_le_meme_travail() {
 /// une seconde transaction d'écriture (`enableMultiWrites` est faux, et le seul
 /// réglage qui le relâche s'appelle `debug_enable_multi_writes`).
 #[test]
+#[ignore]
 fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
     const MARQUE: &str = "RAG3WEAVER_ENFANT_BASE";
 
@@ -163,7 +172,9 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
     let _parent = Rag3dbConnection::new(&dossier).expect("le parent ouvre la base");
 
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", "deux_processus_ne_peuvent_pas_ouvrir_la_meme_base"])
+        // `--ignored` : l'enfant relance ce même test, qui porte `#[ignore]`.
+        // Sans ça il ne joue rien et le parent croit à un refus silencieux.
+        .args(["--exact", "deux_processus_ne_peuvent_pas_ouvrir_la_meme_base", "--ignored"])
         .env(MARQUE, &dossier)
         .output()
         .expect("lancer l'enfant");
@@ -192,6 +203,7 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
 /// Les deux moitiés sont vérifiées ici, parce que c'est leur conjonction qui
 /// décrit ce qu'on peut vraiment faire à plusieurs machines.
 #[test]
+#[ignore]
 fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
     const LECTEUR: &str = "RAG3WEAVER_ENFANT_LECTEUR";
     const ECRIVAIN_TIENT: &str = "RAG3WEAVER_ENFANT_PENDANT_ECRITURE";
@@ -242,7 +254,7 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
 
     let enfant = |marque: &str| -> Option<i32> {
         std::process::Command::new(std::env::current_exe().expect("current_exe"))
-            .args(["--exact", "plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient"])
+            .args(["--exact", "plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient", "--ignored"])
             .env(marque, &dossier)
             .output()
             .expect("lancer l'enfant")
@@ -316,6 +328,7 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
 /// Ce qui est interdit dans les deux cas, c'est le refus **sporadique** : il
 /// voudrait dire qu'un transitoire a traversé la reprise.
 #[test]
+#[ignore]
 fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
     const INSISTANT: &str = "RAG3WEAVER_ENFANT_INSISTANT";
     const CYCLES: usize = 80;
@@ -364,7 +377,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
         // `--nocapture` : sans lui le harnais de l'enfant avale son `println!`,
         // et le parent ne lit rien — l'enfant paraîtrait muet alors qu'il parle.
-        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture"])
+        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture", "--ignored"])
         .env(INSISTANT, &dossier)
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -441,6 +454,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
 /// ancienne, l'enfant est refusé et il le **dit** plutôt que de faire croire à
 /// une absence de marque.
 #[test]
+#[ignore]
 fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
     use rag3weaver::{Catalog, CatalogConfig};
     const ENFANT: &str = "RAG3WEAVER_ENFANT_MARQUE";
@@ -515,6 +529,7 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
                 "--exact",
                 "la_marque_dingestion_se_voit_depuis_un_autre_processus",
                 "--nocapture",
+                "--ignored",
             ])
             .env(ENFANT, &dossier)
             .output()

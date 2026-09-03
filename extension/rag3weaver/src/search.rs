@@ -2156,10 +2156,17 @@ fn marquer_la_confiance(query: &str, resultats: &[SearchResult], warnings: &mut 
     }
     let confiance = crate::jaro::meilleur_par_mot(query, &texte);
     if confiance < SEUIL_CONFIANCE {
+        // **La phrase nomme son signal.** Elle est calculée sur le seul plein
+        // texte et atterrit dans la méta de **toute** la recherche : dire
+        // « rien de probant » tout court la ferait parler au nom du vecteur,
+        // qui peut très bien avoir trouvé — c'est même ce pour quoi il existe,
+        // rapprocher ce qui ne partage aucun mot. Une phrase qui affirme plus
+        // que ce qu'elle a mesuré est exactement le défaut qu'on répare.
         warnings.push(format!(
-            "rien de probant pour « {query} » : le meilleur candidat est à \
-             {confiance:.2} de similarité, sous le seuil de {SEUIL_CONFIANCE:.2} — ce \
-             qui suit partage des mots avec la requête sans forcément y répondre"
+            "le plein texte n'a rien de probant pour « {query} » : son meilleur \
+             candidat est à {confiance:.2} de similarité lexicale, sous le seuil de \
+             {SEUIL_CONFIANCE:.2} — il partage des mots avec la requête sans forcément \
+             y répondre. Un autre signal peut avoir mieux trouvé."
         ));
     }
 }

@@ -17,7 +17,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BUILD="$ROOT/build/native-test"
+# **La bibliothèque contre laquelle tout est éprouvé.**
+#
+# C'était `build/native-test`, du 24 août — donc antérieure de dix jours au
+# report de Vela sur `storage_manager.cpp`, qui lève l'exclusion
+# lecteur/écrivain. Toutes nos suites tournaient contre un cœur qui refusait
+# encore un lecteur pendant qu'un écrivain tient la base ; on l'a découvert le
+# 3 septembre 2026 en éprouvant la reprise sur refus transitoire, et le test le
+# montrait noir sur blanc (`e2e_prise_atomique`, 80 refus contre 80 lectures
+# selon la bibliothèque liée).
+#
+# `build/lecteurs` porte le correctif, avec le même type Release, le même
+# `BUILD_SHARED_LIBS`, les mêmes extensions. `RAG3DB_BUILD` permet de revenir
+# sur l'ancienne en une variable — utile pour vérifier qu'un test dit vrai des
+# deux côtés, ce que plusieurs des nôtres font maintenant exprès.
+BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs}"
 WEAVER="$ROOT/extension/rag3weaver"
 
 # ── Confiner la pression mémoire ────────────────────────────────────────────

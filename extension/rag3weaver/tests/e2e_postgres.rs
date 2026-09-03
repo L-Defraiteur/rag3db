@@ -1015,7 +1015,11 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         .expect("recherche douteuse");
     eprintln!("  avertissements : {:?}", douteux.meta.warnings);
     assert!(
-        douteux.meta.warnings.iter().any(|w| w.contains("rien de probant")),
+        douteux
+            .meta
+            .warnings
+            .iter()
+            .any(|w| w.contains("le plein texte n'a rien de probant")),
         "une réponse sous le seuil doit se marquer — avertissements : {:?}",
         douteux.meta.warnings
     );
@@ -1033,7 +1037,10 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         )
         .expect("recherche nette");
     assert!(
-        !net.meta.warnings.iter().any(|w| w.contains("rien de probant")),
+        !net.meta
+            .warnings
+            .iter()
+            .any(|w| w.contains("le plein texte n'a rien de probant")),
         "une requête exacte ne doit pas être marquée : {:?}",
         net.meta.warnings
     );
@@ -1475,5 +1482,63 @@ fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
             .any(|w| w.contains("cohérence stricte non tenue")),
         "une recherche Strict qui ne peut pas l'être doit le dire — {:?}",
         reponse.meta.warnings
+    );
+}
+
+// ═══ 15. Une marque nomme son signal ════════════════════════════════════════
+
+/// **Une phrase ne doit pas affirmer plus que ce qu'elle a mesurée.**
+///
+/// La marque de confiance est calculée sur le seul plein texte, et elle
+/// atterrit dans `meta.warnings` de **toute** la recherche. Dire « rien de
+/// probant » tout court la ferait parler au nom du vecteur — qui peut très bien
+/// avoir trouvé, c'est même ce pour quoi il existe : rapprocher ce qui ne
+/// partage aucun mot avec la requête.
+///
+/// Ce test tient la formulation. Il n'est pas cosmétique : c'est la différence
+/// entre « le moteur n'a rien » et « une de ses deux moitiés n'a rien ».
+#[test]
+fn la_marque_de_confiance_nomme_son_signal() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Gneiss", "gneiss metamorphique foliation migmatite", 10.0),
+                produit("Remontoir", "remontoir couronne barillet armage", 20.0),
+            ],
+        )
+        .unwrap();
+
+    // Une requête qui ne fait que partager des mots, sans rien désigner.
+    let r = catalog
+        .search(
+            "Product",
+            "couronne metamorphique",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche douteuse");
+
+    let marque = r
+        .meta
+        .warnings
+        .iter()
+        .find(|w| w.contains("rien de probant"))
+        .unwrap_or_else(|| panic!("la marque devait se poser : {:?}", r.meta.warnings));
+    eprintln!("[marque] {marque}");
+
+    assert!(
+        marque.starts_with("le plein texte n'a rien de probant"),
+        "la marque doit nommer le signal qu'elle a mesuré : {marque}"
+    );
+    assert!(
+        marque.contains("Un autre signal peut avoir mieux trouvé"),
+        "et laisser sa place au vecteur, qui rapproche ce qui ne partage aucun mot : \
+         {marque}"
     );
 }

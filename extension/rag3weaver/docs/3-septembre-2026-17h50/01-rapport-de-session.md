@@ -367,7 +367,15 @@ Rien n'est retiré. Une recherche sous le seuil pousse un avertissement :
 > 0.72, sous le seuil de 0.80 — ce qui suit partage des mots avec la requête
 > sans forcément y répondre
 
-Et cet avertissement **arrive** à un agent, ce qui n'était pas vrai ce matin :
+**Et la phrase nomme son signal.** Elle est calculée sur le seul plein texte et
+atterrit dans la méta de *toute* la recherche : dire « rien de probant » tout
+court la ferait parler au nom du vecteur, qui peut très bien avoir trouvé —
+c'est même ce pour quoi il existe, rapprocher ce qui ne partage aucun mot. Une
+phrase qui affirme plus que ce qu'elle a mesuré est exactement le défaut qu'on
+répare ; celle-ci dit « le plein texte n'a rien de probant […] un autre signal
+peut avoir mieux trouvé », et un test tient la formulation.
+
+Cet avertissement **arrive** à un agent, ce qui n'était pas vrai ce matin :
 c'est la tuyauterie réparée à la §4 (méta fusionnable, passe-plat `render.meta`,
 schémas de fabrique recousus) qui le porte jusqu'à la fiche. Les deux moitiés de
 la journée se rejoignent là.
@@ -587,12 +595,22 @@ contrat mort dès que la bibliothèque bouge. Il tient maintenant l'invariant qu
 est le nôtre — **ou refusé, ou il lit juste, jamais du bruit** — et nomme le
 régime observé. Les quatre tests passent contre les deux bibliothèques.
 
-### Ce qui reste à décider, et qui n'est pas à moi
+### Tranché : le script relie la bibliothèque à jour
 
-`run_e2e.sh` relie `build/native-test`, du 24 août. Le remettre à jour est
-presque une compilation complète ; pointer le script sur une bibliothèque
-portant le report ne coûte rien. **C'est le poste de Lucie et c'est son
-arbitrage**, pas le mien.
+Lucie a choisi. `run_e2e.sh` pointe sur `build/lecteurs`, avec
+`RAG3DB_BUILD` pour revenir sur l'ancienne en une variable — utile parce que
+plusieurs de nos tests disent maintenant vrai des deux côtés, exprès.
+
+**Et le déplacement a découvert cinq tests qui ne tournaient jamais.**
+`e2e_prise_atomique` n'avait pas `#[ignore]`, alors que `run_e2e.sh` ne lance
+que les tests ignorés (`-- --ignored`). Ces cinq-là étaient « 5 filtered out »
+à chaque passe complète, c'est-à-dire jamais joués — ils ne tournaient que si
+quelqu'un appelait cargo à la main, et personne ne le faisait. C'est la même
+famille que tout le reste : une couverture qui existe sur le papier.
+
+Corrigé, avec la conséquence qu'il fallait voir : ces tests se relancent
+eux-mêmes en processus enfant, et l'enfant devait recevoir `--ignored` à son
+tour. Sans ça il ne joue rien, et le parent lit son silence comme un refus.
 
 ## 11. La troisième duplication, fondue
 
