@@ -104,16 +104,56 @@ enregistrements pour élargir au maximum la fenêtre :
 **Aucun refus n'a résisté.** Le test exige `perdus == 0` : si un seul refus
 survivait à cinq tentatives, il échouerait.
 
-> **Donc `rag3daemon` peut cesser de relayer les lectures, à condition de
-> réessayer sur ce refus précis.** Une poignée de reprises espacées de quelques
-> millisecondes suffit. Ce n'est pas une lecture qui échoue, c'est une lecture
-> qui attend.
+> **Donc `rag3daemon` peut cesser de relayer les lectures, à deux conditions.**
+> La première est ici : réessayer sur ce refus précis. Une poignée de reprises
+> espacées de quelques millisecondes suffit — ce n'est pas une lecture qui
+> échoue, c'est une lecture qui attend. La seconde est ailleurs, elle n'était pas
+> dans le périmètre de cette mesure, et elle est décrite juste en dessous.
+
+### La seconde condition : le contrat de cohérence d'ingestion, qui se dégrade en silence
+
+Signalée par la session qui tient `extension/rag3weaver/`, et vérifiée.
+
+Ce que cette mission mesure, c'est la cohérence **de la page lue** : le lecteur
+ne voit jamais une ligne à demi écrite. C'est établi. Mais il existe une seconde
+cohérence, celle **de ce qui a été ingéré**, et elle ne survit pas au passage
+entre processus.
+
+`SearchOptions` porte un `Consistency` à trois valeurs, et `Strict` vide toute la
+file d'ingestion avant de chercher :
+
+```rust
+// extension/rag3weaver/src/catalog.rs:3983
+search::Consistency::Strict  => { self.drain(); }
+search::Consistency::Eventual => { if self.has_pending() { self.flush_insertions(); } }
+search::Consistency::Immediate => {}
+```
+
+Or `self.pending` est un champ **en mémoire du catalogue**. Un lecteur dans un
+autre processus a son propre catalogue, dont la file est vide : `has_pending()`
+répond faux, `drain()` ne fait rien. Pour lui, `Strict` et `Eventual` n'ont plus
+de sens — **il ne lui reste que `Immediate`, sans que rien ne le lui dise.**
+
+C'est la forme de défaut qu'on passe nos journées à débusquer : un appelant
+demande la garantie la plus forte et reçoit la plus faible, en silence.
+
+**Le verrou n'a jamais protégé de ça**, et il faut être juste sur ce point : il
+rendait l'accès concurrent *impossible*, pas *ordonné*. On ne perd donc rien
+qu'on avait — on découvre une garantie qui n'a jamais franchi la frontière du
+processus, et qui devient visible maintenant qu'on peut la franchir.
+
+La forme de la réponse est petite : l'écrivain publie son avancement dans la base
+même — une marque d'eau que les deux moteurs de stockage savent déjà écrire — et
+le lecteur qui veut `Strict` attend qu'elle dépasse ce qu'il attend, au lieu
+d'attendre une file qu'il ne peut pas voir. Ce n'est pas construit, et ce n'est
+pas dans ce répertoire.
 
 ## Ce que ça change, et ce que ça ne change pas
 
-**Ce qu'on gagne.** Les lectures sortent du relais. Un processus tiers ouvre la
-base directement, en lecture seule, pendant que l'écrivain travaille — et ce
-qu'il lit est bon.
+**Ce qu'on gagne.** Les lectures peuvent sortir du relais. Un processus tiers
+ouvre la base directement, en lecture seule, pendant que l'écrivain travaille —
+et ce qu'il lit est bon, page par page. « Peuvent » et non « sortent » : la
+seconde condition ci-dessus est un préalable, pas une amélioration ultérieure.
 
 **Ce qu'on n'a pas pris.** Rien de la couche transactionnelle de Vela : ni leur
 contrôle de concurrence multi-version, ni leur rotation de journal, ni leurs
@@ -207,5 +247,8 @@ ils passent : une mesure qui ne s'affiche pas est une mesure qu'on ne relit pas.
   pose un point de reprise tous les cinq enregistrements. Un usage normal en
   verra beaucoup moins ; personne ne l'a vérifié.
 - **Rien n'a été changé dans `rag3daemon`.** La mesure dit qu'il *peut* cesser de
-  relayer. Le faire est un autre chantier, et il appartient à la session qui
-  tient `extension/rag3weaver/`.
+  relayer, sous deux conditions. Le faire est un autre chantier, et il appartient
+  à la session qui tient `extension/rag3weaver/`.
+- **La marque d'eau d'ingestion n'existe pas.** Sans elle, un lecteur hors du
+  processus écrivain ne peut pas honorer `Consistency::Strict`. C'est le
+  préalable, et il n'est pas commencé.
