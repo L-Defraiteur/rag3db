@@ -51,8 +51,64 @@ impl Rag3dbConnection {
     ///
     /// Pour lire *et* écrire à plusieurs, c'est `rag3daemon` :
     /// [`crate::daemon::db`].
+    /// **Ce n'est pas une lecture qui échoue, c'est une lecture qui attend.**
+    ///
+    /// Mesuré par la session voisine le 3 septembre 2026 : sur quatre-vingts
+    /// cycles d'ouverture pendant qu'un écrivain travaille, cinq à six sont
+    /// refusés — « Couldn't replay shadow pages under read-only mode » — et
+    /// tous aboutissent en trois tentatives. Aucun n'est perdu. Le refus dure
+    /// le temps que l'écrivain finisse de poser ses pages fantômes.
+    ///
+    /// Sans reprise, cet instant se présente à l'appelant comme « la base est
+    /// inaccessible ». Avec, il se présente comme ce qu'il est : une attente
+    /// de quelques millisecondes.
+    ///
+    /// **On ne filtre pas sur le message.** Il vient du cœur C++, on ne le
+    /// contrôle pas, et le jour où il change une reprise qui l'épluche
+    /// s'arrêterait sans bruit. Toute erreur d'ouverture est donc retentée dans
+    /// un budget court : une vraie panne — chemin absent, base tenue par un
+    /// écrivain — échoue de la même façon quelques dizaines de millisecondes
+    /// plus tard, et l'erreur **dit** combien de tentatives ont eu lieu.
     pub fn read_only(path: impl AsRef<Path>) -> Result<Self, DbError> {
-        Self::with_config(path, Self::default_config().read_only(true))
+        Self::read_only_patient(path, Self::PATIENCE_OUVERTURE_MS)
+    }
+
+    /// Le budget d'attente par défaut à l'ouverture d'un lecteur.
+    ///
+    /// Trois tentatives suffisaient dans la mesure ; on laisse de la marge sans
+    /// jamais faire passer une vraie panne pour une lenteur.
+    pub const PATIENCE_OUVERTURE_MS: u64 = 250;
+
+    /// Comme [`read_only`](Self::read_only), avec un budget d'attente choisi.
+    ///
+    /// Utile à un lecteur qui préfère attendre la fin d'un point de reprise
+    /// plutôt que d'échouer — il sait, lui, combien de temps il peut donner.
+    pub fn read_only_patient(path: impl AsRef<Path>, budget_ms: u64) -> Result<Self, DbError> {
+        let path = path.as_ref();
+        let debut = std::time::Instant::now();
+        let mut tentatives = 0u32;
+        let mut attente = std::time::Duration::from_millis(5);
+        loop {
+            tentatives += 1;
+            match Self::with_config(path, Self::default_config().read_only(true)) {
+                Ok(c) => return Ok(c),
+                Err(e) => {
+                    let ecoule = debut.elapsed().as_millis() as u64;
+                    if ecoule + attente.as_millis() as u64 > budget_ms {
+                        // L'erreur porte le compte : sans lui, on ne saurait
+                        // pas distinguer « refusé une fois » de « refusé
+                        // obstinément », et c'est toute la différence entre une
+                        // attente et une panne.
+                        return Err(DbError::ConnectionError(format!(
+                            "{e} (ouverture en lecture seule refusée sur {tentatives} \
+                             tentative(s) en {ecoule} ms)"
+                        )));
+                    }
+                    std::thread::sleep(attente);
+                    attente = (attente * 2).min(std::time::Duration::from_millis(40));
+                }
+            }
+        }
     }
 
     /// Create an in-memory database.
@@ -309,6 +365,63 @@ fn cypher_to_rag3db_value(value: &CypherValue) -> rag3db::Value {
 
 #[cfg(test)]
 mod tests {
+
+    /// **La reprise existe, et elle se compte.**
+    ///
+    /// La condition qu'elle absorbe — « Couldn't replay shadow pages under
+    /// read-only mode » — n'est pas atteignable dans ce binaire : l'exclusion
+    /// lecteur/écrivain y tient encore (voir
+    /// `e2e_prise_atomique::plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient`).
+    /// Elle a été mesurée par la session voisine sur un cœur portant le report
+    /// de Vela.
+    ///
+    /// Ce qui est éprouvable ici, c'est le mécanisme : une ouverture qui
+    /// échoue est retentée dans son budget, et l'erreur **dit** combien de
+    /// tentatives ont eu lieu. Sans ce compte, on ne distinguerait pas
+    /// « refusé une fois » de « refusé obstinément » — et c'est toute la
+    /// différence entre une attente et une panne.
+    #[test]
+    fn une_ouverture_impossible_est_retentee_et_le_dit() {
+        let absent = std::env::temp_dir().join("rag3weaver-chemin-qui-n-existe-pas-du-tout");
+        let _ = std::fs::remove_dir_all(&absent);
+
+        let debut = std::time::Instant::now();
+        let err = Rag3dbConnection::read_only_patient(&absent, 60)
+            .err()
+            .expect("un chemin absent ne s'ouvre pas");
+        let ecoule = debut.elapsed();
+
+        let texte = err.to_string();
+        assert!(
+            texte.contains("tentative(s)"),
+            "l'erreur doit dire combien de fois on a essayé : {texte}"
+        );
+        assert!(
+            !texte.contains("sur 1 tentative(s)"),
+            "le budget laissait la place à plusieurs essais : {texte}"
+        );
+        // Et le budget est tenu : une vraie panne ne se transforme pas en gel.
+        assert!(
+            ecoule < std::time::Duration::from_millis(400),
+            "le budget de 60 ms n'a pas été tenu : {ecoule:?}"
+        );
+    }
+
+    /// Et le budget zéro n'essaie qu'une fois — pour l'appelant qui veut
+    /// échouer tout de suite.
+    #[test]
+    fn un_budget_nul_n_attend_pas() {
+        let absent = std::env::temp_dir().join("rag3weaver-chemin-absent-sans-patience");
+        let _ = std::fs::remove_dir_all(&absent);
+        let err = Rag3dbConnection::read_only_patient(&absent, 0)
+            .err()
+            .expect("un chemin absent ne s'ouvre pas");
+        assert!(
+            err.to_string().contains("sur 1 tentative(s)"),
+            "sans budget, une seule tentative : {err}"
+        );
+    }
+
     use super::*;
 
     // ── Unit tests (no DB needed) ──────────────────────────────────────

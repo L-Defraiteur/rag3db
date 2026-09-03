@@ -100,12 +100,7 @@ L'ordre est celui du **coût de ne pas le faire**, pas celui de la difficulté.
 
 ### 1. La marque d'eau d'ingestion — **faite**, voir §9
 
-### 2. La reprise sur refus transitoire dans `rag3daemon`
-
-Le refus de pages fantômes est transitoire : cinq à six sur quatre-vingts
-cycles, résolus en trois tentatives, aucun perdu. Quelques millisecondes
-d'attente suffisent. **Ce n'est pas une lecture qui échoue, c'est une lecture
-qui attend.** À faire avec le 1, pas avant.
+### 2. La reprise sur refus transitoire — **posée, mais dormante**, voir §10
 
 ### 3. Les poids du combo, qui restent une supposition — et le banc n'existait pas
 
@@ -517,3 +512,36 @@ pendant qu'un autre écrivain a du travail non publié le porte dans
 **Ce qui reste :** la reprise sur refus transitoire dans `rag3daemon` (point 2
 de la liste), à faire maintenant que la marque existe. C'est ce qui permettra
 aux lecteurs de cesser de passer par le démon.
+
+## 10. La reprise sur refus transitoire — et un désaccord que je n'enjambe pas
+
+La session voisine a mesuré qu'un lecteur peut ouvrir pendant qu'un écrivain
+travaille, et que le seul refus — « Couldn't replay shadow pages under
+read-only mode » — est **transitoire** : cinq à six sur quatre-vingts cycles,
+résolus en trois tentatives, aucun perdu. Ce n'est pas une lecture qui échoue,
+c'est une lecture qui attend.
+
+`Rag3dbConnection::read_only` retente donc dans un budget court (250 ms ;
+`read_only_patient` pour choisir), avec un recul qui double jusqu'à 40 ms.
+
+**On ne filtre pas sur le message.** Il vient du cœur C++, on ne le contrôle
+pas, et une reprise qui l'épluche s'arrêterait sans bruit le jour où il change.
+Toute erreur d'ouverture est retentée : une vraie panne — chemin absent, base
+tenue — échoue de la même façon quelques dizaines de millisecondes plus tard, et
+l'erreur **dit** combien de tentatives ont eu lieu. Sans ce compte, on ne
+distinguerait pas « refusé une fois » de « refusé obstinément ».
+
+### Ce que je n'ai pas prouvé
+
+**La condition n'est pas atteignable dans ce binaire.**
+`e2e_prise_atomique::plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient`
+passe en affirmant l'**inverse** de la mesure voisine : un lecteur ouvrant
+pendant qu'un écrivain tient la base est refusé, et le test l'assert. Il tourne
+contre `build/native-test`.
+
+Donc ou bien ce build ne porte pas le report de Vela, ou bien le report ne lève
+pas cette exclusion et la mesure portait sur autre chose. La reprise est **posée
+mais dormante** ; seuls le mécanisme et le compte de tentatives sont éprouvés,
+en unitaire. La question est partie à `rag3db-57` plutôt que d'être tranchée au
+jugé — et je n'ai pas lancé de reconstruction C++ sur le poste sans savoir
+qu'elle change quelque chose.
