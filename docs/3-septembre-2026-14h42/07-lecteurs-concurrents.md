@@ -224,6 +224,36 @@ la machinerie de pages fantômes sur laquelle bute notre lecteur. Elle passe
 entièrement. Elle prend treize minutes : ne pas la lancer avec un délai
 d'attente court, elle n'est pas bloquée, elle est lente.
 
+## Confirmé de l'extérieur, par un second harnais
+
+La mesure ci-dessus est en C++, dans le même processus de test que le moteur. La
+session qui tient `extension/rag3weaver/` l'a refaite depuis Rust, avec son
+propre montage à deux processus, contre la même bibliothèque : quatre-vingts
+ouvertures en lecture seule pendant qu'un écrivain écrit sans relâche, point de
+reprise toutes les cinq écritures.
+
+| | contre une bibliothèque d'avant le correctif | contre celle d'après |
+|---|---:|---:|
+| ouvertures refusées | **80** | **0** |
+| lectures obtenues | 0 | **80** |
+| lectures incohérentes | — | **0** |
+
+Deux choses en sortent, et la seconde ne se déduisait pas de ma mesure seule.
+
+**Le régime bascule entièrement**, il ne s'améliore pas à la marge. Quatre-vingts
+refus deviennent quatre-vingts lectures. C'est bien le verrou qui décidait, et
+rien d'autre.
+
+**Et le zéro refus est le vrai résultat.** Ma mesure brute en comptait cinq à six
+sur quatre-vingts. Leur chemin de lecture réessaie dans un budget court, et il
+n'en laisse passer *aucun*. Ce que mon test
+`LeRefusSeResoutParUneNouvelleTentative` établissait dans son propre montage est
+donc confirmé de bout en bout, par du code appelant qui n'a pas été écrit pour la
+démonstration : **le transitoire est absorbé, l'appelant ne le voit jamais.**
+
+La deuxième condition de la troisième phrase — réessayer sur ce refus — n'est
+plus une recommandation, elle est éprouvée.
+
 ## Attention au build : un artefact périmé dit le contraire
 
 Un désaccord est apparu entre cette mesure et un test Rust du crate, qui
