@@ -725,6 +725,14 @@ impl Node for RenderResultsNode {
             // pouvait pas dire ce qu'on avait cherché, et sa fiche perdait son
             // en-tête dès qu'on demandait une relation (28 août 2026).
             PortDef { name: "query", port_type: PortType::Query, required: false },
+            // **Et la méta ressort pour la même raison que la requête.**
+            // `search.mmd` compose par-dessus `search_base` : le `bm25.meta`
+            // du sous-graphe est consommé à l'intérieur, donc invisible de
+            // l'extérieur. Sans ce passe-plat, l'outil que les agents tiennent
+            // réellement dans la main perdait **tous** les avertissements du
+            // moteur — le sous-graphe les affichait, l'étage extérieur
+            // réécrivait la fiche sans eux.
+            PortDef { name: "meta", port_type: PortType::Meta, required: false },
         ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -779,6 +787,9 @@ impl Node for RenderResultsNode {
         };
         ctx.set_output("text", PortValue::new(text));
         ctx.set_output("results", PortValue::new(results));
+        if let Some(m) = meta {
+            ctx.set_output("meta", PortValue::new(m));
+        }
         if let Some(qp) = query {
             ctx.set_output("query", PortValue::new(qp));
         }
@@ -829,11 +840,13 @@ impl NodeFactory for RenderResultsNodeFactory {
             inputs: vec![
                 PortDef { name: "results", port_type: PortType::Results, required: false },
                 PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "meta", port_type: PortType::Meta, required: false },
             ],
             outputs: vec![
                 PortDef { name: "text", port_type: PortType::Text, required: false },
                 PortDef { name: "results", port_type: PortType::Results, required: false },
                 PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "meta", port_type: PortType::Meta, required: false },
             ],
             config_params: vec![
                 ConfigParam {

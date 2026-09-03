@@ -167,9 +167,29 @@ d'un côté, `JOIN X AS p ON p._uuid = n._parent_uuid` de l'autre — et par
 reste un paramètre à part, pour qu'une frontière de locataire ne dépende jamais
 de la présence d'un `WHERE`.
 
-Reste ouvert : le nœud de graphe avertit quand il ne peut pas compiler le filtre
-(`filtre_utilisateur_for`), mais **aucun backend ne refuse** un filtre qu'il ne
-saurait pas honorer — aujourd'hui les deux le savent, et rien ne le vérifie.
+**Puis le silence lui-même a été fermé.** `SearchBackend::honore_le_filtre()`
+rend `false` par défaut — délibérément : un backend neuf est bruyant tant qu'il
+n'a pas dit le contraire. Quand il ne garantit rien, les deux chemins poussent
+« les résultats ne sont peut-être PAS restreints au domaine demandé ».
+
+Et en vérifiant que l'avertissement **arrive** à l'agent, trois coupures :
+
+| où | ce qui se perdait |
+|---|---|
+| `VectorSearchNode` | disait « les résultats ne sont PAS restreints » dans son **journal**, que l'appelant ne lit pas |
+| `merge_port_values` | ne fusionnait pas deux `SearchMeta` — donc on ne *pouvait* pas brancher deux signaux sur le même port |
+| schéma des fabriques | `meta` absent de `BM25SearchNode` et `RenderResultsNode`, alors que les nœuds l'émettaient — la **composition** ne le voyait pas |
+
+La dernière est la plus coûteuse : `search.mmd`, l'outil réellement offert aux
+agents, compose par-dessus `search_base` et réécrivait la fiche à partir des
+seuls résultats. **Aucun avertissement du moteur n'atteignait un agent depuis
+que la composition existe** — pas même celui du 29 août, qui avait pourtant été
+réparé un étage plus bas.
+
+Fermé par un passe-plat `render.meta`, deux arêtes dans les gabarits, et un
+test qui compare le schéma déclaré à l'implémentation pour **tous** les nœuds
+constructibles (`le_schema_declare_les_memes_ports_que_le_noeud`) — les deux
+seules dérives de l'arbre étaient précisément celles-là.
 
 ### 6. `test/api/db_locking_test.cpp` affirme un contrat mort
 

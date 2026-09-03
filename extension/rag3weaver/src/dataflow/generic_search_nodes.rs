@@ -206,13 +206,27 @@ impl Node for VectorSearchNode {
         }]
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        vec![
+            PortDef {
+                name: "results",
+                port_type: PortType::Results,
+                required: false,
+            },
+            // **Le même canal que sur BM25, et pour la même raison.** Ce nœud
+            // avertissait déjà — « un filtre est demandé mais le service
+            // "catalog" manque, résultats non restreints » — dans son journal,
+            // c'est-à-dire nulle part pour l'agent qui reçoit les résultats.
+            // Deux métas branchées sur un même port se fusionnent, voir
+            // `merge_port_values`.
+            PortDef {
+                name: "meta",
+                port_type: PortType::Meta,
+                required: false,
+            },
+        ]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "VectorSearchNode")?;
 
         // Une cible sans vecteurs n'est pas une panne, c'est une cible sans
@@ -237,6 +251,11 @@ impl Node for VectorSearchNode {
             .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
 
+        // Ce que l'agent doit entendre. `ctx.warn` va dans le journal du nœud,
+        // que personne ne lit du côté de l'appelant : ce qui touche à la
+        // justesse d'un résultat passe par la méta.
+        let mut node_warnings: Vec<String> = Vec::new();
+
         // Le vecteur ne se pré-filtre pas par offsets — le HNSW ne connaît
         // pas nos identités — mais par du Cypher sur l'entité parente. Le
         // catalogue sait le compiler, cellule comprise.
@@ -248,13 +267,21 @@ impl Node for VectorSearchNode {
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {
-                            ctx.warn(&format!("VectorSearchNode: filtre non compilé ({e}) — résultats non restreints"));
+                            node_warnings.push(format!(
+                                "VectorSearchNode: filtre non compilé ({e}) — les \
+                                 résultats ne sont PAS restreints au domaine demandé"
+                            ));
                             (None, vec![], None)
                         }
                     }
                 }
                 None => {
-                    ctx.warn("VectorSearchNode: un filtre est demandé mais le service 'catalog' manque — résultats non restreints");
+                    node_warnings.push(
+                        "VectorSearchNode: un filtre est demandé mais le service \
+                         'catalog' manque — les résultats ne sont PAS restreints au \
+                         domaine demandé"
+                            .to_string(),
+                    );
                     (None, vec![], None)
                 }
             },
@@ -276,6 +303,7 @@ impl Node for VectorSearchNode {
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
+                &mut node_warnings,
             ),
             None => search_vector(
                 &*conn,
@@ -302,7 +330,30 @@ impl Node for VectorSearchNode {
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode, &label)?;
+        for w in &node_warnings {
+            ctx.warn(w);
+        }
+        let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
+        ctx.set_output(
+            "meta",
+            PortValue::new(crate::search::SearchMeta {
+                query: query_str.clone(),
+                target: target.name.clone(),
+                signals: crate::search::SearchSignals::VECTOR,
+                consistency: options.consistency,
+                partial: false,
+                pending_count: 0,
+                vector_count: nombre,
+                bm25_count: 0,
+                sparse_count: 0,
+                fused_count: nombre,
+                reranked_count: 0,
+                warnings: node_warnings,
+                search_time_ms: debut.elapsed().as_millis() as u64,
+                diagnostics: None,
+            }),
+        );
         Ok(())
     }
 }
@@ -1445,9 +1496,13 @@ mod tests {
         let node = VectorSearchNode::new("vec", 10);
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
-        assert_eq!(node.outputs().len(), 1);
+        assert_eq!(node.outputs().len(), 2);
         assert_eq!(node.outputs()[0].name, "results");
         assert_eq!(node.outputs()[0].port_type, PortType::Results);
+        // Le canal des avertissements, comme sur BM25 : sans lui, « les
+        // résultats ne sont PAS restreints » restait dans le journal du nœud.
+        assert_eq!(node.outputs()[1].name, "meta");
+        assert_eq!(node.outputs()[1].port_type, PortType::Meta);
         assert_eq!(node.node_type(), "VectorSearchNode");
     }
 

@@ -121,6 +121,18 @@ pub trait SearchBackend: Send + Sync {
     /// à l'ingestion — donc si on écrit, ou non, un second corpus sur disque.
     fn sert_le_plein_texte(&self) -> bool { false }
 
+    /// Ce backend **applique-t-il** le domaine de travail qu'on lui passe ?
+    ///
+    /// `false` par défaut, et c'est délibéré : un filtre ignoré rend des lignes
+    /// que l'appelant croyait exclues, sans erreur et sans trace. Le défaut
+    /// doit donc être « je ne garantis rien », pour qu'un backend neuf soit
+    /// bruyant tant qu'il n'a pas dit le contraire — pas l'inverse.
+    ///
+    /// Les deux backends d'aujourd'hui le savent, donc rien ne s'en plaint
+    /// aujourd'hui. C'est exactement le genre de silence qui se réveille au
+    /// troisième.
+    fn honore_le_filtre(&self) -> bool { false }
+
     /// Recherche plein texte servie par le backend lui-même.
     ///
     /// `None` = ce backend n'en sert pas, l'appelant reste sur lucivy. C'est

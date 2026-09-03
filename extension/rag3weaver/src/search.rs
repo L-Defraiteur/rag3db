@@ -844,9 +844,20 @@ pub fn search_vector_via_backend(
     extra_where: Option<&str>,
     extra_params: &[QueryParam],
     extra_match: Option<&str>,
+    // Là où le doute se dit. Un filtre qu'un backend n'applique pas rend des
+    // lignes que l'appelant croyait exclues : c'est faux, pas seulement large.
+    warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     let index_name = format!("{entity}_vec");
     let has_filters = extra_where.is_some() || extra_match.is_some();
+
+    if has_filters && !backend.honore_le_filtre() {
+        warnings.push(format!(
+            "le backend de recherche ne garantit pas d'appliquer le filtre sur le \
+             chemin vectoriel de « {entity} » — les résultats ne sont peut-être PAS \
+             restreints au domaine demandé"
+        ));
+    }
 
     let hits = if has_filters {
         backend.vector_search_filtered(
@@ -2132,6 +2143,13 @@ pub fn search_texte_natif(
         Some((j, w)) => (Some(j), Some(w)),
         None => (None, None),
     };
+    if filtre.is_some() && !backend.honore_le_filtre() {
+        warnings.push(format!(
+            "le backend de plein texte ne garantit pas d'appliquer le filtre sur \
+             « {table} » — les résultats ne sont peut-être PAS restreints au domaine \
+             demandé"
+        ));
+    }
     let bruts = match backend.text_search(
         table,
         &champs_texte,

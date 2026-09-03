@@ -33,6 +33,12 @@
 %% la substitution traverse les deux niveaux. Son port libre `resolve.results`
 %% est `render.results` : le nœud de rendu laisse passer les résultats, et
 %% c'est ce qui permet de continuer à composer par-dessus lui.
+%%
+%% **Et la méta traverse pour la même raison.** Sans `render.meta:meta`, cet
+%% étage réécrivait la fiche à partir des seuls résultats : tous les
+%% avertissements du moteur — « je n'ai pas cherché ce que tu crois », « le
+%% filtre n'a pas été appliqué » — s'arrêtaient à l'étage du dessous, et
+%% l'outil réellement offert aux agents était le seul à ne pas les montrer.
 
 graph LR
     inner["SearchTool(target=$target, query=$query, limit=$limit, rerank=$rerank)"]
@@ -43,5 +49,6 @@ graph LR
     inner -->|render.results:results| fetch
     inner -->|render.results:results| compose
     inner -->|render.query:query| render
+    inner -->|render.meta:meta| render
     fetch -->|children| compose
     compose -->|results| render

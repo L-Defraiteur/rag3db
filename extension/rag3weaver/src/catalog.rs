@@ -4135,6 +4135,7 @@ impl Catalog {
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
+                &mut search_warnings,
             )?;
             hits
         } else {

@@ -41,6 +41,10 @@ fn inline_params(cypher: &str, params: &[QueryParam]) -> String {
 
 
 impl SearchBackend for Rag3dbSearchBackend {
+    /// Le filtre devient un **graphe projeté** avant la descente HNSW — c'est
+    /// un vrai pré-filtre, pas un tri après coup.
+    fn honore_le_filtre(&self) -> bool { true }
+
     fn vector_search(
         &self,
         table: &str,

@@ -25,6 +25,10 @@ impl PostgresSearchBackend {
 impl SearchBackend for PostgresSearchBackend {
     fn sert_le_plein_texte(&self) -> bool { true }
 
+    /// Le `WHERE` et sa jointure descendent dans le SQL — `text_search` et
+    /// `vector_search_filtered` les recollent tous deux.
+    fn honore_le_filtre(&self) -> bool { true }
+
     /// Plein texte par trigrammes, servi par la base.
     ///
     /// **`<%` et pas `%`.** L'opérateur `%` compare deux chaînes *entières* :

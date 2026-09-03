@@ -1854,6 +1854,9 @@ mod tests {
                 // Les avertissements du moteur jusqu'à la fiche : sans cette
                 // arête, zéro résultat ne dit pas pourquoi (issue 02).
                 EdgeDef { from_node: "bm25".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
+                // Et ceux du chemin vectoriel, qui n'avaient jamais de canal :
+                // deux métas sur un même port se fusionnent.
+                EdgeDef { from_node: "vector".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "rerank".into(), to_port: "query".into() },
                 EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
@@ -1935,7 +1938,7 @@ mod tests {
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
         assert_eq!(def.nodes.len(), 7);
-        assert_eq!(def.edges.len(), 11);
+        assert_eq!(def.edges.len(), 12);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -2461,6 +2464,56 @@ mod tests {
         let mut names = g.node_names();
         names.sort_unstable();
         assert_eq!(names, vec!["compose", "fetch", "inner", "render"]);
+    }
+
+    /// **L'avertissement traverse les deux étages.**
+    ///
+    /// `search` compose par-dessus `search_base` : le `bm25.meta` du
+    /// sous-graphe est consommé à l'intérieur, donc invisible. C'est le
+    /// passe-plat `render.meta` qui le rend de nouveau atteignable — sans lui,
+    /// l'étage extérieur réécrivait la fiche à partir des seuls résultats, et
+    /// l'outil réellement offert aux agents était le **seul** à ne montrer
+    /// aucun avertissement du moteur.
+    ///
+    /// Le port n'existait pas non plus dans le schéma déclaré par la fabrique,
+    /// alors que le nœud l'émettait : deux sources de vérité qui avaient
+    /// dérivé. Voir `le_schema_declare_les_memes_ports_que_le_noeud`.
+    #[test]
+    fn la_meta_traverse_les_deux_etages_de_search() {
+        let (nodes, tools) = builtin_graph_tools().unwrap();
+
+        // 1. Le sous-graphe expose bien `render.meta` comme port libre.
+        let schema = nodes
+            .schema(SEARCH_TOOL_NODE_TYPE)
+            .expect("le type de nœud du sous-graphe");
+        assert!(
+            schema.outputs.iter().any(|p| p.name == "render.meta"),
+            "le sous-graphe doit exposer render.meta — sorties : {:?}",
+            schema.outputs.iter().map(|p| p.name).collect::<Vec<_>>()
+        );
+
+        // 2. L'étage extérieur le branche sur le port `meta` de son rendu.
+        let search = tools.get("search").unwrap();
+        assert!(
+            search.template().edges.iter().any(|e| {
+                e.from_node == "inner"
+                    && e.from_port == "render.meta"
+                    && e.to_node == "render"
+                    && e.to_port == "meta"
+            }),
+            "l'arête render.meta → meta manque : {:?}",
+            search
+                .template()
+                .edges
+                .iter()
+                .map(|e| format!("{}.{} → {}.{}", e.from_node, e.from_port, e.to_node, e.to_port))
+                .collect::<Vec<_>>()
+        );
+
+        // 3. Et le graphe monté tient debout avec cette arête.
+        search
+            .build(&nodes, &json!({"target": "Product", "query": "rust"}))
+            .expect("le graphe composé doit se construire");
     }
 
     #[test]

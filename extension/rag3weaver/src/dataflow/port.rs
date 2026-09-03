@@ -224,6 +224,41 @@ pub fn merge_port_values(a: PortValue, b: PortValue) -> Result<PortValue, String
         return Ok(PortValue::new(vec_a));
     }
 
+    // **Deux signaux, deux métas, un seul port.** Sans cette branche, brancher
+    // `vector -->|meta| render` à côté de `bm25 -->|meta| render` échouait sur
+    // « cannot merge PortValues of incompatible types » — et comme personne ne
+    // le branchait, les avertissements du chemin vectoriel n'atteignaient
+    // jamais l'agent. C'est la même règle que partout : ce qui n'est pas
+    // fusionnable n'est pas dit.
+    if a.is::<crate::search::SearchMeta>() && b.is::<crate::search::SearchMeta>() {
+        let mut ma = take_or_clone::<crate::search::SearchMeta>(a).unwrap();
+        let mb = take_or_clone::<crate::search::SearchMeta>(b).unwrap();
+        for w in mb.warnings {
+            // Deux nœuds peuvent dire la même chose (le service `catalog` qui
+            // manque, par exemple) : l'agent n'a pas besoin de l'entendre deux
+            // fois.
+            if !ma.warnings.contains(&w) {
+                ma.warnings.push(w);
+            }
+        }
+        // Les comptes s'additionnent parce que chaque méta ne connaît que son
+        // propre signal ; le temps est le plus long, pas la somme — les nœuds
+        // ont pu tourner en parallèle.
+        ma.vector_count += mb.vector_count;
+        ma.bm25_count += mb.bm25_count;
+        ma.sparse_count += mb.sparse_count;
+        ma.fused_count = ma.fused_count.max(mb.fused_count);
+        ma.reranked_count = ma.reranked_count.max(mb.reranked_count);
+        ma.search_time_ms = ma.search_time_ms.max(mb.search_time_ms);
+        ma.partial |= mb.partial;
+        ma.pending_count = ma.pending_count.max(mb.pending_count);
+        ma.signals |= mb.signals;
+        if ma.diagnostics.is_none() {
+            ma.diagnostics = mb.diagnostics;
+        }
+        return Ok(PortValue::new(ma));
+    }
+
     Err("cannot merge PortValues of incompatible types".to_string())
 }
 
@@ -309,5 +344,64 @@ impl Serialize for BatchPayload {
         s.serialize_field("batch_type", &self.batch_type)?;
         s.serialize_field("count", &self.count)?;
         s.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::{SearchMeta, SearchSignals};
+
+    fn meta(signal: SearchSignals, n: usize, avertissements: &[&str]) -> SearchMeta {
+        SearchMeta {
+            query: "rust".into(),
+            target: "Product".into(),
+            signals: signal,
+            consistency: crate::search::Consistency::Immediate,
+            partial: false,
+            pending_count: 0,
+            vector_count: if signal.vector() { n } else { 0 },
+            bm25_count: if signal.bm25() { n } else { 0 },
+            sparse_count: 0,
+            fused_count: n,
+            reranked_count: 0,
+            warnings: avertissements.iter().map(|s| s.to_string()).collect(),
+            search_time_ms: 3,
+            diagnostics: None,
+        }
+    }
+
+    /// **Deux signaux, deux métas, un seul port.**
+    ///
+    /// Sans cette fusion, brancher `vector -->|meta| render` à côté de
+    /// `bm25 -->|meta| render` échouait — donc personne ne le branchait, donc
+    /// les avertissements du chemin vectoriel (« les résultats ne sont PAS
+    /// restreints ») n'atteignaient jamais l'agent.
+    #[test]
+    fn deux_metas_se_fusionnent_sur_un_port() {
+        let a = PortValue::new(meta(SearchSignals::BM25, 4, &["le filtre n'est pas appliqué"]));
+        let b = PortValue::new(meta(SearchSignals::VECTOR, 6, &["cible sans vecteurs"]));
+
+        let fusion = merge_port_values(a, b).expect("deux métas doivent fusionner");
+        let m = take_or_clone::<SearchMeta>(fusion).expect("une méta en sort");
+
+        assert_eq!(
+            m.warnings,
+            vec!["le filtre n'est pas appliqué", "cible sans vecteurs"],
+            "les deux voix doivent être entendues, dans l'ordre"
+        );
+        assert_eq!(m.bm25_count, 4);
+        assert_eq!(m.vector_count, 6);
+        assert!(m.signals.bm25() && m.signals.vector(), "{:?}", m.signals);
+    }
+
+    /// Deux nœuds peuvent dire la même chose — le service `catalog` qui
+    /// manque, par exemple. L'agent n'a pas à l'entendre deux fois.
+    #[test]
+    fn la_fusion_ne_repete_pas_le_meme_avertissement() {
+        let a = PortValue::new(meta(SearchSignals::BM25, 1, &["le service 'catalog' manque"]));
+        let b = PortValue::new(meta(SearchSignals::VECTOR, 1, &["le service 'catalog' manque"]));
+        let m = take_or_clone::<SearchMeta>(merge_port_values(a, b).unwrap()).unwrap();
+        assert_eq!(m.warnings.len(), 1, "{:?}", m.warnings);
     }
 }

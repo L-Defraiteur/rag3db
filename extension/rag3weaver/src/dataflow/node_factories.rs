@@ -768,6 +768,15 @@ fn query_in() -> PortDef {
     PortDef { name: "query", port_type: PortType::Query, required: true }
 }
 
+/// **Le canal des avertissements d'un nœud de signal.**
+///
+/// À déclarer partout où le nœud l'émet : le schéma est ce que lit la
+/// composition de graphes, et un port absent du schéma est invisible depuis
+/// l'extérieur — même quand le nœud le remplit fidèlement.
+fn meta_out() -> PortDef {
+    PortDef { name: "meta", port_type: PortType::Meta, required: false }
+}
+
 fn results_out() -> PortDef {
     PortDef { name: "results", port_type: PortType::Results, required: false }
 }
@@ -799,7 +808,7 @@ impl NodeFactory for VectorSearchNodeFactory {
             node_type: "VectorSearchNode",
             description: "Vector similarity search on chunk embeddings",
             inputs: vec![query_in()],
-            outputs: vec![results_out()],
+            outputs: vec![results_out(), meta_out()],
             config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }
@@ -846,7 +855,7 @@ impl NodeFactory for BM25SearchNodeFactory {
             node_type: "BM25SearchNode",
             description: "BM25 full-text search with highlight→chunk resolution",
             inputs: vec![query_in()],
-            outputs: vec![results_out()],
+            outputs: vec![results_out(), meta_out()],
             config_params: vec![
                 limit_param(),
                 ConfigParam {
@@ -1401,5 +1410,56 @@ mod tests {
             Err(e) => assert!(e.contains("missing 'kb_name'"), "got: {e}"),
             Ok(_) => panic!("expected error"),
         }
+    }
+
+    /// **Le schéma déclaré et le nœud réel doivent dire les mêmes ports.**
+    ///
+    /// Il y a deux sources de vérité : `NodeFactory::schema()`, que lisent la
+    /// composition de graphes et la liste des outils, et `Node::inputs/outputs`,
+    /// que lit le montage d'un graphe plat. Elles avaient dérivé sur
+    /// `RenderResultsNode` : le port `meta` existait sur le nœud — les graphes
+    /// plats le branchaient — et manquait au schéma. Conséquence, `search.mmd`
+    /// qui **contient** `search_base` ne voyait pas `render.meta` et refusait de
+    /// se construire.
+    ///
+    /// Une dérive de ce genre ne se voit qu'au moment où quelqu'un compose. Ce
+    /// test la fait voir tout de suite, pour tous les nœuds constructibles sans
+    /// configuration.
+    #[test]
+    fn le_schema_declare_les_memes_ports_que_le_noeud() {
+        let registry = builtin_registry();
+        let mut derives: Vec<String> = Vec::new();
+        let mut vus = 0usize;
+
+        for node_type in registry.types() {
+            // Un nœud qui exige de la configuration n'est pas comparable ici ;
+            // il l'est dans son propre test.
+            let Ok(node) = registry.create(node_type, "n", &serde_json::json!({})) else {
+                continue;
+            };
+            vus += 1;
+            let schema = registry.schema(node_type).expect("schéma du type créé");
+            let noms = |ports: &[PortDef]| -> Vec<String> {
+                let mut v: Vec<String> = ports.iter().map(|p| p.name.to_string()).collect();
+                v.sort();
+                v
+            };
+            let (se, ne) = (noms(&schema.inputs), noms(&node.inputs()));
+            if se != ne {
+                derives.push(format!("{node_type} entrées : schéma {se:?} ≠ nœud {ne:?}"));
+            }
+            let (ss, ns) = (noms(&schema.outputs), noms(&node.outputs()));
+            if ss != ns {
+                derives.push(format!("{node_type} sorties : schéma {ss:?} ≠ nœud {ns:?}"));
+            }
+        }
+
+        assert!(vus > 10, "trop peu de nœuds comparés ({vus}) — le test ne prouve rien");
+        assert!(
+            derives.is_empty(),
+            "{} type(s) de nœud dérivent entre leur schéma et leur implémentation :\n  {}",
+            derives.len(),
+            derives.join("\n  ")
+        );
     }
 }
