@@ -11,6 +11,7 @@ du projet puisse mener cette mission sans redécouvrir.
 | [04 — Knowledge dump](04-knowledge-dump.md) | Comment construire, comment tester, où sont les choses, et les pièges qui coûtent une demi-journée. |
 | [05 — La réponse](05-la-sonde-et-sa-reponse.md) | **La sonde est faite.** Les trois phrases du critère, étayées ligne par ligne. À lire après 01. |
 | [06 — Le second fork](06-reperage-vela.md) | **Vela**, l'autre continuation MIT. Même histoire git, aucun renommage, 55 fichiers sur 58 se fondent seuls. Mais l'écriture multi-processus n'est pas résolue. |
+| [07 — Lecteurs concurrents](07-lecteurs-concurrents.md) | **Fait et mesuré.** Trois lignes de Vela reportées : un lecteur ouvre pendant qu'on écrit, ce qu'il lit est cohérent, et rag3daemon peut cesser de relayer. |
 
 ## La mission en trois phrases
 
@@ -64,6 +65,21 @@ Plusieurs processus **lecteurs** deviennent possibles, plusieurs processus
 **écrivains** non — et c'était notre douleur.
 
 Tout est dans [06 — Le second fork](06-reperage-vela.md).
+
+## Ce qu'on en a pris, et ce que ça donne
+
+**Ladybug : rien.** Pas d'histoire git commune, renommages en sens contraire, et
+leur découpage en dépôts qui transforme 171 de nos fichiers en problème
+multi-dépôts. On garde le tag et les documents.
+
+**Vela : trois lignes, et elles suffisent.** Le seul correctif du verrou de
+fichier a été reporté, sans rien de leur couche transactionnelle. Mesuré à trois
+tests à deux processus : un second processus **ouvre en lecture pendant qu'un
+écrivain travaille**, ce qu'il lit est **cohérent** — le moteur refuse plutôt que
+de déchirer — et le refus est **transitoire**, résolu en trois tentatives.
+
+Donc `rag3daemon` peut cesser de relayer les lectures. Voir
+[07 — Lecteurs concurrents](07-lecteurs-concurrents.md).
 
 ## Ce qui est déjà fait, et qu'il ne faut pas refaire
 
