@@ -103,6 +103,45 @@ pub fn jaro_winkler(a: &str, b: &str) -> f64 {
     j + commun as f64 * ECHELLE * (1.0 - j)
 }
 
+/// Replier les accents, pour que « cafe » et « café » se comparent comme un
+/// seul mot.
+///
+/// Sans ça, l'étage d'ordonnancement contredirait celui du rappel : la base
+/// rapporte « café » pour « cafe » — elle normalise, elle — et Jaro-Winkler le
+/// classerait ensuite en dessous d'une correspondance moins bonne mais sans
+/// accent.
+///
+/// **Ce n'est pas un normaliseur Unicode.** La table couvre le latin
+/// occidental, ce qui suffit au français, à l'espagnol, à l'allemand et aux
+/// langues voisines. Un texte cyrillique ou vietnamien passe inchangé — ce qui
+/// est correct, faute de mieux, plutôt que faux.
+fn sans_accents(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+        'ç' => 'c',
+        'è' | 'é' | 'ê' | 'ë' => 'e',
+        'ì' | 'í' | 'î' | 'ï' => 'i',
+        'ñ' => 'n',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' => 'u',
+        'ý' | 'ÿ' => 'y',
+        'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' => 'A',
+        'Ç' => 'C',
+        'È' | 'É' | 'Ê' | 'Ë' => 'E',
+        'Ì' | 'Í' | 'Î' | 'Ï' => 'I',
+        'Ñ' => 'N',
+        'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' => 'O',
+        'Ù' | 'Ú' | 'Û' | 'Ü' => 'U',
+        'Ý' => 'Y',
+        autre => autre,
+    }
+}
+
+/// Minuscules **et** sans accents, en un passage.
+fn replie(mot: &str) -> String {
+    mot.chars().flat_map(|c| c.to_lowercase()).map(sans_accents).collect()
+}
+
 /// Le meilleur Jaro-Winkler entre la requête et **un mot** du texte.
 ///
 /// Comparer une requête de trois mots à un paragraphe entier donne toujours un
@@ -128,11 +167,11 @@ pub fn meilleur_par_mot(requete: &str, texte: &str) -> f64 {
     // Moyenne sur les termes de la requête, chacun cherchant son meilleur mot :
     // une requête dont un seul terme colle ne doit pas valoir autant qu'une
     // dont tous collent.
-    let minuscules: Vec<String> = mots.iter().map(|m| m.to_lowercase()).collect();
+    let minuscules: Vec<String> = mots.iter().map(|m| replie(m)).collect();
     let somme: f64 = termes
         .iter()
         .map(|t| {
-            let t = t.to_lowercase();
+            let t = replie(t);
             minuscules
                 .iter()
                 .map(|m| jaro_winkler(&t, m))
@@ -199,6 +238,15 @@ mod tests {
         assert!(meilleur_par_mot("progamming", t) > 0.9, "{}", meilleur_par_mot("progamming", t));
         // Rien à voir.
         assert!(meilleur_par_mot("xylophone", t) < 0.7, "{}", meilleur_par_mot("xylophone", t));
+    }
+
+    #[test]
+    fn les_accents_ne_separent_pas_deux_fois_le_meme_mot() {
+        // La base rapporte « café » pour « cafe » parce qu'elle normalise ;
+        // l'ordonnancement doit être d'accord avec elle.
+        assert!(meilleur_par_mot("cafe", "un café serré") > 0.99);
+        assert!(meilleur_par_mot("café", "un cafe serre") > 0.99);
+        assert!(meilleur_par_mot("PRECEDE", "il précède") > 0.99);
     }
 
     #[test]

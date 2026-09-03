@@ -619,3 +619,51 @@ fn les_cellules_se_separent() {
         "FUITE ENTRE CELLULES sur le chemin vectoriel — {noms_h:?}"
     );
 }
+
+// ═══ 8. Les accents ne coupent pas la recherche ══════════════════════════════
+
+#[test]
+fn les_accents_ne_coupent_pas() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Café serré", "Un café torréfié à Naples, préparé très serré.", 3.50),
+                produit("Marteau", "Un outil de charpentier en acier forgé.", 19.90),
+            ],
+        )
+        .unwrap();
+
+    // Sans normalisation, « cafe torrefie » ne partage aucun trigramme utile
+    // avec « café torréfié » — un utilisateur francophone qui tape sans
+    // accents ne trouve rien, ce qui est la moitié des requêtes réelles.
+    for requete in ["cafe torrefie", "café torréfié", "CAFE"] {
+        let reponse = catalog
+            .search(
+                "Product",
+                requete,
+                SearchOptions {
+                    consistency: Consistency::Immediate,
+                    signals: Some(SearchSignals::BM25),
+                    ..Default::default()
+                },
+            )
+            .unwrap_or_else(|e| panic!("recherche « {requete} » : {e}"));
+        let noms: Vec<String> = reponse
+            .results
+            .iter()
+            .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+            .collect();
+        eprintln!("« {requete} » → {noms:?}");
+        assert!(
+            noms.contains(&"Café serré".to_string()),
+            "« {requete} » ne trouve pas « Café serré » : {noms:?}"
+        );
+        assert!(
+            !noms.contains(&"Marteau".to_string()),
+            "« {requete} » remonte le marteau : {noms:?}"
+        );
+    }
+}

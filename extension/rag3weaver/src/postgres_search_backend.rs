@@ -49,14 +49,27 @@ impl SearchBackend for PostgresSearchBackend {
             return Some(Ok(Vec::new()));
         }
 
+        // **La même expression des deux côtés.** `rag3weaver.sans_accents` est
+        // appliquée au champ *et* à la requête : au champ pour que le
+        // planificateur reconnaisse l'expression de l'index GIN, à la requête
+        // pour que « cafe » et « café » aient les mêmes trigrammes.
         let ou = fields
             .iter()
-            .map(|f| format!("$q <% {f}"))
+            .map(|f| {
+                format!(
+                    "rag3weaver.sans_accents($q) <% rag3weaver.sans_accents({f})"
+                )
+            })
             .collect::<Vec<_>>()
             .join(" OR ");
         let meilleur = fields
             .iter()
-            .map(|f| format!("word_similarity($q, {f})"))
+            .map(|f| {
+                format!(
+                    "word_similarity(rag3weaver.sans_accents($q), \
+                     rag3weaver.sans_accents({f}))"
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         // `concat_ws` plutôt que le champ gagnant : l'ordonnancement fin

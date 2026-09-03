@@ -989,11 +989,33 @@ impl SchemaDialect for PostgresDialect {
 
     fn setup_statements(&self) -> Vec<String> {
         vec![
-            "CREATE EXTENSION IF NOT EXISTS vector".into(),
+            // **Le schéma d'abord.** Une extension créée sans `SCHEMA` atterrit
+            // dans le premier schéma du `search_path`, lequel commence par
+            // `"$user"` : l'emplacement dépendrait donc du **nom du rôle**.
+            // Sur ce poste elles tombaient dans `rag3weaver` par coïncidence,
+            // et une fonction qui les cherchait dans `public` échouait. On le
+            // décide au lieu de le subir.
+            "CREATE SCHEMA IF NOT EXISTS rag3weaver".into(),
+            "CREATE EXTENSION IF NOT EXISTS vector SCHEMA rag3weaver".into(),
             // Trigrammes : le plein texte servi par la base elle-même, sans
             // second corpus à stocker à côté.
-            "CREATE EXTENSION IF NOT EXISTS pg_trgm".into(),
-            "CREATE SCHEMA IF NOT EXISTS rag3weaver".into(),
+            "CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA rag3weaver".into(),
+            // Accents : « cafe » doit trouver « café ». Sur un corpus français
+            // ce n'est pas un raffinement, c'est la moitié des requêtes.
+            "CREATE EXTENSION IF NOT EXISTS unaccent SCHEMA rag3weaver".into(),
+            // **`unaccent()` est STABLE, pas IMMUTABLE** — donc inutilisable
+            // dans une expression d'index. Le contournement est un enrobage
+            // déclaré immuable, avec le dictionnaire **nommé explicitement** :
+            // c'est la forme à un argument qui est instable, parce qu'elle
+            // dépend du `search_path` pour trouver son dictionnaire.
+            //
+            // La même expression doit servir des **deux** côtés — à l'index et
+            // à la requête — sinon le planificateur ne les apparie pas et
+            // l'index n'est jamais utilisé.
+            "CREATE OR REPLACE FUNCTION rag3weaver.sans_accents(text) \
+             RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT \
+             AS $$ SELECT rag3weaver.unaccent('rag3weaver.unaccent'::regdictionary, $1) $$"
+                .into(),
         ]
     }
 
@@ -1112,7 +1134,7 @@ impl SchemaDialect for PostgresDialect {
             .map(|f| {
                 format!(
                     "CREATE INDEX IF NOT EXISTS {court}_{f}_trgm_idx \
-                     ON {table} USING gin ({f} gin_trgm_ops)"
+                     ON {table} USING gin (rag3weaver.sans_accents({f}) gin_trgm_ops)"
                 )
             })
             .collect()
