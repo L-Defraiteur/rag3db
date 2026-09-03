@@ -166,14 +166,23 @@ C'est du code de test mort hérité de Kuzu, pas de nous. Il n'a donc pas été
 
 ## Non-régression
 
-| suite | résultat |
-|---|---|
-| `api_test` (dont les trois nouveaux) | **101 / 101** |
+Toutes les suites touchées de près ou de loin par le gestionnaire de stockage
+ont été exécutées, et toutes passent.
 
-Les suites `transaction_test`, `node_insertion_deletion_test`, `node_update_test`
-et `buffer_manager_test` ont été lancées ; elles sont longues — les tests de
-reprise après panne prennent près de trente secondes chacun. Leur résultat est
-reporté au §« Reste à faire » s'il n'est pas consigné ici.
+| suite | tests | résultat | durée |
+|---|---:|---|---:|
+| `api_test` (dont les trois nouveaux) | 101 | **tous** | 40 s |
+| `transaction_test` | 49 | **tous** | 13 min |
+| `buffer_manager_test` | 3 | **tous** | < 1 s |
+| `node_update_test` | 2 | **tous** | 1 s |
+| `node_insertion_deletion_test` | 2 | **tous** | < 1 s |
+
+`transaction_test` est la plus intéressante des cinq : elle contient les
+`FlakyCheckpointerTest`, qui simulent une panne au milieu d'un point de reprise —
+`RecoverFromCheckpointFlushingShadowFailure`, entre autres — et donc exactement
+la machinerie de pages fantômes sur laquelle bute notre lecteur. Elle passe
+entièrement. Elle prend treize minutes : ne pas la lancer avec un délai
+d'attente court, elle n'est pas bloquée, elle est lente.
 
 ## Comment refaire la mesure
 
