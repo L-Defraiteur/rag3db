@@ -69,8 +69,31 @@ git show 89f0263cc:src/include/storage/index/index.h > /tmp/notre.h
 diff /tmp/notre.h /tmp/leur.h
 ```
 
+
 Sans cette normalisation on surestime largement l'écart. Ça s'est déjà produit
 pendant le repérage.
+
+> **Correction (sonde du 3 septembre) : la recette ci-dessus est fautive.** En
+> expression régulière, le tiret bas est un caractère de mot, donc `\b` ne coupe
+> pas entre `lbug` et `_`. Tous les identifiants de l'API C
+> (`lbug_connection_execute`, `rag3db_connection_execute`) échappent au
+> remplacement, et l'écart est **surestimé d'un facteur deux** en nombre de
+> fichiers. Un fichier de test de l'API C ressort à 2 906 lignes d'écart alors
+> qu'il est identique à l'amont.
+>
+> Employer un remplacement **sans frontière de mot**, avec les variantes de
+> casse :
+>
+> ```sh
+> # chez eux
+> sed 's/LADYBUG/KUZU/g; s/Ladybug/Kuzu/g; s/ladybug/kuzu/g; s/LBUG/KUZU/g; s/lbug/kuzu/g'
+> # chez nous
+> sed 's/RAG3DB/KUZU/g; s/Rag3db/Kuzu/g; s/rag3db/kuzu/g'
+> ```
+>
+> Les noms de **chemins** portent le même renommage : les normaliser aussi avant
+> d'apparier deux fichiers. Avec cette recette, les chiffres du document 01 se
+> reproduisent exactement (1 637 / 1 608 / 29 / 5).
 
 ## 4. Construire
 
@@ -142,11 +165,18 @@ git log --format='%h %ad %an — %s' --date=short --since=2025-10-10 \
   ladybug-main-2026-08-31 -- src/optimizer/filter_push_down_optimizer.cpp
 ```
 
-Les scripts du repérage (séparation renommage / vrai travail, comparaison
-fichier par fichier) ont vécu dans un dossier temporaire et n'ont pas été
-conservés. Ils tiennent en trente lignes de Python chacun et le
-[document 01](01-reperage-ladybug.md) décrit ce qu'ils font ; les réécrire coûte
-moins cher que de les retrouver.
+Les scripts du repérage ont vécu dans un dossier temporaire et n'ont pas été
+conservés. Celui de la sonde, lui, **est gardé** :
+
+```sh
+python3 docs/3-septembre-2026-14h42/reapplication.py
+```
+
+Il sépare le renommage du vrai travail, puis tente la réapplication de chacun de
+nos greffons du cœur sur leur arbre par une fusion à trois branches, et classe
+les conflits. Il ne lit que des objets git, n'écrit que dans un dossier
+temporaire, et **ne touche jamais à l'index ni à l'arbre de travail**. C'est lui
+qui produit les chiffres du [document 05](05-la-sonde-et-sa-reponse.md) §2.
 
 ## 7. Ce qui n'est pas su
 
@@ -154,6 +184,9 @@ moins cher que de les retrouver.
   passe.
 - **Les 187 fichiers partagés hors du cœur** (`extension/geo`,
   `extension/vector`, `tools/rust_api`, `tools/java_api`, `tools/wasm`) n'ont pas
-  été comparés à Ladybug. C'est la mesure manquante du coût d'un rebasage.
+  été comparés à Ladybug — et **ne peuvent pas l'être depuis ce dépôt** : chez
+  eux, ces chemins sont des sous-modules pointant vers d'autres dépôts. Il faut
+  cloner `ladybugdb/extensions`, `ladybug-java`, `ladybug-wasm`… Voir
+  [05 — La réponse](05-la-sonde-et-sa-reponse.md) §3.
 - **`docs/builds-et-tests.md` est partiellement périmé** — au moins sur
   `lucivy_fts`. Les autres sections n'ont pas été revérifiées.

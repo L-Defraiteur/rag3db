@@ -110,14 +110,14 @@ ont fait un mécanisme d'index secondaires enfichables, avec descente de prédic
 et optimisation informée par les statistiques.
 
 Le signe le plus net est dans l'interface elle-même. `storage/index/index.h`
-passe de **19 à 25 méthodes virtuelles**, et gagne :
+passe de **19 à 25 méthodes virtuelles** — vérifié.
 
-```cpp
-enum class IndexConstraintType : uint8_t {
-    PRIMARY = 0,
-    SECONDARY_NON_UNIQUE = 1,
-};
-```
+> **Correction (sonde du 3 septembre).** Cette section attribuait aussi à
+> Ladybug l'ajout de `IndexConstraintType` et de sa valeur
+> `SECONDARY_NON_UNIQUE`. C'est faux : cet enum existe **déjà en amont**, mot
+> pour mot, à `89f0263cc`. Ils n'en ont retiré que la macro d'export. Le compte
+> de virtuelles, lui, est bon. Voir
+> [05 — La réponse](05-la-sonde-et-sa-reponse.md).
 
 Ils ont aussi un `src/processor/map/map_index_scan_node.cpp` que nous n'avons
 pas.
@@ -186,6 +186,12 @@ La question devient :
 **Prochain pas : une sonde de faisabilité**, pas une fusion — décrite dans
 [02 — La mission](02-la-mission-et-son-critere.md).
 
+> **La sonde est faite**, le même jour. Réponse : leur descente **n'atteint pas**
+> un index classé, fermée à la fois par la forme du prédicat et par le type
+> d'index. Les deux généralisations sont bien orthogonales. Nos ~478 lignes
+> vivantes se réappliquent. Voir
+> [05 — La réponse](05-la-sonde-et-sa-reponse.md).
+
 ## 7. Le coût réel du rebasage, hors du cœur
 
 Le cœur n'est pas le plus cher. Hors `src/` :
@@ -201,10 +207,13 @@ C'est là qu'il faudra regarder ensuite — et ce document ne le mesure pas.
 
 ## 8. Ce qui n'est pas tranché
 
-- **La sonde du §6** n'est pas faite. Tout ce document en dépend.
-- **Les 187 fichiers partagés hors du cœur** ne sont pas mesurés. `extension/geo`
-  et `extension/vector` peuvent réserver la même surprise que le cœur — en bien
-  ou en mal.
+- ~~**La sonde du §6** n'est pas faite.~~ **Faite** — voir
+  [05 — La réponse](05-la-sonde-et-sa-reponse.md).
+- **Les 187 fichiers partagés hors du cœur** : la question ne se pose plus ainsi.
+  Ladybug a sorti `extension/`, `benchmark/`, `dataset/` et les cinq API de
+  langage en **dépôts séparés, référencés en sous-modules**. Nos 171 fichiers
+  concernés (13 035 lignes) ne se comparent pas depuis ce dépôt. C'est le
+  repérage suivant, et il faut cloner leurs dépôts pour le mener.
 - **Il existe un second fork** : `Vela-Engineering/kuzu`, MIT aussi, orienté
   mémoire d'agent avec écriture concurrente multi-processus. Ça touche une
   question qu'on a explicitement heurtée (issue sur `F_WRLCK`, deux processus sur
