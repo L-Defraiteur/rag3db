@@ -305,6 +305,9 @@ n'est pas la question de cette mission.
   build de Ladybug reste non tenté sur ce poste.
 - **La branche B n'a pas lieu d'être** : elle ne s'ouvrait que si la descente
   était atteignable. Elle ne l'est pas.
-- **Le contenu de leurs dépôts d'extensions n'a pas été lu.** Il faudrait les
-  cloner. C'est le repérage suivant, et c'est lui qui décide du rebasage.
-- **`Vela-Engineering/kuzu`** reste non évalué.
+- **Leur dépôt d'extensions n'a été lu qu'en surface.** Assez pour établir que
+  `vector` y est et qu'il garde la forme de Kuzu — ce qui a corrigé le §1 — pas
+  assez pour chiffrer le rebasage de nos 171 fichiers hors du cœur. C'est le
+  repérage qui décide du rebasage, et il reste à faire.
+- ~~**`Vela-Engineering/kuzu`** reste non évalué.~~ **Repéré** le même jour, voir
+  [06 — Le second fork](06-reperage-vela.md).
