@@ -1268,3 +1268,81 @@ fn les_trois_moteurs_de_texte_marchent() {
         "lucivy doit trouver sur postgres — c'est le chemin du retour : {noms_lucivy:?}"
     );
 }
+
+// ═══ 13. La reprise après incident, sur PostgreSQL ═══════════════════════════
+
+/// **Ce qui manquait pour que PostgreSQL soit un backend et pas une
+/// démonstration.**
+///
+/// `initialize()` disait déjà ce qui manquait — « aucun magasin de checkpoints :
+/// le seul disponible parle Cypher […] la reprise après incident est
+/// indisponible » — et continuait. Une ingestion morte en route ne pouvait pas
+/// reprendre. Sur kuzu si, sur PostgreSQL non.
+///
+/// La suite de conformité est **la même** que celle jouée contre le magasin
+/// Cypher : deux implémentations d'un même trait tenues à la main divergent, et
+/// la garde n'est pas la bonne volonté.
+#[test]
+fn la_reprise_apres_incident_tient_sur_postgres() {
+    let (_garde, ctx, _catalog) = catalogue(8);
+    let conn: Arc<dyn DbConnection> = Arc::new(
+        ctx.rt
+            .block_on(PostgresConnection::new(&conn_str()))
+            .expect("connexion pour le magasin de checkpoints"),
+    );
+    let store = rag3weaver::dataflow::checkpoint_store::PostgresCheckpointStore::new(conn);
+    rag3weaver::dataflow::checkpoint_store::verifier_conformite(&store, "postgres")
+        .unwrap_or_else(|e| panic!("{e}"));
+}
+
+/// Et le catalogue le **monte tout seul** : une pièce écrite mais jamais
+/// appelée est une pièce qui se dégrade sans bruit — c'est le défaut qu'on a
+/// passé la journée à débusquer.
+#[test]
+fn le_catalogue_monte_le_magasin_de_checkpoints() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    assert!(
+        catalog.has_checkpoint_store(),
+        "PostgreSQL doit avoir sa reprise après incident sans qu'on la lui pose à la main"
+    );
+
+    // **Et il s'en sert.** Un magasin monté mais jamais écrit ne vaut pas mieux
+    // qu'un magasin absent : c'est le défaut de la journée. Une ingestion
+    // réelle doit laisser sa trace.
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities("Product", vec![produit("Clavecin", "clavecin baroque", 10.0)])
+        .unwrap();
+
+    let n = catalog
+        .conn()
+        .execute("SELECT count(*) FROM rag3weaver._dataflow_execution")
+        .expect("la table des exécutions doit exister")
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    assert!(
+        n > 0,
+        "une ingestion doit laisser un checkpoint — sinon la reprise n'a rien à reprendre"
+    );
+
+    // Et rien d'inachevé ne traîne après une ingestion réussie.
+    let inachevees = catalog
+        .conn()
+        .execute(
+            "SELECT count(*) FROM rag3weaver._dataflow_execution \
+             WHERE status IN ('running', 'failed')",
+        )
+        .expect("compte des inachevées")
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
+    assert_eq!(
+        inachevees, 0,
+        "une ingestion réussie ne doit laisser aucune exécution en cours ni échouée"
+    );
+}

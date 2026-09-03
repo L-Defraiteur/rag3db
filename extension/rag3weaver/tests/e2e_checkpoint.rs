@@ -261,3 +261,22 @@ fn checkpoint_independent_per_drain() {
     // Both documents in DB
     assert_eq!(catalog.count("Document").unwrap(), 2);
 }
+
+// ═══ La conformité, jouée contre le magasin Cypher ══════════════════════════
+
+/// **La même suite que sur PostgreSQL** (`e2e_postgres::la_reprise_apres_incident_tient_sur_postgres`).
+///
+/// Deux implémentations d'un même trait, tenues à la main, divergent — le
+/// 3 septembre 2026 l'a montré trois fois : les schémas de nœuds, le miroir
+/// Rust de `search_base`, les registres de services des tests. La garde n'est
+/// pas la bonne volonté, c'est **une** suite jouée contre les deux.
+#[test]
+#[ignore]
+fn le_magasin_cypher_tient_le_contrat() {
+    use std::sync::Arc;
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let conn: Arc<dyn rag3weaver::connection::DbConnection> = Arc::new(conn);
+    let store = rag3weaver::dataflow::checkpoint_store::CypherCheckpointStore::new(conn);
+    rag3weaver::dataflow::checkpoint_store::verifier_conformite(&store, "cypher")
+        .unwrap_or_else(|e| panic!("{e}"));
+}

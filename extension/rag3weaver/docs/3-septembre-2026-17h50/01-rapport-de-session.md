@@ -438,3 +438,47 @@ catalogue — et aucun n'avait le dialecte. Complétés, mais la duplication res
 c'est le troisième cas aujourd'hui de deux copies tenues à la main qui divergent,
 après les schémas de nœuds et le miroir Rust de `search_base`. Un
 `Catalog::register_search_services` les fondrait.
+
+## 8. La reprise après incident sur PostgreSQL — elle n'existait pas
+
+`initialize()` le disait déjà, et continuait :
+
+> aucun magasin de checkpoints : le seul disponible parle Cypher […] **La
+> reprise après incident est indisponible.**
+
+Une ingestion morte en route ne pouvait pas reprendre. Sur kuzu si, sur
+PostgreSQL non. C'est ce que voulait dire « PostgreSQL est prouvé » : prouvé sur
+ce que les tests couvraient.
+
+`PostgresCheckpointStore` tient maintenant le même contrat — les deux tables,
+`INSERT … ON CONFLICT` là où le Cypher fait `MERGE`, et deux index (`status`,
+`execution_id`) sans lesquels une base qui a vécu balaie tout à chaque reprise.
+
+Il vit **dans le même fichier** que la version Cypher : deux implémentations
+côte à côte se surveillent mieux que deux implémentations dans deux fichiers.
+
+### Ce n'est plus le catalogue qui devine
+
+Le choix se faisait sur `speaks_cypher()`, et j'ai d'abord écrit la suite sur le
+**nom** du dialecte — exactement la fragilité payée toute la journée : un
+backend neuf n'aurait qu'à s'appeler autrement pour repartir en silence sans
+reprise après incident. C'est devenu
+`SchemaDialect::nouveau_magasin_de_checkpoints`, qui rend `None` quand il n'en a
+pas — et `initialize()` **le dit** au lieu de démarrer amputé.
+
+### La garde : une suite, deux magasins
+
+`verifier_conformite(store, étiquette)` est publique et compilée toujours. Elle
+éprouve les neuf méthodes du trait, dont les deux règles qui n'étaient nulle
+part : un nœud terminé garde son contexte d'annulation et ses sorties ; à
+`mark_completed`, les nœuds sans annulation s'effacent et ceux qui en ont une
+survivent **allégés de leurs sorties** — c'est ce qui borne la taille.
+
+Elle est jouée depuis `e2e_postgres` et depuis `e2e_checkpoint`. Un magasin
+écrit ailleurs — Neo4j, SQLite — s'éprouvera du dehors avec la même fonction,
+sans recopier ce qu'elle vérifie. C'est la réponse aux **trois** duplications
+trouvées aujourd'hui : la garde n'est pas la bonne volonté.
+
+Et le test ne s'arrête pas au magasin : il vérifie qu'une **ingestion réelle**
+laisse son checkpoint, et qu'une ingestion réussie ne laisse rien d'inachevé.
+Un magasin monté mais jamais écrit ne vaudrait pas mieux qu'un magasin absent.

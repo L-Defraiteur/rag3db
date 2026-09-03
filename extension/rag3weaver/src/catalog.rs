@@ -382,6 +382,15 @@ impl Catalog {
 
     /// Set a custom checkpoint store. Must be called before `initialize()`.
     /// If set, `initialize()` will skip creating the default `CypherCheckpointStore`.
+    /// Ce catalogue sait-il reprendre après un incident ?
+    ///
+    /// `false` veut dire qu'une ingestion morte en route ne se rejoue pas.
+    /// `initialize()` l'annonce par un `Warning` ; ceci permet de l'affirmer
+    /// dans un test, ce qui est la seule façon qu'une promesse ne s'évapore pas.
+    pub fn has_checkpoint_store(&self) -> bool {
+        self.checkpoint_store.is_some()
+    }
+
     pub fn set_checkpoint_store(&mut self, store: Arc<dyn CheckpointStore>) {
         self.checkpoint_store = Some(store);
     }
@@ -782,23 +791,26 @@ impl Catalog {
         // le `CREATE NODE TABLE` — on ne le monte donc que là où il tourne, et
         // on dit ce qui manque quand on ne le monte pas.
         if self.checkpoint_store.is_none() {
-            if self.dialect.speaks_cypher() {
-                let cp_store: Arc<dyn CheckpointStore> =
-                    Arc::new(CypherCheckpointStore::new(self.conn.clone()));
-                cp_store
-                    .initialize()
-                    .map_err(|e| CatalogError::DbError(e))?;
-                self.checkpoint_store = Some(cp_store);
-            } else {
-                self.emit_event(CatalogEvent::Warning {
-                    context: "initialize".into(),
-                    message: format!(
-                        "aucun magasin de checkpoints : le seul disponible parle Cypher, \
-                         et le dialecte est « {} ». La reprise après incident est \
-                         indisponible ; fournis-en un avec set_checkpoint_store().",
-                        self.dialect.name()
-                    ),
-                });
+            // **C'est le dialecte qui dit ce qu'il sait offrir.** Choisir ici
+            // sur son nom serait refaire la fragilité qu'on a payée toute la
+            // journée : un backend neuf n'aurait qu'à s'appeler autrement pour
+            // repartir en silence sans reprise après incident.
+            match self.dialect.nouveau_magasin_de_checkpoints(self.conn.clone()) {
+                Some(cp_store) => {
+                    cp_store.initialize().map_err(CatalogError::DbError)?;
+                    self.checkpoint_store = Some(cp_store);
+                }
+                None => {
+                    self.emit_event(CatalogEvent::Warning {
+                        context: "initialize".into(),
+                        message: format!(
+                            "aucun magasin de checkpoints pour le dialecte « {} » : la \
+                             reprise après incident est indisponible ; fournis-en un avec \
+                             set_checkpoint_store().",
+                            self.dialect.name()
+                        ),
+                    });
+                }
             }
         }
 

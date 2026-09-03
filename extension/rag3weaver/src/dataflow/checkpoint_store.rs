@@ -415,6 +415,531 @@ impl CheckpointStore for CypherCheckpointStore {
     }
 }
 
+// ─── Le même magasin, en SQL ────────────────────────────────────────────────
+
+/// Magasin de checkpoints pour PostgreSQL.
+///
+/// **Ce qui manquait pour que PostgreSQL soit un backend et pas une
+/// démonstration.** `initialize()` disait déjà ce qui manquait — « aucun
+/// magasin de checkpoints : le seul disponible parle Cypher […] la reprise
+/// après incident est indisponible » — et continuait. Une ingestion qui mourait
+/// en route ne pouvait pas reprendre.
+///
+/// Il vit dans le même fichier que [`CypherCheckpointStore`] **exprès** : les
+/// deux tiennent le même contrat, et deux implémentations côte à côte se
+/// surveillent mieux que deux implémentations dans deux fichiers. La garde
+/// réelle reste le test de conformité, joué contre les deux.
+pub struct PostgresCheckpointStore {
+    conn: Arc<dyn DbConnection>,
+}
+
+impl PostgresCheckpointStore {
+    pub fn new(conn: Arc<dyn DbConnection>) -> Self {
+        Self { conn }
+    }
+}
+
+impl CheckpointStore for PostgresCheckpointStore {
+    fn initialize(&self) -> Result<(), String> {
+        self.conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS rag3weaver._dataflow_execution (\
+                     _uuid TEXT PRIMARY KEY, \
+                     pipeline_name TEXT, \
+                     status TEXT, \
+                     graph_json TEXT, \
+                     graph_hash TEXT, \
+                     node_count BIGINT, \
+                     edge_count BIGINT, \
+                     expanded_count BIGINT, \
+                     inputs_json TEXT, \
+                     error TEXT, \
+                     duration_ms BIGINT, \
+                     created_at BIGINT, \
+                     updated_at BIGINT)",
+            )
+            .map_err(|e| e.to_string())?;
+        self.conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS rag3weaver._dataflow_node_state (\
+                     _uuid TEXT PRIMARY KEY, \
+                     execution_id TEXT, \
+                     node_name TEXT, \
+                     status TEXT, \
+                     output_ports TEXT, \
+                     undo_json TEXT, \
+                     duration_ms BIGINT, \
+                     error TEXT, \
+                     completed_at BIGINT)",
+            )
+            .map_err(|e| e.to_string())?;
+        // `find_incomplete` balaie par statut, `load_execution` et `delete`
+        // par exécution : sans ces deux index, une base qui a vécu balaie
+        // toute la table à chaque reprise.
+        self.conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS _dataflow_execution_status \
+                 ON rag3weaver._dataflow_execution (status, created_at)",
+            )
+            .map_err(|e| e.to_string())?;
+        self.conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS _dataflow_node_state_exec \
+                 ON rag3weaver._dataflow_node_state (execution_id)",
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
+        let graph_json = serde_json::to_string(&checkpoint.graph_def).map_err(|e| e.to_string())?;
+        let inputs_json =
+            serde_json::to_string(&checkpoint.initial_inputs).map_err(|e| e.to_string())?;
+        let now = timestamp_ms();
+
+        self.conn
+            .execute_with_params(
+                "INSERT INTO rag3weaver._dataflow_execution \
+                     (_uuid, status, graph_json, graph_hash, node_count, inputs_json, \
+                      error, created_at, updated_at) \
+                 VALUES ($exec_id, $status, $graph_json, $graph_hash, $node_count, \
+                         $inputs_json, $error, $created_at, $updated_at) \
+                 ON CONFLICT (_uuid) DO UPDATE SET \
+                     status = EXCLUDED.status, graph_json = EXCLUDED.graph_json, \
+                     graph_hash = EXCLUDED.graph_hash, node_count = EXCLUDED.node_count, \
+                     inputs_json = EXCLUDED.inputs_json, error = EXCLUDED.error, \
+                     created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at",
+                &[
+                    QueryParam::new("exec_id", CypherValue::String(checkpoint.execution_id.clone())),
+                    QueryParam::new("status", CypherValue::String(status_to_string(&checkpoint.status))),
+                    QueryParam::new("graph_json", CypherValue::String(graph_json)),
+                    QueryParam::new("graph_hash", CypherValue::String(checkpoint.graph_hash.clone())),
+                    QueryParam::new("node_count", CypherValue::Int(checkpoint.nodes.len() as i64)),
+                    QueryParam::new("inputs_json", CypherValue::String(inputs_json)),
+                    QueryParam::new("error", CypherValue::String(String::new())),
+                    QueryParam::new("created_at", CypherValue::Int(now as i64)),
+                    QueryParam::new("updated_at", CypherValue::Int(now as i64)),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+
+        for (node_name, node_cp) in &checkpoint.nodes {
+            let uuid = format!("{}:{}", checkpoint.execution_id, node_name);
+            self.conn
+                .execute_with_params(
+                    "INSERT INTO rag3weaver._dataflow_node_state \
+                         (_uuid, execution_id, node_name, status, output_ports, undo_json, \
+                          duration_ms, error, completed_at) \
+                     VALUES ($uuid, $exec_id, $node_name, $status, $output_ports, '', \
+                             $duration_ms, $error, $completed_at) \
+                     ON CONFLICT (_uuid) DO UPDATE SET \
+                         execution_id = EXCLUDED.execution_id, node_name = EXCLUDED.node_name, \
+                         status = EXCLUDED.status, output_ports = EXCLUDED.output_ports, \
+                         duration_ms = EXCLUDED.duration_ms, error = EXCLUDED.error, \
+                         completed_at = EXCLUDED.completed_at",
+                    &[
+                        QueryParam::new("uuid", CypherValue::String(uuid)),
+                        QueryParam::new("exec_id", CypherValue::String(checkpoint.execution_id.clone())),
+                        QueryParam::new("node_name", CypherValue::String(node_name.clone())),
+                        QueryParam::new("status", CypherValue::String(node_status_to_string(&node_cp.status))),
+                        QueryParam::new("output_ports", CypherValue::String(String::new())),
+                        QueryParam::new("duration_ms", CypherValue::Int(0)),
+                        QueryParam::new("error", CypherValue::String(String::new())),
+                        QueryParam::new("completed_at", CypherValue::Int(0)),
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn load_execution(&self, execution_id: &str) -> Result<Option<ExecutionCheckpoint>, String> {
+        let result = self
+            .conn
+            .execute_with_params(
+                "SELECT status, graph_json, graph_hash, node_count, error, created_at, \
+                        updated_at, inputs_json \
+                 FROM rag3weaver._dataflow_execution WHERE _uuid = $exec_id",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+        if result.rows.is_empty() {
+            return Ok(None);
+        }
+        let row = &result.rows[0];
+        let status = string_to_status(row[0].as_str().unwrap_or("running"));
+        let graph_def: GraphDefinition =
+            serde_json::from_str(row[1].as_str().unwrap_or("{}")).map_err(|e| e.to_string())?;
+        let graph_hash = row[2].as_str().unwrap_or("").to_string();
+        let created_at = row[5].as_i64().unwrap_or(0) as u64;
+        let updated_at = row[6].as_i64().unwrap_or(0) as u64;
+        let initial_inputs: HashMap<String, HashMap<String, CheckpointPortValue>> =
+            serde_json::from_str(row.get(7).and_then(|v| v.as_str()).unwrap_or("{}"))
+                .unwrap_or_default();
+
+        let nodes_result = self
+            .conn
+            .execute_with_params(
+                "SELECT node_name, status, output_ports, duration_ms, error, completed_at, \
+                        undo_json \
+                 FROM rag3weaver._dataflow_node_state WHERE execution_id = $exec_id",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+
+        let mut nodes = HashMap::new();
+        for row in &nodes_result.rows {
+            let node_name = row[0].as_str().unwrap_or("").to_string();
+            let output_ports_json = row[2].as_str().unwrap_or("{}");
+            let duration_ms = row[3].as_i64().unwrap_or(0) as u64;
+            let error_str = row[4].as_str().unwrap_or("").to_string();
+            let completed_at = row[5].as_i64().unwrap_or(0) as u64;
+            let undo_json_str = row.get(6).and_then(|v| v.as_str()).unwrap_or("");
+            nodes.insert(
+                node_name,
+                NodeCheckpoint {
+                    status: string_to_node_status(row[1].as_str().unwrap_or("pending")),
+                    output_ports: if output_ports_json.is_empty() {
+                        HashMap::new()
+                    } else {
+                        serde_json::from_str(output_ports_json).unwrap_or_default()
+                    },
+                    undo_context: if undo_json_str.is_empty() {
+                        None
+                    } else {
+                        serde_json::from_str(undo_json_str).ok()
+                    },
+                    duration_ms: (duration_ms > 0).then_some(duration_ms),
+                    error: (!error_str.is_empty()).then_some(error_str),
+                    completed_at: (completed_at > 0).then_some(completed_at),
+                },
+            );
+        }
+
+        Ok(Some(ExecutionCheckpoint {
+            execution_id: execution_id.to_string(),
+            status,
+            graph_def,
+            graph_hash,
+            nodes,
+            initial_inputs,
+            created_at,
+            updated_at,
+        }))
+    }
+
+    fn find_incomplete(&self) -> Result<Vec<String>, String> {
+        let result = self
+            .conn
+            .execute(
+                "SELECT _uuid FROM rag3weaver._dataflow_execution \
+                 WHERE status IN ('running', 'failed') ORDER BY created_at",
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(result
+            .rows
+            .iter()
+            .filter_map(|row| row[0].as_str().map(|s| s.to_string()))
+            .collect())
+    }
+
+    fn save_node_completed(
+        &self,
+        execution_id: &str,
+        node_name: &str,
+        outputs: &HashMap<String, CheckpointPortValue>,
+        undo_context: Option<&serde_json::Value>,
+        duration_ms: u64,
+    ) -> Result<(), String> {
+        let uuid = format!("{execution_id}:{node_name}");
+        let now = timestamp_ms();
+        let outputs_json = serde_json::to_string(outputs).map_err(|e| e.to_string())?;
+        let undo_json = match undo_context {
+            Some(ctx) => serde_json::to_string(ctx).map_err(|e| e.to_string())?,
+            None => String::new(),
+        };
+
+        // `MERGE` côté Cypher : la ligne peut ne pas exister si le nœud n'était
+        // pas déclaré à la création. `INSERT … ON CONFLICT` tient le même
+        // contrat — et `execution_id` est renseigné à l'insertion, sans quoi
+        // une ligne créée ici serait invisible à `load_execution`.
+        self.conn
+            .execute_with_params(
+                "INSERT INTO rag3weaver._dataflow_node_state \
+                     (_uuid, execution_id, node_name, status, output_ports, undo_json, \
+                      duration_ms, error, completed_at) \
+                 VALUES ($uuid, $exec_id, $node_name, $status, $output_ports, $undo_json, \
+                         $duration_ms, '', $completed_at) \
+                 ON CONFLICT (_uuid) DO UPDATE SET \
+                     status = EXCLUDED.status, output_ports = EXCLUDED.output_ports, \
+                     undo_json = EXCLUDED.undo_json, duration_ms = EXCLUDED.duration_ms, \
+                     completed_at = EXCLUDED.completed_at",
+                &[
+                    QueryParam::new("uuid", CypherValue::String(uuid)),
+                    QueryParam::new("exec_id", CypherValue::String(execution_id.to_string())),
+                    QueryParam::new("node_name", CypherValue::String(node_name.to_string())),
+                    QueryParam::new("status", CypherValue::String("completed".to_string())),
+                    QueryParam::new("output_ports", CypherValue::String(outputs_json)),
+                    QueryParam::new("undo_json", CypherValue::String(undo_json)),
+                    QueryParam::new("duration_ms", CypherValue::Int(duration_ms as i64)),
+                    QueryParam::new("completed_at", CypherValue::Int(now as i64)),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+
+        self.conn
+            .execute_with_params(
+                "UPDATE rag3weaver._dataflow_execution SET updated_at = $now \
+                 WHERE _uuid = $exec_id",
+                &[
+                    QueryParam::new("now", CypherValue::Int(now as i64)),
+                    QueryParam::new("exec_id", CypherValue::String(execution_id.to_string())),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn save_node_failed(&self, execution_id: &str, node_name: &str, error: &str) -> Result<(), String> {
+        let uuid = format!("{execution_id}:{node_name}");
+        let now = timestamp_ms();
+        self.conn
+            .execute_with_params(
+                "INSERT INTO rag3weaver._dataflow_node_state \
+                     (_uuid, execution_id, node_name, status, output_ports, undo_json, \
+                      duration_ms, error, completed_at) \
+                 VALUES ($uuid, $exec_id, $node_name, $status, '', '', 0, $error, $completed_at) \
+                 ON CONFLICT (_uuid) DO UPDATE SET \
+                     status = EXCLUDED.status, error = EXCLUDED.error, \
+                     completed_at = EXCLUDED.completed_at",
+                &[
+                    QueryParam::new("uuid", CypherValue::String(uuid)),
+                    QueryParam::new("exec_id", CypherValue::String(execution_id.to_string())),
+                    QueryParam::new("node_name", CypherValue::String(node_name.to_string())),
+                    QueryParam::new("status", CypherValue::String("failed".to_string())),
+                    QueryParam::new("error", CypherValue::String(error.to_string())),
+                    QueryParam::new("completed_at", CypherValue::Int(now as i64)),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
+        let now = timestamp_ms();
+        self.conn
+            .execute_with_params(
+                "UPDATE rag3weaver._dataflow_execution \
+                 SET status = $status, updated_at = $now WHERE _uuid = $exec_id",
+                &[
+                    QueryParam::new("status", CypherValue::String("completed".to_string())),
+                    QueryParam::new("now", CypherValue::Int(now as i64)),
+                    QueryParam::new("exec_id", CypherValue::String(execution_id.to_string())),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        // Les lignes sans contexte d'annulation ne servent plus ; celles qui en
+        // ont un survivent, allégées de leurs sorties.
+        self.conn
+            .execute_with_params(
+                "DELETE FROM rag3weaver._dataflow_node_state \
+                 WHERE execution_id = $exec_id AND (undo_json = '' OR undo_json IS NULL)",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+        self.conn
+            .execute_with_params(
+                "UPDATE rag3weaver._dataflow_node_state SET output_ports = '' \
+                 WHERE execution_id = $exec_id",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+        let now = timestamp_ms();
+        self.conn
+            .execute_with_params(
+                "UPDATE rag3weaver._dataflow_execution \
+                 SET status = $status, error = $error, updated_at = $now WHERE _uuid = $exec_id",
+                &[
+                    QueryParam::new("status", CypherValue::String("failed".to_string())),
+                    QueryParam::new("error", CypherValue::String(error.to_string())),
+                    QueryParam::new("now", CypherValue::Int(now as i64)),
+                    QueryParam::new("exec_id", CypherValue::String(execution_id.to_string())),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn delete(&self, execution_id: &str) -> Result<(), String> {
+        self.conn
+            .execute_with_params(
+                "DELETE FROM rag3weaver._dataflow_node_state WHERE execution_id = $exec_id",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+        self.conn
+            .execute_with_params(
+                "DELETE FROM rag3weaver._dataflow_execution WHERE _uuid = $exec_id",
+                &[QueryParam::new("exec_id", CypherValue::String(execution_id.to_string()))],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+// ─── Conformité ─────────────────────────────────────────────────────────────
+
+/// **Le même contrat, éprouvé sur chaque magasin.**
+///
+/// Deux implémentations d'un même trait, tenues à la main, divergent — c'est le
+/// constat de la journée du 3 septembre 2026, fait trois fois : les schémas de
+/// nœuds, le miroir Rust de `search_base`, les registres de services des tests.
+/// La garde n'est pas la bonne volonté, c'est **une** suite jouée contre les
+/// deux.
+///
+/// Publique et compilée toujours : un magasin écrit ailleurs — Neo4j, SQLite —
+/// s'éprouve du dehors avec la même fonction, sans recopier ce qu'elle vérifie.
+///
+/// `etiquette` n'entre que dans les messages ; les identifiants d'exécution
+/// sont uniques pour que la fonction puisse tourner sur une base partagée.
+pub fn verifier_conformite(store: &dyn CheckpointStore, etiquette: &str) -> Result<(), String> {
+    use crate::dataflow::checkpoint::{
+        CheckpointExecutionStatus, NodeCheckpoint, NodeCheckpointStatus,
+    };
+
+    let dire = |quoi: &str| format!("[conformité {etiquette}] {quoi}");
+    store.initialize().map_err(|e| dire(&format!("initialize : {e}")))?;
+
+    let exec = format!("conf-{etiquette}-{}", timestamp_ms());
+    let sortie = CheckpointPortValue {
+        port_type: crate::dataflow::port::PortType::Empty,
+        is_batch: false,
+        data_json: Some("{\"a\":1}".to_string()),
+        record_count: Some(1),
+    };
+    let noeud = |statut: NodeCheckpointStatus| NodeCheckpoint {
+        status: statut,
+        output_ports: HashMap::new(),
+        undo_context: None,
+        duration_ms: None,
+        error: None,
+        completed_at: None,
+    };
+
+    let mut nodes = HashMap::new();
+    nodes.insert("a".to_string(), noeud(NodeCheckpointStatus::Pending));
+    nodes.insert("b".to_string(), noeud(NodeCheckpointStatus::Pending));
+    nodes.insert("c".to_string(), noeud(NodeCheckpointStatus::Pending));
+
+    let cp = ExecutionCheckpoint {
+        execution_id: exec.clone(),
+        status: CheckpointExecutionStatus::Running,
+        graph_def: GraphDefinition { nodes: vec![], edges: vec![] },
+        graph_hash: "hachage-de-test".to_string(),
+        nodes,
+        initial_inputs: HashMap::new(),
+        created_at: 0,
+        updated_at: 0,
+    };
+    store.create_execution(&cp).map_err(|e| dire(&format!("create_execution : {e}")))?;
+
+    // 1. Ce qu'on vient d'écrire se relit, avec ses trois nœuds en attente.
+    let relu = store
+        .load_execution(&exec)
+        .map_err(|e| dire(&format!("load_execution : {e}")))?
+        .ok_or_else(|| dire("load_execution rend None juste après create_execution"))?;
+    if relu.graph_hash != "hachage-de-test" {
+        return Err(dire(&format!("graph_hash perdu : « {} »", relu.graph_hash)));
+    }
+    if relu.nodes.len() != 3 {
+        return Err(dire(&format!("{} nœud(s) relus au lieu de 3", relu.nodes.len())));
+    }
+
+    // 2. Une exécution en cours se retrouve — c'est ce qui rend la reprise
+    //    possible ; sans ça un incident laisse un travail invisible.
+    let incompletes = store.find_incomplete().map_err(|e| dire(&format!("find_incomplete : {e}")))?;
+    if !incompletes.contains(&exec) {
+        return Err(dire("find_incomplete ne voit pas l'exécution en cours"));
+    }
+
+    // 3. Un nœud terminé garde ses sorties **et** son contexte d'annulation.
+    let mut sorties = HashMap::new();
+    sorties.insert("out".to_string(), sortie.clone());
+    store
+        .save_node_completed(&exec, "a", &sorties, Some(&serde_json::json!({"undo": 1})), 42)
+        .map_err(|e| dire(&format!("save_node_completed avec undo : {e}")))?;
+    store
+        .save_node_completed(&exec, "b", &sorties, None, 7)
+        .map_err(|e| dire(&format!("save_node_completed sans undo : {e}")))?;
+    store
+        .save_node_failed(&exec, "c", "ça a cassé")
+        .map_err(|e| dire(&format!("save_node_failed : {e}")))?;
+
+    let relu = store
+        .load_execution(&exec)
+        .map_err(|e| dire(&format!("load_execution après écriture : {e}")))?
+        .ok_or_else(|| dire("l'exécution a disparu"))?;
+    let a = relu.nodes.get("a").ok_or_else(|| dire("le nœud « a » a disparu"))?;
+    if a.status != NodeCheckpointStatus::Completed {
+        return Err(dire(&format!("« a » devait être terminé, il est {:?}", a.status)));
+    }
+    if a.undo_context.is_none() {
+        return Err(dire("« a » a perdu son contexte d'annulation — le rollback devient impossible"));
+    }
+    if a.output_ports.get("out").and_then(|p| p.data_json.as_deref()) != Some("{\"a\":1}") {
+        return Err(dire("« a » a perdu ses sorties — la reprise repartirait sans elles"));
+    }
+    if a.duration_ms != Some(42) {
+        return Err(dire(&format!("durée de « a » : {:?} au lieu de 42", a.duration_ms)));
+    }
+    let c = relu.nodes.get("c").ok_or_else(|| dire("le nœud « c » a disparu"))?;
+    if c.status != NodeCheckpointStatus::Failed || c.error.as_deref() != Some("ça a cassé") {
+        return Err(dire(&format!("« c » devait porter son échec, il porte {:?}", c.error)));
+    }
+
+    // 4. Terminer l'exécution : les nœuds sans annulation s'effacent, ceux qui
+    //    en ont une survivent **allégés de leurs sorties**.
+    store.mark_completed(&exec).map_err(|e| dire(&format!("mark_completed : {e}")))?;
+    let relu = store
+        .load_execution(&exec)
+        .map_err(|e| dire(&format!("load_execution après mark_completed : {e}")))?
+        .ok_or_else(|| dire("l'exécution a disparu après mark_completed"))?;
+    if relu.status != CheckpointExecutionStatus::Completed {
+        return Err(dire(&format!("statut {:?} au lieu de Completed", relu.status)));
+    }
+    if !relu.nodes.contains_key("a") {
+        return Err(dire("« a » portait un contexte d'annulation : il devait survivre"));
+    }
+    if relu.nodes.contains_key("b") {
+        return Err(dire("« b » n'avait rien à annuler : il devait être effacé"));
+    }
+    if !relu.nodes["a"].output_ports.is_empty() {
+        return Err(dire("les sorties de « a » devaient être vidées — c'est ce qui borne la taille"));
+    }
+    let incompletes = store.find_incomplete().map_err(|e| dire(&format!("find_incomplete : {e}")))?;
+    if incompletes.contains(&exec) {
+        return Err(dire("une exécution terminée ne doit plus figurer parmi les incomplètes"));
+    }
+
+    // 5. Un échec se dit et se retrouve.
+    store.mark_failed(&exec, "raté").map_err(|e| dire(&format!("mark_failed : {e}")))?;
+    let incompletes = store.find_incomplete().map_err(|e| dire(&format!("find_incomplete : {e}")))?;
+    if !incompletes.contains(&exec) {
+        return Err(dire("une exécution échouée doit figurer parmi les incomplètes"));
+    }
+
+    // 6. Et tout s'efface.
+    store.delete(&exec).map_err(|e| dire(&format!("delete : {e}")))?;
+    if store.load_execution(&exec).map_err(|e| dire(&format!("load après delete : {e}")))?.is_some() {
+        return Err(dire("l'exécution survit à son delete"));
+    }
+    Ok(())
+}
+
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
 fn status_to_string(s: &CheckpointExecutionStatus) -> String {

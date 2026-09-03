@@ -404,6 +404,25 @@ pub trait SchemaDialect: Send + Sync {
         forward: bool,
     ) -> String;
 
+    /// Le magasin de checkpoints que ce dialecte sait servir, s'il en a un.
+    ///
+    /// **Le dialecte le dit, le catalogue ne le devine pas.** Sans cette
+    /// méthode, `initialize()` choisissait sur `speaks_cypher()` puis sur le
+    /// nom du dialecte — donc un backend neuf repartait sans reprise après
+    /// incident sans que son auteur ait rien à décider, ni rien à voir.
+    ///
+    /// `None` = ce backend n'en a pas encore ; `initialize()` le **dit** au
+    /// lieu de démarrer amputé en silence.
+    fn nouveau_magasin_de_checkpoints(
+        &self,
+        conn: std::sync::Arc<dyn crate::connection::DbConnection>,
+    ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
+        // Le défaut est le Cypher, comme partout ici.
+        Some(std::sync::Arc::new(
+            crate::dataflow::checkpoint_store::CypherCheckpointStore::new(conn),
+        ))
+    }
+
     /// **Résoudre des décalages de parents, avec tous leurs chunks**, en une
     /// requête.
     ///
@@ -1648,6 +1667,15 @@ impl SchemaDialect for PostgresDialect {
                  JOIN {target_entity} AS {target_alias} ON {target_alias}._uuid = _r_{target_alias}.from_uuid"
             )
         }
+    }
+
+    fn nouveau_magasin_de_checkpoints(
+        &self,
+        conn: std::sync::Arc<dyn crate::connection::DbConnection>,
+    ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
+        Some(std::sync::Arc::new(
+            crate::dataflow::checkpoint_store::PostgresCheckpointStore::new(conn),
+        ))
     }
 
     /// Le chunk porte `_parent_uuid` : une jointure gauche suffit, et le
