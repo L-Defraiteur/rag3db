@@ -238,10 +238,20 @@ fn scope_bm25_index_per_cell_never_sees_the_other_cell() {
     let mut catalog = catalog_in_memory();
     catalog.register_entity("Product", make_product_config()).unwrap();
 
+    // Les textes exclusifs à une cellule ne partagent **aucun mot** avec ceux
+    // de l'autre. Ce n'était pas le cas avant : « alpha private text » et
+    // « beta private text » partageaient `private`, et le test ne tenait que
+    // parce que le mode BM25 par défaut était `Contains` — la requête entière
+    // collée en un seul terme ne matchait rien. Depuis que `Parse` est le
+    // défaut pour une phrase (issue 02, 29 août 2026), « alpha private » se
+    // découpe et trouve légitimement le document de beta sur `private`.
+    //
+    // Le test échouait donc en criant à la fuite là où le cloisonnement était
+    // intact. Des mots disjoints le rendent indifférent au mode.
     catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes"), make_product("A-only", "alpha private text")]).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes"), make_product("A-only", "xylophone")]).unwrap();
     catalog.set_scope(Scope::new("acme", "beta")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "beta private text")]).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "clavecin")]).unwrap();
 
     let keys = blob_keys(&catalog);
     assert!(keys.iter().any(|k| k.starts_with("Lucivy_Product__acme__alpha")), "blobs alpha: {keys:?}");
@@ -250,11 +260,17 @@ fn scope_bm25_index_per_cell_never_sees_the_other_cell() {
 
     // Cellule courante = beta.
     assert_eq!(search_names(&mut catalog, "kernel scheduler", SearchSignals::BM25), vec!["B-shared"]);
-    assert!(search_names(&mut catalog, "alpha private", SearchSignals::BM25).is_empty());
+    assert_eq!(search_names(&mut catalog, "clavecin", SearchSignals::BM25), vec!["B-only"],
+        "beta doit voir son propre mot exclusif");
+    let fuite_beta = search_names(&mut catalog, "xylophone", SearchSignals::BM25);
+    assert!(fuite_beta.is_empty(), "depuis beta, « xylophone » (alpha seul) rend {fuite_beta:?}");
 
     catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
     assert_eq!(search_names(&mut catalog, "kernel scheduler", SearchSignals::BM25), vec!["A-shared"]);
-    assert!(search_names(&mut catalog, "beta private", SearchSignals::BM25).is_empty());
+    assert_eq!(search_names(&mut catalog, "xylophone", SearchSignals::BM25), vec!["A-only"],
+        "alpha doit voir son propre mot exclusif");
+    let fuite_alpha = search_names(&mut catalog, "clavecin", SearchSignals::BM25);
+    assert!(fuite_alpha.is_empty(), "depuis alpha, « clavecin » (beta seul) rend {fuite_alpha:?}");
 }
 
 /// Le vecteur HNSW reste par table : l'isolation vient du filtre sur les
