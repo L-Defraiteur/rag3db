@@ -224,6 +224,38 @@ la machinerie de pages fantômes sur laquelle bute notre lecteur. Elle passe
 entièrement. Elle prend treize minutes : ne pas la lancer avec un délai
 d'attente court, elle n'est pas bloquée, elle est lente.
 
+## Attention au build : un artefact périmé dit le contraire
+
+Un désaccord est apparu entre cette mesure et un test Rust du crate, qui
+affirmait l'inverse — qu'un lecteur reste refusé — **et qui passait**. Ce n'était
+pas une contradiction : les deux mesures portaient sur des bibliothèques
+différentes.
+
+```
+build/native-test/src/librag3db.a        24 août 2026
+le report du correctif                    3 septembre 2026, 17h14
+build/lecteurs/src/librag3db.a            3 septembre 2026, 17h21
+```
+
+`build/native-test` précède le correctif de dix jours. Il ne peut pas le
+contenir, et l'exclusion qu'il fait observer est l'ancien comportement,
+correctement observé sur un artefact périmé.
+
+**La leçon, pour la prochaine fois :** avant de conclure d'un test qui contredit
+une mesure, comparer la date de la bibliothèque liée à celle du changement. Un
+`stat` sur le `.a` coûte une seconde et évite une enquête.
+
+`build/lecteurs` porte le correctif et a été complété pour être interchangeable —
+même type Release, même liaison statique, mêmes extensions `vector;geo`, et un
+jeu de bibliothèques statiques désormais identique à celui de `build/native-test`
+(il manquait `brotlienc` et les extensions, ajoutés depuis). Pour l'employer sans
+recompiler quoi que ce soit :
+
+```sh
+export RAG3DB_LIBRARY_DIR=$PWD/build/lecteurs/src
+export RAG3DB_INCLUDE_DIR=$PWD/src/include
+```
+
 ## Comment refaire la mesure
 
 ```sh
