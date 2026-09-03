@@ -477,6 +477,18 @@ mod tests {
         (adresse, stop)
     }
 
+    /// Un port que personne n'écoute — **à l'instant où on le rend**.
+    ///
+    /// Le noyau ne sait pas réserver un port sans l'occuper : on lie, on lit le
+    /// numéro, on relâche. Entre le relâchement et l'usage, n'importe qui peut
+    /// le prendre — un autre test du même binaire, ou n'importe quel processus
+    /// du poste. Cette course est **inhérente**, pas corrigeable ici.
+    ///
+    /// Ce qui est corrigeable, c'est de ne pas s'y laisser piéger : un test qui
+    /// utilise ce port doit poser une **sonde de santé**, pour que le module
+    /// distingue « c'est lui » de « c'est quelqu'un ». Sans elle, `sonder` rend
+    /// `Repond` dès que le TCP se connecte, et un inconnu passe pour le serveur
+    /// attendu.
     fn port_libre() -> String {
         let e = TcpListener::bind("127.0.0.1:0").unwrap();
         let a = e.local_addr().unwrap().to_string();
@@ -554,27 +566,41 @@ mod tests {
     #[test]
     fn un_serveur_qui_meurt_renvoie_a_son_journal() {
         let dossier = std::env::temp_dir().join("rag3weaver-tests-serveur");
+        // La sonde de santé n'est pas décorative ici : sans elle, un inconnu
+        // qui a pris le port entre-temps rend `Repond`, et `assurer` s'attache
+        // à lui en croyant que le serveur tourne déjà. Le test tombait alors
+        // au hasard, en accusant le code testé.
         let s = Serveur::new("mourant", port_libre(), "/bin/false")
+            .sante("/sante", "mourant")
             .journal_dans(&dossier)
             .attente(Duration::from_secs(2));
         match s.assurer() {
             Err(ServeurError::Mort { journal, .. }) => {
                 assert_eq!(journal, dossier.join("mourant.log"));
             }
-            autre => panic!("attendu Mort, obtenu {autre:?}"),
+            // Quelqu'un d'autre écoute sur ce port. C'est précisément ce que
+            // `Occupe` existe pour dire — « quelqu'un répond, ce n'est pas
+            // lui » — et ce n'est pas un défaut du code testé. Ce qui serait
+            // un défaut, c'est de s'y **attacher** : ce cas-là reste refusé.
+            Err(ServeurError::Occupe { .. }) => {}
+            autre => panic!("attendu Mort (ou Occupe si le port a été pris), obtenu {autre:?}"),
         }
     }
 
     #[test]
     fn un_serveur_qui_vit_sans_repondre_est_muet_pas_mort() {
         let dossier = std::env::temp_dir().join("rag3weaver-tests-serveur");
+        // Même raison qu'au-dessus : la sonde empêche un inconnu de se faire
+        // passer pour lui.
         let s = Serveur::new("muet", port_libre(), "/bin/sleep")
             .arg("30")
+            .sante("/sante", "muet")
             .journal_dans(&dossier)
             .attente(Duration::from_millis(400));
         match s.assurer() {
             Err(ServeurError::Muet { nom, .. }) => assert_eq!(nom, "muet"),
-            autre => panic!("attendu Muet, obtenu {autre:?}"),
+            Err(ServeurError::Occupe { .. }) => {}
+            autre => panic!("attendu Muet (ou Occupe si le port a été pris), obtenu {autre:?}"),
         }
     }
 
