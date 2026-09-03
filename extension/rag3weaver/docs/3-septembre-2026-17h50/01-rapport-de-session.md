@@ -531,17 +531,49 @@ tenue — échoue de la même façon quelques dizaines de millisecondes plus tar
 l'erreur **dit** combien de tentatives ont eu lieu. Sans ce compte, on ne
 distinguerait pas « refusé une fois » de « refusé obstinément ».
 
-### Ce que je n'ai pas prouvé
+### Le désaccord, levé — et ce n'en était pas un
 
-**La condition n'est pas atteignable dans ce binaire.**
-`e2e_prise_atomique::plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient`
-passe en affirmant l'**inverse** de la mesure voisine : un lecteur ouvrant
-pendant qu'un écrivain tient la base est refusé, et le test l'assert. Il tourne
-contre `build/native-test`.
+Mon test affirmait qu'un lecteur est refusé pendant qu'un écrivain tient la
+base ; la mesure voisine disait l'inverse. **Les deux disaient vrai, sur deux
+binaires différents** :
 
-Donc ou bien ce build ne porte pas le report de Vela, ou bien le report ne lève
-pas cette exclusion et la mesure portait sur autre chose. La reprise est **posée
-mais dormante** ; seuls le mécanisme et le compte de tentatives sont éprouvés,
-en unitaire. La question est partie à `rag3db-57` plutôt que d'être tranchée au
-jugé — et je n'ai pas lancé de reconstruction C++ sur le poste sans savoir
-qu'elle change quelque chose.
+```
+build/native-test/…/librag3db.a        24 août 2026
+le correctif de storage_manager.cpp     3 septembre 2026, 17h14
+build/lecteurs/…/librag3db.a            3 septembre 2026, 17h21
+```
+
+Mon build est antérieur de dix jours au report de Vela. L'exclusion qu'il
+observe est l'ancien comportement, **correctement observé** — ce n'est donc pas
+un contrat mort comme `db_locking_test.cpp`, qui l'affirme sans jamais tourner.
+`rag3db-57` a construit `build/lecteurs`, aligné sur le même jeu de
+bibliothèques, sans toucher au mien pour ne pas casser une exécution en cours.
+
+### Ce que la reprise fait vraiment
+
+`un_lecteur_qui_insiste_pendant_qu_on_ecrit` ouvre quatre-vingts fois en lecture
+seule pendant qu'un écrivain écrit sans relâche, avec un point de reprise toutes
+les cinq écritures — une boucle volontairement hostile.
+
+| bibliothèque | résultat |
+|---|---|
+| `build/lecteurs` (à jour) | **REFUS=0, LUS=80, INCOHERENTS=0** |
+| `build/native-test` (24 août) | REFUS=80 — l'exclusion, nommée comme l'ancien contrat |
+
+Le test **affirme quelque chose dans les deux régimes** et interdit le
+troisième : un refus **sporadique** voudrait dire qu'un transitoire a traversé
+le budget de `read_only`. C'est le seul cas qui serait un défaut, et c'est celui
+qu'il garde.
+
+L'autre test a rendu son assertion sur l'exclusion : elle dépend de la
+bibliothèque, pas de notre code, et l'épingler ferait de lui l'affirmation d'un
+contrat mort dès que la bibliothèque bouge. Il tient maintenant l'invariant qui
+est le nôtre — **ou refusé, ou il lit juste, jamais du bruit** — et nomme le
+régime observé. Les quatre tests passent contre les deux bibliothèques.
+
+### Ce qui reste à décider, et qui n'est pas à moi
+
+`run_e2e.sh` relie `build/native-test`, du 24 août. Le remettre à jour est
+presque une compilation complète ; pointer le script sur une bibliothèque
+portant le report ne coûte rien. **C'est le poste de Lucie et c'est son
+arbitrage**, pas le mien.

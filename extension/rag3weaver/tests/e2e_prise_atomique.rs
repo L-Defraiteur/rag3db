@@ -257,16 +257,167 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
     assert_eq!(code, Some(7), "deux lecteurs doivent pouvoir partager la base");
     drop(lecteur_parent);
 
-    // ── Un écrivain tient : plus personne n'entre ─────────────────────────
+    // ── Un écrivain tient : deux contrats possibles, aucun troisième ──────
+    //
+    // **Cette moitié dépend de la bibliothèque, pas de notre code.** Avant le
+    // report de Vela, un lecteur était refusé (verrou partagé contre verrou
+    // exclusif). Après, il entre et lit — mesuré le 3 septembre 2026 contre
+    // `build/lecteurs`, où ce même enfant rend 7 au lieu de 3.
+    //
+    // Épingler l'un des deux ferait de ce test l'affirmation d'un contrat mort
+    // dès que la bibliothèque bouge — le défaut qu'on a sorti trois fois
+    // aujourd'hui. Ce qui est **invariant**, et qui est notre affaire, c'est
+    // qu'il n'y a pas de troisième issue : ou refusé, ou il lit **juste**.
+    // Jamais du bruit, jamais un silence.
+    //
+    // L'affirmation tranchante sur la reprise vit dans
+    // `un_lecteur_qui_insiste_pendant_qu_on_ecrit`, où elle a un sens dans les
+    // deux régimes.
     let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
     let code = enfant(ECRIVAIN_TIENT);
-    println!("▸ lecteur pendant qu'un écrivain tient  : {code:?} (3 = refusé)");
-    assert_eq!(
-        code,
-        Some(3),
-        "un lecteur ne doit pas entrer pendant qu'un écrivain tient la base"
-    );
+    match code {
+        Some(3) => println!(
+            "▸ lecteur pendant qu'un écrivain tient  : refusé — bibliothèque antérieure \
+             au report de Vela"
+        ),
+        Some(7) => println!(
+            "▸ lecteur pendant qu'un écrivain tient  : il lit, et juste — bibliothèque \
+             portant le report de Vela"
+        ),
+        autre => panic!(
+            "issue inattendue ({autre:?}) : un lecteur doit être refusé (3) ou lire \
+             juste (7). 9 voudrait dire qu'il a lu autre chose que ce qui est en base."
+        ),
+    }
     drop(ecrivain);
 
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+// ═══ Un lecteur qui insiste pendant qu'on écrit ═════════════════════════════
+
+/// **Ce que la reprise doit absorber, éprouvé plutôt que supposé.**
+///
+/// Le report de Vela lève l'exclusion lecteur/écrivain : un lecteur peut ouvrir
+/// pendant qu'un écrivain travaille. Le refus qui reste — « Couldn't replay
+/// shadow pages under read-only mode » — est **transitoire** : il dure le temps
+/// que l'écrivain finisse de poser ses pages fantômes. Sans reprise, cet
+/// instant se présente à l'appelant comme « la base est inaccessible ».
+///
+/// Ce test ouvre quatre-vingts fois pendant qu'on écrit, et regarde ce qui
+/// arrive. **Il affirme quelque chose dans les deux régimes**, et dit lequel il
+/// observe :
+///
+/// - bibliothèque à jour → **aucun** refus ne doit survivre à la reprise, et
+///   chaque ouverture réussie doit lire un compte cohérent, jamais du bruit ;
+/// - bibliothèque antérieure au report → le refus est **uniforme**, c'est
+///   l'ancien contrat, et il est nommé comme tel.
+///
+/// Ce qui est interdit dans les deux cas, c'est le refus **sporadique** : il
+/// voudrait dire qu'un transitoire a traversé la reprise.
+#[test]
+fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
+    const INSISTANT: &str = "RAG3WEAVER_ENFANT_INSISTANT";
+    const CYCLES: usize = 80;
+
+    // Rôle enfant : ouvrir en boucle, compter les refus, dire ce qu'on a lu.
+    if let Ok(dossier) = std::env::var(INSISTANT) {
+        let mut refus = 0usize;
+        let mut lus = 0usize;
+        let mut incoherents = 0usize;
+        for _ in 0..CYCLES {
+            match Rag3dbConnection::read_only(&dossier) {
+                Ok(conn) => match conn.execute("MATCH (t:Travail) RETURN count(t) AS n") {
+                    // Le compte croît pendant qu'on écrit : ce qui compte est
+                    // qu'il soit **plausible**, jamais du bruit.
+                    Ok(r) => match r.rows.first().and_then(|l| l.first()) {
+                        Some(CypherValue::Int(n)) if *n >= 0 => lus += 1,
+                        _ => incoherents += 1,
+                    },
+                    Err(_) => incoherents += 1,
+                },
+                Err(_) => refus += 1,
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents}");
+        std::process::exit(0);
+    }
+
+    let dossier = std::env::temp_dir().join(format!(
+        "rag3weaver-insistant-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
+    ecrivain
+        .execute("CREATE NODE TABLE Travail(id INT64, statut STRING, preneur STRING, PRIMARY KEY(id))")
+        .expect("table");
+
+    // L'enfant insiste pendant que le parent écrit sans relâche : un point de
+    // reprise tous les cinq enregistrements, c'est-à-dire une boucle
+    // volontairement hostile.
+    let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+        // `--nocapture` : sans lui le harnais de l'enfant avale son `println!`,
+        // et le parent ne lit rien — l'enfant paraîtrait muet alors qu'il parle.
+        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture"])
+        .env(INSISTANT, &dossier)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("lancer l'enfant insistant");
+
+    let mut i = 0i64;
+    while enfant.try_wait().expect("try_wait").is_none() {
+        ecrivain
+            .execute(&format!("CREATE (:Travail {{id: {i}, statut: 'libre', preneur: ''}})"))
+            .expect("insertion");
+        i += 1;
+        if i % 5 == 0 {
+            let _ = ecrivain.execute("CHECKPOINT");
+        }
+    }
+    let sortie = enfant.wait_with_output().expect("attendre l'enfant");
+    let texte = String::from_utf8_lossy(&sortie.stdout);
+    let ligne = texte
+        .lines()
+        .find(|l| l.starts_with("REFUS="))
+        .unwrap_or_else(|| panic!("l'enfant n'a rien dit :\n{texte}"));
+    println!("▸ {ligne}   ({i} écritures pendant ce temps)");
+
+    let lire = |cle: &str| -> usize {
+        ligne
+            .split_whitespace()
+            .find_map(|m| m.strip_prefix(cle))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_else(|| panic!("« {cle} » illisible dans « {ligne} »"))
+    };
+    let (refus, lus, incoherents) = (lire("REFUS="), lire("LUS="), lire("INCOHERENTS="));
+
+    // Ce qui est vrai dans les deux régimes.
+    assert_eq!(
+        incoherents, 0,
+        "une ouverture qui réussit doit lire un compte cohérent, jamais du bruit"
+    );
+    assert_eq!(refus + lus, CYCLES, "chaque cycle doit avoir une issue nommée");
+
+    if refus == 0 {
+        println!("  → bibliothèque à jour : la reprise absorbe tout ce qui est transitoire");
+    } else if refus == CYCLES {
+        println!(
+            "  → bibliothèque antérieure au report de Vela : l'exclusion lecteur/écrivain \
+             tient encore, le refus est l'ancien contrat"
+        );
+    } else {
+        panic!(
+            "refus SPORADIQUE : {refus}/{CYCLES}. Ce n'est ni l'ancien contrat (refus \
+             uniforme) ni la reprise qui fonctionne (aucun refus) — un transitoire a \
+             traversé le budget de `read_only`"
+        );
+    }
+    drop(ecrivain);
     let _ = std::fs::remove_dir_all(&dossier);
 }
