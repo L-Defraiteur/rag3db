@@ -172,6 +172,13 @@ pub struct Catalog {
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
     fts_storage: crate::fts_handle::FtsStorage,
+    /// **L'identité de cet écrivain**, pour que sa marque de travail en attente
+    /// ne se confonde pas avec celle d'un autre processus. Tirée à la
+    /// construction : deux catalogues du même programme sont deux écrivains.
+    writer_id: String,
+    /// La marque est-elle posée en base ? Évite un aller-retour par
+    /// enregistrement : on n'écrit qu'à la **transition** file vide → non vide.
+    marque_posee: bool,
     /// Base directory for sparse/FTS mmap caches.
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
@@ -229,6 +236,11 @@ impl Catalog {
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
             fts_storage: Default::default(),
+            writer_id: crate::uuid::hashsafe_uuid(
+                "_writer",
+                &[&format!("{:?}", std::time::SystemTime::now()), &format!("{:?}", std::thread::current().id())],
+            ),
+            marque_posee: false,
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
             fail_node: None,
@@ -1684,6 +1696,7 @@ impl Catalog {
                 data,
                 new_content_hash,
             });
+            self.annoncer_travail_en_attente();
             records_enqueued += 1;
         }
 
@@ -1787,6 +1800,156 @@ impl Catalog {
             ],
         ).map_err(|e| CatalogError::DbError(e.to_string()))?;
         Ok(())
+    }
+
+    // ── La marque de travail en attente ────────────────────────────────
+    //
+    // **Ce que `Consistency` ne peut pas promettre seule.** `Strict` veut dire
+    // « vide la file avant de chercher ». La file vit dans `Catalog::pending`,
+    // en mémoire : un lecteur d'un autre processus a son propre catalogue, dont
+    // la file est vide. Il demandait `Strict` et obtenait `Immediate`, **sans
+    // que rien ne le dise**.
+    //
+    // Le verrou de fichier n'a jamais protégé de ça : il rendait l'accès
+    // concurrent *impossible*, pas *ordonné*. Ça devient visible maintenant
+    // qu'on peut le franchir.
+    //
+    // Un lecteur ne peut pas vider la file d'un autre. Il peut seulement
+    // **attendre qu'elle soit vide** — encore faut-il que l'écrivain le
+    // publie. D'où ces deux gestes : marquer à la transition file vide → non
+    // vide, effacer après chaque drain réussi.
+
+    /// Le préfixe des marques, un enregistrement par écrivain vivant.
+    const PREFIXE_MARQUE: &'static str = "_ingestion/pending/";
+
+    /// Au-delà de ce délai sans nouvelle, une marque est tenue pour
+    /// **abandonnée** — le processus qui l'a posée est probablement mort.
+    /// L'attendre indéfiniment transformerait une panne en gel.
+    const MARQUE_PERIMEE_MS: u64 = 60_000;
+
+    /// Annoncer qu'on a du travail non publié. Idempotent, et **une seule
+    /// écriture par cycle** : c'est la transition qui compte, pas chaque
+    /// enregistrement.
+    fn annoncer_travail_en_attente(&mut self) {
+        if self.marque_posee {
+            return;
+        }
+        let cle = format!("{}{}", Self::PREFIXE_MARQUE, self.writer_id);
+        let maintenant = crate::dataflow::checkpoint::timestamp_ms();
+        match self.persist_meta_key(&cle, &maintenant.to_string()) {
+            Ok(()) => self.marque_posee = true,
+            Err(e) => {
+                // Ne pas faire échouer une mise en file pour ça — mais ne pas
+                // se taire non plus : sans la marque, un lecteur d'un autre
+                // processus croira la base à jour.
+                self.emit_event(CatalogEvent::Warning {
+                    context: "marque_ingestion".into(),
+                    message: format!(
+                        "marque de travail en attente non publiée ({e}) — un lecteur \
+                         d'un autre processus croira la base à jour"
+                    ),
+                });
+            }
+        }
+    }
+
+    /// Effacer la marque : plus rien n'attend chez nous.
+    fn effacer_la_marque(&mut self) {
+        if !self.marque_posee {
+            return;
+        }
+        let cle = format!("{}{}", Self::PREFIXE_MARQUE, self.writer_id);
+        match self.persist_meta_key(&cle, "0") {
+            Ok(()) => self.marque_posee = false,
+            Err(e) => self.emit_event(CatalogEvent::Warning {
+                context: "marque_ingestion".into(),
+                message: format!(
+                    "marque de travail en attente non effacée ({e}) — les lecteurs \
+                     `Strict` attendront pour rien jusqu'à péremption"
+                ),
+            }),
+        }
+    }
+
+    /// **Attendre que plus aucun écrivain n'ait de travail non publié.**
+    ///
+    /// C'est ce que `Strict` peut honnêtement offrir à travers la frontière du
+    /// processus. Rend `true` si l'attente a abouti.
+    ///
+    /// Trois façons de ne pas aboutir, et toutes se **disent** :
+    /// le délai expire, une marque est périmée (processus mort), ou la lecture
+    /// des marques échoue. Aucune ne se déguise en succès.
+    pub fn attendre_les_ecritures(&self, timeout_ms: u64, warnings: &mut Vec<String>) -> bool {
+        let debut = std::time::Instant::now();
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        loop {
+            let result = self.conn.execute_with_params(
+                &stmt,
+                &[QueryParam::new(
+                    "prefix",
+                    CypherValue::String(Self::PREFIXE_MARQUE.to_string()),
+                )],
+            );
+            let rows = match result {
+                Ok(r) => r.rows,
+                Err(e) => {
+                    warnings.push(format!(
+                        "cohérence stricte impossible : les marques d'ingestion sont \
+                         illisibles ({e}) — les résultats peuvent ignorer des écritures \
+                         en cours"
+                    ));
+                    return false;
+                }
+            };
+
+            let maintenant = crate::dataflow::checkpoint::timestamp_ms();
+            let mut vivants = 0usize;
+            let mut perimes: Vec<String> = Vec::new();
+            for row in &rows {
+                let (Some(k), Some(v)) = (
+                    row.first().and_then(|v| v.as_str()),
+                    row.get(1).and_then(|v| v.as_str()),
+                ) else {
+                    continue;
+                };
+                if !k.starts_with(Self::PREFIXE_MARQUE) || v == "0" {
+                    continue;
+                }
+                // Ne pas s'attendre soi-même : notre propre file vient d'être
+                // vidée par le `drain()` qui précède.
+                if k.ends_with(&self.writer_id) {
+                    continue;
+                }
+                let depuis = v.parse::<u64>().map(|t| maintenant.saturating_sub(t)).unwrap_or(0);
+                if depuis > Self::MARQUE_PERIMEE_MS {
+                    perimes.push(k.trim_start_matches(Self::PREFIXE_MARQUE).to_string());
+                } else {
+                    vivants += 1;
+                }
+            }
+
+            if !perimes.is_empty() {
+                warnings.push(format!(
+                    "cohérence stricte partielle : {} écrivain(s) marqué(s) depuis plus de \
+                     {} s — probablement morts, leur travail est ignoré ({})",
+                    perimes.len(),
+                    Self::MARQUE_PERIMEE_MS / 1000,
+                    perimes.join(", ")
+                ));
+            }
+            if vivants == 0 {
+                return true;
+            }
+            if debut.elapsed().as_millis() as u64 >= timeout_ms {
+                warnings.push(format!(
+                    "cohérence stricte non tenue : {vivants} écrivain(s) ont encore du \
+                     travail non publié après {timeout_ms} ms — les résultats qui suivent \
+                     les ignorent"
+                ));
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
     }
 
     /// Read a single `_catalog_meta` value.
@@ -2731,6 +2894,7 @@ impl Catalog {
                             data: clean_data,
                             new_content_hash: String::new(),
                         });
+                        self.annoncer_travail_en_attente();
                     }
                     kb_failed = self.drain().failed;
                 }
@@ -2798,6 +2962,7 @@ impl Catalog {
             resolver,
             entity_ref.clone(),
         ));
+        self.annoncer_travail_en_attente();
         self.drain_counters.total_queued += 1;
 
         // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
@@ -2856,6 +3021,7 @@ impl Catalog {
                 index_resolver,
                 index_ref.clone(),
             ));
+            self.annoncer_travail_en_attente();
 
             // Link: {Entity}_IN_{KB}
             let in_rel_name = format!("{entity_name}_IN_{kb_name}");
@@ -2868,6 +3034,7 @@ impl Catalog {
                 in_rel_resolver,
                 in_rel_ref,
             ));
+            self.annoncer_travail_en_attente();
 
             // Aggregate (deferred: will rebuild _content + chunks at drain time)
             self.pending.aggregates.push(AggregateRecord {
@@ -2876,6 +3043,7 @@ impl Catalog {
                 title_entity: entity_name.to_string(),
                 source_uuid: uuid.clone(),
             });
+            self.annoncer_travail_en_attente();
 
             self.drain_counters.total_queued += 3; // index entity + link + aggregate
         }
@@ -2911,12 +3079,14 @@ impl Catalog {
             resolver,
             relation_ref.clone(),
         ));
+        self.annoncer_travail_en_attente();
         self.drain_counters.total_queued += 1;
 
         // Incremental: if this relation connects a content entity to a title entity
         // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
         // Only when UUIDs are already resolved (incremental case). In batch mode,
         // UUIDs are pending EntityRefs and create() already enqueued AggregateRecords.
+        let mut annoncer_apres = false;
         for (kb_name, kb_meta) in &self.kb_metadata {
             let title_entity = &kb_meta.title.entity;
             let title_uuid = if from_entity == *title_entity && kb_meta.entities.contains(&to_entity) {
@@ -2938,7 +3108,12 @@ impl Catalog {
                     source_uuid: t_uuid,
                 });
                 self.drain_counters.total_queued += 1;
+                annoncer_apres = true;
             }
+        }
+        // Hors de la boucle : elle emprunte `self.kb_metadata`.
+        if annoncer_apres {
+            self.annoncer_travail_en_attente();
         }
 
         Ok(relation_ref)
@@ -3088,6 +3263,7 @@ impl Catalog {
             data,
             new_content_hash,
         });
+        self.annoncer_travail_en_attente();
         Ok(())
     }
 
@@ -3106,6 +3282,7 @@ impl Catalog {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),
         });
+        self.annoncer_travail_en_attente();
         Ok(())
     }
 
@@ -3433,9 +3610,26 @@ impl Catalog {
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
     pub fn drain(&mut self) -> FlushResult {
+        // **Le filet.** La marque se pose aux points d'entrée qui mettent en
+        // file ; si un chemin l'a oubliée, on la pose ici et on le **dit** —
+        // un oubli doit se voir, pas produire un lecteur qui croit la base à
+        // jour. `build_ingestion_graph` a déjà pris la file, donc on regarde
+        // avant.
+        let avait_du_travail = !self.pending.is_empty();
+        if avait_du_travail && !self.marque_posee {
+            self.emit_event(CatalogEvent::Warning {
+                context: "marque_ingestion".into(),
+                message: "du travail était en file sans marque publiée — un chemin de \
+                          mise en file ne l'annonce pas ; posée ici par sécurité"
+                    .into(),
+            });
+            self.annoncer_travail_en_attente();
+        }
+
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
             self.build_ingestion_graph();
         if graph.nodes.is_empty() {
+            self.effacer_la_marque();
             return FlushResult::default();
         }
 
@@ -3470,6 +3664,10 @@ impl Catalog {
                 // deux champs valaient toujours zéro — un nombre présenté comme
                 // une mesure et qui n'en était pas une. C'est aussi ici que
                 // l'événement part, pour qu'il ne porte pas les mêmes zéros.
+                // La file est vidée : plus rien n'attend chez nous. Effacé
+                // **avant** de rendre, pour qu'un lecteur qui regarde juste
+                // après voie la base à jour.
+                self.effacer_la_marque();
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );
@@ -4044,9 +4242,15 @@ impl Catalog {
         let pending_count = self.pending.total_count();
 
         // Consistency
+        let mut strict_warnings: Vec<String> = Vec::new();
         match options.consistency {
             search::Consistency::Strict => {
+                // Notre file d'abord — c'est tout ce que `Strict` savait faire.
                 self.drain();
+                // Puis celle des autres. Un lecteur d'un autre processus ne
+                // peut pas la vider ; il peut attendre qu'elle le soit, et
+                // **dire** quand il n'y arrive pas.
+                self.attendre_les_ecritures(options.timeout_ms, &mut strict_warnings);
             }
             search::Consistency::Eventual => {
                 if self.has_pending() {
@@ -4163,7 +4367,7 @@ impl Catalog {
         // hors projection (bug kuzu/vector, canari dans e2e_scope) — le WHERE
         // de scope ne suffit donc pas. Sur-fetch, puis post-filtre par colonnes.
         // Toujours collectés (`meta.warnings`) : moteur, attribution de chunks, scope.
-        let mut search_warnings: Vec<String> = Vec::new();
+        let mut search_warnings: Vec<String> = std::mem::take(&mut strict_warnings);
         // Plus de sur-fetch : depuis le 27 août, la projection est respectée
         // par la recherche vectorielle (`searchFromUnCheckpointed` consulte
         // enfin le masque). Le filtre est redevenu un **vrai pré-filtre**, et
@@ -5145,6 +5349,7 @@ impl Catalog {
                     entity_ref,
                     resolver: None, // already resolved above
                 });
+                self.annoncer_travail_en_attente();
             }
         }
     }

@@ -98,27 +98,7 @@ maintenant dans la suite.
 
 L'ordre est celui du **coût de ne pas le faire**, pas celui de la difficulté.
 
-### 1. La marque d'eau d'ingestion — *préalable, pas suite*
-
-`Consistency::{Immediate, Eventual, Strict}` est **intra-processus** : la file
-d'attente vit dans le `Catalog` de l'écrivain, en mémoire. Vérifié par la
-session voisine — `Strict` appelle `self.drain()`, et `has_pending()` ne teste
-que `!self.pending.is_empty()`. Un lecteur d'un autre processus a son propre
-catalogue, dont la file est vide : il demande `Strict` et obtient `Immediate`,
-**sans que rien ne le dise**.
-
-Le verrou n'a jamais protégé de ça — il rendait l'accès concurrent
-*impossible*, pas *ordonné*. On ne perd donc rien qu'on avait : on découvre une
-garantie qui n'a jamais franchi la frontière du processus, et qui devient
-visible maintenant qu'on peut la franchir.
-
-**Forme proposée** : l'écrivain publie son avancement dans `_catalog_meta`, que
-les deux backends savent déjà écrire ; le lecteur qui veut `Strict` attend que
-la marque dépasse ce qu'il attend.
-
-**Pourquoi en premier** : c'est le préalable à ce que `rag3daemon` cesse de
-relayer les lectures, et tant qu'il relaie, rien ne presse — mais bâtir dessus
-sans elle installerait une promesse fausse.
+### 1. La marque d'eau d'ingestion — **faite**, voir §9
 
 ### 2. La reprise sur refus transitoire dans `rag3daemon`
 
@@ -482,3 +462,58 @@ trouvées aujourd'hui : la garde n'est pas la bonne volonté.
 Et le test ne s'arrête pas au magasin : il vérifie qu'une **ingestion réelle**
 laisse son checkpoint, et qu'une ingestion réussie ne laisse rien d'inachevé.
 Un magasin monté mais jamais écrit ne vaudrait pas mieux qu'un magasin absent.
+
+## 9. La marque d'eau — ce que `Strict` promettait sans pouvoir le tenir
+
+`Consistency::Strict` veut dire « vide la file avant de chercher ». Vérifié
+moi-même plutôt que sur parole : `Strict` appelle `self.drain()`, et
+`has_pending()` ne teste que `!self.pending.is_empty()`. **La file vit en
+mémoire.** Un lecteur d'un autre processus a son propre catalogue, dont la file
+est vide : il demandait `Strict` et obtenait `Immediate`, sans que rien ne le
+dise.
+
+Le verrou de fichier n'a jamais protégé de ça — il rendait l'accès concurrent
+*impossible*, pas *ordonné*.
+
+### Ce qu'une marque d'eau peut, et ce qu'elle ne peut pas
+
+**Un lecteur ne peut pas vider la file d'un autre.** Il peut seulement attendre
+qu'elle soit vide, et encore faut-il que l'écrivain le publie. C'est la limite
+honnête de ce qui est faisable, et elle est écrite dans le code.
+
+D'où deux gestes, et **une seule écriture par cycle** — c'est la transition qui
+compte, pas chaque enregistrement :
+
+- l'écrivain pose `_ingestion/pending/{son id}` quand sa file passe de vide à
+  non vide ;
+- il l'efface après chaque drain réussi, **avant** de rendre la main.
+
+Un lecteur qui demande `Strict` vide sa propre file, puis attend que plus aucun
+écrivain ne soit marqué. Trois façons de ne pas y arriver, et **toutes se
+disent** : le délai expire, une marque est périmée (au-delà d'une minute, le
+processus qui l'a posée est probablement mort — l'attendre transformerait une
+panne en gel), ou les marques sont illisibles. Aucune ne se déguise en succès.
+
+### Le filet contre l'oubli
+
+La marque se pose aux onze endroits où la file se remplit. Un douzième chemin
+ajouté demain l'oublierait — et l'oubli produirait exactement le défaut qu'on
+répare : un lecteur qui croit la base à jour. Donc `drain()` regarde : s'il
+trouve du travail sans marque publiée, il la pose **et le signale**. Un oubli se
+voit au lieu de mentir.
+
+### Ce que le test affirme
+
+Deux catalogues sur la même base tiennent lieu de deux processus — ils ont des
+files séparées, ce qui est exactement la propriété en cause. Le test suit les
+trois temps : base au repos, l'attente aboutit sans un mot ; l'écrivain met en
+file sans vider, l'attente **n'aboutit pas et le dit** ; l'écrivain vide,
+l'attente aboutit de nouveau.
+
+Et un second test va jusqu'au bout de la chaîne : une recherche `Strict` faite
+pendant qu'un autre écrivain a du travail non publié le porte dans
+`meta.warnings` — donc jusqu'à un agent, par la tuyauterie réparée à la §4.
+
+**Ce qui reste :** la reprise sur refus transitoire dans `rag3daemon` (point 2
+de la liste), à faire maintenant que la marque existe. C'est ce qui permettra
+aux lecteurs de cesser de passer par le démon.

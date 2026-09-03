@@ -1346,3 +1346,134 @@ fn le_catalogue_monte_le_magasin_de_checkpoints() {
         "une ingestion réussie ne doit laisser aucune exécution en cours ni échouée"
     );
 }
+
+// ═══ 14. La marque d'eau : Strict traverse la frontière du processus ═════════
+
+/// **Ce que `Consistency::Strict` promettait sans pouvoir le tenir.**
+///
+/// `Strict` veut dire « vide la file avant de chercher ». La file vit dans
+/// `Catalog::pending`, **en mémoire** : un lecteur d'un autre processus a son
+/// propre catalogue, dont la file est vide. Il demandait `Strict` et obtenait
+/// `Immediate`, sans que rien ne le dise.
+///
+/// Le verrou de fichier n'a jamais protégé de ça — il rendait l'accès
+/// concurrent *impossible*, pas *ordonné*. Ça devient visible maintenant qu'on
+/// peut le franchir.
+///
+/// Deux catalogues sur la même base tiennent lieu de deux processus : ils ont
+/// des files séparées, ce qui est exactement la propriété en cause.
+#[test]
+fn la_marque_deau_traverse_la_frontiere() {
+    let (_garde, ctx, mut ecrivain) = catalogue(8);
+    ecrivain.register_entity("Product", config_produit()).unwrap();
+
+    // Le lecteur : un second catalogue, sa propre file — donc vide.
+    let boxed: Box<dyn DbConnection> = Box::new(
+        ctx.rt
+            .block_on(PostgresConnection::new(&conn_str()))
+            .expect("connexion du lecteur"),
+    );
+    let mut lecteur = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
+    let partagee = lecteur.conn_arc();
+    lecteur.set_dialect(Arc::new(PostgresDialect));
+    lecteur.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));
+    lecteur.set_blob_store(Arc::new(
+        rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee),
+    ));
+    lecteur.initialize().expect("initialize du lecteur");
+    lecteur.register_entity("Product", config_produit()).unwrap();
+
+    // 1. Rien en attente : `Strict` aboutit sans un mot.
+    let mut avertissements: Vec<String> = Vec::new();
+    assert!(
+        lecteur.attendre_les_ecritures(1_000, &mut avertissements),
+        "base au repos : l'attente doit aboutir — {avertissements:?}"
+    );
+    assert!(avertissements.is_empty(), "rien à signaler : {avertissements:?}");
+
+    // 2. L'écrivain met en file **sans vider**. C'est le cas qui mentait :
+    //    le lecteur n'a aucun moyen de le savoir depuis sa propre file.
+    ecrivain
+        .create("Product", produit("Clavecin", "clavecin baroque sautereau", 10.0))
+        .expect("mise en file");
+    assert!(ecrivain.has_pending(), "le montage suppose une file non vidée");
+
+    let mut avertissements: Vec<String> = Vec::new();
+    let abouti = lecteur.attendre_les_ecritures(200, &mut avertissements);
+    eprintln!("[marque] attente sous travail : abouti={abouti}, {avertissements:?}");
+    assert!(
+        !abouti,
+        "un écrivain a du travail non publié : l'attente ne doit PAS aboutir"
+    );
+    assert!(
+        avertissements.iter().any(|w| w.contains("cohérence stricte non tenue")),
+        "et elle doit le dire — {avertissements:?}"
+    );
+
+    // 3. L'écrivain vide : la marque s'efface, et l'attente aboutit de nouveau.
+    ecrivain.drain();
+    assert!(!ecrivain.has_pending());
+    let mut avertissements: Vec<String> = Vec::new();
+    assert!(
+        lecteur.attendre_les_ecritures(1_000, &mut avertissements),
+        "après le drain, l'attente doit aboutir — {avertissements:?}"
+    );
+    assert!(avertissements.is_empty(), "et sans rien signaler : {avertissements:?}");
+}
+
+/// Et la promesse remonte **jusqu'à l'appelant** : une recherche `Strict` faite
+/// pendant qu'un autre écrivain a du travail non publié le dit dans sa méta.
+///
+/// Sans cette ligne, la garantie se dégraderait exactement comme avant — en
+/// silence.
+#[test]
+fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
+    let (_garde, ctx, mut ecrivain) = catalogue(8);
+    ecrivain.register_entity("Product", config_produit()).unwrap();
+    ecrivain
+        .ingest_entities("Product", vec![produit("Sextant", "sextant navigation", 10.0)])
+        .unwrap();
+
+    let boxed: Box<dyn DbConnection> = Box::new(
+        ctx.rt
+            .block_on(PostgresConnection::new(&conn_str()))
+            .expect("connexion du lecteur"),
+    );
+    let mut lecteur = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
+    let partagee = lecteur.conn_arc();
+    lecteur.set_dialect(Arc::new(PostgresDialect));
+    lecteur.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));
+    lecteur.set_blob_store(Arc::new(
+        rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee),
+    ));
+    lecteur.initialize().expect("initialize du lecteur");
+    lecteur.register_entity("Product", config_produit()).unwrap();
+
+    // L'écrivain met en file sans vider.
+    ecrivain
+        .create("Product", produit("Clavecin", "clavecin baroque", 20.0))
+        .expect("mise en file");
+
+    let reponse = lecteur
+        .search(
+            "Product",
+            "navigation",
+            SearchOptions {
+                consistency: Consistency::Strict,
+                signals: Some(SearchSignals::BM25),
+                timeout_ms: 200,
+                ..Default::default()
+            },
+        )
+        .expect("recherche stricte");
+    eprintln!("[marque] avertissements de la recherche : {:?}", reponse.meta.warnings);
+    assert!(
+        reponse
+            .meta
+            .warnings
+            .iter()
+            .any(|w| w.contains("cohérence stricte non tenue")),
+        "une recherche Strict qui ne peut pas l'être doit le dire — {:?}",
+        reponse.meta.warnings
+    );
+}
