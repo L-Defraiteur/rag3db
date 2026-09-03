@@ -421,3 +421,150 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
     drop(ecrivain);
     let _ = std::fs::remove_dir_all(&dossier);
 }
+
+// ═══ La marque d'eau, vue depuis un autre processus ═════════════════════════
+
+/// **La marque d'eau franchit-elle vraiment la frontière ?**
+///
+/// Elle a été éprouvée sur PostgreSQL (`e2e_postgres::la_marque_deau_traverse_la_frontiere`)
+/// avec deux catalogues. Mais c'est **kuzu** que `rag3daemon` sert, et c'est
+/// pour les lecteurs de kuzu que la marque existe : la prouver ailleurs et la
+/// supposer ici serait exactement le raccourci qu'on passe la journée à
+/// débusquer.
+///
+/// Ici, deux vrais processus. L'écrivain met en file **sans vider** ; l'enfant
+/// ouvre la base en lecture seule et cherche la marque. S'il la voit, un
+/// lecteur d'un autre processus peut savoir qu'il ne voit pas tout — c'est
+/// toute la question.
+///
+/// Ce test demande une bibliothèque portant le report de Vela ; sur une plus
+/// ancienne, l'enfant est refusé et il le **dit** plutôt que de faire croire à
+/// une absence de marque.
+#[test]
+fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
+    use rag3weaver::{Catalog, CatalogConfig};
+    const ENFANT: &str = "RAG3WEAVER_ENFANT_MARQUE";
+
+    // Rôle enfant : lire les marques, et rien d'autre.
+    if let Ok(dossier) = std::env::var(ENFANT) {
+        match Rag3dbConnection::read_only(&dossier) {
+            Ok(conn) => {
+                let r = conn
+                    .execute(
+                        "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH '_ingestion/pending/' \
+                         RETURN m._key, m._value",
+                    )
+                    .expect("lire les marques");
+                let vivantes = r
+                    .rows
+                    .iter()
+                    .filter(|l| l.get(1).and_then(|v| v.as_str()).is_some_and(|v| v != "0"))
+                    .count();
+                println!("MARQUES={vivantes}");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                println!("REFUSE={e}");
+                std::process::exit(3);
+            }
+        }
+    }
+
+    let dossier = std::env::temp_dir().join(format!(
+        "rag3weaver-marque-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let mut config = CatalogConfig::default();
+    config.embedding_dim = 4;
+    let mut ecrivain = Catalog::new(
+        Box::new(Rag3dbConnection::new(&dossier).expect("écrivain")),
+        Box::new(rag3weaver::embedder::MockEmbedder::new(4)),
+        config,
+    );
+    ecrivain.initialize().expect("initialize");
+    // Un champ de contenu et le seul signal BM25 : ce test ne parle pas de
+    // recherche, il parle de la marque — inutile de traîner un embarqueur.
+    let mut champs = std::collections::HashMap::new();
+    champs.insert(
+        "texte".to_string(),
+        rag3weaver::SimpleFieldDef {
+            field_type: rag3weaver::config::FieldType::Text,
+            is_content: true,
+            ..Default::default()
+        },
+    );
+    ecrivain
+        .register_entity(
+            "Produit",
+            rag3weaver::EntityConfig {
+                fields: champs,
+                signals: rag3weaver::search::SearchSignals::BM25,
+                ..Default::default()
+            },
+        )
+        .expect("entité");
+
+    let lire_marques = |attendu: &str| -> Option<usize> {
+        let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+            .args([
+                "--exact",
+                "la_marque_dingestion_se_voit_depuis_un_autre_processus",
+                "--nocapture",
+            ])
+            .env(ENFANT, &dossier)
+            .output()
+            .expect("lancer l'enfant");
+        let texte = String::from_utf8_lossy(&sortie.stdout);
+        if let Some(l) = texte.lines().find(|l| l.starts_with("REFUSE=")) {
+            println!("▸ {attendu} : enfant refusé — {l}");
+            return None;
+        }
+        let l = texte
+            .lines()
+            .find(|l| l.starts_with("MARQUES="))
+            .unwrap_or_else(|| panic!("l'enfant n'a rien dit :\n{texte}"));
+        let n: usize = l.trim_start_matches("MARQUES=").parse().expect("compte");
+        println!("▸ {attendu} : {n} marque(s) vue(s) de l'autre processus");
+        Some(n)
+    };
+
+    // 1. Rien en file : rien à signaler.
+    let Some(au_repos) = lire_marques("au repos") else {
+        println!(
+            "  → bibliothèque antérieure au report de Vela : un lecteur ne peut pas \
+             ouvrir pendant qu'un écrivain tient, donc la marque ne lui sert à rien \
+             encore. Test sans objet ici, et il le dit."
+        );
+        drop(ecrivain);
+        let _ = std::fs::remove_dir_all(&dossier);
+        return;
+    };
+    assert_eq!(au_repos, 0, "au repos, aucun écrivain ne doit être marqué");
+
+    // 2. L'écrivain met en file **sans vider**. C'est le cas qui mentait :
+    //    la file est en mémoire, invisible de l'extérieur.
+    let mut donnees = std::collections::BTreeMap::new();
+    donnees.insert("_uuid".to_string(), CypherValue::String("p1".to_string()));
+    donnees.insert("texte".to_string(), CypherValue::String("un texte".to_string()));
+    ecrivain.create("Produit", donnees).expect("mise en file");
+    assert!(ecrivain.has_pending(), "le montage suppose une file non vidée");
+
+    let sous_travail = lire_marques("sous travail non publié").expect("l'enfant lit");
+    assert_eq!(
+        sous_travail, 1,
+        "un lecteur d'un autre processus doit VOIR qu'un écrivain a du travail non publié"
+    );
+
+    // 3. L'écrivain vide : la marque s'efface, vue de l'extérieur.
+    ecrivain.drain();
+    let apres = lire_marques("après le drain").expect("l'enfant lit");
+    assert_eq!(apres, 0, "après le drain, plus rien ne doit être marqué");
+
+    drop(ecrivain);
+    let _ = std::fs::remove_dir_all(&dossier);
+}

@@ -509,9 +509,28 @@ Et un second test va jusqu'au bout de la chaîne : une recherche `Strict` faite
 pendant qu'un autre écrivain a du travail non publié le porte dans
 `meta.warnings` — donc jusqu'à un agent, par la tuyauterie réparée à la §4.
 
-**Ce qui reste :** la reprise sur refus transitoire dans `rag3daemon` (point 2
-de la liste), à faire maintenant que la marque existe. C'est ce qui permettra
-aux lecteurs de cesser de passer par le démon.
+### Et sur kuzu, avec deux vrais processus
+
+La marque avait d'abord été éprouvée sur PostgreSQL, avec deux catalogues. Mais
+c'est **kuzu** que `rag3daemon` sert, et c'est pour ses lecteurs que la marque
+existe : la prouver ailleurs et la supposer ici aurait été le raccourci qu'on
+passe la journée à débusquer.
+
+`e2e_prise_atomique::la_marque_dingestion_se_voit_depuis_un_autre_processus`
+lance un **vrai** second processus qui ouvre la base en lecture seule et compte
+les marques. Trois temps, contre `build/lecteurs` :
+
+```
+au repos                : 0 marque(s) vue(s) de l'autre processus
+sous travail non publié : 1
+après le drain          : 0
+```
+
+Un lecteur d'un autre processus **voit** qu'un écrivain a du travail non publié.
+C'est exactement ce qui manquait. Contre `build/native-test`, l'enfant est
+refusé et le test le dit — sans objet sur cette bibliothèque, pas silencieux.
+
+**Les deux préalables au retrait du relais sont donc posés et éprouvés.**
 
 ## 10. La reprise sur refus transitoire — et un désaccord que je n'enjambe pas
 
