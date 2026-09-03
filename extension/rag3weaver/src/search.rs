@@ -2081,6 +2081,38 @@ const POIDS_JARO: f64 = 0.65;
 /// chunks (`{Entité}_Chunk` et `{KB}_Index_Chunk`).
 const CHAMP_TEXTE_CHUNK: &str = "_text";
 
+/// **Sous ce score, on ne promet rien** — et on le dit.
+///
+/// Notre recherche rend toujours quelque chose dès qu'un mot se ressemble. Le
+/// banc `e2e_postgres::ou_vit_la_frontiere_entre_le_vrai_et_le_bruit` mesure où
+/// vit la frontière, sur un corpus de vingt descriptions à cinq vocabulaires
+/// disjoints, une fois le plancher de rappel ouvert :
+///
+/// | famille | score |
+/// |---|---|
+/// | requête exacte | 1,00 |
+/// | requête dégradée (fautes, troncature) | ≥ 0,84 |
+/// | **bruit proche** (mots du corpus, sens absent) | ≤ 0,76 |
+/// | bruit lointain | rien du tout |
+///
+/// Le seuil vit donc dans ]0,76 ; 0,84[ et 0,80 le partage. **C'est une mesure,
+/// pas le 0,7 de ragkit** — le leur a été calibré sur des noms de médicaments,
+/// des noms propres courts où deux chaînes proches désignent la même molécule.
+/// Le nôtre porte sur des descriptions ; le nombre ne voyage pas, la méthode si.
+///
+/// Ce corpus est synthétique et petit : la **forme** est établie — il y a une
+/// frontière, et le bruit proche est ce qui la fixe — le **nombre** est à
+/// remesurer sur un corpus réel.
+///
+/// # Marquer, pas filtrer
+///
+/// Rien n'est retiré. Le recouvrement est réel : une vraie requête maladroite
+/// peut passer sous une jolie coïncidence, et décider à la place de l'appelant
+/// lui retirerait un résultat qu'il aurait su reconnaître. On **dit** que rien
+/// n'est probant, et c'est lui qui tranche — ragkit est arrivé à la même
+/// conclusion pour la même raison.
+const SEUIL_CONFIANCE: f64 = 0.80;
+
 /// Combien de candidats demander à la base pour en garder `limit`.
 ///
 /// Le rappel est large exprès : c'est l'ordonnancement fin qui décide, et il ne
@@ -2201,6 +2233,20 @@ pub fn search_texte_natif(
         .collect();
     classes.sort_by(|a, b| b.1.total_cmp(&a.1));
     classes.truncate(limit * FACTEUR_RAPPEL);
+
+    // **Le dire, une fois, sur le meilleur.** Un appelant qui reçoit une liste
+    // ordonnée n'a aucun moyen de savoir qu'elle ne vaut rien : les scores sont
+    // comparables entre eux, pas dans l'absolu. Sans cette phrase, une
+    // coïncidence lexicale se présente exactement comme une réponse.
+    if let Some((_, meilleur)) = classes.first() {
+        if *meilleur < SEUIL_CONFIANCE {
+            warnings.push(format!(
+                "rien de probant pour « {query} » : le meilleur candidat est à \
+                 {meilleur:.2}, sous le seuil de {SEUIL_CONFIANCE:.2} — ce qui suit \
+                 partage des mots avec la requête sans forcément y répondre"
+            ));
+        }
+    }
 
     let par_decalage: std::collections::HashMap<u64, f64> = classes.iter().copied().collect();
     let decalages: Vec<u64> = classes.iter().map(|(o, _)| *o).collect();

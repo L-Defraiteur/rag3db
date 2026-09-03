@@ -127,7 +127,14 @@ cycles, résolus en trois tentatives, aucun perdu. Quelques millisecondes
 d'attente suffisent. **Ce n'est pas une lecture qui échoue, c'est une lecture
 qui attend.** À faire avec le 1, pas avant.
 
-### 3. Les poids du combo, qui restent une supposition
+### 3. Les poids du combo, qui restent une supposition — et le banc n'existait pas
+
+**Correction** : ce document affirmait plus bas que « le banc qui les tranchera
+est `e2e_phase0b` ». C'était faux. `e2e_phase0b` est une suite de tests, pas une
+mesure : elle avait départagé les modes BM25 parce que des tests passaient ou
+non selon le mode, pas parce qu'elle chiffrait quoi que ce soit. Le banc a été
+écrit depuis (§6) et il mesure le seuil ; les poids restent à y ajouter.
+
 
 0,35 trigramme / 0,65 Jaro-Winkler, posés au jugé. Le banc qui les tranchera est
 `e2e_phase0b`, celui qui a déjà départagé `Contains`, `ContainsSplit` et
@@ -135,13 +142,10 @@ qui attend.** À faire avec le 1, pas avant.
 valide la *forme* à deux étages, pas les *poids* pour un corpus de code et de
 documents.
 
-### 4. Le seuil de confiance, qu'on n'a pas du tout
+### 4. Le seuil de confiance — **mesuré, puis posé**
 
-Notre recherche rend **toujours** quelque chose, même sur une requête absurde.
-Ragkit calibre un seuil (0,7) et choisit de **marquer** plutôt que de **filtrer**,
-parce que le recouvrement est réel — le pire bruit dépasse la pire vraie requête.
-On n'a ni seuil, ni marque, ni notion d'introuvable. C'est le manque le plus
-visible pour qui s'en sert.
+Voir §6. Fait sur le chemin trigramme ; reste à mesurer sur le chemin lucivy et
+sur le vecteur, qui demandent un vrai embarqueur.
 
 ### 5. Le filtre utilisateur sur le chemin texte natif — **fait**
 
@@ -294,3 +298,59 @@ Le nœud ne pouvait pas les connaître : le rechunkage a lieu en aval
 partait dans une somme. Ils remontent maintenant par un service `chunk_counts`,
 recollés dans `Catalog::drain`, qui émet aussi l'événement à cet endroit pour
 qu'il ne porte plus de zéro. Le test les affirme.
+
+## 6. Le seuil de confiance — ce que le banc a dit
+
+Le banc est `e2e_postgres::ou_vit_la_frontiere_entre_le_vrai_et_le_bruit` :
+vingt descriptions, cinq vocabulaires disjoints, et quatre familles de requêtes.
+
+**La première version ne mesurait rien**, et c'est la leçon la plus utile :
+toutes ses requêtes reprenaient les mots exacts de leur cible, donc tout valait
+1,0000 — trigramme et Jaro rendent 1 sur une correspondance verbatim — et le
+bruit lointain rendait zéro. Séparation parfaite, information nulle. J'ai
+d'ailleurs failli lire ces 1,0000 comme une normalisation par requête ; le score
+n'est pas normalisé, c'étaient mes requêtes qui étaient trop faciles.
+
+La frontière vit dans le **bruit proche** : des mots du corpus, une combinaison
+qui ne désigne rien. C'est la confusion réelle, pas « zzzz qqqq ».
+
+### Ce que la mesure a trouvé
+
+| famille | plancher 0,6 (défaut) | plancher 0,3 |
+|---|---|---|
+| exacte | 1,00 | 1,00 |
+| dégradée (fautes, troncature) | **0,00** — « sauterau baroqe » ne rapporte rien | ≥ 0,84 |
+| bruit proche | ≤ 0,74 | ≤ 0,76 |
+| bruit lointain | rien | rien |
+
+**Deux défauts distincts, et le premier était invisible.**
+
+`<%` ne rapporte que ce qui dépasse `pg_trgm.word_similarity_threshold`, 0,6 par
+défaut. Ce plancher décidait donc ce que Jaro avait le droit d'ordonner : le
+dessin à deux étages ne fonctionnait pas — la base tranchait à la place de
+l'étage qui sait trancher. Une requête à deux fautes rendait **zéro résultat**,
+et une falaise de rappel ne se voit pas comme une erreur, elle se voit comme
+« ça n'existe pas ». Le backend pose maintenant 0,3 (`PLANCHER_RAPPEL`).
+
+Le rappel ouvert, la frontière apparaît : **]0,76 ; 0,84[**, et 0,80 la partage.
+C'est une mesure, pas le 0,7 de ragkit — le leur a été calibré sur des noms de
+médicaments, des noms propres courts où deux chaînes proches désignent la même
+molécule. La **forme** est établie ; le **nombre** est à remesurer sur un corpus
+réel, ce corpus-ci étant synthétique et petit.
+
+### Marquer, pas filtrer
+
+Rien n'est retiré. Une recherche sous le seuil pousse un avertissement :
+
+> rien de probant pour « couronne metamorphique » : le meilleur candidat est à
+> 0.72, sous le seuil de 0.80 — ce qui suit partage des mots avec la requête
+> sans forcément y répondre
+
+Et cet avertissement **arrive** à un agent, ce qui n'était pas vrai ce matin :
+c'est la tuyauterie réparée à la §4 (méta fusionnable, passe-plat `render.meta`,
+schémas de fabrique recousus) qui le porte jusqu'à la fiche. Les deux moitiés de
+la journée se rejoignent là.
+
+Le test affirme les trois choses : que la falaise existe au plancher par défaut,
+que 0,80 partage bien l'intervalle une fois le rappel ouvert, et qu'une requête
+exacte n'est **pas** marquée.

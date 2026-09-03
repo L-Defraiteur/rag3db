@@ -746,3 +746,283 @@ fn le_filtre_utilisateur_tient() {
     }
     assert!(manques.is_empty(), "filtre utilisateur :\n  {}", manques.join("\n  "));
 }
+
+// ═══ 10. Le banc : où vit la frontière entre le vrai et le bruit ═════════════
+
+/// **Avant de poser un seuil, le mesurer.**
+///
+/// Ragkit en a un (0,7) mais calibré sur des **noms de médicaments** — des noms
+/// propres courts, où deux chaînes proches désignent presque toujours la même
+/// molécule. Notre corpus est fait de descriptions ; rien ne dit que le nombre
+/// voyage, et le poser sans regarder serait refaire au jugé ce qu'on reproche
+/// aux poids 0,35 / 0,65.
+///
+/// **Ce que la première version de ce banc a appris, et qui vaut d'être écrit :
+/// un banc dont toutes les requêtes reprennent les mots exacts de leur cible ne
+/// mesure rien.** Tout y valait 1,0000 — trigramme et Jaro rendent tous deux 1
+/// sur une correspondance verbatim — et le bruit lointain rendait zéro résultat,
+/// parce que `<%` a un plancher de similarité. Séparation parfaite, information
+/// nulle. La frontière ne vit pas là.
+///
+/// Elle vit dans quatre familles, et ce sont elles qu'on mesure :
+///
+/// | famille | ce qu'on attend |
+/// |---|---|
+/// | exacte | les mots de la cible, tels quels |
+/// | dégradée | fautes de frappe, mot tronqué — ce qu'un humain tape vraiment |
+/// | bruit proche | des mots **du corpus**, mais une combinaison qui ne désigne rien |
+/// | bruit lointain | rien en commun avec le corpus |
+///
+/// C'est le **bruit proche** qui décide : s'il monte au-dessus des requêtes
+/// dégradées, aucun seuil ne sépare, et il faut marquer plutôt que filtrer.
+#[test]
+fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+
+    // Cinq domaines, aucun mot commun entre eux : sans ça une requête d'un
+    // domaine répond par accident sur un autre, et la mesure ne vaut rien.
+    let corpus: Vec<(&str, &str)> = vec![
+        ("Clavecin", "clavecin baroque sautereau registre"),
+        ("Xylophone", "xylophone lames palissandre resonateur"),
+        ("Crescendo", "crescendo nuance orchestre partition"),
+        ("Arpege", "arpege accord egrene doigte"),
+        ("Sextant", "sextant navigation astronomique horizon"),
+        ("Estuaire", "estuaire maree salinite envasement"),
+        ("Tourbillon", "tourbillon courant marin remous"),
+        ("Meridien", "meridien longitude greenwich cartographie"),
+        ("Obsidienne", "obsidienne verre volcanique conchoidale"),
+        ("Basalte", "basalte coulee prismatique refroidissement"),
+        ("Gneiss", "gneiss metamorphique foliation migmatite"),
+        ("Kaolin", "kaolin argile blanche porcelaine"),
+        ("Stipule", "stipule feuille appendice petiole"),
+        ("Rhizome", "rhizome souterrain bourgeon vivace"),
+        ("Samare", "samare fruit aile dissemination"),
+        ("Cambium", "cambium assise generatrice liber"),
+        ("Echappement", "echappement ancre balancier spiral"),
+        ("Cage", "cage rotative gravite chronometrie"),
+        ("Quantieme", "quantieme perpetuel calendrier bissextile"),
+        ("Remontoir", "remontoir couronne barillet armage"),
+    ];
+    catalog
+        .ingest_entities(
+            "Product",
+            corpus.iter().map(|(n, d)| produit(n, d, 10.0)).collect(),
+        )
+        .unwrap();
+
+    let cherche = |c: &mut Catalog, q: &str| -> (f64, Option<String>) {
+        let r = c
+            .search(
+                "Product",
+                q,
+                SearchOptions {
+                    consistency: Consistency::Immediate,
+                    signals: Some(SearchSignals::BM25),
+                    limit: 5,
+                    ..Default::default()
+                },
+            )
+            .unwrap_or_else(|e| panic!("recherche « {q} » : {e}"));
+        let p = r.results.first();
+        (
+            p.map(|x| x.score).unwrap_or(0.0),
+            p.and_then(|x| x.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string())),
+        )
+    };
+
+    let mesure = |c: &mut Catalog, titre: &str, qs: &[(&str, Option<&str>)]| -> (f64, f64) {
+        eprintln!("\n── {titre} ──");
+        let (mut mini, mut maxi) = (f64::MAX, 0.0f64);
+        for (q, attendu) in qs {
+            let (score, nom) = cherche(c, q);
+            let verdict = match (attendu, nom.as_deref()) {
+                (Some(a), Some(n)) if a == &n => "✓".to_string(),
+                (Some(a), n) => format!("✗ (attendu {a}, eu {})", n.unwrap_or("rien")),
+                (None, None) => "— rien, et c'est juste".to_string(),
+                (None, Some(n)) => format!("⚠ rend {n} alors qu'il n'y a rien à rendre"),
+            };
+            eprintln!("  {q:<30} {score:.4}  {verdict}");
+            mini = mini.min(score);
+            maxi = maxi.max(score);
+        }
+        (mini, maxi)
+    };
+
+    // Le plancher de rappel de `pg_trgm`, mesuré aux deux valeurs. Par défaut
+    // `word_similarity_threshold` vaut 0,6 : c'est **lui** qui décide ce que la
+    // base rapporte, donc lui qui décide ce que Jaro peut ordonner. Un rappel
+    // trop serré ne se voit pas comme une erreur — il se voit comme « aucun
+    // résultat », ce qui ressemble à « ça n'existe pas ».
+    let plancher = |c: &Catalog, v: f64| {
+        c.conn()
+            .execute(&format!("SET pg_trgm.word_similarity_threshold = {v}"))
+            .unwrap_or_else(|e| panic!("plancher {v} : {e}"));
+    };
+
+    // Le backend pose lui-même 0,3 au premier appel : pour montrer la falaise,
+    // il faut donc **remettre** le défaut de PostgreSQL explicitement, après
+    // qu'il ait parlé une fois. C'est ce que fait la recherche à blanc.
+    let _ = cherche(&mut catalog, "amorce");
+    eprintln!("\n═══ plancher au défaut de PostgreSQL (0,6) ══════════════════");
+    plancher(&catalog, 0.6);
+
+    let (exact_min, _) = mesure(&mut catalog, "exactes", &[
+        ("sautereau baroque", Some("Clavecin")),
+        ("lames palissandre", Some("Xylophone")),
+        ("navigation astronomique", Some("Sextant")),
+        ("verre volcanique", Some("Obsidienne")),
+        ("ancre balancier", Some("Echappement")),
+    ]);
+
+    // Ce qu'un humain tape vraiment : une lettre en trop, une qui manque, un
+    // mot au singulier, un mot seul.
+    let (degrade_min, _) = mesure(&mut catalog, "dégradées (fautes, troncatures)", &[
+        ("sauterau baroqe", Some("Clavecin")),
+        ("palissandre", Some("Xylophone")),
+        ("navigaton astronomiqe", Some("Sextant")),
+        ("volcanic", Some("Obsidienne")),
+        ("balancier ancres", Some("Echappement")),
+        ("metamorphique", Some("Gneiss")),
+    ]);
+
+    // **La famille qui décide.** Des mots du corpus, mais une combinaison qui
+    // ne désigne aucun produit. C'est la confusion réelle — pas « zzzz ».
+    let (_, proche_max) = mesure(&mut catalog, "bruit PROCHE (mots du corpus, sens absent)", &[
+        ("palissade baroque", None),
+        ("horizon volcanique", None),
+        ("couronne metamorphique", None),
+        ("feuille prismatique", None),
+        ("balancier salinite", None),
+    ]);
+
+    let (_, loin_max) = mesure(&mut catalog, "bruit lointain", &[
+        ("hydravion supersonique", None),
+        ("blockchain consensus byzantin", None),
+        ("zzzz qqqq wwww", None),
+    ]);
+
+    eprintln!("\n  exactes ≥ {exact_min:.4}   dégradées ≥ {degrade_min:.4}");
+    eprintln!("  bruit proche ≤ {proche_max:.4}   bruit lointain ≤ {loin_max:.4}");
+    if proche_max < degrade_min {
+        eprintln!(
+            "  → SÉPARÉS : un seuil vit dans ]{proche_max:.4} ; {degrade_min:.4}[\n"
+        );
+    } else {
+        eprintln!(
+            "  → RECOUVREMENT de {:.4} — le pire vrai passe sous le meilleur bruit. \
+             Aucun seuil ne sépare : il faut MARQUER, pas filtrer.\n",
+            proche_max - degrade_min
+        );
+    }
+
+    // ── La même mesure, plancher de rappel abaissé ──────────────────────────
+    //
+    // C'est l'expérience qui compte : le dessin à deux étages veut que la base
+    // rapporte **large** et que Jaro tranche. Avec le plancher par défaut, la
+    // base ne rapporte pas large — elle ferme la porte avant.
+    eprintln!("\n═══ plancher de rappel abaissé à 0,3 ═══════════════════════");
+    plancher(&catalog, 0.3);
+
+    let (exact_min_b, _) = mesure(&mut catalog, "exactes", &[
+        ("sautereau baroque", Some("Clavecin")),
+        ("lames palissandre", Some("Xylophone")),
+        ("navigation astronomique", Some("Sextant")),
+        ("verre volcanique", Some("Obsidienne")),
+        ("ancre balancier", Some("Echappement")),
+    ]);
+    let (degrade_min_b, _) = mesure(&mut catalog, "dégradées (fautes, troncatures)", &[
+        ("sauterau baroqe", Some("Clavecin")),
+        ("palissandre", Some("Xylophone")),
+        ("navigaton astronomiqe", Some("Sextant")),
+        ("volcanic", Some("Obsidienne")),
+        ("balancier ancres", Some("Echappement")),
+        ("metamorphique", Some("Gneiss")),
+    ]);
+    let (_, proche_max_b) = mesure(&mut catalog, "bruit PROCHE", &[
+        ("palissade baroque", None),
+        ("horizon volcanique", None),
+        ("couronne metamorphique", None),
+        ("feuille prismatique", None),
+        ("balancier salinite", None),
+    ]);
+    let (_, loin_max_b) = mesure(&mut catalog, "bruit lointain", &[
+        ("hydravion supersonique", None),
+        ("blockchain consensus byzantin", None),
+        ("zzzz qqqq wwww", None),
+    ]);
+
+    eprintln!("\n  exactes ≥ {exact_min_b:.4}   dégradées ≥ {degrade_min_b:.4}");
+    eprintln!("  bruit proche ≤ {proche_max_b:.4}   bruit lointain ≤ {loin_max_b:.4}");
+    if proche_max_b < degrade_min_b {
+        eprintln!("  → SÉPARÉS : un seuil vit dans ]{proche_max_b:.4} ; {degrade_min_b:.4}[\n");
+    } else {
+        eprintln!(
+            "  → RECOUVREMENT de {:.4} : marquer, pas filtrer\n",
+            proche_max_b - degrade_min_b
+        );
+    }
+
+    // ── Ce que le banc affirme ──────────────────────────────────────────────
+    assert!(exact_min > 0.0, "une requête exacte doit rendre quelque chose");
+    assert!(exact_min_b > 0.0, "abaisser le plancher ne doit rien casser");
+
+    // La falaise : au plancher de PostgreSQL, une requête à deux fautes ne
+    // rapporte **rien**. C'est ce qui justifie `PLANCHER_RAPPEL`.
+    assert_eq!(
+        degrade_min, 0.0,
+        "au plancher 0,6, « sauterau baroqe » devait ne rien rapporter — si ce \
+         n'est plus le cas, `PLANCHER_RAPPEL` n'a plus de raison d'être"
+    );
+
+    // Et la frontière : une fois le rappel ouvert, le bruit proche reste sous
+    // les requêtes dégradées. C'est ce qui rend un seuil possible.
+    assert!(
+        proche_max_b < degrade_min_b,
+        "le bruit proche ({proche_max_b:.4}) doit rester sous la pire vraie \
+         requête ({degrade_min_b:.4}) — sinon aucun seuil ne sépare et il faut \
+         revoir `SEUIL_CONFIANCE`"
+    );
+    assert!(
+        proche_max_b < 0.80 && degrade_min_b > 0.80,
+        "0,80 doit partager l'intervalle ]{proche_max_b:.4} ; {degrade_min_b:.4}["
+    );
+
+    // **Et le marquage se dit.** Une coïncidence lexicale doit s'annoncer comme
+    // telle, sinon elle se présente exactement comme une réponse.
+    let douteux = catalog
+        .search(
+            "Product",
+            "couronne metamorphique",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche douteuse");
+    eprintln!("  avertissements : {:?}", douteux.meta.warnings);
+    assert!(
+        douteux.meta.warnings.iter().any(|w| w.contains("rien de probant")),
+        "une réponse sous le seuil doit se marquer — avertissements : {:?}",
+        douteux.meta.warnings
+    );
+
+    // Et une vraie réponse ne se fait pas marquer pour rien.
+    let net = catalog
+        .search(
+            "Product",
+            "sautereau baroque",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche nette");
+    assert!(
+        !net.meta.warnings.iter().any(|w| w.contains("rien de probant")),
+        "une requête exacte ne doit pas être marquée : {:?}",
+        net.meta.warnings
+    );
+}

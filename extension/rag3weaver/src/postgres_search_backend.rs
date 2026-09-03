@@ -10,14 +10,54 @@ use std::sync::Arc;
 use crate::connection::{DbConnection, QueryParam};
 use crate::search_backend::*;
 
+/// **Le plancher de rappel de `pg_trgm`, et pourquoi il n'est pas celui de
+/// PostgreSQL.**
+///
+/// `<%` ne rapporte une ligne que si `word_similarity` dépasse
+/// `pg_trgm.word_similarity_threshold`, **0,6 par défaut**. Ce plancher décide
+/// donc ce que la base rapporte — c'est-à-dire ce que Jaro-Winkler a le droit
+/// d'ordonner. Trop haut, il tranche à la place de l'étage qui sait trancher.
+///
+/// Mesuré (`e2e_postgres::ou_vit_la_frontiere_entre_le_vrai_et_le_bruit`) :
+///
+/// | plancher | « sauterau baroqe » (deux fautes) |
+/// |---|---|
+/// | 0,6 (défaut) | **aucun résultat** |
+/// | 0,3 | Clavecin, au rang 1, score 0,84 |
+///
+/// Une falaise de rappel ne se voit pas comme une erreur : elle se voit comme
+/// « aucun résultat », ce qui ressemble à « ça n'existe pas ». D'où 0,3 :
+/// la base rappelle large, nous ordonnons.
+const PLANCHER_RAPPEL: f64 = 0.3;
+
 /// PostgreSQL search backend using pgvector for vector similarity.
 pub struct PostgresSearchBackend {
     conn: Arc<dyn DbConnection>,
+    /// Le plancher n'est posé qu'une fois : c'est un réglage de session, et la
+    /// connexion vit aussi longtemps que le backend.
+    plancher_pose: std::sync::Once,
 }
 
 impl PostgresSearchBackend {
     pub fn new(conn: Arc<dyn DbConnection>) -> Self {
-        Self { conn }
+        Self { conn, plancher_pose: std::sync::Once::new() }
+    }
+
+    /// Poser le plancher de rappel, une fois, sur cette session.
+    ///
+    /// Un échec se dit dans le journal et ne fait pas échouer la recherche : on
+    /// se retrouve alors avec le plancher de PostgreSQL, c'est-à-dire un rappel
+    /// plus serré — dégradé, pas faux.
+    fn poser_le_plancher(&self) {
+        self.plancher_pose.call_once(|| {
+            let sql = format!("SET pg_trgm.word_similarity_threshold = {PLANCHER_RAPPEL}");
+            if let Err(e) = self.conn.execute(&sql) {
+                eprintln!(
+                    "[rag3weaver] plancher de rappel non posé ({e}) — le rappel trigramme \
+                     reste au défaut de PostgreSQL, donc plus serré"
+                );
+            }
+        });
     }
 }
 
@@ -55,6 +95,7 @@ impl SearchBackend for PostgresSearchBackend {
         if fields.is_empty() {
             return Some(Ok(Vec::new()));
         }
+        self.poser_le_plancher();
 
         // **La même expression des deux côtés.** `rag3weaver.sans_accents` est
         // appliquée au champ *et* à la requête : au champ pour que le
