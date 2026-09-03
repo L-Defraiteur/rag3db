@@ -1451,6 +1451,19 @@ mod tests {
                 "KBQuerySourceNode" => serde_json::json!({ "kb_name": "kb", "query": "rust" }),
                 "SearchSourceNode" => serde_json::json!({ "target_name": "Product", "query": "rust" }),
                 "SendMessageNode" => serde_json::json!({ "to": "quelqu'un", "content": "bonjour" }),
+                // Les verbes de l'agent, que la feature `code` enregistre. Ils
+                // manquaient à cette table : elle avait été bâtie sous les
+                // features par défaut, et le filet s'arrêtait donc au bord de
+                // la compilation la plus courante. Ces arêtes ne coûtent rien
+                // quand le type n'est pas enregistré — l'arme n'est jamais
+                // atteinte.
+                "ReadFileNode" => serde_json::json!({ "path": "README.md" }),
+                "EditFileNode" => serde_json::json!({ "path": "README.md", "content": "texte" }),
+                "GrepNode" => serde_json::json!({ "pattern": "motif" }),
+                "RunCommandNode" => serde_json::json!({ "command": "true" }),
+                "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
+                "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
+                "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 _ => serde_json::json!({}),
             }
         };

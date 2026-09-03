@@ -1790,9 +1790,42 @@ mod tests {
         let back: serde_json::Value = serde_json::from_str(&text).expect("the request body must round-trip as JSON");
         let names: Vec<&str> = back["tools"].as_array().unwrap().iter().map(|t| t["function"]["name"].as_str().unwrap()).collect();
         assert_eq!(names, crate::dataflow::graph_tool::BUILTIN_TOOL_NAMES);
-        let edit = &back["tools"][0]["function"]["parameters"];
-        eprintln!("{}", serde_json::to_string_pretty(edit).unwrap());
-        assert_eq!(edit["properties"]["old"]["default"], "");
+        // **Par le nom, pas par la position.** Ce test lisait `tools[0]` en
+        // croyant tenir `edit` ; le jour où `adopt` s'est ajouté, la liste
+        // étant alphabétique, il a lu la fiche d'à côté et vu `Null` là où il
+        // attendait `""`. Une assertion accrochée à un rang ne dit pas ce
+        // qu'elle croit dire.
+        let par_nom = |nom: &str| -> serde_json::Value {
+            back["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["function"]["name"] == nom)
+                .unwrap_or_else(|| panic!("l'outil « {nom} » n'est plus offert"))
+                ["function"]["parameters"]
+                .clone()
+        };
+        assert_eq!(par_nom("edit")["properties"]["old"]["default"], "");
+
+        // Et le cas général, celui que Vertex avait refusé : **aucun défaut ne
+        // doit se sérialiser en `null`**. C'est la propriété qui comptait ;
+        // la vérifier sur une seule fiche laissait les dix autres libres de
+        // rompre la même règle sans que rien ne le dise.
+        for outil in back["tools"].as_array().unwrap() {
+            let nom = outil["function"]["name"].as_str().unwrap();
+            let Some(props) = outil["function"]["parameters"]["properties"].as_object() else {
+                continue;
+            };
+            for (champ, def) in props {
+                if let Some(defaut) = def.get("default") {
+                    assert!(
+                        !defaut.is_null(),
+                        "{nom}.{champ} a un défaut `null` — Vertex refuse le corps entier \
+                         (« Expected a valid JSON object in the request »)"
+                    );
+                }
+            }
+        }
     }
 
     /// Un flux coupé par Vertex : les fragments d'un appel, puis un objet
