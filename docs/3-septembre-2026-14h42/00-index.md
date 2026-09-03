@@ -32,8 +32,10 @@ ou par non, et elle décide de tout le reste.
 ## La réponse, obtenue le jour même
 
 **Non — leur descente de prédicat n'atteint pas un index classé**, et elle est
-fermée deux fois : par la forme du prédicat et par le type d'index. Ils n'ont
-d'ailleurs aucune extension vectorielle, donc jamais eu notre problème.
+fermée deux fois : par la forme du prédicat et par le type d'index. Ils ont bien
+une extension vectorielle — dans un dépôt séparé, et c'est celle de Kuzu,
+inchangée : on l'interroge par une **fonction de table**, jamais par un `WHERE`.
+Ils ont donc exactement le manque que notre greffe comble, sans l'avoir comblé.
 
 Les deux généralisations sont **orthogonales**. Notre greffe se réapplique — 15
 de nos 24 greffons du cœur se reposent seuls, 2 seulement demandent un arbitrage

@@ -90,10 +90,36 @@ tout leur `src/` :
 | `searchFunc` | 0 | 7 |
 | `SEARCH_SCORE` / `VECTOR_DISTANCE` | 0 | 3 |
 
-**Et la raison de fond : ils n'ont pas d'extension vectorielle du tout.**
-Aucun HNSW nulle part dans leur arbre. Ils n'ont donc jamais eu le problème que
-notre greffe résout. Leur généralisation sert l'ART, un index ordonné, parce que
-c'est le seul index secondaire qu'ils possèdent.
+> **Correction (relecture du 3 septembre, en fin de journée).** Ce paragraphe
+> disait : *« ils n'ont pas d'extension vectorielle du tout, aucun HNSW nulle
+> part dans leur arbre »*. L'observation est exacte et la conclusion en est
+> fausse — **aucune** extension n'est dans leur arbre, elles sont toutes dans un
+> dépôt séparé, ce que ce document constate lui-même trois sections plus bas.
+> L'absence de HNSW dans le dépôt principal ne prouve donc rien.
+>
+> **Ils ont bien une extension vectorielle**, dans `ladybugdb/extensions.git`,
+> et elle est celle de Kuzu, inchangée dans sa forme :
+>
+> | | fichiers de `vector/src/function/` |
+> |---|---|
+> | Kuzu à l'archivage | `create_hnsw_index` · `drop_hnsw_index` · `query_hnsw_index` |
+> | Ladybug aujourd'hui | **les mêmes trois** |
+> | nous | les mêmes trois **+ `vector_search_function.cpp`** |
+>
+> Ils interrogent donc leur index vectoriel par une **fonction de table**, comme
+> Kuzu le faisait — c'est-à-dire avec exactement le manque que notre greffe
+> comble, et sans l'avoir comblé.
+
+**Et la raison de fond : leur index vectoriel n'a jamais réclamé de descente.**
+Ils ont hérité l'extension HNSW de Kuzu et l'ont laissée telle quelle : on
+l'interroge par un appel explicite qui produit des lignes, jamais par un `WHERE`
+qui se substitue au scan. Leur généralisation sert donc l'ART, le seul index
+secondaire pour lequel ils aient écrit une descente.
+
+**Ce qui rend l'argument de contribution amont plus fort, pas plus faible.** Ils
+n'ont pas un besoin théorique de notre contrat : ils ont une extension
+vectorielle vivante qui en bénéficierait directement, le jour où ils voudront
+écrire `WHERE vector_search(...)` plutôt que `CALL query_hnsw_index(...)`.
 
 Leurs six nouvelles virtuelles sur `storage::Index` disent la même chose. La
 seule qui accepte une borne de résultats, `scanPrimaryKeyRange`, prend un
