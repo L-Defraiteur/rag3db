@@ -6,4 +6,5 @@ add_rag3db_api_test(api_test
         result_value_test.cpp
         storage_driver_test.cpp
         udf_test.cpp
-        read_only_test.cpp)
+        read_only_test.cpp
+        lecteurs_concurrents_test.cpp)

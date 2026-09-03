@@ -44,7 +44,15 @@ void StorageManager::initDataFileHandle(VirtualFileSystem* vfs, main::ClientCont
     } else {
         auto flag = readOnly ? FileHandle::O_PERSISTENT_FILE_READ_ONLY :
                                FileHandle::O_PERSISTENT_FILE_CREATE_NOT_EXISTS;
-        flag |= FileHandle::O_LOCKED_PERSISTENT_FILE;
+        // Only the writer takes the exclusive file lock. A read-only open takes
+        // no lock at all, so a second process can read while a writer works.
+        // Ported from Vela-Engineering/kuzu, commit 87bf0bef9 (d298e9ce1).
+        // NOTE: this buys concurrent READERS only. Two writer processes are
+        // still refused, and the reader gets no isolation from the writer --
+        // see docs/3-septembre-2026-14h42/07 for what was measured.
+        if (!readOnly) {
+            flag |= FileHandle::O_LOCKED_PERSISTENT_FILE;
+        }
         dataFH = memoryManager.getBufferManager()->getFileHandle(databasePath, flag, vfs, context);
         if (dataFH->getNumPages() == 0) {
             if (!readOnly) {
