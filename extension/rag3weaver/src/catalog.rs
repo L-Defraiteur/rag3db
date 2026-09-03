@@ -2612,6 +2612,12 @@ impl Catalog {
             if let Some(b) = self.search_backend.clone() {
                 services.register("texte_natif", b);
             }
+            // La cellule voyage avec le backend, pour la même raison : le nœud
+            // ne peut pas la demander au catalogue, dont le verrou est déjà
+            // tenu quand le graphe s'exécute. Absente = base à une cellule.
+            if self.multi_cell {
+                services.register("cellule", self.scope.clone());
+            }
         }
 
         if let Some(ref sparse_emb) = self.sparse_embedder {
@@ -3343,6 +3349,12 @@ impl Catalog {
             if let Some(b) = self.search_backend.clone() {
                 services.register("texte_natif", b);
             }
+            // La cellule voyage avec le backend, pour la même raison : le nœud
+            // ne peut pas la demander au catalogue, dont le verrou est déjà
+            // tenu quand le graphe s'exécute. Absente = base à une cellule.
+            if self.multi_cell {
+                services.register("cellule", self.scope.clone());
+            }
         }
 
         // Shared services for delete/update nodes
@@ -3613,6 +3625,12 @@ impl Catalog {
         if self.plein_texte_natif() {
             if let Some(b) = self.search_backend.clone() {
                 services.register("texte_natif", b);
+            }
+            // La cellule voyage avec le backend, pour la même raison : le nœud
+            // ne peut pas la demander au catalogue, dont le verrou est déjà
+            // tenu quand le graphe s'exécute. Absente = base à une cellule.
+            if self.multi_cell {
+                services.register("cellule", self.scope.clone());
             }
         }
 
@@ -4111,6 +4129,8 @@ impl Catalog {
                     self.search_backend.as_ref().unwrap().as_ref(),
                     &target, query, search_limit,
                     enrich_fields, options.result_mode,
+                    self.multi_cell
+                        .then(|| (self.scope.org.as_str(), self.scope.project.as_str())),
                     diag.as_mut(), &mut search_warnings,
                 )?
             } else if is_chunked {

@@ -2096,6 +2096,10 @@ pub fn search_texte_natif(
     limit: usize,
     return_fields: &[String],
     result_mode: ResultMode,
+    // La cellule courante, quand la base est multi-locataire. `None` = base à
+    // une seule cellule. Voir `SearchBackend::text_search` : c'est une
+    // isolation de données, pas un filtre de confort.
+    cellule: Option<(&str, &str)>,
     diagnostics: Option<&mut SearchDiagnostics>,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
@@ -2118,7 +2122,13 @@ pub fn search_texte_natif(
     let table = &target.chunk_table;
     let champs_texte = [CHAMP_TEXTE_CHUNK.to_string()];
 
-    let bruts = match backend.text_search(table, &champs_texte, query, limit * FACTEUR_RAPPEL) {
+    let bruts = match backend.text_search(
+        table,
+        &champs_texte,
+        query,
+        limit * FACTEUR_RAPPEL,
+        cellule,
+    ) {
         Some(Ok(v)) => v,
         Some(Err(e)) => {
             return Err(CatalogError::DbError(format!(

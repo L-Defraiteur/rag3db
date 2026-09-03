@@ -35,6 +35,7 @@ use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::postgres_connection::PostgresConnection;
 use rag3weaver::postgres_search_backend::PostgresSearchBackend;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
+use rag3weaver::scope::Scope;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, SimpleFieldDef};
 
 // ─── Le socle ────────────────────────────────────────────────────────────────
@@ -155,9 +156,23 @@ fn produit(name: &str, description: &str, price: f64) -> BTreeMap<String, Cypher
     d
 }
 
+/// **Une base, un test à la fois.**
+///
+/// Tous les tests partagent le même PostgreSQL et chacun rase le schéma au
+/// démarrage : lancés en parallèle, ils se détruisent mutuellement — six sur
+/// sept échouaient, et pour une raison qui n'avait rien à voir avec le code
+/// testé. Un `--test-threads=1` dans la ligne de commande corrigeait le
+/// symptôme et laissait le piège en place pour le suivant.
+///
+/// Le verrou est donc **dans la suite**, pas dans son invocation. Il est tenu
+/// pendant tout le test, et `is_poisoned` est ignoré : si un test panique en le
+/// tenant, les suivants doivent quand même pouvoir raser et repartir.
+static VERROU_BASE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Le catalogue branché sur postgres : dialecte, backend de recherche, et le
 /// magasin de blobs qui va avec — les trois pièces qu'un backend doit fournir.
-fn catalogue(dim: usize) -> (Contexte, Catalog) {
+fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catalog) {
+    let garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
     let (ctx, conn) = Contexte::ouvrir();
     table_rase(conn.as_ref());
 
@@ -175,14 +190,14 @@ fn catalogue(dim: usize) -> (Contexte, Catalog) {
         rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee),
     ));
     catalog.initialize().expect("initialize sur postgres");
-    (ctx, catalog)
+    (garde, ctx, catalog)
 }
 
 // ═══ 1. Le schéma se pose ════════════════════════════════════════════════════
 
 #[test]
 fn le_schema_se_pose() {
-    let (_ctx, mut catalog) = catalogue(8);
+    let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog
         .register_entity("Product", config_produit())
         .expect("register_entity");
@@ -216,7 +231,7 @@ fn le_schema_se_pose() {
 
 #[test]
 fn l_ingestion_ecrit_des_lignes() {
-    let (_ctx, mut catalog) = catalogue(8);
+    let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     let res = catalog
@@ -267,7 +282,7 @@ fn l_ingestion_ecrit_des_lignes() {
 
 #[test]
 fn le_vecteur_classe() {
-    let (_ctx, mut catalog) = catalogue(8);
+    let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -302,7 +317,7 @@ fn le_vecteur_classe() {
 
 #[test]
 fn le_plein_texte_trouve() {
-    let (_ctx, mut catalog) = catalogue(8);
+    let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -382,7 +397,7 @@ fn le_plein_texte_trouve() {
 
 #[test]
 fn l_hybride_fusionne() {
-    let (_ctx, mut catalog) = catalogue(8);
+    let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -432,4 +447,175 @@ fn l_hybride_fusionne() {
         .and_then(|v| v.as_str())
         .unwrap_or("");
     assert_eq!(premier, "Rust Book", "la remontée chunk → entité s'est perdue");
+}
+
+// ═══ 6. Les relations tiennent ═══════════════════════════════════════════════
+
+/// Une entité minimale, pour être l'autre bout d'une relation.
+fn config_variante() -> EntityConfig {
+    let mut fields = HashMap::new();
+    fields.insert(
+        "label".into(),
+        SimpleFieldDef {
+            field_type: FieldType::String,
+            is_title: true,
+            // `is_content` aussi : une entité sans champ de contenu est refusée
+            // à l'enregistrement, faute de quoi indexer. Le titre fait les deux.
+            is_content: true,
+            ..Default::default()
+        },
+    );
+    EntityConfig { fields, signals: SearchSignals::BM25, ..Default::default() }
+}
+
+fn variante(label: &str) -> BTreeMap<String, CypherValue> {
+    let mut d = BTreeMap::new();
+    d.insert("label".into(), CypherValue::String(label.into()));
+    d
+}
+
+#[test]
+fn les_relations_tiennent() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog.register_entity("Variant", config_variante()).unwrap();
+    catalog
+        .register_relation("HAS_VARIANT", "Product", "Variant")
+        .expect("register_relation sur postgres");
+
+    let livre = catalog
+        .create("Product", produit("Rust Book", "Ownership and lifetimes.", 49.99))
+        .unwrap();
+    let poche = catalog.create("Variant", variante("Rust Book — poche")).unwrap();
+    let relie = catalog.create("Variant", variante("Rust Book — relié")).unwrap();
+    catalog
+        .link("HAS_VARIANT", livre.clone(), poche, BTreeMap::new())
+        .unwrap();
+    catalog.link("HAS_VARIANT", livre, relie, BTreeMap::new()).unwrap();
+
+    let vidage = catalog.drain();
+    assert_eq!(vidage.failed, 0, "le vidage a échoué : {vidage:?}");
+
+    // La table de relation est une vraie table sur postgres, avec sa clé
+    // primaire composite. On vérifie les deux arêtes, et qu'elles partent bien
+    // du même produit — c'est la jointure sur `to_uuid` qui n'avait aucun index
+    // avant aujourd'hui.
+    let n = catalog
+        .execute_raw("SELECT count(*) FROM has_variant")
+        .expect("count relations")
+        .rows[0][0]
+        .as_i64()
+        .unwrap();
+    assert_eq!(n, 2, "deux arêtes attendues");
+
+    let jointure = catalog
+        .execute_raw(
+            "SELECT p.name, v.label FROM has_variant r \
+             JOIN product p ON p._uuid = r.from_uuid \
+             JOIN variant v ON v._uuid = r.to_uuid \
+             ORDER BY v.label",
+        )
+        .expect("jointure des deux bouts");
+    let paires: Vec<(String, String)> = jointure
+        .rows
+        .iter()
+        .map(|r| {
+            (
+                r[0].as_str().unwrap_or("").to_string(),
+                r[1].as_str().unwrap_or("").to_string(),
+            )
+        })
+        .collect();
+    eprintln!("arêtes : {paires:?}");
+    assert_eq!(paires.len(), 2);
+    assert!(paires.iter().all(|(p, _)| p == "Rust Book"), "{paires:?}");
+}
+
+// ═══ 7. Les cellules se séparent ═════════════════════════════════════════════
+
+#[test]
+fn les_cellules_se_separent() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+
+    let cellule_a = Scope { org: "acme".into(), project: "boutique".into() };
+    let cellule_b = Scope { org: "globex".into(), project: "entrepot".into() };
+
+    catalog.set_scope(cellule_a.clone()).expect("cellule A");
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![produit("Rust Book", "Ownership, lifetimes and concurrency.", 49.99)],
+        )
+        .unwrap();
+
+    catalog.set_scope(cellule_b.clone()).expect("cellule B");
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![produit("Python Cookbook", "Ownership, lifetimes and concurrency.", 39.99)],
+        )
+        .unwrap();
+
+    // Les deux descriptions sont **identiques** : si le cloisonnement fuit, la
+    // recherche dans une cellule remonte le produit de l'autre avec le même
+    // score, et rien ne le signalera.
+    let reponse = catalog
+        .search(
+            "Product",
+            "Ownership, lifetimes and concurrency.",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche dans la cellule B");
+
+    let noms: Vec<String> = reponse
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+        .collect();
+    eprintln!("cellule B voit : {noms:?}");
+
+    assert!(
+        noms.contains(&"Python Cookbook".to_string()),
+        "la cellule B ne voit pas son propre produit : {noms:?}"
+    );
+    assert!(
+        !noms.contains(&"Rust Book".to_string()),
+        "FUITE ENTRE CELLULES : la cellule B voit le produit de la cellule A — {noms:?}"
+    );
+
+    // **Et le même cloisonnement sur le chemin vectoriel**, qui passe par un
+    // autre code : `vector_search_filtered` reçoit un `WHERE` construit par le
+    // catalogue avec l'alias `n.`, alors que la requête postgres n'aliase pas
+    // sa table. Si c'est faux, ça se verra ici — soit par une erreur SQL, soit
+    // par une fuite.
+    let hybride = catalog
+        .search(
+            "Product",
+            "Ownership, lifetimes and concurrency.",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::HYBRID),
+                ..Default::default()
+            },
+        )
+        .expect("recherche hybride cloisonnée sur postgres");
+
+    let noms_h: Vec<String> = hybride
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+        .collect();
+    eprintln!(
+        "hybride cellule B voit : {noms_h:?}  (bm25={} vecteur={})",
+        hybride.meta.bm25_count, hybride.meta.vector_count
+    );
+    assert!(
+        !noms_h.contains(&"Rust Book".to_string()),
+        "FUITE ENTRE CELLULES sur le chemin vectoriel — {noms_h:?}"
+    );
 }

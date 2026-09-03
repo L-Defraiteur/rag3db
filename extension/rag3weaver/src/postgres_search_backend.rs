@@ -43,6 +43,7 @@ impl SearchBackend for PostgresSearchBackend {
         fields: &[String],
         query: &str,
         limit: usize,
+        cellule: Option<(&str, &str)>,
     ) -> Option<Result<Vec<TextHit>, String>> {
         if fields.is_empty() {
             return Some(Ok(Vec::new()));
@@ -67,17 +68,34 @@ impl SearchBackend for PostgresSearchBackend {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let sql = format!(
-            "SELECT _uuid, _row_id, GREATEST({meilleur}) AS score, \
-                    concat_ws(' ', {texte}) AS texte \
-             FROM {table} WHERE {ou} \
-             ORDER BY score DESC LIMIT {limit}"
-        );
-
-        let params = vec![QueryParam::new(
+        // La cellule ferme la requête avant tout classement. L'index
+        // `(_org, _project)` posé sur chaque table de données sert exactement
+        // ça — voir `SchemaDialect::secondary_indexes`.
+        let mut params = vec![QueryParam::new(
             "q",
             crate::connection::CypherValue::String(query.to_string()),
         )];
+        let cloison = match cellule {
+            Some((org, projet)) => {
+                params.push(QueryParam::new(
+                    "cell_org",
+                    crate::connection::CypherValue::String(org.to_string()),
+                ));
+                params.push(QueryParam::new(
+                    "cell_proj",
+                    crate::connection::CypherValue::String(projet.to_string()),
+                ));
+                " AND _org = $cell_org AND _project = $cell_proj"
+            }
+            None => "",
+        };
+
+        let sql = format!(
+            "SELECT _uuid, _row_id, GREATEST({meilleur}) AS score, \
+                    concat_ws(' ', {texte}) AS texte \
+             FROM {table} WHERE ({ou}){cloison} \
+             ORDER BY score DESC LIMIT {limit}"
+        );
         let resultat = match self.conn.execute_with_params(&sql, &params) {
             Ok(r) => r,
             // Une erreur est une erreur, pas une absence : `Some(Err)` pour que
@@ -146,7 +164,7 @@ impl SearchBackend for PostgresSearchBackend {
         limit: usize,
         _filter_match: Option<&str>,
         filter_where: Option<&str>,
-        _filter_params: &[QueryParam],
+        filter_params: &[QueryParam],
     ) -> Result<Vec<VectorHit>, String> {
         let embedding_str = embedding
             .iter()
@@ -159,16 +177,26 @@ impl SearchBackend for PostgresSearchBackend {
             None => "WHERE embedding IS NOT NULL".to_string(),
         };
 
-        // PostgreSQL: filter + vector search in one query (no graph projection needed)
+        // **La table est aliasée `n`.** Le catalogue construit ses filtres avec
+        // cet alias (`n._org = $_scope_org`), parce que c'est celui du motif
+        // Cypher côté rag3db. Sans lui, le `WHERE` référençait une table qui
+        // n'existe pas — et comme les paramètres n'étaient pas transmis non
+        // plus, la requête échouait sur le `$` avant même d'y arriver. Le
+        // chemin vectoriel **filtré** n'avait donc jamais tourné.
         let sql = format!(
             "SELECT _uuid, (embedding <=> '[{embedding_str}]'::vector) AS distance \
-             FROM {table} \
+             FROM {table} n \
              {where_clause} \
              ORDER BY distance \
              LIMIT {limit}"
         );
 
-        let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
+        let result = if filter_params.is_empty() {
+            self.conn.execute(&sql)
+        } else {
+            self.conn.execute_with_params(&sql, filter_params)
+        }
+        .map_err(|e| e.to_string())?;
 
         Ok(result.rows.iter().map(|row| {
             let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();

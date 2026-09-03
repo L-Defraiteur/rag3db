@@ -128,12 +128,20 @@ pub trait SearchBackend: Send + Sync {
     /// à l'ingestion — donc si on écrit, ou non, un second corpus sur disque.
     fn sert_le_plein_texte(&self) -> bool { false }
 
+    ///
+    /// `cellule` borne la recherche à un couple `(org, project)`. **Ce n'est pas
+    /// une option de confort** : sans elle, une base multi-locataire rend les
+    /// lignes d'une cellule aux requêtes d'une autre, sans que rien ne le
+    /// signale. Le paramètre est donc obligatoire et explicite plutôt que
+    /// dérivé d'un filtre général — on ne veut pas qu'une isolation de données
+    /// dépende de la présence d'un `WHERE` construit ailleurs.
     fn text_search(
         &self,
         _table: &str,
         _fields: &[String],
         _query: &str,
         _limit: usize,
+        _cellule: Option<(&str, &str)>,
     ) -> Option<Result<Vec<TextHit>, String>> {
         None
     }

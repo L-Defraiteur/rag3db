@@ -467,6 +467,10 @@ impl Node for BM25SearchNode {
             .cloned();
 
         if let Some(backend) = natif {
+            let cellule: Option<crate::scope::Scope> = options
+                .scope
+                .clone()
+                .or_else(|| ctx.service::<crate::scope::Scope>("cellule").cloned());
             let results = crate::search::search_texte_natif(
                 backend.as_ref(),
                 &target,
@@ -474,6 +478,9 @@ impl Node for BM25SearchNode {
                 self.limit,
                 &target.enrich_fields,
                 self.result_mode,
+                // `options.scope` prime : c'est une recherche explicitement
+                // dirigée vers une autre cellule. Sinon, celle du catalogue.
+                cellule.as_ref().map(|s| (s.org.as_str(), s.project.as_str())),
                 None,
                 &mut node_warnings,
             )
