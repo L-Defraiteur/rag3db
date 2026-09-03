@@ -10,10 +10,7 @@ use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::tools::ToolDef;
 
 fn vertex() -> Option<OpenAiLlm> {
-    let project = std::env::var("GOOGLE_CLOUD_PROJECT").ok()?;
-    let source = rag3weaver::gcp_auth::TokenSource::from_env().map_err(|e| eprintln!("{e}")).ok()?;
-    let token = source.token().map_err(|e| eprintln!("{e}")).ok()?;
-    Some(OpenAiLlm::vertex(&project, "global", token, "google/gemini-3.5-flash"))
+    rag3weaver::regime::modele_agentique("schema-probe")
 }
 
 fn strip(v: &mut serde_json::Value, key: &str) {

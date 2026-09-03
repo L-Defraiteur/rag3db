@@ -135,15 +135,20 @@ impl BurnDevice {
                     .filter(|v| !v.trim().is_empty())
                     .map(|v| depuis(v, "RAG3WEAVER_BURN_DEVICE"))
             })
-            // **Le régime, en dernier recours et pour l'embarqueur seul.**
-            // C'est lui qui tient le modèle des heures durant : un reranker ou
-            // un OCR prennent la carte le temps d'un appel, l'embarqueur la
-            // garde. Voir `crate::regime`.
-            .or_else(|| match role {
-                BurnRole::Embedder => crate::regime::Regime::courant()
-                    .carte_embedder()
-                    .map(|v| depuis(v, "la carte la moins chargée, régime confort")),
-                _ => None,
+            // **Le régime, en dernier recours — pour les trois rôles.**
+            //
+            // Il ne valait que pour l'embarqueur, avec une raison
+            // d'efficacité : c'est lui qui tient le modèle des heures durant,
+            // un reranker ou un OCR prennent la carte le temps d'un appel.
+            // La raison est bonne et ne décide plus ici : `confort` ne parle
+            // pas d'efficacité mais de **ne pas être dérangée**, et un OCR qui
+            // prend la carte du compositeur le temps d'un appel fait
+            // précisément le tort qu'on cherche à éviter. Sous `plein`,
+            // `carte_locale()` rend `None` et rien ne bouge.
+            .or_else(|| {
+                crate::regime::Regime::courant()
+                    .carte_locale()
+                    .map(|v| depuis(v, "la carte la moins chargée, régime confort"))
             });
 
         let Some((raw, source)) = choix else {

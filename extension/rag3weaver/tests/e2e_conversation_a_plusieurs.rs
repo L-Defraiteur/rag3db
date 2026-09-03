@@ -47,11 +47,13 @@ fn rag3db_root() -> String {
     })
 }
 
+/// **Cette suite était locale seulement**, et ce n'était pas un oubli : trois
+/// agents qui se répondent font beaucoup d'appels, et les envoyer au nuage se
+/// paie. La fabrique change cela, délibérément — sous `RAG3WEAVER_REGIME=confort`
+/// c'est précisément ce qu'on demande, ne pas prendre la carte. Sous `plein`,
+/// `RAG3WEAVER_LOCAL_LLM` continue de décider comme avant.
 fn model() -> Option<OpenAiLlm> {
-    let base = std::env::var("RAG3WEAVER_LOCAL_LLM").ok()?;
-    let name = std::env::var("RAG3WEAVER_LOCAL_MODEL").unwrap_or_else(|_| "local".into());
-    eprintln!("[fil] {name} @ {base}");
-    Some(OpenAiLlm::new(base, name))
+    rag3weaver::regime::modele_agentique("fil")
 }
 
 /// Notre propre `src/`, indexé en entier : les agents parlent de code réel.
@@ -262,7 +264,7 @@ impl Artefact {
 #[ignore]
 fn trois_agents_un_fil_une_question() {
     let Some(llm) = model() else {
-        eprintln!("skipped: RAG3WEAVER_LOCAL_LLM absent");
+        eprintln!("skipped: aucun modèle — ni RAG3WEAVER_LOCAL_LLM, ni identifiants Vertex");
         return;
     };
     let (services, _source) = setup();

@@ -33,18 +33,7 @@ use rag3weaver::llm::{generate_to_string, GenOptions, ResponseFormat, Turn};
 use rag3weaver::openai_llm::OpenAiLlm;
 
 fn modele() -> Option<(OpenAiLlm, String)> {
-    if let Ok(base) = std::env::var("RAG3WEAVER_LOCAL_LLM") {
-        let nom = std::env::var("RAG3WEAVER_LOCAL_MODEL").unwrap_or_else(|_| "local".into());
-        eprintln!("[mermaid] {nom} @ {base}");
-        return Some((OpenAiLlm::new(base, nom.clone()), nom));
-    }
-    let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok()?;
-    let source = rag3weaver::gcp_auth::TokenSource::from_env().ok()?;
-    let jeton = source.token().ok()?;
-    let lieu = std::env::var("GOOGLE_CLOUD_LOCATION").unwrap_or_else(|_| "global".into());
-    let nom = std::env::var("VERTEX_MODEL").unwrap_or_else(|_| "google/gemini-3.5-flash".into());
-    eprintln!("[mermaid] {nom} @ {lieu} · projet {projet}");
-    Some((OpenAiLlm::vertex(&projet, &lieu, jeton, nom.clone()), nom))
+    rag3weaver::regime::modele_agentique_nomme("mermaid")
 }
 
 /// Un schéma assez riche pour que les questions aient un sens, et assez petit

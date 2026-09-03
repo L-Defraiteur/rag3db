@@ -129,24 +129,7 @@ fn setup() -> Arc<ServiceRegistry> {
 /// Les mêmes questions et les mêmes missions que pour le nuage, donc des
 /// chiffres directement comparables (doc 11).
 fn model() -> Option<OpenAiLlm> {
-    if let Ok(base) = std::env::var("RAG3WEAVER_LOCAL_LLM") {
-        let name = std::env::var("RAG3WEAVER_LOCAL_MODEL").unwrap_or_else(|_| "local".into());
-        eprintln!("[cloud-agent] {name} @ {base}");
-        // Un modèle local n'a pas de quota mais il est lent : la politique
-        // de réessai du nuage (60 s après un 429) n'a rien à faire ici.
-        return Some(OpenAiLlm::new(base, name));
-    }
-    vertex()
-}
-
-fn vertex() -> Option<OpenAiLlm> {
-    let project = std::env::var("GOOGLE_CLOUD_PROJECT").map_err(|e| eprintln!("[cloud-agent] GOOGLE_CLOUD_PROJECT: {e}")).ok()?;
-    let source = rag3weaver::gcp_auth::TokenSource::from_env().map_err(|e| eprintln!("[cloud-agent] TokenSource: {e}")).ok()?;
-    let token = source.token().map_err(|e| eprintln!("[cloud-agent] token: {e}")).ok()?;
-    let location = std::env::var("GOOGLE_CLOUD_LOCATION").unwrap_or_else(|_| "global".into());
-    let model = std::env::var("VERTEX_MODEL").unwrap_or_else(|_| "google/gemini-3.5-flash".into());
-    eprintln!("[cloud-agent] {model} @ {location}");
-    Some(OpenAiLlm::vertex(&project, &location, token, model))
+    rag3weaver::regime::modele_agentique("cloud-agent")
 }
 
 fn dump(turns: &[Turn]) {

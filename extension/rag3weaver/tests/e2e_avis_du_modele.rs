@@ -29,15 +29,7 @@ use rag3weaver::llm::{generate_to_string, GenOptions, Turn};
 use rag3weaver::openai_llm::OpenAiLlm;
 
 fn vertex() -> Option<OpenAiLlm> {
-    let project = std::env::var("GOOGLE_CLOUD_PROJECT").ok()?;
-    let source = rag3weaver::gcp_auth::TokenSource::from_env()
-        .map_err(|e| eprintln!("[avis] identifiants : {e}"))
-        .ok()?;
-    let token = source.token().map_err(|e| eprintln!("[avis] jeton : {e}")).ok()?;
-    let location = std::env::var("GOOGLE_CLOUD_LOCATION").unwrap_or_else(|_| "global".into());
-    let model = std::env::var("VERTEX_MODEL").unwrap_or_else(|_| "google/gemini-3.5-flash".into());
-    eprintln!("[avis] {model} @ {location} · projet {project}");
-    Some(OpenAiLlm::vertex(&project, &location, token, model))
+    rag3weaver::regime::modele_agentique("avis")
 }
 
 /// La surface, telle que le moteur la publie — **catalogue branché**.
