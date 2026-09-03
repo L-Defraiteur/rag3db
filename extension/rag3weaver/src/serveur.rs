@@ -477,28 +477,44 @@ mod tests {
         (adresse, stop)
     }
 
-    /// Un port que personne n'écoute — **à l'instant où on le rend**.
+    /// **Une adresse où personne ne peut répondre.**
     ///
-    /// Le noyau ne sait pas réserver un port sans l'occuper : on lie, on lit le
-    /// numéro, on relâche. Entre le relâchement et l'usage, n'importe qui peut
-    /// le prendre — un autre test du même binaire, ou n'importe quel processus
-    /// du poste. Cette course est **inhérente**, pas corrigeable ici.
+    /// Les quatre tests qui s'en servent lancent `/bin/true`, `/bin/false`,
+    /// `/bin/sleep` ou un binaire absent : **aucun ne lie quoi que ce soit**.
+    /// Ils n'ont donc pas besoin d'un port libre, mais d'un port *sourd*. La
+    /// confusion entre les deux leur a coûté des échecs au hasard pendant deux
+    /// jours, chacun avec un symptôme différent — une attache là où on
+    /// attendait une mort, un `Occupe` là où on attendait un `Absent`, un
+    /// service debout là où on attendait un échec de lancement.
     ///
-    /// Ce qui est corrigeable, c'est de ne pas s'y laisser piéger : un test qui
-    /// utilise ce port doit poser une **sonde de santé**, pour que le module
-    /// distingue « c'est lui » de « c'est quelqu'un ». Sans elle, `sonder` rend
-    /// `Repond` dès que le TCP se connecte, et un inconnu passe pour le serveur
-    /// attendu.
-    fn port_libre() -> String {
-        let e = TcpListener::bind("127.0.0.1:0").unwrap();
-        let a = e.local_addr().unwrap().to_string();
-        drop(e);
-        a
+    /// Deux fausses pistes avant celle-ci, et elles valent d'être écrites :
+    ///
+    /// 1. Lier le port 0 puis relâcher. La course n'était pas celle qu'on
+    ///    croyait : elle est **interne**. Un test relâche le port 36999, un
+    ///    voisin le reçoit aussitôt et le tient le temps de son propre appel, et
+    ///    le premier trouve quelqu'un en sondant.
+    /// 2. Une adresse de bouclage distincte par appel. Insuffisant : un
+    ///    processus qui écoute sur `0.0.0.0` répond sur **toutes** les adresses
+    ///    locales, `127.0.0.103` comprise. Ce poste en a plusieurs, dans la
+    ///    plage éphémère précisément.
+    ///
+    /// Ce qui ferme la question : un port **privilégié**. Lier en dessous de
+    /// 1024 demande `CAP_NET_BIND_SERVICE`, donc aucun processus de test ne le
+    /// peut, et rien ne prend le port 1. L'adresse change à chaque appel pour
+    /// que deux tests restent lisibles séparément dans un diagnostic.
+    ///
+    /// (`127.0.0.53` et `.54` seraient de mauvais choix : systemd-resolved.)
+    fn port_sourd() -> String {
+        use std::sync::atomic::{AtomicU8, Ordering};
+        static SUIVANTE: AtomicU8 = AtomicU8::new(100);
+        let n = SUIVANTE.fetch_add(1, Ordering::Relaxed);
+        let n = if n > 250 { 100 } else { n };
+        format!("127.0.0.{n}:1")
     }
 
     #[test]
     fn personne_n_ecoute_donc_absent() {
-        let s = Serveur::new("fantome", port_libre(), "/bin/true").sante("/sante", "fantome");
+        let s = Serveur::new("fantome", port_sourd(), "/bin/true").sante("/sante", "fantome");
         assert_eq!(s.etat(), Etat::Absent);
     }
 
@@ -554,7 +570,7 @@ mod tests {
 
     #[test]
     fn un_programme_absent_se_dit_au_lancement() {
-        let s = Serveur::new("x", port_libre(), "/programme/qui/n/existe/pas");
+        let s = Serveur::new("x", port_sourd(), "/programme/qui/n/existe/pas");
         match s.assurer() {
             Err(ServeurError::Lancement { nom, .. }) => assert_eq!(nom, "x"),
             autre => panic!("attendu Lancement, obtenu {autre:?}"),
@@ -570,7 +586,7 @@ mod tests {
         // qui a pris le port entre-temps rend `Repond`, et `assurer` s'attache
         // à lui en croyant que le serveur tourne déjà. Le test tombait alors
         // au hasard, en accusant le code testé.
-        let s = Serveur::new("mourant", port_libre(), "/bin/false")
+        let s = Serveur::new("mourant", port_sourd(), "/bin/false")
             .sante("/sante", "mourant")
             .journal_dans(&dossier)
             .attente(Duration::from_secs(2));
@@ -578,12 +594,7 @@ mod tests {
             Err(ServeurError::Mort { journal, .. }) => {
                 assert_eq!(journal, dossier.join("mourant.log"));
             }
-            // Quelqu'un d'autre écoute sur ce port. C'est précisément ce que
-            // `Occupe` existe pour dire — « quelqu'un répond, ce n'est pas
-            // lui » — et ce n'est pas un défaut du code testé. Ce qui serait
-            // un défaut, c'est de s'y **attacher** : ce cas-là reste refusé.
-            Err(ServeurError::Occupe { .. }) => {}
-            autre => panic!("attendu Mort (ou Occupe si le port a été pris), obtenu {autre:?}"),
+            autre => panic!("attendu Mort, obtenu {autre:?}"),
         }
     }
 
@@ -592,15 +603,14 @@ mod tests {
         let dossier = std::env::temp_dir().join("rag3weaver-tests-serveur");
         // Même raison qu'au-dessus : la sonde empêche un inconnu de se faire
         // passer pour lui.
-        let s = Serveur::new("muet", port_libre(), "/bin/sleep")
+        let s = Serveur::new("muet", port_sourd(), "/bin/sleep")
             .arg("30")
             .sante("/sante", "muet")
             .journal_dans(&dossier)
             .attente(Duration::from_millis(400));
         match s.assurer() {
             Err(ServeurError::Muet { nom, .. }) => assert_eq!(nom, "muet"),
-            Err(ServeurError::Occupe { .. }) => {}
-            autre => panic!("attendu Muet (ou Occupe si le port a été pris), obtenu {autre:?}"),
+            autre => panic!("attendu Muet, obtenu {autre:?}"),
         }
     }
 

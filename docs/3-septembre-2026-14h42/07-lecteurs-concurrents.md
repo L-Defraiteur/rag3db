@@ -130,6 +130,24 @@ que des lecteurs travaillent**. C'est précisément la situation que le test 2
 éprouve, et elle ne produit pas d'incohérence. Mais c'est une exclusion perdue,
 et quelqu'un qui comptait dessus doit le savoir.
 
+## Le contrat public, lui, ne change pas — il est mieux tenu
+
+Ce que `src/include/main/database.h` promet à qui ouvre une base n'a pas bougé :
+
+> *« Multiple read-only `Database` objects can be created with the same database
+> path. If false, the database is opened read-write. Under this mode, there must
+> not be multiple `Database` objects created with the same database path. »*
+
+Les deux moitiés restent vraies, et la première l'est **davantage** qu'avant :
+plusieurs lecteurs pouvaient déjà coexister, ils peuvent désormais le faire même
+si quelqu'un écrit. La seconde est intacte, et le test la vérifie. Le contrat
+n'a jamais promis qu'un lecteur empêcherait un écrivain de s'installer — c'était
+un effet du verrou, pas une promesse.
+
+Le drapeau de verrouillage n'est d'ailleurs consulté qu'à un seul endroit,
+`storage_manager.cpp`, et appliqué à un seul autre, `file_handle.cpp:36`. Aucun
+autre code ne s'appuyait sur le verrou du lecteur.
+
 ## Un test mort qui portait l'ancien contrat
 
 `test/api/db_locking_test.cpp` affirme l'inverse de ce qu'on vient de mesurer :
