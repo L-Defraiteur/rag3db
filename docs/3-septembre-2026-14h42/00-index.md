@@ -10,6 +10,7 @@ du projet puisse mener cette mission sans redécouvrir.
 | [03 — Notre greffe](03-notre-greffe.md) | Ce que font vraiment nos 542 lignes du cœur, qui s'en sert, et pourquoi elles sont au niveau du **plan** et non du stockage. |
 | [04 — Knowledge dump](04-knowledge-dump.md) | Comment construire, comment tester, où sont les choses, et les pièges qui coûtent une demi-journée. |
 | [05 — La réponse](05-la-sonde-et-sa-reponse.md) | **La sonde est faite.** Les trois phrases du critère, étayées ligne par ligne. À lire après 01. |
+| [06 — Le second fork](06-reperage-vela.md) | **Vela**, l'autre continuation MIT. Même histoire git, aucun renommage, 55 fichiers sur 58 se fondent seuls. Mais l'écriture multi-processus n'est pas résolue. |
 
 ## La mission en trois phrases
 
@@ -45,6 +46,22 @@ n'est pas le code, c'est le découpage en dépôts.
 
 Tout est dans [05 — La réponse](05-la-sonde-et-sa-reponse.md), qui corrige aussi
 deux erreurs des documents précédents.
+
+## Et le second fork, celui de la mémoire d'agent
+
+Repéré dans la foulée, puisque la sonde avait tranché vite.
+`Vela-Engineering/kuzu` est **l'inverse de Ladybug point par point** : notre
+dernier commit amont est leur ancêtre, ils n'ont rien renommé, et tout est resté
+dans un seul dépôt — HNSW compris. Leur travail sur l'écriture concurrente se
+fond dans le nôtre à **55 fichiers sur 58**, avec trois conflits d'une zone
+chacun, dont un qui *simplifie* notre code.
+
+Mais il faut être précis sur ce qu'ils résolvent : leur concurrence est
+**interne au processus**, et l'écrivain garde le verrou exclusif de fichier.
+Plusieurs processus **lecteurs** deviennent possibles, plusieurs processus
+**écrivains** non — et c'était notre douleur.
+
+Tout est dans [06 — Le second fork](06-reperage-vela.md).
 
 ## Ce qui est déjà fait, et qu'il ne faut pas refaire
 
