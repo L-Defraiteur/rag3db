@@ -78,8 +78,11 @@ tests à deux processus : un second processus **ouvre en lecture pendant qu'un
 écrivain travaille**, ce qu'il lit est **cohérent** — le moteur refuse plutôt que
 de déchirer — et le refus est **transitoire**, résolu en trois tentatives.
 
-Donc `rag3daemon` peut cesser de relayer les lectures. Voir
-[07 — Lecteurs concurrents](07-lecteurs-concurrents.md).
+Donc `rag3daemon` peut cesser de relayer les lectures — **à deux conditions** :
+réessayer sur ce refus, et publier dans la base une marque d'eau d'ingestion. La
+seconde n'existe pas encore : `Consistency::Strict` vide une file qui vit en
+mémoire du processus écrivain, et un lecteur d'ailleurs ne peut ni la voir ni
+l'attendre. Voir [07 — Lecteurs concurrents](07-lecteurs-concurrents.md).
 
 ## Ce qui est déjà fait, et qu'il ne faut pas refaire
 
