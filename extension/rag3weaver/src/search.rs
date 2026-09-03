@@ -2060,22 +2060,40 @@ pub fn search_bm25_chunked(
         return Ok(vec![]);
     }
 
-    finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics, warnings)
+    // Le chemin lucivy passe par la même mesure de confiance que le chemin
+    // natif : c'est ce qui rend le nombre comparable d'un backend à l'autre.
+    // lucivy rend du BM25, non borné — on ne peut pas y poser de seuil.
+    let sortie =
+        finish_bm25_chunked(conn, target, hits, return_fields, result_mode, diagnostics, warnings)?;
+    marquer_la_confiance(query, &sortie, warnings);
+    Ok(sortie)
 }
 
 /// **Part du rappel** dans le score final. Le trigramme dit « ce texte contient
 /// quelque chose d'approchant » ; il le dit bien, et il le dit *mal* pour
 /// ordonner — sa similarité ignore l'ordre des caractères.
-const POIDS_TRIGRAMME: f64 = 0.35;
+const POIDS_TRIGRAMME: f64 = 0.20;
 
 /// **Part de l'ordre.** Jaro-Winkler regarde les transpositions et prime le
 /// préfixe commun, ce qui correspond à la façon dont on cherche un nom ou un
 /// identifiant.
 ///
-/// Les deux poids sont un **premier réglage, pas une mesure** : le banc qui les
-/// tranchera est celui de `e2e_phase0b`, qui a déjà servi à départager
-/// `Contains`, `ContainsSplit` et `Parse`.
-const POIDS_JARO: f64 = 0.65;
+/// **Mesurés**, par `e2e_postgres::les_poids_du_combo_se_mesurent`, au critère
+/// de la marge entre la pire requête dégradée et le meilleur bruit proche :
+///
+/// | trigramme / Jaro | marge |
+/// |---|---|
+/// | 1,00 / 0,00 | **−0,03** |
+/// | 0,35 / 0,65 (l'ancien réglage) | ≈ +0,077 |
+/// | **0,20 / 0,80** | **+0,086** |
+/// | 0,00 / 1,00 | +0,058 |
+///
+/// Le fait qui compte n'est pas le nombre mais la forme : **le trigramme seul
+/// ne sépare pas** — sa marge est négative. C'est un bon signal de *rappel* et
+/// un mauvais signal de *classement*, ce qui est exactement la thèse des deux
+/// étages, mesurée plutôt que supposée. Le plateau est plat entre 0,10 et 0,30 ;
+/// 0,20 est au milieu.
+const POIDS_JARO: f64 = 0.80;
 
 /// Le champ où vit le texte d'un chunk, sur les deux familles de tables de
 /// chunks (`{Entité}_Chunk` et `{KB}_Index_Chunk`).
@@ -2088,14 +2106,14 @@ const CHAMP_TEXTE_CHUNK: &str = "_text";
 /// vit la frontière, sur un corpus de vingt descriptions à cinq vocabulaires
 /// disjoints, une fois le plancher de rappel ouvert :
 ///
-/// | famille | score |
+/// | famille | Jaro pur |
 /// |---|---|
 /// | requête exacte | 1,00 |
-/// | requête dégradée (fautes, troncature) | ≥ 0,84 |
-/// | **bruit proche** (mots du corpus, sens absent) | ≤ 0,76 |
+/// | requête dégradée (fautes, troncature) | ≥ 0,915 |
+/// | **bruit proche** (mots du corpus, sens absent) | ≤ 0,857 |
 /// | bruit lointain | rien du tout |
 ///
-/// Le seuil vit donc dans ]0,76 ; 0,84[ et 0,80 le partage. **C'est une mesure,
+/// Le seuil vit donc dans ]0,857 ; 0,915[ et 0,88 le partage. **C'est une mesure,
 /// pas le 0,7 de ragkit** — le leur a été calibré sur des noms de médicaments,
 /// des noms propres courts où deux chaînes proches désignent la même molécule.
 /// Le nôtre porte sur des descriptions ; le nombre ne voyage pas, la méthode si.
@@ -2104,6 +2122,25 @@ const CHAMP_TEXTE_CHUNK: &str = "_text";
 /// frontière, et le bruit proche est ce qui la fixe — le **nombre** est à
 /// remesurer sur un corpus réel.
 ///
+/// # Pourquoi Jaro **pur**, et non le score de classement
+///
+/// Le score qui ordonne et le score qui rassure ne sont pas le même nombre.
+/// Celui qui ordonne est **relatif** — il n'a de sens qu'entre les lignes d'une
+/// même requête, et il change de nature selon le backend : Jaro pondéré de
+/// trigramme sur PostgreSQL, du **BM25 non borné** sur lucivy. On ne peut pas
+/// poser un seuil dessus.
+///
+/// Celui qui rassure doit être **absolu et comparable partout**. Jaro-Winkler
+/// l'est : borné dans [0, 1], calculé chez nous sur le texte rendu, quel que
+/// soit qui l'a rendu. Le même nombre veut dire la même chose sur les deux
+/// chemins — c'est ce qui permet à `Consistency`, aux cellules et à tout le
+/// reste de rester des choix, sans que la confiance dépende du backend.
+///
+/// lucivy sait aussi faire du Jaro-Winkler, mais comme **métrique
+/// d'acceptation floue** (`fuzzy_metric`) : elle élargit le rappel, elle ne
+/// rend pas de score. C'est l'autre moitié du même outil, et elle irait au même
+/// endroit que `PLANCHER_RAPPEL` côté PostgreSQL — le rappel, pas la confiance.
+///
 /// # Marquer, pas filtrer
 ///
 /// Rien n'est retiré. Le recouvrement est réel : une vraie requête maladroite
@@ -2111,7 +2148,47 @@ const CHAMP_TEXTE_CHUNK: &str = "_text";
 /// lui retirerait un résultat qu'il aurait su reconnaître. On **dit** que rien
 /// n'est probant, et c'est lui qui tranche — ragkit est arrivé à la même
 /// conclusion pour la même raison.
-const SEUIL_CONFIANCE: f64 = 0.80;
+pub const SEUIL_CONFIANCE: f64 = 0.88;
+
+/// **Dire quand rien n'est probant** — sur n'importe quel chemin de texte.
+///
+/// Un appelant qui reçoit une liste ordonnée n'a aucun moyen de savoir qu'elle
+/// ne vaut rien : les scores sont comparables entre eux, pas dans l'absolu.
+/// Sans cette phrase, une coïncidence lexicale se présente exactement comme une
+/// réponse — et c'est ce qui a fait accuser le moteur pendant six mois sur les
+/// tests batch du 8 mars.
+///
+/// La confiance est recalculée **ici**, en Jaro pur sur le texte rendu, et pas
+/// tirée du score de classement : voir [`SEUIL_CONFIANCE`] pour pourquoi les
+/// deux nombres ne peuvent pas être le même.
+fn marquer_la_confiance(query: &str, resultats: &[SearchResult], warnings: &mut Vec<String>) {
+    let Some(premier) = resultats.first() else { return };
+    // Le texte du meilleur candidat : celui du chunk s'il y en a un, sinon les
+    // champs textuels rapportés. Sans texte, on ne peut rien affirmer — et
+    // affirmer quand même serait exactement le défaut qu'on répare.
+    let texte = match premier.chunk.as_ref() {
+        Some(c) => c.text.clone(),
+        None => match premier.data.as_ref() {
+            Some(d) => d
+                .values()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            None => return,
+        },
+    };
+    if texte.trim().is_empty() {
+        return;
+    }
+    let confiance = crate::jaro::meilleur_par_mot(query, &texte);
+    if confiance < SEUIL_CONFIANCE {
+        warnings.push(format!(
+            "rien de probant pour « {query} » : le meilleur candidat est à \
+             {confiance:.2} de similarité, sous le seuil de {SEUIL_CONFIANCE:.2} — ce \
+             qui suit partage des mots avec la requête sans forcément y répondre"
+        ));
+    }
+}
 
 /// Combien de candidats demander à la base pour en garder `limit`.
 ///
@@ -2234,19 +2311,6 @@ pub fn search_texte_natif(
     classes.sort_by(|a, b| b.1.total_cmp(&a.1));
     classes.truncate(limit * FACTEUR_RAPPEL);
 
-    // **Le dire, une fois, sur le meilleur.** Un appelant qui reçoit une liste
-    // ordonnée n'a aucun moyen de savoir qu'elle ne vaut rien : les scores sont
-    // comparables entre eux, pas dans l'absolu. Sans cette phrase, une
-    // coïncidence lexicale se présente exactement comme une réponse.
-    if let Some((_, meilleur)) = classes.first() {
-        if *meilleur < SEUIL_CONFIANCE {
-            warnings.push(format!(
-                "rien de probant pour « {query} » : le meilleur candidat est à \
-                 {meilleur:.2}, sous le seuil de {SEUIL_CONFIANCE:.2} — ce qui suit \
-                 partage des mots avec la requête sans forcément y répondre"
-            ));
-        }
-    }
 
     let par_decalage: std::collections::HashMap<u64, f64> = classes.iter().copied().collect();
     let decalages: Vec<u64> = classes.iter().map(|(o, _)| *o).collect();
@@ -2342,6 +2406,8 @@ pub fn search_texte_natif(
             chunks: None,
         })
         .collect();
+
+    marquer_la_confiance(query, &sortie, warnings);
 
     if let Some(d) = diagnostics {
         d.engine_warnings.extend(warnings.iter().cloned());

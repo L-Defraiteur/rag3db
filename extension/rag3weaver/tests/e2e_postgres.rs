@@ -983,10 +983,11 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
          requête ({degrade_min_b:.4}) — sinon aucun seuil ne sépare et il faut \
          revoir `SEUIL_CONFIANCE`"
     );
-    assert!(
-        proche_max_b < 0.80 && degrade_min_b > 0.80,
-        "0,80 doit partager l'intervalle ]{proche_max_b:.4} ; {degrade_min_b:.4}["
-    );
+    // **Ce banc mesure le classement, pas la confiance.** Les scores rendus ici
+    // sont ceux de la fusion (0,20 trigramme / 0,80 Jaro) : relatifs, et d'une
+    // autre nature sur lucivy. Le seuil, lui, vit sur du Jaro pur et se vérifie
+    // dans `les_poids_du_combo_se_mesurent`. Ce qui compte ici est qu'un
+    // intervalle **existe** — sans lui, aucun seuil n'aurait de sens.
 
     // **Et le marquage se dit.** Une coïncidence lexicale doit s'annoncer comme
     // telle, sinon elle se présente exactement comme une réponse.
@@ -1024,5 +1025,141 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         !net.meta.warnings.iter().any(|w| w.contains("rien de probant")),
         "une requête exacte ne doit pas être marquée : {:?}",
         net.meta.warnings
+    );
+}
+
+// ═══ 11. Les poids du combo, mesurés au lieu d'être supposés ═════════════════
+
+/// **0,35 trigramme / 0,65 Jaro étaient posés au jugé.** Ce banc les mesure.
+///
+/// Il n'a besoin d'aucun réglage en production : il demande au backend ses
+/// candidats **bruts** (`text_search` rend le score trigramme *et* le texte),
+/// calcule Jaro lui-même, et balaie les combinaisons en Rust. C'est la
+/// **formule** qu'on mesure, pas la tuyauterie — donc rien à exposer, rien à
+/// laisser derrière.
+///
+/// Le critère est celui du banc précédent : la **marge** entre la pire requête
+/// dégradée (qui doit passer) et le meilleur bruit proche (qui ne doit pas).
+/// Une marge large veut dire qu'un seuil y tient sans trembler.
+#[test]
+fn les_poids_du_combo_se_mesurent() {
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+
+    let corpus: Vec<(&str, &str)> = vec![
+        ("Clavecin", "clavecin baroque sautereau registre"),
+        ("Xylophone", "xylophone lames palissandre resonateur"),
+        ("Crescendo", "crescendo nuance orchestre partition"),
+        ("Arpege", "arpege accord egrene doigte"),
+        ("Sextant", "sextant navigation astronomique horizon"),
+        ("Estuaire", "estuaire maree salinite envasement"),
+        ("Tourbillon", "tourbillon courant marin remous"),
+        ("Meridien", "meridien longitude greenwich cartographie"),
+        ("Obsidienne", "obsidienne verre volcanique conchoidale"),
+        ("Basalte", "basalte coulee prismatique refroidissement"),
+        ("Gneiss", "gneiss metamorphique foliation migmatite"),
+        ("Kaolin", "kaolin argile blanche porcelaine"),
+        ("Stipule", "stipule feuille appendice petiole"),
+        ("Rhizome", "rhizome souterrain bourgeon vivace"),
+        ("Samare", "samare fruit aile dissemination"),
+        ("Cambium", "cambium assise generatrice liber"),
+        ("Echappement", "echappement ancre balancier spiral"),
+        ("Cage", "cage rotative gravite chronometrie"),
+        ("Quantieme", "quantieme perpetuel calendrier bissextile"),
+        ("Remontoir", "remontoir couronne barillet armage"),
+    ];
+    catalog
+        .ingest_entities(
+            "Product",
+            corpus.iter().map(|(n, d)| produit(n, d, 10.0)).collect(),
+        )
+        .unwrap();
+
+    let backend = catalog.search_backend().expect("le backend postgres");
+
+    // Le meilleur score d'une requête, pour un partage de poids donné.
+    let meilleur = |q: &str, poids_trgm: f64| -> f64 {
+        let hits = backend
+            .text_search("Product_Chunk", &["_text".to_string()], q, 50, None, None, None, &[])
+            .expect("le backend sert le plein texte")
+            .unwrap_or_else(|e| panic!("text_search « {q} » : {e}"));
+        hits.iter()
+            .map(|h| {
+                let fin = rag3weaver::jaro::meilleur_par_mot(q, &h.texte);
+                poids_trgm * h.score + (1.0 - poids_trgm) * fin
+            })
+            .fold(0.0f64, f64::max)
+    };
+
+    let degradees = [
+        "sauterau baroqe",
+        "palissandre",
+        "navigaton astronomiqe",
+        "volcanic",
+        "balancier ancres",
+        "metamorphique",
+    ];
+    let bruit_proche = [
+        "palissade baroque",
+        "horizon volcanique",
+        "couronne metamorphique",
+        "feuille prismatique",
+        "balancier salinite",
+    ];
+
+    eprintln!("\n  poids trgm/jaro   pire vraie   meilleur bruit   marge");
+    let mut meilleure_marge = (f64::MIN, 0.0f64);
+    for pas in 0..=10 {
+        let pt = pas as f64 / 10.0;
+        let pire_vraie = degradees
+            .iter()
+            .map(|q| meilleur(q, pt))
+            .fold(f64::MAX, f64::min);
+        let pire_bruit = bruit_proche
+            .iter()
+            .map(|q| meilleur(q, pt))
+            .fold(0.0f64, f64::max);
+        let marge = pire_vraie - pire_bruit;
+        let marque = if pt == 0.35 { "  ← aujourd'hui" } else { "" };
+        eprintln!(
+            "  {:.2} / {:.2}        {pire_vraie:.4}       {pire_bruit:.4}      {marge:+.4}{marque}",
+            pt,
+            1.0 - pt
+        );
+        if marge > meilleure_marge.0 {
+            meilleure_marge = (marge, pt);
+        }
+    }
+    eprintln!(
+        "\n  marge maximale {:+.4} à {:.2} trigramme / {:.2} Jaro\n",
+        meilleure_marge.0,
+        meilleure_marge.1,
+        1.0 - meilleure_marge.1
+    );
+
+    // Ce que le banc affirme : il existe un partage qui sépare. Le nombre se
+    // lit dans la sortie et se fixe dans `search.rs` — pas ici, sinon le banc
+    // deviendrait le juge de sa propre réponse.
+    assert!(
+        meilleure_marge.0 > 0.0,
+        "aucun partage de poids ne sépare le vrai du bruit proche"
+    );
+
+    // **Et le seuil de confiance, qui vit sur Jaro pur.** Le score de classement
+    // et le score de confiance ne sont pas le même nombre : le premier est
+    // relatif et change de nature selon le backend (BM25 non borné sur lucivy),
+    // le second doit être absolu et comparable partout. C'est la ligne
+    // 0,00 / 1,00 du tableau ci-dessus qui le fixe.
+    let jaro_vraie = degradees.iter().map(|q| meilleur(q, 0.0)).fold(f64::MAX, f64::min);
+    let jaro_bruit = bruit_proche.iter().map(|q| meilleur(q, 0.0)).fold(0.0f64, f64::max);
+    let seuil = rag3weaver::search::SEUIL_CONFIANCE;
+    eprintln!(
+        "  en Jaro pur : pire vraie {jaro_vraie:.4}, meilleur bruit {jaro_bruit:.4} \
+         — seuil posé à {seuil:.2}\n"
+    );
+    assert!(
+        jaro_bruit < seuil && seuil < jaro_vraie,
+        "SEUIL_CONFIANCE ({seuil:.2}) doit partager ]{jaro_bruit:.4} ; {jaro_vraie:.4}[ \
+         — s'il est déplacé sans remesurer, c'est ici que ça se dit"
     );
 }

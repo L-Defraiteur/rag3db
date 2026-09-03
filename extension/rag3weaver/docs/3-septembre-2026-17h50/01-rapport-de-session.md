@@ -332,11 +332,57 @@ l'étage qui sait trancher. Une requête à deux fautes rendait **zéro résulta
 et une falaise de rappel ne se voit pas comme une erreur, elle se voit comme
 « ça n'existe pas ». Le backend pose maintenant 0,3 (`PLANCHER_RAPPEL`).
 
-Le rappel ouvert, la frontière apparaît : **]0,76 ; 0,84[**, et 0,80 la partage.
-C'est une mesure, pas le 0,7 de ragkit — le leur a été calibré sur des noms de
-médicaments, des noms propres courts où deux chaînes proches désignent la même
-molécule. La **forme** est établie ; le **nombre** est à remesurer sur un corpus
-réel, ce corpus-ci étant synthétique et petit.
+Le rappel ouvert, la frontière apparaît. C'est une mesure, pas le 0,7 de
+ragkit — le leur a été calibré sur des noms de médicaments, des noms propres
+courts où deux chaînes proches désignent la même molécule. La **forme** est
+établie ; le **nombre** est à remesurer sur un corpus réel, ce corpus-ci étant
+synthétique et petit.
+
+### Les poids, mesurés à leur tour
+
+Second banc, `les_poids_du_combo_se_mesurent` : il demande au backend ses
+candidats **bruts**, calcule Jaro lui-même et balaie les partages en Rust — donc
+il mesure la **formule**, sans exposer de réglage que la production n'utiliserait
+pas. Critère : la marge entre la pire requête dégradée et le meilleur bruit
+proche.
+
+| trigramme / Jaro | marge |
+|---|---|
+| 1,00 / 0,00 | **−0,03** |
+| 0,35 / 0,65 (l'ancien réglage, au jugé) | ≈ +0,077 |
+| **0,20 / 0,80** | **+0,086** |
+| 0,00 / 1,00 | +0,058 |
+
+Le fait qui compte n'est pas le nombre : **le trigramme seul ne sépare pas**,
+sa marge est négative. Bon signal de *rappel*, mauvais signal de *classement* —
+la thèse des deux étages, mesurée plutôt que supposée. Le plateau est plat entre
+0,10 et 0,30 ; 0,20 est au milieu.
+
+### Deux scores, pas un — et c'est ce qui unifie les backends
+
+Le score qui **ordonne** et le score qui **rassure** ne peuvent pas être le même
+nombre. Le premier est relatif et change de nature selon le backend : Jaro
+pondéré de trigramme sur PostgreSQL, du **BM25 non borné** sur lucivy. Aucun
+seuil ne s'y pose.
+
+Le second doit être absolu. C'est **Jaro-Winkler pur**, recalculé chez nous sur
+le texte rendu, borné, identique quel que soit qui l'a rendu :
+
+| famille | Jaro pur |
+|---|---|
+| exacte | 1,00 |
+| dégradée | ≥ 0,915 |
+| bruit proche | ≤ 0,857 |
+
+`SEUIL_CONFIANCE = 0,88` partage l'intervalle, et **les deux chemins de texte
+passent par la même fonction** (`marquer_la_confiance`). Le même nombre veut
+donc dire la même chose sur PostgreSQL et sur lucivy.
+
+lucivy sait aussi faire du Jaro-Winkler, mais comme **métrique d'acceptation
+floue** (`fuzzy_metric`) : elle élargit le rappel, elle ne rend pas de score.
+C'est l'autre moitié du même outil, et sa place est celle de `PLANCHER_RAPPEL`
+côté PostgreSQL — le rappel, pas la confiance. À brancher quand on voudra
+ouvrir le rappel de lucivy comme on vient d'ouvrir celui du trigramme.
 
 ### Marquer, pas filtrer
 
