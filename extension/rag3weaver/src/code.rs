@@ -1434,8 +1434,14 @@ mod tests {
 
         // ── Ce qui est écarté le dit ──────────────────────────────────────
         assert_eq!(a.skipped.len(), 1, "{:?}", a.skipped);
-        assert!(a.skipped[0].0.ends_with("Cargo.lock"));
-        assert!(!a.skipped[0].1.is_empty(), "un refus se nomme");
+        // Retrouvé par son nom, pas par son rang : ce qu'on veut dire est
+        // « le verrou a été écarté », pas « le premier écarté est le verrou ».
+        // Le jour où un second fichier sort, une assertion accrochée au rang
+        // lirait la ligne d'à côté au lieu d'échouer.
+        let (chemin, raison) =
+            a.skipped.iter().find(|(c, _)| c.ends_with("Cargo.lock")).expect("le verrou est écarté");
+        assert!(chemin.ends_with("Cargo.lock"));
+        assert!(!raison.is_empty(), "un refus se nomme");
 
         let names: Vec<&str> = a.scopes.iter().map(|s| s.name.as_str()).collect();
         let norm = a.scopes.iter().find(|s| s.name == "norm").unwrap_or_else(|| panic!("norm not in {names:?}"));
