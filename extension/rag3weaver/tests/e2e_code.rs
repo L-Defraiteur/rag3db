@@ -279,14 +279,11 @@ fn read_and_grep_as_graph_tools() {
     let mut services = ServiceRegistry::new();
     {
         let cat = catalog.lock().unwrap();
-        services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
-        services.register(
-            "dialect",
-            std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-                as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-        );
-        services.register("fts_handles", cat.fts_handles().clone());
-        services.register::<Arc<dyn rag3weaver::embedder::Embedder>>("embedder", Arc::new(HashEmbedder::new(64)));
+        // Le catalogue monte lui-même la liste dont les nœuds de recherche
+
+        // ont besoin — une seule source, au lieu d'un montage par test.
+
+        cat.register_search_services(&mut services);
     }
     services.register("catalog", catalog.clone());
     services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
@@ -1311,14 +1308,9 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
         let mut services = ServiceRegistry::new();
         {
             let cat = catalog.lock().unwrap();
-            services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
-            services.register(
-                "dialect",
-                std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-                    as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-            );
-            services.register("fts_handles", cat.fts_handles().clone());
-            services.register("sparse_handles", cat.sparse_handles().clone());
+            // Une seule source pour la liste : le catalogue la connaît.
+
+            cat.register_search_services(&mut services);
         }
         services.register("catalog", catalog.clone());
         if let Some(d) = domain {
@@ -1385,14 +1377,9 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     let mut services = ServiceRegistry::new();
     {
         let cat = catalog.lock().unwrap();
-        services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
-        services.register(
-            "dialect",
-            std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-                as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-        );
-        services.register("fts_handles", cat.fts_handles().clone());
-        services.register("sparse_handles", cat.sparse_handles().clone());
+        // Une seule source pour la liste : le catalogue la connaît.
+
+        cat.register_search_services(&mut services);
     }
     services.register("catalog", catalog.clone());
     services.register(
@@ -1421,7 +1408,6 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
 fn the_vector_path_honours_the_filter_too() {
     use rag3weaver::code::analyze;
     use rag3weaver::dataflow::{DataflowGraph, DataflowRuntime, ServiceRegistry};
-    use rag3weaver::embedder::HashEmbedder;
     use rag3weaver::work_domain::{Selector, WorkDomain, WORK_DOMAIN_SERVICE};
 
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
@@ -1447,15 +1433,9 @@ fn the_vector_path_honours_the_filter_too() {
         let mut services = ServiceRegistry::new();
         {
             let cat = catalog.lock().unwrap();
-            services.register("conn", rag3weaver::dataflow::ConnService(cat.conn_arc()));
-            services.register(
-                "dialect",
-                std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-                    as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-            );
+            cat.register_search_services(&mut services);
         }
         services.register("catalog", catalog.clone());
-        services.register::<std::sync::Arc<dyn rag3weaver::embedder::Embedder>>("embedder", std::sync::Arc::new(HashEmbedder::new(64)));
         if let Some(d) = domain {
             services.register(WORK_DOMAIN_SERVICE, std::sync::Arc::new(d));
         }

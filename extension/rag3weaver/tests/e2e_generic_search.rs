@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::{
-    BM25SearchNode, ConnService, DataflowGraph, DataflowRuntime, ResolveParentNode,
+    BM25SearchNode, DataflowGraph, DataflowRuntime, ResolveParentNode,
     SearchSourceNode, ServiceRegistry,
 };
 #[cfg(feature = "burn-embedder")]
@@ -168,35 +168,18 @@ fn build_services(
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
 ) -> (ServiceRegistry, Arc<Mutex<Catalog>>) {
-    let conn_arc = catalog.conn_arc();
-    let fts_handles = catalog.fts_handles().clone();
-    let sparse_handles = catalog.sparse_handles().clone();
-    let catalog_arc = Arc::new(Mutex::new(catalog));
-
     let mut services = ServiceRegistry::new();
-    // Les nœuds lisent `ConnService` sous "conn" et `Arc<dyn …Embedder>` tels quels
-    // (le registre stocke la valeur sans l'envelopper).
+    // **Une seule source pour la liste.** Ce montage la reconstruisait pièce
+    // par pièce, et c'est comme ça qu'il a perdu le dialecte le jour où
+    // `BM25SearchNode` s'est mis à en avoir besoin. Le catalogue la connaît :
+    // connexion, dialecte, cellule, index FTS et sparse, embarqueurs.
+    catalog.register_search_services(&mut services);
+    let catalog_arc = Arc::new(Mutex::new(catalog));
     services.register("catalog", catalog_arc.clone());
-    services.register("conn", ConnService(conn_arc));
-    services.register(
-        "dialect",
-        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-    );
-    // **Le dialecte est un service comme les autres.** `BM25SearchNode` en a
-    // besoin pour la résolution : lucivy rend des décalages, et les changer en
-    // entités ne parlait que Cypher jusqu'ici. Le catalogue l'enregistre déjà
-    // dans ses propres registres ; ce montage à la main l'avait oublié.
-    services.register(
-        "dialect",
-        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-    );
-    // Les nœuds BM25/sparse cherchent dans les index Rust ouverts par le Catalog.
-    services.register("fts_handles", fts_handles);
-    services.register("sparse_handles", sparse_handles);
-    services.register::<Arc<dyn Embedder>>("embedder", embedder);
 
+    // Ce que l'appelant choisit, lui : un embarqueur autre que celui du
+    // catalogue, pour éprouver un montage précis.
+    services.register::<Arc<dyn Embedder>>("embedder", embedder);
     if let Some(sparse) = sparse_embedder {
         services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", sparse);
     }

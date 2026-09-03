@@ -22,13 +22,13 @@ use rag3weaver::dataflow::{GraphTool, ReactPolicy, Reactor};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use rag3weaver::dataflow::{
-    builtin_graph_tools, execute_definition, execute_definition_as, parse_mermaid, register_trace_schema, ConnService,
+    builtin_graph_tools, execute_definition, execute_definition_as, parse_mermaid, register_trace_schema,
     NodeTypePolicy, ServiceRegistry, EVENTS_SERVICE, MESSAGE_ENTITY, RUN_ENTITY, TRACE_ENTITY, TRACE_GRAPH_MERMAID,
 };
 use rag3weaver::events::inbox_topic;
 use rag3weaver::{topic, EventBus};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions};
-use rag3weaver::embedder::{Embedder, MockEmbedder};
+use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::llm::{
     dangling_tool_results, orphan_tool_calls, CallbackLlm, CountingSink, FinishReason, MockLlm,
     StringSink, Turn,
@@ -117,22 +117,14 @@ fn setup_catalog() -> Catalog {
 }
 
 fn services(catalog: Catalog) -> Arc<ServiceRegistry> {
-    let conn_arc = catalog.conn_arc();
-    let fts_handles = catalog.fts_handles().clone();
-    let sparse_handles = catalog.sparse_handles().clone();
-    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
-
     let mut services = ServiceRegistry::new();
+    // **Une seule source pour la liste.** Le catalogue monte lui-même ce dont
+    // les nœuds de recherche ont besoin — connexion, dialecte, cellule, index
+    // FTS et sparse, embarqueur. Ce montage la reconstruisait à la main, et
+    // c'est comme ça qu'il a perdu le dialecte le jour où `BM25SearchNode` s'est
+    // mis à en avoir besoin.
+    catalog.register_search_services(&mut services);
     services.register("catalog", Arc::new(Mutex::new(catalog)));
-    services.register("conn", ConnService(conn_arc));
-    services.register(
-        "dialect",
-        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-    );
-    services.register("fts_handles", fts_handles);
-    services.register("sparse_handles", sparse_handles);
-    services.register::<Arc<dyn Embedder>>("embedder", embedder);
     Arc::new(services)
 }
 

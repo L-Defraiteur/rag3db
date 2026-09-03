@@ -89,21 +89,17 @@ fn setup() -> (Arc<ServiceRegistry>, Arc<dyn FileSource>) {
     let report = catalog.ingest_code(&analysis).unwrap();
     eprintln!("[fil] ingéré {report:?}");
 
-    let conn_arc = catalog.conn_arc();
-    let fts = catalog.fts_handles().clone();
-    let sparse = catalog.sparse_handles().clone();
-    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
     let mut services = ServiceRegistry::new();
-    services.register("catalog", Arc::new(Mutex::new(catalog)));
-    services.register("conn", rag3weaver::dataflow::services::ConnService(conn_arc));
-    services.register(
-        "dialect",
-        std::sync::Arc::new(rag3weaver::dialect::Rag3dbDialect)
-            as std::sync::Arc<dyn rag3weaver::dialect::SchemaDialect>,
-    );
-    services.register("fts_handles", fts);
-    services.register("sparse_handles", sparse);
+    // Le catalogue monte lui-même la liste — une seule source.
+    catalog.register_search_services(&mut services);
+    // **L'embarqueur du graphe n'est pas celui du catalogue**, et c'est voulu :
+    // le catalogue garde un `HashEmbedder` pour son ingestion, le graphe reçoit
+    // le vrai BGE-M3. Enregistré **après** la liste commune, qui poserait sinon
+    // celui du catalogue — un agent qui cherche sur des vecteurs de hachage
+    // aurait raison de bouder la recherche.
+    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
     services.register::<Arc<dyn Embedder>>("embedder", embedder);
+    services.register("catalog", Arc::new(Mutex::new(catalog)));
     services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, source.clone());
     (Arc::new(services), source)
 }

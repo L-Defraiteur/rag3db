@@ -3959,6 +3959,50 @@ impl Catalog {
     }
 
     /// Get a cloned Arc to the connection (for recording, observability).
+    /// **Le registre de services d'une recherche, monté par le catalogue
+    /// lui-même.**
+    ///
+    /// Dix montages à la main, dans sept fichiers de tests, reconstruisaient ce
+    /// registre pièce par pièce — et aucun n'avait le dialecte, ce qui a cassé
+    /// trois suites le jour où `BM25SearchNode` s'est mis à en avoir besoin. Ils
+    /// ne l'avaient pas oublié par négligence : rien ne disait quelle était la
+    /// liste, donc chacun avait la sienne, et elles divergeaient.
+    ///
+    /// La liste vit ici désormais. Un nœud qui réclamera un service de plus
+    /// n'aura qu'un endroit à faire changer, et tous les appelants le suivront.
+    ///
+    /// N'enregistre que ce qui se déduit du catalogue. Le service `catalog`
+    /// lui-même reste à l'appelant : il demande un `Arc<Mutex<Catalog>>`, donc
+    /// de posséder le catalogue, pas de l'emprunter.
+    pub fn register_search_services(
+        &self,
+        services: &mut crate::dataflow::services::ServiceRegistry,
+    ) {
+        services.register(
+            "conn",
+            crate::dataflow::services::ConnService(self.conn_arc()),
+        );
+        services.register("dialect", self.dialect_arc());
+        services.register("scope", self.scope.clone());
+        // Les nœuds BM25 et sparse cherchent dans les index Rust ouverts par le
+        // catalogue — pas dans la base.
+        services.register("fts_handles", self.fts_handles.clone());
+        services.register("sparse_handles", self.sparse_handles.clone());
+        services.register::<Arc<dyn Embedder>>("embedder", self.embedder.clone());
+        if let Some(ref sparse) = self.sparse_embedder {
+            services.register::<Arc<dyn crate::embedder::SparseEmbedder>>(
+                "sparse_embedder",
+                sparse.clone(),
+            );
+        }
+        if let Some(ref dual) = self.dual_embedder {
+            services.register::<Arc<dyn crate::embedder::DualEmbedder>>(
+                "dual_embedder",
+                dual.clone(),
+            );
+        }
+    }
+
     pub fn conn_arc(&self) -> Arc<dyn DbConnection> {
         self.conn.clone()
     }

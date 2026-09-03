@@ -408,11 +408,8 @@ position** : un ordre divergent ne donnerait pas une erreur mais des champs
 échangés.
 
 **Et une quatrième chose, de la même famille que la journée.** Dix montages de
-services à la main, dans sept fichiers de tests, reconstruisent le registre du
-catalogue — et aucun n'avait le dialecte. Complétés, mais la duplication reste :
-c'est le troisième cas aujourd'hui de deux copies tenues à la main qui divergent,
-après les schémas de nœuds et le miroir Rust de `search_base`. Un
-`Catalog::register_search_services` les fondrait.
+services à la main, dans sept fichiers de tests, reconstruisaient le registre du
+catalogue — et aucun n'avait le dialecte. **Fondus depuis** (§11).
 
 ## 8. La reprise après incident sur PostgreSQL — elle n'existait pas
 
@@ -596,3 +593,30 @@ régime observé. Les quatre tests passent contre les deux bibliothèques.
 presque une compilation complète ; pointer le script sur une bibliothèque
 portant le report ne coûte rien. **C'est le poste de Lucie et c'est son
 arbitrage**, pas le mien.
+
+## 11. La troisième duplication, fondue
+
+Dix montages de services à la main, dans sept fichiers de tests, reconstruisaient
+pièce par pièce ce que le catalogue sait déjà : connexion, dialecte, cellule,
+index FTS et sparse, embarqueurs. Aucun n'avait le dialecte — non par
+négligence, mais parce que **rien ne disait quelle était la liste**, donc chacun
+avait la sienne, et elles divergeaient. Trois suites sont tombées le jour où
+`BM25SearchNode` s'est mis à en avoir besoin.
+
+`Catalog::register_search_services` porte la liste. Un nœud qui réclamera un
+service de plus n'aura qu'un endroit à faire changer. **130 lignes supprimées
+pour 65**, et zéro montage à la main restant.
+
+Le service `catalog` reste à l'appelant : il demande un `Arc<Mutex<Catalog>>`,
+donc de posséder le catalogue, pas de l'emprunter.
+
+### Ce que le fondu a failli casser
+
+Deux tests « cloud » enregistraient **BGE-M3** comme embarqueur dense pendant
+que leur catalogue gardait un `HashEmbedder`. Le fondu aurait posé celui du
+catalogue : un agent aurait cherché sur des vecteurs de hachage, et les tests
+seraient restés verts. La divergence était **voulue** ; elle est maintenant
+écrite comme telle, avec l'enregistrement explicite après la liste commune.
+
+C'est la limite de tout fondu : il n'est juste que si les copies disaient bien
+la même chose. Deux ne le disaient pas.
