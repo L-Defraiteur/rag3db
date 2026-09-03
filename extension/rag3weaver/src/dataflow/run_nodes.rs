@@ -77,7 +77,7 @@ impl Node for RunCommandNode {
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::run_nodes::RunCommandNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // **Sans porte, on n'exécute rien.** Le défaut fermé n'est pas une
@@ -218,7 +218,7 @@ impl Node for WaitOutputNode {
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::run_nodes::WaitOutputNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let chemin = std::path::PathBuf::from(&self.journal);

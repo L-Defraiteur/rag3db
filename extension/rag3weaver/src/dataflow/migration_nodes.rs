@@ -57,26 +57,11 @@ impl Node for CypherNode {
     }
 
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "trigger",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::migration_nodes::CypherNodeFactory).0
     }
 
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "result",
-                port_type: PortType::Map,
-                required: false,
-            },
-            PortDef {
-                name: "done",
-                port_type: PortType::Empty,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::migration_nodes::CypherNodeFactory).1
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -478,19 +463,11 @@ impl Node for ValidateNode {
     }
 
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "trigger",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::migration_nodes::ValidateNodeFactory).0
     }
 
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "done",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::migration_nodes::ValidateNodeFactory).1
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {

@@ -50,10 +50,10 @@ impl Node for ParseCodeNode {
         Some(Box::new(serde_json::json!({ "root": self.root })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "sources", port_type: PortType::Code, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::ParseCodeNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "code", port_type: PortType::Code, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::ParseCodeNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let root = self.root.clone().unwrap_or_default();
@@ -127,10 +127,10 @@ impl Node for CodeIngestNode {
         "CodeIngestNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "code", port_type: PortType::Code, required: true }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::CodeIngestNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "done", port_type: PortType::Empty, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::CodeIngestNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let analysis = ctx
@@ -214,7 +214,7 @@ impl Node for ReadFileNode {
         Some(Box::new(serde_json::json!({ "path": self.path, "offset": self.offset, "limit": self.limit })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::ReadFileNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("ReadFileNode: 'file_source' service not found")?;
@@ -292,7 +292,7 @@ impl Node for GrepNode {
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::GrepNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("GrepNode: 'file_source' service not found")?;
@@ -360,7 +360,7 @@ impl Node for ListFilesNode {
         Some(Box::new(serde_json::json!({ "path_prefix": self.path_prefix, "limit": self.limit, "with_state": self.with_state })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::ListFilesNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("ListFilesNode: 'file_source' service not found")?;
@@ -419,7 +419,7 @@ impl Node for EditFileNode {
         Some(Box::new(serde_json::json!({ "path": self.path, "op": op })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::EditFileNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("EditFileNode: 'file_source' service not found")?;

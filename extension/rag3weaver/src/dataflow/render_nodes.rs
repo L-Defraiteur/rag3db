@@ -702,38 +702,10 @@ impl Node for RenderResultsNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "results", port_type: PortType::Results, required: false },
-            // Facultatif : la requête, pour que la fiche puisse dire ce qu'on
-            // cherchait et où. Un graphe qui ne la branche pas rend la même
-            // liste, sans l'en-tête.
-            PortDef { name: "query", port_type: PortType::Query, required: false },
-            // Facultatif : ce que le moteur a dit de la recherche — ses
-            // avertissements. Un graphe qui ne le branche pas rend la même
-            // fiche, sans la section.
-            PortDef { name: "meta", port_type: PortType::Meta, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::render_nodes::RenderResultsNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "text", port_type: PortType::Text, required: false },
-            PortDef { name: "results", port_type: PortType::Results, required: false },
-            // **La requête ressort, comme les résultats.** Un graphe qui en
-            // contient un autre ne voit de lui que ses ports **libres** : le
-            // `source.query` du sous-graphe est consommé à l'intérieur, donc
-            // invisible. Sans ce passe-plat, l'étage extérieur de `search` ne
-            // pouvait pas dire ce qu'on avait cherché, et sa fiche perdait son
-            // en-tête dès qu'on demandait une relation (28 août 2026).
-            PortDef { name: "query", port_type: PortType::Query, required: false },
-            // **Et la méta ressort pour la même raison que la requête.**
-            // `search.mmd` compose par-dessus `search_base` : le `bm25.meta`
-            // du sous-graphe est consommé à l'intérieur, donc invisible de
-            // l'extérieur. Sans ce passe-plat, l'outil que les agents tiennent
-            // réellement dans la main perdait **tous** les avertissements du
-            // moteur — le sous-graphe les affichait, l'étage extérieur
-            // réécrivait la fiche sans eux.
-            PortDef { name: "meta", port_type: PortType::Meta, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::render_nodes::RenderResultsNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let results: Vec<UnifiedResult> = ctx

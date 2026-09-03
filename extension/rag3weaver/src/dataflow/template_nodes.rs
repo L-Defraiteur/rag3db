@@ -82,7 +82,7 @@ impl Node for PlaceTemplateNode {
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::template_nodes::PlaceTemplateNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // **Une seule famille pose des entités.** Un gabarit de composant React
@@ -301,7 +301,7 @@ impl Node for AdoptTemplateNode {
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::template_nodes::AdoptTemplateNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // **Un gabarit adopté appartient au projet.** Sans racine de projet, il

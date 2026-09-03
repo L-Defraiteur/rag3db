@@ -80,7 +80,7 @@ impl Node for SchemaNode {
         Some(Box::new(serde_json::json!({ "target": self.cible, "template": self.gabarit })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::schema_nodes::SchemaNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let catalog = ctx

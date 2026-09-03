@@ -166,6 +166,25 @@ pub struct NodeRegistry {
     factories: HashMap<&'static str, Box<dyn NodeFactory>>,
 }
 
+/// Les ports **déclarés** d'un type de nœud, lus là où ils le sont : le
+/// schéma de sa fabrique.
+///
+/// Existe pour qu'il n'y ait qu'un seul rédacteur. Il y avait deux
+/// écritures des mêmes ports — le schéma, que lit la composition de
+/// graphes, et `Node::inputs`/`outputs`, que lit le montage d'un graphe
+/// plat — et elles avaient dérivé : le port `meta` de `BM25SearchNode` et
+/// de `RenderResultsNode` existait sur le nœud et manquait au schéma, donc
+/// l'outil `search`, qui **compose**, ne le voyait pas.
+///
+/// Le schéma reste la source parce qu'il est le seul disponible **avant**
+/// d'avoir une instance : le sondeur de `GraphNodeFactory::templated` lit
+/// des schémas de type sur une définition où les `$param` peuvent encore
+/// traîner (voir `graph_node.rs`).
+pub fn ports_declares(factory: &dyn NodeFactory) -> (Vec<PortDef>, Vec<PortDef>) {
+    let s = factory.schema();
+    (s.inputs, s.outputs)
+}
+
 impl NodeRegistry {
     pub fn new() -> Self {
         Self {

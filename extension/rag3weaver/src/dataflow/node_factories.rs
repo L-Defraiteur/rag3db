@@ -120,7 +120,14 @@ named_factory!(
     "KBGatherNode",
     "Read DB, detect content changes, output changed KBContentRecords",
     &[
-        PortDef { name: "aggregates", port_type: PortType::Aggregates, required: true },
+        // **Pas requis.** Le nœud le dit dans son propre code — « optional —
+        // might be connected to initial input » — et il se nourrit aussi du
+        // service `pending_aggregates`, que remplissent `DeleteRecordNode` et
+        // `UpdateRecordNode`. Le schéma affirmait le contraire ; personne ne
+        // s'en apercevait parce que c'est `Node::inputs` que lit le montage
+        // d'un graphe plat. En unifiant les deux, le runtime s'est mis à
+        // attendre une entrée qui ne vient pas : sept tests d'ingestion.
+        PortDef { name: "aggregates", port_type: PortType::Aggregates, required: false },
         PortDef { name: "trigger", port_type: PortType::Empty, required: false },
     ],
     &[
@@ -1427,20 +1434,59 @@ mod tests {
     /// configuration.
     #[test]
     fn le_schema_declare_les_memes_ports_que_le_noeud() {
+        // **Aucun type ne doit sortir du filet.** Un nœud qui exige de la
+        // configuration en reçoit ici le minimum ; un type neuf sans entrée
+        // dans cette table fait échouer le test au lieu d'être sauté en
+        // silence — c'est tout l'intérêt, un test qui se rétrécit tout seul ne
+        // protège plus rien.
+        let minimum = |node_type: &str| -> serde_json::Value {
+            match node_type {
+                "CypherNode" => serde_json::json!({ "query": "MATCH (n) RETURN n" }),
+                "ValidateNode" => serde_json::json!({
+                    "query": "MATCH (n) RETURN count(n) AS n",
+                    "assert": "n > 0",
+                }),
+                "FetchRelatedNode" => serde_json::json!({ "relation": "HAS_VARIANT" }),
+                "FlushNode" | "SparseCommitNode" => serde_json::json!({ "table": "Product" }),
+                "KBQuerySourceNode" => serde_json::json!({ "kb_name": "kb", "query": "rust" }),
+                "SearchSourceNode" => serde_json::json!({ "target_name": "Product", "query": "rust" }),
+                "SendMessageNode" => serde_json::json!({ "to": "quelqu'un", "content": "bonjour" }),
+                _ => serde_json::json!({}),
+            }
+        };
+
         let registry = builtin_registry();
         let mut derives: Vec<String> = Vec::new();
+        let mut incomparables: Vec<String> = Vec::new();
         let mut vus = 0usize;
 
         for node_type in registry.types() {
-            // Un nœud qui exige de la configuration n'est pas comparable ici ;
-            // il l'est dans son propre test.
-            let Ok(node) = registry.create(node_type, "n", &serde_json::json!({})) else {
-                continue;
+            let node = match registry.create(node_type, "n", &minimum(node_type)) {
+                Ok(n) => n,
+                Err(e) => {
+                    incomparables.push(format!("{node_type} : {e}"));
+                    continue;
+                }
             };
             vus += 1;
             let schema = registry.schema(node_type).expect("schéma du type créé");
+            // **Le nom ne suffit pas.** Un port présent des deux côtés mais
+            // `required` d'un côté seulement change le comportement du
+            // runtime : il attend l'entrée, ou il ne l'attend pas. Comparer
+            // les seuls noms laissait passer exactement ça — et ça a coûté
+            // sept tests d'ingestion au moment d'unifier les deux sources.
             let noms = |ports: &[PortDef]| -> Vec<String> {
-                let mut v: Vec<String> = ports.iter().map(|p| p.name.to_string()).collect();
+                let mut v: Vec<String> = ports
+                    .iter()
+                    .map(|p| {
+                        format!(
+                            "{} : {:?}{}",
+                            p.name,
+                            p.port_type,
+                            if p.required { " (requis)" } else { "" }
+                        )
+                    })
+                    .collect();
                 v.sort();
                 v
             };
@@ -1454,7 +1500,19 @@ mod tests {
             }
         }
 
-        assert!(vus > 10, "trop peu de nœuds comparés ({vus}) — le test ne prouve rien");
+        assert!(
+            incomparables.is_empty(),
+            "{} type(s) de nœud n'ont pas pu être construits — ajoutez leur \
+             configuration minimale à la table ci-dessus plutôt que de les laisser \
+             hors du filet :\n  {}",
+            incomparables.len(),
+            incomparables.join("\n  ")
+        );
+        assert_eq!(
+            vus,
+            registry.types().len(),
+            "tous les types enregistrés doivent être comparés"
+        );
         assert!(
             derives.is_empty(),
             "{} type(s) de nœud dérivent entre leur schéma et leur implémentation :\n  {}",

@@ -39,7 +39,7 @@ use crate::search::{
 use crate::search_strategy::UnifiedResult;
 
 use super::node::{Node, NodeContext};
-use super::port::{take_or_clone, PortDef, PortType, PortValue, QueryPayload};
+use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── SearchSourceNode ────────────────────────────────────────────────────────
@@ -82,14 +82,10 @@ impl Node for SearchSourceNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SearchSourceNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SearchSourceNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let catalog = ctx
@@ -199,31 +195,10 @@ impl Node for VectorSearchNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: true,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::VectorSearchNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            },
-            // **Le même canal que sur BM25, et pour la même raison.** Ce nœud
-            // avertissait déjà — « un filtre est demandé mais le service
-            // "catalog" manque, résultats non restreints » — dans son journal,
-            // c'est-à-dire nulle part pour l'agent qui reçoit les résultats.
-            // Deux métas branchées sur un même port se fusionnent, voir
-            // `merge_port_values`.
-            PortDef {
-                name: "meta",
-                port_type: PortType::Meta,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::VectorSearchNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
@@ -436,32 +411,10 @@ impl Node for BM25SearchNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: true,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::BM25SearchNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            },
-            // **Le canal qui manquait.** Les avertissements du moteur — « la
-            // recherche floue ignore les séparateurs », un regex sans littéral,
-            // une attribution de chunk douteuse — partaient dans le journal du
-            // nœud et s'arrêtaient là. Un avertissement qui ne remonte pas est
-            // un avertissement qui n'existe pas : l'agent voyait « aucun
-            // résultat » sans jamais savoir qu'on n'avait pas cherché ce qu'il
-            // croyait (issue 02 du 29 août 2026).
-            PortDef {
-                name: "meta",
-                port_type: PortType::Meta,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::BM25SearchNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
@@ -680,18 +633,10 @@ impl Node for SparseSearchNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: true,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SparseSearchNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SparseSearchNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
@@ -899,35 +844,10 @@ impl Node for FuseResultsNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "vector",
-                port_type: PortType::Results,
-                required: false,
-            },
-            PortDef {
-                name: "bm25",
-                port_type: PortType::Results,
-                required: false,
-            },
-            PortDef {
-                name: "sparse",
-                port_type: PortType::Results,
-                required: false,
-            },
-            PortDef {
-                name: "signals",
-                port_type: PortType::Results,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FuseResultsNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FuseResultsNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // Listes étiquetées, dans l'ordre : ports nommés, puis fan-in par
@@ -1100,25 +1020,10 @@ impl Node for RerankNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: true,
-            },
-            PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: true,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::RerankNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::RerankNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut results = ctx.take_input("results")
@@ -1255,25 +1160,10 @@ impl Node for ResolveParentNode {
         }))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: true,
-            },
-            PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ResolveParentNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ResolveParentNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let results = ctx.take_input("results")
@@ -1473,6 +1363,7 @@ fn retag(results: &mut [UnifiedResult], label: &str) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::port::PortType;
     use super::*;
     use std::collections::BTreeMap;
 

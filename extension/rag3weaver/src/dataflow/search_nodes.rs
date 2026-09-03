@@ -17,7 +17,7 @@ use crate::search_strategy::{
 };
 
 use super::node::{Node, NodeContext};
-use super::port::{take_or_clone, PortDef, PortType, PortValue, QueryPayload};
+use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
 use super::services::ConnService;
 
 // ─── KBQuerySourceNode ─────────────────────────────────────────────────────────
@@ -59,14 +59,10 @@ impl Node for KBQuerySourceNode {
         "KBQuerySourceNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBQuerySourceNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBQuerySourceNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         ctx.set_output(
@@ -106,25 +102,10 @@ impl Node for KBSearchNode {
         "KBSearchNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "query",
-            port_type: PortType::Query,
-            required: true,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBSearchNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            },
-            PortDef {
-                name: "meta",
-                port_type: PortType::Meta,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBSearchNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let qp = ctx.take_input("query")
@@ -204,18 +185,10 @@ impl Node for FetchRelatedNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: true,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FetchRelatedNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "children",
-            port_type: PortType::Children,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FetchRelatedNodeFactory).1
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -362,25 +335,10 @@ impl Node for ComposeNode {
         "ComposeNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: true,
-            },
-            PortDef {
-                name: "children",
-                port_type: PortType::Children,
-                required: false,
-            },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ComposeNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "results",
-            port_type: PortType::Results,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ComposeNodeFactory).1
     }
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -411,6 +369,7 @@ impl Node for ComposeNode {
 
 #[cfg(test)]
 mod tests {
+    use super::super::port::PortType;
     use super::*;
     use crate::search::SearchOptions;
 

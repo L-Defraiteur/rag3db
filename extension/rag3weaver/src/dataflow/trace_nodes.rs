@@ -825,7 +825,7 @@ impl Node for EventSourceNode {
         Some(Box::new(serde_json::json!({ "topics": self.topics.join(","), "cursor": self.cursor, "limit": self.limit })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "events", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::trace_nodes::EventSourceNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let bus = ctx
@@ -931,10 +931,10 @@ impl Node for TraceSinkNode {
         "TraceSinkNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "events", port_type: PortType::Map, required: true }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::trace_nodes::TraceSinkNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::trace_nodes::TraceSinkNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let catalog = ctx
@@ -1018,7 +1018,7 @@ impl Node for SendMessageNode {
         Some(Box::new(serde_json::json!({ "to": self.to, "content": self.content, "from": self.from })))
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "result", port_type: PortType::Map, required: false }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::trace_nodes::SendMessageNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let bus = ctx

@@ -60,13 +60,10 @@ impl Node for OcrNode {
         "OcrNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "image", port_type: PortType::Image, required: true }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::ocr_nodes::OcrNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "text", port_type: PortType::Text, required: false },
-            PortDef { name: "ocr", port_type: PortType::Ocr, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::ocr_nodes::OcrNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let ocr = ctx

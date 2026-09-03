@@ -85,13 +85,10 @@ impl Node for LlmNode {
         "LlmNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef { name: "prompt", port_type: PortType::Text, required: true }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::llm_nodes::LlmNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "text", port_type: PortType::Text, required: false },
-            PortDef { name: "llm", port_type: PortType::Llm, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::llm_nodes::LlmNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let llm = ctx

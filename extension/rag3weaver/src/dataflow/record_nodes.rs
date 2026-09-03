@@ -77,16 +77,10 @@ impl Node for InsertRecordNode {
         "InsertRecordNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::InsertRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-            PortDef { name: "inserted", port_type: PortType::Entities, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::InsertRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = ctx.take_input("entities")
@@ -319,17 +313,10 @@ impl Node for LinkRecordNode {
         "LinkRecordNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "relations", port_type: PortType::Relations, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::LinkRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "done",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::LinkRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<RelationRecord> = ctx.take_input("relations")
@@ -551,17 +538,10 @@ impl Node for KBEmbedNode {
         Some(Box::new(serde_json::json!({ "gpu_batch_size": self.gpu_batch_size })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBEmbedNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "done",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBEmbedNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = ctx.take_input("entities")
@@ -1195,17 +1175,10 @@ impl Node for KBChunkRecordNode {
         "KBChunkRecordNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBChunkRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-            PortDef { name: "chunks", port_type: PortType::Entities, required: false },
-            PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBChunkRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
@@ -1420,17 +1393,10 @@ impl Node for ChunkRecordNode {
         "ChunkRecordNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ChunkRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-            PortDef { name: "chunks", port_type: PortType::Entities, required: false },
-            PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ChunkRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use rayon::prelude::*;
@@ -1566,17 +1532,10 @@ impl Node for EmbedNode {
         })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::EmbedNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef {
-            name: "done",
-            port_type: PortType::Empty,
-            required: false,
-        }]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::EmbedNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let mut items: Vec<EntityRecord> = ctx.take_input("entities")
@@ -2437,16 +2396,10 @@ impl Node for KBGatherNode {
         "KBGatherNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "aggregates", port_type: PortType::Aggregates, required: false },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBGatherNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBGatherNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // Read from port (optional — might be connected to initial input)
@@ -2567,15 +2520,10 @@ impl Node for KBUpdateNode {
         "KBUpdateNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "kb_content", port_type: PortType::KBContent, required: true },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBUpdateNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBUpdateNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let scope = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
@@ -2863,16 +2811,10 @@ impl Node for KBChunkNode {
         "KBChunkNode"
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "kb_content", port_type: PortType::KBContent, required: true },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBChunkNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: false },
-            PortDef { name: "relations", port_type: PortType::Relations, required: false },
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBChunkNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<KBContentRecord> = ctx.take_input("kb_content")
@@ -2968,14 +2910,10 @@ impl Node for FlushNode {
         Some(Box::new(serde_json::json!({ "tables": self.tables })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FlushNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FlushNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         // Commit des index FTS Rust. Le repli `CALL FLUSH_LUCIVY_INDEX` est
@@ -3070,14 +3008,10 @@ impl Node for SparseCommitNode {
         Some(Box::new(serde_json::json!({ "tables": self.tables })))
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SparseCommitNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SparseCommitNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned()
@@ -3150,14 +3084,10 @@ impl Node for RechunkDeleteNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "RechunkDeleteNode" }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: true },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::RechunkDeleteNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "entities", port_type: PortType::Entities, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::RechunkDeleteNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<EntityRecord> = ctx.take_input("entities")
@@ -3257,15 +3187,10 @@ impl Node for DeleteRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "DeleteRecordNode" }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "deletes", port_type: PortType::Deletes, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::DeleteRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::DeleteRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let items: Vec<DeleteRecord> = ctx.take_input("deletes")
@@ -3671,16 +3596,10 @@ impl Node for UpdateRecordNode {
     fn name(&self) -> &str { &self.name }
     fn node_type(&self) -> &'static str { "UpdateRecordNode" }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "updates", port_type: PortType::Updates, required: true },
-            PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::UpdateRecordNodeFactory).0
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![
-            PortDef { name: "done", port_type: PortType::Empty, required: false },
-            PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
-        ]
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::UpdateRecordNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let raw_items: Vec<UpdateRecord> = ctx.take_input("updates")

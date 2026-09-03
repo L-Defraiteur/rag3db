@@ -187,9 +187,31 @@ que la composition existe** — pas même celui du 29 août, qui avait pourtant 
 réparé un étage plus bas.
 
 Fermé par un passe-plat `render.meta`, deux arêtes dans les gabarits, et un
-test qui compare le schéma déclaré à l'implémentation pour **tous** les nœuds
-constructibles (`le_schema_declare_les_memes_ports_que_le_noeud`) — les deux
-seules dérives de l'arbre étaient précisément celles-là.
+test qui compare le schéma déclaré à l'implémentation.
+
+**Puis les deux sources ont été unifiées.** Vérifié d'abord qu'aucun nœud
+feuille ne calcule ses ports depuis sa configuration — seuls `Graph` et
+`GraphNode` le font, et eux n'ont pas de schéma statique. Les ports sont donc
+une constante du **type**, pas de l'instance : une seule écriture suffit.
+
+Le schéma de fabrique reste le rédacteur, parce qu'il est le seul disponible
+**avant** d'avoir une instance : le sondeur de `GraphNodeFactory::templated`
+lit des schémas de type sur une définition où les `$param` peuvent encore
+traîner. Les 44 implémentations de nœud délèguent maintenant à
+`ports_declares(&XFactory)` — 372 lignes supprimées pour 137.
+
+Deux choses se sont vues en le faisant :
+
+- Le test ne comparait que les **noms** de ports. `KBGatherNode.aggregates`
+  était `required` au schéma et facultatif au nœud ; en unifiant, le runtime
+  s'est mis à attendre une entrée qui ne vient pas — sept tests d'ingestion.
+  Le nœud avait raison (il se nourrit aussi du service `pending_aggregates`),
+  le schéma a été corrigé, et le test compare désormais nom, type **et**
+  `required`.
+- Le test ne couvrait que les 26 types constructibles sans configuration. Il
+  couvre les 34, avec une table de configurations minimales, et **refuse de
+  rétrécir** : un type neuf sans entrée dans cette table fait échouer le test
+  au lieu d'être sauté en silence.
 
 ### 6. `test/api/db_locking_test.cpp` affirme un contrat mort
 
@@ -214,5 +236,19 @@ dépense récurrente dont personne n'a énoncé le bénéfice.
   lignes. Leurs builds restent non tentés.
 - **Les 171 fichiers hors du cœur** face à Ladybug ne sont pas chiffrés, et ne
   peuvent pas l'être depuis ce dépôt.
-- **Aucun de mes sept tests postgres n'éprouve `Strict`** : ils passent tous
+- **Aucun de mes tests postgres n'éprouve `Strict`** : ils passent tous
   `Immediate`, et tiennent parce que l'ingestion est synchrone juste avant.
+- **Deux tests de `e2e_simple_entity` échouent, et c'est antérieur** —
+  `simple_batch_delete_multiple` et `simple_batch_update_multiple`. Vérifié en
+  remisant : ils échouent aussi sans le travail d'aujourd'hui. Le batch
+  delete/update ne retire pas l'ancien contenu de l'index plein texte ; le
+  symptôme est décrit depuis le 8 mars 2026
+  ([rapport batch CRUD](../../../docs/8-mars-2026-01h54/12-rapport-progression-batch-crud.md)).
+  Sur 50 suites E2E, c'est le seul échec.
+- **Le miroir Rust de `search_base` reste couplé au graphe de production.**
+  `search_in_rust`, 70 lignes dans les tests, recopie `search_base.mmd` nœud
+  par nœud pour prouver que l'analyseur Mermaid et l'API Rust construisent la
+  même chose. L'intention est juste, le sujet ne l'est pas : toute évolution du
+  graphe de production oblige à éditer le miroir. **Le générer serait pire** —
+  il prouverait que l'analyseur est d'accord avec l'analyseur. Le bon geste est
+  un fixture minimal dédié, découplé de `search_base`.
