@@ -3158,11 +3158,14 @@ impl Catalog {
     fn build_ingestion_graph(&mut self) -> (
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
+        // (chunks supprimés, chunks créés) par uuid, mesurés en aval
+        Arc<Mutex<HashMap<String, (usize, usize)>>>,
     ) {
         let mut pending = std::mem::take(&mut self.pending);
         let empty_results = || (
             DataflowGraph::new(), ServiceRegistry::new(), 0,
             Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())),
+            Arc::new(Mutex::new(HashMap::new())),
         );
         if pending.is_empty() {
             return empty_results();
@@ -3197,6 +3200,11 @@ impl Catalog {
 
         // Shared result containers — cloned Arcs returned to drain() for extraction
         let update_results: Arc<Mutex<Vec<UpdateResult>>> = Arc::new(Mutex::new(Vec::new()));
+        // **Ce que le rechunkage a réellement fait**, par uuid : (supprimés, créés).
+        // `UpdateRecordNode` ne peut pas le savoir — le rechunkage a lieu en aval —
+        // et rendait donc deux zéros écrits en dur. Ils sont recollés ici.
+        let chunk_counts: Arc<Mutex<HashMap<String, (usize, usize)>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let delete_results: Arc<Mutex<Vec<DeleteResult>>> = Arc::new(Mutex::new(Vec::new()));
 
         // Seed pending_aggregates with initial aggregates; DeleteRecordNode and
@@ -3379,6 +3387,7 @@ impl Catalog {
         // Shared services for delete/update nodes
         services.register("pending_aggregates", pending_aggregates);
         services.register("update_results", update_results.clone());
+        services.register("chunk_counts", chunk_counts.clone());
         services.register("delete_results", delete_results.clone());
 
         // Event bus for node-emitted lifecycle events + warnings
@@ -3407,12 +3416,12 @@ impl Catalog {
             services.register("fail_node", fail_node.clone());
         }
 
-        (graph, services, op_count, update_results, delete_results)
+        (graph, services, op_count, update_results, delete_results, chunk_counts)
     }
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
     pub fn drain(&mut self) -> FlushResult {
-        let (mut graph, services, op_count, update_results, delete_results) =
+        let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
             self.build_ingestion_graph();
         if graph.nodes.is_empty() {
             return FlushResult::default();
@@ -3441,9 +3450,34 @@ impl Catalog {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
                 // Extract results from shared services
-                let updates = std::mem::take(
+                let mut updates = std::mem::take(
                     &mut *update_results.lock().unwrap_or_else(|e| e.into_inner()),
                 );
+                // **Les comptes de chunks, recollés.** Ils sont mesurés en aval
+                // du nœud qui construit `UpdateResult` ; sans cette couture, les
+                // deux champs valaient toujours zéro — un nombre présenté comme
+                // une mesure et qui n'en était pas une. C'est aussi ici que
+                // l'événement part, pour qu'il ne porte pas les mêmes zéros.
+                let comptes = std::mem::take(
+                    &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
+                );
+                for u in &mut updates {
+                    if let Some((supprimes, crees)) = comptes.get(&u.uuid) {
+                        u.chunks_deleted = *supprimes;
+                        u.chunks_created = *crees;
+                    }
+                }
+                for u in &updates {
+                    if matches!(u.status, crate::records::UpdateStatus::Updated) {
+                        self.emit_event(CatalogEvent::EntityUpdated {
+                            entity: u.entity.clone(),
+                            uuid: u.uuid.clone(),
+                            reembedded: u.reembedded,
+                            chunks_created: u.chunks_created,
+                            chunks_deleted: u.chunks_deleted,
+                        });
+                    }
+                }
                 let deletes = std::mem::take(
                     &mut *delete_results.lock().unwrap_or_else(|e| e.into_inner()),
                 );

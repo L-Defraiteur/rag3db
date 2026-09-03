@@ -1441,6 +1441,23 @@ impl Node for ChunkRecordNode {
         ctx.metric("chunks", all_chunk_entities.len() as f64);
         ctx.metric("chunk_links", all_chunk_relations.len() as f64);
 
+        // L'autre moitié de `UpdateResult` : combien de chunks ont été créés,
+        // par parent. Le service n'existe que pendant un drain qui contient
+        // des mises à jour ; `drain` n'applique ensuite ces comptes qu'aux
+        // uuid qu'il a effectivement mis à jour, donc un autre producteur de
+        // chunks ne peut pas les fausser.
+        if let Some(compte) = ctx
+            .service::<Arc<Mutex<HashMap<String, (usize, usize)>>>>("chunk_counts")
+            .cloned()
+        {
+            let mut c = compte.lock().map_err(|e| format!("chunk_counts lock: {e}"))?;
+            for chunk in &all_chunk_entities {
+                if let Some(parent) = chunk.data.get("_parent_uuid").and_then(|v| v.as_str()) {
+                    c.entry(parent.to_string()).or_default().1 += 1;
+                }
+            }
+        }
+
         ctx.trigger("done");
         ctx.set_output("chunks", PortValue::new(
             BatchPayload::new(PortType::Entities, all_chunk_entities),
@@ -3108,6 +3125,14 @@ impl Node for RechunkDeleteNode {
             groups.entry(rec.entity_name.clone()).or_default().push(uuid);
         }
 
+        // **Le compte par uuid, pas seulement le total.** La requête rend
+        // `uuid, count(c)` : le détail était là et partait dans une somme. Il
+        // sert à `UpdateResult.chunks_deleted`, qui était un zéro écrit en dur
+        // — un nombre présenté comme une mesure et qui n'en était pas une.
+        let par_uuid = ctx
+            .service::<Arc<Mutex<HashMap<String, (usize, usize)>>>>("chunk_counts")
+            .cloned();
+
         let mut total_deleted: usize = 0;
         for (entity_name, uuids) in &groups {
             let chunk_table = format!("{entity_name}_Chunk");
@@ -3124,8 +3149,15 @@ impl Node for RechunkDeleteNode {
                 )
                 .map_err(|e| e.to_string())?;
             for row in &result.rows {
-                if let Some(cnt) = row.get(1).and_then(|v| v.as_i64()) {
-                    total_deleted += cnt as usize;
+                let Some(cnt) = row.get(1).and_then(|v| v.as_i64()) else { continue };
+                total_deleted += cnt as usize;
+                if let (Some(uuid), Some(compte)) = (row.first().and_then(|v| v.as_str()), &par_uuid) {
+                    compte
+                        .lock()
+                        .map_err(|e| format!("chunk_counts lock: {e}"))?
+                        .entry(uuid.to_string())
+                        .or_default()
+                        .0 += cnt as usize;
                 }
             }
         }
@@ -3646,8 +3678,7 @@ impl Node for UpdateRecordNode {
             .ok_or("UpdateRecordNode: 'pending_aggregates' service not registered")?;
         let results_svc = ctx.service::<Arc<Mutex<Vec<UpdateResult>>>>("update_results").cloned()
             .ok_or("UpdateRecordNode: 'update_results' service not registered")?;
-        let event_bus = ctx.service::<Arc<EventBus>>("event_bus").cloned();
-
+        
         // Group by entity_name
         let mut entity_groups: HashMap<String, Vec<usize>> = HashMap::new();
         for (i, rec) in items.iter().enumerate() {
@@ -3986,6 +4017,15 @@ impl Node for UpdateRecordNode {
                 } else {
                     UpdateStatus::Unchanged
                 };
+                // Les deux comptes restent à zéro **ici** et c'est exact : le
+                // rechunkage a lieu en aval (`rechunk_delete`, `rechunk_chunk`),
+                // ce nœud ne peut pas les connaître. `Catalog::drain` les
+                // recolle avant de rendre le résultat, et c'est lui qui émet
+                // l'événement — avec les vrais nombres.
+                //
+                // Avant, ces zéros étaient rendus tels quels et l'événement
+                // partait avec : deux champs présentés comme des mesures qui
+                // n'en étaient pas.
                 all_results.push(UpdateResult {
                     uuid: uuid.clone(),
                     entity: entity_name.clone(),
@@ -3994,17 +4034,6 @@ impl Node for UpdateRecordNode {
                     chunks_created: 0,
                     chunks_deleted: 0,
                 });
-                if found {
-                    if let Some(ref bus) = event_bus {
-                        bus.emit(CatalogEvent::EntityUpdated {
-                            entity: entity_name.clone(),
-                            uuid: uuid.clone(),
-                            reembedded,
-                            chunks_created: 0,
-                            chunks_deleted: 0,
-                        });
-                    }
-                }
             }
         }
 

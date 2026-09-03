@@ -1124,10 +1124,16 @@ fn simple_update_unchanged_no_rechunk() {
 fn simple_batch_delete_multiple() {
     let mut catalog = setup_simple_catalog(4);
 
+    // **Trois vocabulaires disjoints.** Le montage précédent donnait la même
+    // phrase aux trois — « … description content here » — et le test
+    // n'affirmait donc rien : chercher « alpha description » après avoir
+    // supprimé Alpha remontait Beta sur le mot `description`, et l'échec se
+    // lisait comme un index corrompu. Un mot propre à chacun, et l'assertion
+    // porte enfin sur la suppression.
     let products = vec![
-        make_product("Alpha", "Alpha description content here", "Alpha details", 10.0),
-        make_product("Beta", "Beta description content here", "Beta details", 20.0),
-        make_product("Gamma", "Gamma description content here", "Gamma details", 30.0),
+        make_product("Alpha", "xylophone crescendo", "arpege", 10.0),
+        make_product("Beta", "tourbillon marin", "estuaire", 20.0),
+        make_product("Gamma", "sextant nocturne", "meridien", 30.0),
     ];
     catalog.ingest_entities("Product", products).unwrap();
 
@@ -1170,7 +1176,7 @@ fn simple_batch_delete_multiple() {
 
     // BM25: Beta still searchable
     let response = catalog
-        .search("Product", "beta description", SearchOptions {
+        .search("Product", "tourbillon", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -1181,14 +1187,22 @@ fn simple_batch_delete_multiple() {
 
     // BM25: Alpha not searchable
     let response2 = catalog
-        .search("Product", "alpha description", SearchOptions {
+        .search("Product", "xylophone", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
         
         .unwrap();
-    assert_eq!(response2.results.len(), 0, "Alpha should not be searchable after batch delete");
+    let noms: Vec<String> = response2
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+        .collect();
+    assert_eq!(
+        response2.results.len(), 0,
+        "« xylophone » n'appartenait qu'à Alpha, supprimé — remonté : {noms:?}"
+    );
 }
 
 #[test]
@@ -1196,10 +1210,13 @@ fn simple_batch_delete_multiple() {
 fn simple_batch_update_multiple() {
     let mut catalog = setup_simple_catalog(4);
 
+    // Même règle qu'au-dessus : trois vocabulaires disjoints, et aucun mot du
+    // contenu qui reparaisse dans le nom. Sans quoi « Alpha original » remonte
+    // Alpha **par son titre**, et le test ne dit rien de son ancien contenu.
     let products = vec![
-        make_product("Alpha", "Alpha original description", "Alpha original details", 10.0),
-        make_product("Beta", "Beta original description", "Beta original details", 20.0),
-        make_product("Gamma", "Gamma original description", "Gamma original details", 30.0),
+        make_product("Alpha", "xylophone crescendo", "arpege", 10.0),
+        make_product("Beta", "tourbillon marin", "estuaire", 20.0),
+        make_product("Gamma", "sextant nocturne", "meridien", 30.0),
     ];
     catalog.ingest_entities("Product", products).unwrap();
 
@@ -1210,15 +1227,15 @@ fn simple_batch_update_multiple() {
     let updates = vec![
         (
             uuids[0].clone(),
-            make_product("Alpha", "Alpha NEW completely different content", "Alpha NEW details", 10.0),
+            make_product("Alpha", "clavecin baroque", "cadence", 10.0),
         ),
         (
             uuids[1].clone(),
-            make_product("Beta", "Beta original description", "Beta original details", 99.99), // only price
+            make_product("Beta", "tourbillon marin", "estuaire", 99.99), // le prix seul
         ),
         (
             uuids[2].clone(),
-            make_product("Gamma", "Gamma NEW entirely rewritten text", "Gamma NEW details", 30.0),
+            make_product("Gamma", "obsidienne fumee", "basalte", 30.0),
         ),
     ];
     for (uuid, data) in updates {
@@ -1252,20 +1269,53 @@ fn simple_batch_update_multiple() {
     assert!(matches!(results[2].status, UpdateStatus::Updated));
     assert!(results[2].reembedded);
 
+    // **Et les chunks comptent pour de vrai.** Ces deux champs étaient des
+    // zéros écrits en dur dans `UpdateRecordNode` : le rechunkage a lieu en
+    // aval, le nœud ne pouvait pas les connaître, et personne ne l'avait
+    // remarqué parce qu'aucun test ne les regardait. `Catalog::drain` les
+    // recolle maintenant depuis le service `chunk_counts`.
+    for (rang, nom) in [(0usize, "Alpha"), (2, "Gamma")] {
+        assert!(
+            results[rang].chunks_deleted >= 1,
+            "{nom} a été réécrit : ses anciens chunks devaient être supprimés, \
+             chunks_deleted={}",
+            results[rang].chunks_deleted
+        );
+        assert!(
+            results[rang].chunks_created >= 1,
+            "{nom} a été réécrit : de nouveaux chunks devaient naître, \
+             chunks_created={}",
+            results[rang].chunks_created
+        );
+    }
+    assert_eq!(
+        (results[1].chunks_deleted, results[1].chunks_created),
+        (0, 0),
+        "Beta n'a changé que de prix : aucun chunk ne devait bouger"
+    );
+
     // BM25: old Alpha content not findable
     let response = catalog
-        .search("Product", "Alpha original", SearchOptions {
+        .search("Product", "xylophone", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
         
         .unwrap();
-    assert_eq!(response.results.len(), 0, "old Alpha content should be gone");
+    let noms: Vec<String> = response
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+        .collect();
+    assert_eq!(
+        response.results.len(), 0,
+        "« xylophone » était l'ancien contenu d'Alpha, réécrit — remonté : {noms:?}"
+    );
 
     // BM25: new Alpha content findable
     let response2 = catalog
-        .search("Product", "completely different", SearchOptions {
+        .search("Product", "clavecin", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -1276,7 +1326,7 @@ fn simple_batch_update_multiple() {
 
     // BM25: Beta still findable with original content
     let response3 = catalog
-        .search("Product", "Beta original", SearchOptions {
+        .search("Product", "tourbillon", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()

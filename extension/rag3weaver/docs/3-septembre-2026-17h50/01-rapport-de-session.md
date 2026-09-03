@@ -238,13 +238,8 @@ dépense récurrente dont personne n'a énoncé le bénéfice.
   peuvent pas l'être depuis ce dépôt.
 - **Aucun de mes tests postgres n'éprouve `Strict`** : ils passent tous
   `Immediate`, et tiennent parce que l'ingestion est synchrone juste avant.
-- **Deux tests de `e2e_simple_entity` échouent, et c'est antérieur** —
-  `simple_batch_delete_multiple` et `simple_batch_update_multiple`. Vérifié en
-  remisant : ils échouent aussi sans le travail d'aujourd'hui. Le batch
-  delete/update ne retire pas l'ancien contenu de l'index plein texte ; le
-  symptôme est décrit depuis le 8 mars 2026
-  ([rapport batch CRUD](../../../docs/8-mars-2026-01h54/12-rapport-progression-batch-crud.md)).
-  Sur 50 suites E2E, c'est le seul échec.
+- **Les deux tests rouges de `e2e_simple_entity` sont réparés** — et le
+  diagnostic de mars était faux. Voir §5.
 - **Le miroir Rust de `search_base` reste couplé au graphe de production.**
   `search_in_rust`, 70 lignes dans les tests, recopie `search_base.mmd` nœud
   par nœud pour prouver que l'analyseur Mermaid et l'API Rust construisent la
@@ -252,3 +247,50 @@ dépense récurrente dont personne n'a énoncé le bénéfice.
   graphe de production oblige à éditer le miroir. **Le générer serait pire** —
   il prouverait que l'analyseur est d'accord avec l'analyseur. Le bon geste est
   un fixture minimal dédié, découplé de `search_base`.
+
+## 5. Le batch delete/update — six mois de mauvais diagnostic
+
+`simple_batch_delete_multiple` et `simple_batch_update_multiple` étaient rouges
+depuis le 8 mars 2026. Le
+[rapport de l'époque](../../../docs/8-mars-2026-01h54/12-rapport-progression-batch-crud.md)
+concluait à un index plein texte **corrompu par le `DETACH DELETE`**, et
+proposait de le reconstruire.
+
+Ce n'était pas ça. Le montage donnait la même phrase aux trois produits :
+
+```
+Alpha : "Alpha description content here"
+Beta  : "Beta  description content here"
+Gamma : "Gamma description content here"
+```
+
+Chercher « alpha description » après avoir supprimé Alpha remontait **Beta**,
+sur le mot `description`. Le test n'affirmait donc rien sur la suppression. Même
+histoire côté mise à jour, avec une seconde couche : `name` est indexé
+(`is_title`), donc « Alpha original » remontait Alpha **par son propre nom**,
+quel que soit son contenu.
+
+C'est exactement le défaut trouvé le matin même sur
+`scope_bm25_index_per_cell_never_sees_the_other_cell`. **Un test dont les
+fixtures partagent leur vocabulaire n'affirme rien** — et ici il a fait accuser
+le moteur pendant six mois.
+
+Réparé au montage : trois vocabulaires disjoints (`xylophone`, `tourbillon`,
+`sextant`), aucun mot du contenu qui reparaisse dans le nom, et un contrôle
+positif à côté de chaque assertion négative. Les deux tests passent. La
+suppression et la réécriture retirent bien l'ancien contenu de l'index.
+
+### Et un vrai défaut, trouvé en passant
+
+`UpdateResult.chunks_created` et `chunks_deleted` étaient des **zéros écrits en
+dur** dans `UpdateRecordNode`, et l'événement `EntityUpdated` partait avec les
+mêmes. Deux champs présentés comme des mesures qui n'en étaient pas — visibles
+dans la sortie du test depuis toujours (`status=Updated, reembedded=true,
+chunks_deleted=0, chunks_created=0`) sans que rien ne les regarde.
+
+Le nœud ne pouvait pas les connaître : le rechunkage a lieu en aval
+(`rechunk_delete`, `rechunk_chunk`). Les nombres existaient pourtant —
+`batch_cascade_delete_returning_count` rend `uuid, count(c)` et le détail
+partait dans une somme. Ils remontent maintenant par un service `chunk_counts`,
+recollés dans `Catalog::drain`, qui émet aussi l'événement à cet endroit pour
+qu'il ne porte plus de zéro. Le test les affirme.
