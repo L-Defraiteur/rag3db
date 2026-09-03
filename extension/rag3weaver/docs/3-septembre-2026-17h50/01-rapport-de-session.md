@@ -638,3 +638,44 @@ seraient restés verts. La divergence était **voulue** ; elle est maintenant
 
 C'est la limite de tout fondu : il n'est juste que si les copies disaient bien
 la même chose. Deux ne le disaient pas.
+
+## 12. Le lecteur choisit son chemin — et sait lequel il a pris
+
+Le relais devient **facultatif pour lire** : un lecteur peut ouvrir lui-même en
+lecture seule pendant que le démon tient la base en écriture. Facultatif, pas
+caduc — la bibliothèque liée peut être antérieure au report.
+
+Le piège est donc le choix lui-même, et il porte un nom : **jamais de repli
+silencieux**, ni vers le relais ni vers le direct. Un lecteur qui croit lire en
+direct alors qu'il passe par un relais ne peut diagnostiquer ni sa latence ni sa
+fraîcheur.
+
+`crate::acces` prend la forme qui a déjà fait ses preuves avec `MoteurTexte` —
+trois valeurs, dont une qui décide **et dit ce qu'elle a décidé** :
+
+| | |
+|---|---|
+| `Direct` | ouvre lui-même ; un refus est une **erreur nommée**, qui dit aussi que `Auto` existe |
+| `Demon` | le relais ; sans description de serveur, c'est une **erreur**, pas un repli sur le direct |
+| `Auto` (défaut) | le direct s'il marche, le relais sinon — avec un avertissement qui porte la raison du refus |
+
+Le `Lecteur` rendu porte `par: Chemin` en clair : un appelant qui mesure des
+latences ou lit un journal n'a rien à deviner.
+
+Éprouvé contre un vrai démon (`e2e_rag3daemon::un_lecteur_choisit_son_chemin_et_le_dit`) :
+le direct **s'ouvre pendant que le démon écrit** et lit les mêmes cinq notes que
+le relais ; `Auto` prend alors le direct sans un mot. Sur une bibliothèque
+antérieure, le test suit l'autre branche et vérifie que le repli **se dit**.
+
+### Et encore des tests qui ne tournaient pas
+
+`e2e_rag3daemon::deux_processus_partagent_la_base_par_le_demon` — celui qui
+porte la raison d'être du démon — n'avait pas `#[ignore]` non plus. Jamais joué
+dans une passe complète.
+
+Il en reste, et ils sont nommés ici plutôt que corrigés au jugé, parce que leur
+intention n'est pas la mienne : `e2e_avis_du_modele` (1), `e2e_demon_embeddings`
+(1), `e2e_lecture_mermaid` (2), `e2e_catalogue_gabarits` (5 sur 10). Et
+`e2e_postgres` (17) ne tourne pas non plus sous `run_e2e.sh`, faute de la
+feature `postgres` dans son jeu — celui-là, je le lance à la main à chaque fois,
+mais la passe complète ne le couvre pas.

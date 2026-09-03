@@ -98,6 +98,14 @@ pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
 pub mod rag3db_search_backend;
+
+/// Par où un lecteur atteint la base : lui-même, ou par le relais.
+///
+/// Le choix n'existe que là où les deux existent — le cœur embarqué et le
+/// démon. Sous une seule des deux features, il n'y a pas de choix à faire, donc
+/// pas de module à offrir.
+#[cfg(all(feature = "rag3db-native", feature = "daemon"))]
+pub mod acces;
 #[cfg(feature = "postgres")]
 pub mod postgres_connection;
 #[cfg(feature = "postgres")]

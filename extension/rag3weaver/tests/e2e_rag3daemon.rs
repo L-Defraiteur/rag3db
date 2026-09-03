@@ -58,7 +58,11 @@ fn prendre_tout(conn: &dyn DbConnection, qui: &str) -> Vec<i64> {
     pris
 }
 
+// `#[ignore]` comme partout ici : `run_e2e.sh` ne lance que les tests ignorés.
+// Sans lui, celui-ci était « filtered out » à chaque passe complète — jamais
+// joué, alors qu'il porte la raison d'être du démon.
 #[test]
+#[ignore]
 fn deux_processus_partagent_la_base_par_le_demon() {
     // ── Rôle enfant : se brancher sur le démon et prendre sa part ──────────
     if let Ok(adresse) = std::env::var(ADRESSE_ENFANT) {
@@ -122,7 +126,10 @@ fn deux_processus_partagent_la_base_par_le_demon() {
 
     // ── Les deux processus prennent en même temps ─────────────────────────
     let enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", "deux_processus_partagent_la_base_par_le_demon", "--nocapture"])
+        // `--ignored` : l'enfant relance ce test, qui porte désormais l'attribut.
+        // Sans ça il ne joue rien, et le parent lit son silence comme « il n'a
+        // rien pris » — un échec qui accuserait le partage au lieu du montage.
+        .args(["--exact", "deux_processus_partagent_la_base_par_le_demon", "--nocapture", "--ignored"])
         .env(ADRESSE_ENFANT, &adresse)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -172,5 +179,110 @@ fn deux_processus_partagent_la_base_par_le_demon() {
     assert_eq!(reste.rows[0][0], CypherValue::Int(0));
 
     drop(parent); // arrête le démon (Fin::Arreter)
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+// ═══ Le choix du lecteur, et ce qu'il en dit ════════════════════════════════
+
+/// **Un lecteur choisit son chemin, et sait lequel il a pris.**
+///
+/// Depuis le report de Vela, un lecteur peut ouvrir lui-même en lecture seule
+/// pendant que le démon tient la base en écriture. Le relais devient donc
+/// facultatif **pour lire** — facultatif, pas caduc : la bibliothèque liée peut
+/// être antérieure au report.
+///
+/// Ce test tient la règle qui empêche cette souplesse de devenir un piège :
+/// **jamais de repli silencieux**, ni vers le relais, ni vers le direct. Un
+/// lecteur qui croit lire en direct alors qu'il passe par un relais ne peut
+/// diagnostiquer ni sa latence ni sa fraîcheur.
+#[test]
+#[ignore]
+fn un_lecteur_choisit_son_chemin_et_le_dit() {
+    use rag3weaver::acces::{ouvrir_lecteur, Acces, Chemin};
+
+    let adresse = port_libre();
+    let dossier = std::env::temp_dir().join(format!(
+        "rag3weaver-acces-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let journal = std::env::temp_dir().join("rag3weaver-e2e-acces");
+
+    let serveur = DaemonConnection::serveur(
+        &adresse,
+        env!("CARGO_BIN_EXE_rag3daemon"),
+        dossier.to_string_lossy(),
+    )
+    .journal_dans(&journal)
+    .fin(Fin::Arreter);
+
+    // Le démon tient la base et y écrit : c'est la scène qui compte.
+    let ecrivain = DaemonConnection::assurer(&serveur)
+        .unwrap_or_else(|e| panic!("assurer : {e}\n  journal : {}", journal.join("rag3daemon.log").display()));
+    ecrivain
+        .execute("CREATE NODE TABLE Note(id INT64, texte STRING, PRIMARY KEY(id))")
+        .expect("table");
+    for i in 0..5 {
+        ecrivain
+            .execute(&format!("CREATE (:Note {{id: {i}, texte: 'note {i}'}})"))
+            .expect("insertion");
+    }
+
+    let compte = |l: &rag3weaver::acces::Lecteur| -> i64 {
+        l.conn
+            .execute("MATCH (n:Note) RETURN count(n) AS n")
+            .expect("lire")
+            .rows
+            .first()
+            .and_then(|r| r.first())
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1)
+    };
+
+    // ── Le relais, explicitement demandé ──────────────────────────────────
+    let par_relais = ouvrir_lecteur(&dossier, Acces::Demon, Some(&serveur)).expect("le relais");
+    assert_eq!(par_relais.par, Chemin::Demon);
+    assert!(par_relais.avertissements.is_empty(), "rien à signaler quand on demande le relais");
+    assert_eq!(compte(&par_relais), 5, "le relais doit lire ce qui est en base");
+
+    // ── Le direct, ou une erreur nommée ───────────────────────────────────
+    match ouvrir_lecteur(&dossier, Acces::Direct, Some(&serveur)) {
+        Ok(direct) => {
+            assert_eq!(direct.par, Chemin::Direct);
+            assert!(
+                direct.avertissements.is_empty(),
+                "un direct qui réussit n'a rien à signaler : {:?}",
+                direct.avertissements
+            );
+            assert_eq!(compte(&direct), 5, "le direct doit lire la même chose que le relais");
+            println!("▸ direct : ouvert pendant que le démon tient la base, 5 notes lues");
+
+            // Et `Auto` doit alors prendre le direct, sans un mot.
+            let auto = ouvrir_lecteur(&dossier, Acces::Auto, Some(&serveur)).expect("auto");
+            assert_eq!(auto.par, Chemin::Direct, "Auto doit préférer le direct quand il marche");
+            assert!(auto.avertissements.is_empty(), "{:?}", auto.avertissements);
+        }
+        Err(e) => {
+            // Bibliothèque antérieure au report : le direct est refusé, et
+            // l'erreur le **nomme** au lieu de rendre le message brut du cœur.
+            assert!(e.contains("accès direct demandé et refusé"), "{e}");
+            println!("▸ direct : refusé — bibliothèque antérieure au report de Vela");
+
+            // Et `Auto` se rabat **en le disant** : c'est toute la règle.
+            let auto = ouvrir_lecteur(&dossier, Acces::Auto, Some(&serveur)).expect("auto");
+            assert_eq!(auto.par, Chemin::Demon, "Auto doit se rabattre");
+            assert!(
+                auto.avertissements.iter().any(|w| w.contains("repli sur le relais")),
+                "le repli doit se dire, jamais se taire : {:?}",
+                auto.avertissements
+            );
+            assert_eq!(compte(&auto), 5);
+            println!("▸ auto   : replié sur le relais, et il le dit");
+        }
+    }
+
     let _ = std::fs::remove_dir_all(&dossier);
 }
