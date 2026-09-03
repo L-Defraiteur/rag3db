@@ -122,28 +122,69 @@ enum class IndexConstraintType : uint8_t {
 Ils ont aussi un `src/processor/map/map_index_scan_node.cpp` que nous n'avons
 pas.
 
-## 6. La décision
+## 6. La décision — après vérification de ce que la greffe sert vraiment
 
-Nos 542 lignes existent **parce que Kuzu n'avait pas de scan par index
-secondaire enfichable**. Ladybug en a un.
+**Correction d'une conclusion trop rapide.** La première version de ce document
+disait : « nos 542 lignes existent pour brancher le plein texte, la question est
+de savoir si `lucivy_fts` peut devenir un index secondaire chez eux ». C'est
+faux, et il a suffi de regarder qui appelle notre code pour le voir.
 
-La question n'est donc plus « comment fusionner nos 542 lignes » mais :
+**L'extension C++ `lucivy_fts` a été supprimée** — commit `a39698fd4`,
+*« chore(fts): supprimer l'extension C++ lucivy_fts (code mort) »*. Le plein
+texte tourne désormais entièrement en Rust dans le processus (`ShardedHandle`,
+`fts_handle.rs`) et ne touche plus le cœur C++ du tout.
 
-> **`lucivy_fts` peut-il devenir un index secondaire derrière leur interface
-> `Index`, et leur descente de prédicat sait-elle l'atteindre ?**
+Le seul consommateur vivant de notre greffe est **l'extension vecteur** :
 
-Si oui, notre patch du cœur tombe à près de zéro et devient une **extension** —
-c'est-à-dire qu'on cesse d'être un fork du cœur pour redevenir un utilisateur
-avec des extensions. C'est le meilleur cas, et le plus vexant : quelqu'un a fait
-le travail général pendant qu'on faisait le particulier.
+```
+extension/vector/src/function/vector_search_function.cpp:244:  func->isIndexScanPredicate = true;
+extension/vector/src/function/vector_search_function.cpp:30:   struct VectorSearchBindData final : IndexSearchBindData {
+```
 
-Si non, on reste sur notre fork, et on porte le coût du renommage à chaque
-reprise.
+Notre patch fait donc descendre un prédicat de **similarité vectorielle** vers un
+scan d'index HNSW. Et notre modification de `storage/index/index.h` (4 lignes)
+ajoute `finalizeDelete`, dont le commentaire dit : *« Override in extensions that
+need batched cleanup (e.g., HNSW) »*.
 
-**Prochain pas : une sonde de faisabilité d'une journée**, pas une fusion.
-Prendre leur `Index`, écrire la coquille d'un index FTS qui l'implémente en
-`SECONDARY_NON_UNIQUE`, et vérifier qu'un `WHERE` plein texte descend jusqu'à
-lui. Ça se répond par oui ou non, et ça décide de tout le reste.
+Au passage : **deux de nos cinq fichiers neufs sont morts**.
+`fts_scan_node_table.h` n'est inclus par personne, et `fts_types.h` seulement par
+lui. Environ 64 lignes à supprimer, résidus du retrait de l'extension.
+
+### Et leur généralisation ne va pas dans notre direction
+
+Les six méthodes virtuelles que Ladybug a ajoutées à `Index` :
+
+```
+lookupAll            scanPrimaryKeyRange     discardPrimaryKey
+lookupPrimaryKey     getStorageEntries       reclaimStorage
+```
+
+Toutes tournent autour de la **clé** : recherche exacte, parcours d'intervalle,
+gestion du stockage. Aucune n'a la forme d'une recherche **classée** —
+`(requête, k) → (offset, score)`. Et aucune n'est notre `finalizeDelete`.
+
+C'est cohérent avec leurs commits : ils ont généralisé pour l'**ART**, un index
+ordonné. Nous avons généralisé pour la **similarité**, qui n'est pas un
+prédicat de comparaison. **Les deux généralisations sont probablement
+orthogonales**, et dans ce cas notre patch survit à un rebasage au lieu de s'y
+dissoudre.
+
+### Ce que ça change pour la suite
+
+La question devient :
+
+> **Leur descente de prédicat peut-elle atteindre un index non ordonné, ou est-elle
+> câblée pour les comparaisons ?**
+
+- Si elle est généralisée : notre greffe se réduit, peut-être beaucoup.
+- Si elle est câblée pour l'ordre — ce que les signatures laissent croire — alors
+  nos ~478 lignes vivantes se réappliquent, et le coût du suivi reste le
+  renommage. Mais notre `IndexSearchBindData` devient une **contribution amont
+  évidente** : ils en auront besoin le jour où ils voudront pousser un prédicat
+  vectoriel ou plein texte.
+
+**Prochain pas : une sonde de faisabilité**, pas une fusion — décrite dans
+[02 — La mission](02-la-mission-et-son-critere.md).
 
 ## 7. Le coût réel du rebasage, hors du cœur
 
