@@ -44,6 +44,9 @@ impl SearchBackend for PostgresSearchBackend {
         query: &str,
         limit: usize,
         cellule: Option<(&str, &str)>,
+        filter_join: Option<&str>,
+        filter_where: Option<&str>,
+        filter_params: &[QueryParam],
     ) -> Option<Result<Vec<TextHit>, String>> {
         if fields.is_empty() {
             return Some(Ok(Vec::new()));
@@ -53,11 +56,17 @@ impl SearchBackend for PostgresSearchBackend {
         // appliquée au champ *et* à la requête : au champ pour que le
         // planificateur reconnaisse l'expression de l'index GIN, à la requête
         // pour que « cafe » et « café » aient les mêmes trigrammes.
+        //
+        // **Tout est qualifié par `n`.** Dès qu'un filtre joint la table
+        // parente, `_uuid`, `_org` et `_text` existent des deux côtés : sans
+        // préfixe, PostgreSQL refuse la requête pour ambiguïté — et un champ de
+        // chunk qui porte le même nom qu'un champ d'entité serait pris pour
+        // l'autre.
         let ou = fields
             .iter()
             .map(|f| {
                 format!(
-                    "rag3weaver.sans_accents($q) <% rag3weaver.sans_accents({f})"
+                    "rag3weaver.sans_accents($q) <% rag3weaver.sans_accents(n.{f})"
                 )
             })
             .collect::<Vec<_>>()
@@ -67,7 +76,7 @@ impl SearchBackend for PostgresSearchBackend {
             .map(|f| {
                 format!(
                     "word_similarity(rag3weaver.sans_accents($q), \
-                     rag3weaver.sans_accents({f}))"
+                     rag3weaver.sans_accents(n.{f}))"
                 )
             })
             .collect::<Vec<_>>()
@@ -77,7 +86,7 @@ impl SearchBackend for PostgresSearchBackend {
         // répondu, seulement de voir tout le texte candidat.
         let texte = fields
             .iter()
-            .map(|f| f.as_str())
+            .map(|f| format!("n.{f}"))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -98,15 +107,23 @@ impl SearchBackend for PostgresSearchBackend {
                     "cell_proj",
                     crate::connection::CypherValue::String(projet.to_string()),
                 ));
-                " AND _org = $cell_org AND _project = $cell_proj"
+                " AND n._org = $cell_org AND n._project = $cell_proj"
             }
             None => "",
         };
 
+        // **Le domaine de travail descend jusqu'ici.** Il était simplement
+        // absent : la recherche rendait les lignes filtrées comme les autres,
+        // sans erreur et sans avertissement. Le `WHERE` et sa jointure sont
+        // rendus par le dialecte, donc en SQL, pas en Cypher.
+        let jointure = filter_join.map(|j| format!(" {j}")).unwrap_or_default();
+        let filtre = filter_where.map(|w| format!(" AND ({w})")).unwrap_or_default();
+        params.extend(filter_params.iter().cloned());
+
         let sql = format!(
-            "SELECT _uuid, _row_id, GREATEST({meilleur}) AS score, \
+            "SELECT n._uuid, n._row_id, GREATEST({meilleur}) AS score, \
                     concat_ws(' ', {texte}) AS texte \
-             FROM {table} WHERE ({ou}){cloison} \
+             FROM {table} AS n{jointure} WHERE ({ou}){cloison}{filtre} \
              ORDER BY score DESC LIMIT {limit}"
         );
         let resultat = match self.conn.execute_with_params(&sql, &params) {
@@ -175,7 +192,7 @@ impl SearchBackend for PostgresSearchBackend {
         _index_name: &str,
         embedding: &[f32],
         limit: usize,
-        _filter_match: Option<&str>,
+        filter_match: Option<&str>,
         filter_where: Option<&str>,
         filter_params: &[QueryParam],
     ) -> Result<Vec<VectorHit>, String> {
@@ -186,9 +203,16 @@ impl SearchBackend for PostgresSearchBackend {
             .join(",");
 
         let where_clause = match filter_where {
-            Some(w) => format!("WHERE embedding IS NOT NULL AND {w}"),
-            None => "WHERE embedding IS NOT NULL".to_string(),
+            Some(w) => format!("WHERE n.embedding IS NOT NULL AND {w}"),
+            None => "WHERE n.embedding IS NOT NULL".to_string(),
         };
+
+        // **La jointure était jetée.** `filter_match` arrivait ici et n'était
+        // pas lu : le `WHERE` référençait un `p` que rien ne déclarait, et
+        // toute recherche vectorielle sous filtre utilisateur mourait sur
+        // « missing FROM-clause entry for table "p" ». Elle est maintenant
+        // rendue par le dialecte — donc en SQL — et recollée après la table.
+        let jointure = filter_match.map(|j| format!(" {j}")).unwrap_or_default();
 
         // **La table est aliasée `n`.** Le catalogue construit ses filtres avec
         // cet alias (`n._org = $_scope_org`), parce que c'est celui du motif
@@ -197,8 +221,8 @@ impl SearchBackend for PostgresSearchBackend {
         // plus, la requête échouait sur le `$` avant même d'y arriver. Le
         // chemin vectoriel **filtré** n'avait donc jamais tourné.
         let sql = format!(
-            "SELECT _uuid, (embedding <=> '[{embedding_str}]'::vector) AS distance \
-             FROM {table} n \
+            "SELECT n._uuid, (n.embedding <=> '[{embedding_str}]'::vector) AS distance \
+             FROM {table} AS n{jointure} \
              {where_clause} \
              ORDER BY distance \
              LIMIT {limit}"

@@ -114,13 +114,6 @@ pub struct TextHit {
 /// `pg_trgm`, où l'index vit avec les données au lieu d'être un second corpus
 /// à stocker et à tenir à jour.
 pub trait SearchBackend: Send + Sync {
-    /// Recherche plein texte servie par le backend lui-même.
-    ///
-    /// `None` = ce backend n'en sert pas, l'appelant reste sur lucivy. C'est
-    /// **trois** réponses et non deux : « je ne sais pas faire », « je sais et
-    /// voilà », « je sais et ça a échoué » — la troisième ne doit pas se
-    /// confondre avec la première, sinon un backend cassé se replierait
-    /// silencieusement et personne ne saurait pourquoi c'est lent.
     /// Ce backend sert-il le plein texte lui-même ?
     ///
     /// Se déclare séparément de `text_search` parce qu'il faut le savoir
@@ -128,6 +121,13 @@ pub trait SearchBackend: Send + Sync {
     /// à l'ingestion — donc si on écrit, ou non, un second corpus sur disque.
     fn sert_le_plein_texte(&self) -> bool { false }
 
+    /// Recherche plein texte servie par le backend lui-même.
+    ///
+    /// `None` = ce backend n'en sert pas, l'appelant reste sur lucivy. C'est
+    /// **trois** réponses et non deux : « je ne sais pas faire », « je sais et
+    /// voilà », « je sais et ça a échoué » — la troisième ne doit pas se
+    /// confondre avec la première, sinon un backend cassé se replierait
+    /// silencieusement et personne ne saurait pourquoi c'est lent.
     ///
     /// `cellule` borne la recherche à un couple `(org, project)`. **Ce n'est pas
     /// une option de confort** : sans elle, une base multi-locataire rend les
@@ -142,6 +142,14 @@ pub trait SearchBackend: Send + Sync {
         _query: &str,
         _limit: usize,
         _cellule: Option<(&str, &str)>,
+        // Le domaine de travail, rendu par le dialecte : la jointure qui
+        // expose le parent, la condition qui porte sur ses champs, et les
+        // paramètres. Un backend qui sert le plein texte **doit** les honorer
+        // ou refuser bruyamment — un filtre ignoré rend des résultats faux
+        // sans rien dire.
+        _filter_join: Option<&str>,
+        _filter_where: Option<&str>,
+        _filter_params: &[QueryParam],
     ) -> Option<Result<Vec<TextHit>, String>> {
         None
     }

@@ -2200,6 +2200,40 @@ impl Catalog {
     /// d'autres locataires.
     ///
     /// Extrait de `search` pour que les nœuds de graphe l'appellent aussi.
+    /// **Le filtre utilisateur seul**, compilé pour une table de chunks.
+    ///
+    /// La condition porte sur les champs du **parent** (`price`, `language`,
+    /// `file_path`…), qui n'existent pas sur un chunk : elle vient donc avec la
+    /// jointure qui rend `p` disponible, rendue par le dialecte.
+    ///
+    /// La cellule n'y est **pas** : elle reste un paramètre à part, pour qu'une
+    /// frontière de locataire ne dépende jamais de la présence d'un filtre.
+    /// C'est `compile_filter_for_vector` qui la recolle, et le chemin texte
+    /// natif qui la passe de son côté.
+    pub fn compile_filter_utilisateur(
+        &self,
+        entity: &str,
+        condition: Option<&FilterCondition>,
+    ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
+        let Some(cond) = condition else {
+            return Ok((None, vec![], None));
+        };
+        let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
+        let parsed = parser
+            .parse_condition(cond, entity, "p")
+            .map_err(|e| CatalogError::FilterError(e.to_string()))?;
+        let w = (!parsed.where_clauses.is_empty()).then(|| parsed.combine_where());
+        let mut clauses: Vec<String> = Vec::new();
+        if w.is_some() {
+            // La jointure chunk→parent d'abord : les jointures inter-entités
+            // qui suivent s'accrochent à `p`.
+            clauses.push(self.dialect.chunk_parent_join("n", "p", entity));
+        }
+        clauses.extend(parsed.match_clauses.iter().cloned());
+        let m = (!clauses.is_empty()).then(|| clauses.join(" "));
+        Ok((w, parsed.params, m))
+    }
+
     pub fn compile_filter_for_vector(
         &self,
         entity: &str,
@@ -2214,23 +2248,8 @@ impl Catalog {
         // moins de résultats : il **plantait**, « Cannot find property
         // file_path for n » — sur `Catalog::search` comme sur le nœud. Trouvé
         // le 27 août en câblant le domaine de travail au chemin vectoriel.
-        let (where_str, mut params, match_str) = match condition {
-            Some(cond) => {
-                let mut parser = FilterParser::new(&self.config.relations, self.dialect.as_ref());
-                let parsed = parser
-                    .parse_condition(cond, entity, "p")
-                    .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-                let w = (!parsed.where_clauses.is_empty()).then(|| parsed.combine_where());
-                let mut clauses: Vec<String> = Vec::new();
-                if w.is_some() {
-                    clauses.push(format!("MATCH (n)-[:{entity}_CHUNKED_FROM]->(p:{entity})"));
-                }
-                clauses.extend(parsed.match_clauses.iter().cloned());
-                let m = (!clauses.is_empty()).then(|| clauses.join(" "));
-                (w, parsed.params, m)
-            }
-            None => (None, vec![], None),
-        };
+        let (where_str, mut params, match_str) =
+            self.compile_filter_utilisateur(entity, condition)?;
 
         if !self.multi_cell {
             return Ok((where_str, params, match_str));
@@ -4023,6 +4042,13 @@ impl Catalog {
             None => None,
         };
 
+        // Et le même filtre pour le chemin texte **natif**, sans la cellule :
+        // là-bas c'est la base qui cherche, donc le domaine de travail descend
+        // en SQL et non en offsets. Il n'y descendait pas du tout — la
+        // recherche rendait les lignes filtrées comme les autres, sans le dire.
+        let (fu_where, fu_params, fu_join) =
+            self.compile_filter_utilisateur(entity, condition.as_ref())?;
+
         // Both KB and simple entities always have chunks
         let is_chunked = true;
 
@@ -4131,6 +4157,11 @@ impl Catalog {
                     enrich_fields, options.result_mode,
                     self.multi_cell
                         .then(|| (self.scope.org.as_str(), self.scope.project.as_str())),
+                    match (fu_join.as_deref(), fu_where.as_deref()) {
+                        (Some(j), Some(w)) => Some((j, w)),
+                        _ => None,
+                    },
+                    &fu_params,
                     diag.as_mut(), &mut search_warnings,
                 )?
             } else if is_chunked {

@@ -447,8 +447,6 @@ impl Node for BM25SearchNode {
             None => &target.bm25_fields,
         };
 
-        let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options);
-
         let mut node_warnings: Vec<String> = Vec::new();
 
         // **Le plein texte servi par la base**, quand elle sait le faire.
@@ -467,6 +465,10 @@ impl Node for BM25SearchNode {
             .cloned();
 
         if let Some(backend) = natif {
+            // Le domaine de travail descend en SQL ici, pas en offsets : c'est
+            // la base qui cherche. Même exigence que sur l'autre chemin — s'il
+            // ne peut pas descendre, on le **dit**.
+            let filtre = filtre_utilisateur_for(ctx, "BM25SearchNode", &target, &options);
             let cellule: Option<crate::scope::Scope> = options
                 .scope
                 .clone()
@@ -481,6 +483,8 @@ impl Node for BM25SearchNode {
                 // `options.scope` prime : c'est une recherche explicitement
                 // dirigée vers une autre cellule. Sinon, celle du catalogue.
                 cellule.as_ref().map(|s| (s.org.as_str(), s.project.as_str())),
+                filtre.as_ref().map(|(j, w, _)| (j.as_str(), w.as_str())),
+                filtre.as_ref().map(|(_, _, p)| p.as_slice()).unwrap_or(&[]),
                 None,
                 &mut node_warnings,
             )
@@ -514,6 +518,11 @@ impl Node for BM25SearchNode {
             );
             return Ok(());
         }
+
+        // Le chemin lucivy, lui, veut des offsets. Résolus ici et pas plus
+        // haut : le chemin natif est déjà parti avec son propre filtre, et
+        // résoudre pour rien ferait un aller de base par recherche.
+        let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options);
 
         let results = search_bm25_chunked(
             &*conn,
@@ -1314,6 +1323,43 @@ fn allowed_ids_for(
         Ok(ids) => ids,
         Err(e) => {
             ctx.warn(&format!("{node_type}: filtre non résolu ({e}) — la recherche n'est pas restreinte"));
+            None
+        }
+    }
+}
+
+/// Le **domaine de travail** rendu en SQL, pour le chemin texte natif.
+///
+/// Jumeau de [`allowed_ids_for`] : là-bas le filtre devient des offsets lucivy,
+/// ici il devient une jointure et une condition que la base applique
+/// elle-même. Même règle dans les deux cas — si le filtre ne peut pas
+/// descendre, on l'annonce plutôt que de rendre des lignes que l'appelant
+/// croyait exclues.
+fn filtre_utilisateur_for(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+) -> Option<(String, String, Vec<crate::connection::QueryParam>)> {
+    let condition = options.filter_condition.as_ref()?;
+    let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() else {
+        ctx.warn(&format!(
+            "{node_type}: un filtre est demandé mais le service 'catalog' manque — \
+             la recherche n'est pas restreinte"
+        ));
+        return None;
+    };
+    let compile = catalog
+        .lock()
+        .unwrap()
+        .compile_filter_utilisateur(&target.name, Some(condition));
+    match compile {
+        Ok((Some(w), params, Some(j))) => Some((j, w, params)),
+        Ok(_) => None,
+        Err(e) => {
+            ctx.warn(&format!(
+                "{node_type}: filtre non compilé ({e}) — la recherche n'est pas restreinte"
+            ));
             None
         }
     }

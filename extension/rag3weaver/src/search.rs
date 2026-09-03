@@ -2100,6 +2100,12 @@ pub fn search_texte_natif(
     // une seule cellule. Voir `SearchBackend::text_search` : c'est une
     // isolation de données, pas un filtre de confort.
     cellule: Option<(&str, &str)>,
+    // **Le domaine de travail.** Sur le chemin lucivy il descend en offsets
+    // (`allowed_ids`) ; ici il descend en SQL, parce que c'est la base qui
+    // cherche. Rendu par le dialecte via `Catalog::compile_filter_utilisateur`
+    // — la jointure d'abord, la condition ensuite.
+    filtre: Option<(&str, &str)>,
+    filtre_params: &[crate::connection::QueryParam],
     diagnostics: Option<&mut SearchDiagnostics>,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
@@ -2122,12 +2128,19 @@ pub fn search_texte_natif(
     let table = &target.chunk_table;
     let champs_texte = [CHAMP_TEXTE_CHUNK.to_string()];
 
+    let (filtre_join, filtre_where) = match filtre {
+        Some((j, w)) => (Some(j), Some(w)),
+        None => (None, None),
+    };
     let bruts = match backend.text_search(
         table,
         &champs_texte,
         query,
         limit * FACTEUR_RAPPEL,
         cellule,
+        filtre_join,
+        filtre_where,
+        filtre_params,
     ) {
         Some(Ok(v)) => v,
         Some(Err(e)) => {
@@ -2145,9 +2158,17 @@ pub fn search_texte_natif(
     };
 
     if bruts.is_empty() {
+        // Sous filtre, l'absence a deux causes possibles et il faut le dire :
+        // rien ne ressemble à la requête, ou rien ne passe le domaine de
+        // travail. Les confondre enverrait chercher au mauvais endroit.
+        let sous_filtre = if filtre.is_some() {
+            " dans le domaine de travail demandé"
+        } else {
+            ""
+        };
         warnings.push(format!(
-            "aucun trigramme commun entre « {query} » et {table} — sous le seuil de \
-             pg_trgm, une requête plus longue ou plus proche du texte rapportera"
+            "aucun trigramme commun entre « {query} » et {table}{sous_filtre} — sous le \
+             seuil de pg_trgm, une requête plus longue ou plus proche du texte rapportera"
         ));
         return Ok(vec![]);
     }

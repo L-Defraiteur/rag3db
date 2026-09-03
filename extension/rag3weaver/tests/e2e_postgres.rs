@@ -667,3 +667,82 @@ fn les_accents_ne_coupent_pas() {
         );
     }
 }
+
+// ═══ 9. Le filtre utilisateur tient sur les deux chemins ═════════════════════
+
+/// **Un filtre ignoré est pire qu'un filtre refusé.**
+///
+/// Le domaine de travail (« cherche, mais seulement dans ça ») descend par deux
+/// routes différentes : des offsets `allowed_ids` sur le chemin lucivy, un
+/// `WHERE` compilé sur le chemin vectoriel. Aucune des deux n'a été éprouvée
+/// sur postgres, et le chemin texte **natif** n'en reçoit aucune.
+///
+/// Les trois produits partagent la même description, donc le texte les remonte
+/// tous les trois : seul le filtre peut faire la différence. S'il ne descend
+/// pas, le test le voit ; s'il descend mal, il échoue bruyamment. C'est
+/// exactement ce qu'on veut des deux côtés.
+#[test]
+fn le_filtre_utilisateur_tient() {
+    use rag3weaver::filter::{FilterOp, FilterValue};
+
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+
+    let commun = "Ownership, lifetimes and concurrency.";
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Livre bon marche", commun, 10.0),
+                produit("Livre moyen", commun, 30.0),
+                produit("Livre cher", commun, 90.0),
+            ],
+        )
+        .unwrap();
+
+    let mut filtres = HashMap::new();
+    filtres.insert(
+        "price".to_string(),
+        FilterValue::Ops(vec![FilterOp::Lt(CypherValue::Float(20.0))]),
+    );
+
+    // Les deux chemins sont éprouvés **dans la même passe** : s'arrêter au
+    // premier échec cacherait l'état du second, et c'est précisément ce qu'on
+    // veut savoir ici.
+    let mut manques: Vec<String> = Vec::new();
+    for signal in [SearchSignals::BM25, SearchSignals::VECTOR] {
+        let reponse = match catalog.search(
+            "Product",
+            commun,
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(signal),
+                filters: filtres.clone(),
+                ..Default::default()
+            },
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                manques.push(format!("{signal:?} : la recherche filtrée échoue — {e}"));
+                continue;
+            }
+        };
+
+        let noms: Vec<String> = reponse
+            .results
+            .iter()
+            .filter_map(|r| r.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+            .collect();
+        eprintln!("{signal:?} sous filtre price<20 : {noms:?}");
+
+        if !noms.contains(&"Livre bon marche".to_string()) {
+            manques.push(format!(
+                "{signal:?} : le seul produit qui satisfait le filtre manque — {noms:?}"
+            ));
+        }
+        if noms.contains(&"Livre cher".to_string()) || noms.contains(&"Livre moyen".to_string()) {
+            manques.push(format!("{signal:?} : le filtre ne descend pas — {noms:?}"));
+        }
+    }
+    assert!(manques.is_empty(), "filtre utilisateur :\n  {}", manques.join("\n  "));
+}

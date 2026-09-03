@@ -380,6 +380,27 @@ pub trait SchemaDialect: Send + Sync {
         forward: bool,
     ) -> String;
 
+    /// Joindre un **chunk à son parent**, pour qu'un filtre puisse porter sur
+    /// les champs du parent alors que la recherche court sur les chunks.
+    ///
+    /// C'est le seul chaînon de filtrage qui était encore écrit en Cypher en
+    /// dur dans le catalogue : sur PostgreSQL, le `WHERE` compilé référençait
+    /// un `p` que la requête ne déclarait jamais, et le chemin vectoriel
+    /// **filtré** échouait sur « missing FROM-clause entry for table "p" ».
+    ///
+    /// Le défaut par défaut est le Cypher, comme partout ailleurs ici.
+    fn chunk_parent_join(
+        &self,
+        chunk_alias: &str,
+        parent_alias: &str,
+        parent_entity: &str,
+    ) -> String {
+        format!(
+            "MATCH ({chunk_alias})-[:{parent_entity}_CHUNKED_FROM]->\
+             ({parent_alias}:{parent_entity})"
+        )
+    }
+
     /// Expression for array/list length. E.g. `size(prop)` or `cardinality(prop)`.
     fn filter_size_expr(&self, prop: &str) -> String;
 
@@ -1555,6 +1576,23 @@ impl SchemaDialect for PostgresDialect {
         }
     }
 
+    /// Le chunk porte `_parent_uuid` : une seule jointure, sur une colonne
+    /// indexée (`secondary_indexes`). Passer par la table de relation
+    /// `{parent}_CHUNKED_FROM` en coûterait deux pour le même résultat.
+    fn chunk_parent_join(
+        &self,
+        chunk_alias: &str,
+        parent_alias: &str,
+        parent_entity: &str,
+    ) -> String {
+        // Pas de `internal_table` ici : les tables d'entités vivent dans le
+        // schéma courant, contrairement aux tables de relations.
+        format!(
+            "JOIN {parent_entity} AS {parent_alias} \
+             ON {parent_alias}._uuid = {chunk_alias}._parent_uuid"
+        )
+    }
+
     fn filter_size_expr(&self, prop: &str) -> String {
         format!("cardinality({prop})")
     }
@@ -1658,6 +1696,25 @@ mod tests {
         let ddl = d.create_rel_table("Doc_CHUNKED_FROM", "Doc_Chunk", "Doc", &[]);
         assert!(ddl.contains("CREATE REL TABLE IF NOT EXISTS"));
         assert!(ddl.contains("FROM Doc_Chunk TO Doc"));
+    }
+
+    /// **La jointure chunk→parent, dans les deux langues.**
+    ///
+    /// Elle était écrite en Cypher en dur dans le catalogue : sur PostgreSQL le
+    /// `WHERE` compilé référençait un `p` que la requête ne déclarait jamais,
+    /// et toute recherche sous filtre utilisateur mourait sur « missing
+    /// FROM-clause entry for table "p" ». Ce test tient les deux formes pour
+    /// qu'une seule ne reparte pas sans l'autre.
+    #[test]
+    fn la_jointure_chunk_parent_parle_les_deux_langues() {
+        assert_eq!(
+            Rag3dbDialect.chunk_parent_join("n", "p", "Product"),
+            "MATCH (n)-[:Product_CHUNKED_FROM]->(p:Product)"
+        );
+        assert_eq!(
+            PostgresDialect.chunk_parent_join("n", "p", "Product"),
+            "JOIN Product AS p ON p._uuid = n._parent_uuid"
+        );
     }
 
     #[test]

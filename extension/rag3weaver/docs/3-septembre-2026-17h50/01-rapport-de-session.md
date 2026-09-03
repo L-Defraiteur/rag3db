@@ -143,11 +143,33 @@ parce que le recouvrement est réel — le pire bruit dépasse la pire vraie req
 On n'a ni seuil, ni marque, ni notion d'introuvable. C'est le manque le plus
 visible pour qui s'en sert.
 
-### 5. Le filtre utilisateur sur le chemin texte natif
+### 5. Le filtre utilisateur sur le chemin texte natif — **fait**
 
-`search_texte_natif` reçoit la **cellule** mais pas la condition de filtre
-générale. Sur le chemin lucivy elle descend par `allowed_ids` ; ici elle n'est ni
-appliquée ni signalée. À câbler, ou à refuser bruyamment — pas à ignorer.
+`search_texte_natif` recevait la **cellule** mais pas la condition de filtre
+générale : ni appliquée, ni signalée.
+
+Le test écrit avant la correction — `le_filtre_utilisateur_tient`, trois produits
+de même description et de prix différents — en a trouvé **deux** au lieu d'un :
+
+| chemin | ce qu'il faisait |
+|---|---|
+| texte natif | rendait les trois produits sous `price < 20`, **en silence** |
+| vectoriel filtré | `missing FROM-clause entry for table "p"` — **toute** recherche sous filtre utilisateur mourait |
+
+Même cause : la jointure chunk→parent était écrite en **Cypher en dur** dans
+`compile_filter_for_vector`, alors que tout le reste du filtre passait déjà par
+le dialecte (`filter_join_clause`). Le backend postgres recevait ce `MATCH`
+sous le nom `filter_match` et le **jetait**.
+
+Corrigé par `SchemaDialect::chunk_parent_join` — `MATCH (n)-[:X_CHUNKED_FROM]->(p:X)`
+d'un côté, `JOIN X AS p ON p._uuid = n._parent_uuid` de l'autre — et par
+`compile_filter_utilisateur`, qui rend le filtre **sans la cellule** : celle-ci
+reste un paramètre à part, pour qu'une frontière de locataire ne dépende jamais
+de la présence d'un `WHERE`.
+
+Reste ouvert : le nœud de graphe avertit quand il ne peut pas compiler le filtre
+(`filtre_utilisateur_for`), mais **aucun backend ne refuse** un filtre qu'il ne
+saurait pas honorer — aujourd'hui les deux le savent, et rien ne le vérifie.
 
 ### 6. `test/api/db_locking_test.cpp` affirme un contrat mort
 
