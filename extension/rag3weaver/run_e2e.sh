@@ -171,6 +171,41 @@ cd "$WEAVER"
 # pas (e2e_code) passaient très bien.
 FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
+# ── PostgreSQL : dans la passe, ou absent **en le disant** ──────────────────
+#
+# `e2e_postgres` ne tournait pas ici : sa feature n'était pas dans le jeu, donc
+# ses dix-sept tests étaient hors de toute passe complète. On les lançait à la
+# main — c'est-à-dire qu'on y pensait, ou pas. Le backend qu'on a passé le
+# 3 septembre 2026 à construire n'était couvert par rien d'automatique.
+#
+# La suite ne se saute jamais en silence : sans base, chacun de ses tests
+# échoue en disant comment la démarrer. Faire échouer une passe entière parce
+# qu'un conteneur dort serait pourtant excessif. D'où la sonde : si postgres
+# répond, la feature entre et la suite tourne ; sinon on l'annonce **une fois,
+# en clair**, et le résumé le rappelle. Un saut annoncé n'est pas un silence.
+PG_DANS_LA_PASSE=false
+PG_RAISON=""
+PG_URL="${RAG3WEAVER_PG:-postgres://rag3weaver:rag3weaver@localhost:5433/rag3weaver_test}"
+PG_HOTE=$(printf '%s' "$PG_URL" | sed -E 's|.*@([^:/]+).*|\1|')
+PG_PORT=$(printf '%s' "$PG_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
+# `/dev/tcp` de bash plutôt que `nc` : la première version employait `nc`, qui
+# n'est **pas installé ici**. La sonde ne pouvait donc jamais répondre oui, et
+# aurait écarté postgres pour toujours en croyant l'avoir vérifié — le défaut
+# même qu'elle est censée prévenir, dans l'outil qui le prévient.
+if [ -z "${RAG3WEAVER_SANS_PG:-}" ]; then
+  if timeout 2 bash -c "echo > /dev/tcp/$PG_HOTE/$PG_PORT" 2>/dev/null; then
+    PG_DANS_LA_PASSE=true
+    FEATURES="$FEATURES,postgres"
+  else
+    PG_RAISON="rien n'écoute sur $PG_HOTE:$PG_PORT — \`docker start rag3weaver-pg\`"
+  fi
+else
+  PG_RAISON="RAG3WEAVER_SANS_PG posée"
+fi
+if [ "$PG_DANS_LA_PASSE" = false ]; then
+  echo "▸ ⚠ e2e_postgres NON JOUÉE : $PG_RAISON"
+fi
+
 CARGO_ARGS=(
   --features "$FEATURES"
 )
@@ -181,7 +216,13 @@ if [ -n "$TEST_FILE" ]; then
 else
   # Run ALL e2e test files
   for f in "$WEAVER"/tests/e2e_*.rs; do
-    CARGO_ARGS+=(--test "$(basename "${f%.rs}")")
+    nom="$(basename "${f%.rs}")"
+    # Sans la feature, ce binaire ne compile même pas : l'exclure est la seule
+    # option, et c'est pour ça que l'absence est annoncée plus haut.
+    if [ "$nom" = "e2e_postgres" ] && [ "$PG_DANS_LA_PASSE" = false ]; then
+      continue
+    fi
+    CARGO_ARGS+=(--test "$nom")
   done
 fi
 
@@ -209,6 +250,21 @@ echo "▸ Running: cargo test ${CARGO_ARGS[*]}"
 export PATH="/usr/local/cuda/bin:$PATH"
 export LD_LIBRARY_PATH="$BUILD/src:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export CUDA_ROOT="/usr/local/cuda"
+
+# ── Le régime, et pourquoi c'est `confort` par défaut ───────────────────────
+#
+# Une passe complète charge BGE-M3, MiniLM, deux rerankers et l'OCR. Rien dans
+# ce script ne disait sur quelle carte : ils prenaient donc celle du système,
+# c'est-à-dire la carte principale de Lucie, pendant qu'elle s'en sert. Le
+# 4 septembre 2026 : « ça fait encore travailler mon gpu principal ».
+#
+# `confort` existe pour ça et n'avait jamais été branché ici. Il pose les trois
+# rôles burn sur la carte la moins chargée, le rapport cyclique à 60 % et la
+# rafale à 2 048 — plus lent, et le poste reste utilisable. C'est le bon défaut
+# pour une suite qui tourne en fond ; `RAG3WEAVER_REGIME=plein` reprend la main
+# quand on veut la vitesse et qu'on n'utilise pas la machine.
+export RAG3WEAVER_REGIME="${RAG3WEAVER_REGIME:-confort}"
+echo "▸ régime = $RAG3WEAVER_REGIME (RAG3WEAVER_REGIME=plein pour la vitesse)"
 
 export RAG3DB_SHARED=1
 export RAG3DB_LIBRARY_DIR="$BUILD/src"
@@ -333,6 +389,14 @@ if [ "$SUMMARY" = true ]; then
       fi
     fi
   done
+
+  # **Une suite écartée se rappelle au résumé.** Sans cette ligne, un total
+  # vert dirait « tout passe » alors qu'un backend entier n'a pas été touché —
+  # un saut qui se déguise en succès est exactement ce qu'on répare partout
+  # ailleurs.
+  if [ "$PG_DANS_LA_PASSE" = false ]; then
+    say "  %-30s ÉCARTÉE — %s\n" "e2e_postgres" "$PG_RAISON"
+  fi
 
   say "───────────────────────────────────────────────\n"
   if [ "$TOTAL_FAILED" -eq 0 ]; then

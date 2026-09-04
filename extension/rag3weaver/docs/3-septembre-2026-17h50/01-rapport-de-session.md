@@ -673,9 +673,44 @@ antérieure, le test suit l'autre branche et vérifie que le repli **se dit**.
 porte la raison d'être du démon — n'avait pas `#[ignore]` non plus. Jamais joué
 dans une passe complète.
 
-Il en reste, et ils sont nommés ici plutôt que corrigés au jugé, parce que leur
-intention n'est pas la mienne : `e2e_avis_du_modele` (1), `e2e_demon_embeddings`
-(1), `e2e_lecture_mermaid` (2), `e2e_catalogue_gabarits` (5 sur 10). Et
-`e2e_postgres` (17) ne tourne pas non plus sous `run_e2e.sh`, faute de la
-feature `postgres` dans son jeu — celui-là, je le lance à la main à chaque fois,
-mais la passe complète ne le couvre pas.
+**Et j'en ai d'abord annoncé cinq de trop.** Mon relevé cherchait `#[ignore]`
+seul : il manquait `#[ignore = "raison"]` (trois suites qui vont bien) et
+`#[test] #[ignore]` sur une seule ligne (`e2e_hnsw_scale`, treize tests qui
+tournent très bien). Le vrai compte était **deux**, et les voici traitées — §13.
+
+## 13. Ce que la passe complète ne couvrait pas
+
+`run_e2e.sh` ne lance que les tests ignorés (`-- --ignored`). Un test sans
+l'attribut est donc « filtered out » à chaque passe : il existe, il compile, et
+il ne tourne nulle part. Quatre suites étaient dans ce cas, trouvées l'une après
+l'autre en tirant le fil du build :
+
+| suite | ce qui ne tournait pas |
+|---|---|
+| `e2e_prise_atomique` | les 5 — dont la mesure du partage entre processus |
+| `e2e_rag3daemon` | 1 des 2 — celui qui porte la raison d'être du démon |
+| `e2e_catalogue_gabarits` | 5 sur 10 — la moitié de la suite |
+| `e2e_postgres` | les 17 — voir ci-dessous |
+
+Corollaire à ne pas manquer : trois de ces tests **se relancent eux-mêmes en
+processus enfant**. L'enfant doit recevoir `--ignored` à son tour, sinon il ne
+joue rien et le parent lit son silence comme un échec — un test qui accuserait
+le code au lieu de son propre montage.
+
+### PostgreSQL entre dans la passe, ou son absence s'annonce
+
+`e2e_postgres` n'y était pas du tout : sa feature n'était pas dans le jeu. Le
+backend qu'on a passé la journée à construire n'était couvert par rien
+d'automatique — on le lançait à la main, c'est-à-dire qu'on y pensait, ou pas.
+
+La suite ne se saute jamais en silence : sans base, chacun de ses tests échoue
+en disant comment la démarrer. Mais faire échouer une passe entière parce qu'un
+conteneur dort serait excessif. D'où une sonde : si PostgreSQL répond, la
+feature entre et la suite tourne ; sinon l'écart est annoncé **au lancement et
+dans le résumé**. Un saut annoncé n'est pas un silence.
+
+**Et la sonde s'est trompée d'abord.** Écrite avec `nc`, qui n'est pas installé
+ici : elle ne pouvait jamais répondre oui, et aurait écarté PostgreSQL pour
+toujours en croyant l'avoir vérifié. Le défaut même qu'elle prévient, dans
+l'outil qui le prévient. Refaite avec le `/dev/tcp` de bash, et éprouvée
+conteneur allumé **et** éteint.

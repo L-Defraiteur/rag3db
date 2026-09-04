@@ -16,6 +16,11 @@
 //!
 //! Run with: ./run_e2e.sh --test e2e_catalogue_gabarits
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
+//!
+//! **`#[ignore]` sur chacun.** `run_e2e.sh` ne lance que les tests ignorés
+//! (`-- --ignored`) : cinq de ces dix n'en avaient pas et étaient donc
+//! « filtered out » à chaque passe complète — la moitié de la suite ne tournait
+//! nulle part. Relevé le 3 septembre 2026.
 
 mod common;
 
@@ -406,6 +411,7 @@ fn poser_un_gabarit_l_enregistre_vraiment() {
 /// redemande la liste : « gabarit 'users' inconnu » l'envoie deviner, « inconnu
 /// — il y a conversation, product, user » lui donne la réponse dans le refus.
 #[test]
+#[ignore]
 fn un_gabarit_inconnu_nomme_ses_voisins() {
     use rag3weaver::template::lire;
     let e = lire(&builtin_root(), Family::Entity, "users").expect_err("'users' n'existe pas");
@@ -417,6 +423,7 @@ fn un_gabarit_inconnu_nomme_ses_voisins() {
 /// vraiment quelque chose. Sans cette vérification, un motif silencieusement
 /// ignoré produirait une entité qui a l'air correcte.
 #[test]
+#[ignore]
 fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
     use rag3weaver::template::{lire, preparer_entity};
     let racine = builtin_root();
@@ -442,6 +449,7 @@ fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
 /// se repose sans le réécrire. Le test fait l'aller-retour complet dans une
 /// racine de projet jetable.
 #[test]
+#[ignore]
 fn un_gabarit_adopte_se_repose() {
     use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
 
@@ -480,6 +488,7 @@ fn un_gabarit_adopte_se_repose() {
 /// fourni sans demander la permission, et sans que le nom change — sinon toute
 /// la chaîne (recherche, `place`, documentation) parle d'autre chose.
 #[test]
+#[ignore]
 fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
     use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, scan_racines, Header};
 
@@ -526,6 +535,7 @@ fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
 /// gabarit existe sur le disque et reste introuvable — un agent enterrerait son
 /// propre travail sans le savoir.
 #[test]
+#[ignore]
 fn un_gabarit_sans_description_est_refuse() {
     use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
     let projet = tempfile::tempdir().expect("tempdir");

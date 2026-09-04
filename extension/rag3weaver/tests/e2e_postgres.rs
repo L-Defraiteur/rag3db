@@ -18,6 +18,17 @@
 //! **La suite ne se saute pas en silence.** Si la base n'est pas là, chaque
 //! test échoue en disant comment la démarrer : un « 0 passed » vert est un saut
 //! déguisé, et c'est précisément ce qu'on essaie de ne plus faire.
+//!
+//! **`#[ignore]` sur chacun, comme partout ici**, et depuis le 3 septembre 2026
+//! cette suite entre dans la passe complète : `run_e2e.sh` sonde le port de
+//! PostgreSQL, ajoute la feature s'il répond, et **annonce l'écart** sinon —
+//! au lancement et dans le résumé. Elle n'était couverte par rien
+//! d'automatique jusque-là ; on la lançait à la main, c'est-à-dire qu'on y
+//! pensait, ou pas.
+//!
+//! ```bash
+//! ./run_e2e.sh --test e2e_postgres        # avec le conteneur démarré
+//! ```
 
 #![cfg(feature = "postgres")]
 
@@ -207,6 +218,7 @@ fn catalogue_avec(
 // ═══ 1. Le schéma se pose ════════════════════════════════════════════════════
 
 #[test]
+#[ignore]
 fn le_schema_se_pose() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog
@@ -241,6 +253,7 @@ fn le_schema_se_pose() {
 // ═══ 2. L'ingestion écrit vraiment ═══════════════════════════════════════════
 
 #[test]
+#[ignore]
 fn l_ingestion_ecrit_des_lignes() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -292,6 +305,7 @@ fn l_ingestion_ecrit_des_lignes() {
 // ═══ 3. pgvector répond ══════════════════════════════════════════════════════
 
 #[test]
+#[ignore]
 fn le_vecteur_classe() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -327,6 +341,7 @@ fn le_vecteur_classe() {
 // C'est exactement le genre de « devrait » que cette soirée a puni trois fois.
 
 #[test]
+#[ignore]
 fn le_plein_texte_trouve() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -407,6 +422,7 @@ fn le_plein_texte_trouve() {
 // ═══ 5. Les deux signaux fusionnent ══════════════════════════════════════════
 
 #[test]
+#[ignore]
 fn l_hybride_fusionne() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -486,6 +502,7 @@ fn variante(label: &str) -> BTreeMap<String, CypherValue> {
 }
 
 #[test]
+#[ignore]
 fn les_relations_tiennent() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -545,6 +562,7 @@ fn les_relations_tiennent() {
 // ═══ 7. Les cellules se séparent ═════════════════════════════════════════════
 
 #[test]
+#[ignore]
 fn les_cellules_se_separent() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -634,6 +652,7 @@ fn les_cellules_se_separent() {
 // ═══ 8. Les accents ne coupent pas la recherche ══════════════════════════════
 
 #[test]
+#[ignore]
 fn les_accents_ne_coupent_pas() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -693,6 +712,7 @@ fn les_accents_ne_coupent_pas() {
 /// pas, le test le voit ; s'il descend mal, il échoue bruyamment. C'est
 /// exactement ce qu'on veut des deux côtés.
 #[test]
+#[ignore]
 fn le_filtre_utilisateur_tient() {
     use rag3weaver::filter::{FilterOp, FilterValue};
 
@@ -787,6 +807,7 @@ fn le_filtre_utilisateur_tient() {
 /// C'est le **bruit proche** qui décide : s'il monte au-dessus des requêtes
 /// dégradées, aucun seuil ne sépare, et il faut marquer plutôt que filtrer.
 #[test]
+#[ignore]
 fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -1060,6 +1081,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
 /// dégradée (qui doit passer) et le meilleur bruit proche (qui ne doit pas).
 /// Une marge large veut dire qu'un seuil y tient sans trembler.
 #[test]
+#[ignore]
 fn les_poids_du_combo_se_mesurent() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
@@ -1200,6 +1222,7 @@ fn les_poids_du_combo_se_mesurent() {
 /// corpus, et vérifie qu'ils trouvent tous deux — pas qu'ils trouvent la même
 /// chose : chacun classe à sa sauce, c'est le but.
 #[test]
+#[ignore]
 fn les_trois_moteurs_de_texte_marchent() {
     use rag3weaver::search_backend::MoteurTexte;
 
@@ -1290,6 +1313,7 @@ fn les_trois_moteurs_de_texte_marchent() {
 /// Cypher : deux implémentations d'un même trait tenues à la main divergent, et
 /// la garde n'est pas la bonne volonté.
 #[test]
+#[ignore]
 fn la_reprise_apres_incident_tient_sur_postgres() {
     let (_garde, ctx, _catalog) = catalogue(8);
     let conn: Arc<dyn DbConnection> = Arc::new(
@@ -1306,6 +1330,7 @@ fn la_reprise_apres_incident_tient_sur_postgres() {
 /// appelée est une pièce qui se dégrade sans bruit — c'est le défaut qu'on a
 /// passé la journée à débusquer.
 #[test]
+#[ignore]
 fn le_catalogue_monte_le_magasin_de_checkpoints() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     assert!(
@@ -1370,6 +1395,7 @@ fn le_catalogue_monte_le_magasin_de_checkpoints() {
 /// Deux catalogues sur la même base tiennent lieu de deux processus : ils ont
 /// des files séparées, ce qui est exactement la propriété en cause.
 #[test]
+#[ignore]
 fn la_marque_deau_traverse_la_frontiere() {
     let (_garde, ctx, mut ecrivain) = catalogue(8);
     ecrivain.register_entity("Product", config_produit()).unwrap();
@@ -1434,6 +1460,7 @@ fn la_marque_deau_traverse_la_frontiere() {
 /// Sans cette ligne, la garantie se dégraderait exactement comme avant — en
 /// silence.
 #[test]
+#[ignore]
 fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
     let (_garde, ctx, mut ecrivain) = catalogue(8);
     ecrivain.register_entity("Product", config_produit()).unwrap();
@@ -1498,6 +1525,7 @@ fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
 /// Ce test tient la formulation. Il n'est pas cosmétique : c'est la différence
 /// entre « le moteur n'a rien » et « une de ses deux moitiés n'a rien ».
 #[test]
+#[ignore]
 fn la_marque_de_confiance_nomme_son_signal() {
     let (_garde, _ctx, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
