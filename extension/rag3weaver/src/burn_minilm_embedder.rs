@@ -44,6 +44,9 @@ const MAX_SEQ_LEN: usize = 512;
 pub struct BurnMiniLmEmbedder {
     graph: MiniLmGraph,
     tokenizer: Mutex<Tokenizer>,
+    /// Textes tronqués depuis l'ouverture. Cumulé, jamais remis à zéro : c'est
+    /// l'appelant qui sait ce qu'il a déjà dit.
+    troncatures: std::sync::atomic::AtomicUsize,
     device: Device,
 }
 
@@ -81,6 +84,7 @@ impl BurnMiniLmEmbedder {
         Ok(Self {
             graph,
             tokenizer: Mutex::new(tokenizer),
+            troncatures: std::sync::atomic::AtomicUsize::new(0),
             device,
         })
     }
@@ -111,6 +115,18 @@ impl BurnMiniLmEmbedder {
             .encode_batch(refs, true)
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
         drop(tokenizer);
+
+        // Ce qui a été coupé. `Encoding::truncate` range la part perdue dans
+        // `overflowing` : c'est le seul signal exact par texte — la longueur
+        // ne dirait rien, le rembourrage étant sur le plus long du lot.
+        let coupes = encodings
+            .iter()
+            .filter(|e| !e.get_overflowing().is_empty())
+            .count();
+        if coupes > 0 {
+            self.troncatures
+                .fetch_add(coupes, std::sync::atomic::Ordering::Relaxed);
+        }
 
         let batch = encodings.len();
         let seq = encodings
@@ -172,5 +188,12 @@ impl Embedder for BurnMiniLmEmbedder {
 
     fn dim(&self) -> usize {
         HIDDEN_SIZE
+    }
+
+    fn troncatures(&self) -> Option<(usize, usize)> {
+        Some((
+            self.troncatures.load(std::sync::atomic::Ordering::Relaxed),
+            MAX_SEQ_LEN,
+        ))
     }
 }

@@ -65,6 +65,22 @@ pub trait Embedder: Send + Sync {
         "?"
     }
 
+    /// **Combien de textes ce modèle a tronqués**, et la limite qu'il applique.
+    ///
+    /// `None` : il ne tronque pas, ou ne sait pas le dire.
+    ///
+    /// Une troncature n'échoue jamais. Le texte amputé est embarqué et indexé
+    /// sous le nom du texte entier ; une recherche sur ce qui a été coupé rend
+    /// alors « ça n'existe pas » pour un contenu qui existe. C'est la forme la
+    /// plus chère du défaut — plausible et faux, rien ne casse — et c'est
+    /// exactement celle que `is_mock` existe pour éviter par ailleurs.
+    ///
+    /// Le compte est **cumulé depuis l'ouverture** : à l'appelant de mémoriser
+    /// ce qu'il a déjà signalé.
+    fn troncatures(&self) -> Option<(usize, usize)> {
+        None
+    }
+
     /// **Le modèle vit-il ailleurs ?**
     ///
     /// Sert à une règle et une seule : **celui qui touche la carte souffle**

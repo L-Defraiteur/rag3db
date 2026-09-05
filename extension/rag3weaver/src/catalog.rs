@@ -130,6 +130,9 @@ pub struct Catalog {
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
     pending: PendingWork,
+    /// Combien de troncatures d'embarquement ont **déjà été dites**. Le modèle
+    /// compte depuis son ouverture ; c'est ici qu'on sait ce qui est neuf.
+    troncatures_signalees: usize,
     drain_counters: DrainCounters,
     event_bus: EventBus,
     kb_metadata: HashMap<String, KBMetadata>,
@@ -214,6 +217,7 @@ impl Catalog {
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
+            troncatures_signalees: 0,
             drain_counters: DrainCounters::default(),
             // 1024 : un agent émet quelques événements par appel d'outil et
             // par nœud ; un graphe de trace qui draine entre deux tours ne
@@ -2799,7 +2803,11 @@ impl Catalog {
         let (entity_records, unchanged) = self.split_unchanged(entity_name, &entity_config, entity_records);
         if entity_records.is_empty() {
             self.flush_blob_store("ingest");
-            return Ok(FlushResult { processed: record_count, ..Default::default() });
+            return Ok(FlushResult {
+                processed: record_count,
+                unchanged: record_count,
+                ..Default::default()
+            });
         }
         if unchanged > 0 && std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
             eprintln!("[ingest-profile] {entity_name} : {unchanged}/{record_count} inchangés, travail dérivé sauté");
@@ -2868,6 +2876,11 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
+        // sur le chemin natif l'index vit avec les données et il n'y a rien à
+        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
+        // que `has_sparse` et `has_dual` juste au-dessus.
+        services.register("plein_texte_natif", self.plein_texte_natif());
         // Le plein texte servi par la base : présent **seulement** si c'est le
         // chemin choisi. Passer par un service et non par le catalogue est
         // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
@@ -2902,6 +2915,10 @@ impl Catalog {
         // déjà, le runtime la publie.
         let profile = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
         let mut rx = profile.then(|| runtime.subscribe());
+        // Un second abonné, avec son propre curseur : le bloc de profilage
+        // ci-dessous n'existe que sous variable d'environnement, et les
+        // avertissements des nœuds ne peuvent pas dépendre de ça.
+        let mut ecoute = runtime.subscribe();
 
         let graph_def = graph.to_definition();
         let execution_id = format!(
@@ -2979,9 +2996,12 @@ impl Catalog {
                 // commités par ce graphe restaient dans le tampon jusqu'au
                 // prochain drain — ou au Drop.
                 self.flush_blob_store("ingest");
+                self.signaler_les_troncatures("ingest_entities");
                 Ok(FlushResult {
                     processed: record_count,
                     failed: kb_failed,
+                    unchanged,
+                    warnings: ramasser_les_avertissements(&mut ecoute),
                     ..Default::default()
                 })
             }
@@ -3627,6 +3647,11 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
+        // sur le chemin natif l'index vit avec les données et il n'y a rien à
+        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
+        // que `has_sparse` et `has_dual` juste au-dessus.
+        services.register("plein_texte_natif", self.plein_texte_natif());
         // Le plein texte servi par la base : présent **seulement** si c'est le
         // chemin choisi. Passer par un service et non par le catalogue est
         // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
@@ -3706,6 +3731,8 @@ impl Catalog {
 
         let node_count = graph.nodes.len();
         let runtime = DataflowRuntime::with_services(node_count + 20, services);
+        // S'abonner **avant** d'exécuter, sinon on ne voit rien.
+        let mut ecoute = runtime.subscribe();
 
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
@@ -3721,6 +3748,10 @@ impl Catalog {
         } else {
             runtime.execute(&mut graph)
         };
+
+        // Dans les deux branches : un drain qui échoue a d'autant plus de
+        // raisons d'avoir prévenu avant de mourir.
+        let avertissements = ramasser_les_avertissements(&mut ecoute);
 
         let outcome = match result {
             Ok(_output) => {
@@ -3762,9 +3793,15 @@ impl Catalog {
                 let deletes = std::mem::take(
                     &mut *delete_results.lock().unwrap_or_else(|e| e.into_inner()),
                 );
+                let inchanges = updates
+                    .iter()
+                    .filter(|u| u.status == crate::records::UpdateStatus::Unchanged)
+                    .count();
                 FlushResult {
                     processed: op_count,
                     failed: 0,
+                    unchanged: inchanges,
+                    warnings: avertissements,
                     update_results: updates,
                     delete_results: deletes,
                 }
@@ -3777,7 +3814,12 @@ impl Catalog {
                 });
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count, ..Default::default() }
+                FlushResult {
+                    processed: 0,
+                    failed: op_count,
+                    warnings: avertissements,
+                    ..Default::default()
+                }
             }
         };
 
@@ -3786,7 +3828,45 @@ impl Catalog {
         // store did anyway. What's not flushed here is retried at the next
         // boundary, never dropped.
         self.flush_blob_store("drain");
+        self.signaler_les_troncatures("drain");
         outcome
+    }
+
+    /// Dit ce que le modèle d'embarquement a **coupé** depuis le dernier
+    /// compte rendu.
+    ///
+    /// Une troncature n'échoue pas : le texte amputé est embarqué et indexé
+    /// sous le nom du texte entier, et une recherche sur la part coupée rend
+    /// « ça n'existe pas » pour un contenu qui existe. Rien ne casse, et c'est
+    /// pour ça que ça coûte cher.
+    ///
+    /// Le chiffre est parlant : le MiniLM multilingue tronque à **128 jetons**
+    /// par défaut, quand la taille de chunk vaut 1 500 caractères — soit à peu
+    /// près le tiers gardé sur de la prose, moins sur du code.
+    ///
+    /// **Ce n'est pas la correction**, c'est le refus de se taire. La
+    /// correction est de dériver la taille de chunk de la limite du modèle
+    /// (idée de février, jamais tenue) ; elle change une surface de
+    /// configuration, donc elle ne se décide pas ici.
+    fn signaler_les_troncatures(&mut self, contexte: &str) {
+        let Some((total, limite)) = self.embedder.troncatures() else {
+            return;
+        };
+        if total <= self.troncatures_signalees {
+            return;
+        }
+        let neuves = total - self.troncatures_signalees;
+        self.troncatures_signalees = total;
+        let nom = self.embedder.name().to_string();
+        self.emit_event(CatalogEvent::Warning {
+            context: contexte.to_string(),
+            message: format!(
+                "{neuves} texte(s) tronqué(s) à {limite} jetons par « {nom} » : ce qui \
+                 dépassait n'a pas été embarqué, et n'est donc pas trouvable par le \
+                 vecteur — alors que la ligne, elle, est complète en base. Réduisez la \
+                 taille de chunk de l'entité, ou prenez un modèle à fenêtre plus large."
+            ),
+        });
     }
 
     /// Push buffered index blobs to the database, at a commit boundary.
@@ -3951,6 +4031,11 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
+        // sur le chemin natif l'index vit avec les données et il n'y a rien à
+        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
+        // que `has_sparse` et `has_dual` juste au-dessus.
+        services.register("plein_texte_natif", self.plein_texte_natif());
         // Le plein texte servi par la base : présent **seulement** si c'est le
         // chemin choisi. Passer par un service et non par le catalogue est
         // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
@@ -4058,6 +4143,11 @@ impl Catalog {
         // Les nœuds BM25 et sparse cherchent dans les index Rust ouverts par le
         // catalogue — pas dans la base.
         services.register("fts_handles", self.fts_handles.clone());
+        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
+        // sur le chemin natif l'index vit avec les données et il n'y a rien à
+        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
+        // que `has_sparse` et `has_dual` juste au-dessus.
+        services.register("plein_texte_natif", self.plein_texte_natif());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register::<Arc<dyn Embedder>>("embedder", self.embedder.clone());
         if let Some(ref sparse) = self.sparse_embedder {
@@ -6025,6 +6115,69 @@ mod tests {
         );
     }
 
+    // ── Ce que les nœuds disent, et qui remonte ───────────────────────
+
+    fn journal(node: &str, level: crate::dataflow::NodeLogLevel, text: &str)
+        -> crate::dataflow::DataflowEvent
+    {
+        crate::dataflow::DataflowEvent::NodeLog {
+            node: node.to_string(),
+            node_type: "T".to_string(),
+            level,
+            text: text.to_string(),
+        }
+    }
+
+    /// Le ramassage garde les avertissements et les erreurs, et jette le reste.
+    /// C'est ce qui fait qu'un drain cesse de rendre un compte plein et un
+    /// silence complet.
+    #[test]
+    fn le_ramassage_garde_ce_qui_alerte_et_jette_le_bavardage() {
+        use crate::dataflow::NodeLogLevel;
+
+        let (tx, rx) = async_broadcast::broadcast(64);
+        let mut rx = rx;
+        tx.try_broadcast(journal("insert", NodeLogLevel::Info, "42 lignes"))
+            .expect("info");
+        tx.try_broadcast(journal("insert", NodeLogLevel::Warn, "aucun index ouvert"))
+            .expect("warn");
+        tx.try_broadcast(journal("kb", NodeLogLevel::Error, "service absent"))
+            .expect("error");
+        drop(tx);
+
+        let vus = ramasser_les_avertissements(&mut rx);
+        assert_eq!(vus.len(), 2, "l'info n'a rien à faire là : {vus:?}");
+        assert!(vus[0].starts_with("insert : "), "le nœud est nommé : {vus:?}");
+        assert!(vus[0].contains("aucun index ouvert"));
+        assert!(vus[1].starts_with("kb : "));
+    }
+
+    /// Et quand le canal déborde, il le **dit** : un avertissement perdu en
+    /// silence serait exactement le défaut qu'on répare.
+    #[test]
+    fn le_ramassage_avoue_ce_que_le_canal_a_perdu() {
+        use crate::dataflow::NodeLogLevel;
+
+        let (mut tx, rx) = async_broadcast::broadcast(2);
+        tx.set_overflow(true);
+        let mut rx = rx;
+        for i in 0..5 {
+            tx.try_broadcast(journal("n", NodeLogLevel::Warn, &format!("ligne {i}")))
+                .expect("débordement, pas refus");
+        }
+        drop(tx);
+
+        let vus = ramasser_les_avertissements(&mut rx);
+        assert!(
+            vus.iter().any(|v| v.contains("débordé")),
+            "le débordement doit se dire : {vus:?}"
+        );
+        assert!(
+            vus.iter().any(|v| v.contains("ligne 4")),
+            "et ce qui reste doit sortir quand même : {vus:?}"
+        );
+    }
+
     /// L'unique écrivain de la consigne, pris directement : ce que les deux
     /// chemins de recherche partagent désormais. L'avertissement compte autant
     /// que le verdict — `partial` ne s'affiche nulle part dans la fiche rendue
@@ -6499,6 +6652,46 @@ mod tests {
     }
 }
 
+
+/// Ramasse ce que les **nœuds** ont dit pendant une exécution de graphe.
+///
+/// Ils le disaient déjà par `ctx.warn` — un lot sauté, un service absent, une
+/// indexation impossible — et ça devenait un `DataflowEvent::NodeLog` que
+/// personne n'écoutait côté ingestion. Un drain pouvait donc rendre un compte
+/// plein et un silence complet, ce qui est exactement le défaut qu'on a réparé
+/// côté recherche : ce qui n'est pas remontable n'est pas dit.
+///
+/// **Sans danger pour l'exécution** : l'émetteur fait `try_broadcast` sur un
+/// canal en débordement (`set_overflow(true)`), il n'attend donc jamais un
+/// receveur. En contrepartie le canal écarte le plus ancien quand il déborde,
+/// et sur un très gros graphe des lignes peuvent manquer — le receveur le dit,
+/// et on le répète plutôt que de le cacher.
+fn ramasser_les_avertissements(
+    ecoute: &mut async_broadcast::Receiver<crate::dataflow::DataflowEvent>,
+) -> Vec<String> {
+    let mut avertissements = Vec::new();
+    loop {
+        match ecoute.try_recv() {
+            Ok(crate::dataflow::DataflowEvent::NodeLog { node, level, text, .. }) => {
+                if matches!(
+                    level,
+                    crate::dataflow::NodeLogLevel::Warn | crate::dataflow::NodeLogLevel::Error
+                ) {
+                    avertissements.push(format!("{node} : {text}"));
+                }
+            }
+            Ok(_) => {}
+            Err(async_broadcast::TryRecvError::Overflowed(perdus)) => {
+                avertissements.push(format!(
+                    "{perdus} événement(s) perdus — le canal a débordé ; il peut manquer \
+                     des avertissements de nœuds ici"
+                ));
+            }
+            Err(_) => break,
+        }
+    }
+    avertissements
+}
 
 impl Drop for Catalog {
     /// Filet de sécurité : un `Catalog` peut sortir de portée sans `shutdown()`.

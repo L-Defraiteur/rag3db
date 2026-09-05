@@ -69,6 +69,41 @@ impl InsertRecordNode {
 }
 
 
+/// **Les tables qu'on écrit sans l'index plein texte qu'elles réclament.**
+///
+/// `Catalog::open_fts_handles_for` porte depuis longtemps le commentaire qui
+/// décrit ce défaut sans pouvoir l'empêcher : sans handle ouvert, l'indexation
+/// est sautée, la recherche rend zéro, et rien ne le signale. Un commentaire
+/// n'est pas un contrat — voici la règle, et elle est appelée par les deux
+/// nœuds qui écrivent (`InsertRecordNode` pour les entités, `KBUpdateNode`
+/// pour les lignes d'index).
+///
+/// Elle est **exacte**, donc sans fausse alerte :
+///
+/// - sur le chemin **natif** il n'y a aucun handle à ouvrir — l'index vit avec
+///   les données — donc jamais d'alarme ;
+/// - `reclamees` ne contient que ce qui déclare le signal BM25 ; une table de
+///   chunks n'y est pas (son index vit sur la table parente), une entité sans
+///   plein texte non plus.
+///
+/// Le résultat est trié et dédoublonné : une alarme par table, pas par ligne.
+pub(crate) fn tables_sans_index_plein_texte<T>(
+    natif: bool,
+    reclamees: impl IntoIterator<Item = String>,
+    ouvertes: &HashMap<String, T>,
+) -> Vec<String> {
+    if natif {
+        return Vec::new();
+    }
+    let mut manquantes: Vec<String> = reclamees
+        .into_iter()
+        .filter(|t| !ouvertes.contains_key(t))
+        .collect();
+    manquantes.sort();
+    manquantes.dedup();
+    manquantes
+}
+
 impl Node for InsertRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -114,6 +149,41 @@ impl Node for InsertRecordNode {
                 .entry((rec.entity_name.clone(), columns))
                 .or_default()
                 .push(i);
+        }
+
+        // **L'indexation sautée en silence.** `Catalog::open_fts_handles_for`
+        // porte depuis longtemps le commentaire qui décrit ce défaut sans
+        // pouvoir l'empêcher : sans handle ouvert, l'indexation est sautée, la
+        // recherche rend zéro, et rien ne le signale. Un commentaire n'est pas
+        // un contrat — voici l'alarme. Elle atteint désormais l'appelant :
+        // `drain` et `ingest_entities` ramassent les avertissements des nœuds
+        // dans leur `FlushResult`.
+        //
+        // La règle est exacte, donc sans fausse alerte : on ne se plaint que si
+        // le moteur n'est **pas** natif (sur le chemin natif il n'y a aucun
+        // handle à ouvrir, l'index vit avec les données) **et** que l'entité
+        // déclare le signal BM25. Une table de chunks n'est pas dans
+        // `entity_configs`, elle ne déclenche donc rien — c'est voulu, son index
+        // vit sur la table parente.
+        let natif = ctx.service::<bool>("plein_texte_natif").copied().unwrap_or(false);
+        {
+            let configs = ctx
+                .service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+                .cloned();
+            if let (Some(handles), Some(configs)) = (fts_handles.as_ref(), configs) {
+                let reclamees = groups
+                    .keys()
+                    .map(|(nom, _)| nom.clone())
+                    .filter(|nom| configs.get(nom).is_some_and(|c| c.signals.bm25()));
+                for nom in tables_sans_index_plein_texte(natif, reclamees, handles) {
+                    ctx.warn(&format!(
+                        "aucun index plein texte ouvert pour « {nom} », qui déclare \
+                         pourtant le signal BM25 : ses champs texte ne sont pas indexés \
+                         et une recherche rendra zéro sans autre explication. Il manque \
+                         un open_fts_handles_for() sur ce point d'entrée d'ingestion."
+                    ));
+                }
+            }
         }
 
         ctx.metric("items", items.len() as f64);
@@ -2586,6 +2656,30 @@ impl Node for KBUpdateNode {
             groups.entry(&rec.kb_name).or_default().push(i);
         }
 
+        // Le pendant KB du silence d'`InsertRecordNode` : sans handle ouvert
+        // sur `{kb}_Index`, l'indexation de la ligne d'index est sautée sans un
+        // mot. Même règle exacte — moteur non natif, et la KB déclare BM25.
+        let natif = ctx.service::<bool>("plein_texte_natif").copied().unwrap_or(false);
+        {
+            let metas = ctx
+                .service::<HashMap<String, KBMetadata>>("kb_metadata")
+                .cloned();
+            if let (Some(handles), Some(metas)) = (fts_handles.as_ref(), metas) {
+                let reclamees = groups
+                    .keys()
+                    .filter(|kb| metas.get(**kb).is_some_and(|m| m.signals.bm25()))
+                    .map(|kb| format!("{kb}_Index"));
+                for table in tables_sans_index_plein_texte(natif, reclamees, handles) {
+                    ctx.warn(&format!(
+                        "aucun index plein texte ouvert pour « {table} », dont la base de \
+                         connaissances déclare pourtant le signal BM25 : les lignes d'index \
+                         écrites ici ne seront pas trouvables par mots-clés. Il manque un \
+                         open_fts_handles_for() sur ce point d'entrée d'ingestion."
+                    ));
+                }
+            }
+        }
+
         let mut total_updated: usize = 0;
         let mut total_deleted: usize = 0;
 
@@ -4230,6 +4324,48 @@ fn reindex_fts_rows(
 
 #[cfg(test)]
 mod tests {
+    use super::tables_sans_index_plein_texte as sans_index;
+    use std::collections::HashMap;
+
+    fn ouvertes(noms: &[&str]) -> HashMap<String, ()> {
+        noms.iter().map(|n| ((*n).to_string(), ())).collect()
+    }
+
+    fn veut(noms: &[&str]) -> Vec<String> {
+        noms.iter().map(|n| (*n).to_string()).collect()
+    }
+
+    /// Sur le chemin natif, l'index vit avec les données : il n'y a aucun
+    /// handle à ouvrir, donc jamais d'alarme. Sans cette clause, chaque
+    /// ingestion native crierait au loup.
+    #[test]
+    fn le_chemin_natif_ne_crie_jamais() {
+        assert!(sans_index(true, veut(&["Doc", "Product"]), &ouvertes(&[])).is_empty());
+    }
+
+    /// Le cas qu'on veut attraper : une entité qui réclame le plein texte et
+    /// qu'on écrit sans index ouvert. La recherche rendra zéro, et c'était le
+    /// seul indice.
+    #[test]
+    fn une_table_reclamee_sans_handle_est_nommee() {
+        let vus = sans_index(false, veut(&["Doc", "Product"]), &ouvertes(&["Product"]));
+        assert_eq!(vus, vec!["Doc".to_string()]);
+    }
+
+    /// Une alarme par table, pas par ligne : les groupes d'un même lot
+    /// répètent le nom autant de fois qu'il y a de jeux de colonnes.
+    #[test]
+    fn une_alarme_par_table_et_triee() {
+        let vus = sans_index(false, veut(&["Zebre", "Doc", "Doc", "Alpha"]), &ouvertes(&[]));
+        assert_eq!(vus, vec!["Alpha".to_string(), "Doc".to_string(), "Zebre".to_string()]);
+    }
+
+    /// Et rien à dire quand tout est en place — le silence est correct ici.
+    #[test]
+    fn tout_ouvert_ne_dit_rien() {
+        assert!(sans_index(false, veut(&["Doc"]), &ouvertes(&["Doc"])).is_empty());
+    }
+
     use super::*;
     use crate::config::{EntityConfig, SimpleFieldDef, FieldType};
     use crate::chunker::{Chunker, ChunkerConfig};

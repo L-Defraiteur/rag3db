@@ -106,7 +106,27 @@ impl EntityRef {
         &self.entity
     }
 
-    /// Temp UUID assigned at creation. Does not change after resolution.
+    /// **Clé de corrélation provisoire, pas une identité.**
+    ///
+    /// Elle a le format d'un UUID, elle n'existe dans aucune base, et elle
+    /// **ne change pas** après résolution : c'est le seul accès de ce type qui
+    /// rend toujours quelque chose de crédible, là où [`Self::uuid`] rend
+    /// honnêtement `Err(Pending)` tant que rien n'est écrit. Un appelant qui la
+    /// prend pour l'identité de l'entité écrira une clé étrangère vers une
+    /// ligne qui n'existera jamais, sans qu'aucune erreur ne se lève.
+    ///
+    /// Son emploi légitime est unique : **corréler un ref à travers une
+    /// frontière de sérialisation**. `RecordRefState` la stocke et
+    /// [`EntityRef::pre_resolved`] la restaure, pour qu'une reprise après
+    /// checkpoint ou une annulation retrouve le même ref. C'est pour cela
+    /// qu'elle survit à la résolution.
+    ///
+    /// Elle n'a pas été renommée : son nom voyage dans des champs sérialisés
+    /// (`RecordRefState.temp_uuid`, `from_temp_uuid`, `to_temp_uuid`), et un
+    /// renommage traverserait des checkpoints déjà écrits. Le nom reste, le
+    /// contrat est ici.
+    ///
+    /// **Pour l'identité, et seulement elle : [`Self::uuid`].**
     pub fn temp_uuid(&self) -> &str {
         &self.temp_uuid
     }

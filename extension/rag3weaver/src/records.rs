@@ -93,6 +93,30 @@ pub struct DeleteResult {
 pub struct FlushResult {
     pub processed: usize,
     pub failed: usize,
+    /// Combien, parmi les `processed`, n'ont demandé **aucun travail** : déjà en
+    /// base, identiques, artefacts dérivés présents.
+    ///
+    /// Sans ce compte, le court-circuit de l'inchangé rendait exactement ce que
+    /// rend une vraie ingestion de la même taille — l'appelant ne pouvait pas
+    /// distinguer « j'ai tout réécrit » de « je n'ai rien eu à faire ». C'est
+    /// aussi ce que la synchronisation d'un catalogue doit savoir dire :
+    /// *93 inchangés, 2 modifiés, 5 nouveaux, 3 disparus*.
+    ///
+    /// Un booléen n'aurait pas suffi : sur un lot, les deux cas coexistent.
+    pub unchanged: usize,
+    /// Ce que les **nœuds** ont signalé pendant l'exécution : un lot sauté, un
+    /// service absent, une indexation impossible.
+    ///
+    /// Ils le disaient déjà par `ctx.warn`, ce qui devenait un
+    /// `DataflowEvent::NodeLog` qu'aucun appelant du drain n'écoutait. Un drain
+    /// pouvait donc rendre un compte plein et un silence complet — c'est la
+    /// même correction que pour la recherche, où un avertissement moteur ne
+    /// remontait nulle part.
+    ///
+    /// Le canal des événements a une capacité de 128 et **écarte le plus
+    /// ancien** quand il déborde : sur un très gros drain, des lignes peuvent
+    /// manquer. Quand ça arrive, c'est dit ici aussi.
+    pub warnings: Vec<String>,
     pub update_results: Vec<UpdateResult>,
     pub delete_results: Vec<DeleteResult>,
 }
