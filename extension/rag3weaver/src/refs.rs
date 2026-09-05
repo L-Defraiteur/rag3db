@@ -4,7 +4,9 @@
 //! `(RelationRef, RelationRefResolver)` pairs — consumer/producer split
 //! via `tokio::sync::watch`.
 //!
-//! - `EntityRef`: Clone, read-only. `uuid()` sync, `ready()` async.
+//! - `EntityRef`: Clone, read-only. `uuid()` et `ready()` sont **synchrones** —
+//!   voir [`EntityRef::ready`] : l'attente est bornée, elle ne rend pas la main
+//!   au runtime.
 //! - `EntityRefResolver`: write-only, consumed on `resolve()` or `fail()`.
 //! - Same pattern for relations, resolving to `RelResolved { from_uuid, to_uuid }`.
 
@@ -45,6 +47,22 @@ pub enum RefError {
     #[error("ref failed: {0}")]
     Failed(String),
 }
+
+/// Combien de temps `ready()` attend une résolution avant d'abandonner.
+///
+/// Il fallait une borne : la boucle était infinie et **sans pause**, si bien
+/// qu'un `ready()` sur un ref jamais résolu brûlait un cœur pour toujours au
+/// lieu d'échouer. Le cas nominal ne l'atteint jamais — dans le drain, un ref
+/// est résolu par un nœud amont, sur le même fil, et l'état est déjà `Ready`
+/// au premier tour. La borne ne sert donc qu'au cas fautif : un `create()`
+/// suivi d'un `ready()` sans drain entre les deux, où la résolution ne peut
+/// arriver de nulle part.
+pub const ATTENTE_RESOLUTION_MS: u64 = 30_000;
+
+/// Pause entre deux tours d'attente. Assez courte pour que le cas croisé
+/// (résolution par un autre fil) ne se paie pas en latence, assez longue pour
+/// que l'attente ne soit pas une attente active.
+const PAS_D_ATTENTE_US: u64 = 200;
 
 // ─── Entity Ref ─────────────────────────────────────────────────────────────
 
@@ -134,10 +152,16 @@ impl EntityRef {
         }
     }
 
-    /// Wait asynchronously for resolution.
+    /// Attend la résolution. **Synchrone et bornée**, malgré ce que disait la
+    /// ligne précédente (« wait asynchronously ») : il n'y a ni `await` ni
+    /// rendez-vous avec un runtime ici.
     ///
-    /// Returns immediately if already resolved/failed.
+    /// Rend tout de suite si le ref est déjà résolu ou en échec — c'est le cas
+    /// nominal, celui du drain, où un nœud amont a résolu avant. Sinon attend
+    /// jusqu'à [`ATTENTE_RESOLUTION_MS`] puis rend `RefError::Failed` en
+    /// nommant la cause probable, au lieu de tourner indéfiniment.
     pub fn ready(&mut self) -> Result<String, RefError> {
+        let debut = std::time::Instant::now();
         loop {
             {
                 let state = self.rx.borrow();
@@ -150,6 +174,14 @@ impl EntityRef {
             if self.rx.has_changed().is_err() {
                 return Err(RefError::Failed("channel closed".to_string()));
             }
+            if debut.elapsed().as_millis() as u64 >= ATTENTE_RESOLUTION_MS {
+                return Err(RefError::Failed(format!(
+                    "ref d'entité {} jamais résolu après {} ms — \
+                     il manque probablement un drain() entre le create() et cette attente",
+                    self.entity, ATTENTE_RESOLUTION_MS,
+                )));
+            }
+            std::thread::sleep(std::time::Duration::from_micros(PAS_D_ATTENTE_US));
         }
     }
 }
@@ -289,8 +321,10 @@ impl RelationRef {
         }
     }
 
-    /// Wait asynchronously for resolution.
+    /// Attend la résolution. Même contrat que [`EntityRef::ready`] : synchrone,
+    /// borné par [`ATTENTE_RESOLUTION_MS`], et jamais une attente active.
     pub fn ready(&mut self) -> Result<RelResolved, RefError> {
+        let debut = std::time::Instant::now();
         loop {
             {
                 let state = self.rx.borrow();
@@ -303,6 +337,13 @@ impl RelationRef {
             if self.rx.has_changed().is_err() {
                 return Err(RefError::Failed("channel closed".to_string()));
             }
+            if debut.elapsed().as_millis() as u64 >= ATTENTE_RESOLUTION_MS {
+                return Err(RefError::Failed(format!(
+                    "ref de relation jamais résolu après {ATTENTE_RESOLUTION_MS} ms — \
+                     il manque probablement un drain() entre le link() et cette attente",
+                )));
+            }
+            std::thread::sleep(std::time::Duration::from_micros(PAS_D_ATTENTE_US));
         }
     }
 }

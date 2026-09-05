@@ -4283,18 +4283,23 @@ impl Catalog {
             self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
         }
 
-        let pending_count = self.pending.total_count();
-
         // Consistency
         let mut strict_warnings: Vec<String> = Vec::new();
+        // Les écritures des **autres** processus ont-elles été attendues avec
+        // succès ? Faux seulement en `Strict`, et seulement si l'attente a
+        // échoué — marques illisibles, marques périmées, ou délai dépassé.
+        let mut ecritures_ailleurs_atteintes = true;
         match options.consistency {
             search::Consistency::Strict => {
                 // Notre file d'abord — c'est tout ce que `Strict` savait faire.
                 self.drain();
                 // Puis celle des autres. Un lecteur d'un autre processus ne
                 // peut pas la vider ; il peut attendre qu'elle le soit, et
-                // **dire** quand il n'y arrive pas.
-                self.attendre_les_ecritures(options.timeout_ms, &mut strict_warnings);
+                // **dire** quand il n'y arrive pas. Son verdict comptait pour
+                // les avertissements mais pas pour `partial` : une attente qui
+                // expirait rendait donc un résultat annoncé complet.
+                ecritures_ailleurs_atteintes =
+                    self.attendre_les_ecritures(options.timeout_ms, &mut strict_warnings);
             }
             search::Consistency::Eventual => {
                 if self.has_pending() {
@@ -4303,6 +4308,15 @@ impl Catalog {
             }
             search::Consistency::Immediate => {}
         }
+
+        // **Après** la consigne, pas avant. Ce compte était pris en tête de
+        // fonction, ce qui le rendait faux dans les deux sens : en `Strict` il
+        // annonçait une file que le drain venait de vider, et en `Eventual` —
+        // le défaut — `flush_insertions` ne pose que les entités et laisse
+        // relations et agrégats en file, dont personne n'entendait parler
+        // puisque `partial` ne regardait que `Immediate`. Une recherche pouvait
+        // donc manquer une ligne d'index KB en se disant complète.
+        let pending_count = self.pending.total_count();
 
         // Resolve signals: per-query override > target default
         let signals = options.signals.unwrap_or(target.default_signals);
@@ -4640,8 +4654,9 @@ impl Catalog {
                 target: name.to_string(),
                 signals,
                 consistency: options.consistency,
-                partial: pending_count > 0
-                    && options.consistency == search::Consistency::Immediate,
+                // Incomplet si du travail reste chez nous, ou si celui des
+                // autres processus n'a pas pu être attendu.
+                partial: pending_count > 0 || !ecritures_ailleurs_atteintes,
                 pending_count,
                 warnings: std::mem::take(&mut search_warnings),
                 vector_count,
@@ -5934,6 +5949,66 @@ mod tests {
         assert!(!catalog.has_pending());
     }
 
+    /// Le pendant du test ci-dessus, côté lecture : puisque `flush_insertions`
+    /// laisse le lien et l'agrégat en file, une recherche `Eventual` rend un
+    /// résultat qui peut manquer une ligne d'index KB. Elle l'annonçait
+    /// pourtant comme complet — `partial` ne regardait que `Immediate`, et
+    /// `pending_count` était pris **avant** la consigne de cohérence.
+    #[test]
+    fn recherche_eventual_avoue_le_travail_restant() {
+        use crate::search::{Consistency, SearchOptions};
+
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog
+            .create("Document", make_doc_data("Partiel", "corps"))
+            .unwrap();
+
+        let reponse = catalog
+            .search("main", "test", SearchOptions::default())
+            .unwrap();
+
+        assert_eq!(reponse.meta.consistency, Consistency::Eventual, "le défaut");
+        assert!(
+            catalog.has_pending(),
+            "le lien et l'agrégat restent en file après flush_insertions"
+        );
+        assert!(
+            reponse.meta.pending_count > 0,
+            "le compte doit être celui d'après la consigne, pas d'avant"
+        );
+        assert!(
+            reponse.meta.partial,
+            "du travail reste en file : le résultat est partiel, et doit le dire"
+        );
+    }
+
+    /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc
+    /// tout ce qui était en attente y est encore, et le résultat reste partiel.
+    #[test]
+    fn recherche_immediate_reste_partielle() {
+        use crate::search::{Consistency, SearchOptions};
+
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog
+            .create("Document", make_doc_data("Partiel", "corps"))
+            .unwrap();
+
+        let avant = catalog.pending.total_count();
+        let opts = SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        };
+        let reponse = catalog.search("main", "test", opts).unwrap();
+
+        assert_eq!(
+            reponse.meta.pending_count, avant,
+            "Immediate ne vide rien : le compte est inchangé"
+        );
+        assert!(reponse.meta.partial);
+    }
+
     // ── filter_condition priority ─────────────────────────────────────
 
     #[test]
@@ -6361,6 +6436,24 @@ impl Drop for Catalog {
     /// connexion déjà libérée — ce qui se manifeste par un SIGSEGV, pas par une
     /// erreur Rust.
     fn drop(&mut self) {
+        // Un `Catalog` détruit avec du travail en file le perdait **sans un
+        // mot** : `create`/`update`/`delete`/`link` avaient rendu `Ok`, et rien
+        // n'a jamais été écrit. C'est le mensonge d'acquittement dans sa forme
+        // la plus nette — on ne peut pas drainer ici (le drain peut échouer, et
+        // un `Drop` n'a personne à qui rendre une erreur), mais on peut refuser
+        // de se taire. La marque d'ingestion, elle, reste posée et périmera
+        // toute seule : un lecteur d'un autre processus saura donc aussi.
+        if !self.pending.is_empty() {
+            let p = &self.pending;
+            eprintln!(
+                "[rag3weaver] drop: {} opérations en file perdues, jamais écrites \
+                 ({} entités, {} relations, {} agrégats, {} mises à jour, {} suppressions) \
+                 — il manque un drain() avant la destruction du catalogue",
+                p.total_count(),
+                p.entities.len(), p.relations.len(), p.aggregates.len(),
+                p.updates.len(), p.deletes.len(),
+            );
+        }
         if !self.fts_handles.is_empty() || !self.parked_fts.is_empty() {
             let (_, failed) = self.close_fts_handles();
             for f in failed {
