@@ -23,52 +23,113 @@ C'est le même principe qui a fait passer le second backend devant le reste :
 *prouver ce qui porte avant d'ajouter ce qui pèse*. Je l'avais appliqué aux
 backends et sous-appliqué ici.
 
-## 1. Les écrivains multi-processus — **la question à poser avant la tâche**
+## 1. La vraie concurrence, **sur rag3db**
 
-### Elle est peut-être déjà résolue, et il faut le savoir d'abord
+### Ce que « vraie » veut dire, en trois clauses
 
-**PostgreSQL accepte plusieurs écrivains, nativement.** C'est ce que fait toute
-base serveur. Si le produit cloud tourne sur PostgreSQL — ce qui est
-l'hypothèse la plus probable pour du multi-locataire élastique — alors la
-faisabilité est **déjà acquise**, et ce qui reste à faire est de le *mesurer*
-plutôt que de le construire.
+Lucie, mot pour mot :
 
-Le mur du verrou unique est celui de **rag3db**, une base *embarquée*. C'est une
-propriété de cette famille-là, pas un défaut : SQLite et DuckDB font pareil.
+> deux choses qui sont ok d'écrire en même temps le sont, et les opérations ne
+> sont pas mises en queue alors que les clients pensent que c'est fini — c'est
+> fait à la demande sur le coup, malgré un truc qui arbitre « tiens vous écrivez
+> la même ressource, attendez, je drive ça l'un après l'autre ».
+>
+> et je le veux pour rag3db, c'est ça le challenge.
 
-**Donc la première question n'est pas « comment faire plusieurs écrivains »,
-c'est « sur quel backend tourne le produit cloud ».** Selon la réponse :
+Trois exigences, et aucune n'est celle que j'avais notée :
 
-| si le cloud tourne sur… | ce qu'il reste à faire |
-|---|---|
-| **PostgreSQL** | mesurer plusieurs catalogues écrivains sur la même base : cloisonnement, files d'ingestion concurrentes, marque d'eau à plusieurs, cohérence des index lucivy/sparse partagés |
-| **rag3db** | un gestionnaire de verrous inter-processus, précédé de la relecture du MVCC de Vela |
-| **les deux** | les deux, et le second est de loin le plus cher |
+1. **Le parallélisme est réel, pas simulé.** Deux écritures qui ne se gênent pas
+   se font **en même temps**. Pas de sérialisation globale.
+2. **Un acquittement veut dire fait.** Aucune file qui rend la main pendant que
+   le client croit l'opération terminée.
+3. **L'arbitrage est à la ressource, pas à la base.** Le conflit se détecte là où
+   il est — même ressource — et se règle en faisant attendre, pas en faisant
+   attendre tout le monde.
 
-Une demi-journée de mesure sur PostgreSQL peut donc rendre la moitié du sujet
-sans écrire de moteur. C'est par là qu'il faut commencer.
+**Et c'est sur rag3db**, la base embarquée. Ma note précédente proposait de
+regarder « sur quel backend tourne le cloud » et concluait que PostgreSQL
+réglerait la moitié du sujet : **c'est à côté de la question.** Contourner le mur
+n'est pas l'abattre, et c'est l'abattre qui est l'objectif.
 
-### Ce qu'on sait déjà, et qui ne suffit pas
+### La clause 2 est déjà violée, et c'est chez nous
 
-Trois configurations, et l'état au 5 septembre :
+Avant tout travail sur le cœur C++, il faut voir que **notre propre contrat
+d'écriture ment aujourd'hui** :
 
-| | état |
-|---|---|
-| plusieurs fils écrivains, un processus | oui, par le report d'un fork — **non adopté** |
-| plusieurs processus **lecteurs** | **oui, mesuré** — 80 ouvertures pendant qu'on écrit, zéro refus |
-| plusieurs processus **écrivains** | **non**, sur rag3db |
+| appel | ce qu'il fait | honnête ? |
+|---|---|---|
+| `ingest_entities` | exécute son graphe et rend un `FlushResult` | **oui** — quand il rend, c'est écrit |
+| `create` / `update` / `delete` | poussent dans `Catalog::pending` **en mémoire** et rendent | **non** — le client croit que c'est fait |
+| `drain()` | fait le travail | — |
 
-Ce qui a été bâti pour les lecteurs sert déjà les écrivains le jour venu : la
-**marque d'eau d'ingestion** publie ce qu'un processus n'a pas encore vidé, et
-elle est écrite pour plusieurs écrivains — une marque par écrivain, avec
-péremption. Elle n'a été **éprouvée qu'à un seul**.
+`create` rend un `EntityRef` après une mise en file. Rien n'est en base. Le
+défaut est de la famille qu'on passe nos journées à sortir : **ce n'est pas une
+erreur, c'est un silence** — et il a déjà produit sa conséquence, la marque
+d'eau d'ingestion, qui existe précisément parce qu'un lecteur d'un autre
+processus ne pouvait pas savoir qu'une file invisible existait.
 
-### Le préalable qui n'est pas à nous
+**C'est réparable indépendamment du C++, et ça doit l'être en premier** : ça ne
+demande rien au moteur de stockage, et ça rend la suite mesurable. Un
+acquittement qui ment fausserait toute mesure de concurrence qu'on ferait
+ensuite.
 
-Sur rag3db, le plancher est le **MVCC de Vela** : rotation de WAL, points de
-reprise non bloquants. **Personne ne l'a relu.** On ne pose pas un gestionnaire
-de verrous inter-processus sur une couche de stockage qui suppose un écrivain
-unique — et c'est la session du cœur C++ qui est chez elle sur ce terrain.
+Mais il y a une tension à trancher, et elle est réelle : **la file existe pour
+grouper**. Les écritures partent en `UNWIND`, les embarquements par lots GPU.
+Rendre chaque `create` synchrone tuerait le débit d'ingestion. Deux sorties
+possibles, et c'est un choix de conception, pas une évidence :
+
+- **le lot est explicite** — `create` devient synchrone et lent, et qui veut du
+  débit appelle `ingest_entities`, qui est déjà honnête ;
+- **ou l'acquittement porte son état** — `create` rend un reçu qui dit « en
+  attente », sur lequel on peut attendre. Le client ne croit plus rien à tort.
+
+La seconde garde le débit et respecte la clause 2, au prix d'un type de plus
+dans l'API.
+
+### Ce que la clause 1 et la clause 3 demandent au cœur
+
+Là, c'est le C++, et c'est le gros morceau. Aujourd'hui un second processus **ne
+peut pas ouvrir** la base en écriture : `LocalFileSystem::openFile` pose un
+`F_WRLCK` en `F_SETLK`, refus immédiat ; et `TransactionManager::beginTransaction`
+refuse une seconde transaction d'écriture — le seul réglage qui le relâche
+s'appelle `debug_enable_multi_writes`, ce qui dit son statut.
+
+Trois pièces, dans cet ordre :
+
+1. **Relire le MVCC de Vela.** C'est le plancher, et personne ne l'a fait :
+   rotation de WAL, points de reprise non bloquants. C'est lui qui décide si on
+   bâtit dessus ou si on le remplace, et on ne pose pas d'arbitrage fin sur une
+   couche qui suppose un écrivain unique. **Préalable, pas première tâche.**
+2. **Un gestionnaire de verrous inter-processus.** Le verrou de fichier actuel
+   rend l'accès *impossible*, pas *ordonné* — c'est déjà ce qu'on a écrit à
+   propos de `Consistency`. Il faut un arbitre qui vive hors des processus.
+3. **La granularité.** C'est elle qui distingue la clause 1 de la clause 3 :
+   sans granularité fine, tout arbitrage dégénère en verrou global, et « deux
+   choses qui peuvent s'écrire en même temps » ne s'écrivent jamais en même
+   temps. C'est ce que le MVCC donne, et c'est pour ça que le point 1 le précède.
+
+### L'ordre, et ce qui est mesurable tout de suite
+
+| | qui | dépend de |
+|---|---|---|
+| **a.** L'acquittement cesse de mentir | Rust, ici | rien |
+| **b.** Relire le MVCC de Vela | cœur C++ | rien |
+| **c.** Verrous inter-processus | cœur C++ | b |
+| **d.** Arbitrage à la ressource | cœur C++ + Rust | b, c |
+| **e.** Mesurer : deux écrivains disjoints en parallèle, deux écrivains en conflit sérialisés | ici | a, d |
+
+**a** et **b** peuvent partir en même temps, sur deux terrains disjoints.
+
+### Ce qui est déjà là et qui servira
+
+- La **marque d'eau d'ingestion** est écrite pour **plusieurs** écrivains — une
+  marque par écrivain, avec péremption pour qu'un processus mort ne gèle
+  personne. Elle n'a été **éprouvée qu'à un seul**.
+- La **lecture concurrente** est acquise et mesurée : 80 ouvertures pendant
+  qu'on écrit, zéro refus.
+- Le **choix de chemin d'un lecteur** — direct ou par le relais — existe déjà,
+  avec la règle qui empêchera la même souplesse de devenir un piège côté
+  écriture : jamais de repli silencieux.
 
 ## 2. La lecture des documents
 
