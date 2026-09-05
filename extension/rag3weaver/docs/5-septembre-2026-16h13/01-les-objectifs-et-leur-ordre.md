@@ -73,18 +73,80 @@ demande rien au moteur de stockage, et ça rend la suite mesurable. Un
 acquittement qui ment fausserait toute mesure de concurrence qu'on ferait
 ensuite.
 
-Mais il y a une tension à trancher, et elle est réelle : **la file existe pour
-grouper**. Les écritures partent en `UNWIND`, les embarquements par lots GPU.
-Rendre chaque `create` synchrone tuerait le débit d'ingestion. Deux sorties
-possibles, et c'est un choix de conception, pas une évidence :
+### Le faux dilemme, et la sortie — **deux niveaux de disponibilité**
 
-- **le lot est explicite** — `create` devient synchrone et lent, et qui veut du
-  débit appelle `ingest_entities`, qui est déjà honnête ;
-- **ou l'acquittement porte son état** — `create` rend un reçu qui dit « en
-  attente », sur lequel on peut attendre. Le client ne croit plus rien à tort.
+J'avais posé le choix comme « honnêteté **contre** débit » : rendre `create`
+synchrone tuerait l'ingestion, donc il faudrait un reçu. Lucie a écarté le
+dilemme en observant qu'il repose sur une confusion :
 
-La seconde garde le débit et respecte la clause 2, au prix d'un type de plus
-dans l'API.
+> pour une ingestion c'est compréhensible que ce soit en arrière-plan, mais pour
+> un truc genre « tiens, mon consumer a acheté un produit aujourd'hui », bof.
+>
+> les gens devraient pouvoir se dire « j'ai besoin juste des données, pas de la
+> recherche pour cette requête, le moteur est donc prêt » ou « j'ai besoin de la
+> recherche, est-ce que le moteur est prêt, j'attends jusqu'à ce que… » — et le
+> « j'attends que ce soit prêt » devient un forçage synchrone si on veut
+> vraiment.
+
+**Les deux coûts ne sont pas dans la même partie de l'écriture.** Poser une
+ligne est bon marché ; la rendre *trouvable* — chunker, embarquer, indexer — est
+cher, et c'est ça qui a besoin de lots. Les séparer ne sacrifie donc rien : ça
+récupère le groupage là où il compte et le supprime là où il ne servait à rien.
+
+| niveau | ce qui est vrai | coût | qui en a besoin |
+|---|---|---|---|
+| **donnée** | la ligne est en base, lisible, cohérente | faible | « mon client a acheté un produit » |
+| **recherchable** | les index dérivés sont à jour — plein texte, vecteur, sparse | élevé, par lots | « trouve-moi les clients qui… » |
+
+Trois conséquences :
+
+- **Le niveau « donnée » devient synchrone par défaut.** C'est le cas que Lucie
+  nomme, et c'est celui où la file est indéfendable : un achat qu'on acquitte
+  sans l'écrire est un bug, pas une optimisation.
+- **Le niveau « recherchable » reste en arrière-plan**, légitimement, et
+  l'appelant peut **attendre** qu'il soit atteint. C'est ce qu'elle appelle le
+  forçage synchrone : non pas un mode, mais une **attente choisie**.
+- **Le contrat cesse de mentir sans rien coûter au débit.** Ce qui était un
+  compromis devient une distinction.
+
+### La symétrie qu'on n'avait pas vue
+
+C'est **le même axe que `Consistency`, par l'autre bout.**
+
+| | qui parle | ce qu'il dit |
+|---|---|---|
+| écriture | l'écrivain | *ce qu'il a rendu prêt* |
+| lecture (`Consistency`) | le lecteur | *ce dont il a besoin d'être prêt* |
+
+Deux notions bâties séparément, à des semaines d'intervalle, qui posent la même
+question. Et la **marque d'eau** est ce qui les relie à travers la frontière du
+processus — sauf qu'aujourd'hui elle est **binaire** : « cet écrivain a du
+travail non publié », sans dire lequel.
+
+Elle devrait publier **par niveau** : les lignes sont posées jusqu'à ici, les
+index sont bâtis jusque-là. Un lecteur qui ne veut que la donnée n'attendrait
+alors pas l'indexation — ce qu'il fait aujourd'hui, et qui est du gaspillage
+autant que du mensonge.
+
+**Et la granularité y revient, exactement comme dans la clause 3.** Deux entités
+peuvent être à deux niveaux différents : l'une posée et indexée, l'autre posée
+seulement. Une marque globale répondrait « pas prêt » pour tout le monde à cause
+d'une seule. La même idée que l'arbitrage à la ressource plutôt qu'à la base, et
+c'est la deuxième fois qu'elle sort la même journée — c'est probablement qu'elle
+est structurelle.
+
+### Ce que ça coûte, et ce qui reste ouvert
+
+- Une **API qui change** : les écritures prennent un niveau, ou rendent de quoi
+  attendre. C'est un vrai changement de surface, pas un ajout.
+- **« Recherchable » est-il une seule chose ?** Le plein texte, le vecteur et le
+  sparse se commitent séparément. Un appelant qui ne veut que du BM25 attendrait
+  pour rien l'embarquement GPU. Trois niveaux plutôt que deux, ou un niveau par
+  signal — **à ne pas trancher avant d'avoir un cas qui le demande**. Commencer
+  à deux.
+- L'idée vaut **au-delà de l'écriture**, et c'est Lucie qui le note : un agent
+  aussi devrait pouvoir dire « je n'ai pas besoin de la recherche pour cette
+  requête ». Une requête déclare la disponibilité qu'elle exige.
 
 ### Ce que la clause 1 et la clause 3 demandent au cœur
 
