@@ -4376,9 +4376,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "ld-lucivy"
-version = "3.0.8"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f08285a20ac96a8dd57e70e0c2c649e47a4afc523a98d0405175147a55b0d31a"
+checksum = "d09fed02a97ce516ef6e482742f9e33e66fb95015eff272573b1a6d63e2c7ad9"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -4707,18 +4707,18 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "luciole"
-version = "3.0.8"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83ba50669ca1739a05612c2292ed8eebd415569d602660702a4d2658c400f526"
+checksum = "0887225ff45ac6219240714f6a79ece9a53bfddeebf18d8f187276f85a2bb168"
 dependencies = [
  "flume",
 ]
 
 [[package]]
 name = "lucistore"
-version = "3.0.8"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a38adc689bb091098e48572957a86e1df5fb130c3a5ee4abc6eeb7a88b6cea7c"
+checksum = "654caf0f9eaf3d50600ee2b5c3dfa761d12ab14093ee1d06205a261fed857207"
 dependencies = [
  "serde",
  "serde_json",
@@ -4726,9 +4726,9 @@ dependencies = [
 
 [[package]]
 name = "lucivy-core"
-version = "3.0.8"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db8a5d9870dccb07e6dddad2a631999d8a83807b5a6659a84d3efac92e3058b9"
+checksum = "f681bf0f03060109311dc7dbb1e8c78142e3b2299ef3321d538aa23bbebfb6e4"
 dependencies = [
  "ld-lucivy",
  "luciole",
@@ -6845,9 +6845,9 @@ dependencies = [
 
 [[package]]
 name = "sparse-vector"
-version = "3.0.8"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630dfc8779cadad3471bfcb25d3e029f1eb698919c7d9db590de9ba0dcf491c3"
+checksum = "818bd9d1ca17433724088c950e500d31013820363b91cfc416952bf5b76b8f97"
 dependencies = [
  "bincode",
  "crc32fast",

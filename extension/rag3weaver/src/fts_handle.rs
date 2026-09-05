@@ -39,12 +39,25 @@ pub fn fts_index_name(table: &str) -> String {
     format!("Lucivy_{table}")
 }
 
-/// Construit le `SchemaConfig` v3 d'une table à partir de ses champs texte.
+/// Construit le `SchemaConfig` v4 d'une table à partir de ses champs texte.
 ///
 /// Le JSON est celui qu'attendent aussi les bindings Python/Node — il se
-/// désérialise directement en `SchemaConfig`. `sfx_version: 3` est le défaut
-/// pour tout nouvel index, mais on l'écrit explicitement : c'est le comportement
-/// qu'on veut figer, pas celui qu'on subit.
+/// désérialise directement en `SchemaConfig`. `sfx_version: 4` est le défaut
+/// depuis lucivy 4.0.0, mais on l'écrit explicitement : c'est le comportement
+/// qu'on veut figer, pas celui qu'on subit — le jour où le défaut bougera
+/// encore, nos index ne bougeront pas avec lui sans qu'on l'ait décidé.
+///
+/// La v4, c'est le **dictionnaire partagé** : chaque texte de jeton stocké une
+/// fois par shard au lieu d'une fois par segment. ~20 % de disque et de RAM en
+/// moins pour les mêmes comptes, les mêmes spans et les mêmes scores. Ce qu'on
+/// paie : l'indexation coûte ×1,5 le temps de la v3 au lieu de ×2, et une
+/// requête ×1,2 à ×1,6 à cache froid (les floues, elles, vont plus vite). Le
+/// compromis a été mesuré côté lucivy, pas supposé ici.
+///
+/// Ce que ça implique pour un index **déjà écrit** : il garde la version que
+/// dit son `meta.json`, donc un index v3 reste v3 et ne rétrécit pas. Seul un
+/// index rebâti gagne le dictionnaire. Et une fois qu'une 4.0 a commité dedans,
+/// une 3.0.x ne le rouvre plus.
 ///
 /// Les `filter_fields` du DDL deviennent des champs non-texte du schéma ; ils
 /// sont ensuite adressés via `QueryConfig.filters` à la requête.
@@ -74,7 +87,7 @@ pub fn build_schema_config(
 
     serde_json::from_value(serde_json::json!({
         "fields": fields,
-        "sfx_version": 3,
+        "sfx_version": 4,
         "shards": shards.max(1),
     }))
     .map_err(|e| format!("SchemaConfig invalide: {e}"))
@@ -224,6 +237,14 @@ pub enum FtsStorage {
         /// **Eager par défaut** : c'est le mode validé, et la passation lucivy
         /// recommande de mesurer Eager contre Lazy sur de vrais index avant de
         /// basculer — le gain dépend de la taille et du motif d'accès.
+        ///
+        /// Depuis la v4 (dictionnaire partagé), la paresse rend moins : un index
+        /// à dictionnaire lit ses fichiers `dict-*` **entiers** à l'ouverture —
+        /// la FST et les textes du shard, soit l'essentiel de l'index. Seules les
+        /// postings des segments restent paresseuses. C'est le prix des 20 % de
+        /// disque en moins, et c'est le seul point où la disposition par segment
+        /// fait encore mieux. À mesurer avant de basculer `lazy: true` sur un
+        /// index v4 : ce mode n'a pas été taillé pour lui.
         lazy: bool,
     },
 
@@ -261,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_config_has_text_fields_and_v3() {
+    fn schema_config_has_text_fields_and_v4() {
         let cfg = build_schema_config(
             &["_title".to_string(), "_content".to_string()],
             &[],
@@ -269,7 +290,7 @@ mod tests {
         )
         .expect("config valide");
         let json = serde_json::to_value(&cfg).expect("sérialisable");
-        assert_eq!(json["sfx_version"], 3, "v3 explicite, pas subi");
+        assert_eq!(json["sfx_version"], 4, "v4 explicite, pas subi");
         assert_eq!(json["shards"], 2);
         let names: Vec<&str> = json["fields"]
             .as_array()

@@ -41,19 +41,29 @@ candle-transformers = { version = "0.8", optional = true }
 tokenizers = { version = "0.21", optional = true, default-features = false, features = ["fancy-regex"] }
 hf-hub = { version = "0.4", optional = true }
 
-# lucivy — **publié**, 3.0.8 (29 août 2026). C'était une dépendance par chemin
-# tant que la v3 n'était pas sur crates.io : l'usage naïf de rag3weaver la
-# validait, et l'arbre a bougé huit fois pendant ce temps. Maintenant qu'elle
+# lucivy — **publié**, 4.0.1 (6 septembre 2026). C'était une dépendance par
+# chemin tant que la v3 n'était pas sur crates.io : l'usage naïf de rag3weaver
+# la validait, et l'arbre a bougé huit fois pendant ce temps. Maintenant qu'elle
 # est publiée, on prend la version — un `cargo build` ne dépend plus d'un dépôt
 # voisin, et ce qu'on compile est ce que tout le monde compile.
-lucivy-core = "3.0.8"
+#
+# La 4.0 apporte le **dictionnaire partagé** (une occurrence de chaque texte de
+# jeton par shard au lieu d'une par segment) : ~20 % de disque et de RAM en
+# moins, mêmes comptes, mêmes spans, mêmes scores. On le prend explicitement en
+# posant `sfx_version: 4` (voir `fts_handle::build_schema_config`).
+#
+# **Porte à sens unique.** La 4.0 ouvre les index 3.0.x, mais le premier commit
+# d'une 4.0 convertit l'index pour de bon : une 3.0.x ne le rouvrira plus. Un
+# index existant garde en revanche la version que dit son `meta.json` — il ne
+# gagne le dictionnaire qu'en étant rebâti.
+lucivy-core = "4.0.1"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "3.0.8", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.0.1", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Publié avec le reste en 3.0.8.
-sparse-vector = "3.0.8"
+# voir son NOTICE), persistance via lucistore. Publié avec le reste en 4.0.1.
+sparse-vector = "4.0.1"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
