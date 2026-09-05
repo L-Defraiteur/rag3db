@@ -205,12 +205,12 @@ péniblement ce que llama.cpp fait déjà mieux.
 
 > **À dire clairement, au 5 septembre : la parole n'existe pas.** Aucun TTS,
 > aucun STT, aucun G2P dans le crate — les seules occurrences sont des étiquettes
-> de facturation et des documents de repérage. Ce sur quoi repose la
-> différenciation du produit « agent de code embarqué » est donc **entièrement à
-> écrire**, et deux de ses dettes bloquantes sont amont (le Zipformer faux sur
-> wgpu, le lexique de prononciation français). Ce n'est pas un reproche à
-> l'ordre choisi — avaler le réel passait devant — mais il ne faut pas lire ce
-> tableau comme un état des lieux.
+> de facturation et des documents de repérage. Deux de ses dettes sont d'ailleurs
+> amont (le Zipformer faux sur wgpu, le lexique de prononciation français).
+>
+> **C'est un report assumé, pas un oubli** : la parole se fera avec l'**interface**
+> du produit « agent de code », et il n'y a pas d'interface. Ce tableau dit donc
+> ce qui *différenciera* chaque produit, pas ce qui existe.
 
 ## 8. La phrase à retenir
 

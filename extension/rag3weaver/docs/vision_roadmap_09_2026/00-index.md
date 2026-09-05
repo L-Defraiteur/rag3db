@@ -74,9 +74,10 @@ son absence s'y annonce.
 
 - **La lecture des documents** — pdf, docx, pptx, html, csv. Toujours à écrire.
 - **Le graphe de normalisation xlsx**, porte d'entrée de toute la moitié KB.
-- **La parole** — aucun TTS, aucun STT, aucun G2P. C'est pourtant ce sur quoi
-  repose la différenciation d'un des quatre produits
-  ([01](01-la-vision.md) §7).
+- **La parole** — aucun TTS, aucun STT, aucun G2P. **Reporté, pas oublié** :
+  décision de Lucie, ça se fera avec l'**interface** du produit « agent de
+  code », pas avant. Ce qu'il faut en retenir ici est seulement de ne pas lire
+  le tableau des produits du [01](01-la-vision.md) §7 comme un état des lieux.
 - **`Catalog::search` est toujours un monolithe**, et il a grossi : 409 lignes.
   Le chemin composable existe en parallèle et n'est pas emprunté — deux chemins
   à maintenir, et le prix se paie à chaque correction de recherche.
