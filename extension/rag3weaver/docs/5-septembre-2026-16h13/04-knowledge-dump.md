@@ -37,8 +37,15 @@ là où il y en avait deux.
 
 ## 3. La machine de Lucie — le point le plus important
 
-**Elle s'en sert pendant qu'on travaille.** Ne pas lancer la passe complète sans
-le lui demander : elle charge BGE-M3, MiniLM, deux rerankers et l'OCR.
+**Elle s'en sert pendant qu'on travaille.** La passe complète charge BGE-M3,
+MiniLM, deux rerankers et l'OCR : ça se voit sur le poste.
+
+**Levé le 6 septembre 2026.** Les 3-5 septembre il fallait demander avant toute
+passe lourde — Lucie mesurait les performances de lucivy et une charge parasite
+faussait ses mesures. Elle a levé la consigne le 6 : « lucivy est fini, plus de
+problème de bench à faire en ce moment ». Ce n'était donc pas une règle de fond
+mais l'état de son travail à ce moment-là ; si elle redit qu'elle mesure quelque
+chose, la contrainte revient.
 
 ```sh
 RAG3WEAVER_REGIME=confort   # le DÉFAUT de run_e2e.sh depuis le 4 septembre
