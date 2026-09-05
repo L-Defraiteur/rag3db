@@ -154,7 +154,7 @@ cliente.
 | `EventSourceNode(topics, cursor)`, `TraceSinkNode`, entité `Trace`, graphe `trace.mmd` | faits, sur sujets et curseurs ; second drain à 0 (pas d'écho) |
 | `run_id` partout, `run.<id>`, `parent`, champs `Trace` | fait : `RunStarted`/`RunFinished`, `ctx.run_id()`, `execute_as`, `ToolBox::call_in` + `ServiceRegistry::layered` pour le parent, `AgentRun.run` |
 | `SendMessageNode`, `EventBus::send_message`, `inbox`/`self` relatifs, `Agent::with_inbox` (lecture entre tours, `AgentRun.messages`) | fait — testé : un message d'avant le run vu avant le premier tour, un message arrivé pendant un appel vu au tour suivant, jamais au milieu |
-| Schéma lié : `Run` (hashsafe `run_id`), `Message`, `CHILD_OF` / `SENT_BY` / `SENT_TO`, écrits par `TraceSinkNode` | fait — `search_expand(target = "Message", relation = "SENT_TO")` rend le run |
+| Schéma lié : `Run` (hashsafe `run_id`), `Message`, `CHILD_OF` / `SENT_BY` / `SENT_TO`, écrits par `TraceSinkNode` | fait — `search(target = "Message", relation = "SENT_TO")` rend le run ; l'outil s'appelait `search_expand` avant sa fusion dans `search` |
 | `interrupt` | à faire, petit (le puits sait déjà arrêter) |
 | `%% on:` / `%% policy:`, `Reactor` (fil, tokio `select`, `each` / `batch` / `debounce`, sonnette par sujet), `ReactorHandle` | fait — la fiche `trace` est réactive (`batch 200`) et tourne dans son fil sans se tracer ; deux agents conversent par leurs boîtes, chacun un réacteur (`on(nom, sujets, politique, fermeture)`), bornés par un budget |
 | Boîte durable (`Message` en base, `MessageSourceNode`) | plus tard, même forme de nœud |

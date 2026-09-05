@@ -255,7 +255,7 @@ pub struct KBConfig {
     pub keyword_weight: f64,
 
     /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : copié dans
-    /// `KBMetadata`, jamais lu ensuite. Voir `docs/vision_roadmap_08_2026/06`.
+    /// `KBMetadata`, jamais lu ensuite. Voir `docs/vision_roadmap_09_2026/06`.
     #[serde(alias = "title_boost")]
     pub title_boost: f64,
 
@@ -267,7 +267,7 @@ pub struct KBConfig {
 
     /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : désérialisé
     /// et jamais lu. Emplacement prévu pour `grep` / `read` (feuille de route
-    /// `docs/vision_roadmap_08_2026/06` §2.2).
+    /// `docs/vision_roadmap_09_2026/06` §2.2).
     #[serde(default, alias = "special_ops")]
     pub special_ops: Option<HashMap<String, serde_json::Value>>,
 

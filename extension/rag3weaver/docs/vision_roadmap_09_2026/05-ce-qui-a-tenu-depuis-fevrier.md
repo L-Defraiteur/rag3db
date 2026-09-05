@@ -192,7 +192,7 @@ cherchable, pas une constante.
 *Plus brièvement* : la détection **dynamique** de conteneur
 (`hasChildren = edges.some(e => e.type === 'PARENT_OF')`, qui permet à une
 variable ou une fonction ayant des enfants d'être traitée comme un conteneur) —
-utile le jour où `codeparsers` est branché ; et le format « CSV enrichi » à
+utile maintenant que `codeparsers` est branché ; et le format « CSV enrichi » à
 métadonnées en en-tête (`#schema:kilometrage=number:range:sort`), rejeté à
 l'époque comme « peu intuitif », **qui redevient intéressant si c'est un modèle
 qui écrit l'en-tête**.
@@ -230,7 +230,7 @@ qui écrit l'en-tête**.
 | L2 `DocumentStore` / `Chunker` | nœuds de chunking, `{Entity}_Chunk`, `hashsafe_uuid` |
 | **L3 `Catalog`** | `Catalog` — **le seul nom de la pile à avoir survécu** |
 | L4 `Orchestrator` / `Accumulator` | `OperationQueue` puis DAG dataflow + `drain()` |
-| L5 `code-rag` | `codeparsers/` (**dormant**) |
+| L5 `code-rag` | `codeparsers` — **branché le 25 août 2026, sous-module séparé depuis le 3 septembre** |
 | `hybridStrategy: 'boost'` | `SignalRole::Boost` — **sémantique différente** : boost par *signal*, pas par prédicat sur le résultat |
 | `boostIf` / `onBoost` / `onResultEnrich` | pas d'équivalent (abandonnés) |
 | `fuzzy-fst` | lucivy (paramètre `distance`) |

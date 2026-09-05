@@ -3,7 +3,7 @@
 //! Un backend n'a pas à être codé depuis rien. On tient d'avance des `user`,
 //! des `conversation`, des `product` — et un agent les **pose**, puis les
 //! modifie. C'est la cible du
-//! [doc 08](../docs/vision_roadmap_08_2026/08-des-catalogues-de-gabarits.md),
+//! [doc 08](../docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md),
 //! et elle ferme la boucle du doc 01 au lieu d'y ajouter un morceau : ranger,
 //! retrouver, adopter et modifier demandent exactement ce qu'on a construit
 //! sans l'avoir cherché.
@@ -18,7 +18,7 @@
 //!   demandé de moteur ;
 //! - un `git diff` reste lisible, et on édite un composant avec ses outils
 //!   habituels plutôt qu'une chaîne dans une colonne ;
-//! - le [doc 04](../docs/vision_roadmap_08_2026/04-le-catalogue-comme-graphe.md)
+//! - le [doc 04](../docs/vision_roadmap_09_2026/04-le-catalogue-comme-graphe.md)
 //!   dit que le catalogue est un graphe de **références**, pas un entrepôt.
 //!
 //! ## Deux axes, parce qu'ils répondent à deux questions

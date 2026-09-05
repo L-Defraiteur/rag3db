@@ -183,7 +183,7 @@ rm extension/vector/build/libvector.rag3db_extension   # avant reconstruction si
 
 ## 10. Les documents, dans l'ordre de lecture
 
-- **Vision** : `docs/vision_roadmap_08_2026/01` (la vision), `06` (la feuille de route), `07` (événements, runs et boucles).
+- **Vision** : `docs/vision_roadmap_09_2026/01` (la vision), `06` (la feuille de route), `07` (événements, runs et boucles).
 - **Hier soir** : `docs/25-aout-2026-18h58/07` à `09` (rapport, objectifs, savoir-faire), `11` (les mesures d'agents), `13` à `18` (session, écoute, identité, monde ouvert, relations, index vectoriel).
 - **Aujourd'hui** : ce dossier — `01` (progression et pistes), `02` (architecture), `03` (celui-ci).
 

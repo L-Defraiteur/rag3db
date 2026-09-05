@@ -7,7 +7,7 @@
 Un agent dont **le substrat est aussi le sujet** : il vit dans une base de
 données, il la gère, il construit avec la technologie dont il est fait, et ce
 qu'il construit retourne dans la base où il vit
-([doc 01](../vision_roadmap_08_2026/01-la-vision.md)).
+([doc 01](../vision_roadmap_09_2026/01-la-vision.md)).
 
 Une seule idée la porte : **tout est un graphe, et un graphe est une donnée**.
 Un pipeline d'ingestion est un graphe. Un outil est un graphe plus une fiche.
@@ -20,7 +20,7 @@ liste d'outils, il a un RAG sur ses outils.
 
 ## 2. La cible immédiate : des catalogues de gabarits
 
-Décidée le 29 août ([doc 08](../vision_roadmap_08_2026/08-des-catalogues-de-gabarits.md)).
+Décidée le 29 août ([doc 08](../vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md)).
 Ne pas leur faire tout coder : on tient d'avance des `user`, des
 `conversation`, des `product` — un agent les **pose**, puis les modifie.
 

@@ -4,7 +4,7 @@
 **avant** d'intégrer `codeparsers`, parce qu'elles changent le schéma de
 `File` et la forme du graphe d'ingestion de code. À lire avec le repérage du
 crate (résumé dans le [01](01-rapport-de-progression.md) §4) et la feuille de
-route (`../vision_roadmap_08_2026/06`).
+route (`../vision_roadmap_09_2026/06`).
 
 ## 1. `grep` et `read` lisent le réel, pas la base
 

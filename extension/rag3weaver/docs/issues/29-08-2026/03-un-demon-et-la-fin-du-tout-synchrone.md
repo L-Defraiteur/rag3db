@@ -15,7 +15,7 @@ Le moteur sait charger un modèle, exécuter un graphe, tracer un run. Il ne sai
   processus tirant chacun 2,2 Go du disque vers la même carte.
 - **Le terminal à plusieurs.** Il tiendra des agents vivants entre deux
   commandes. C'est un démon, avec un client qui s'y attache.
-- **La boucle étrange** ([doc 08](../../vision_roadmap_08_2026/08-des-catalogues-de-gabarits.md)).
+- **La boucle étrange** ([doc 08](../../vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md)).
   Un agent qui pose un gabarit de backend doit pouvoir le **faire tourner** —
   sinon on s'arrête à écrire des fichiers, et le critère de réussite (« un
   backend debout qu'on ouvre ») est hors de portée.

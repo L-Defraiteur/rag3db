@@ -8,7 +8,7 @@ output lui sort. Vraiment 100 % tout est* listenable*. Et filtrable aussi à
 chaque fois au max. »* Avec la garde qu'elle pose elle-même : *« faire
 attention à ne pas écouter quand rien d'écoutable »*.
 
-Suite du [07](../vision_roadmap_08_2026/07-evenements-runs-et-boucles.md)
+Suite du [07](../vision_roadmap_09_2026/07-evenements-runs-et-boucles.md)
 (le bus, les runs, le réacteur) et du [13](13-la-session-comme-graphe.md)
 (la session comme graphe — c'est elle, la première cliente).
 

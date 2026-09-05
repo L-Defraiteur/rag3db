@@ -137,7 +137,7 @@ après un passage en Debug.
 
 ## 6. Les documents, et dans quel ordre les lire
 
-1. `../vision_roadmap_08_2026/00` → `01` (la vision), `06` (la feuille de route).
+1. `../vision_roadmap_09_2026/00` → `01` (la vision), `06` (la feuille de route).
 2. Ce dossier : [01](01-rapport-de-progression.md) et
    [07](07-rapport-de-progression-soir.md) (la journée), [02](02-fichiers-en-temps-reel-deux-modes-git-et-histoire.md)
    (les décisions de conception du code), [06](06-lacher-lagent-sur-notre-code.md)

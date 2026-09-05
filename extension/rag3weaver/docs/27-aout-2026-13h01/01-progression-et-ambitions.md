@@ -163,7 +163,7 @@ le zram, pas le CPU).
 
 | Sujet | Où |
 |---|---|
-| Vision, chaos contrôlé | `25-aout/01`, `vision_roadmap_08_2026/` |
+| Vision, chaos contrôlé | `25-aout/01`, `vision_roadmap_09_2026/` |
 | Feuille de route | `25-aout/06`, `25-aout/08` |
 | Relations à travers les lots, couche `Symbol` | [`25-aout/17`](../25-aout-2026-18h58/17-relations-a-travers-les-lots.md) |
 | Index vectoriel, coût, différé | [`25-aout/18`](../25-aout-2026-18h58/18-index-vectoriel-differe.md) |

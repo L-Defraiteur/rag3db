@@ -3,7 +3,7 @@
 Écrit à 18h58, après trente commits dans la journée (`c5f0bb0ed` → `3d4c51f83`,
 134 fichiers, +37 497 / −709). La trace détaillée est dans
 `../23-aout-2026-20h33/` (docs 44 à 52) et la couche au-dessus dans
-`../vision_roadmap_08_2026/`. Ce document est le résumé de ce qui a bougé, ce
+`../vision_roadmap_09_2026/`. Ce document est le résumé de ce qui a bougé, ce
 qui est mesuré, ce qui a été décidé, et ce qui attend.
 
 ## 1. Ce qui est livré aujourd'hui
@@ -19,7 +19,7 @@ qui est mesuré, ce qui a été décidé, et ce qui attend.
 | **Gabarits : `$var` typé** | `b8bf5f57f` | Six gabarits sur sept avaient `limit` et `gpu_batch_size` jamais respectés (chaîne → `as_u64()` → défaut). Corrigé, régressions ajoutées. |
 | **Recherche composable** | `3d4c51f83` | Signaux étiquetés, fusion N-aire avec port `signals` en fan-in et poids par nom, `BM25SearchNode(fields=…)`, `RerankNode` (remplace après la fusion, module en `boost` dedans), vecteur via `SearchBackend`, `result_mode` sur les nœuds de signal, gabarit `weighted_search.mmd`. |
 | **`codeparsers` intégré** (le soir) | `30c0fec67`, `19bea5934` | Crate réparé (offsets d'octets, hash, maps vides, UTF-8), module `code` : `File` / `Scope` / `Library`, `hashsafe`, `ParseCodeNode → CodeIngestNode`. Notre `src/dataflow/` ingéré et navigué. **Deux bugs de fond** trouvés : l'UPDATE HNSW du fork segfaute au-delà de ~512 lignes ; la ré-ingestion doublait les documents plein-texte (corrigé). Doc [03](03-codeparsers-integre-et-deux-bugs-de-fond.md). |
-| **Documents** | 12 commits | 46 (OCR), 47 (LLM/TTS/STT, sept révisions), 48 (pour lucivy), 49 (catalogue comme graphe), 50 (chemin local), 51 (la vision), 52 (recherche composable), et la série `vision_roadmap_08_2026/` en six documents. |
+| **Documents** | 12 commits | 46 (OCR), 47 (LLM/TTS/STT, sept révisions), 48 (pour lucivy), 49 (catalogue comme graphe), 50 (chemin local), 51 (la vision), 52 (recherche composable), et la série `vision_roadmap_09_2026/` en six documents. |
 
 ## 2. Ce qui est mesuré
 

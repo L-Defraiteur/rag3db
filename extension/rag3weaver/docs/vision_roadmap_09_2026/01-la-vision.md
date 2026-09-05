@@ -53,14 +53,17 @@ données qu'il fabrique et retrouve**.
 
 Rien de ce qui suit n'est spéculatif — c'est dans le dépôt aujourd'hui :
 
-- **`codeparsers`** (24 555 lignes, 12 langages, orphelin) sait extraire des
-  entités **et leurs relations** — imports, portées, appels. Branché, l'agent
-  peut lire **son propre code source** comme un graphe navigable.
+- ~~**`codeparsers`** (orphelin)~~ — **branché, puis sorti en dépôt séparé**
+  (3 sept. 2026). L'agent lit **son propre code source** comme un graphe
+  navigable : c'est ce que fait `e2e_code`, sur `src/dataflow/`. La phrase
+  « le plus gros actif dormant du dépôt » n'a plus d'objet.
 - **Les graphes-outils sont sérialisables** (`to_mermaid`, `GraphDefinition`,
   empreinte BLAKE3 déterministe) : ils **se stockent dans la base**, se
   versionnent, se cherchent.
 - **Le schéma de la base est généré** par `SchemaDialect` : l'agent peut donc
-  raisonner sur sa propre structure, pas seulement sur son contenu.
+  raisonner sur sa propre structure, pas seulement sur son contenu. Et depuis le
+  3 septembre, **dans deux langues** — le dialecte est le lieu où l'intention se
+  traduit, et il y en a deux ([15](15-le-moteur-cesse-d-etre-mono-backend.md)).
 - **La boucle d'agent existe** (`c77a2c809`) et ne sait pas qui la pilote —
   Gemini, un modèle local, ou un autre agent.
 - **`ToolBox` coupe dans les deux sens** : un agent est un outil pour un autre
@@ -84,9 +87,18 @@ journée sans le dire :
 | **Cloisonnement org × project** | que le chaos d'un locataire déborde chez un autre |
 | **Erreurs lisibles par un agent, jamais des paniques** | qu'une boucle meure au lieu de se corriger |
 | **Abandon sur erreur répétée** | que l'auto-correction devienne une boucle infinie facturée |
+| **Une absence se nomme** (3 sept. 2026) | qu'un repli, un saut ou une garantie dégradée passent pour un succès |
+| **Une recherche dit quand rien n'est probant** (3 sept. 2026) | qu'une coïncidence lexicale se présente comme une réponse |
 
 > **Le chaos est dans ce que le système peut devenir. Le contrôle est dans ce
 > qu'il ne peut pas perdre.**
+
+**Les deux dernières lignes ne viennent pas d'une décision.** Elles viennent
+d'une répétition : on les a trouvées violées dix fois en une journée, sur du
+code qui compilait, ne levait rien, et mentait — voir
+[15](15-le-moteur-cesse-d-etre-mono-backend.md) §3. Elles ont leur corollaire :
+**une pièce écrite mais jamais appelée se dégrade sans bruit**, ce qui rend une
+option non empruntée aussi dangereuse qu'une option absente.
 
 ## 5. Le danger, nommé
 
@@ -150,13 +162,20 @@ et des relations sortent.
 Décidé le 25 août, contre l'idée de livrer une surface : **on ne livre pas, il
 manque de quoi avaler le réel.**
 
+> **Relu le 5 septembre 2026.** Le point 1 est fait. Un axe qui n'était pas dans
+> cette liste est passé devant les autres — **servir une base qu'on n'a pas
+> écrite** —, parce qu'une boucle qui ne tourne que sur notre propre base ne sert
+> qu'à nos propres projets. Voir
+> [15](15-le-moteur-cesse-d-etre-mono-backend.md) et
+> [06](06-la-feuille-de-route.md) §2.
+
 **Côté documents et code** (moitié « simple ») :
 
-1. **`codeparsers` intégré** — 24 555 lignes déjà écrites, dormantes, 12
-   langages. Le plus gros actif du dépôt, et ses modules `import_resolution` /
-   `relationship_resolution` / `scope_extraction` produisent **les arêtes** :
-   un fichier cesse d'être des chunks pour devenir des entités reliées. Avec
-   `project` dès le premier jour (doc 42).
+1. ~~**`codeparsers` intégré**~~ — **fait**, et sorti en dépôt séparé. Ses
+   modules `import_resolution` / `relationship_resolution` / `scope_extraction`
+   produisent **les arêtes** : un fichier cesse d'être des chunks pour devenir
+   des entités reliées. C'est ce qui rend un graphe supérieur à un magasin de
+   vecteurs pour du code, et c'est éprouvé sur notre propre source.
 2. **Lecture des documents** — pdf, docx, pptx, html, csv. Sans lib lourde : les
    formats Office sont du ZIP + XML. L'OCR (livré) couvre déjà les PDF scannés.
 
@@ -183,6 +202,15 @@ La même technologie, des priorités opposées :
 **L'asymétrie qui décide** : un développeur **a déjà** un LLM. Il **n'a pas** de
 moteur de parole. Embarquer la parole différencie ; embarquer le LLM rattrape
 péniblement ce que llama.cpp fait déjà mieux.
+
+> **À dire clairement, au 5 septembre : la parole n'existe pas.** Aucun TTS,
+> aucun STT, aucun G2P dans le crate — les seules occurrences sont des étiquettes
+> de facturation et des documents de repérage. Ce sur quoi repose la
+> différenciation du produit « agent de code embarqué » est donc **entièrement à
+> écrire**, et deux de ses dettes bloquantes sont amont (le Zipformer faux sur
+> wgpu, le lexique de prononciation français). Ce n'est pas un reproche à
+> l'ordre choisi — avaler le réel passait devant — mais il ne faut pas lire ce
+> tableau comme un état des lieux.
 
 ## 8. La phrase à retenir
 

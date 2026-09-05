@@ -85,7 +85,7 @@ image `pgvector`, un `setup_statements` (`CREATE EXTENSION vector`,
 `CREATE SCHEMA rag3weaver`) et le parcours qu'on connaît : créer, ingérer,
 chercher, comparer.
 
-**C'est le préalable des étages 2 et 3 du [doc vision 13](../vision_roadmap_08_2026/13-avaler-une-base-existante.md).**
+**C'est le préalable des étages 2 et 3 du [doc vision 13](../vision_roadmap_09_2026/13-avaler-une-base-existante.md).**
 
 ### 2. L'agent qui écrit son propre outil
 
@@ -126,10 +126,10 @@ pas compris se dit au lieu d'être jeté.
    *« ça nous inspirera sûrement »*. La question « quelles colonnes portent du
    texte cherchable ? » est la même des deux côtés, et le pipeline tableur la
    rencontrera en premier, sur un terrain plus simple.
-2. **L'ingesteur de base étrangère** ([doc 13](../vision_roadmap_08_2026/13-avaler-une-base-existante.md)) —
+2. **L'ingesteur de base étrangère** ([doc 13](../vision_roadmap_09_2026/13-avaler-une-base-existante.md)) —
    lire un schéma, proposer un graphe, en séparant `Declaree` / `Deduite` /
    `Devinee`.
-3. **Les quatre rôles** ([docs 09 et 10](../vision_roadmap_08_2026/09-trois-roles-et-une-seule-main.md)) —
+3. **Les quatre rôles** ([docs 09 et 10](../vision_roadmap_09_2026/09-trois-roles-et-une-seule-main.md)) —
    vision, design, contexte, code. La plomberie existe depuis le 26 août ; ce
    qui manque, ce sont les rôles et ce que chacun possède.
 4. **La file de travaux** (issue 03 §8) — délibérément repoussée : quatre

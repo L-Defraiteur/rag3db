@@ -1,8 +1,8 @@
 //! **Le catalogue de gabarits, cherché comme le reste.**
 //!
 //! C'est tout l'argument du
-//! [doc 04](../docs/vision_roadmap_08_2026/04-le-catalogue-comme-graphe.md) et
-//! la cible du [doc 08](../docs/vision_roadmap_08_2026/08-des-catalogues-de-gabarits.md) :
+//! [doc 04](../docs/vision_roadmap_09_2026/04-le-catalogue-comme-graphe.md) et
+//! la cible du [doc 08](../docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md) :
 //! un agent trouve ses **capacités** avec les moyens qu'il emploie pour
 //! trouver un **document**. Pas une liste figée dans une invite, pas un second
 //! mécanisme — la même recherche, sur une entité de plus.

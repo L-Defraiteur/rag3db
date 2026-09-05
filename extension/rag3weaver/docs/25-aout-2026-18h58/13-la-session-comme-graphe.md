@@ -38,7 +38,7 @@ Un DAG est acyclique ; une conversation est une boucle. Donc :
 > **Un tour d'agent est un graphe. La boucle qui l'exécute n'en est pas un.**
 
 C'est le même partage que pour la trace : le graphe fait le travail, le
-[réacteur](../vision_roadmap_08_2026/07-evenements-runs-et-boucles.md) tourne.
+[réacteur](../vision_roadmap_09_2026/07-evenements-runs-et-boucles.md) tourne.
 `Agent::run` devient le réacteur de la session : il boucle, il compte, il
 arrête ; **ce qui se passe dans un tour** est un graphe que l'appelant
 choisit.

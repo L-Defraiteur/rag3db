@@ -69,7 +69,7 @@ observé (`Couldn't replay shadow pages under read-only mode`) est **transitoire
   la grammaire C++ (+14 041 scopes), et les fichiers texte entrent dans l'index.
 - L'**identité git** professionnelle est retirée de l'historique de codeparsers.
 - La branche a **fusionné dans `master`**, en avance rapide.
-- Doc de vision 14 : [le schéma comme artefact](../vision_roadmap_08_2026/14-le-schema-comme-artefact.md).
+- Doc de vision 14 : [le schéma comme artefact](../vision_roadmap_09_2026/14-le-schema-comme-artefact.md).
 
 ## 2. Trois défauts trouvés *dans nos propres tests*
 

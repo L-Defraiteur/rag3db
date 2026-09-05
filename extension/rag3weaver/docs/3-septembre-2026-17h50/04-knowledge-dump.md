@@ -183,7 +183,7 @@ réécrit pour ça.
 | chemin | quoi |
 |---|---|
 | `extension/rag3weaver/docs/<date>/` | le crate Rust — **le cas par défaut** |
-| `extension/rag3weaver/docs/vision_roadmap_08_2026/` | la vision, 14 documents |
+| `extension/rag3weaver/docs/vision_roadmap_09_2026/` | la vision, 14 documents |
 | `docs/<date>/` à la racine | le fork kuzu et ses extensions C++ |
 | `extension/rag3weaver/codeparsers/docs/` | le parsage — **dépôt séparé** |
 

@@ -3,10 +3,10 @@
 26 août 2026, 4h30. **Caduc pour nous une heure plus tard** : plutôt que
 d'imposer ce chantier à luciole, rag3weaver s'en est passé — mesure faite,
 il n'en utilisait que le type `PortValue`, deux appels d'exécution et deux
-lignes d'attente coopérative ([07](../vision_roadmap_08_2026/07-evenements-runs-et-boucles.md) §6).
+lignes d'attente coopérative ([07](../vision_roadmap_09_2026/07-evenements-runs-et-boucles.md) §6).
 Ce document reste une note pour lucivy, si un jour ces primitives ont du
 sens pour elle-même ; ce n'est plus un contrat avec rag3weaver. Suite du [48](../23-aout-2026-20h33/48-pour-lucivy-briques-manquantes-dans-luciole.md)
-(23 août) et de la nuit du [07](../vision_roadmap_08_2026/07-evenements-runs-et-boucles.md).
+(23 août) et de la nuit du [07](../vision_roadmap_09_2026/07-evenements-runs-et-boucles.md).
 Le wasm est abandonné pour rag3weaver, tokio est revenu **pour attendre** ;
 ce document dit ce que luciole devrait offrir pour qu'on puisse, un jour,
 retirer tokio sans rien perdre — et comment on le vérifierait.
@@ -164,7 +164,7 @@ Cinq scénarios ; tant qu'ils ne passent pas sur luciole seul, tokio reste.
 - La parité avec l'écosystème async (`reqwest`, `hyper`, `axum`). Le jour
   où on veut un serveur, il tourne sur tokio dans son propre fil et parle
   au reste par le bus — tokio attend, luciole calcule, les deux cohabitent
-  ([07](../vision_roadmap_08_2026/07-evenements-runs-et-boucles.md) §6).
+  ([07](../vision_roadmap_09_2026/07-evenements-runs-et-boucles.md) §6).
 - Le wasm : abandonné pour rag3weaver ; ce que luciole fait pour lucivy
   dans le navigateur ne nous concerne plus.
 - Que ce soit fait vite. Rien ne bloque : tokio fait le travail, et

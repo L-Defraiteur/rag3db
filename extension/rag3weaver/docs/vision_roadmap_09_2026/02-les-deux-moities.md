@@ -34,9 +34,16 @@ qu'**un outil n'est pas un article de catalogue**.
 
 La **moitié déclarée** : `EntityConfig`, `register_entity`, `register_kb`,
 `FieldType::{Choice, Tags, …}`, `FilterOp::{HasAny, HasAll, HasNone, Between}`,
-les poids `title_boost` / `content_boost` / `keyword_weight`, la fusion RRF, le
-rerank, le cloisonnement org × project. Tout ce qu'il faut **quand on connaît le
-schéma**.
+la fusion RRF, le rerank, le cloisonnement org × project. Tout ce qu'il faut
+**quand on connaît le schéma**.
+
+**Correction du 5 septembre 2026 :** cette liste comptait aussi les poids
+`title_boost` / `content_boost`. Ils sont **acceptés et jamais appliqués** —
+copiés dans `KBMetadata` et jamais relus, revérifié. Les compter parmi ce que le
+moteur « a » était l'erreur que ce document reproche ailleurs : confondre ce qui
+est déclaré et ce qui est fait. Leur remplacement est une **topologie** — une
+branche BM25 par champ, pesée à la fusion — parce que lucivy n'a aucune
+pondération par champ. Voir [06](06-la-feuille-de-route.md) §4.
 
 ## 3. Ce qui manque : l'entrée
 
@@ -110,9 +117,13 @@ résumer.
 
 ## 6. Ce qui manque aussi côté documents
 
-L'autre moitié n'est pas complète non plus : **`codeparsers` est orphelin**
-(24 555 lignes, 12 langages, jamais référencé), et rien ne lit un `.pdf`, un
-`.docx` ou un `.pptx`. L'OCR livré couvre déjà les PDF scannés.
+L'autre moitié n'est pas complète non plus : rien ne lit un `.pdf`, un `.docx`
+ou un `.pptx`. L'OCR livré couvre déjà les PDF scannés.
+
+**Correction du 5 septembre 2026 :** cette phrase disait aussi « `codeparsers`
+est orphelin, jamais référencé ». Il est branché depuis le 25 août, éprouvé sur
+notre propre source, et sorti en dépôt séparé le 3 septembre. Ce qui manque ici
+se réduit donc aux **documents**.
 
 Deux idées de février à reprendre ici, détaillées dans
 [05](05-ce-qui-a-tenu-depuis-fevrier.md) : **`File` n'est pas un article de

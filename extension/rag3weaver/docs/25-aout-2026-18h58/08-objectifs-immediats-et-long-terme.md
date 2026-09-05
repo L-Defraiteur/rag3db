@@ -1,7 +1,7 @@
 # 08 — Objectifs : immédiats, moyen terme, long terme
 
 25 août 2026, minuit. Ce qu'on attaque dans l'ordre, et pourquoi cet ordre.
-La feuille de route complète est `../vision_roadmap_08_2026/06` ; ceci est
+La feuille de route complète est `../vision_roadmap_09_2026/06` ; ceci est
 la pile de travail telle qu'elle se présente après ce soir.
 
 ## Immédiat — la prochaine session
@@ -46,7 +46,7 @@ la pile de travail telle qu'elle se présente après ce soir.
   (les formats Office sont du ZIP + XML). L'OCR livré couvre les PDF scannés.
 - **Le graphe de normalisation de tableurs** — la porte d'entrée de la
   moitié KB, avec les quatre corrections que la pratique impose à la spec de
-  février (`../vision_roadmap_08_2026/03`), et le **rapport de validation à
+  février (`../vision_roadmap_09_2026/03`), et le **rapport de validation à
   l'ingestion** (localisé, illustré, avec témoin).
 - **`column=` sur `VectorSearchNode`** — une seconde colonne d'embedding à
   l'ingestion pour une branche « vecteur du titre ».
@@ -56,7 +56,7 @@ la pile de travail telle qu'elle se présente après ce soir.
   et juste, et un cache de préfixe qui tient (les `ToolDef` sont déjà triés
   pour ça).
 
-## Long terme — la vision (`../vision_roadmap_08_2026/01`)
+## Long terme — la vision (`../vision_roadmap_09_2026/01`)
 
 - **Un agent de code qui vit dans sa base** : il la gère, il construit des
   backends avec la même technologie ; le chaos contrôlé. Ce soir il lit,

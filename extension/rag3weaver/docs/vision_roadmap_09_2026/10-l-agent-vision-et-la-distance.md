@@ -15,7 +15,7 @@ Lucie ajoute un quatrième rôle, et c'est celui qui ferme la boucle :
 
 ## 1. On le fait déjà à la main, et c'est l'argument
 
-Ce dépôt contient `docs/vision_roadmap_08_2026/` et `docs/issues/<date>/`. Cette
+Ce dépôt contient `docs/vision_roadmap_09_2026/` et `docs/issues/<date>/`. Cette
 session-ci a produit cinq issues et deux documents de vision. **Le rôle existe
 donc déjà** — il est tenu par un humain, à la main, et il produit exactement ces
 artefacts.

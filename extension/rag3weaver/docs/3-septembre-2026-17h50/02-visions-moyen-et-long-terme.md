@@ -3,7 +3,7 @@
 Rappel de la vision moyen et long terme, pour qu'une session compressée ne
 confonde pas *la prochaine tâche* avec *la direction*. La feuille de route
 détaillée est
-[`docs/vision_roadmap_08_2026/`](../vision_roadmap_08_2026/00-index.md), quatorze
+[`docs/vision_roadmap_09_2026/`](../vision_roadmap_09_2026/00-index.md), quatorze
 documents. Celui-ci en donne l'état au 3 septembre 2026.
 
 ## 1. La boucle étrange, et ce qui la conditionne
@@ -27,7 +27,7 @@ Ce qui suit sur cet axe, par ordre :
   backends, donc le contrat de décalage reste nécessaire — la bonne formulation
   n'est pas « un backend rend des décalages » mais « un décalage est nécessaire
   là où un index Rust vit à côté des données ».
-- **Avaler une base étrangère** ([doc 13](../vision_roadmap_08_2026/13-avaler-une-base-existante.md))
+- **Avaler une base étrangère** ([doc 13](../vision_roadmap_09_2026/13-avaler-une-base-existante.md))
   : lire un schéma qu'on n'a pas écrit et en proposer un graphe, en séparant ce
   qui est **déclaré** de ce qui est **deviné**. À faire **après** le pipeline de
   normalisation xlsx — décision explicite de Lucie : la question « quelles
@@ -36,7 +36,7 @@ Ce qui suit sur cet axe, par ordre :
 
 ## 2. Le schéma comme artefact
 
-[Doc 14](../vision_roadmap_08_2026/14-le-schema-comme-artefact.md), écrit
+[Doc 14](../vision_roadmap_09_2026/14-le-schema-comme-artefact.md), écrit
 aujourd'hui.
 
 Une base change de forme par **deux chemins** et un seul laisse une trace. Le
@@ -58,7 +58,7 @@ Trois positions y sont prises :
 
 ## 3. Les quatre rôles d'agent
 
-[Docs 09 à 12](../vision_roadmap_08_2026/00-index.md). La vision de Lucie, notée
+[Docs 09 à 12](../vision_roadmap_09_2026/00-index.md). La vision de Lucie, notée
 le 30 août :
 
 | rôle | tempérament | ce qu'il fait |
