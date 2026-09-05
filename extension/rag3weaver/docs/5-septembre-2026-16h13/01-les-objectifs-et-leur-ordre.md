@@ -135,18 +135,90 @@ d'une seule. La même idée que l'arbitrage à la ressource plutôt qu'à la bas
 c'est la deuxième fois qu'elle sort la même journée — c'est probablement qu'elle
 est structurelle.
 
+### Quatre disponibilités, pas deux — et ce ne sont pas des niveaux
+
+Lucie, en corrigeant mon « commencer à deux » :
+
+> on peut autant à la lecture qu'à l'écriture attendre « data / textsearch /
+> sparse / dense ».
+
+C'est la bonne forme, et elle n'est pas un **niveau** mais un **ensemble** :
+`data` précède tout — on n'indexe pas ce qui n'est pas posé — mais les trois
+index sont des **frères parallèles**, pas des étages. Ils se commitent
+séparément ; c'était la question que je laissais ouverte, et elle est tranchée
+par la structure plutôt que par un cas d'usage.
+
+Conséquence sur la surface : on n'attend pas « jusqu'au niveau N », on attend
+**les signaux qu'on nomme**. Qui ne veut que du plein texte n'attend pas
+l'embarquement GPU.
+
+### L'invariant qui ordonne tout le chantier
+
+> si les gens font des trucs lourdingues c'est leur responsabilité, mais nous on
+> optimise pour que **jamais deux ressources qui ne sont pas en lien ne soient
+> bloquées l'une par l'autre**.
+
+Cette phrase n'est pas une exigence de plus : **c'est celle dont les autres
+découlent**. Elle trace aussi le partage des responsabilités, ce qui est rare et
+utile — une requête coûteuse est le problème de qui l'écrit ; un **couplage
+faux** est le nôtre.
+
+Elle explique les trois clauses d'un coup, et c'est la même idée que la
+granularité de l'arbitrage et celle de la disponibilité. Trois apparitions par
+des chemins indépendants dans la même journée : **la ressource, et non la base,
+est l'unité de tout ce chantier.**
+
+### Ce que ça condamne, et ce que ça ne condamne pas
+
+Le couplage global existe aujourd'hui, et il est facile à nommer :
+`Catalog::pending` est **une** file, `drain()` **une** barrière. Une recherche
+sur l'entité A peut attendre des écritures en attente sur l'entité B, qui n'a
+rien à voir — c'est le couplage faux, dans le chemin de lecture, aujourd'hui.
+
+**Mais `drain` n'est pas le tort, et il ne faut pas le retirer.** Lucie :
+
+> je pense que drain a son usage quand même dans certains cas, faut pas non plus
+> enlever ce mode de fonctionnement, mais permettre un plus ou moins au cas par
+> cas — « au tick » ? — et un autre avec drain quand on sait très volontairement
+> vouloir faire une grosse opération d'ingestion.
+
+Le lot n'est un tort **que lorsqu'il n'a pas été choisi**. Une grosse ingestion
+veut grouper : c'est ce qui la rend possible. Deux régimes, donc, déclarés :
+
+| régime | ce qu'il fait | pour qui |
+|---|---|---|
+| **au tick** | chaque écriture passe à sa disponibilité déclarée, arbitrée **par ressource** | « mon client a acheté un produit » |
+| **par lot** | on accumule volontairement, on vide quand on le dit | une ingestion massive |
+
+**Et la forme existe déjà à moitié.** `ingest_entities` *est* le verbe de lot, et
+il est honnête : il exécute et rend quand c'est fait. Le défaut n'est donc pas
+qu'il y ait un lot, c'est que **le verbe par item se comporte comme le verbe de
+lot, en silence** — `create` alimente une file globale sans le dire, et seul
+`drain` la vide.
+
+C'est la troisième fois qu'on retrouve cette forme après `MoteurTexte` et
+`Acces` : **une option, pas un remplacement**, avec un défaut qui s'explique. Et
+la même règle qu'ailleurs — le régime se déclare, il ne se devine pas, et le
+choix se **dit** dans ce que l'appel rend.
+
 ### Ce que ça coûte, et ce qui reste ouvert
 
 - Une **API qui change** : les écritures prennent un niveau, ou rendent de quoi
   attendre. C'est un vrai changement de surface, pas un ajout.
-- **« Recherchable » est-il une seule chose ?** Le plein texte, le vecteur et le
-  sparse se commitent séparément. Un appelant qui ne veut que du BM25 attendrait
-  pour rien l'embarquement GPU. Trois niveaux plutôt que deux, ou un niveau par
-  signal — **à ne pas trancher avant d'avoir un cas qui le demande**. Commencer
-  à deux.
+- ~~« Recherchable » est-il une seule chose ?~~ **Tranché** : non. Quatre
+  disponibilités — `data`, `textsearch`, `sparse`, `dense` — dont trois
+  parallèles. Voir plus haut.
+- **Où vit l'arbitrage du régime « au tick » ?** Faire passer chaque écriture
+  sans coupler les ressources demande de savoir quelles ressources une écriture
+  touche. C'est trivial pour une entité, moins pour ses chunks, ses relations et
+  les lignes d'index KB qu'elle alimente — une écriture sur une entité en touche
+  plusieurs par ricochet. **C'est là que le sujet est vraiment difficile**, et
+  c'est le même problème que la granularité des verrous : la réponse ne peut pas
+  être différente des deux côtés.
 - L'idée vaut **au-delà de l'écriture**, et c'est Lucie qui le note : un agent
   aussi devrait pouvoir dire « je n'ai pas besoin de la recherche pour cette
-  requête ». Une requête déclare la disponibilité qu'elle exige.
+  requête ». Une requête déclare la disponibilité qu'elle exige — c'est déjà ce
+  que `Consistency` fait, en plus grossier.
 
 ### Ce que la clause 1 et la clause 3 demandent au cœur
 
