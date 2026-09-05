@@ -830,6 +830,32 @@ impl GraphTool {
         Self::assemble(name.into(), description.into(), params, BTreeSet::new(), template, result)
     }
 
+    /// Comme [`GraphTool::new`], en nommant les paramètres qui **héritent** du
+    /// nœud où ils atterrissent : type, valeur par défaut et liste close.
+    ///
+    /// C'est ce qu'une fiche exprime en écrivant `%% param: nom -- description`
+    /// sans type. La voie Rust ne savait pas le dire, si bien qu'un paramètre
+    /// hérité forçait une exception dans le test qui compare les deux voies —
+    /// et une exception dans un test de parité est un test de parité en moins.
+    pub fn new_avec_herites(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        params: Vec<ConfigParam>,
+        herites: &[&str],
+        template: GraphDefinition,
+        result: &str,
+    ) -> Result<Self, GraphToolError> {
+        let herites: BTreeSet<String> = herites.iter().map(|s| (*s).to_string()).collect();
+        for h in &herites {
+            if !params.iter().any(|p| p.name == h) {
+                return Err(GraphToolError::Spec(format!(
+                    "paramètre hérité '{h}' : pas déclaré"
+                )));
+            }
+        }
+        Self::assemble(name.into(), description.into(), params, herites, template, result)
+    }
+
     fn assemble(
         name: String,
         description: String,
@@ -1812,7 +1838,7 @@ mod tests {
                 NodeDef {
                     name: "source".into(),
                     node_type: "SearchSourceNode".into(),
-                    config: json!({"target_name": "$target", "query": "$query"}),
+                    config: json!({"target_name": "$target", "query": "$query", "consistency": "$consistency"}),
                 },
                 NodeDef {
                     name: "bm25".into(),
@@ -1851,6 +1877,9 @@ mod tests {
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "resolve".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "render".into(), to_port: "query".into() },
                 EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "bm25".into() },
+                // Ce que la consigne de cohérence a trouvé : des écritures en
+                // file rendent le résultat partiel, et l'agent doit l'entendre.
+                EdgeDef { from_node: "source".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 // Les avertissements du moteur jusqu'à la fiche : sans cette
                 // arête, zéro résultat ne dit pas pourquoi (issue 02).
                 EdgeDef { from_node: "bm25".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
@@ -1864,7 +1893,7 @@ mod tests {
                 EdgeDef { from_node: "resolve".into(), from_port: "results".into(), to_node: "render".into(), to_port: "results".into() },
             ],
         };
-        GraphTool::new(
+        GraphTool::new_avec_herites(
             "search_base",
             "Cherche dans une entité ou une base de connaissances.",
             vec![
@@ -1872,7 +1901,12 @@ mod tests {
                 p("query", ConfigParamType::String, true, None, "Texte de la requête."),
                 p("limit", ConfigParamType::Int, false, Some(json!(10)), "Nombre maximum de résultats."),
                 p("rerank", ConfigParamType::Int, false, Some(json!(0)), "Cross-encoder sur les N premiers ; 0 = éteint."),
+                // Ni défaut ni liste close ici : ils viennent du nœud au
+                // moment de la liaison, comme pour `direction`. Les écrire
+                // deux fois, c'est la dette de ce miroir dans sa forme pure.
+                p("consistency", ConfigParamType::String, false, None, "Ce qui doit être prêt avant de chercher."),
             ],
+            &["consistency"],
             template,
             "render.text",
         )
@@ -1886,7 +1920,7 @@ mod tests {
         let t = search_in_rust();
         assert_eq!(t.name(), "search_base");
         assert_eq!(t.result(), ("render", "text"));
-        assert_eq!(t.params().len(), 4);
+        assert_eq!(t.params().len(), 5);
     }
 
     #[test]
@@ -1895,7 +1929,7 @@ mod tests {
         assert_eq!(t.name(), "search");
         assert_eq!(t.result(), ("render", "text"));
         let names: Vec<&str> = t.params().iter().map(|p| p.name).collect();
-        assert_eq!(names, vec!["target", "query", "limit", "rerank", "relation", "direction", "expand_limit"]);
+        assert_eq!(names, vec!["target", "query", "limit", "rerank", "relation", "direction", "expand_limit", "consistency"]);
         assert!(t.params()[1].required);
         assert_eq!(t.params()[2].default, Some(json!(10)));
         assert_eq!(t.params()[2].param_type, ConfigParamType::Int);
@@ -1933,12 +1967,12 @@ mod tests {
         // `parse_mermaid` ignore les `%%` : la fiche ne gêne personne.
         // (Avec les `$var` substitués, comme n'importe quel gabarit.)
         let mut vars = HashMap::new();
-        for (k, v) in [("target", "Product"), ("query", "rust"), ("limit", "10"), ("rerank", "0")] {
+        for (k, v) in [("target", "Product"), ("query", "rust"), ("limit", "10"), ("rerank", "0"), ("consistency", "eventual")] {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
         assert_eq!(def.nodes.len(), 7);
-        assert_eq!(def.edges.len(), 12);
+        assert_eq!(def.edges.len(), 13);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -1978,7 +2012,7 @@ mod tests {
         let t = search_in_rust();
         let back = GraphTool::from_mermaid(&t.to_mermaid()).unwrap();
         assert_eq!(back.name(), "search_base");
-        assert_eq!(back.params().len(), 4);
+        assert_eq!(back.params().len(), 5);
         assert_eq!(back.to_mermaid(), t.to_mermaid());
     }
 
@@ -2055,9 +2089,11 @@ mod tests {
         let required: Vec<&str> = d.parameters["required"].as_array().unwrap()
             .iter().map(|v| v.as_str().unwrap()).collect();
         assert_eq!(required, vec!["target", "query"]);
-        // Aucun paramètre de plomberie n'a fuité.
+        // Aucun paramètre de plomberie n'a fuité. `consistency` en fait partie
+        // depuis le 6 septembre : ce n'est pas de la plomberie, c'est
+        // l'appelant qui dit ce qu'il exige d'être prêt.
         let props = d.parameters["properties"].as_object().unwrap();
-        assert_eq!(props.len(), 7);
+        assert_eq!(props.len(), 8);
         assert!(!props.contains_key("fuzzy_distance"));
         assert!(!props.contains_key("result_mode"));
     }
@@ -2134,6 +2170,14 @@ mod tests {
         let t = tools.get("search").unwrap();
         let d = t.tool_def();
         assert_eq!(d.parameters["properties"]["direction"]["enum"], json!(["Outgoing", "Incoming"]));
+        // La consigne de cohérence est une liste close pour la même raison :
+        // un « strickt » mal tapé doit être refusé et nommé, pas ignoré — sans
+        // quoi l'appelant croit attendre et n'attend rien.
+        assert_eq!(
+            d.parameters["properties"]["consistency"]["enum"],
+            json!(["immediate", "eventual", "strict"])
+        );
+        assert_eq!(d.parameters["properties"]["consistency"]["default"], "eventual");
         // Sans catalogue, les listes `@…` restent des chaînes libres.
         assert!(d.parameters["properties"]["relation"].get("enum").is_none());
         assert!(d.parameters["properties"]["target"].get("enum").is_none());
@@ -2178,6 +2222,14 @@ mod tests {
 
         let d = expand.tool_def();
         assert_eq!(d.parameters["properties"]["direction"]["enum"], json!(["Outgoing", "Incoming"]));
+        // La consigne de cohérence est une liste close pour la même raison :
+        // un « strickt » mal tapé doit être refusé et nommé, pas ignoré — sans
+        // quoi l'appelant croit attendre et n'attend rien.
+        assert_eq!(
+            d.parameters["properties"]["consistency"]["enum"],
+            json!(["immediate", "eventual", "strict"])
+        );
+        assert_eq!(d.parameters["properties"]["consistency"]["default"], "eventual");
         assert_eq!(d.parameters["properties"]["direction"]["default"], json!("Outgoing"));
         let err = expand
             .validate_arguments(&json!({"target": "X", "query": "q", "relation": "R", "direction": "Sideways"}))
@@ -2367,6 +2419,9 @@ mod tests {
         assert_eq!(args["limit"], 10);
         // Le cross-encoder est éteint tant qu'on ne le demande pas.
         assert_eq!(args["rerank"], 0);
+        // `consistency` n'a pas de défaut ici : il l'hérite du nœud à la
+        // liaison, et c'est `a_fixed_list_becomes_an_enum_and_bounds_the_call`
+        // qui vérifie ce qu'un agent reçoit vraiment.
         assert_eq!(args.len(), 4);
     }
 
@@ -2557,7 +2612,7 @@ mod tests {
         let (nodes, _) = builtin_graph_tools().unwrap();
         let schema = nodes.schema(SEARCH_TOOL_NODE_TYPE).unwrap();
         let names: Vec<&str> = schema.config_params.iter().map(|p| p.name).collect();
-        assert_eq!(names, vec!["target", "query", "limit", "rerank"]);
+        assert_eq!(names, vec!["target", "query", "limit", "rerank", "consistency"]);
     }
 
     // ── Appel d'outil → Turn ────────────────────────────────────────

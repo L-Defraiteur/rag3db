@@ -1879,6 +1879,77 @@ impl Catalog {
     /// Trois façons de ne pas aboutir, et toutes se **disent** :
     /// le délai expire, une marque est périmée (processus mort), ou la lecture
     /// des marques échoue. Aucune ne se déguise en succès.
+    /// Applique la consigne de cohérence d'une recherche, et rend de quoi le
+    /// dire honnêtement.
+    ///
+    /// **Unique écrivain des trois branches.** Elles vivaient dans le corps de
+    /// [`Catalog::search`], c'est-à-dire nulle part pour le chemin composable :
+    /// l'outil `search` offert aux agents passe par `search_base.mmd`, donc par
+    /// `SearchSourceNode`, qui ne les traversait pas. `Consistency::Strict`
+    /// n'était d'ailleurs construit nulle part dans `src/` — la marque d'eau
+    /// d'ingestion, éprouvée sur deux processus réels, n'avait aucun appelant.
+    /// C'est la famille de défauts qui revient : une pièce écrite mais jamais
+    /// appelée se dégrade sans bruit.
+    ///
+    /// Rend `(reste_en_file, partiel)` :
+    /// - **reste_en_file** — ce qui reste dans *notre* file une fois la consigne
+    ///   appliquée. Mesuré après, jamais avant : en `Strict` un compte pris
+    ///   avant annonçait une file que le drain venait de vider.
+    /// - **partiel** — le résultat doit s'annoncer incomplet, soit parce qu'il
+    ///   reste du travail ici, soit parce que celui des autres processus n'a pas
+    ///   pu être attendu.
+    ///
+    /// Et quand c'est partiel, elle le **dit** dans `warnings` : ces
+    /// avertissements-là remontent jusqu'à la fiche rendue à l'agent, alors
+    /// qu'un `partial: true` dans la méta ne s'affiche nulle part.
+    pub fn appliquer_la_consigne(
+        &mut self,
+        consistency: search::Consistency,
+        timeout_ms: u64,
+        warnings: &mut Vec<String>,
+    ) -> (usize, bool) {
+        // Les écritures des **autres** processus ont-elles été attendues avec
+        // succès ? Faux seulement en `Strict`, et seulement si l'attente a
+        // échoué — marques illisibles, marques périmées, ou délai dépassé.
+        let mut ecritures_ailleurs_atteintes = true;
+        match consistency {
+            search::Consistency::Strict => {
+                // Notre file d'abord — c'est tout ce que `Strict` savait faire.
+                self.drain();
+                // Puis celle des autres. Un lecteur d'un autre processus ne
+                // peut pas la vider ; il peut attendre qu'elle le soit, et
+                // **dire** quand il n'y arrive pas. Son verdict comptait pour
+                // les avertissements mais pas pour `partial` : une attente qui
+                // expirait rendait donc un résultat annoncé complet.
+                ecritures_ailleurs_atteintes =
+                    self.attendre_les_ecritures(timeout_ms, warnings);
+            }
+            search::Consistency::Eventual => {
+                // `flush_insertions` ne pose que les entités : relations et
+                // agrégats restent en file, et c'est ce reste que le compte
+                // ci-dessous va voir.
+                if self.has_pending() {
+                    self.flush_insertions();
+                }
+            }
+            search::Consistency::Immediate => {}
+        }
+
+        let reste = self.pending.total_count();
+        let partiel = reste > 0 || !ecritures_ailleurs_atteintes;
+
+        if reste > 0 {
+            warnings.push(format!(
+                "{reste} écriture(s) sont encore en file au moment de cette recherche \
+                 (relations, agrégats de base de connaissances, ou entités non posées) : \
+                 le résultat peut être incomplet. Demandez « consistency: strict » \
+                 pour les attendre avant de chercher."
+            ));
+        }
+
+        (reste, partiel)
+    }
+
     pub fn attendre_les_ecritures(&self, timeout_ms: u64, warnings: &mut Vec<String>) -> bool {
         let debut = std::time::Instant::now();
         let stmt = self.dialect.load_meta_by_prefix("prefix");
@@ -4283,40 +4354,13 @@ impl Catalog {
             self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
         }
 
-        // Consistency
+        // Consistency — voir `appliquer_la_consigne`, l'unique écrivain.
         let mut strict_warnings: Vec<String> = Vec::new();
-        // Les écritures des **autres** processus ont-elles été attendues avec
-        // succès ? Faux seulement en `Strict`, et seulement si l'attente a
-        // échoué — marques illisibles, marques périmées, ou délai dépassé.
-        let mut ecritures_ailleurs_atteintes = true;
-        match options.consistency {
-            search::Consistency::Strict => {
-                // Notre file d'abord — c'est tout ce que `Strict` savait faire.
-                self.drain();
-                // Puis celle des autres. Un lecteur d'un autre processus ne
-                // peut pas la vider ; il peut attendre qu'elle le soit, et
-                // **dire** quand il n'y arrive pas. Son verdict comptait pour
-                // les avertissements mais pas pour `partial` : une attente qui
-                // expirait rendait donc un résultat annoncé complet.
-                ecritures_ailleurs_atteintes =
-                    self.attendre_les_ecritures(options.timeout_ms, &mut strict_warnings);
-            }
-            search::Consistency::Eventual => {
-                if self.has_pending() {
-                    self.flush_insertions();
-                }
-            }
-            search::Consistency::Immediate => {}
-        }
-
-        // **Après** la consigne, pas avant. Ce compte était pris en tête de
-        // fonction, ce qui le rendait faux dans les deux sens : en `Strict` il
-        // annonçait une file que le drain venait de vider, et en `Eventual` —
-        // le défaut — `flush_insertions` ne pose que les entités et laisse
-        // relations et agrégats en file, dont personne n'entendait parler
-        // puisque `partial` ne regardait que `Immediate`. Une recherche pouvait
-        // donc manquer une ligne d'index KB en se disant complète.
-        let pending_count = self.pending.total_count();
+        let (pending_count, partiel) = self.appliquer_la_consigne(
+            options.consistency,
+            options.timeout_ms,
+            &mut strict_warnings,
+        );
 
         // Resolve signals: per-query override > target default
         let signals = options.signals.unwrap_or(target.default_signals);
@@ -4654,9 +4698,7 @@ impl Catalog {
                 target: name.to_string(),
                 signals,
                 consistency: options.consistency,
-                // Incomplet si du travail reste chez nous, ou si celui des
-                // autres processus n'a pas pu être attendu.
-                partial: pending_count > 0 || !ecritures_ailleurs_atteintes,
+                partial: partiel,
                 pending_count,
                 warnings: std::mem::take(&mut search_warnings),
                 vector_count,
@@ -5980,6 +6022,34 @@ mod tests {
         assert!(
             reponse.meta.partial,
             "du travail reste en file : le résultat est partiel, et doit le dire"
+        );
+    }
+
+    /// L'unique écrivain de la consigne, pris directement : ce que les deux
+    /// chemins de recherche partagent désormais. L'avertissement compte autant
+    /// que le verdict — `partial` ne s'affiche nulle part dans la fiche rendue
+    /// à un agent, les avertissements si.
+    #[test]
+    fn la_consigne_dit_ce_qui_reste_et_comment_l_attendre() {
+        use crate::search::Consistency;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog
+            .create("Document", make_doc_data("Reste", "corps"))
+            .unwrap();
+
+        let mut avertissements: Vec<String> = Vec::new();
+        let (reste, partiel) =
+            catalog.appliquer_la_consigne(Consistency::Eventual, 5_000, &mut avertissements);
+
+        assert!(reste > 0, "relations et agrégats restent après flush_insertions");
+        assert!(partiel);
+        assert_eq!(avertissements.len(), 1);
+        assert!(
+            avertissements[0].contains("consistency: strict"),
+            "l'avertissement doit dire comment attendre, pas seulement qu'il reste \
+             du travail : {avertissements:?}"
         );
     }
 

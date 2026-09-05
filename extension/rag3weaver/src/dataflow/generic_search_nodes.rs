@@ -129,13 +129,55 @@ impl Node for SearchSourceNode {
             }
         }
 
+        // **La consigne de cohérence, enfin appliquée sur ce chemin.** Elle
+        // vivait dans le corps de `Catalog::search`, que ce graphe n'emprunte
+        // pas : l'outil `search` des agents traversait donc zéro des trois
+        // branches, et `Consistency::Strict` n'était construit nulle part.
+        // C'est ici le seul endroit qui convienne — après la résolution de la
+        // cible, avant que les signaux ne lisent quoi que ce soit.
+        let (reste_en_file, partiel, mut avertissements) = {
+            let mut cat = catalog.lock().unwrap();
+            let mut w: Vec<String> = Vec::new();
+            let (reste, partiel) =
+                cat.appliquer_la_consigne(options.consistency, options.timeout_ms, &mut w);
+            (reste, partiel, w)
+        };
+        for a in &avertissements {
+            ctx.warn(a);
+        }
+
         ctx.set_output(
             "query",
             PortValue::new(QueryPayload {
                 target_name: self.target_name.clone(),
                 query: self.query.clone(),
-                options,
-                target: Some(target),
+                options: options.clone(),
+                target: Some(target.clone()),
+            }),
+        );
+
+        // Le journal du nœud ne va nulle part pour un agent — c'est ce qu'on a
+        // découvert avec l'avertissement de filtre du nœud vectoriel. La méta
+        // est le seul canal qui remonte jusqu'à la fiche rendue, et
+        // `merge_port_values` sait déjà fondre deux `SearchMeta` (les
+        // avertissements se concatènent, `partial` s'ajoute par `|=`).
+        ctx.set_output(
+            "meta",
+            PortValue::new(crate::search::SearchMeta {
+                query: self.query.clone(),
+                target: target.name.clone(),
+                signals: crate::search::SearchSignals::NONE,
+                consistency: options.consistency,
+                partial: partiel,
+                pending_count: reste_en_file,
+                vector_count: 0,
+                bm25_count: 0,
+                sparse_count: 0,
+                fused_count: 0,
+                reranked_count: 0,
+                warnings: std::mem::take(&mut avertissements),
+                search_time_ms: 0,
+                diagnostics: None,
             }),
         );
         Ok(())
@@ -1381,9 +1423,14 @@ mod tests {
     fn search_source_node_ports() {
         let node = SearchSourceNode::new("src", "Product", "test", SearchOptions::default());
         assert_eq!(node.inputs().len(), 0);
-        assert_eq!(node.outputs().len(), 1);
+        assert_eq!(node.outputs().len(), 2);
         assert_eq!(node.outputs()[0].name, "query");
         assert_eq!(node.outputs()[0].port_type, PortType::Query);
+        // Le second port dit ce que la consigne de cohérence a trouvé. Sans
+        // lui, un agent ne peut pas distinguer « rien à trouver » de « des
+        // écritures sont encore en file ».
+        assert_eq!(node.outputs()[1].name, "meta");
+        assert_eq!(node.outputs()[1].port_type, PortType::Meta);
         assert_eq!(node.node_type(), "SearchSourceNode");
     }
 

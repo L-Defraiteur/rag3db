@@ -652,12 +652,34 @@ impl NodeFactory for SearchSourceNodeFactory {
             .get("query")
             .and_then(|v| v.as_str())
             .ok_or("SearchSourceNode: missing 'query' config")?;
-        let options: crate::search::SearchOptions = if let Some(opts) = config.get("options") {
+        let mut options: crate::search::SearchOptions = if let Some(opts) = config.get("options") {
             serde_json::from_value(opts.clone())
                 .map_err(|e| format!("SearchSourceNode: invalid 'options': {e}"))?
         } else {
             crate::search::SearchOptions::default()
         };
+        // `consistency` à part de `options` : un gabarit substitue des valeurs
+        // scalaires, pas des morceaux de JSON. Un nom inconnu est refusé —
+        // retomber en silence sur le défaut ferait croire à une attente qui
+        // n'aurait jamais lieu, et c'est précisément le défaut qu'on répare.
+        if let Some(c) = config.get("consistency").and_then(|v| v.as_str()) {
+            if !c.is_empty() {
+                options.consistency = match c.to_ascii_lowercase().as_str() {
+                    "immediate" => crate::search::Consistency::Immediate,
+                    "eventual" => crate::search::Consistency::Eventual,
+                    "strict" => crate::search::Consistency::Strict,
+                    autre => {
+                        return Err(format!(
+                            "SearchSourceNode: 'consistency' inconnu {autre:?} — \
+                             attendu immediate, eventual ou strict"
+                        ))
+                    }
+                };
+            }
+        }
+        if let Some(t) = config.get("timeout_ms").and_then(|v| v.as_u64()) {
+            options.timeout_ms = t;
+        }
         Ok(Box::new(SearchSourceNode::new(name, target_name, query, options)))
     }
 
@@ -670,12 +692,45 @@ impl NodeFactory for SearchSourceNodeFactory {
             node_type: "SearchSourceNode",
             description: "Resolves SearchTarget and emits query",
             inputs: vec![],
-            outputs: vec![PortDef {
-                name: "query",
-                port_type: PortType::Query,
-                required: false,
-            }],
+            outputs: vec![
+                PortDef {
+                    name: "query",
+                    port_type: PortType::Query,
+                    required: false,
+                },
+                // Ce que la consigne de cohérence a trouvé : le reste en file,
+                // `partial`, et l'avertissement qui le dit à l'agent.
+                PortDef {
+                    name: "meta",
+                    port_type: PortType::Meta,
+                    required: false,
+                },
+            ],
             config_params: vec![
+                ConfigParam {
+                    name: "consistency",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("eventual")),
+                    description: "Ce qui doit être prêt avant de chercher : immediate (n'attendre rien), eventual (poser les entités en file), strict (tout vider et attendre les écritures des autres processus)",
+                    // Liste close : un « strickt » mal tapé devient une erreur
+                    // `bad_choice` nommée, et non une attente qui n'a pas lieu.
+                    choices: Some(Choices::Fixed(vec![
+                        "immediate".to_string(),
+                        "eventual".to_string(),
+                        "strict".to_string(),
+                    ])),
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "timeout_ms",
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(serde_json::json!(5000)),
+                    description: "Délai maximum d'attente des écritures des autres processus, en strict",
+                    choices: None,
+                    json_schema: None,
+                },
                 ConfigParam {
                     name: "target_name",
                     param_type: ConfigParamType::String,

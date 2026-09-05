@@ -4,6 +4,7 @@
 %% param: query string! -- Texte de la requête : un identifiant exact, ou une vraie phrase si vous mettez 'rerank'.
 %% param: limit int = 10 -- Nombre maximum de résultats.
 %% param: rerank int = 0 -- Faire relire les N premiers résultats par un cross-encoder qui compare votre requête à chacun, phrase contre phrase, et les remet dans l'ordre. Ne le demandez que si 'query' est une vraie question en langue naturelle — sur un identifiant il ne sert à rien et coûte cher. 20 est une bonne valeur ; 0 le désactive.
+%% param: consistency -- Ce que vous exigez d'être prêt avant de chercher. 'eventual' (défaut) cherche sur ce qui est déjà posé. 'strict' vide d'abord la file d'écriture et attend celle des autres processus — à demander quand vous venez d'écrire et voulez le relire. 'immediate' n'attend rien. Dans tous les cas, un résultat rendu alors que des écritures sont en file vous le dit dans ses avertissements.
 %% result: render.text
 %%
 %% **Un gabarit qui n'est pas un outil.** Celui-ci n'est jamais offert à un
@@ -56,11 +57,26 @@
 %% arêtes sur le même port d'entrée se **fusionnent** (`merge_port_values`) —
 %% avertissements concaténés, comptes additionnés.
 %%
+%% La troisième est arrivée le 6 septembre, et elle vient d'un trou plus large.
+%% La consigne de cohérence (`Consistency`) vivait dans le corps de
+%% `Catalog::search` — que ce graphe **n'emprunte pas**. L'outil des agents ne
+%% traversait donc aucune de ses trois branches, `Consistency::Strict` n'était
+%% construit nulle part dans `src/`, et la marque d'eau d'ingestion — bâtie et
+%% éprouvée sur deux processus réels — n'avait aucun appelant en production.
+%% Elle est maintenant appliquée par `SearchSourceNode`, après la résolution de
+%% la cible et avant que le moindre signal ne lise quoi que ce soit, par le même
+%% `Catalog::appliquer_la_consigne` que le chemin monolithique : un seul
+%% écrivain, parce que chaque correction de recherche de cette semaine a dû être
+%% portée aux deux chemins et que l'une l'a été à moitié.
+%%
+%% L'arête `source -->|meta| render` est ce qui rend la trouvaille dicible : le
+%% journal d'un nœud ne va nulle part pour un agent, la méta si.
+%%
 %% La fiche reste la même surface : `fuzzy_distance`, `result_mode`, les
 %% poids de fusion et les `return_fields` de la résolution restent en dedans.
 
 graph LR
-    source["SearchSourceNode(target_name=$target, query=$query)"]
+    source["SearchSourceNode(target_name=$target, query=$query, consistency=$consistency)"]
     bm25["BM25SearchNode(limit=$limit)"]
     vector["VectorSearchNode(limit=$limit)"]
     fuse["FuseResultsNode(weights='bm25:0.6,vector:0.4')"]
@@ -73,6 +89,7 @@ graph LR
     source -->|query| rerank
     source -->|query| resolve
     source -->|query| render
+    source -->|meta| render
     bm25 -->|meta| render
     vector -->|meta| render
     bm25 -->|results:bm25| fuse

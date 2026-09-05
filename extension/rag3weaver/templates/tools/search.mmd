@@ -7,6 +7,7 @@
 %% param: relation string = "" -- Relation du graphe à suivre depuis chaque résultat, pour obtenir ses voisins. Vide = pas d'expansion.
 %% param: direction -- Sens de parcours, quand 'relation' est donnée.
 %% param: expand_limit int = 5 -- Nombre maximum de voisins par résultat (0 = illimité).
+%% param: consistency -- Ce que vous exigez d'être prêt avant de chercher. 'eventual' (défaut) cherche sur ce qui est déjà posé. 'strict' vide d'abord la file d'écriture et attend celle des autres processus — à demander quand vous venez d'écrire et voulez le relire. 'immediate' n'attend rien. Dans tous les cas, un résultat rendu alors que des écritures sont en file vous le dit dans ses avertissements.
 %% result: render.text
 %%
 %% **Un seul outil de recherche, avec un paramètre de plus.** Il y en avait
@@ -41,7 +42,7 @@
 %% l'outil réellement offert aux agents était le seul à ne pas les montrer.
 
 graph LR
-    inner["SearchTool(target=$target, query=$query, limit=$limit, rerank=$rerank)"]
+    inner["SearchTool(target=$target, query=$query, limit=$limit, rerank=$rerank, consistency=$consistency)"]
     fetch["FetchRelatedNode(relation=$relation, direction=$direction, limit=$expand_limit)"]
     compose["ComposeNode"]
     render["RenderResultsNode"]
