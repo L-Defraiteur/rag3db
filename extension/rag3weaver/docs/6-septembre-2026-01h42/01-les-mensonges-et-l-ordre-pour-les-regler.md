@@ -31,6 +31,63 @@ suivis d'un `drain()` dans la même fonction. Le mensonge d'acquittement est don
 un **défaut d'API**, pas un défaut en exercice — ce qui ne le rend pas moins
 réel, mais le place après ce qui ment à quelqu'un aujourd'hui.
 
+## Ce qui a été réglé dans la nuit du 6
+
+| | ce que c'était | commit |
+|---|---|---|
+| **1.b** `FlushResult.unchanged` | le court-circuit de l'inchangé rendait exactement ce que rend une vraie ingestion ; le compte existait et n'allait qu'à un `eprintln!` sous variable d'environnement | `42d40a8b1` |
+| **1.a (moitié)** `FlushResult.warnings` | les nœuds disaient déjà ce qu'ils sautaient, par `ctx.warn` ; aucun appelant du drain n'écoutait | `42d40a8b1` |
+| **7.b** l'indexation sautée parle | `tables_sans_index_plein_texte`, une règle exacte appelée par les deux nœuds qui écrivent — rien sur le chemin natif, seulement ce qui déclare BM25 | `42d40a8b1` |
+| **7.a** la troncature d'embarquement | `Embedder::troncatures()`, défaut de trait, comptée par `Encoding::overflowing` ; dite en avertissement aux trois frontières d'écriture | `42d40a8b1` |
+| **2** `temp_uuid` | porte son contrat : clé de corrélation, pas identité. **Pas renommée** — son nom voyage dans des champs sérialisés de checkpoint | `42d40a8b1` |
+| **nouveau** `flush_insertions` n'indexait rien | voir ci-dessous : le plus grave de la nuit | `90fbea2b0` |
+
+### Le quatrième point d'entrée
+
+`open_fts_handles_for` porte cette phrase depuis longtemps :
+
+> À appeler depuis **chaque** point d'entrée d'ingestion : sans handle ouvert,
+> `InsertRecordNode` saute l'indexation en silence, et la recherche rend 0 sans
+> que rien ne le signale.
+
+Trois l'appelaient. **`flush_insertions`, non** — et son registre de services
+« minimal » ne portait pas `fts_handles` non plus. Or c'est le chemin qu'emprunte
+**toute recherche en `Eventual`**, le défaut, dès qu'il y a du travail en file.
+Les entités qui y passaient étaient consommées — `mem::take`, elles ne repassent
+pas au drain — et jamais indexées en plein texte.
+
+Le défaut que le commentaire annonçait s'était réalisé à l'endroit exact qu'il
+décrivait. Il a survécu parce qu'**aucun test n'empruntait la combinaison du
+produit** : `create()` puis une recherche en `Eventual`. Tous les e2e de
+recherche passent par `ingest_entities` et `Consistency::Immediate`.
+
+Deux leçons, et la seconde vaut plus que la première : un commentaire n'est pas
+un contrat ; et **une suite peut être verte sur tous les chemins sauf celui que
+les gens empruntent**.
+
+### Ce qui reste ouvert dans le point 1.a
+
+`FlushResult.failed` vaut toujours `0` en dur au succès, et `processed` compte
+toujours les opérations **enfilées**. La raison n'a pas bougé : il n'existe
+aucun canal d'échec **par enregistrement** — `UpdateResult` et `DeleteResult`
+n'ont pas de statut d'échec, et le graphe est tout-ou-rien au niveau `Err`. Les
+avertissements sont un pansement honnête, pas le canal. Le créer change une
+structure de résultats publique ; c'est à décider, pas à glisser.
+
+### Un point neuf, délibérément non fait
+
+**Quatre registres de services d'ingestion écrits à la main** —
+`ingest_entities`, `build_ingestion_graph`, `drain_resume`, `flush_insertions` —
+dont trois partagent quarante-quatre lignes identiques. Ajouter
+`plein_texte_natif` a demandé de l'écrire quatre fois, ce qui est la preuve du
+coût. C'est le motif déjà unifié pour la recherche (`register_search_services`).
+
+**Pas fait cette nuit** : les blocs divergent d'une façon qui n'est pas anodine
+— `ingest_entities` n'enregistre ni `kb_metadata` ni `event_bus` — et unifier
+sans décider ce que ces absences veulent dire changerait le comportement en
+silence. C'est exactement ce qu'on reproche au reste. À faire avec la personne
+qui sait si ces absences sont voulues.
+
 ## 0. La passe complète, d'abord
 
 Rien ne s'ordonne sur un socle non vérifié. Deux changements sont entrés sans
@@ -39,6 +96,12 @@ dictionnaire partagé) et les deux commits ci-dessus. Les 916 tests de
 bibliothèque ne touchent ni la base native ni les modèles.
 
 C'est le préalable, pas une tâche.
+
+**Note de la nuit :** lancée d'abord en `confort`, elle a mis vingt minutes de
+mur pour trois minutes de CPU sur un seul test — les deux processus à l'arrêt
+entre les lots, ce que ce régime fait exprès. Il existait pour une contrainte
+levée le 6 septembre. Relancée en `RAG3WEAVER_REGIME=plein`, avec toutes les
+corrections de la nuit dedans.
 
 ## 1. Les comptes cessent de mentir
 
