@@ -162,6 +162,26 @@ impl EntityRecord {
         }
     }
 
+    /// **Un enregistrement dont l'identité est déjà connue**, donc sans
+    /// résolveur à consommer.
+    ///
+    /// La ligne existe déjà en base : c'est le cas d'une passe de rattrapage,
+    /// qui relit des chunks pour leur donner l'embarquement qu'ils doivent. Il
+    /// n'y a rien à résoudre, seulement à traverser des nœuds qui savent
+    /// attendre un `EntityRef` — et un ref déjà prêt les traverse sans attendre.
+    pub fn deja_resolu(
+        entity_name: String,
+        data: BTreeMap<String, CypherValue>,
+        uuid: &str,
+    ) -> Self {
+        Self {
+            entity_name,
+            data,
+            entity_ref: EntityRef::pre_resolved(&String::new(), uuid, uuid),
+            resolver: None,
+        }
+    }
+
     /// Take the resolver out (consumed once on success by InsertNode).
     pub fn take_resolver(&mut self) -> Option<EntityRefResolver> {
         self.resolver.take()

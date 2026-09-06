@@ -36,14 +36,23 @@
 //!
 //! | demandé | ce qui se passe | exact ? |
 //! |---|---|---|
-//! | rien | rien | oui |
-//! | `Donnee` | les entités en file sont posées (`flush_insertions`) | **non** — relations et agrégats peuvent rester |
-//! | tout le reste | le graphe entier est drainé | **non** — on draine plus que le signal demandé |
+//! | rien | rien | **oui** |
+//! | `Donnee` | les entités en file sont posées (`flush_insertions`) | non — relations et agrégats peuvent rester |
+//! | `PleinTexte` | le graphe est drainé **sans l'étage GPU** | **oui** |
+//! | `Sparse` ou `Dense` | le graphe entier, étage GPU compris | non — les deux signaux GPU partent ensemble |
 //!
-//! Les deux approximations vont dans le sens sûr. Elles se resserreront quand
-//! le graphe de drain saura s'arrêter par étage — `dense` et `sparse` d'abord,
-//! qui sont déjà des nœuds distincts en bout de chaîne et que le schéma v3 sait
-//! désormais distinguer par leurs marqueurs (`_embed_hash`, `_sparse_hash`).
+//! La ligne `PleinTexte` est devenue exacte le 6 septembre 2026 : les nœuds
+//! d'embarquement sont des **feuilles** du graphe de drain, donc les omettre ne
+//! déséquilibre rien. Ce qui n'est pas embarqué devient une **dette dans la
+//! base** — chunks dont `_embed_hash` ou `_sparse_hash` est vide — et non un
+//! état en mémoire : elle survit à un processus qui meurt, elle s'interroge
+//! (`SchemaDialect::count_marqueur_manquant`), et une recherche qui bute dessus
+//! le dit au lieu de rendre zéro en silence.
+//!
+//! Les deux approximations restantes vont dans le sens sûr. Celle de `Donnee`
+//! se resserrera quand `flush_insertions` saura poser aussi les relations ;
+//! celle des deux signaux GPU, quand les nœuds d'embarquement sauront n'en
+//! calculer qu'un — le schéma v3 sait déjà les distinguer par leurs marqueurs.
 
 use serde::{Deserialize, Serialize};
 

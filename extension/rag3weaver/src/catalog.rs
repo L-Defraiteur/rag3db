@@ -130,6 +130,16 @@ pub struct Catalog {
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
     pending: PendingWork,
+    /// **Un indice, pas une vérité** : a-t-on drainé sans l'étage GPU depuis
+    /// le dernier rattrapage ?
+    ///
+    /// Il sert à éviter un balayage de table dans le cas nominal — sans lui,
+    /// chaque recherche exigeant le dense paierait un `SELECT … LIMIT` qui, ne
+    /// trouvant rien, parcourt tout. La vérité, elle, reste dans la base : si
+    /// cet indice se trompe (un autre processus a créé de la dette), la
+    /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
+    /// C'est pour ça qu'il a le droit d'être approximatif.
+    peut_devoir_un_embarquement: bool,
     /// Combien de troncatures d'embarquement ont **déjà été dites**. Le modèle
     /// compte depuis son ouverture ; c'est ici qu'on sait ce qui est neuf.
     troncatures_signalees: usize,
@@ -199,6 +209,13 @@ pub struct Catalog {
     conn: Arc<dyn DbConnection>,
 }
 
+/// Combien de chunks une passe de rattrapage prend par table.
+///
+/// Une borne, pas un réglage de performance : une base qui doit des millions de
+/// chunks doit pouvoir avancer par morceaux sans tout tenir en mémoire ni
+/// monopoliser la carte. Ce qui dépasse est repris à la passe suivante.
+pub const RATTRAPAGE_PAR_PASSE: usize = 512;
+
 impl Catalog {
     // ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -217,6 +234,7 @@ impl Catalog {
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
+            peut_devoir_un_embarquement: false,
             troncatures_signalees: 0,
             drain_counters: DrainCounters::default(),
             // 1024 : un agent émet quelques événements par appel d'outil et
@@ -1980,6 +1998,208 @@ impl Catalog {
     /// Trois façons de ne pas aboutir, et toutes se **disent** :
     /// le délai expire, une marque est périmée (processus mort), ou la lecture
     /// des marques échoue. Aucune ne se déguise en succès.
+    /// **Les services que tout graphe d'ingestion attend**, et rien de plus.
+    ///
+    /// Extrait le 6 septembre 2026 de **trois** registres écrits à la main —
+    /// `ingest_entities`, `build_ingestion_graph`, `drain_resume` — au moment
+    /// où un quatrième appelant est apparu. Ajouter `plein_texte_natif` avait
+    /// demandé de l'écrire quatre fois : c'était la preuve du coût, en écrire
+    /// une cinquième aurait été la payer.
+    ///
+    /// **Seul le noyau strictement identique aux trois est ici.** Ce qui
+    /// diverge reste chez chacun, sans arbitrage de ma part : `ingest_entities`
+    /// n'enregistre ni `kb_metadata` ni `event_bus`, et je ne sais pas si c'est
+    /// voulu. Unifier ce qu'on ne comprend pas, c'est changer le comportement
+    /// en silence — exactement ce qu'on reproche au reste.
+    fn enregistrer_les_services_communs(&self, services: &mut ServiceRegistry) {
+        services.register("conn", self.conn.clone());
+        services.register("dialect", self.dialect.clone());
+        services.register("scope", self.scope.clone());
+        services.register("node_id_cache", self.node_id_cache.clone());
+        services.register("embedder", self.embedder.clone());
+        if let Some(ref ocr) = self.ocr {
+            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
+        }
+        if let Some(ref llm) = self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
+            let mut tool_registry = NodeRegistry::new();
+            register_builtins(&mut tool_registry);
+            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
+        }
+    }
+
+    /// **La passe de rattrapage** : embarquer ce que la coupe a laissé dû.
+    ///
+    /// Quand une recherche n'exige que `data` ou `textsearch`, le drain
+    /// s'arrête avant l'étage GPU et les chunks partent avec un marqueur vide.
+    /// Cette dette **n'est pas gardée en mémoire** — elle est dans la base, donc
+    /// elle survit à un processus qui meurt, et c'est ici qu'on la retrouve :
+    /// une requête, pas un état.
+    ///
+    /// C'est aussi la brique du tick : la même passe, appelée périodiquement,
+    /// ramasse ce qui traîne **à travers toutes les tables** et le passe au GPU
+    /// en un seul lot. Un ramassage global bat en une passe ce que dix
+    /// ingestions font en dix — et c'est là que sont les 99 % du coût.
+    ///
+    /// `limite` borne chaque table : une base qui doit des millions de chunks
+    /// doit pouvoir avancer par morceaux sans tout tenir en mémoire ni
+    /// monopoliser la carte. Rend le nombre de chunks passés au graphe.
+    pub fn embarquer_le_retard(
+        &mut self,
+        exige: crate::disponibilite::Disponibilites,
+        limite: usize,
+    ) -> Result<usize, CatalogError> {
+        if !exige.dense() && !exige.sparse() {
+            return Ok(0);
+        }
+
+        // Les tables de chunks et ce que chacune déclare. Clonées d'abord :
+        // la suite prend `&mut self`.
+        let mut cibles: Vec<(String, bool, search::SearchSignals)> = Vec::new();
+        for (nom, cfg) in &self.entity_configs {
+            if cfg.chunked != Some(false) {
+                cibles.push((format!("{nom}_Chunk"), false, cfg.signals));
+            }
+        }
+        for (kb, meta) in &self.kb_metadata {
+            cibles.push((format!("{kb}_Index_Chunk"), true, meta.signals));
+        }
+
+        let mut total = 0usize;
+        for (table, est_kb, signaux) in cibles {
+            // On ne rattrape que ce qui est **à la fois** exigé et déclaré :
+            // inutile de chercher un retard dense sur une entité qui n'a pas de
+            // signal vectoriel.
+            let mut marqueurs: Vec<&str> = Vec::new();
+            if exige.dense() && signaux.vector() {
+                marqueurs.push("_embed_hash");
+            }
+            if exige.sparse() && signaux.sparse() {
+                marqueurs.push("_sparse_hash");
+            }
+            if marqueurs.is_empty() {
+                continue;
+            }
+
+            // Union par uuid : un chunk peut devoir les deux, il ne passe
+            // qu'une fois — le nœud sait déjà ne recalculer que ce qui manque.
+            let mut par_uuid: BTreeMap<String, BTreeMap<String, CypherValue>> = BTreeMap::new();
+            for marqueur in marqueurs {
+                let requete = self.dialect
+                    .select_chunks_sans_marqueur(&table, marqueur, limite, est_kb);
+                // **Ne pas avaler cette erreur.** La première version le
+                // faisait, et elle a caché son propre défaut pendant une
+                // demi-heure : la requête demandait `_kb_name` sur une table de
+                // chunks d'entité simple, qui ne l'a pas, et le rattrapage
+                // reprenait zéro chunk en silence pendant que l'avertissement
+                // continuait d'en annoncer deux.
+                let res = match self.conn.execute(&requete) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        self.emit_event(CatalogEvent::Warning {
+                            context: "rattrapage".to_string(),
+                            message: format!(
+                                "lecture du retard sur « {table} » ({marqueur}) : {e} — \
+                                 ces chunks ne seront pas rattrapés"
+                            ),
+                        });
+                        continue;
+                    }
+                };
+                for ligne in &res.rows {
+                    let Some(uuid) = ligne.first().and_then(|v| v.as_str()) else { continue };
+                    let mut data = BTreeMap::new();
+                    data.insert("_uuid".to_string(), CypherValue::String(uuid.to_string()));
+                    if let Some(t) = ligne.get(1).and_then(|v| v.as_str()) {
+                        data.insert("_text".to_string(), CypherValue::String(t.to_string()));
+                    }
+                    if let Some(h) = ligne.get(2).and_then(|v| v.as_str()) {
+                        data.insert("_text_hash".to_string(), CypherValue::String(h.to_string()));
+                    }
+                    if let Some(k) = ligne.get(3).and_then(|v| v.as_str()).filter(|k| !k.is_empty()) {
+                        data.insert("_kb_name".to_string(), CypherValue::String(k.to_string()));
+                    }
+                    par_uuid.insert(uuid.to_string(), data);
+                }
+            }
+            if par_uuid.is_empty() {
+                continue;
+            }
+
+            // Sans handle ouvert, les vecteurs sparse seraient calculés puis
+            // jetés — l'avertissement le dirait, mais autant l'éviter.
+            if exige.sparse() && signaux.sparse() {
+                self.ensure_sparse_handle(&table);
+            }
+
+            let nombre = par_uuid.len();
+            let records: Vec<EntityRecord> = par_uuid
+                .into_iter()
+                .map(|(uuid, data)| EntityRecord::deja_resolu(table.clone(), data, &uuid))
+                .collect();
+
+            let mut graph = DataflowGraph::new();
+            if est_kb {
+                graph.add_node(Box::new(KBEmbedNode::new("rattrapage", 32)))
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+            } else {
+                graph.add_node(Box::new(EmbedNode::new("rattrapage", signaux, 32)))
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+            }
+            graph.set_initial_input(
+                "rattrapage",
+                "entities",
+                PortValue::new(BatchPayload::new(PortType::Entities, records)),
+            );
+
+            let mut services = ServiceRegistry::new();
+            self.enregistrer_les_services_communs(&mut services);
+            services.register("embedding_dim", self.config.embedding_dim);
+            services.register("config", self.config.clone());
+            services.register("kb_metadata", self.kb_metadata.clone());
+            services.register("entity_configs", self.entity_configs.clone());
+            services.register("has_sparse",
+                self.sparse_embedder.is_some() || self.dual_embedder.is_some());
+            services.register("has_dual", self.dual_embedder.is_some());
+            services.register("sparse_handles", self.sparse_handles.clone());
+            services.register("plein_texte_natif", self.plein_texte_natif());
+            if let Some(ref sp) = self.sparse_embedder {
+                services.register("sparse_embedder", sp.clone());
+            }
+            if let Some(ref du) = self.dual_embedder {
+                services.register("dual_embedder", du.clone());
+            }
+
+            let runtime = DataflowRuntime::with_services(8, services);
+            let mut ecoute = runtime.subscribe();
+            let issue = runtime.execute(&mut graph);
+            for a in ramasser_les_avertissements(&mut ecoute) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage".to_string(),
+                    message: a,
+                });
+            }
+            match issue {
+                Ok(_) => total += nombre,
+                Err(e) => {
+                    self.emit_event(CatalogEvent::Error {
+                        context: "rattrapage".to_string(),
+                        message: format!("embarquement du retard sur « {table} » : {e}"),
+                    });
+                }
+            }
+        }
+
+        self.flush_blob_store("rattrapage");
+        self.signaler_les_troncatures("rattrapage");
+        // Le tour est fait. S'il restait plus que la borne quelque part, il en
+        // reste encore : l'indice reste posé et la passe suivante reprendra.
+        if total < limite {
+            self.peut_devoir_un_embarquement = false;
+        }
+        Ok(total)
+    }
+
     /// **Pourquoi un signal n'a rien rendu : parce qu'il n'a pas encore été
     /// calculé.**
     ///
@@ -2062,11 +2282,23 @@ impl Catalog {
         // que demandé, parce que le graphe de drain ne sait pas encore
         // s'arrêter par étage.
         if exige.exige_un_derive() {
-            // Un seul drain pour `textsearch`, `sparse` ou `dense` : ils
-            // vivent dans le même graphe. Le jour où il saura s'arrêter après
-            // `chunk_insert`, c'est **ici** que la distinction se fera, et
-            // nulle part ailleurs.
-            self.drain();
+            // **La coupe.** `textsearch` seul s'arrête quand les chunks sont
+            // posés et indexés en plein texte ; `dense` ou `sparse` emmènent
+            // l'étage GPU. Ce qui n'est pas fait devient une dette dans la
+            // base, pas en mémoire, et une recherche qui bute dessus le dit
+            // (`expliquer_le_silence_d_un_signal`).
+            self.drain_jusqu_a(exige);
+            // Ce que la file contenait est fait. Reste ce que des coupes
+            // précédentes ont laissé dû — dans la base, pas en mémoire.
+            if (exige.dense() || exige.sparse()) && self.peut_devoir_un_embarquement {
+                if let Err(e) = self.embarquer_le_retard(exige, RATTRAPAGE_PAR_PASSE) {
+                    warnings.push(format!(
+                        "le rattrapage d'embarquement a échoué ({e}) : des chunks \
+                         restent sans vecteur et la recherche peut rendre moins que ce \
+                         qui existe"
+                    ));
+                }
+            }
         } else if exige.donnee() && self.has_pending() {
             // `flush_insertions` ne pose que les entités : relations et
             // agrégats restent en file, et c'est ce reste que le compte
@@ -3053,20 +3285,7 @@ impl Catalog {
 
         // Build services
         let mut services = ServiceRegistry::new();
-        services.register("conn", self.conn.clone());
-        services.register("dialect", self.dialect.clone());
-        services.register("scope", self.scope.clone());
-        services.register("node_id_cache", self.node_id_cache.clone());
-        services.register("embedder", self.embedder.clone());
-        if let Some(ref ocr) = self.ocr {
-            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
-        }
-        if let Some(ref llm) = self.llm {
-            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
-            let mut tool_registry = NodeRegistry::new();
-            register_builtins(&mut tool_registry);
-            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
-        }
+        self.enregistrer_les_services_communs(&mut services);
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("entity_configs", self.entity_configs.clone());
@@ -3635,7 +3854,16 @@ impl Catalog {
         }
     }
 
-    fn build_ingestion_graph(&mut self) -> (
+    /// `avec_embarquement` : inclure l'étage GPU, ou s'arrêter juste après que
+    /// les chunks sont posés **et indexés en plein texte**.
+    ///
+    /// C'est la coupe des disponibilités. Ce qu'elle rend sans l'étage GPU :
+    /// `data` et `textsearch`. Ce qu'elle laisse dû : `dense` et `sparse`, et
+    /// cette dette n'est pas gardée en mémoire — elle est dans la base, sous la
+    /// forme de chunks dont `_embed_hash` ou `_sparse_hash` est vide. Elle
+    /// survit donc à un processus qui meurt, et elle s'interroge
+    /// (`count_marqueur_manquant`).
+    fn build_ingestion_graph(&mut self, avec_embarquement: bool) -> (
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
         // (chunks supprimés, chunks créés) par uuid, mesurés en aval
@@ -3778,13 +4006,21 @@ impl Catalog {
 
             // Signals resolved per-entity inside EmbedNode via entity_configs service.
             // The fallback signal here is unused when entity_configs is registered.
-            graph.add_node(Box::new(EmbedNode::new("rechunk_embed", search::SearchSignals::BM25, 32))).unwrap();
-            graph.connect("rechunk_insert", "inserted", "rechunk_embed", "entities").unwrap();
-            graph.connect("rechunk_link", "done", "rechunk_embed", "trigger").unwrap();
-
-            // Flush FTS for updated entity tables
+            //
+            // **Le seul nœud d'embarquement qui n'est pas une feuille** : le
+            // flush FTS attend sa fin. Quand on coupe avant l'embarquement, le
+            // flush prend donc son déclencheur en amont — sinon il ne partirait
+            // jamais et l'index plein texte resterait dans le tampon, ce qui
+            // est précisément la disponibilité qu'on cherche à rendre.
             graph.add_node(Box::new(FlushNode::new("rechunk_flush", update_entity_tables))).unwrap();
-            graph.connect("rechunk_embed", "done", "rechunk_flush", "trigger").unwrap();
+            if avec_embarquement {
+                graph.add_node(Box::new(EmbedNode::new("rechunk_embed", search::SearchSignals::BM25, 32))).unwrap();
+                graph.connect("rechunk_insert", "inserted", "rechunk_embed", "entities").unwrap();
+                graph.connect("rechunk_link", "done", "rechunk_embed", "trigger").unwrap();
+                graph.connect("rechunk_embed", "done", "rechunk_flush", "trigger").unwrap();
+            } else {
+                graph.connect("rechunk_link", "done", "rechunk_flush", "trigger").unwrap();
+            }
         }
 
         // ─── 5. KB pipeline: gather → update → chunk ───────────────
@@ -3815,9 +4051,14 @@ impl Catalog {
             graph.connect("chunk_kb", "relations", "agg_links", "relations").unwrap();
             graph.connect("agg_inserts", "done", "agg_links", "trigger").unwrap();
 
-            graph.add_node(Box::new(KBEmbedNode::new("agg_embeds", 32))).unwrap();
-            graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
-            graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
+            // Une feuille : rien ne consomme sa sortie, donc l'omettre ne
+            // déséquilibre rien. Les chunks sont posés et indexés en plein
+            // texte ; leur dette d'embarquement est dans la base, marqueur vide.
+            if avec_embarquement {
+                graph.add_node(Box::new(KBEmbedNode::new("agg_embeds", 32))).unwrap();
+                graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
+                graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
+            }
 
             graph.add_node(Box::new(FlushNode::new("flush_fts", flush_tables.clone()))).unwrap();
             graph.connect("update_kb", "done", "flush_fts", "trigger").unwrap();
@@ -3825,20 +4066,7 @@ impl Catalog {
 
         // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
-        services.register("conn", self.conn.clone());
-        services.register("dialect", self.dialect.clone());
-        services.register("scope", self.scope.clone());
-        services.register("node_id_cache", self.node_id_cache.clone());
-        services.register("embedder", self.embedder.clone());
-        if let Some(ref ocr) = self.ocr {
-            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
-        }
-        if let Some(ref llm) = self.llm {
-            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
-            let mut tool_registry = NodeRegistry::new();
-            register_builtins(&mut tool_registry);
-            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
-        }
+        self.enregistrer_les_services_communs(&mut services);
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());
@@ -3905,7 +4133,29 @@ impl Catalog {
     }
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
+    /// Vide la file **jusqu'à** ce que les disponibilités demandées soient
+    /// tenues, et pas au-delà.
+    ///
+    /// `dense` ou `sparse` demandés ⇒ l'étage GPU est du voyage. Sinon on
+    /// s'arrête quand les chunks sont posés et indexés en plein texte, et le
+    /// reste devient une dette interrogeable dans la base.
+    pub fn drain_jusqu_a(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
+        self.drainer(exige.dense() || exige.sparse())
+    }
+
+    /// Le drain complet, étage GPU compris. C'est le contrat historique, et il
+    /// ne bouge pas : tout appelant qui écrivait `drain()` obtient la même
+    /// chose qu'avant.
     pub fn drain(&mut self) -> FlushResult {
+        self.drainer(true)
+    }
+
+    fn drainer(&mut self, avec_embarquement: bool) -> FlushResult {
+        if !avec_embarquement && self.has_pending() {
+            // On s'apprête à poser des chunks sans les embarquer : la dette
+            // naît ici, et l'indice la note.
+            self.peut_devoir_un_embarquement = true;
+        }
         // **Le filet.** La marque se pose aux points d'entrée qui mettent en
         // file ; si un chemin l'a oubliée, on la pose ici et on le **dit** —
         // un oubli doit se voir, pas produire un lecteur qui croit la base à
@@ -3923,7 +4173,7 @@ impl Catalog {
         }
 
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
-            self.build_ingestion_graph();
+            self.build_ingestion_graph(avec_embarquement);
         if graph.nodes.is_empty() {
             self.effacer_la_marque();
             return FlushResult::default();
@@ -4259,20 +4509,7 @@ impl Catalog {
 
         // Rebuild the ServiceRegistry (same as build_ingestion_graph)
         let mut services = ServiceRegistry::new();
-        services.register("conn", self.conn.clone());
-        services.register("dialect", self.dialect.clone());
-        services.register("scope", self.scope.clone());
-        services.register("node_id_cache", self.node_id_cache.clone());
-        services.register("embedder", self.embedder.clone());
-        if let Some(ref ocr) = self.ocr {
-            services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
-        }
-        if let Some(ref llm) = self.llm {
-            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
-            let mut tool_registry = NodeRegistry::new();
-            register_builtins(&mut tool_registry);
-            services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
-        }
+        self.enregistrer_les_services_communs(&mut services);
         services.register("embedding_dim", self.config.embedding_dim);
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());

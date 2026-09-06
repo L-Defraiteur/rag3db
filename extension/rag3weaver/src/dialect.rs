@@ -338,6 +338,29 @@ pub trait SchemaDialect: Send + Sync {
     /// passe de rattrapage la retrouve telle quelle.
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String;
 
+    /// **Les chunks qui doivent encore un embarquement**, bornés.
+    ///
+    /// Rend `_uuid, _text, _text_hash, _kb_name` — de quoi reconstruire le
+    /// travail d'embarquement sans rien avoir gardé en mémoire. C'est la
+    /// contrepartie de [`Self::count_marqueur_manquant`] : l'un dit combien,
+    /// l'autre dit lesquels.
+    ///
+    /// La borne n'est pas une commodité : une passe de rattrapage doit pouvoir
+    /// avancer par morceaux sur une base qui en doit des millions, sans tenir
+    /// le tout en mémoire ni monopoliser la carte.
+    ///
+    /// `avec_kb_name` : les chunks d'une base de connaissances portent
+    /// `_kb_name`, ceux d'une entité simple **non** — leur table est
+    /// délibérément plus étroite. Demander une colonne absente ne rend pas une
+    /// ligne vide, ça fait échouer la requête.
+    fn select_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String;
+
     // ── Search resolution ────────────────────────────────────────────
 
     /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
@@ -884,6 +907,20 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
              RETURN count(n) AS cnt"
+        )
+    }
+
+    fn select_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String {
+        let kb = if avec_kb_name { ", n._kb_name" } else { "" };
+        format!(
+            "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
+             RETURN n._uuid, n._text, n._text_hash{kb} LIMIT {limite}"
         )
     }
 
@@ -1540,6 +1577,20 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "SELECT count(*) AS cnt FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = ''"
+        )
+    }
+
+    fn select_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String {
+        let kb = if avec_kb_name { ", _kb_name" } else { "" };
+        format!(
+            "SELECT _uuid, _text, _text_hash{kb} FROM {table} \
+             WHERE {marqueur} IS NULL OR {marqueur} = '' LIMIT {limite}"
         )
     }
 

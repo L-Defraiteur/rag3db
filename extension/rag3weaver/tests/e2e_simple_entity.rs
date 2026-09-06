@@ -431,6 +431,124 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
     );
 }
 
+/// **La coupe, sur le chemin où elle existe.**
+///
+/// Le graphe de drain ne découpe pas les entités simples — leurs chunks
+/// viennent d'`ingest_entities`, qui garde son contrat complet. Il porte
+/// l'embarquement pour deux choses : les lignes d'index KB, et les **chunks
+/// réécrits** après une mise à jour. C'est ce second chemin qu'on éprouve ici.
+///
+/// Exiger `data + textsearch` réécrit les chunks et les indexe en plein texte
+/// **sans passer par le GPU** ; leur embarquement devient une dette dans la
+/// base. Exiger `dense` ensuite déclenche le rattrapage, qui la retrouve par
+/// une requête — rien n'a été gardé en mémoire.
+///
+/// Les assertions portent sur la **dette**, pas sur la qualité vectorielle :
+/// l'embarqueur de ce fichier est un factice à quatre dimensions, et faire
+/// dépendre un test de ses similarités serait le rendre faux et fragile.
+#[test]
+#[ignore]
+fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+
+    let mut catalog = setup_simple_catalog(4);
+    catalog
+        .ingest_entities("Product", vec![make_product(
+            "Rust Book",
+            "A comprehensive guide to Rust programming language covering ownership.",
+            "Systems programming, memory safety.",
+            49.99,
+        )])
+        .expect("ingestion complète");
+
+    // Tout est embarqué : `ingest_entities` ne coupe rien.
+    let apres_ingestion = catalog
+        .search("Product", "programming", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    assert!(
+        apres_ingestion.meta.warnings.iter().all(|a| !a.contains("pas encore été embarqués")),
+        "aucune dette après une ingestion complète : {:?}", apres_ingestion.meta.warnings
+    );
+
+    // ── La mise à jour, puis la coupe ──────────────────────────────────
+    let uuid = {
+        let res = catalog
+            .search("Product", "Rust", SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            })
+            .expect("recherche");
+        res.results.first().map(|r| r.uuid.clone()).expect("le produit posé")
+    };
+    let mut maj = BTreeMap::new();
+    maj.insert(
+        "description".to_string(),
+        CypherValue::String(
+            "Une refonte complète du texte, avec des mots entièrement nouveaux : \
+             marmotte, clavecin, cartographie."
+                .to_string(),
+        ),
+    );
+    catalog.update("Product", &uuid, maj).expect("mise en file");
+
+    let mut w = Vec::new();
+    let (reste, _) = catalog.appliquer_la_consigne(D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+    assert_eq!(reste, 0, "la file est vidée jusqu'au plein texte : {w:?}");
+
+    // Le plein texte trouve le nouveau texte, sans qu'aucun GPU ait tourné.
+    let bm25 = catalog
+        .search("Product", "clavecin", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche");
+    assert!(
+        !bm25.results.is_empty(),
+        "le plein texte doit voir les chunks réécrits sans étage GPU"
+    );
+
+    // Et la dette dense est là, **et elle se dit**.
+    let dense = catalog
+        .search("Product", "clavecin", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    eprintln!("[coupe] avertissements après la coupe : {:?}", dense.meta.warnings);
+    assert!(
+        dense.meta.warnings.iter().any(|a| a.contains("pas encore été embarqués")),
+        "la coupe laisse une dette, et un zéro vectoriel doit dire que c'en est \
+         une — pas une absence : {:?}", dense.meta.warnings
+    );
+
+    // ── Exiger le dense rattrape ───────────────────────────────────────
+    // Par la consigne, pas par un appel direct : c'est le contrat qu'on
+    // éprouve — « exiger dense » doit rattraper tout seul.
+    let mut w = Vec::new();
+    catalog.appliquer_la_consigne(D::TOUT, false, 5_000, &mut w);
+
+    let dense = catalog
+        .search("Product", "clavecin", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    eprintln!("[coupe] avertissements après rattrapage : {:?}", dense.meta.warnings);
+    assert!(
+        dense.meta.warnings.iter().all(|a| !a.contains("pas encore été embarqués")),
+        "la passe de rattrapage doit avoir soldé la dette — sinon exiger « dense » \
+         est une promesse non tenue : {:?}", dense.meta.warnings
+    );
+}
+
 #[test]
 #[ignore]
 fn simple_bm25_no_results_for_nonsense() {
