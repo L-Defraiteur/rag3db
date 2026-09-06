@@ -27,9 +27,9 @@ Si cette ligne dit autre chose, rien de ce qui suit ne s'applique.
 
 | couche | version | d'où |
 |---|---|---|
-| burn | 0.22.0-pre.3 | fork `L-Defraiteur/burn`, branche `rag3weaver/pre.3`, rev `669686ec` |
+| burn | 0.22.0-pre.3 | fork `L-Defraiteur/burn`, branche `rag3weaver/pre.3`, rev `ee16daac` |
 | cubecl | 0.11.0-pre.3 | fork `L-Defraiteur/cubecl`, `rag3weaver/pre.3`, rev `0565518f` |
-| cubek | 0.3.0-pre.3 | fork `L-Defraiteur/cubek`, `rag3weaver/pre.3`, rev `3062b6a1` |
+| cubek | 0.3.0-pre.3 | fork `L-Defraiteur/cubek`, `rag3weaver/pre.3`, rev `e9821ceb` |
 | backend | Vulkan (wgpu + SPIR-V épinglé), radv, RDNA4 gfx1201 | `Device::vulkan(kind)` |
 | précision | **Flex32** : stockage f32, matmul f16 sur les matrices coopératives, accumulation f32 | `RAG3WEAVER_BURN_FLOAT=f32` pour l'ancien |
 | autotune | oui (feature `burn-autotune`), cache global `~/.cache/cubecl/default.db` | `cubecl.toml` à la racine du crate |
@@ -40,13 +40,16 @@ chaque atelier en entier (patcher un seul crate d'un dépôt tire ses voisins
 en double de ceux du registre). Un poste sans réseau compile dès que
 `~/.cargo/git` a les trois clones.
 
-Ce que les forks corrigent (une ligne chacun, quatre PR amont à ouvrir) :
+Ce que les forks corrigent (six PR amont à ouvrir, voir 03 B) :
 
 | crate | fichier | la ligne |
 |---|---|---|
 | cubecl-wgpu | `backend/vulkan.rs`, `register_types` | Vulkan inscrit `FloatKind::Flex32` parmi ses types |
 | burn-cubecl | `ops/tensor.rs`, `float_from_data` | accepte un `TensorData` en Flex32 |
 | cubek-matmul | `definition/elems.rs`, `from_globals` | une sortie Flex32 accumule en f32 |
+| burn-cubecl | `kernel/attention/base.rs`, `flash_attention` | en Flex32, q, k, v passent en f16 pour la voie accélérée (qui exige type global = type de tuile) ; sans ça la flash ne se lançait **jamais** et la voie naïve tournait sous son nom |
+| burn-cubecl | `kernel/attention/tune.rs` | la voie naïve reste en lice tant que ses scores tiennent en 256 Mio (plus rapide sur les séquences courtes) |
+| cubek-attention | `global/simple/reader/mask.rs`, `attention.rs` | le masque matérialisé se lit avec `stride(2)`, pas `seq_kv` : un masque `[b,1,1,sk]` étendu était lu de travers (cosinus 0,04) |
 
 Le quatrième trou (`TensorData::convert_dtype(Flex32)` de burn-std, qui
 ré-étiquette f32) est contourné chez nous : `Flex32Adapter` dans
@@ -86,23 +89,36 @@ Carte TV (gfx1201, `gpu:1`), jetons ≈ mots, lots chauds, Flex32 + autotune + f
 
 | lot | BGE-M3 | granite-278m | granite-107m | MiniLM anglais | ce matin (BGE-M3, f32, sans rien) |
 |---|---|---|---|---|---|
-| 8 × 100 mots | 24 212 j/s | 40 770 | 87 170 | 97 488 | 5 351 |
-| 32 × 100 | 21 225 | 44 227 | 184 336 | 198 845 | 5 755 |
-| 64 × 100 | 21 882 | 49 057 | 202 174 | 239 478 | 3 803 |
-| 32 × 300 | 9 891 | 29 139 | 67 883 | 114 124 | 3 327 |
-| 12 formes inédites | 11 476 | 24 561 | 37 140 | 56 542 | 4 196 |
+| 8 × 100 mots | 15 538 j/s | 39 017 | 91 551 | 110 562 | 5 351 |
+| 32 × 100 | 19 191 | 35 444 | 188 872 | 171 102 | 5 755 |
+| 64 × 100 | 21 713 | 41 726 | 204 394 | 172 452 | 3 803 |
+| 32 × 300 | 15 296 | 45 037 | 108 138 | 136 110 | 3 327 |
+| 8 × 900 | 8 028 | 214 694 † | 488 320 † | 576 531 † | — |
+| 12 formes inédites (cache froid) | 13 470 | 21 789 | 48 609 | 28 491 | 4 196 |
+| **128 × 450 (512 jetons)** | — | **121 975** | **416 153** | — | — |
+| **256 × 450** | — | **121 899** | **416 565** | — | — |
 
-Les lots de 900 mots sont tronqués à 512 jetons par tout ce qui n'est pas
-BGE-M3 : leurs chiffres n'y comptent pas. BGE-M3 est **à parité avec
-llama.cpp** sur la même carte (22 000–23 000 j/s sur les lots courts). Vertex
+† tronqués à 512 jetons. Mesuré à minuit, cache d'autotune désactivé
+(`CUBECL_AUTOTUNE_CACHE=false`), sans démon, après la correction de la
+flash (03 D). Avant elle, le même banc donnait granite-107m 109 573 à
+128 × 450 et 129 960 à 256 (après une panique de 3 Gio), granite-278m 43 833
+et 25 533 : **× 3,7 et × 2,8 sur les lots de 512 jetons**, ce que l'indexation
+envoie. Sur les lots de 100 jetons la voie naïve reste la plus rapide et le
+tuner la garde (elle est en lice sous 256 Mio de scores) ; les écarts avec
+la mesure de 23 h (granite-278m 44 227 → 35 444 à 32 × 100, BGE-M3 24 212
+→ 15 538 à 8 × 100) sont à confirmer à cache chaud, la mesure de 23 h
+tournait avec le cache et l'ancien plan.
+
+BGE-M3 est **à parité avec llama.cpp** sur la même carte (22 000–23 000 j/s sur les lots courts). Vertex
 `text-embedding-005`, au quota du compte, plafonne à 8 000 j/s à un appel et
 répond 429 dès huit en vol.
 
 Qualité sur notre code (45 questions fr/en, 67 scopes réels, [04](04-le-banc-de-qualite.md)) :
 granite-278m MRR 0,844, BGE-M3 0,793, granite-107m 0,779, MiniLM 0,61 et 0,57.
 
-Parité : Flex32 contre f32, cosinus 0,999999 (BGE-M3), 0,99999 (Granite sur
-ROCm). Granite : paraphrase fr/en 0,977 contre 0,479 pour un texte étranger ;
+Parité : Flex32 contre f32, cosinus 1,00000 (BGE-M3, 16 textes, après la
+correction de la flash) ; flash contre voie naïve de burn, écart absolu max
+0,0004 à 0,0008 (`e2e_burn_attention`). Granite : paraphrase fr/en 0,977 contre 0,479 pour un texte étranger ;
 une question en français retrouve `budget_batches` à 0,70 contre 0,53 et 0,52.
 
 Ingestion réelle (session architecture, granite-107m, découpe façon

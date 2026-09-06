@@ -49,7 +49,7 @@ lui ; sinon 278m ; BGE-M3 reste le second étage. Le démon change de modèle
 par `RAG3WEAVER_EMBED_MODEL`, le catalogue garde le nom et la dimension dans
 `_catalog_meta` (session architecture) et refuse un mélange.
 
-## B. Les quatre PR amont, depuis les forks
+## B. Les six PR amont, depuis les forks
 
 **Pourquoi.** Trois entrées `[patch]` et un adaptateur disparaissent le jour
 où c'est fusionné ; et ce sont des corrections d'une ligne, faciles à
@@ -61,6 +61,8 @@ accepter.
 | tracel-ai/burn | idem | `crates/burn-cubecl/src/ops/tensor.rs` : `DType::Flex32` dans `float_from_data` | « burn-cubecl: accept Flex32 in float_from_data » |
 | tracel-ai/cubek | idem | `crates/cubek-matmul/src/definition/elems.rs` : Flex32 accumule en f32 | « matmul: Flex32 output accumulates in f32 » |
 | tracel-ai/burn | à écrire | burn-std `convert_dtype(Flex32)` doit étiqueter Flex32 (`convert_inplace_with` pose `Target::dtype()` = f32) | « TensorData::convert_dtype keeps Flex32 » |
+| tracel-ai/burn | `rag3weaver/pre.3`, commit `ee16daac` | `kernel/attention/base.rs` : cast f16 de q, k, v pour la voie accélérée en Flex32 ; `tune.rs` : la voie naïve en lice sous 256 Mio | « burn-cubecl: launch accelerated flash attention on Flex32; keep the fallback competing on short sequences » |
+| tracel-ai/cubek | `rag3weaver/pre.3`, commit `e9821ceb` | `cubek-attention` : le masque matérialisé se lit avec `stride(2)` | « attention: read the materialized mask with its own row stride » (un bug amont franc : tout masque broadcast sur seq_q est faux) |
 
 Les commits existent sur les branches `rag3weaver/pre.3` (et `pre.2`) des
 forks, en français ; à rebaser sur `main` de chaque dépôt avec un message en
@@ -94,7 +96,62 @@ d'urgence.
 
 ## D. Le conseil de lot à 256, et l'autotune qui essaie la voie naïve
 
-**Ce qu'on sait.** L'attention est fusionnée partout ; ce qui retient le
+**Fait le 7 septembre à 0 h 30** : forks burn `ee16daac` et cubek `e9821ceb`,
+révisions bumpées dans `Cargo.toml`, cache d'autotune vidé, parité et débits
+dans le [01 §4](01-l-etat-du-moteur.md). Trois correctifs et non un : la
+flash refusait Flex32 (cast f16 dans burn-cubecl) ; **le masque étendu était
+lu de travers par cubek** (`seq_kv` pris pour pas de ligne, cosinus 0,04
+contre la voie naïve ; `stride(2)` désormais) ; et le tuner ne mesurait plus
+la voie naïve, plus rapide sur les séquences courtes (en lice sous 256 Mio).
+Le conseil de lot peut passer à 256 (`budget_conseille` des granite) : 256 ×
+512 tourne, mais ne rend pas plus que 128 (416 000 contre 416 000) — pas
+d'urgence. Le récit :
+
+**Trouvé le 6 septembre vers 23 h 30.** Le diagnostic ci-dessous
+était faux sur un point : ce n'est pas l'autotune qui *essaie* la voie naïve,
+c'est que **la flash accélérée ne se lançait jamais en Flex32**. La voie
+« blackbox accelerated » de cubek charge ses fragments directement depuis la
+mémoire globale, sans étage pour convertir, et exige donc que le type global
+soit le type de tuile (f16) : elle refuse Flex32 (et f32) avec
+« Query global and tile types must be the same because no stage to cast in
+between ». Et `burn-cubecl::attention` **dégrade silencieusement** une flash
+qui ne se lance pas vers la voie naïve, y compris à l'intérieur des candidats
+d'autotune : le tuner mesurait la voie naïve trois fois sous les noms
+« blackbox_2/4/8_planes » (44,67 / 44,68 / 44,70 ms : le même noyau) et la
+déclarait gagnante. Tout ce qu'on a appelé « flash » aujourd'hui était la
+voie naïve ; à 256 × 12 × 512², ses scores font 3 Gio, au-dessus du tampon
+wgpu, et seul le noyau « unit » (flash sans matrices coopératives, 310 ms)
+survivait. En f16 la flash se lance et 256 passe (sonde : 508 ms le premier
+appel, puis ~1 ms).
+
+**La correction, dans le fork burn** (`crates/burn-cubecl/src/kernel/attention/`,
+pas encore poussée ni mesurée — la carte était à l'architecture) :
+`base.rs` : quand l'entrée est Flex32 et la stratégie blackbox, `flash_attention`
+convertit q, k, v en f16 (trois passes élémentaires, c'est exactement ce que
+Flex32 promet), lance, et reconvertit la sortie en Flex32 ; la dégradation vers
+la voie naïve journalise sa raison (`log::debug!`). `tune.rs` : les candidats
+flash appellent `flash_attention` directement, pour qu'un candidat qui ne se
+lance pas soit une erreur d'autotune et non la voie naïve sous son nom.
+Les sondes : `tests/e2e_burn_attention.rs` (forme surchargeable par
+`RAG3WEAVER_SONDE_B/H/S/D`). Compilation contre le clone local sans toucher
+au `Cargo.toml` partagé : `cargo --config <scratchpad>/patch-burn-local.toml`
+(un `[patch.crates-io]` des 25 crates burn par chemin).
+
+**À faire dès que la carte revient** : sondes en Flex32 (256 doit passer et
+valoir le f16) ; `granite_{107m,278m}_lots_longs_selon_la_taille` à 32–256 ;
+parité Flex32 contre f32 sur granite et BGE-M3 (écart absolu max, pas
+cosinus : les vecteurs *doivent* changer, puisque la flash tourne enfin) ;
+puis pousser sur `rag3weaver/pre.3`, bumper la révision des 25 entrées burn,
+vider le cache d'autotune (`~/.cache/cubecl/default.db`, les entrées
+« blackbox » sont des mensonges), remesurer le 01 §4. Ce sont deux PR amont
+de plus (cast f16 pour Flex32 dans burn-cubecl ; candidats sans dégradation).
+
+Mesuré avant la correction (chantier D, lots de 450 mots, jetons/s, deuxième
+passe) : granite-107m 32 → 105 534, 64 → 90 550, 128 → 109 573, 256 → 129 960 ;
+granite-278m 32 → 42 160, 64 → 38 617, 128 → 43 833, 256 → 25 533 (après la
+panique de 3 Gio).
+
+**Ce qu'on croyait savoir (gardé pour l'écart).** L'attention est fusionnée partout ; ce qui retient le
 conseil à 128 × 512, c'est que l'autotune de l'attention garde le candidat
 naïf dans son plan (priorité minimale, mais essayé), et qu'à 256 séquences de
 512 il demande 3,2 Go d'un tenseur, au-dessus de la taille maximale d'un

@@ -81,3 +81,29 @@ fn granite_107m_lot_de_256_sequences_longues() {
     eprintln!("[granite] 256 × 450 mots : {} vecteurs en {s:.2} s → {:.0} jetons/s", v.len(), 256.0 * 452.0 / s);
     assert_eq!(v.len(), 256);
 }
+
+/// **Le débit selon la taille du lot, sur des séquences longues** (chantier
+/// D du 03 optimiseur) : 32, 64, 128 et 256 séquences de ~450 mots, chaque
+/// taille jouée deux fois (la première compile les noyaux). Ce qui dit si
+/// conseiller 256 plutôt que 128 vaut la peine.
+fn lots_longs_selon_la_taille(e: &dyn Embedder, nom: &str) {
+    let voc = ["fn", "catalogue", "gabarit", "search", "embedding", "ingestion", "relation", "chunk", "scope", "budget"];
+    for n in [32usize, 64, 128, 256] {
+        let textes: Vec<String> = (0..n).map(|i| (0..450).map(|j| voc[(i * 7 + j * 13) % voc.len()]).collect::<Vec<_>>().join(" ")).collect();
+        let mut debits = Vec::new();
+        for _ in 0..2 {
+            let t = std::time::Instant::now();
+            let v = e.embed(&textes).unwrap();
+            assert_eq!(v.len(), n);
+            debits.push(n as f64 * 452.0 / t.elapsed().as_secs_f64());
+        }
+        eprintln!("[{nom}] {n:>3} × 450 mots : {:.0} puis {:.0} jetons/s", debits[0], debits[1]);
+    }
+}
+
+#[test]
+#[ignore]
+fn granite_107m_lots_longs_selon_la_taille() { lots_longs_selon_la_taille(common::burn::GRANITE_107M.as_ref(), "granite-107m"); }
+#[test]
+#[ignore]
+fn granite_278m_lots_longs_selon_la_taille() { lots_longs_selon_la_taille(common::burn::GRANITE_278M.as_ref(), "granite-278m"); }

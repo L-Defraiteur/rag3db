@@ -118,6 +118,21 @@ dans les 51 entrées `[patch.crates-io]` (un `sed` sur l'ancienne révision),
 changé. Les clones de travail de cette session étaient dans le scratchpad ;
 `~/.cargo/git/checkouts/` a la copie que cargo utilise.
 
+**Itérer sur un fork sans toucher au `Cargo.toml` partagé** (7 septembre) :
+un fichier `[patch.crates-io]` qui pointe **tout l'atelier** par chemin
+(`burn = { path = "<clone>/crates/burn" }`, les 25 crates burn, les 11
+cubek — patcher un seul crate tire ses voisins en double) et
+`cargo --config <ce fichier> test …` : cargo compile contre le clone, l'autre
+session ne voit rien, et on ne pousse que quand la mesure est bonne. Les
+clones de ce soir : `<scratchpad>/burn` et `<scratchpad>/cubek`, remote
+`fork` = L-Defraiteur (`origin` est tracel-ai, en lecture seule).
+
+**Le piège fish** : `E="A=1 B=2"; env $E cargo …` pose une seule variable
+`A` valant `1 B=2`. Toujours les variables en préfixe explicite, ou
+`env A=1 B=2 cargo …` en toutes lettres. Le 7 septembre à minuit, ça a
+lancé quatre bancs sans `RAG3WEAVER_SANS_DEMON`, sur la mauvaise carte, et
+remplacé le démon de la session architecture.
+
 Monter de version (pre.3 → suivante) : `docs/issues/6-septembre-2026/vers-pre3.py`
 montre le geste (versions, branches, adaptateur), et
 `flex32-adapter-pre3.rs` l'API burn-store à suivre.
