@@ -32,6 +32,9 @@ pub const PROJECT_TABLE: &str = "_Project";
 pub const DEFAULT_ID: &str = "default";
 /// Clé méta de version de schéma (2 = colonnes de scope présentes).
 pub const SCHEMA_VERSION_KEY: &str = "schema_version";
+
+/// Clé de `_catalog_meta` : le modèle d'embarquement de la base (`nom:dim`).
+pub const EMBEDDING_MODEL_KEY: &str = "embedding_model";
 /// **3** depuis le 6 septembre 2026 : les tables de chunks gagnent
 /// `_sparse_hash`, le marqueur d'embarquement sparse séparé du dense.
 ///

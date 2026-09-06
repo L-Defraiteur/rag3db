@@ -717,3 +717,90 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
 
     let _ = std::fs::remove_dir_all(&dossier);
 }
+
+// ─── Le modèle d'embarquement de la base ─────────────────────────────────────
+
+/// Un embarqueur qui n'est pas un factice : il a un nom, et le catalogue le
+/// retient. Les vecteurs ne comptent pas ici.
+struct EmbarqueurNomme(&'static str, usize);
+
+impl rag3weaver::embedder::Embedder for EmbarqueurNomme {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::embedder::EmbedError> {
+        Ok(texts.iter().map(|_| vec![0.5; self.1]).collect())
+    }
+    fn dim(&self) -> usize {
+        self.1
+    }
+    fn is_mock(&self) -> bool {
+        false
+    }
+    fn name(&self) -> &str {
+        self.0
+    }
+}
+
+fn catalogue_sur(dossier: &std::path::Path, embarqueur: EmbarqueurNomme) -> rag3weaver::Catalog {
+    let conn = Rag3dbConnection::new(dossier).expect("ouvrir la base");
+    let boxed: Box<dyn DbConnection> = Box::new(conn);
+    let ext = format!(
+        "{}/extension/vector/build/libvector.rag3db_extension",
+        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
+        })
+    );
+    boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let mut config = rag3weaver::CatalogConfig::default();
+    config.embedding_dim = embarqueur.1;
+    let mut catalog = rag3weaver::Catalog::new(boxed, Box::new(embarqueur), config);
+    catalog.initialize().expect("initialize");
+    catalog
+}
+
+/// **Un index se cherche avec le modèle qui l'a construit.** La base retient
+/// le premier modèle réel qui embarque (`nom:dim` dans `_catalog_meta`) ; le
+/// même modèle repasse ; un autre est refusé en nommant les deux — pas de
+/// scores plausibles et faux entre deux espaces vectoriels. Demandé par la
+/// session moteur le 6 septembre 2026, en posant granite à côté de BGE-M3.
+#[test]
+#[ignore]
+fn un_index_refuse_un_autre_modele_d_embarquement() {
+    use rag3weaver::config::{EntityConfig, FieldType, SimpleFieldDef};
+    let dossier = std::env::temp_dir().join(format!("rag3weaver-modele-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dossier);
+    let entite = || {
+        let mut fields = HashMap::new();
+        fields.insert("texte".to_string(), SimpleFieldDef { field_type: FieldType::Text, is_title: true, is_content: true, ..Default::default() });
+        EntityConfig { fields, ..Default::default() }
+    };
+    let ligne = || {
+        let mut d = std::collections::BTreeMap::new();
+        d.insert("texte".to_string(), CypherValue::String("un clavecin".into()));
+        vec![d]
+    };
+
+    // 1. Le premier modèle réel s'enregistre.
+    {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        assert_eq!(a.indexed_embedding_model().unwrap(), None, "rien avant le premier embarquement");
+        a.register_entity("Produit", entite()).unwrap();
+        a.ingest_entities("Produit", ligne()).unwrap();
+        assert_eq!(a.indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"));
+    }
+    // 2. Le même modèle repasse.
+    {
+        let mut a2 = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a2.ingest_entities("Produit", ligne()).unwrap();
+    }
+    // 3. Un autre modèle est refusé, en nommant les deux.
+    {
+        let mut b = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 4));
+        match b.ingest_entities("Produit", ligne()) {
+            Err(rag3weaver::CatalogError::EmbeddingModelMismatch { indexed, current }) => {
+                assert_eq!((indexed.as_str(), current.as_str()), ("modele-a:4", "modele-b:4"));
+            }
+            autre => panic!("un autre modèle devait être refusé : {autre:?}"),
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dossier);
+}

@@ -68,6 +68,11 @@ pub enum CatalogError {
     /// pose rien. Le verbe refusé est nommé.
     #[error("catalogue ouvert en lecture seule : {0} refusé")]
     LectureSeule(String),
+    /// **Un index se cherche avec le modèle qui l'a construit.** Les vecteurs
+    /// de granite-107m et ceux de BGE-M3 ne vivent pas dans le même espace ;
+    /// les mélanger rend des scores plausibles et faux, sans rien dire.
+    #[error("cet index a été construit avec le modèle d'embarquement `{indexed}` ; celui-ci est `{current}` — ré-indexer, ou reprendre le même modèle")]
+    EmbeddingModelMismatch { indexed: String, current: String },
     #[error("unknown entity: {0}")]
     UnknownEntity(String),
     #[error("unknown relation: {0}")]
@@ -1932,6 +1937,44 @@ impl Catalog {
         })
     }
 
+    // ── Le modèle d'embarquement de la base ─────────────────────────────
+
+    /// La signature du modèle qui embarque : `nom:dimension`. `None` pour un
+    /// factice — un index de test ne s'engage sur rien.
+    fn embedding_model_signature(&self) -> Option<String> {
+        if self.embedder.is_mock() {
+            return None;
+        }
+        Some(format!("{}:{}", self.embedder.name(), self.embedder.dim()))
+    }
+
+    /// **Vérifier que le modèle est celui de l'index, ou l'enregistrer.**
+    ///
+    /// Appelé avant tout embarquement — ingestion, rattrapage, requête. Au
+    /// premier modèle réel, la base retient `nom:dimension` dans
+    /// `_catalog_meta` ; ensuite un autre modèle est refusé en le nommant.
+    /// Demandé par la session moteur le 6 septembre 2026, au moment de
+    /// mettre granite à côté de BGE-M3 : ragforge gardait `embedding_model`
+    /// sur chaque nœud et ré-embarquait quand il changeait.
+    pub fn check_embedding_model(&self) -> Result<(), CatalogError> {
+        let Some(current) = self.embedding_model_signature() else { return Ok(()) };
+        match self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)? {
+            None => {
+                if !self.lecture_seule {
+                    self.persist_meta_key(crate::scope::EMBEDDING_MODEL_KEY, &current)?;
+                }
+                Ok(())
+            }
+            Some(indexed) if indexed == current => Ok(()),
+            Some(indexed) => Err(CatalogError::EmbeddingModelMismatch { indexed, current }),
+        }
+    }
+
+    /// Le modèle enregistré avec la base, s'il y en a un.
+    pub fn indexed_embedding_model(&self) -> Result<Option<String>, CatalogError> {
+        self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)
+    }
+
     // ── Persistence (_catalog_meta) ─────────────────────────────────────
 
     /// Persist a key-value pair to `_catalog_meta`.
@@ -2420,6 +2463,7 @@ impl Catalog {
         limite: usize,
         tables: Option<&HashSet<String>>,
     ) -> Result<usize, CatalogError> {
+        self.check_embedding_model()?;
         if !exige.dense() && !exige.sparse() {
             return Ok(0);
         }
@@ -3880,6 +3924,9 @@ impl Catalog {
         let avec_embarquement = exige.dense() || exige.sparse();
         self.check_initialized()?;
         self.check_ecriture("ingest_entities")?;
+        if avec_embarquement {
+            self.check_embedding_model()?;
+        }
 
         let entity_config = self.entity_configs.get(entity_name)
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?
@@ -6335,6 +6382,7 @@ impl Catalog {
         need_dense: bool,
         need_sparse: bool,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
+        self.check_embedding_model()?;
         let vecteurs = if need_dense && need_sparse {
             if let Some(ref dual_emb) = self.dual_embedder {
                 // Single forward pass → dense + sparse
