@@ -2221,9 +2221,21 @@ impl Catalog {
         Ok(())
     }
 
-    /// Bases créées avant les colonnes de scope : `ALTER TABLE ADD _org/_project`
-    /// (défaut `"default"`) sur toutes les tables de données connues, une fois,
-    /// sous la clé méta `schema_version`.
+    /// **Les migrations de schéma**, gardées par la clé méta `schema_version`.
+    ///
+    /// - **v2** : `_org` / `_project` sur toutes les tables de données, défaut
+    ///   `"default"` — les bases créées avant le cloisonnement.
+    /// - **v3** : `_sparse_hash` sur les tables de **chunks**, défaut vide — le
+    ///   marqueur d'embarquement sparse, séparé du dense.
+    ///
+    /// Les deux étapes rejouent à chaque montée de version : les `ALTER` sont
+    /// idempotents et leurs erreurs « existe déjà » sont avalées ici, à cet
+    /// endroit précis et pour cette raison précise.
+    ///
+    /// **Ce que la v3 coûte une fois** : les chunks déjà embarqués en sparse
+    /// reçoivent un `_sparse_hash` vide, donc ils seront réembarqués au prochain
+    /// passage. C'est le choix honnête — supposer qu'ils sont faits, c'est
+    /// exactement le mensonge que cette colonne existe pour supprimer.
     fn migrate_scope_columns(&self) -> Result<(), CatalogError> {
         use crate::scope::{SCHEMA_VERSION, SCHEMA_VERSION_KEY};
         if self.read_meta_key(SCHEMA_VERSION_KEY)?.as_deref() == Some(SCHEMA_VERSION) {
@@ -2258,6 +2270,36 @@ impl Catalog {
         if altered > 0 {
             eprintln!("[rag3weaver] schéma v{SCHEMA_VERSION}: colonnes de scope ajoutées ({altered} ALTER)");
         }
+
+        // ── v3 : `_sparse_hash` sur les tables de chunks ────────────────
+        let marqueur = crate::dialect::ColumnDef {
+            name: "_sparse_hash".into(),
+            col_type: crate::dialect::ColumnType::Text,
+        };
+        let mut sparse_ajoutes = 0usize;
+        for table in tables.iter().filter(|t| t.ends_with("_Chunk")) {
+            let ddl = self.dialect.alter_add_column_default(table, &marqueur, "''");
+            match self.conn.execute(&ddl) {
+                Ok(_) => sparse_ajoutes += 1,
+                Err(e) => {
+                    let msg = e.to_string().to_lowercase();
+                    if !(msg.contains("exist") || msg.contains("already has")
+                        || msg.contains("not found") || msg.contains("does not")) {
+                        return Err(CatalogError::DbError(format!(
+                            "migration _sparse_hash {table}: {e}"
+                        )));
+                    }
+                }
+            }
+        }
+        if sparse_ajoutes > 0 {
+            eprintln!(
+                "[rag3weaver] schéma v{SCHEMA_VERSION}: _sparse_hash ajouté sur \
+                 {sparse_ajoutes} table(s) de chunks — les chunks déjà embarqués en \
+                 sparse seront réembarqués une fois"
+            );
+        }
+
         self.persist_meta_key(SCHEMA_VERSION_KEY, SCHEMA_VERSION)
     }
 
@@ -2775,7 +2817,7 @@ impl Catalog {
                 &chunk_table,
                 "uuid",
                 "_parent_uuid",
-                &["_parent_uuid", "_embed_hash"],
+                &["_parent_uuid", "_embed_hash", "_sparse_hash"],
             );
             let Ok(result) = self
                 .conn
@@ -2783,20 +2825,33 @@ impl Catalog {
             else {
                 return (records, 0);
             };
-            // Par parent : combien de chunks, combien d'embarqués.
-            let mut tally: HashMap<String, (usize, usize)> = HashMap::new();
+            // Par parent : combien de chunks, combien embarqués **en dense**,
+            // combien **en sparse**.
+            //
+            // Les deux se comptent séparément depuis le schéma v3. Avant, un
+            // seul `_embed_hash` répondait pour les deux signaux : une entité
+            // dont les chunks avaient un vecteur dense mais pas de vecteur
+            // sparse était déclarée complète, et le court-circuit de l'inchangé
+            // la sautait — définitivement.
+            let mut tally: HashMap<String, (usize, usize, usize)> = HashMap::new();
             for row in &result.rows {
                 let Some(parent) = row.first().and_then(|v| v.as_str()) else { continue };
-                let embedded = row.get(1).and_then(|v| v.as_str()).is_some_and(|h| !h.is_empty());
-                let e = tally.entry(parent.to_string()).or_insert((0, 0));
+                let pose = |i: usize| {
+                    row.get(i).and_then(|v| v.as_str()).is_some_and(|h| !h.is_empty())
+                };
+                let e = tally.entry(parent.to_string()).or_insert((0, 0, 0));
                 e.0 += 1;
-                e.1 += usize::from(embedded);
+                e.1 += usize::from(pose(1));
+                e.2 += usize::from(pose(2));
             }
-            let needs_embedding = config.signals.vector();
+            let veut_dense = config.signals.vector();
+            let veut_sparse = config.signals.sparse();
             complete = tally
                 .into_iter()
-                .filter(|(_, (chunks, embedded))| {
-                    *chunks > 0 && (!needs_embedding || embedded == chunks)
+                .filter(|(_, (chunks, dense, sparse))| {
+                    *chunks > 0
+                        && (!veut_dense || dense == chunks)
+                        && (!veut_sparse || sparse == chunks)
                 })
                 .map(|(uuid, _)| uuid)
                 .collect();

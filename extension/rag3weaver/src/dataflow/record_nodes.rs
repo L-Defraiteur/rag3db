@@ -735,7 +735,10 @@ impl Node for KBEmbedNode {
             .map(|w| w.uuid.as_str())
             .collect();
 
-        let mut existing_hashes: HashMap<String, String> = HashMap::new();
+        // Un marqueur par signal : `_embed_hash` pour le dense, `_sparse_hash`
+        // pour le sparse. Un chunk peut être à jour pour l'un et devoir l'autre.
+        let mut hash_dense: HashMap<String, String> = HashMap::new();
+        let mut hash_sparse: HashMap<String, String> = HashMap::new();
         if !all_uuids.is_empty() {
             // Group by entity_name for efficient UNWIND queries
             let mut by_entity: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -757,28 +760,35 @@ impl Node for KBEmbedNode {
                     &[QueryParam { name: "items".into(), value: items_param }],
                 ) {
                     for row in &result.rows {
-                        if let (Some(uuid), Some(hash)) = (
-                            row.first().and_then(|v| v.as_str()),
-                            row.get(1).and_then(|v| v.as_str()),
-                        ) {
-                            existing_hashes.insert(uuid.to_string(), hash.to_string());
+                        let Some(uuid) = row.first().and_then(|v| v.as_str()) else { continue };
+                        // Vide vaut absent : c'est la valeur qu'un chunk neuf
+                        // porte à sa naissance.
+                        if let Some(h) = row.get(1).and_then(|v| v.as_str()).filter(|h| !h.is_empty()) {
+                            hash_dense.insert(uuid.to_string(), h.to_string());
+                        }
+                        if let Some(h) = row.get(2).and_then(|v| v.as_str()).filter(|h| !h.is_empty()) {
+                            hash_sparse.insert(uuid.to_string(), h.to_string());
                         }
                     }
                 }
             }
         }
 
-        let is_changed = |w: &EmbedWork| -> bool {
-            match existing_hashes.get(&w.uuid) {
-                Some(existing) => existing != &w.text_hash,
-                None => true, // no _embed_hash = never embedded, must embed
-            }
+        // **Chaque signal juge par son propre marqueur.** Un seul les jugeait
+        // tous les trois : un chunk embarqué en dense était donc réputé fait
+        // pour le sparse aussi, et n'y passait jamais. C'est le défaut que la
+        // colonne `_sparse_hash` du schéma v3 existe pour supprimer.
+        let a_jour = |carte: &HashMap<String, String>, uuid: &str, texte: &str| -> bool {
+            carte.get(uuid).is_some_and(|pose| pose == texte)
         };
+        let dense_a_faire = |w: &EmbedWork| !a_jour(&hash_dense, &w.uuid, &w.text_hash);
+        let sparse_a_faire = |w: &EmbedWork| !a_jour(&hash_sparse, &w.uuid, &w.text_hash);
 
         let pre_filter = dense_works.len() + sparse_works.len() + dual_works.len();
-        dense_works.retain(is_changed);
-        sparse_works.retain(is_changed);
-        dual_works.retain(is_changed);
+        dense_works.retain(dense_a_faire);
+        sparse_works.retain(sparse_a_faire);
+        // Le dual produit les deux : il repasse si **l'un des deux** manque.
+        dual_works.retain(|w| dense_a_faire(w) || sparse_a_faire(w));
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
 
         ctx.metric("entities", items.len() as f64);
@@ -966,14 +976,25 @@ impl Node for KBEmbedNode {
                                 }
                             }
 
-                            // **Maintenant** le marqueur : le vecteur est écrit.
-                            // Si on n'est pas passé ici — handle absent —, le
-                            // chunk reste non embarqué, et une passe ultérieure
-                            // le reprendra au lieu de le croire fait.
-                            let pose = dialect.embed_set_hash_returning_offset(entity_name);
+                            // **Maintenant** le marqueur, et c'est le **sien** :
+                            // `_sparse_hash`, pas `_embed_hash`. Le vecteur est
+                            // écrit. Si on n'est pas passé ici — handle absent —
+                            // le chunk reste non embarqué en sparse, et une
+                            // passe ultérieure le reprendra au lieu de le croire
+                            // fait.
+                            let marques = CypherValue::List(
+                                group.iter().map(|(work, _)| {
+                                    let mut m = BTreeMap::new();
+                                    m.insert("_uuid".into(), CypherValue::String(work.uuid.clone()));
+                                    m.insert("_sparse_hash".into(),
+                                        CypherValue::String(work.text_hash.clone()));
+                                    CypherValue::Map(m)
+                                }).collect(),
+                            );
+                            let pose = dialect.batch_update_fields(entity_name, &["_sparse_hash"]);
                             conn.execute_with_params(
                                 &pose,
-                                &[QueryParam { name: "items".into(), value: items_param }],
+                                &[QueryParam { name: "items".into(), value: marques }],
                             ).map_err(|e| e.to_string())?;
                         }
                     }
@@ -1152,11 +1173,17 @@ impl Node for KBEmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
-            conn.execute_with_params(
-                &cypher,
-                &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).map_err(|e| format!("KBEmbedNode undo failed: {e}"))?;
+            // **Les deux marqueurs, ou l'undo ment à moitié.** Annuler un
+            // embarquement en ne remettant que `_embed_hash` laisserait
+            // `_sparse_hash` posé : le chunk serait réembarqué en dense et
+            // jamais en sparse, sans que rien ne le signale.
+            for colonne in ["_embed_hash", "_sparse_hash"] {
+                let cypher = dialect.batch_set_null(entity_name, colonne);
+                conn.execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "uuids".into(), value: uuid_params.clone() }],
+                ).map_err(|e| format!("KBEmbedNode undo failed: {e}"))?;
+            }
         }
         Ok(())
     }
@@ -1481,6 +1508,9 @@ impl ChunkRecordNode {
                 chunk_data.insert("_title".into(), CypherValue::String(title.clone()));
                 chunk_data.insert("_text_hash".into(), CypherValue::String(content_hash(&chunk.text)));
                 chunk_data.insert("_embed_hash".into(), CypherValue::String(String::new()));
+                // Le pendant sparse, vide comme lui : deux marqueurs, deux
+                // disponibilités, et aucun des deux n'est acquis à la naissance.
+                chunk_data.insert("_sparse_hash".into(), CypherValue::String(String::new()));
                 chunk_data.insert("_index".into(), CypherValue::Int(chunk.index as i64));
                 chunk_data.insert("_start_char".into(), CypherValue::Int(chunk.start_byte as i64));
                 chunk_data.insert("_end_char".into(), CypherValue::Int(chunk.end_byte as i64));
@@ -1778,7 +1808,10 @@ impl Node for EmbedNode {
             .map(|w| w.uuid.as_str())
             .collect();
 
-        let mut existing_hashes: HashMap<String, String> = HashMap::new();
+        // Un marqueur par signal : `_embed_hash` pour le dense, `_sparse_hash`
+        // pour le sparse. Un chunk peut être à jour pour l'un et devoir l'autre.
+        let mut hash_dense: HashMap<String, String> = HashMap::new();
+        let mut hash_sparse: HashMap<String, String> = HashMap::new();
         if !all_uuids.is_empty() {
             let mut by_entity: HashMap<&str, Vec<&str>> = HashMap::new();
             for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
@@ -1801,28 +1834,35 @@ impl Node for EmbedNode {
                     &[QueryParam { name: "items".into(), value: items_param }],
                 ) {
                     for row in &result.rows {
-                        if let (Some(uuid), Some(hash)) = (
-                            row.first().and_then(|v| v.as_str()),
-                            row.get(1).and_then(|v| v.as_str()),
-                        ) {
-                            existing_hashes.insert(uuid.to_string(), hash.to_string());
+                        let Some(uuid) = row.first().and_then(|v| v.as_str()) else { continue };
+                        // Vide vaut absent : c'est la valeur qu'un chunk neuf
+                        // porte à sa naissance.
+                        if let Some(h) = row.get(1).and_then(|v| v.as_str()).filter(|h| !h.is_empty()) {
+                            hash_dense.insert(uuid.to_string(), h.to_string());
+                        }
+                        if let Some(h) = row.get(2).and_then(|v| v.as_str()).filter(|h| !h.is_empty()) {
+                            hash_sparse.insert(uuid.to_string(), h.to_string());
                         }
                     }
                 }
             }
         }
 
-        let is_changed = |w: &SimpleEmbedWork| -> bool {
-            match existing_hashes.get(&w.uuid) {
-                Some(existing) => existing != &w.text_hash,
-                None => true,
-            }
+        // **Chaque signal juge par son propre marqueur.** Un seul les jugeait
+        // tous les trois : un chunk embarqué en dense était donc réputé fait
+        // pour le sparse aussi, et n'y passait jamais. C'est le défaut que la
+        // colonne `_sparse_hash` du schéma v3 existe pour supprimer.
+        let a_jour = |carte: &HashMap<String, String>, uuid: &str, texte: &str| -> bool {
+            carte.get(uuid).is_some_and(|pose| pose == texte)
         };
+        let dense_a_faire = |w: &SimpleEmbedWork| !a_jour(&hash_dense, &w.uuid, &w.text_hash);
+        let sparse_a_faire = |w: &SimpleEmbedWork| !a_jour(&hash_sparse, &w.uuid, &w.text_hash);
 
         let pre_filter = dense_works.len() + sparse_works.len() + dual_works.len();
-        dense_works.retain(is_changed);
-        sparse_works.retain(is_changed);
-        dual_works.retain(is_changed);
+        dense_works.retain(dense_a_faire);
+        sparse_works.retain(sparse_a_faire);
+        // Le dual produit les deux : il repasse si **l'un des deux** manque.
+        dual_works.retain(|w| dense_a_faire(w) || sparse_a_faire(w));
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
 
         ctx.metric("entities", items.len() as f64);
@@ -1962,6 +2002,27 @@ impl Node for EmbedNode {
                                         }
                                     }
                                 }
+
+                                // Le marqueur sparse, après son vecteur. Le
+                                // dense posera le sien plus bas, sur sa propre
+                                // colonne : c'est ce qui rend les deux
+                                // disponibilités indépendantes.
+                                let marques = CypherValue::List(
+                                    group.iter().map(|(work, _)| {
+                                        let mut m = BTreeMap::new();
+                                        m.insert("_uuid".into(),
+                                            CypherValue::String(work.uuid.clone()));
+                                        m.insert("_sparse_hash".into(),
+                                            CypherValue::String(work.text_hash.clone()));
+                                        CypherValue::Map(m)
+                                    }).collect(),
+                                );
+                                let pose = dialect
+                                    .batch_update_fields(entity_name, &["_sparse_hash"]);
+                                conn.execute_with_params(
+                                    &pose,
+                                    &[QueryParam { name: "items".into(), value: marques }],
+                                ).map_err(|e| e.to_string())?;
                             }
                         }
                     }
@@ -2137,11 +2198,17 @@ impl Node for EmbedNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let cypher = dialect.batch_set_null(entity_name, "_embed_hash");
-            conn.execute_with_params(
-                &cypher,
-                &[QueryParam { name: "uuids".into(), value: uuid_params }],
-            ).map_err(|e| format!("EmbedNode undo failed: {e}"))?;
+            // **Les deux marqueurs, ou l'undo ment à moitié.** Annuler un
+            // embarquement en ne remettant que `_embed_hash` laisserait
+            // `_sparse_hash` posé : le chunk serait réembarqué en dense et
+            // jamais en sparse, sans que rien ne le signale.
+            for colonne in ["_embed_hash", "_sparse_hash"] {
+                let cypher = dialect.batch_set_null(entity_name, colonne);
+                conn.execute_with_params(
+                    &cypher,
+                    &[QueryParam { name: "uuids".into(), value: uuid_params.clone() }],
+                ).map_err(|e| format!("EmbedNode undo failed: {e}"))?;
+            }
         }
         Ok(())
     }

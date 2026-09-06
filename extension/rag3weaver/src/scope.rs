@@ -32,7 +32,9 @@ pub const PROJECT_TABLE: &str = "_Project";
 pub const DEFAULT_ID: &str = "default";
 /// Clé méta de version de schéma (2 = colonnes de scope présentes).
 pub const SCHEMA_VERSION_KEY: &str = "schema_version";
-pub const SCHEMA_VERSION: &str = "2";
+/// **3** depuis le 6 septembre 2026 : les tables de chunks gagnent
+/// `_sparse_hash`, le marqueur d'embarquement sparse séparé du dense.
+pub const SCHEMA_VERSION: &str = "3";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -347,8 +347,14 @@ pub trait SchemaDialect: Send + Sync {
 
     // ── Embed operations ─────────────────────────────────────────────
 
-    /// Check existing embed hashes: match by item.uuid, return _uuid + _embed_hash.
-    /// Only returns rows where _embed_hash IS NOT NULL.
+    /// Les deux marqueurs d'embarquement d'un chunk : `_uuid`, `_embed_hash`
+    /// (dense) et `_sparse_hash` (sparse).
+    ///
+    /// **Trois colonnes et aucun filtre** depuis le schéma v3. Elle n'en
+    /// rendait que deux, et ne rendait la ligne que si `_embed_hash` n'était pas
+    /// nul — ce qui cachait exactement le cas qui compte maintenant : un chunk
+    /// embarqué en dense et pas en sparse. Le tri se fait chez l'appelant, qui
+    /// seul sait quel signal l'intéresse.
     fn embed_check_hashes(&self, table: &str) -> String;
 
     /// SET embedding column + _embed_hash on matched entities.
@@ -911,8 +917,7 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "UNWIND $items AS item \
              MATCH (n:{table} {{_uuid: item.uuid}}) \
-             WHERE n._embed_hash IS NOT NULL \
-             RETURN n._uuid, n._embed_hash"
+             RETURN n._uuid, n._embed_hash, n._sparse_hash"
         )
     }
 
@@ -1552,9 +1557,8 @@ impl SchemaDialect for PostgresDialect {
 
     fn embed_check_hashes(&self, table: &str) -> String {
         format!(
-            "SELECT _uuid, _embed_hash FROM {table} \
-             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid \
-             WHERE _embed_hash IS NOT NULL"
+            "SELECT _uuid, _embed_hash, _sparse_hash FROM {table} \
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
         )
     }
 

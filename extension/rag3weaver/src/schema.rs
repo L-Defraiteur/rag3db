@@ -273,6 +273,12 @@ pub fn generate_index_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_text".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_embed_hash".into(), col_type: ColumnType::Text },
+        // **Le marqueur sparse, séparé du dense.** Un seul `_embed_hash` ne
+        // peut pas répondre à deux questions : « dense prêt ? » et « sparse
+        // prêt ? » sont deux disponibilités distinctes, et sur le chemin dual
+        // l'écriture dense marquait pour les deux — un vecteur sparse perdu
+        // restait donc annoncé écrit. Vide = pas encore embarqué en sparse.
+        ColumnDef { name: "_sparse_hash".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
@@ -320,6 +326,12 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_embed_hash".into(), col_type: ColumnType::Text },
+        // **Le marqueur sparse, séparé du dense.** Un seul `_embed_hash` ne
+        // peut pas répondre à deux questions : « dense prêt ? » et « sparse
+        // prêt ? » sont deux disponibilités distinctes, et sur le chemin dual
+        // l'écriture dense marquait pour les deux — un vecteur sparse perdu
+        // restait donc annoncé écrit. Vide = pas encore embarqué en sparse.
+        ColumnDef { name: "_sparse_hash".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
