@@ -148,7 +148,7 @@ impl BurnDevice {
             .or_else(|| {
                 crate::regime::Regime::courant()
                     .carte_locale()
-                    .map(|v| depuis(v, "la carte la moins chargée, régime confort"))
+                    .map(|v| depuis(v, "la carte au moins d'écrans actifs, régime confort"))
             });
 
         let Some((raw, source)) = choix else {

@@ -273,48 +273,42 @@ pub fn modele_agentique_nomme(etiquette: &str) -> Option<(OpenAiLlm, String)> {
     }
 }
 
-/// **La carte la moins chargée**, par son rang parmi les cartes — l'index que
-/// `gpu:N` attend. `None` s'il n'y a rien à choisir.
+/// [`least_watched_card`] sur le vrai `/sys/class/drm`, mesurée une fois.
+fn carte_libre_du_poste() -> Option<usize> {
+    static CARTE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
+    *CARTE.get_or_init(|| least_watched_card(Path::new("/sys/class/drm")))
+}
+
+/// **La carte que personne ne regarde** — ou le moins de monde.
 ///
-/// # Pourquoi pas « la carte sans écran »
+/// L'heuristique est de Lucie (6 septembre 2026) : *« un bureau a souvent
+/// deux écrans, une télé supplémentaire un seul »*. On compte les connecteurs
+/// **actifs** (`enabled`) de chaque carte, on prend celle qui en a le moins ;
+/// à égalité, celle qui a le moins de VRAM prise. L'index rendu est celui
+/// que wgpu donne, c'est-à-dire l'ordre PCI.
 ///
-/// C'était le premier critère, et il ne marchait pas — pour une raison qui
-/// mérite d'être écrite, parce qu'elle se représente chaque fois qu'on lit
-/// sysfs.
-///
-/// **`status=connected` ne veut pas dire qu'il y a un écran.** Sur le poste de
-/// développement, le 29 août 2026, `card0-HDMI-A-3` se déclarait `connected`,
-/// `enabled`, `dpms=On` — avec **zéro octet d'EDID et un seul mode, 640x480**.
-/// Rien n'était branché dessus. Un vrai écran se reconnaît à son EDID et à sa
-/// liste de modes : les deux sorties de `card2` rendent 384 et 128 octets
-/// d'EDID, pour 46 et 15 modes. Le connecteur fantôme, lui, ne rend rien.
-///
-/// On aurait donc pu sauver le critère en exigeant un EDID non vide. On ne le
-/// fait pas, parce que la question n'est pas « y a-t-il un écran » mais
-/// **« quelqu'un se sert-il de cette carte »** — un écran branché sur un siège
-/// qui n'est pas lancé n'occupe personne. La charge répond aux deux : 0,09 Go
-/// contre 1,95 Go au repos, parce que les tampons du compositeur vivent sur
-/// une carte et pas sur l'autre.
+/// Avant, c'était « la moins chargée en VRAM », et ça se retournait : dès
+/// qu'un modèle occupait la carte libre, la moins chargée devenait celle du
+/// bureau, et le banc d'essai suivant figeait l'écran. Un écran, ça ne bouge
+/// pas quand on charge un modèle.
 ///
 /// # Ce que ça suppose, et ce que ça ne suppose pas
 ///
 /// - L'ordre PCI est celui que wgpu énumère. Vérifié ici (bus 04 → `gpu:0`,
 ///   bus 07 → `gpu:1`, VRAM à l'appui) ; c'est ce que fait le chargeur Vulkan.
-/// - La mesure est prise **une fois, au démarrage**. Une carte occupée à cet
-///   instant par autre chose sera écartée à tort — c'est un défaut par défaut,
-///   et `RAG3WEAVER_BURN_DEVICE_EMBEDDER` reprend la main.
+/// - Un connecteur `enabled` est un écran que le compositeur dessine. Une
+///   télé branchée mais éteinte (`disabled`) ne compte pas — c'est voulu.
+/// - La mesure est prise **une fois, au démarrage**.
+///   `RAG3WEAVER_BURN_DEVICE_EMBEDDER` reprend la main.
 /// - Une seule carte : rien à choisir, on ne dit rien.
-/// [`carte_la_plus_libre`] sur le vrai `/sys/class/drm`, mesurée une fois.
-fn carte_libre_du_poste() -> Option<usize> {
-    static CARTE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
-    *CARTE.get_or_init(|| carte_la_plus_libre(Path::new("/sys/class/drm")))
-}
-
-pub fn carte_la_plus_libre(racine: &Path) -> Option<usize> {
-    let mut cartes: Vec<(String, u64)> = Vec::new();
-    for e in std::fs::read_dir(racine).ok()?.flatten() {
+pub fn least_watched_card(racine: &Path) -> Option<usize> {
+    // (adresse PCI, écrans actifs, VRAM prise)
+    let mut cartes: Vec<(String, usize, u64)> = Vec::new();
+    let Ok(entrees) = std::fs::read_dir(racine) else { return None };
+    let entrees: Vec<_> = entrees.flatten().collect();
+    for e in &entrees {
         let nom = e.file_name();
-        let nom = nom.to_string_lossy();
+        let nom = nom.to_string_lossy().to_string();
         // `card0`, pas `card0-DP-1` : les connecteurs sont des entrées sœurs.
         if !nom.starts_with("card") || nom.contains('-') {
             continue;
@@ -335,18 +329,26 @@ pub fn carte_la_plus_libre(racine: &Path) -> Option<usize> {
         let adresse = std::fs::read_link(&device)
             .ok()
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-            .unwrap_or_else(|| nom.to_string());
-        cartes.push((adresse, vram));
+            .unwrap_or_else(|| nom.clone());
+        let prefixe = format!("{nom}-");
+        let ecrans = entrees
+            .iter()
+            .filter(|c| c.file_name().to_string_lossy().starts_with(&prefixe))
+            .filter(|c| {
+                std::fs::read_to_string(c.path().join("enabled"))
+                    .map(|v| v.trim() == "enabled")
+                    .unwrap_or(false)
+            })
+            .count();
+        cartes.push((adresse, ecrans, vram));
     }
     if cartes.len() < 2 {
         return None;
     }
-    // **Sur l'adresse seule.** Trier les paires ferait de la VRAM un second
-    // critère et réordonnerait les cartes selon ce qu'on cherche justement à
-    // mesurer.
+    // **L'ordre, sur l'adresse seule** : c'est l'index wgpu. Le choix, après.
     cartes.sort_by(|a, b| a.0.cmp(&b.0));
-    let mini = cartes.iter().map(|(_, v)| *v).min()?;
-    cartes.iter().position(|(_, v)| *v == mini)
+    let meilleure = cartes.iter().map(|(_, e, v)| (*e, *v)).min()?;
+    cartes.iter().position(|(_, e, v)| (*e, *v) == meilleure)
 }
 
 #[cfg(test)]
@@ -379,8 +381,24 @@ mod tests {
     /// Un faux `/sys/class/drm` : des cartes, leur adresse PCI, leur VRAM
     /// occupée en octets.
     fn faux_sysfs(cartes: &[(&str, &str, u64)]) -> tempfile::TempDir {
+        faux_sysfs_avec_ecrans(&cartes.iter().map(|(c, p, v)| (*c, *p, *v, 0usize)).collect::<Vec<_>>())
+    }
+
+    /// Le même, avec des connecteurs : `ecrans` actifs (`enabled`), plus un
+    /// connecteur branché mais éteint sur chaque carte — la télé du siège.
+    fn faux_sysfs_avec_ecrans(cartes: &[(&str, &str, u64, usize)]) -> tempfile::TempDir {
         let d = tempfile::tempdir().expect("tempdir");
-        for (carte, pci, vram) in cartes {
+        for (carte, pci, vram, ecrans) in cartes {
+            for i in 0..*ecrans {
+                let c = d.path().join(format!("{carte}-DP-{i}"));
+                std::fs::create_dir_all(&c).unwrap();
+                std::fs::write(c.join("status"), "connected\n").unwrap();
+                std::fs::write(c.join("enabled"), "enabled\n").unwrap();
+            }
+            let tv = d.path().join(format!("{carte}-HDMI-A-9"));
+            std::fs::create_dir_all(&tv).unwrap();
+            std::fs::write(tv.join("status"), "connected\n").unwrap();
+            std::fs::write(tv.join("enabled"), "disabled\n").unwrap();
             // Le vrai `device` est un **lien** vers l'adresse PCI : on en
             // pose un, sinon le test ne dirait rien de l'ordre réel.
             let cible = d.path().join(pci);
@@ -393,15 +411,31 @@ mod tests {
         d
     }
 
-    /// Le cas du poste : la seconde carte est presque vide, la première porte
-    /// les tampons du compositeur.
+    /// **Le cas du poste, le vrai.** Deux écrans actifs sur la carte du
+    /// bureau, une télé éteinte sur l'autre — et un modèle déjà chargé sur
+    /// l'autre, qui la rend *plus* occupée en VRAM. L'ancienne règle prenait
+    /// alors le bureau et figeait l'écran ; celle-ci compte les écrans.
+    #[test]
+    fn la_carte_des_modeles_est_celle_qu_on_regarde_le_moins() {
+        let d = faux_sysfs_avec_ecrans(&[
+            ("card2", "0000:04:00.0", 1_500_000_000, 2),
+            ("card0", "0000:07:00.0", 6_900_000_000, 0),
+        ]);
+        assert_eq!(least_watched_card(d.path()), Some(1), "bus 07, sans écran actif, malgré ses 6,9 Go");
+        // Siège allumé : la télé compte, mais un écran reste moins que deux.
+        std::fs::write(d.path().join("card0-HDMI-A-9").join("enabled"), "enabled\n").unwrap();
+        assert_eq!(least_watched_card(d.path()), Some(1));
+    }
+
+    /// Sans écran nulle part, la VRAM départage : la seconde carte est presque
+    /// vide, la première porte les tampons du compositeur.
     #[test]
     fn la_moins_chargee_est_celle_qui_a_le_moins_de_vram_prise() {
         let d = faux_sysfs(&[
             ("card0", "0000:04:00.0", 1_950_000_000),
             ("card2", "0000:07:00.0", 90_000_000),
         ]);
-        assert_eq!(carte_la_plus_libre(d.path()), Some(1));
+        assert_eq!(least_watched_card(d.path()), Some(1));
     }
 
     /// **L'index suit l'ordre PCI, pas l'ordre des noms.** `card2` avant
@@ -412,7 +446,7 @@ mod tests {
             ("card10", "0000:04:00.0", 90_000_000),
             ("card2", "0000:07:00.0", 1_950_000_000),
         ]);
-        assert_eq!(carte_la_plus_libre(d.path()), Some(0), "bus 04 est la première");
+        assert_eq!(least_watched_card(d.path()), Some(0), "bus 04 est la première");
     }
 
     /// **Une seule carte : rien à choisir.** Rendre `Some(0)` reviendrait à
@@ -420,12 +454,12 @@ mod tests {
     #[test]
     fn une_seule_carte_ne_propose_rien() {
         let d = faux_sysfs(&[("card0", "0000:04:00.0", 1_950_000_000)]);
-        assert_eq!(carte_la_plus_libre(d.path()), None);
+        assert_eq!(least_watched_card(d.path()), None);
     }
 
     #[test]
     fn un_dossier_qui_n_existe_pas_ne_panique_pas() {
-        assert_eq!(carte_la_plus_libre(Path::new("/n/existe/pas")), None);
+        assert_eq!(least_watched_card(Path::new("/n/existe/pas")), None);
     }
 
     // ── Les quatre promesses ────────────────────────────────────────────
