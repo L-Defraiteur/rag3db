@@ -38,7 +38,22 @@ pub struct PortSnapshot {
 
 impl PortSnapshot {
     /// Build a snapshot from a port name and value, using checkpoint serialization.
+    ///
+    /// **Un lot ne se sérialise pas.** L'instantané d'un `BatchPayload` porte
+    /// son type et son compte, pas son JSON : personne ne le lit sur le chemin
+    /// vivant (seul le résumé d'une requête regarde `data_json`), et le
+    /// produire coûtait deux sérialisations par lot — en sortie, puis en
+    /// entrée du nœud suivant. Sur le cœur C++ de rag3db (6 septembre 2026),
+    /// c'était 5,8 s d'un drain de 225 000 liens, hors de tout nœud.
     pub(crate) fn from_port(name: &str, value: &PortValue) -> Self {
+        if let Some(payload) = value.downcast::<super::port::BatchPayload>() {
+            return PortSnapshot {
+                name: name.to_string(),
+                port_type: payload.batch_type,
+                count: Some(payload.count()),
+                data_json: None,
+            };
+        }
         match port_value_to_checkpoint(value) {
             Ok(cpv) => PortSnapshot {
                 name: name.to_string(),

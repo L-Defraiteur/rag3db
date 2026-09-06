@@ -219,6 +219,29 @@ pub struct EntityRecord {
     pub data: BTreeMap<String, CypherValue>,
     pub entity_ref: EntityRef,
     pub resolver: Option<EntityRefResolver>,
+    /// **Les vecteurs calculés avant que la ligne existe.** Sur une première
+    /// ingestion, l'embarquement précède l'insertion : les vecteurs voyagent
+    /// avec l'enregistrement, et la ligne se pose avec eux en une fois. Ils
+    /// ne sont pas dans `data` : un `Vec<f32>` de 1 024 cases tient en 4 Ko,
+    /// la même chose en `CypherValue::List` en prend trente (6 septembre 2026).
+    pub vectors: Option<RecordVectors>,
+}
+
+/// Les vecteurs d'un enregistrement, calculés en mémoire, à poser avec la ligne.
+#[derive(Debug, Clone, Default)]
+pub struct RecordVectors {
+    /// Le vecteur dense et la colonne qui le reçoit.
+    pub dense: Option<DenseVector>,
+    /// Le vecteur sparse, à insérer dans le handle sparse une fois le décalage
+    /// de la ligne connu.
+    pub sparse: Option<crate::sparse_index::SparseVector>,
+}
+
+/// Un vecteur dense et sa colonne.
+#[derive(Debug, Clone)]
+pub struct DenseVector {
+    pub column: String,
+    pub values: Vec<f32>,
 }
 
 impl EntityRecord {
@@ -233,6 +256,7 @@ impl EntityRecord {
             data,
             entity_ref,
             resolver: Some(resolver),
+            vectors: None,
         }
     }
 
@@ -253,6 +277,7 @@ impl EntityRecord {
             data,
             entity_ref: EntityRef::pre_resolved(&String::new(), uuid, uuid),
             resolver: None,
+            vectors: None,
         }
     }
 
@@ -444,6 +469,7 @@ impl CheckpointEntityRecord {
             data: self.data,
             entity_ref,
             resolver: None,
+            vectors: None,
         }
     }
 }

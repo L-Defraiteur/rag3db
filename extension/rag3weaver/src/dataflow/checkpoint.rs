@@ -506,6 +506,7 @@ mod tests {
             data,
             entity_ref,
             resolver: None,
+            vectors: None,
         };
 
         let payload = BatchPayload::new(PortType::Entities, vec![record]);
@@ -576,6 +577,7 @@ mod tests {
             data: BTreeMap::new(),
             entity_ref,
             resolver: None,
+            vectors: None,
         };
 
         let cp = record.to_checkpoint();

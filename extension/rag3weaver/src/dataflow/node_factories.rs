@@ -604,11 +604,10 @@ impl NodeFactory for EmbedNodeFactory {
                     required: false,
                 },
             ],
-            outputs: vec![PortDef {
-                name: "done",
-                port_type: PortType::Empty,
-                required: false,
-            }],
+            outputs: vec![
+                PortDef { name: "done", port_type: PortType::Empty, required: false },
+                PortDef { name: "embedded", port_type: PortType::Entities, required: false },
+            ],
             config_params: vec![
                 ConfigParam {
                     name: "gpu_batch_size",

@@ -35,8 +35,8 @@ use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
-    ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode,
-    KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode, MarquerDecoupeNode,
+    ChunkRecordNode, DeleteRecordNode, EmbedMode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode,
+    KBGatherNode, InsertMode, InsertRecordNode, LinkRecordNode, KBUpdateNode, MarquerDecoupeNode,
     RechunkDeleteNode, UpdateRecordNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
@@ -3128,6 +3128,35 @@ impl Catalog {
     }
 
     /// Nombre de cellules connues (max des orgs et des projets).
+    /// **Une table sans aucune ligne.** Une erreur vaut « non » : dans le
+    /// doute, on prend le chemin éprouvé.
+    fn table_vide(&self, table: &str) -> bool {
+        self.conn
+            .execute(&self.dialect.count_rows(table))
+            .ok()
+            .and_then(|res| res.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()))
+            .is_some_and(|n| n == 0)
+    }
+
+    /// **Le chemin de masse est-il permis pour cette ingestion ?** Oui quand
+    /// le moteur sait charger un fichier, que la table de l'entité et celle
+    /// de ses chunks sont vides, que l'entité n'alimente pas une base de
+    /// connaissances (ce pipeline a ses propres nœuds), et que personne n'a
+    /// demandé le ligne à ligne (`RAG3WEAVER_INGESTION_LIGNE_A_LIGNE`, pour
+    /// mesurer l'un contre l'autre).
+    fn premiere_ingestion_possible(&self, entity_name: &str, config: &crate::config::EntityConfig) -> bool {
+        if std::env::var_os("RAG3WEAVER_INGESTION_LIGNE_A_LIGNE").is_some() {
+            return false;
+        }
+        if !self.dialect.supports_copy_from() || config.has_kb_participation() {
+            return false;
+        }
+        if !self.table_vide(entity_name) {
+            return false;
+        }
+        config.chunked == Some(false) || self.table_vide(&format!("{entity_name}_Chunk"))
+    }
+
     fn count_scope_nodes(&self) -> Result<usize, CatalogError> {
         let mut max = 0usize;
         for table in [crate::scope::ORG_TABLE, crate::scope::PROJECT_TABLE] {
@@ -3973,16 +4002,48 @@ impl Catalog {
                 data,
                 entity_ref,
                 resolver: Some(resolver),
+                vectors: None,
             });
         }
 
         let record_count = entity_records.len();
 
+        // **Première ingestion : le chemin de masse.** La table est vide,
+        // donc rien n'est à comparer, aucune clé ne peut heurter, et le
+        // moteur sait charger un fichier d'un bloc : les lignes partent par
+        // COPY, l'embarquement précède l'insertion des chunks pour que le
+        // vecteur se pose avec la ligne. Au moindre doute (table non vide,
+        // moteur sans COPY, entité d'une base de connaissances), le chemin
+        // de toujours. Mesuré le 6 septembre 2026 sur le cœur C++ de rag3db.
+        let premiere_ingestion = self.premiere_ingestion_possible(entity_name, &entity_config);
+        let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        if premiere_ingestion && profil {
+            eprintln!("[ingest-profile] {entity_name} : première ingestion, {record_count} lignes par le chemin de masse");
+        }
+
         // Le court-circuit de l'inchangé : ce qui est déjà en base, identique
         // et complet, ne redescend pas dans le graphe (doc 17 §6). Le compte
         // rendu ne bouge pas — ces enregistrements *sont* ingérés, ils
-        // l'étaient déjà.
-        let (entity_records, unchanged) = self.split_unchanged(entity_name, &entity_config, entity_records);
+        // l'étaient déjà. Sur une table vide, il n'y a rien à relire.
+        let (mut entity_records, unchanged) = if premiere_ingestion {
+            (entity_records, 0)
+        } else {
+            self.split_unchanged(entity_name, &entity_config, entity_records)
+        };
+        // **La marque de découpe voyage avec la ligne** sur une première
+        // ingestion : `_chunked_hash = _content_hash` dans le CSV du parent,
+        // au lieu d'un SET par parent après les chunks (825 ms sur 18 140
+        // scopes). Le contrat « la marque ne dit vrai qu'une fois les chunks
+        // posés » tient quand même : si ce graphe meurt entre les deux, la
+        // table n'est plus vide, l'ingestion suivante relit la ligne et son
+        // absence de chunks (`split_unchanged`), et la redécoupe.
+        if premiere_ingestion {
+            for rec in &mut entity_records {
+                if let Some(hash) = rec.data.get("_content_hash").cloned() {
+                    rec.data.insert("_chunked_hash".into(), hash);
+                }
+            }
+        }
         if entity_records.is_empty() {
             self.flush_blob_store("ingest");
             return Ok(FlushResult {
@@ -3991,7 +4052,7 @@ impl Catalog {
                 ..Default::default()
             });
         }
-        if unchanged > 0 && std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+        if unchanged > 0 && profil {
             eprintln!("[ingest-profile] {entity_name} : {unchanged}/{record_count} inchangés, travail dérivé sauté");
         }
 
@@ -4004,9 +4065,11 @@ impl Catalog {
 
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
+        let signals = entity_config.signals;
+        let mode_insert = if premiere_ingestion { InsertMode::Copy } else { InsertMode::Upsert };
 
         // 1. Insert entities
-        graph.add_node(Box::new(InsertRecordNode::new("insert"))).unwrap();
+        graph.add_node(Box::new(InsertRecordNode::new("insert").with_mode(mode_insert))).unwrap();
         graph.set_initial_input("insert", "entities",
             PortValue::new(BatchPayload::new(PortType::Entities, entity_records)));
 
@@ -4014,9 +4077,17 @@ impl Catalog {
         graph.add_node(Box::new(ChunkRecordNode::new("chunk"))).unwrap();
         graph.connect("insert", "inserted", "chunk", "entities").unwrap();
 
-        // 3. Insert chunks
-        graph.add_node(Box::new(InsertRecordNode::new("chunk_insert"))).unwrap();
-        graph.connect("chunk", "chunks", "chunk_insert", "entities").unwrap();
+        // 3. Insert chunks. Sur une première ingestion avec embarquement,
+        // l'embarquement passe **avant** : les chunks arrivent à l'insertion
+        // avec leurs vecteurs et leurs marqueurs, et se posent en une fois.
+        graph.add_node(Box::new(InsertRecordNode::new("chunk_insert").with_mode(mode_insert))).unwrap();
+        if premiere_ingestion && avec_embarquement {
+            graph.add_node(Box::new(EmbedNode::new("embed", signals, 32).with_mode(EmbedMode::Enrich))).unwrap();
+            graph.connect("chunk", "chunks", "embed", "entities").unwrap();
+            graph.connect("embed", "embedded", "chunk_insert", "entities").unwrap();
+        } else {
+            graph.connect("chunk", "chunks", "chunk_insert", "entities").unwrap();
+        }
 
         // 4. Link chunks → parent (CHUNKED_FROM)
         graph.add_node(Box::new(LinkRecordNode::new("chunk_link"))).unwrap();
@@ -4025,21 +4096,22 @@ impl Catalog {
 
         // 4 bis. Le marqueur de découpage, **après** les liens : `_chunked_hash`
         // dit que les chunks de ce contenu existent, il ne le dit qu'une fois
-        // que c'est vrai.
-        graph.add_node(Box::new(MarquerDecoupeNode::new("marquer_decoupe"))).unwrap();
-        graph.connect("chunk", "parents", "marquer_decoupe", "entities").unwrap();
-        graph.connect("chunk_link", "done", "marquer_decoupe", "trigger").unwrap();
+        // que c'est vrai. Sur une première ingestion, il est déjà dans la ligne.
+        if !premiere_ingestion {
+            graph.add_node(Box::new(MarquerDecoupeNode::new("marquer_decoupe"))).unwrap();
+            graph.connect("chunk", "parents", "marquer_decoupe", "entities").unwrap();
+            graph.connect("chunk_link", "done", "marquer_decoupe", "trigger").unwrap();
+        }
 
-        // 5. Embed chunks
-        let signals = entity_config.signals;
+        // 5. Embed chunks — après leur insertion, sur le chemin de toujours.
         // Une feuille : le flush FTS se déclenche depuis l'insertion, pas
         // depuis l'embarquement. L'omettre ne déséquilibre donc rien, et les
         // chunks restent posés et indexés en plein texte.
-        if avec_embarquement {
+        if avec_embarquement && !premiere_ingestion {
             graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
             graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
             graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
-        } else {
+        } else if !avec_embarquement {
             self.peut_devoir_un_embarquement = true;
         }
 
@@ -5262,6 +5334,18 @@ impl Catalog {
             self.annoncer_travail_en_attente();
         }
 
+        // Le même profil que les nœuds, par phase du drain lui-même : sur le
+        // cœur C++ (6 septembre 2026), trois secondes d'un drain de liens
+        // n'étaient dans aucun nœud.
+        let profil_phases = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+        let mut horloge = std::time::Instant::now();
+        let phase = |nom: &str, horloge: &mut std::time::Instant| {
+            if profil_phases {
+                eprintln!("[drain-profile] {:>6} ms  drain/{nom}", horloge.elapsed().as_millis());
+            }
+            *horloge = std::time::Instant::now();
+        };
+
         // Ce que ce drain emporte : tout, ou la fermeture d'une cible.
         let lot = match cible {
             None => std::mem::take(&mut self.pending),
@@ -5271,8 +5355,10 @@ impl Catalog {
                 self.pending.extraire_les_tables(&tables, &bouts)
             }
         };
+        phase("extraction du lot", &mut horloge);
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
             self.build_ingestion_graph(lot, avec_embarquement, avec_decoupage);
+        phase("construction du graphe", &mut horloge);
         if graph.nodes.is_empty() {
             // La marque dit ce qui reste — rien, ou ce que d'autres cibles
             // doivent encore.
@@ -5302,6 +5388,7 @@ impl Catalog {
         } else {
             runtime.execute(&mut graph)
         };
+        phase("exécution", &mut horloge);
 
         if let Some(rx) = profil.as_mut() {
             let mut par_noeud: Vec<(String, u64)> = Vec::new();
@@ -5342,6 +5429,7 @@ impl Catalog {
                 // Un drain borné laisse le reste : la marque le dit table
                 // par table, et son horodatage se rafraîchit au passage.
                 self.annoncer_travail_en_attente();
+                phase("marque et avertissements", &mut horloge);
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );
@@ -7553,6 +7641,7 @@ impl Catalog {
                     data,
                     entity_ref,
                     resolver: None, // already resolved above
+                    vectors: None,
                 });
                 self.devoir(&entity_name, crate::disponibilite::Disponibilites::TOUT);
             }

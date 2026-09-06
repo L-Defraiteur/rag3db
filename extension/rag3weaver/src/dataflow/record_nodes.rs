@@ -58,16 +58,60 @@ use super::port::{BatchPayload, PortDef, PortType, PortValue};
 /// **Services**: `conn` (DbConnection), `node_id_cache` (RwLock<NodeIdCache>)
 pub struct InsertRecordNode {
     name: String,
+    mode: InsertMode,
     undo_data: Option<serde_json::Value>,
     // Stored during execute() for undo()
     conn: Option<Arc<dyn DbConnection>>,
     dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
 }
 
+/// **Le chemin d'écriture d'`InsertRecordNode`.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InsertMode {
+    /// `UNWIND … MERGE` : idempotent, rend les identifiants. Le défaut.
+    #[default]
+    Upsert,
+    /// `COPY … FROM` : le chargement en masse du moteur, réservé à une
+    /// première ingestion — la table est vide, aucune clé ne peut heurter.
+    /// Mesuré le 6 septembre 2026 sur le cœur C++ de rag3db : 18 140 scopes
+    /// par MERGE en 2,5 s, 20 132 chunks avec leur vecteur posés après en
+    /// 2 + 7,7 s. Un moteur sans chemin de masse retombe sur `Upsert`.
+    Copy,
+}
+
 impl InsertRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), undo_data: None, conn: None, dialect: None }
+        Self { name: name.into(), mode: InsertMode::Upsert, undo_data: None, conn: None, dialect: None }
     }
+
+    pub fn with_mode(mut self, mode: InsertMode) -> Self {
+        self.mode = mode;
+        self
+    }
+}
+
+/// La table `uuid → identifiant interne` rendue par un `batch_upsert`
+/// (`RETURN ID(n), item._uuid`) ou par [`SchemaDialect::select_node_ids`]
+/// (`RETURN n._uuid, ID(n)`) — l'ordre des colonnes diffère, on lit par type.
+fn identifiants_par_uuid(rows: &[Vec<CypherValue>], uuid_en_premier: bool) -> HashMap<String, String> {
+    let mut table = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let (Some(a), Some(b)) = (row.first(), row.get(1)) else { continue };
+        // **L'identifiant n'a pas le même type selon le backend.**
+        // `node_id_expr` rend `ID(n)` sur rag3db — une chaîne
+        // `"table:offset"` — et `_row_id` sur PostgreSQL, un entier.
+        // Ne lire que la chaîne laissait cette table **vide** sur
+        // tout backend SQL, et avec elle le cache d'identifiants et
+        // l'indexation lucivy : un index se créait, se commitait, et
+        // ne contenait aucun document. `MoteurTexte::Lucivy` était
+        // donc inutilisable sur PostgreSQL, sans une erreur nulle part.
+        let lire = |v: &CypherValue| v.as_str().map(|s| s.to_string()).or_else(|| v.as_i64().map(|n| n.to_string()));
+        let (uuid, id) = if uuid_en_premier { (a, b) } else { (b, a) };
+        if let (Some(uuid), Some(id)) = (uuid.as_str(), lire(id)) {
+            table.insert(uuid.to_string(), id);
+        }
+    }
+    table
 }
 
 
@@ -176,10 +220,38 @@ impl Node for InsertRecordNode {
             .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .cloned();
 
-        // Group by (entity_name, sorted column_set) for UNWIND batching.
+        // **Le chemin de masse dédoublonne d'abord.** `COPY` refuse tout le
+        // fichier sur une clé en double là où `MERGE` mettait à jour : la
+        // dernière occurrence d'un uuid gagne, les autres sont résolues sans
+        // être écrites.
+        let mut ecartes: HashSet<usize> = HashSet::new();
+        if self.mode == InsertMode::Copy {
+            let mut vus: HashSet<String> = HashSet::with_capacity(items.len());
+            for i in (0..items.len()).rev() {
+                let uuid = items[i].data.get("_uuid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                if !vus.insert(uuid.clone()) {
+                    ecartes.insert(i);
+                    if let Some(r) = items[i].take_resolver() {
+                        r.resolve(uuid);
+                    }
+                }
+            }
+        }
+
+        // Group by (entity_name, sorted column_set) for UNWIND batching. En
+        // masse, la colonne du vecteur dense fait partie de la clé du groupe :
+        // elle est une colonne du CSV comme les autres.
         let mut groups: HashMap<(String, Vec<String>), Vec<usize>> = HashMap::new();
         for (i, rec) in items.iter().enumerate() {
+            if ecartes.contains(&i) {
+                continue;
+            }
             let mut columns: Vec<String> = rec.data.keys().cloned().collect();
+            if let Some(dense) = rec.vectors.as_ref().and_then(|v| v.dense.as_ref()) {
+                if !rec.data.contains_key(&dense.column) {
+                    columns.push(dense.column.clone());
+                }
+            }
             columns.sort();
             groups
                 .entry((rec.entity_name.clone(), columns))
@@ -228,79 +300,89 @@ impl Node for InsertRecordNode {
             .map(|((name, _), idxs)| format!("{}×{}", name, idxs.len()))
             .collect::<Vec<_>>().join(", ")));
 
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
+            .ok_or("InsertRecordNode: 'dialect' service not registered")?;
+        let sparse_handles = ctx
+            .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+            .cloned();
+        let mut copied = 0usize;
+
         for ((entity_name, columns), indices) in &groups {
             let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+            // Ce que la relecture des identifiants doit servir : le cache et
+            // lucivy (par table), le handle sparse (par enregistrement).
+            let a_indexer = fts_handles.as_ref().is_some_and(|h| h.contains_key(entity_name.as_str()));
+            let porte_du_sparse = indices.iter().any(|&i| items[i].vectors.as_ref().is_some_and(|v| v.sparse.is_some()));
 
-            // Build batch upsert via dialect (idempotent MERGE/INSERT ON CONFLICT)
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-                .ok_or("InsertRecordNode: 'dialect' service not registered")?;
-            let cypher = dialect.batch_upsert(entity_name, &col_refs);
-
-            // Build items list param
-            let items_param = CypherValue::List(
-                indices
-                    .iter()
-                    .map(|&i| {
-                        let rec = &items[i];
-                        let mut map = BTreeMap::new();
-                        for col in &col_refs {
-                            map.insert(
-                                col.to_string(),
-                                rec.data
-                                    .get(*col)
-                                    .cloned()
-                                    .unwrap_or(CypherValue::Null),
-                            );
-                        }
-                        CypherValue::Map(map)
-                    })
-                    .collect(),
-            );
-
-            // **Un groupe qui échoue ne tue plus le graphe.** Il se compte,
-            // ses refs sont résolus en échec — un lien vers une de ces lignes
-            // échouera tout de suite et se comptera, au lieu d'attendre
-            // trente secondes — et les autres groupes passent.
-            let result = match conn.execute_with_params(
-                &cypher,
-                &[QueryParam { name: "items".to_string(), value: items_param }],
-            ) {
-                Ok(r) => r,
-                Err(e) => {
-                    let cause = e.to_string();
-                    for &i in indices {
-                        if let Some(r) = items[i].take_resolver() {
-                            r.fail(format!("insertion dans « {entity_name} » échouée : {cause}"));
-                        }
+            // **En masse, par COPY**, sur une première ingestion : le moteur
+            // charge le fichier d'un bloc, sans MERGE ligne à ligne. Refusé,
+            // le groupe repasse par le chemin de toujours.
+            let mut uuid_to_node_id: Option<HashMap<String, String>> = None;
+            if self.mode == InsertMode::Copy {
+                match copier_les_noeuds(conn.as_ref(), dialect.as_ref(), entity_name, &col_refs, indices, &items, a_indexer || porte_du_sparse) {
+                    Ok(Some(ids)) => {
+                        copied += indices.len();
+                        uuid_to_node_id = Some(ids);
                     }
-                    consigner_l_echec(
-                        ctx, "InsertRecordNode", entity_name, indices.len(), Disponibilites::TOUT, cause,
-                    );
-                    continue;
-                }
-            };
-
-            // Build UUID → node_id map for safe matching (don't rely on row order)
-            let mut uuid_to_node_id: HashMap<String, String> = HashMap::new();
-            for row in &result.rows {
-                if let (Some(id_val), Some(uuid_val)) = (row.first(), row.get(1)) {
-                    // **L'identifiant n'a pas le même type selon le backend.**
-                    // `node_id_expr` rend `ID(n)` sur rag3db — une chaîne
-                    // `"table:offset"` — et `_row_id` sur PostgreSQL, un entier.
-                    // Ne lire que la chaîne laissait cette table **vide** sur
-                    // tout backend SQL, et avec elle le cache d'identifiants et
-                    // l'indexation lucivy : un index se créait, se commitait, et
-                    // ne contenait aucun document. `MoteurTexte::Lucivy` était
-                    // donc inutilisable sur PostgreSQL, sans une erreur nulle part.
-                    let id = id_val
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .or_else(|| id_val.as_i64().map(|n| n.to_string()));
-                    if let (Some(id_str), Some(uuid_str)) = (id, uuid_val.as_str()) {
-                        uuid_to_node_id.insert(uuid_str.to_string(), id_str);
+                    Ok(None) => {}
+                    Err(cause) => {
+                        ctx.warn(&format!("insertion dans « {entity_name} » : chargement en masse refusé ({cause}), retour au MERGE"));
                     }
                 }
             }
+
+            let uuid_to_node_id = match uuid_to_node_id {
+                Some(ids) => ids,
+                None => {
+                    // Build batch upsert via dialect (idempotent MERGE/INSERT ON CONFLICT)
+                    let cypher = dialect.batch_upsert(entity_name, &col_refs);
+
+                    // Build items list param. Un vecteur porté par
+                    // l'enregistrement se pose avec la ligne, ici aussi.
+                    let items_param = CypherValue::List(
+                        indices
+                            .iter()
+                            .map(|&i| {
+                                let rec = &items[i];
+                                let mut map = BTreeMap::new();
+                                for col in &col_refs {
+                                    let valeur = rec.data.get(*col).cloned().or_else(|| {
+                                        rec.vectors.as_ref().and_then(|v| v.dense.as_ref())
+                                            .filter(|d| d.column == *col)
+                                            .map(|d| CypherValue::List(d.values.iter().map(|&f| CypherValue::Float(f as f64)).collect()))
+                                    });
+                                    map.insert(col.to_string(), valeur.unwrap_or(CypherValue::Null));
+                                }
+                                CypherValue::Map(map)
+                            })
+                            .collect(),
+                    );
+
+                    // **Un groupe qui échoue ne tue plus le graphe.** Il se compte,
+                    // ses refs sont résolus en échec — un lien vers une de ces lignes
+                    // échouera tout de suite et se comptera, au lieu d'attendre
+                    // trente secondes — et les autres groupes passent.
+                    let result = match conn.execute_with_params(
+                        &cypher,
+                        &[QueryParam { name: "items".to_string(), value: items_param }],
+                    ) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            let cause = e.to_string();
+                            for &i in indices {
+                                if let Some(r) = items[i].take_resolver() {
+                                    r.fail(format!("insertion dans « {entity_name} » échouée : {cause}"));
+                                }
+                            }
+                            consigner_l_echec(
+                                ctx, "InsertRecordNode", entity_name, indices.len(), Disponibilites::TOUT, cause,
+                            );
+                            continue;
+                        }
+                    };
+                    identifiants_par_uuid(&result.rows, false)
+                }
+            };
 
             // Resolve refs + cache node IDs
             for &i in indices {
@@ -363,6 +445,22 @@ impl Node for InsertRecordNode {
                                 }
                             }
                         }
+
+                        // Le vecteur sparse porté par l'enregistrement, dans le
+                        // handle, au décalage de la ligne — ce qu'`EmbedNode`
+                        // fait après coup quand la ligne le précède.
+                        if let Some(sv) = rec.vectors.as_mut().and_then(|v| v.sparse.take()) {
+                            if let Some(handle) = sparse_handles.as_ref().and_then(|h| h.get(entity_name.as_str())) {
+                                let sv_idx = sparse_vector::index::SparseVector::new(sv.indices, sv.values);
+                                if let Err(e) = handle.insert(node_id.offset, &sv_idx) {
+                                    consigner_l_echec(
+                                        ctx, "InsertRecordNode", entity_name, 0,
+                                        Disponibilites::SPARSE,
+                                        format!("vecteur sparse de la ligne {uuid} : {e}"),
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -370,6 +468,9 @@ impl Node for InsertRecordNode {
                     resolver.resolve(uuid);
                 }
             }
+        }
+        if copied > 0 {
+            ctx.metric("copied", copied as f64);
         }
 
         // Capture undo data: entity_name → [uuid] for DELETE
@@ -465,14 +566,42 @@ struct ResolvedLink {
 /// Au-delà de ce nombre d'arêtes dans une relation, le lot part par COPY.
 const COPY_SEUIL: usize = 2_000;
 
+/// **Un fichier CSV à nous seuls.** Le processus, un compteur, et l'instant :
+/// deux graphes dans le même processus — deux tests, deux fils — qui posent
+/// la même table à la même milliseconde se volaient le fichier (6 septembre
+/// 2026 : un lot de trois lignes en laissait une).
+fn fichier_csv(prefixe: &str, table: &str) -> std::path::PathBuf {
+    static COMPTEUR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COMPTEUR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "rag3weaver-{prefixe}-{}-{n}-{table}-{}.csv",
+        std::process::id(),
+        crate::dataflow::checkpoint::timestamp_ms()
+    ))
+}
+
 /// Une valeur Cypher dans une cellule CSV, entre guillemets doublés au besoin.
 fn cellule_csv(v: &CypherValue) -> String {
     let brut = match v {
         CypherValue::Null => return String::new(),
+        // La cellule vide est une chaîne vide, pas un NULL — `_embed_hash` à
+        // la naissance d'un chunk en est une, et la lire NULL la ferait
+        // réécrire. C'est le `null_strings` du COPY des nœuds qui le garantit.
+        CypherValue::String(s) if s.is_empty() => return "\"\"".to_string(),
         CypherValue::String(s) => s.clone(),
         CypherValue::Int(i) => i.to_string(),
         CypherValue::Float(f) => f.to_string(),
         CypherValue::Bool(b) => b.to_string(),
+        CypherValue::List(items) => {
+            let cases: Vec<String> = items.iter().map(|x| match x {
+                CypherValue::Int(i) => i.to_string(),
+                CypherValue::Float(f) => f.to_string(),
+                CypherValue::Bool(b) => b.to_string(),
+                CypherValue::Null => String::new(),
+                autre => format!("{autre:?}"),
+            }).collect();
+            format!("[{}]", cases.join(","))
+        }
         autre => format!("{autre:?}"),
     };
     if brut.contains([',', '"', '\n', '\r']) {
@@ -480,6 +609,96 @@ fn cellule_csv(v: &CypherValue) -> String {
     } else {
         brut
     }
+}
+
+/// Une valeur qu'on sait écrire en CSV pour le moteur : les scalaires, et
+/// les listes de nombres. Une liste de chaînes ou une carte a une syntaxe
+/// qu'on n'a pas éprouvée, et un NULL se lit différemment selon le type de
+/// la colonne, que l'écrivain ne connaît pas — leur groupe reste sur le MERGE.
+fn csv_sait_ecrire(v: &CypherValue) -> bool {
+    match v {
+        CypherValue::String(_) | CypherValue::Int(_) | CypherValue::Float(_) | CypherValue::Bool(_) => true,
+        CypherValue::List(items) => items.iter().all(|x| matches!(x, CypherValue::Int(_) | CypherValue::Float(_) | CypherValue::Bool(_) | CypherValue::Null)),
+        _ => false,
+    }
+}
+
+/// **Poser un groupe de lignes par COPY.** `Ok(None)` : pas de chemin de
+/// masse ici (moteur sans COPY, ou une valeur qu'on ne sait pas écrire en
+/// CSV) — l'appelant reste sur le MERGE. `Ok(Some(ids))` : posé ; la table
+/// `uuid → identifiant` est relue seulement si `relire_les_identifiants`,
+/// c'est-à-dire quand lucivy ou le handle sparse en ont besoin. Vide sinon.
+fn copier_les_noeuds(
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    table: &str,
+    columns: &[&str],
+    indices: &[usize],
+    items: &[EntityRecord],
+    relire_les_identifiants: bool,
+) -> Result<Option<HashMap<String, String>>, String> {
+    let chemin = fichier_csv("lignes", table);
+    let Some(copie) = dialect.copy_nodes_from_csv(table, columns, &chemin.to_string_lossy()) else {
+        return Ok(None);
+    };
+    if indices.iter().any(|&i| items[i].data.values().any(|v| !csv_sait_ecrire(v))) {
+        return Ok(None);
+    }
+
+    {
+        use std::io::Write;
+        let fichier = std::fs::File::create(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let mut w = std::io::BufWriter::with_capacity(1 << 20, fichier);
+        let mut ligne = String::new();
+        for &i in indices {
+            let rec = &items[i];
+            ligne.clear();
+            for (k, col) in columns.iter().enumerate() {
+                if k > 0 {
+                    ligne.push(',');
+                }
+                match rec.data.get(*col) {
+                    Some(v) => ligne.push_str(&cellule_csv(v)),
+                    None => {
+                        // La colonne du vecteur dense : `[f1,f2,…]` entre
+                        // guillemets, écrit depuis le `f32` sans passer par
+                        // une liste de `CypherValue`.
+                        if let Some(d) = rec.vectors.as_ref().and_then(|v| v.dense.as_ref()).filter(|d| d.column == *col) {
+                            ligne.push_str("\"[");
+                            for (j, f) in d.values.iter().enumerate() {
+                                if j > 0 {
+                                    ligne.push(',');
+                                }
+                                use std::fmt::Write as _;
+                                let _ = write!(ligne, "{f}");
+                            }
+                            ligne.push_str("]\"");
+                        }
+                    }
+                }
+            }
+            ligne.push('\n');
+            w.write_all(ligne.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        w.flush().map_err(|e| e.to_string())?;
+    }
+
+    let resultat = conn.execute(&copie).map_err(|e| e.to_string());
+    let _ = std::fs::remove_file(&chemin);
+    resultat?;
+
+    let mut ids = HashMap::new();
+    if relire_les_identifiants {
+        let uuids: Vec<&str> = indices.iter().filter_map(|&i| items[i].data.get("_uuid").and_then(|v| v.as_str())).collect();
+        for tranche in uuids.chunks(5_000) {
+            let param = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.to_string())).collect());
+            let lu = conn
+                .execute_with_params(&dialect.select_node_ids(table), &[QueryParam { name: "uuids".into(), value: param }])
+                .map_err(|e| e.to_string())?;
+            ids.extend(identifiants_par_uuid(&lu.rows, true));
+        }
+    }
+    Ok(Some(ids))
 }
 
 /// **Poser un lot d'arêtes par COPY.** Rend `Ok(true)` si le lot est posé,
@@ -497,12 +716,7 @@ fn copier_les_liens(
     resolved: &[ResolvedLink],
     items: &[RelationRecord],
 ) -> Result<bool, String> {
-    let chemin = std::env::temp_dir().join(format!(
-        "rag3weaver-liens-{}-{}-{}.csv",
-        std::process::id(),
-        rel_name,
-        crate::dataflow::checkpoint::timestamp_ms()
-    ));
+    let chemin = fichier_csv("liens", rel_name);
     let Some(copie) = dialect.copy_links_from_csv(rel_name, ends, prop_refs, &chemin.to_string_lossy()) else {
         return Ok(false);
     };
@@ -1581,6 +1795,7 @@ impl KBChunkRecordNode {
                         data: chunk_data,
                         entity_ref: chunk_ref,
                         resolver: None, // resolver already consumed above
+                        vectors: None,
                     });
 
                     let (link_ref, link_resolver) = RelationRef::new(&rel_name);
@@ -1797,6 +2012,7 @@ impl ChunkRecordNode {
                     data: chunk_data,
                     entity_ref: chunk_ref,
                     resolver: None,
+                    vectors: None,
                 });
 
                 let (link_ref, link_resolver) = RelationRef::new(&rel_name);
@@ -2011,9 +2227,24 @@ pub struct EmbedNode {
     sparse_col: String,
     signals: search::SearchSignals,
     gpu_batch_size: usize,
+    mode: EmbedMode,
     undo_data: Option<serde_json::Value>,
     conn: Option<Arc<dyn DbConnection>>,
     dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
+}
+
+/// **Ce qu'`EmbedNode` fait de ses vecteurs.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EmbedMode {
+    /// Les lignes existent : on vérifie leurs marqueurs, on pose les
+    /// vecteurs par `SET`, le sparse dans son handle au décalage relu. Le défaut.
+    #[default]
+    Persist,
+    /// Les lignes n'existent pas encore : les vecteurs et leurs marqueurs
+    /// s'attachent aux enregistrements (`EntityRecord::vectors`, `_embed_hash`,
+    /// `_sparse_hash`), et l'insertion qui suit les pose avec la ligne. Sans
+    /// vérification de marqueurs — rien n'est en base — et sans rien à défaire.
+    Enrich,
 }
 
 impl EmbedNode {
@@ -2029,10 +2260,16 @@ impl EmbedNode {
             sparse_col: "sparse".into(),
             signals,
             gpu_batch_size,
+            mode: EmbedMode::Persist,
             undo_data: None,
             conn: None,
             dialect: None,
         }
+    }
+
+    pub fn with_mode(mut self, mode: EmbedMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     pub fn with_columns(
@@ -2242,7 +2479,9 @@ impl Node for EmbedNode {
         // pour le sparse. Un chunk peut être à jour pour l'un et devoir l'autre.
         let mut hash_dense: HashMap<String, String> = HashMap::new();
         let mut hash_sparse: HashMap<String, String> = HashMap::new();
-        if !all_uuids.is_empty() {
+        let enrich = self.mode == EmbedMode::Enrich;
+        // En mode Enrich, rien n'est en base : tout est à faire.
+        if !enrich && !all_uuids.is_empty() {
             let mut by_entity: HashMap<&str, Vec<&str>> = HashMap::new();
             for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
                 by_entity.entry(&w.entity_name).or_default().push(&w.uuid);
@@ -2303,6 +2542,10 @@ impl Node for EmbedNode {
 
         let embedding_col = &self.embedding_col;
 
+        // Les vecteurs gardés en mémoire (mode Enrich), par uuid.
+        let mut dense_done: HashMap<String, Vec<f32>> = HashMap::new();
+        let mut sparse_done: HashMap<String, SparseVector> = HashMap::new();
+
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {
             // **Par longueur, pour que le lot ne rembourre presque rien.** Le
@@ -2324,6 +2567,15 @@ impl Node for EmbedNode {
                         "embedder returned {} vectors for {} texts",
                         vectors.len(), chunk.len()
                     ));
+                }
+                if enrich {
+                    for (work, vector) in chunk.iter().zip(vectors.into_iter()) {
+                        if vector.len() != embedding_dim {
+                            return Err(format!("embedding dimension mismatch: expected {}, got {}", embedding_dim, vector.len()));
+                        }
+                        dense_done.insert(work.uuid.clone(), vector);
+                    }
+                    return Ok(());
                 }
 
                 // Group by entity_name for batch UNWIND
@@ -2383,6 +2635,12 @@ impl Node for EmbedNode {
                             "sparse embedder returned {} vectors for {} texts",
                             sparse_vecs.len(), chunk.len()
                         ));
+                    }
+                    if enrich {
+                        for (work, sv) in chunk.iter().zip(sparse_vecs.into_iter()) {
+                            sparse_done.insert(work.uuid.clone(), sv);
+                        }
+                        return Ok(());
                     }
 
                     let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &SparseVector)>> =
@@ -2511,6 +2769,18 @@ impl Node for EmbedNode {
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
 
+                if enrich {
+                    for (work, dense) in dense_results.drain(..) {
+                        if dense.len() != embedding_dim {
+                            return Err(format!("embedding dimension mismatch: expected {}, got {}", embedding_dim, dense.len()));
+                        }
+                        dense_done.insert(work.uuid.clone(), dense);
+                    }
+                    for (work, sparse) in sparse_results.drain(..) {
+                        sparse_done.insert(work.uuid.clone(), sparse);
+                    }
+                }
+
                 // UNWIND dense (sets embedding + _embed_hash)
                 {
                     let mut groups: HashMap<&str, Vec<(&SimpleEmbedWork, &Vec<f32>)>> = HashMap::new();
@@ -2597,16 +2867,48 @@ impl Node for EmbedNode {
             }
         }
 
-        // Capture undo data
-        let mut undo_groups: HashMap<&str, Vec<&str>> = HashMap::new();
-        for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
-            undo_groups.entry(&w.entity_name).or_default().push(&w.uuid);
-        }
-        let undo_map: HashMap<String, Vec<String>> = undo_groups.into_iter()
-            .map(|(k, v)| (k.to_string(), v.into_iter().map(|u| u.to_string()).collect()))
-            .collect();
-        if !undo_map.is_empty() {
-            self.undo_data = Some(serde_json::json!(undo_map));
+        // **Les vecteurs s'attachent aux enregistrements** (mode Enrich) :
+        // le marqueur dans `data`, le vecteur à côté, et l'insertion qui
+        // suit pose tout avec la ligne.
+        if enrich {
+            let mut attaches = 0usize;
+            for rec in &mut items {
+                let Some(uuid) = rec.data.get("_uuid").and_then(|v| v.as_str()).map(|s| s.to_string()) else { continue };
+                // Par `get` et non `remove` : un uuid en double dans le lot
+                // (la dernière occurrence gagne à l'insertion) doit être
+                // enrichi à chaque occurrence, sinon c'est la nue qui reste.
+                let dense = dense_done.get(&uuid).cloned();
+                let sparse = sparse_done.get(&uuid).cloned();
+                if dense.is_none() && sparse.is_none() {
+                    continue;
+                }
+                let hash = rec.data.get("_text_hash").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    .or_else(|| rec.data.get(&self.text_field).and_then(|v| v.as_str()).map(content_hash))
+                    .unwrap_or_default();
+                let vectors = rec.vectors.get_or_insert_with(Default::default);
+                if let Some(values) = dense {
+                    rec.data.insert("_embed_hash".into(), CypherValue::String(hash.clone()));
+                    vectors.dense = Some(crate::records::DenseVector { column: embedding_col.clone(), values });
+                }
+                if let Some(sv) = sparse {
+                    rec.data.insert("_sparse_hash".into(), CypherValue::String(hash));
+                    vectors.sparse = Some(sv);
+                }
+                attaches += 1;
+            }
+            ctx.metric("enriched", attaches as f64);
+        } else {
+            // Capture undo data
+            let mut undo_groups: HashMap<&str, Vec<&str>> = HashMap::new();
+            for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
+                undo_groups.entry(&w.entity_name).or_default().push(&w.uuid);
+            }
+            let undo_map: HashMap<String, Vec<String>> = undo_groups.into_iter()
+                .map(|(k, v)| (k.to_string(), v.into_iter().map(|u| u.to_string()).collect()))
+                .collect();
+            if !undo_map.is_empty() {
+                self.undo_data = Some(serde_json::json!(undo_map));
+            }
         }
 
         // Store services for undo
@@ -2614,6 +2916,9 @@ impl Node for EmbedNode {
         self.dialect = Some(dialect.clone());
 
         ctx.trigger("done");
+        ctx.set_output("embedded", PortValue::new(
+            BatchPayload::new(PortType::Entities, items),
+        ));
         Ok(())
     }
 
@@ -2745,6 +3050,7 @@ fn generate_chunk_records(
                 data: chunk_data,
                 entity_ref: chunk_ref,
                 resolver: None,
+                vectors: None,
             });
 
             // HAS_CHUNK link
@@ -4796,6 +5102,7 @@ impl Node for UpdateRecordNode {
                                 data: props,
                                 entity_ref: EntityRef::pre_resolved(entity_name, &uuid, &uuid),
                                 resolver: None,
+                                vectors: None,
                             });
                         }
                     }
@@ -5403,9 +5710,10 @@ mod tests {
     fn embed_node_ports() {
         let node = EmbedNode::new("e", search::SearchSignals::HYBRID, 64);
         assert_eq!(node.inputs().len(), 2); // entities + trigger
-        assert_eq!(node.outputs().len(), 1); // done
+        assert_eq!(node.outputs().len(), 2); // done + embedded
         assert_eq!(node.inputs()[0].name, "entities");
         assert_eq!(node.outputs()[0].name, "done");
+        assert_eq!(node.outputs()[1].name, "embedded");
     }
 
 }

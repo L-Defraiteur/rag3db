@@ -76,6 +76,10 @@ pub fn colonnes_de_chunk(alias: &str, has_source_refs: bool) -> Vec<String> {
     v
 }
 
+/// **Le NULL d'un CSV de chargement en masse.** Un mot convenu, jamais une
+/// cellule vide : la cellule vide est une chaîne vide.
+pub const CSV_NULL: &str = "__rag3weaver_null__";
+
 pub trait SchemaDialect: Send + Sync {
     /// Backend name for diagnostics (e.g. "rag3db", "postgresql").
     fn name(&self) -> &'static str;
@@ -365,6 +369,38 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
+
+    /// **Charger des lignes en masse depuis un CSV** (sans en-tête, une
+    /// cellule par colonne de `columns`, dans cet ordre), quand le moteur
+    /// sait le faire. `None` : pas de chemin de masse, l'appelant reste sur
+    /// [`Self::batch_upsert`].
+    ///
+    /// C'est le jumeau de [`Self::copy_links_from_csv`] pour les nœuds. Il
+    /// ne fusionne pas : une clé déjà présente fait refuser tout le fichier,
+    /// l'appelant réserve donc ce chemin à une table vide ou à des clés
+    /// qu'il sait absentes. Les colonnes non listées prennent leur défaut.
+    fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {
+        let _ = (table, columns, path);
+        None
+    }
+
+    /// Le moteur a-t-il un chargement en masse ([`Self::copy_nodes_from_csv`]) ?
+    fn supports_copy_from(&self) -> bool {
+        false
+    }
+
+    /// **Les identifiants internes de lignes désignées par uuid** — ce que
+    /// `batch_upsert` rend en écrivant, relu après un chargement en masse
+    /// qui ne rend rien. Paramètre `$uuids` ; colonnes `_uuid`, identifiant
+    /// (au format de [`Self::node_id_expr`]).
+    fn select_node_ids(&self, table: &str) -> String {
+        let id = self.node_id_expr("n");
+        format!(
+            "UNWIND $uuids AS uuid \
+             MATCH (n:{table} {{_uuid: uuid}}) \
+             RETURN n._uuid, {id}"
+        )
+    }
 
     /// **Combien de chunks doivent encore un embarquement**, pour un marqueur
     /// donné (`_embed_hash` pour le dense, `_sparse_hash` pour le sparse).
@@ -794,6 +830,24 @@ impl SchemaDialect for Rag3dbDialect {
         let _ = prop_columns;
         let (from, to) = ends;
         Some(format!("COPY {rel_table} FROM '{path}' (from='{from}', to='{to}')"))
+    }
+
+    fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {
+        // Sans en-tête (le défaut du moteur), les listes entre crochets dans
+        // une cellule entre guillemets, le guillemet doublé pour s'échapper.
+        // Lecteur **séquentiel** : le lecteur parallèle refuse un saut de
+        // ligne entre guillemets, et du texte en a toujours.
+        // Et le NULL est un mot convenu, pas la cellule vide : le moteur lit
+        // `""` comme un NULL, or une chaîne vide en est une (`_embed_hash` à
+        // la naissance d'un chunk) — la comparer à NULL la ferait réécrire.
+        Some(format!(
+            "COPY {table} ({}) FROM '{path}' (parallel=false, null_strings=['{CSV_NULL}'])",
+            columns.join(", ")
+        ))
+    }
+
+    fn supports_copy_from(&self) -> bool {
+        true
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -1561,6 +1615,10 @@ impl SchemaDialect for PostgresDialect {
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
         let col_list = fields.join(", ");
         format!("SELECT {col_list} FROM {table} WHERE _uuid = ANY($uuids)")
+    }
+
+    fn select_node_ids(&self, table: &str) -> String {
+        format!("SELECT _uuid, _row_id FROM {table} WHERE _uuid = ANY($uuids)")
     }
 
     fn batch_update_returning(
