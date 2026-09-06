@@ -1,3 +1,4 @@
+// rag3weaver : patch_attention.py — attention fusionnée / masque booléen / casts « float » neutres, 6 septembre 2026.
 // rag3weaver : casts « float » neutres (patch_attention.py --casts-neutres, 6 septembre 2026).
 // Generated from ONNX "/tmp/claude-1000/-home-lucied-git-workspaces-rag3db/13068ada-ca9b-4752-8b48-bf8f40ed08a2/scratchpad/granite/hf-278m/model.onnx" by burn-onnx
 extern crate alloc;
@@ -557,12 +558,19 @@ impl Submodule2 {
             let q = transpose1_out1;
             let k = matmul4_k_corrected;
             let v = transpose2_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul5_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1.clone()),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -877,12 +885,19 @@ impl Submodule3 {
             let q = transpose5_out1;
             let k = matmul12_k_corrected;
             let v = transpose6_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul13_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -1197,12 +1212,19 @@ impl Submodule4 {
             let q = transpose9_out1;
             let k = matmul20_k_corrected;
             let v = transpose10_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul21_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -1517,12 +1539,19 @@ impl Submodule5 {
             let q = transpose13_out1;
             let k = matmul28_k_corrected;
             let v = transpose14_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul29_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -1837,12 +1866,19 @@ impl Submodule6 {
             let q = transpose17_out1;
             let k = matmul36_k_corrected;
             let v = transpose18_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul37_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -2157,12 +2193,19 @@ impl Submodule7 {
             let q = transpose21_out1;
             let k = matmul44_k_corrected;
             let v = transpose22_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul45_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -2477,12 +2520,19 @@ impl Submodule8 {
             let q = transpose25_out1;
             let k = matmul52_k_corrected;
             let v = transpose26_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul53_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -2797,12 +2847,19 @@ impl Submodule9 {
             let q = transpose29_out1;
             let k = matmul60_k_corrected;
             let v = transpose30_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul61_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -3117,12 +3174,19 @@ impl Submodule10 {
             let q = transpose33_out1;
             let k = matmul68_k_corrected;
             let v = transpose34_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul69_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -3437,12 +3501,19 @@ impl Submodule11 {
             let q = transpose37_out1;
             let k = matmul76_k_corrected;
             let v = transpose38_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul77_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -3757,12 +3828,19 @@ impl Submodule12 {
             let q = transpose41_out1;
             let k = matmul84_k_corrected;
             let v = transpose42_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul85_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,
@@ -4137,12 +4215,19 @@ impl Submodule13 {
             let q = transpose45_out1;
             let k = matmul92_k_corrected;
             let v = transpose46_out1;
+            // rag3weaver : le masque en booléen, pas en biais — avec un biais,
+            // burn-cubecl retombe sur l'attention naïve (patch_attention.py, 6 sept. 2026).
+            let masque = {
+                let [b, h, sq, _] = q.dims();
+                let sk = k.dims()[2];
+                where3_out1.clone().lower_elem(0.0).expand([b, h, sq, sk])
+            };
             let matmul93_out1 = burn::tensor::module::attention(
                 q,
                 k,
                 v,
+                Some(masque),
                 None,
-                Some(where3_out1),
                 burn::tensor::ops::AttentionModuleOptions {
                     scale: None,
                     softcap: None,

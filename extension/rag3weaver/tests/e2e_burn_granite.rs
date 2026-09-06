@@ -66,3 +66,18 @@ fn granite_278m_paraphrase_entre_langues() { paraphrase_entre_langues(common::bu
 #[test]
 #[ignore]
 fn granite_278m_question_trouve_le_code() { question_trouve_le_code(common::burn::GRANITE_278M.as_ref()); }
+
+/// **Un lot de 256 séquences de ~450 mots** : ce que le conseil de lot promet
+/// une fois l'attention fusionnée (sans elle, 3,2 Go de scores, refusé).
+#[test]
+#[ignore]
+fn granite_107m_lot_de_256_sequences_longues() {
+    let e = common::burn::GRANITE_107M.as_ref();
+    let voc = ["fn", "catalogue", "gabarit", "search", "embedding", "ingestion", "relation", "chunk", "scope", "budget"];
+    let textes: Vec<String> = (0..256).map(|i| (0..450).map(|j| voc[(i * 7 + j * 13) % voc.len()]).collect::<Vec<_>>().join(" ")).collect();
+    let t = std::time::Instant::now();
+    let v = e.embed(&textes).unwrap();
+    let s = t.elapsed().as_secs_f64();
+    eprintln!("[granite] 256 × 450 mots : {} vecteurs en {s:.2} s → {:.0} jetons/s", v.len(), 256.0 * 452.0 / s);
+    assert_eq!(v.len(), 256);
+}

@@ -290,6 +290,18 @@ les sondes de 96 × 96 ne le montrent pas. À creuser dans cubek-convolution ;
 les quatre tests `*_selon_la_precision` et `le_detecteur_etage_par_etage` de
 `e2e_burn_ocr` sont l'outil, `PRECISION_OCR` l'interrupteur.
 
+**Le masque en booléen, pas en biais.** burn-onnx pre.3 émet déjà
+`module::attention` pour tous les graphes BERT/XLM-R (MiniLM ×2, rerankers ×3,
+Granite ×2), mais passe le masque en biais additif (`attn_bias`), et
+burn-cubecl retombe alors sur l'attention naïve, scores matérialisés : 3,2 Go
+pour 256 séquences de 512, refusé. `patch_attention.py` convertit les 66
+appels en masque booléen ; la flash attention prend, le lot de 256 passe
+(granite-107m : 256 × 450 mots en 4 s à froid), MiniLM anglais monte à
+97 000–239 000 jetons/s (×2,5). Le conseil de lot de Granite passe à 128 × 512 :
+l'autotune essaie encore la voie naïve parmi ses candidats, et à 256 elle
+dépasse la taille maximale d'un tampon wgpu (le serveur panique puis se
+rattrape) ; à 128 c'est 1,6 Go, sous la limite.
+
 ## 8 bis. Trois points de comparaison : Vertex, llama.cpp, MiniLM
 
 Lucie, le soir : *« toujours affreux si on envisage d'indexer le kernel Linux

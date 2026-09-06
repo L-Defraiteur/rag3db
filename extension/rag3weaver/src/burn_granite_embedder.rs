@@ -182,12 +182,14 @@ impl<G: GraniteGraph> Embedder for GraniteEmbedder<G> {
         Some((self.troncatures.load(Ordering::Relaxed), MAX_SEQ_LEN))
     }
 
-    /// 64 séquences de 512 : ces graphes matérialisent la matrice d'attention
-    /// (`séquences × 12 têtes × 512² × 4 octets` = 800 Mo à 64, 3,2 Go à 256,
-    /// refusé par la carte le 6 septembre 2026). Le jour où leur attention
-    /// est fusionnée comme celle de BGE-M3, le conseil remonte.
+    /// 128 séquences de 512. L'attention est fusionnée (masque booléen, voir
+    /// `patch_attention.py`), donc les scores ne sont plus matérialisés — sauf
+    /// par l'autotune, qui essaie aussi la voie naïve : à 256 séquences elle
+    /// demande 3,2 Go d'un tenseur, au-dessus de la limite d'un tampon wgpu,
+    /// et le serveur panique avant de se rattraper (6 septembre 2026). À 128
+    /// c'est 1,6 Go, sous la limite, et la carte est saturée de toute façon.
     fn budget_conseille(&self) -> Option<(usize, usize)> {
-        Some((64, MAX_SEQ_LEN))
+        Some((128, MAX_SEQ_LEN))
     }
 }
 
