@@ -529,6 +529,38 @@ impl Catalog {
         (closed, failed)
     }
 
+    /// Dit les options de champ **acceptées et jamais appliquées**.
+    ///
+    /// `FieldDef.boost` est désérialisé et aucun chemin de recherche ne le lit :
+    /// lucivy n'a pas de pondération par champ. Le taire, c'est laisser
+    /// quelqu'un régler un cadran débranché et conclure que le moteur ne fait
+    /// pas la différence. Même famille que `title_boost` sur une base de
+    /// connaissances, et même correction à terme — une branche de recherche par
+    /// champ, pesée à la fusion.
+    fn signaler_les_options_inertes(&self) {
+        for (entite, def) in &self.config.entities {
+            let mut avec_boost: Vec<&str> = def
+                .fields
+                .iter()
+                .filter(|(_, f)| f.boost.is_some())
+                .map(|(nom, _)| nom.as_str())
+                .collect();
+            if avec_boost.is_empty() {
+                continue;
+            }
+            avec_boost.sort();
+            self.emit_event(CatalogEvent::Warning {
+                context: "initialize".to_string(),
+                message: format!(
+                    "« {entite} » : « boost » est posé sur {} — accepté et **jamais \
+                     appliqué**. Aucun chemin de recherche ne le lit ; le classement \
+                     sera le même sans lui.",
+                    avec_boost.join(", ")
+                ),
+            });
+        }
+    }
+
     /// Détruit l'index FTS d'une table via `ShardedHandle::drop_index`.
     ///
     /// Nécessaire au reindex : le schéma de l'index est **figé à sa création**,
@@ -915,6 +947,10 @@ impl Catalog {
                 crate::rag3db_search_backend::Rag3dbSearchBackend::new(self.conn.clone()),
             ));
         }
+
+        // Ce qu'on accepte sans l'appliquer, on le dit au montage — pas quand
+        // quelqu'un s'étonnera d'un classement inchangé.
+        self.signaler_les_options_inertes();
 
         self.initialized = true;
         Ok(())
@@ -1483,6 +1519,52 @@ impl Catalog {
 
         crate::schema::validate_identifier(kb_name, "knowledge_base")
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+
+        // **Ce qu'on accepte sans l'appliquer, on le dit au moment où on
+        // l'accepte.** `title_boost` et `content_boost` sont copiés dans
+        // `KBMetadata` et jamais relus — vérifié le 25 août 2026, toujours vrai.
+        // Les taire, c'est laisser quelqu'un régler un cadran débranché et
+        // conclure que le moteur ne fait pas la différence.
+        //
+        // On ne se plaint que d'une valeur **choisie**, pas du défaut : sinon
+        // l'avertissement se déclencherait sur chaque KB et cesserait d'être lu.
+        //
+        // La correction n'est pas un correctif mais une **topologie** — une
+        // branche BM25 par champ, pesée à la fusion — parce que lucivy n'a
+        // aucune pondération par champ. Voir `vision_roadmap_09_2026/06` §4.
+        {
+            let defauts = crate::config::KBConfig::default();
+            let mut poses: Vec<String> = Vec::new();
+            if kb_config.title_boost != defauts.title_boost {
+                poses.push(format!("title_boost = {}", kb_config.title_boost));
+            }
+            if kb_config.content_boost != defauts.content_boost {
+                poses.push(format!("content_boost = {}", kb_config.content_boost));
+            }
+            if kb_config.special_ops.is_some() {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "register_kb".to_string(),
+                    message: format!(
+                        "« {kb_name} » : « special_ops » est posé — désérialisé et \
+                         **jamais lu**. C'est l'emplacement prévu pour des opérations \
+                         comme grep et read, qui n'y sont pas encore branchées."
+                    ),
+                });
+            }
+            if !poses.is_empty() {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "register_kb".to_string(),
+                    message: format!(
+                        "« {kb_name} » : {} — accepté(s) et **jamais appliqué(s)**. Ces \
+                         poids sont copiés dans les métadonnées et plus jamais relus ; \
+                         le classement sera le même que sans eux. Une pondération par \
+                         champ demande une branche de recherche par champ, pesée à la \
+                         fusion, ce que le moteur ne fait pas encore.",
+                        poses.join(", ")
+                    ),
+                });
+            }
+        }
 
         // Find the title entity (entity with a field that has title_for = kb_name)
         let kb_title_entities = crate::schema::resolve_kb_title_entities(&self.config);
@@ -6162,6 +6244,75 @@ mod tests {
         assert!(
             reponse.meta.partial,
             "du travail reste en file : le résultat est partiel, et doit le dire"
+        );
+    }
+
+    // ── Les cadrans débranchés se signalent ───────────────────────────
+
+    /// Ramasse les avertissements du catalogue, sans bloquer.
+    fn avertissements_du_catalogue(
+        rx: &mut async_broadcast::Receiver<crate::events::CatalogEvent>,
+    ) -> Vec<String> {
+        let mut vus = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if let crate::events::CatalogEvent::Warning { message, .. } = ev {
+                vus.push(message);
+            }
+        }
+        vus
+    }
+
+    /// `boost` est désérialisé et aucun chemin de recherche ne le lit. Le taire,
+    /// c'est laisser quelqu'un régler un cadran débranché et conclure que le
+    /// moteur ne fait pas la différence entre un titre et un corps.
+    ///
+    /// Notre propre configuration de test en pose un sur `title` — l'alarme ne
+    /// vise donc pas un cas de laboratoire.
+    #[test]
+    fn un_boost_pose_est_annonce_comme_inerte() {
+        let config = make_test_config();
+        assert!(
+            config.entities["Document"].fields["title"].boost.is_some(),
+            "la fiche de test pose bien un boost"
+        );
+
+        let mut catalog = Catalog::new(
+            Box::new(MockConnection::new()),
+            Box::new(MockEmbedder::new(384)),
+            config,
+        );
+        let mut rx = catalog.subscribe();
+        catalog.initialize().unwrap();
+
+        let vus = avertissements_du_catalogue(&mut rx);
+        assert!(
+            vus.iter().any(|m| m.contains("boost") && m.contains("title")),
+            "le boost posé doit être annoncé inerte : {vus:?}"
+        );
+    }
+
+    /// Et sans boost posé, pas un mot : un avertissement qui se déclenche sur
+    /// toutes les configurations cesse d'être lu.
+    #[test]
+    fn sans_boost_pose_le_montage_se_tait() {
+        let mut config = make_test_config();
+        for def in config.entities.values_mut() {
+            for f in def.fields.values_mut() {
+                f.boost = None;
+            }
+        }
+        let mut catalog = Catalog::new(
+            Box::new(MockConnection::new()),
+            Box::new(MockEmbedder::new(384)),
+            config,
+        );
+        let mut rx = catalog.subscribe();
+        catalog.initialize().unwrap();
+
+        let vus = avertissements_du_catalogue(&mut rx);
+        assert!(
+            !vus.iter().any(|m| m.contains("boost")),
+            "rien à dire sur le boost ici : {vus:?}"
         );
     }
 
