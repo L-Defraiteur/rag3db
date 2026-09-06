@@ -492,7 +492,7 @@ fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
     );
 
     // Et le rattrapage la solde — c'est le tick, appelé à la demande.
-    let repris = catalog.embarquer_le_retard(D::TOUT, 512).expect("rattrapage");
+    let repris = catalog.embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage");
     assert!(repris > 0, "le rattrapage doit retrouver la dette dans la base");
 
     let dense = catalog

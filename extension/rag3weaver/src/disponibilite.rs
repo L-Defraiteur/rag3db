@@ -32,7 +32,10 @@
 //!
 //! **La garantie est conservatrice : on ne dit jamais « prêt » quand ça ne
 //! l'est pas.** En revanche on attend parfois plus que demandé, et il faut le
-//! savoir :
+//! savoir. Et depuis le 6 septembre après-midi, elle est **bornée à la
+//! fermeture de la cible** (`Catalog::fermeture`) : ce qu'une autre ressource
+//! a en file n'est ni attendu ni compté — l'invariant de Lucie, *jamais deux
+//! ressources sans lien bloquées l'une par l'autre*.
 //!
 //! | demandé | ce qui se passe | exact ? |
 //! |---|---|---|

@@ -416,7 +416,7 @@ fn le_noeud_sparse_explique_son_silence() {
     );
 
     // Le rattrapage solde la dette ; le même nœud ne s'en plaint plus.
-    let repris = cat_arc.lock().unwrap().embarquer_le_retard(D::SPARSE, 512).expect("rattrapage");
+    let repris = cat_arc.lock().unwrap().embarquer_le_retard(D::SPARSE, 512, None).expect("rattrapage");
     assert!(repris > 0, "la dette doit être retrouvée dans la base");
 
     let meta = chercher(services_de(&cat_arc));

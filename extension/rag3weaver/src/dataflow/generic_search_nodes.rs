@@ -139,8 +139,11 @@ impl Node for SearchSourceNode {
             let mut cat = catalog.lock().unwrap();
             let mut w: Vec<String> = Vec::new();
             let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
-            let (reste, partiel) =
-                cat.appliquer_la_consigne(exige, attendre_ailleurs, options.timeout_ms, &mut w);
+            // Bornée à la fermeture de la cible : ce que d'autres entités ont
+            // en file n'attend pas cette recherche, et ne la rend pas partielle.
+            let (reste, partiel) = cat.appliquer_la_consigne_pour(
+                &self.target_name, exige, attendre_ailleurs, options.timeout_ms, &mut w,
+            );
             (reste, partiel, w)
         };
         for a in &avertissements {

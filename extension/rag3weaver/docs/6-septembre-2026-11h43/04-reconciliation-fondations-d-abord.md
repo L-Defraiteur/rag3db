@@ -48,7 +48,8 @@ les docs annonçaient. Le rang renvoie à la section 2.
 | la coupe et la dette en base | 6 sept | faite, testée, **un demi-portage** : `SparseSearchNode` n'explique pas son silence, `Catalog::search` si | quatre lignes | **A1** |
 | le tick | 6 sept | la dette et le rattrapage existent ; **aucun déclencheur** | l'appel opportuniste là où on paie déjà le GPU ; le fil de fond n'a **pas d'hôte** (le démon tient une connexion, pas un catalogue) | **A4**, **F** |
 | `Donnee` laisse les relations | table d'approximation | vrai | `LinkRecordNode` dans le graphe de `flush_insertions` | **A2** |
-| `flush_insertions` pose **tout** | trouvé ce matin | une recherche sur A pose les entités de B — le couplage faux, sur le chemin par défaut | poser la **fermeture** de la cible, pas la file entière | **C1** |
+| `flush_insertions` pose **tout** | trouvé ce matin | une recherche sur A pose les entités de B — le couplage faux, sur le chemin par défaut | poser la **fermeture** de la cible, pas la file entière | **C1** — fait l'après-midi |
+| une mise à jour ne se pose pas seule | trouvé en faisant C1 | ses conséquences sur les chunks ne sont ni en base ni en file : perdues si le graphe s'arrête à la donnée | la dette de découpage en base | **C5** |
 | `PendingWork` file unique, `drain` barrière | 5 sept, invariant | vrai ; seul `AUCUNE` respecte l'invariant | partitionner par fermeture de ressource, drain compris | **C1** |
 | `FlushResult.failed = 0` en dur | nuit, §1.a | vrai, **et lu** : `ingest_code` l'additionne, `code_tools` l'affiche | un échec par groupe d'enregistrements, sans faire tomber le graphe | **A5** |
 | `temp_uuid` | nuit, §2, « petit, isolé, donc tôt » | documenté, pas renommé — au motif que le nom voyage dans des checkpoints ; c'est le **champ** qui voyage, pas la méthode | renommer la méthode, garder le champ | **A6** |
@@ -200,6 +201,21 @@ elle, deux rattrapages calculent deux fois. **Dépend de D** pour être
 exercée à deux processus écrivains ; **écrite avant**, parce que sa forme ne
 dépend pas de D et qu'un processus seul la traverse sans coût.
 
+**C5. La dette de découpage vit dans la base.** Trouvé en écrivant C1 : une
+mise à jour ne peut pas se poser au niveau `data` seul, parce que ses
+conséquences sur les chunks — le redécoupage — ne sont demandées qu'au
+moment où `UpdateRecordNode` les émet sur un port. Sans nœud en aval, elles
+sont **perdues** : le `_content_hash` de l'entité est déjà neuf, un drain
+ultérieur ne voit plus de changement, et les chunks restent périmés pour
+toujours. C'est exactement la forme du défaut que `_embed_hash` a réglé pour
+l'embarquement, et la réponse est la même : un marqueur en base (le hash du
+contenu à partir duquel les chunks ont été découpés, sur le parent), une
+requête qui retrouve les parents dont les chunks sont en retard, et une passe
+qui les redécoupe. Tant que ce n'est pas là, `appliquer_la_consigne` **draine
+le graphe sans GPU** dès qu'une mise à jour ou une suppression est dans la
+fermeture — plus que demandé, jamais moins. Après C5, la mise à jour se
+posera seule et le redécoupage rejoindra la dette.
+
 ### D. La vraie concurrence sur rag3db — le cœur C++
 
 C'est le monument, et Lucie a dit de ne pas le contourner. Ses trois pièces
@@ -268,7 +284,7 @@ C1                       — la fermeture de ressource
 A3                       — les verbes honnêtes, sur C1
 A4                       — le rattrapage là où le GPU est payé
 A5                       — le canal d'échec
-C2  C3  C4               — marque par niveau, lecture seule, réclamation
+C2  C3  C4  C5           — marque par niveau, lecture seule, réclamation, dette de découpage
 B                        — un seul chemin de recherche
 D (cartographie)         — la relecture du MVCC de Vela, en doc
 ```

@@ -6,7 +6,7 @@
 //!
 //! See doc 23 — "Design: Elimination des Ops — Le graphe EST le plan".
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -524,6 +524,76 @@ impl PendingWork {
             + self.aggregates.len()
             + self.updates.len()
             + self.deletes.len()
+    }
+
+    /// **Extrait ce qui touche ces tables**, et laisse le reste en place.
+    ///
+    /// C'est la moitié mécanique de l'invariant de Lucie — *jamais deux
+    /// ressources sans lien bloquées l'une par l'autre* : un drain n'emporte
+    /// plus la file entière, il emporte la **fermeture** d'une cible
+    /// ([`crate::Catalog::fermeture`] la calcule), et ce qui n'y est pas
+    /// attend son propre lecteur.
+    ///
+    /// - une entité, une mise à jour, une suppression : par sa table ;
+    /// - une relation : par les tables de ses **deux** bouts
+    ///   (`bouts_d_une_relation` les donne depuis la config) — la fermeture
+    ///   garantit qu'elles y sont ensemble ;
+    /// - un agrégat : par la table d'index de sa base de connaissances.
+    pub fn extraire_les_tables(
+        &mut self,
+        tables: &HashSet<String>,
+        bouts_d_une_relation: &dyn Fn(&str) -> Option<(String, String)>,
+    ) -> PendingWork {
+        fn partager<T>(source: &mut Vec<T>, garder: impl Fn(&T) -> bool) -> Vec<T> {
+            let (pris, restent): (Vec<T>, Vec<T>) =
+                std::mem::take(source).into_iter().partition(|x| garder(x));
+            *source = restent;
+            pris
+        }
+        let dans = |t: &str| tables.contains(t);
+        let relation_dedans = |r: &RelationRecord| {
+            bouts_d_une_relation(&r.rel_name)
+                .is_some_and(|(de, vers)| dans(&de) && dans(&vers))
+        };
+        PendingWork {
+            entities: partager(&mut self.entities, |e| dans(&e.entity_name)),
+            relations: partager(&mut self.relations, relation_dedans),
+            aggregates: partager(&mut self.aggregates, |a| dans(&format!("{}_Index", a.kb_name))),
+            updates: partager(&mut self.updates, |u| dans(&u.entity_name)),
+            deletes: partager(&mut self.deletes, |d| dans(&d.entity_name)),
+        }
+    }
+
+    /// Combien d'opérations en file touchent ces tables — la même règle que
+    /// [`Self::extraire_les_tables`], sans rien prendre. C'est ce qu'une
+    /// recherche annonce comme « encore en file » : le reste de **sa**
+    /// fermeture, pas celui de la base entière.
+    pub fn compter_les_tables(
+        &self,
+        tables: &HashSet<String>,
+        bouts_d_une_relation: &dyn Fn(&str) -> Option<(String, String)>,
+    ) -> usize {
+        let dans = |t: &str| tables.contains(t);
+        self.entities.iter().filter(|e| dans(&e.entity_name)).count()
+            + self
+                .relations
+                .iter()
+                .filter(|r| {
+                    bouts_d_une_relation(&r.rel_name)
+                        .is_some_and(|(de, vers)| dans(&de) && dans(&vers))
+                })
+                .count()
+            + self.aggregates.iter().filter(|a| dans(&format!("{}_Index", a.kb_name))).count()
+            + self.updates.iter().filter(|u| dans(&u.entity_name)).count()
+            + self.deletes.iter().filter(|d| dans(&d.entity_name)).count()
+    }
+
+    /// Y a-t-il une mise à jour ou une suppression dans ces tables ? Poser la
+    /// donnée ne suffit alors pas : leurs conséquences sur les chunks
+    /// passent par le graphe de drain.
+    pub fn a_des_mises_a_jour_dans(&self, tables: &HashSet<String>) -> bool {
+        self.updates.iter().any(|u| tables.contains(&u.entity_name))
+            || self.deletes.iter().any(|d| tables.contains(&d.entity_name))
     }
 }
 

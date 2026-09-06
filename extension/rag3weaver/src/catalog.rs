@@ -2079,6 +2079,97 @@ impl Catalog {
         services.register("run_topic", crate::events::topic::CATALOG.to_string());
     }
 
+    /// Les tables des deux bouts d'une relation, d'après la config. Ce que
+    /// [`PendingWork::extraire_les_tables`] demande pour juger une relation.
+    ///
+    /// Deux familles : les relations **déclarées** (`config.relations`), et les
+    /// liens **implicites** `{Entité}_IN_{KB}` que `create` met en file entre
+    /// une entité et sa ligne d'index — ceux-là ne sont dans aucune
+    /// déclaration, et les oublier laissait la ligne d'index hors de la
+    /// fermeture de son entité.
+    fn bouts_des_relations(config: &CatalogConfig) -> impl Fn(&str) -> Option<(String, String)> + '_ {
+        move |nom: &str| {
+            if let Some(d) = config.relations.get(nom) {
+                return Some((d.from.clone(), d.to.clone()));
+            }
+            config.knowledge_bases.keys().find_map(|kb| {
+                nom.strip_suffix(&format!("_IN_{kb}"))
+                    .map(|entite| (entite.to_string(), format!("{kb}_Index")))
+            })
+        }
+    }
+
+    /// **La fermeture d'une ressource** : les tables qu'un drain de `graine`
+    /// doit emporter, et pas une de plus.
+    ///
+    /// C'est la règle qui écrit l'invariant de Lucie — *jamais deux
+    /// ressources sans lien bloquées l'une par l'autre*. Deux ressources **en
+    /// lien** s'attendent, et la fermeture est la définition du lien :
+    ///
+    /// - une base de connaissances dépend de ses **sources** : ses agrégats
+    ///   relisent les entités titre et contenu, qui doivent donc être posées ;
+    /// - une relation en file dont un bout est dans l'ensemble y amène
+    ///   **l'autre bout** — on ne pose pas un lien vers une ligne absente ;
+    /// - et pour un **écrivain** (`pour_ecrire`), une entité amène les bases
+    ///   qu'elle alimente : ce qu'un `ingest_entities` a mis en file pour ses
+    ///   index, c'est à lui de le solder.
+    ///
+    /// Un **lecteur** ne prend pas la troisième règle : chercher dans une
+    /// entité qui alimente une base n'oblige pas à agréger cette base — c'est
+    /// le dérivé de la base, pas de l'entité, et c'est son lecteur qui le
+    /// paiera. C'est exactement la différence entre « ce que ma lecture exige »
+    /// et « ce que mon écriture a causé ».
+    ///
+    /// Seules les relations **en file** comptent : un type de relation déclaré
+    /// entre A et B sans enregistrement en attente ne lie rien.
+    pub fn fermeture(&self, graine: &str, pour_ecrire: bool) -> HashSet<String> {
+        let mut tables: HashSet<String> = HashSet::new();
+        if self.kb_metadata.contains_key(graine) {
+            tables.insert(format!("{graine}_Index"));
+        } else {
+            tables.insert(graine.to_string());
+        }
+        loop {
+            let avant = tables.len();
+            let instantane: Vec<String> = tables.iter().cloned().collect();
+            for t in &instantane {
+                if let Some(kb) = t.strip_suffix("_Index") {
+                    if let Some(meta) = self.kb_metadata.get(kb) {
+                        tables.insert(meta.title.entity.clone());
+                        tables.extend(meta.entities.iter().cloned());
+                    }
+                }
+                if pour_ecrire {
+                    if let Some(def) = self.config.entities.get(t) {
+                        for kb in resolve_entity_kbs(def).keys() {
+                            tables.insert(format!("{kb}_Index"));
+                        }
+                    }
+                }
+            }
+            let bouts = Self::bouts_des_relations(&self.config);
+            for r in &self.pending.relations {
+                // Un lien **implicite** vers une ligne d'index est la
+                // plomberie de la base de connaissances, pas un lien que
+                // l'utilisateur a posé : il ne tire un lecteur nulle part.
+                // Il tire l'écrivain, qui doit solder ce qu'il a causé.
+                let implicite = !self.config.relations.contains_key(&r.rel_name);
+                if implicite && !pour_ecrire {
+                    continue;
+                }
+                if let Some((de, vers)) = bouts(&r.rel_name) {
+                    if tables.contains(&de) || tables.contains(&vers) {
+                        tables.insert(de);
+                        tables.insert(vers);
+                    }
+                }
+            }
+            if tables.len() == avant {
+                return tables;
+            }
+        }
+    }
+
     /// **La passe de rattrapage** : embarquer ce que la coupe a laissé dû.
     ///
     /// Quand une recherche n'exige que `data` ou `textsearch`, le drain
@@ -2095,10 +2186,16 @@ impl Catalog {
     /// `limite` borne chaque table : une base qui doit des millions de chunks
     /// doit pouvoir avancer par morceaux sans tout tenir en mémoire ni
     /// monopoliser la carte. Rend le nombre de chunks passés au graphe.
+    ///
+    /// `tables` : les tables parentes à rattraper, ou `None` pour toutes. Un
+    /// **lecteur** rattrape sa fermeture et rien d'autre — payer le GPU des
+    /// autres serait le couplage que l'invariant interdit. Le balayage global
+    /// est pour qui paie déjà une passe GPU (voir `drainer`).
     pub fn embarquer_le_retard(
         &mut self,
         exige: crate::disponibilite::Disponibilites,
         limite: usize,
+        tables: Option<&HashSet<String>>,
     ) -> Result<usize, CatalogError> {
         if !exige.dense() && !exige.sparse() {
             return Ok(0);
@@ -2106,14 +2203,17 @@ impl Catalog {
 
         // Les tables de chunks et ce que chacune déclare. Clonées d'abord :
         // la suite prend `&mut self`.
+        let retenue = |parent: &str| tables.is_none_or(|t| t.contains(parent));
         let mut cibles: Vec<(String, bool, search::SearchSignals)> = Vec::new();
         for (nom, cfg) in &self.entity_configs {
-            if cfg.chunked != Some(false) {
+            if cfg.chunked != Some(false) && retenue(nom) {
                 cibles.push((format!("{nom}_Chunk"), false, cfg.signals));
             }
         }
         for (kb, meta) in &self.kb_metadata {
-            cibles.push((format!("{kb}_Index_Chunk"), true, meta.signals));
+            if retenue(&format!("{kb}_Index")) {
+                cibles.push((format!("{kb}_Index_Chunk"), true, meta.signals));
+            }
         }
 
         let mut total = 0usize;
@@ -2312,22 +2412,55 @@ impl Catalog {
         timeout_ms: u64,
         warnings: &mut Vec<String>,
     ) -> (usize, bool) {
+        self.consigne(None, exige, attendre_les_autres, timeout_ms, warnings)
+    }
+
+    /// La même consigne, **bornée à la fermeture d'une cible** : c'est celle
+    /// des deux chemins de recherche. Une recherche sur A ne pose, ne draine et
+    /// ne rattrape que ce dont A dépend ; ce que B a en file attend le lecteur
+    /// de B. Et le « reste en file » qu'elle annonce est celui de sa
+    /// fermeture, pas celui de la base entière.
+    pub fn appliquer_la_consigne_pour(
+        &mut self,
+        cible: &str,
+        exige: crate::disponibilite::Disponibilites,
+        attendre_les_autres: bool,
+        timeout_ms: u64,
+        warnings: &mut Vec<String>,
+    ) -> (usize, bool) {
+        self.consigne(Some(cible), exige, attendre_les_autres, timeout_ms, warnings)
+    }
+
+    fn consigne(
+        &mut self,
+        cible: Option<&str>,
+        exige: crate::disponibilite::Disponibilites,
+        attendre_les_autres: bool,
+        timeout_ms: u64,
+        warnings: &mut Vec<String>,
+    ) -> (usize, bool) {
+        // La fermeture est recalculée à chaque étape et non gardée : une
+        // étape peut la changer (une relation posée n'y lie plus rien).
+        let fermeture = |moi: &Self| cible.map(|c| moi.fermeture(c, false));
+
         // **Ce que le moteur sait tenir, et où il approxime.** Voir la table en
         // tête de `disponibilite` : la garantie est conservatrice — on ne dit
         // jamais « prêt » quand ça ne l'est pas — mais on attend parfois plus
-        // que demandé, parce que le graphe de drain ne sait pas encore
-        // s'arrêter par étage.
+        // que demandé.
         if exige.exige_un_derive() {
             // **La coupe.** `textsearch` seul s'arrête quand les chunks sont
             // posés et indexés en plein texte ; `dense` ou `sparse` emmènent
             // l'étage GPU. Ce qui n'est pas fait devient une dette dans la
             // base, pas en mémoire, et une recherche qui bute dessus le dit
             // (`expliquer_le_silence_d_un_signal`).
-            self.drain_jusqu_a(exige);
+            let gpu = exige.dense() || exige.sparse();
+            self.drainer(gpu, cible.map(|c| (c, false)));
             // Ce que la file contenait est fait. Reste ce que des coupes
-            // précédentes ont laissé dû — dans la base, pas en mémoire.
-            if (exige.dense() || exige.sparse()) && self.peut_devoir_un_embarquement {
-                if let Err(e) = self.embarquer_le_retard(exige, RATTRAPAGE_PAR_PASSE) {
+            // précédentes ont laissé dû — dans la base, pas en mémoire. Un
+            // lecteur ne rattrape que sa fermeture.
+            if gpu && self.peut_devoir_un_embarquement {
+                let tables = fermeture(self);
+                if let Err(e) = self.embarquer_le_retard(exige, RATTRAPAGE_PAR_PASSE, tables.as_ref()) {
                     warnings.push(format!(
                         "le rattrapage d'embarquement a échoué ({e}) : des chunks \
                          restent sans vecteur et la recherche peut rendre moins que ce \
@@ -2336,10 +2469,27 @@ impl Catalog {
                 }
             }
         } else if exige.donnee() && self.has_pending() {
-            // `flush_insertions` ne pose que les entités : relations et
-            // agrégats restent en file, et c'est ce reste que le compte
-            // ci-dessous va voir.
-            self.flush_insertions();
+            // La donnée : les entités et les relations entre elles. Mais une
+            // **mise à jour** ou une **suppression** ne se pose pas seule :
+            // ses conséquences sur les chunks et les lignes d'index passent par
+            // le graphe. Quand il y en a dans la fermeture, on draine le graphe
+            // **sans l'étage GPU** — plus que demandé, jamais moins, et sans
+            // toucher à ce qui n'est pas en lien. (Le jour où la dette de
+            // découpage vivra dans la base comme celle d'embarquement, la
+            // mise à jour pourra se poser seule ; voir la réconciliation, C5.)
+            let tables = fermeture(self);
+            let a_des_mises_a_jour = match tables.as_ref() {
+                Some(t) => self.pending.a_des_mises_a_jour_dans(t),
+                None => !self.pending.updates.is_empty() || !self.pending.deletes.is_empty(),
+            };
+            if a_des_mises_a_jour {
+                self.drainer(false, cible.map(|c| (c, false)));
+            } else {
+                match cible {
+                    Some(c) => { self.flush_insertions_de(c); }
+                    None => { self.flush_insertions(); }
+                }
+            }
         }
 
         // Les écritures des **autres** processus. Question indépendante de la
@@ -2352,7 +2502,14 @@ impl Catalog {
             ecritures_ailleurs_atteintes = self.attendre_les_ecritures(timeout_ms, warnings);
         }
 
-        let reste = self.pending.total_count();
+        // Le reste **de cette fermeture** : ce que B a en file ne rend pas
+        // partielle une recherche sur A.
+        let reste = match fermeture(self) {
+            Some(t) => self
+                .pending
+                .compter_les_tables(&t, &Self::bouts_des_relations(&self.config)),
+            None => self.pending.total_count(),
+        };
         let partiel = reste > 0 || !ecritures_ailleurs_atteintes;
 
         if reste > 0 {
@@ -3447,10 +3604,12 @@ impl Catalog {
                         });
                         self.annoncer_travail_en_attente();
                     }
-                    // Le drain secondaire suit la même consigne : si
-                    // l'appelant n'a pas demandé le GPU pour ses entités, il ne
-                    // le veut pas davantage pour leurs lignes d'index.
-                    kb_failed = self.drain_jusqu_a(exige).failed;
+                    // Le drain secondaire suit la même consigne — pas de GPU
+                    // pour les lignes d'index si l'appelant n'en a pas voulu
+                    // pour ses entités — et **sa fermeture d'écrivain** : ce que
+                    // cette ingestion a mis en file pour ses bases, et rien de
+                    // ce qu'un autre a laissé.
+                    kb_failed = self.drainer(avec_embarquement, Some((entity_name, true))).failed;
                 }
 
                 // The KB aggregation runs as a second drain, and its result used
@@ -3918,13 +4077,15 @@ impl Catalog {
     /// forme de chunks dont `_embed_hash` ou `_sparse_hash` est vide. Elle
     /// survit donc à un processus qui meurt, et elle s'interroge
     /// (`count_marqueur_manquant`).
-    fn build_ingestion_graph(&mut self, avec_embarquement: bool) -> (
+    fn build_ingestion_graph(&mut self, lot: PendingWork, avec_embarquement: bool) -> (
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
         // (chunks supprimés, chunks créés) par uuid, mesurés en aval
         Arc<Mutex<HashMap<String, (usize, usize)>>>,
     ) {
-        let mut pending = std::mem::take(&mut self.pending);
+        // Le lot est choisi par l'appelant — la file entière, ou la fermeture
+        // d'une cible. Ce graphe ne touche plus à `self.pending`.
+        let mut pending = lot;
         let empty_results = || (
             DataflowGraph::new(), ServiceRegistry::new(), 0,
             Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())),
@@ -4149,17 +4310,32 @@ impl Catalog {
     /// s'arrête quand les chunks sont posés et indexés en plein texte, et le
     /// reste devient une dette interrogeable dans la base.
     pub fn drain_jusqu_a(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
-        self.drainer(exige.dense() || exige.sparse())
+        self.drainer(exige.dense() || exige.sparse(), None)
     }
 
     /// Le drain complet, étage GPU compris. C'est le contrat historique, et il
     /// ne bouge pas : tout appelant qui écrivait `drain()` obtient la même
     /// chose qu'avant.
     pub fn drain(&mut self) -> FlushResult {
-        self.drainer(true)
+        self.drainer(true, None)
     }
 
-    fn drainer(&mut self, avec_embarquement: bool) -> FlushResult {
+    /// **Draine la fermeture d'une cible**, jusqu'aux disponibilités demandées,
+    /// et laisse en file ce qui n'est pas en lien avec elle.
+    ///
+    /// C'est le drain d'un lecteur : ce dont sa lecture dépend, et rien
+    /// d'autre. Voir [`Catalog::fermeture`] pour ce que « en lien » veut dire.
+    pub fn drain_de(
+        &mut self,
+        cible: &str,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> FlushResult {
+        self.drainer(exige.dense() || exige.sparse(), Some((cible, false)))
+    }
+
+    /// `cible` : `None` draine la file entière ; `Some((graine, pour_ecrire))`
+    /// n'emporte que sa fermeture et **remet le reste en file**.
+    fn drainer(&mut self, avec_embarquement: bool, cible: Option<(&str, bool)>) -> FlushResult {
         if !avec_embarquement && self.has_pending() {
             // On s'apprête à poser des chunks sans les embarquer : la dette
             // naît ici, et l'indice la note.
@@ -4181,10 +4357,23 @@ impl Catalog {
             self.annoncer_travail_en_attente();
         }
 
+        // Ce que ce drain emporte : tout, ou la fermeture d'une cible.
+        let lot = match cible {
+            None => std::mem::take(&mut self.pending),
+            Some((graine, pour_ecrire)) => {
+                let tables = self.fermeture(graine, pour_ecrire);
+                let bouts = Self::bouts_des_relations(&self.config);
+                self.pending.extraire_les_tables(&tables, &bouts)
+            }
+        };
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
-            self.build_ingestion_graph(avec_embarquement);
+            self.build_ingestion_graph(lot, avec_embarquement);
         if graph.nodes.is_empty() {
-            self.effacer_la_marque();
+            // La marque ne s'efface que si **plus rien** n'attend — pas
+            // seulement rien pour cette cible.
+            if self.pending.is_empty() {
+                self.effacer_la_marque();
+            }
             return FlushResult::default();
         }
 
@@ -4225,10 +4414,13 @@ impl Catalog {
                 // deux champs valaient toujours zéro — un nombre présenté comme
                 // une mesure et qui n'en était pas une. C'est aussi ici que
                 // l'événement part, pour qu'il ne porte pas les mêmes zéros.
-                // La file est vidée : plus rien n'attend chez nous. Effacé
-                // **avant** de rendre, pour qu'un lecteur qui regarde juste
-                // après voie la base à jour.
-                self.effacer_la_marque();
+                // Plus rien n'attend chez nous — si c'est vrai de **toute** la
+                // file, pas seulement du lot de ce drain. Effacé **avant** de
+                // rendre, pour qu'un lecteur qui regarde juste après voie la
+                // base à jour.
+                if self.pending.is_empty() {
+                    self.effacer_la_marque();
+                }
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );
@@ -4394,10 +4586,30 @@ impl Catalog {
     /// ni plus ni moins.
     pub fn flush_insertions(&mut self) -> FlushResult {
         let entities = std::mem::take(&mut self.pending.entities);
-        if entities.is_empty() {
-            return FlushResult::default();
-        }
+        let relations = std::mem::take(&mut self.pending.relations);
+        self.poser_la_donnee(entities, relations)
+    }
 
+    /// **La donnée d'une cible, et rien d'autre** : les entités et relations
+    /// de sa fermeture. Le dérivé de cette fermeture (agrégats, mises à jour,
+    /// suppressions) reste en file, comme tout ce qui n'est pas en lien.
+    pub fn flush_insertions_de(&mut self, cible: &str) -> FlushResult {
+        let tables = self.fermeture(cible, false);
+        let mut lot = {
+            let bouts = Self::bouts_des_relations(&self.config);
+            self.pending.extraire_les_tables(&tables, &bouts)
+        };
+        self.pending.aggregates.append(&mut lot.aggregates);
+        self.pending.updates.append(&mut lot.updates);
+        self.pending.deletes.append(&mut lot.deletes);
+        self.poser_la_donnee(lot.entities, lot.relations)
+    }
+
+    fn poser_la_donnee(
+        &mut self,
+        entities: Vec<EntityRecord>,
+        relations: Vec<RelationRecord>,
+    ) -> FlushResult {
         // **Les relations dont les deux bouts seront posés partent avec la
         // donnée** — c'est ce qui rend `Donnee` exact, et non « les entités,
         // sans les liens ». Un bout est posable s'il est déjà un uuid, déjà
@@ -4413,12 +4625,15 @@ impl Catalog {
             RefOrUuid::Uuid(_) => true,
             RefOrUuid::Ref(r) => r.uuid().is_ok() || cles.contains(r.cle_de_correlation()),
         };
-        let (relations, restent): (Vec<RelationRecord>, Vec<RelationRecord>) =
-            std::mem::take(&mut self.pending.relations)
+        let (relations, mut restent): (Vec<RelationRecord>, Vec<RelationRecord>) =
+            relations
                 .into_iter()
                 .partition(|rel| posable(&rel.from) && posable(&rel.to));
         drop(cles);
-        self.pending.relations = restent;
+        self.pending.relations.append(&mut restent);
+        if entities.is_empty() && relations.is_empty() {
+            return FlushResult::default();
+        }
 
         // Le quatrième point d'entrée, enfin.
         let noms: Vec<String> = {
@@ -4430,17 +4645,23 @@ impl Catalog {
         self.open_fts_handles_for(&noms);
 
         let op_count = entities.len() + relations.len();
+        let avec_entites = !entities.is_empty();
         let mut graph = DataflowGraph::new();
-        graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
-        graph.set_initial_input("inserts", "entities",
-            PortValue::new(BatchPayload::new(PortType::Entities, entities)));
+        if avec_entites {
+            graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
+            graph.set_initial_input("inserts", "entities",
+                PortValue::new(BatchPayload::new(PortType::Entities, entities)));
+        }
         if !relations.is_empty() {
             // Même câblage que le drain : les liens partent quand les lignes
-            // sont posées, et pas avant.
+            // sont posées, et pas avant. Des liens entre lignes déjà posées
+            // (deux uuids) partent seuls.
             graph.add_node(Box::new(LinkRecordNode::new("links"))).unwrap();
             graph.set_initial_input("links", "relations",
                 PortValue::new(BatchPayload::new(PortType::Relations, relations)));
-            graph.connect("inserts", "done", "links", "trigger").unwrap();
+            if avec_entites {
+                graph.connect("inserts", "done", "links", "trigger").unwrap();
+            }
         }
 
         let mut services = ServiceRegistry::new();
@@ -4950,7 +5171,8 @@ impl Catalog {
         // Consistency — voir `appliquer_la_consigne`, l'unique écrivain.
         let mut strict_warnings: Vec<String> = Vec::new();
         let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
-        let (pending_count, partiel) = self.appliquer_la_consigne(
+        let (pending_count, partiel) = self.appliquer_la_consigne_pour(
+            name,
             exige,
             attendre_ailleurs,
             options.timeout_ms,
@@ -6946,6 +7168,155 @@ mod tests {
         let (r2, _) = crate::refs::EntityRef::new("Document");
         assert_ne!(r1.cle_de_correlation(), r2.cle_de_correlation());
         assert_ne!(r1.cle_de_correlation(), pose);
+    }
+
+    // ── La fermeture de ressource ─────────────────────────────────────
+
+    /// La fiche de test, plus une entité **sans lien** avec la base de
+    /// connaissances : `Note`, et une relation déclarée `CITES` de `Note` vers
+    /// `Document`. C'est le minimum pour éprouver l'invariant — il faut deux
+    /// ressources qui ne se touchent pas, et une façon de les faire se toucher.
+    fn make_catalog_a_deux_entites() -> Catalog {
+        let mut config = make_test_config();
+        let mut fields = HashMap::new();
+        fields.insert(
+            "title".to_string(),
+            FieldDef {
+                field_type: FieldType::Text,
+                title_for: None,
+                content_for: None,
+                boost: None,
+                default_value: None,
+            },
+        );
+        config.entities.insert(
+            "Note".to_string(),
+            EntityDef { fields, hashsafe: Some(vec!["title".to_string()]) },
+        );
+        config.relations.insert(
+            "CITES".to_string(),
+            RelationDef {
+                from: "Note".to_string(),
+                to: "Document".to_string(),
+                properties: None,
+            },
+        );
+        Catalog::new(
+            Box::new(MockConnection::new()),
+            Box::new(MockEmbedder::new(384)),
+            config,
+        )
+    }
+
+    fn note(title: &str) -> BTreeMap<String, CypherValue> {
+        let mut d = BTreeMap::new();
+        d.insert("title".to_string(), CypherValue::String(title.to_string()));
+        d
+    }
+
+    fn tables(noms: &[&str]) -> HashSet<String> {
+        noms.iter().map(|n| (*n).to_string()).collect()
+    }
+
+    /// **La fermeture suit les liens, et pas plus.** Un lecteur d'une base de
+    /// connaissances emporte ses sources ; un lecteur d'une entité n'emporte
+    /// pas la base qu'elle alimente ; un écrivain, si. Un lien déclaré en file
+    /// amène l'autre bout ; un lien implicite vers une ligne d'index n'amène
+    /// que l'écrivain.
+    #[test]
+    fn la_fermeture_suit_les_liens_et_pas_plus() {
+        let mut catalog = make_catalog_a_deux_entites();
+        catalog.initialize().unwrap();
+        let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        let n = catalog.create("Note", note("N")).unwrap();
+
+        // Sans lien déclaré en file : chacun chez soi.
+        assert_eq!(catalog.fermeture("Note", false), tables(&["Note"]));
+        assert_eq!(catalog.fermeture("Document", false), tables(&["Document"]),
+            "le lien implicite vers main_Index ne tire pas un lecteur");
+        assert_eq!(catalog.fermeture("main", false), tables(&["main_Index", "Document"]),
+            "une base emporte ses sources");
+        assert_eq!(catalog.fermeture("Document", true), tables(&["Document", "main_Index"]),
+            "l'écrivain solde ce qu'il a causé");
+
+        // Un lien déclaré en file amène l'autre bout, dans les deux sens.
+        catalog.link("CITES", n, d, BTreeMap::new()).unwrap();
+        assert_eq!(catalog.fermeture("Note", false), tables(&["Note", "Document"]));
+        assert_eq!(catalog.fermeture("Document", false), tables(&["Document", "Note"]));
+        assert_eq!(
+            catalog.fermeture("main", false),
+            tables(&["main_Index", "Document", "Note"]),
+            "transitif : la base → sa source → ce qui la cite"
+        );
+    }
+
+    /// **L'invariant, écrit** : une lecture sur `Note` ne pose, ne draine ni
+    /// n'annonce ce que `Document` a en file. Et la marque d'ingestion reste
+    /// posée tant qu'il reste quelque chose — pour qui que ce soit.
+    #[test]
+    fn une_lecture_sur_a_ne_paie_pas_les_ecritures_sur_b() {
+        use crate::disponibilite::Disponibilites as D;
+
+        let mut catalog = make_catalog_a_deux_entites();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        catalog.create("Note", note("N")).unwrap();
+        let en_file_pour_document = 4; // entité, ligne d'index, lien, agrégat
+        assert_eq!(catalog.pending_work().total_count(), en_file_pour_document + 1);
+
+        // Donnée pour Note : Note est posée, Document intact, rien de partiel.
+        let mut w = Vec::new();
+        let (reste, partiel) = catalog.appliquer_la_consigne_pour("Note", D::DONNEE, false, 5_000, &mut w);
+        assert_eq!(reste, 0, "rien ne reste **pour Note** : {w:?}");
+        assert!(!partiel, "ce que Document a en file ne rend pas Note partielle");
+        assert!(w.is_empty(), "{w:?}");
+        assert_eq!(catalog.pending_work().total_count(), en_file_pour_document);
+        assert!(catalog.marque_posee, "il reste du travail : la marque reste");
+
+        // Le dérivé pour Note, GPU compris : toujours rien chez Document.
+        let res = catalog.drain_de("Note", D::TOUT);
+        assert_eq!(res.processed, 0, "plus rien à faire pour Note");
+        assert_eq!(catalog.pending_work().total_count(), en_file_pour_document);
+        assert!(catalog.marque_posee);
+
+        // Et la base de connaissances, elle, emporte tout ce qui lui reste.
+        let mut w = Vec::new();
+        let (reste, partiel) =
+            catalog.appliquer_la_consigne_pour("main", D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+        assert_eq!(reste, 0, "{w:?}");
+        assert!(!partiel);
+        assert!(catalog.pending_work().is_empty());
+        assert!(!catalog.marque_posee, "plus rien nulle part : la marque s'efface");
+    }
+
+    /// Un lecteur de `Document` au niveau donnée pose `Document`, et laisse à
+    /// la base de connaissances sa ligne d'index, son lien et son agrégat —
+    /// c'est le dérivé de la base, pas de l'entité. Son compte « en file » ne
+    /// les voit pas : sa donnée à lui est complète.
+    #[test]
+    fn un_lecteur_d_entite_laisse_le_derive_de_la_base_a_la_base() {
+        use crate::disponibilite::Disponibilites as D;
+
+        let mut catalog = make_catalog_a_deux_entites();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+
+        let mut w = Vec::new();
+        let (reste, partiel) =
+            catalog.appliquer_la_consigne_pour("Document", D::DONNEE, false, 5_000, &mut w);
+        assert_eq!(reste, 0, "{w:?}");
+        assert!(!partiel);
+        let p = catalog.pending_work();
+        assert!(p.entities.iter().all(|e| e.entity_name == "main_Index"), "seule la ligne d'index attend");
+        assert_eq!(p.relations.len(), 1, "le lien implicite attend avec elle");
+        assert_eq!(p.aggregates.len(), 1);
+
+        // Le lecteur de la base, lui, voit ce reste et le solde.
+        let mut w = Vec::new();
+        let (reste, _) = catalog.appliquer_la_consigne_pour("main", D::DONNEE, false, 5_000, &mut w);
+        assert_eq!(reste, 1, "l'agrégat, du dérivé : {w:?}");
+        assert!(catalog.pending_work().entities.is_empty());
+        assert!(catalog.pending_work().relations.is_empty());
     }
 
     /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc
