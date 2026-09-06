@@ -122,7 +122,42 @@ Monter de version (pre.3 → suivante) : `docs/issues/6-septembre-2026/vers-pre3
 montre le geste (versions, branches, adaptateur), et
 `flex32-adapter-pre3.rs` l'API burn-store à suivre.
 
-## 6. Les pièges qui ont coûté une heure chacun
+## 6. Les autres sessions, et comment leur parler
+
+Deux sessions Claude Code travaillent sur le même arbre, sans branche :
+**architecture** (chemin d'indexation : découpe, lots, pipeline, catalogue,
+base ; ses docs sous `docs/<date>/`) et **optimiseur** (celle-ci : moteur
+burn, démon, forks ; `docs/optimiseur/<date>/`). Lucie relance l'une ou
+l'autre avec `claude --resume <id>`.
+
+- **Trouver l'autre** : l'outil `ListAgents` liste les sessions vivantes du
+  poste avec leur nom ; le 6 septembre au soir, l'architecture s'appelait
+  « Rag3weaver architecture backend et FTS ». L'identifiant de reprise que
+  Lucie donne n'est pas le nom affiché — c'est le nom qu'il faut.
+- **Lui écrire** : `SendMessage` avec ce nom ; ses réponses arrivent d'elles-
+  mêmes dans la conversation (`cross-session-message`). Première ligne =
+  l'essentiel (elle n'en voit que ça avant d'ouvrir). Un rapport long va dans
+  un doc commité, le message ne porte que le hash et le résumé — c'est ainsi
+  qu'est parti [`docs/issues/6-septembre-2026/04`](../../issues/6-septembre-2026/04-rapport-pour-la-session-principale.md).
+- **Ce qu'on s'est promis**, après y avoir laissé une heure :
+  1. `git add` avec des chemins explicites seulement, jamais `-A` — un
+     `git add -A` de l'autre a ramassé huit fichiers de celle-ci dans son
+     commit a7bb1b308 ;
+  2. chacune commite ses fichiers elle-même, en français, sans trailer ;
+  3. un fichier laissé non compilable dans l'arbre bloque l'autre : on le
+     corrige ou on le commite tout de suite en prévenant, et on dit quels
+     fichiers on tient (elle ne touche pas aux nôtres, on ne touche pas aux
+     siens : `catalog.rs`, `scope.rs`, `record_nodes.rs`, `e2e_mesure_*`) ;
+  4. on annonce chaque commit avec son hash et ce qu'il change pour l'autre
+     (un conseil de lot, une Identite, une dimension) ;
+  5. la carte TV est partagée : on dit quand on la prend pour une chaîne de
+     bancs, elle mesure entre deux.
+- **Le contrat entre les deux** : l'`Identite` du démon (`modele`, `dim`,
+  `precision`, `lot_conseille`) et `Embedder::budget_conseille()` côté
+  moteur ; `_catalog_meta` (nom et dimension du modèle, refus d'un mélange)
+  et les lots en jetons côté indexation. Changer l'un se dit à l'autre.
+
+## 7. Les pièges qui ont coûté une heure chacun
 
 1. `run_e2e.sh` compilait les dépendances en -O0 : deux semaines de mesures
    dans ces conditions. Réglé dans `Cargo.toml`.
