@@ -382,22 +382,38 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
         eprintln!("[eventual] avertissement : {a}");
     }
 
-    // La file n'est pas vide : `flush_insertions` ne pose que les entités, et
-    // les agrégats restent. Le résultat doit donc s'annoncer partiel — c'est la
-    // correction du 6 septembre, éprouvée ici de bout en bout.
+    // **L'assertion qui compte.** Avant le 6 septembre 2026, ce compte était
+    // zéro : `flush_insertions` posait les lignes sans ouvrir de handle FTS ni
+    // enregistrer `fts_handles`, et les entités — consommées par `mem::take` —
+    // ne repassaient jamais au drain. La recherche rendait « rien trouvé » pour
+    // une ligne bien présente en base, sans une erreur.
     assert!(
-        reponse.meta.partial,
-        "du travail reste en file, le résultat doit le dire"
+        !reponse.results.is_empty(),
+        "une entité posée par flush_insertions doit être trouvable en plein texte \
+         dans la foulée — zéro résultat ici veut dire que l'indexation a été sautée \
+         en silence"
     );
+    assert!(reponse.meta.bm25_count > 0, "le signal plein texte doit avoir répondu");
 
-    // La ligne est bien en base…
+    // Et la ligne est bien en base : les deux bouts, pas seulement l'index.
     let compte = catalog.count("Product").expect("compte");
     assert_eq!(compte, 2, "les deux produits sont posés");
 
-    // …et une seconde recherche, file vidée, doit la trouver. Sans handle FTS
-    // ouvert au moment du flush, elle rendait zéro pour toujours.
+    // L'invariant de la méta, quel que soit ce qui reste. Ici `Product` ne
+    // participe à aucune base de connaissances : `create()` n'enfile qu'un
+    // enregistrement d'entité, sans relation ni agrégat, donc `flush_insertions`
+    // vide tout et il ne reste rien. C'est ce que la première version de ce test
+    // avait supposé faux — elle attendait « partiel » en recopiant un cas de
+    // bibliothèque qui, lui, a une KB.
+    assert_eq!(
+        reponse.meta.partial,
+        reponse.meta.pending_count > 0,
+        "« partiel » dit exactement s'il reste du travail, ni plus ni moins"
+    );
+
+    // Le drain d'après ne doit rien changer à ce qu'on trouve.
     catalog.drain();
-    let reponse = catalog
+    let apres = catalog
         .search(
             "Product",
             "programming language",
@@ -408,13 +424,11 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
             },
         )
         .expect("la recherche ne doit pas échouer");
-
-    assert!(
-        !reponse.results.is_empty(),
-        "une entité posée par flush_insertions doit rester trouvable en plein texte — \
-         zéro résultat ici veut dire que l'indexation a été sautée en silence"
+    assert_eq!(
+        apres.results.len(),
+        reponse.results.len(),
+        "le drain ne réindexe pas ce qui l'était déjà, et n'en perd pas"
     );
-    assert!(reponse.meta.bm25_count > 0, "le signal plein texte doit avoir répondu");
 }
 
 #[test]
