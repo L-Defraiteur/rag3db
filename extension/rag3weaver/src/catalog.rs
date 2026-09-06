@@ -64,6 +64,10 @@ pub struct KBMetadata {
 pub enum CatalogError {
     #[error("not initialized")]
     NotInitialized,
+    /// Ce catalogue a été ouvert en lecture : il ne met rien en file et ne
+    /// pose rien. Le verbe refusé est nommé.
+    #[error("catalogue ouvert en lecture seule : {0} refusé")]
+    LectureSeule(String),
     #[error("unknown entity: {0}")]
     UnknownEntity(String),
     #[error("unknown relation: {0}")]
@@ -143,6 +147,11 @@ pub struct Catalog {
     /// Ce qu'un verbe unitaire rend prêt quand on ne lui dit rien. Voir
     /// [`RegimeEcriture`] : au tick par défaut, par lot quand on le déclare.
     regime_d_ecriture: crate::disponibilite::RegimeEcriture,
+    /// **Ouvert en lecture** : ce catalogue lit une base qu'un autre processus
+    /// tient, ou que personne ne tient. Il ne pose aucun DDL, ne migre rien,
+    /// n'écrit aucune marque, et refuse les verbes d'écriture par une erreur
+    /// nommée. Voir [`Catalog::ouvrir_en_lecture`].
+    lecture_seule: bool,
     /// Combien de troncatures d'embarquement ont **déjà été dites**. Le modèle
     /// compte depuis son ouverture ; c'est ici qu'on sait ce qui est neuf.
     troncatures_signalees: usize,
@@ -242,6 +251,7 @@ impl Catalog {
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
+            lecture_seule: false,
             troncatures_signalees: 0,
             drain_counters: DrainCounters::default(),
             // 1024 : un agent émet quelques événements par appel d'outil et
@@ -781,6 +791,9 @@ impl Catalog {
     }
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
+        if self.lecture_seule {
+            return self.initialiser_en_lecture();
+        }
         // 0. Backend setup (CREATE EXTENSION, CREATE SCHEMA, etc.)
         for stmt in self.dialect.setup_statements() {
             self.conn.execute(&stmt)
@@ -2613,7 +2626,17 @@ impl Catalog {
             // Ce que la file contenait est fait. Reste ce que des coupes
             // précédentes ont laissé dû — dans la base, pas en mémoire. Un
             // lecteur ne rattrape que sa fermeture.
-            if gpu && self.peut_devoir_un_embarquement {
+            if gpu && self.lecture_seule {
+                // Un lecteur ne solde pas la dette d'un écrivain. Il la voit
+                // comme tout le monde — `expliquer_le_silence_d_un_signal` la
+                // dira si un signal rend zéro — mais il ne peut pas l'écrire.
+                warnings.push(
+                    "catalogue en lecture seule : la dette d'embarquement éventuelle ne \
+                     peut pas être soldée d'ici ; un écrivain exigeant « dense » ou \
+                     « sparse » le fera"
+                        .to_string(),
+                );
+            } else if gpu && self.peut_devoir_un_embarquement {
                 let tables = fermeture(self);
                 if let Err(e) = self.embarquer_le_retard(exige, RATTRAPAGE_PAR_PASSE, tables.as_ref()) {
                     warnings.push(format!(
@@ -3596,6 +3619,7 @@ impl Catalog {
     ) -> Result<FlushResult, CatalogError> {
         let avec_embarquement = exige.dense() || exige.sparse();
         self.check_initialized()?;
+        self.check_ecriture("ingest_entities")?;
 
         let entity_config = self.entity_configs.get(entity_name)
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?
@@ -3841,6 +3865,145 @@ impl Catalog {
         }
     }
 
+    // ── La lecture seule ────────────────────────────────────────────────
+
+    /// **Un catalogue qui lit, et ne peut rien d'autre.**
+    ///
+    /// C'est la pièce qui manquait à `crate::acces` : un lecteur savait
+    /// choisir son chemin vers la base — direct, ou par le démon — et rien ne
+    /// construisait un catalogue dessus. Celui-ci se monte sur n'importe
+    /// quelle connexion (`Rag3dbConnection::read_only`, `DaemonConnection`,
+    /// PostgreSQL), et son `initialize` **ne pose rien** : pas de DDL, pas de
+    /// migration, pas de magasin de checkpoints, pas de marque. Il charge ce
+    /// qu'un écrivain a persisté — entités, relations, bases de connaissances
+    /// — et lit les index depuis le magasin de blobs sans jamais les réécrire.
+    ///
+    /// Une base au schéma en retard est **refusée**, pas migrée : migrer est
+    /// un acte d'écrivain. Un verbe d'écriture rend
+    /// [`CatalogError::LectureSeule`] avec le nom du verbe.
+    ///
+    /// Ce qu'un lecteur exige d'être prêt s'applique comme partout, avec une
+    /// borne dite : il ne peut pas solder une dette d'embarquement, il la
+    /// signale.
+    pub fn ouvrir_en_lecture(
+        conn: Box<dyn DbConnection>,
+        embedder: Box<dyn Embedder>,
+        config: CatalogConfig,
+    ) -> Self {
+        let mut c = Self::new(conn, embedder, config);
+        c.lecture_seule = true;
+        c
+    }
+
+    /// Ce catalogue est-il ouvert en lecture seule ?
+    pub fn en_lecture_seule(&self) -> bool {
+        self.lecture_seule
+    }
+
+    /// Refuse un verbe d'écriture sur un catalogue en lecture — en le nommant.
+    fn check_ecriture(&self, verbe: &str) -> Result<(), CatalogError> {
+        if self.lecture_seule {
+            return Err(CatalogError::LectureSeule(verbe.to_string()));
+        }
+        Ok(())
+    }
+
+    /// `initialize` d'un catalogue en lecture : tout ce qui **lit**, rien de
+    /// ce qui écrit. Les numéros renvoient aux étapes de [`Catalog::initialize`].
+    fn initialiser_en_lecture(&mut self) -> Result<(), CatalogError> {
+        // 1. Le schéma déclaré doit être valide — c'est de la logique, pas
+        //    une écriture.
+        let validation = validate_schema(&self.config);
+        if !validation.valid {
+            return Err(CatalogError::ValidationFailed(validation.errors.join("; ")));
+        }
+
+        // Une base en retard de schéma n'est pas à nous à migrer.
+        {
+            use crate::scope::{SCHEMA_VERSION, SCHEMA_VERSION_KEY};
+            let lue = self.read_meta_key(SCHEMA_VERSION_KEY)?;
+            if lue.as_deref() != Some(SCHEMA_VERSION) {
+                return Err(CatalogError::SchemaError(format!(
+                    "base au schéma {} alors que cette bibliothèque attend le schéma \
+                     v{SCHEMA_VERSION} : à migrer par un écrivain, un lecteur ne pose rien",
+                    lue.map(|v| format!("v{v}")).unwrap_or_else(|| "sans version".to_string())
+                )));
+            }
+        }
+
+        // 5. Les métadonnées des bases de connaissances, depuis la config.
+        for (kb_name, kb_validation) in &validation.knowledge_bases {
+            let kb_config = self.config.knowledge_bases.get(kb_name).cloned().unwrap_or_default();
+            let title = match &kb_validation.title {
+                Some(t) => KBFieldRef { entity: t.entity.clone(), field: t.field.clone() },
+                None => continue,
+            };
+            let content: Vec<KBFieldRef> = kb_validation
+                .content
+                .iter()
+                .map(|c| KBFieldRef { entity: c.entity.clone(), field: c.field.clone() })
+                .collect();
+            self.kb_metadata.insert(
+                kb_name.clone(),
+                KBMetadata {
+                    name: kb_name.clone(),
+                    title,
+                    content,
+                    entities: kb_validation.entities.clone(),
+                    signals: kb_config.signals,
+                    keyword_weight: kb_config.keyword_weight,
+                    title_boost: kb_config.title_boost,
+                    content_boost: kb_config.content_boost,
+                    chunking: kb_config.chunking,
+                },
+            );
+        }
+        self.warm_chunker_cache();
+
+        // 8. Le magasin de blobs, **sans sa table** : elle existe, un écrivain
+        //    l'a posée. Ce qu'on y lirait d'un tampon jamais vidé n'existe
+        //    pas : un lecteur ne commite aucun index.
+        if self.blob_store.is_none() && self.dialect.speaks_cypher() {
+            let store = match self.sync_conn.clone() {
+                Some(sc) => CypherBlobStore::from_sync_connection(sc),
+                None => CypherBlobStore::from_sync_connection(self.conn.clone()),
+            };
+            self.blob_store = Some(Arc::new(BufferedBlobStore::new(store)));
+        }
+
+        // 10. Ce que l'écrivain a persisté : entités, relations, bases.
+        self.load_entity_configs()?;
+        self.load_relations()?;
+        self.load_kb_configs()?;
+
+        // 9. Les index sparse, ouverts depuis les blobs.
+        let mut tables_sparse: Vec<String> = Vec::new();
+        for (kb, meta) in &self.kb_metadata {
+            if meta.signals.sparse() {
+                tables_sparse.push(format!("{kb}_Index_Chunk"));
+            }
+        }
+        for (nom, cfg) in &self.entity_configs {
+            if cfg.signals.sparse() && cfg.chunked != Some(false) {
+                tables_sparse.push(format!("{nom}_Chunk"));
+            }
+        }
+        for table in tables_sparse {
+            self.ensure_sparse_handle(&table);
+        }
+
+        // 10 bis. Plusieurs cellules ? On le lit, on ne pose rien.
+        self.multi_cell = self.multi_cell || self.count_scope_nodes().unwrap_or(1) > 1;
+
+        // 11. Le moteur de recherche.
+        if self.search_backend.is_none() {
+            self.search_backend = Some(Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(self.conn.clone())));
+        }
+        self.signaler_les_options_inertes();
+        self.initialized = true;
+        Ok(())
+    }
+
     // ── Les verbes unitaires ────────────────────────────────────────────
 
     /// **Déclare le régime d'écriture** — au tick (défaut) ou par lot. Voir
@@ -3944,6 +4107,7 @@ impl Catalog {
         data: BTreeMap<String, CypherValue>,
     ) -> Result<EntityRef, CatalogError> {
         self.check_initialized()?;
+        self.check_ecriture("create")?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
         // **L'identité est une propriété de l'entité, pas du verbe.** La même
@@ -4118,6 +4282,7 @@ impl Catalog {
         properties: BTreeMap<String, CypherValue>,
     ) -> Result<RelationRef, CatalogError> {
         self.check_initialized()?;
+        self.check_ecriture("link")?;
 
         let rel_def = self.config.relations.get(rel_name)
             .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
@@ -4347,6 +4512,7 @@ impl Catalog {
         data: BTreeMap<String, CypherValue>,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.check_ecriture("update")?;
         self.check_entity(entity_name)?;
         let new_content = self.build_content_text(entity_name, &data);
         let new_content_hash = content_hash(&new_content);
@@ -4391,6 +4557,7 @@ impl Catalog {
         uuid: &str,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.check_ecriture("delete")?;
         self.check_entity(entity_name)?;
         self.pending.deletes.push(crate::records::DeleteRecord {
             entity_name: entity_name.to_string(),
@@ -7785,6 +7952,25 @@ mod tests {
         assert_eq!(reste, 1, "l'agrégat, du dérivé : {w:?}");
         assert!(catalog.pending_work().entities.is_empty());
         assert!(catalog.pending_work().relations.is_empty());
+    }
+
+    // ── La lecture seule ──────────────────────────────────────────────
+
+    /// Un lecteur ne migre pas : une base sans version de schéma — ou en
+    /// retard — est refusée, en le disant.
+    #[test]
+    fn un_lecteur_refuse_une_base_sans_version() {
+        let mut lecteur = Catalog::ouvrir_en_lecture(
+            Box::new(MockConnection::new()),
+            Box::new(MockEmbedder::new(384)),
+            make_test_config(),
+        );
+        assert!(lecteur.en_lecture_seule());
+        let err = lecteur.initialize().unwrap_err();
+        assert!(
+            matches!(&err, CatalogError::SchemaError(m) if m.contains("sans version") && m.contains("écrivain")),
+            "{err}"
+        );
     }
 
     // ── Le canal d'échecs par groupe ──────────────────────────────────

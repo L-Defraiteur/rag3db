@@ -585,3 +585,135 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
     drop(ecrivain);
     let _ = std::fs::remove_dir_all(&dossier);
 }
+
+
+// ═══ Un catalogue en lecture ═════════════════════════════════════════════════
+
+/// **Un catalogue qui lit ce qu'un autre a posé, sans rien poser lui-même.**
+///
+/// C'est l'appelant qui manquait à `crate::acces` : un lecteur savait choisir
+/// son chemin vers la base, et rien ne montait un catalogue dessus. Ici
+/// l'écrivain ingère et lâche la base ; l'enfant l'ouvre en lecture seule
+/// (`Rag3dbConnection::read_only`), monte `Catalog::ouvrir_en_lecture`, dont
+/// `initialize` ne pose ni DDL, ni migration, ni marque — il charge ce que
+/// l'écrivain a persisté — et **cherche**. Puis il essaie d'écrire, et doit
+/// être refusé par une erreur nommée.
+///
+/// Codes de l'enfant : 7 = a trouvé et a été refusé à l'écriture ; 3 = n'a pas
+/// pu ouvrir ; 4 = `initialize` a échoué ; 8 = la recherche a échoué ; 9 = zéro
+/// résultat ; 6 = l'écriture n'a **pas** été refusée.
+#[test]
+#[ignore]
+fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
+    use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
+    const ENFANT_LECTEUR: &str = "RAG3WEAVER_ENFANT_CATALOGUE_LECTEUR";
+
+    if let Ok(dossier) = std::env::var(ENFANT_LECTEUR) {
+        let Ok(conn) = Rag3dbConnection::read_only(&dossier) else { std::process::exit(3) };
+        let mut config = rag3weaver::CatalogConfig::default();
+        config.embedding_dim = 4;
+        let mut lecteur = rag3weaver::Catalog::ouvrir_en_lecture(
+            Box::new(conn),
+            Box::new(rag3weaver::embedder::MockEmbedder::new(4)),
+            config,
+        );
+        if let Err(e) = lecteur.initialize() {
+            eprintln!("initialize en lecture : {e}");
+            std::process::exit(4);
+        }
+        assert!(lecteur.en_lecture_seule());
+        let reponse = match lecteur.search(
+            "Produit",
+            "clavecin",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("recherche en lecture : {e}");
+                std::process::exit(8);
+            }
+        };
+        if reponse.results.is_empty() {
+            eprintln!("zéro résultat ; avertissements : {:?}", reponse.meta.warnings);
+            std::process::exit(9);
+        }
+        let mut d = std::collections::BTreeMap::new();
+        d.insert("texte".to_string(), CypherValue::String("intrus".into()));
+        match lecteur.create("Produit", d) {
+            Err(rag3weaver::CatalogError::LectureSeule(verbe)) if verbe == "create" => {
+                std::process::exit(7)
+            }
+            autre => {
+                eprintln!("l'écriture aurait dû être refusée : {autre:?}");
+                std::process::exit(6);
+            }
+        }
+    }
+
+    let dossier = std::env::temp_dir().join(format!(
+        "rag3weaver-catalogue-lecteur-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    // L'écrivain pose, indexe, et lâche.
+    {
+        let mut config = rag3weaver::CatalogConfig::default();
+        config.embedding_dim = 4;
+        let mut ecrivain = rag3weaver::Catalog::new(
+            Box::new(Rag3dbConnection::new(&dossier).expect("écrivain")),
+            Box::new(rag3weaver::embedder::MockEmbedder::new(4)),
+            config,
+        );
+        ecrivain.initialize().expect("initialize");
+        let mut champs = HashMap::new();
+        champs.insert(
+            "texte".to_string(),
+            rag3weaver::SimpleFieldDef {
+                field_type: rag3weaver::config::FieldType::Text,
+                is_content: true,
+                ..Default::default()
+            },
+        );
+        ecrivain
+            .register_entity(
+                "Produit",
+                rag3weaver::EntityConfig {
+                    fields: champs,
+                    signals: rag3weaver::search::SearchSignals::BM25,
+                    ..Default::default()
+                },
+            )
+            .expect("entité");
+        let mut d = std::collections::BTreeMap::new();
+        d.insert(
+            "texte".to_string(),
+            CypherValue::String("un clavecin baroque à deux claviers".into()),
+        );
+        let res = ecrivain.ingest_entities("Produit", vec![d]).expect("ingestion");
+        assert_eq!(res.failed, 0, "{res:?}");
+        ecrivain.shutdown().expect("shutdown");
+    }
+
+    let code = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+        .args(["--exact", "un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose", "--ignored"])
+        .env(ENFANT_LECTEUR, &dossier)
+        .output()
+        .expect("lancer l'enfant");
+    let stderr = String::from_utf8_lossy(&code.stderr);
+    println!("▸ catalogue en lecture dans un autre processus : {:?}\n{stderr}", code.status.code());
+    assert_eq!(
+        code.status.code(),
+        Some(7),
+        "le lecteur doit trouver ce que l'écrivain a posé, et être refusé à l'écriture"
+    );
+
+    let _ = std::fs::remove_dir_all(&dossier);
+}
