@@ -26,7 +26,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::catalog::Catalog;
-use crate::template::{ecrire_entity, lire_dans, preparer_entity, racines, Family, Header};
+use crate::template::{prepare_entity, read_in, roots, write_entity, Family, Header};
 
 use super::node::{Node, NodeContext};
 use super::port::{PortDef, PortType, PortValue};
@@ -37,9 +37,9 @@ pub struct PlaceTemplateNode {
     template: String,
     family: Family,
     /// Le nom sous lequel enregistrer. Vide : celui du gabarit.
-    sous_le_nom: String,
+    alias: String,
     /// Les motifs à appliquer, par leur nom.
-    motifs: Vec<String>,
+    patterns: Vec<String>,
 }
 
 impl PlaceTemplateNode {
@@ -48,8 +48,8 @@ impl PlaceTemplateNode {
             node_name: name.to_string(),
             template: template.into(),
             family: Family::Entity,
-            sous_le_nom: String::new(),
-            motifs: Vec::new(),
+            alias: String::new(),
+            patterns: Vec::new(),
         }
     }
     pub fn with_family(mut self, f: Family) -> Self {
@@ -57,11 +57,11 @@ impl PlaceTemplateNode {
         self
     }
     pub fn with_name(mut self, nom: impl Into<String>) -> Self {
-        self.sous_le_nom = nom.into();
+        self.alias = nom.into();
         self
     }
-    pub fn with_patterns(mut self, motifs: Vec<String>) -> Self {
-        self.motifs = motifs;
+    pub fn with_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.patterns = patterns;
         self
     }
 }
@@ -77,8 +77,8 @@ impl Node for PlaceTemplateNode {
         Some(Box::new(serde_json::json!({
             "template": self.template,
             "family": self.family.as_str(),
-            "as": self.sous_le_nom,
-            "patterns": self.motifs,
+            "as": self.alias,
+            "patterns": self.patterns,
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
@@ -97,18 +97,18 @@ impl Node for PlaceTemplateNode {
             ));
         }
 
-        let toutes = racines(racine_projet(ctx).as_deref());
+        let toutes = roots(project_root(ctx).as_deref());
         let contenu =
-            lire_dans(&toutes, self.family, &self.template).map_err(|e| format!("place: {e}"))?;
+            read_in(&toutes, self.family, &self.template).map_err(|e| format!("place: {e}"))?;
 
         let mut motifs = Vec::new();
-        for nom in &self.motifs {
-            motifs.push(lire_dans(&toutes, Family::Pattern, nom).map_err(|e| format!("place: {e}"))?);
+        for nom in &self.patterns {
+            motifs.push(read_in(&toutes, Family::Pattern, nom).map_err(|e| format!("place: {e}"))?);
         }
         let refs: Vec<&str> = motifs.iter().map(String::as_str).collect();
 
-        let config = preparer_entity(&contenu, &refs).map_err(|e| format!("place: {e}"))?;
-        let nom = if self.sous_le_nom.is_empty() { self.template.clone() } else { self.sous_le_nom.clone() };
+        let config = prepare_entity(&contenu, &refs).map_err(|e| format!("place: {e}"))?;
+        let nom = if self.alias.is_empty() { self.template.clone() } else { self.alias.clone() };
 
         // Ce qu'on va montrer, lu **avant** l'enregistrement : après, la
         // configuration appartient au catalogue.
@@ -126,15 +126,15 @@ impl Node for PlaceTemplateNode {
         }
 
         ctx.metric("fields", champs.len() as f64);
-        ctx.metric("patterns", self.motifs.len() as f64);
+        ctx.metric("patterns", self.patterns.len() as f64);
 
         let mut rapport = format!(
             "**{nom}** posé depuis le gabarit `{}` ({}).\n\n",
             self.template,
             self.family.as_str()
         );
-        if !self.motifs.is_empty() {
-            rapport.push_str(&format!("Motifs appliqués : {}\n\n", self.motifs.join(", ")));
+        if !self.patterns.is_empty() {
+            rapport.push_str(&format!("Motifs appliqués : {}\n\n", self.patterns.join(", ")));
         }
         rapport.push_str(&format!("Signaux : `{signaux}`\n\n"));
         rapport.push_str(&format!("Champs ({}) : {}\n", champs.len(), champs.join(", ")));
@@ -166,8 +166,8 @@ impl super::node_registry::NodeFactory for PlaceTemplateNodeFactory {
             node = node.with_name(n);
         }
         if let Some(p) = config.get("patterns") {
-            let motifs = super::node_factories::parse_str_list(p, "PlaceTemplateNode", "patterns")?;
-            node = node.with_patterns(motifs);
+            let patterns = super::node_factories::parse_str_list(p, "PlaceTemplateNode", "patterns")?;
+            node = node.with_patterns(patterns);
         }
         Ok(Box::new(node))
     }
@@ -242,7 +242,7 @@ impl super::node_registry::NodeFactory for PlaceTemplateNodeFactory {
 /// rendu : le curseur d'un `WorkingTree` est `worktree:<racine>`. Une source
 /// virtuelle — un instantané en mémoire — n'a pas de racine sur le disque, et
 /// alors il n'y a pas de gabarits de projet : ceux fournis suffisent.
-fn racine_projet(ctx: &mut NodeContext) -> Option<std::path::PathBuf> {
+fn project_root(ctx: &mut NodeContext) -> Option<std::path::PathBuf> {
     let source = ctx.service::<Arc<dyn crate::code_tools::FileSource>>(
         crate::code_tools::FILE_SOURCE_SERVICE,
     )?;
@@ -255,7 +255,7 @@ fn racine_projet(ctx: &mut NodeContext) -> Option<std::path::PathBuf> {
 pub struct AdoptTemplateNode {
     node_name: String,
     entity: String,
-    sous_le_nom: String,
+    alias: String,
     category: String,
     description: String,
     note: String,
@@ -266,14 +266,14 @@ impl AdoptTemplateNode {
         Self {
             node_name: name.to_string(),
             entity: entity.into(),
-            sous_le_nom: String::new(),
+            alias: String::new(),
             category: String::new(),
             description: description.into(),
             note: String::new(),
         }
     }
     pub fn with_name(mut self, n: impl Into<String>) -> Self {
-        self.sous_le_nom = n.into();
+        self.alias = n.into();
         self
     }
     pub fn with_category(mut self, c: impl Into<String>) -> Self {
@@ -296,7 +296,7 @@ impl Node for AdoptTemplateNode {
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
         Some(Box::new(serde_json::json!({
             "entity": self.entity,
-            "as": self.sous_le_nom,
+            "as": self.alias,
             "category": self.category,
         })))
     }
@@ -307,7 +307,7 @@ impl Node for AdoptTemplateNode {
         // **Un gabarit adopté appartient au projet.** Sans racine de projet, il
         // n'y a nulle part où l'écrire qui ne soit la bibliothèque de tout le
         // monde — et on le dit plutôt que d'écrire dans le crate.
-        let racine = racine_projet(ctx).ok_or(
+        let racine = project_root(ctx).ok_or(
             "adopt: pas de racine de projet (la source de fichiers est virtuelle) —              un gabarit adopté s'écrit sous le projet, pas dans la bibliothèque fournie",
         )?;
 
@@ -322,13 +322,15 @@ impl Node for AdoptTemplateNode {
                 .ok_or_else(|| format!("adopt: '{}' n'est pas une entité enregistrée", self.entity))?
         };
 
-        let nom = if self.sous_le_nom.is_empty() { self.entity.clone() } else { self.sous_le_nom.clone() };
+        let nom = if self.alias.is_empty() { self.entity.clone() } else { self.alias.clone() };
         let header = Header {
             category: self.category.clone(),
             description: self.description.clone(),
             note: self.note.clone(),
+            // Posé à l'étape E3 : l'empreinte du gabarit fourni masqué.
+            derived_from: String::new(),
         };
-        let chemin = ecrire_entity(&racine, &nom, &config, &header)
+        let chemin = write_entity(&racine, &nom, &config, &header)
             .map_err(|e| format!("adopt: {e}"))?;
 
         let mut champs: Vec<String> = config.fields.keys().cloned().collect();

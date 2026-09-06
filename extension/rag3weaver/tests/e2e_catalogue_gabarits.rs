@@ -29,7 +29,7 @@ use std::sync::Arc;
 use rag3weaver::embedder::DualEmbedder;
 use rag3weaver::search::SearchOptions;
 use rag3weaver::template::{
-    builtin_root, register_template_schema, scan, Family, TEMPLATE_ENTITY,
+    builtin_root, register_template_schema, scan, Family, Origin, TEMPLATE_ENTITY,
 };
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
@@ -80,7 +80,7 @@ fn brique_1_le_cosinus_nu_dit_il_la_verite() {
     use rag3weaver::embedder::Embedder;
     let emb: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
 
-    let fiches = scan(&builtin_root()).unwrap();
+    let fiches = scan(&builtin_root(), Origin::Builtin).unwrap();
     let entites: Vec<_> = fiches.iter().filter(|f| f.family == Family::Entity).collect();
     assert_eq!(entites.len(), 3);
 
@@ -138,7 +138,7 @@ fn brique_1_le_cosinus_nu_dit_il_la_verite() {
 #[ignore]
 fn brique_3_quel_texte_est_embarque() {
     let mut catalog = setup();
-    let fiches = scan(&builtin_root()).unwrap();
+    let fiches = scan(&builtin_root(), Origin::Builtin).unwrap();
     catalog
         .ingest_entities(TEMPLATE_ENTITY, fiches.iter().map(|f| f.data()).collect())
         .unwrap();
@@ -154,7 +154,7 @@ fn brique_3_quel_texte_est_embarque() {
     // Le texte de chaque chunk, tronqué : c'est lui qui a été embarqué.
     let rows = catalog
         .execute_raw("MATCH (c:Template_Chunk) RETURN c._title, c._text LIMIT 12")
-        .expect("lire les chunks");
+        .expect("read les chunks");
     for r in &rows.rows {
         let titre = r.first().and_then(|v| v.as_str()).unwrap_or("");
         let texte = r.get(1).and_then(|v| v.as_str()).unwrap_or("");
@@ -173,7 +173,7 @@ fn brique_3_quel_texte_est_embarque() {
 fn brique_2_quel_signal_ment() {
     use rag3weaver::search::SearchSignals;
     let mut catalog = setup();
-    let fiches = scan(&builtin_root()).unwrap();
+    let fiches = scan(&builtin_root(), Origin::Builtin).unwrap();
     let r = catalog
         .ingest_entities(TEMPLATE_ENTITY, fiches.iter().map(|f| f.data()).collect())
         .unwrap();
@@ -222,7 +222,7 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
     let mut catalog = setup();
 
     // ── 1. Le catalogue s'indexe ────────────────────────────────────────
-    let fiches = scan(&builtin_root()).expect("lire les gabarits fournis");
+    let fiches = scan(&builtin_root(), Origin::Builtin).expect("read les gabarits fournis");
     eprintln!("[catalogue] {} gabarits sur le disque", fiches.len());
     for f in &fiches {
         eprintln!("  {:<10} {:<14} {}", f.family.as_str(), f.name, f.category);
@@ -247,7 +247,7 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
             })
             .collect()
     };
-    // Ce qu'on veut lire quand un classement surprend : le score, et **quel
+    // Ce qu'on veut read quand un classement surprend : le score, et **quel
     // signal** l'a trouvé.
     let detail = |r: &rag3weaver::search::SearchResponse| -> String {
         r.results
@@ -378,14 +378,14 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
 #[test]
 #[ignore]
 fn poser_un_gabarit_l_enregistre_vraiment() {
-    use rag3weaver::template::{lire, preparer_entity};
+    use rag3weaver::template::{read, prepare_entity};
 
     let mut catalog = setup();
     let racine = builtin_root();
 
     // Ce que l'outil fait, avec les mêmes fonctions que le nœud.
-    let contenu = lire(&racine, Family::Entity, "user").expect("le gabarit user existe");
-    let config = preparer_entity(&contenu, &[]).expect("configuration lisible");
+    let contenu = read(&racine, Family::Entity, "user").expect("le gabarit user existe");
+    let config = prepare_entity(&contenu, &[]).expect("configuration lisible");
     let champs: Vec<String> = {
         let mut c: Vec<String> = config.fields.keys().cloned().collect();
         c.sort_unstable();
@@ -413,8 +413,8 @@ fn poser_un_gabarit_l_enregistre_vraiment() {
 #[test]
 #[ignore]
 fn un_gabarit_inconnu_nomme_ses_voisins() {
-    use rag3weaver::template::lire;
-    let e = lire(&builtin_root(), Family::Entity, "users").expect_err("'users' n'existe pas");
+    use rag3weaver::template::read;
+    let e = read(&builtin_root(), Family::Entity, "users").expect_err("'users' n'existe pas");
     assert!(e.contains("users"), "{e}");
     assert!(e.contains("user"), "le refus doit nommer les voisins : {e}");
 }
@@ -425,18 +425,18 @@ fn un_gabarit_inconnu_nomme_ses_voisins() {
 #[test]
 #[ignore]
 fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
-    use rag3weaver::template::{lire, preparer_entity};
+    use rag3weaver::template::{read, prepare_entity};
     let racine = builtin_root();
-    let contenu = lire(&racine, Family::Entity, "user").expect("user");
+    let contenu = read(&racine, Family::Entity, "user").expect("user");
 
-    let nu = preparer_entity(&contenu, &[]).expect("nu");
-    let motif = match lire(&racine, Family::Pattern, "versioned") {
+    let nu = prepare_entity(&contenu, &[]).expect("nu");
+    let motif = match read(&racine, Family::Pattern, "versioned") {
         Ok(m) => m,
         // Le motif est facultatif dans le catalogue fourni : si personne ne
         // l'a encore écrit, le test ne prétend pas le contraire.
         Err(_) => return,
     };
-    let habille = preparer_entity(&contenu, &[&motif]).expect("habillé");
+    let habille = prepare_entity(&contenu, &[&motif]).expect("habillé");
     assert!(
         habille.fields.len() > nu.fields.len(),
         "le motif n'a rien ajouté : {} champs contre {}",
@@ -451,15 +451,15 @@ fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
 #[test]
 #[ignore]
 fn un_gabarit_adopte_se_repose() {
-    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
+    use rag3weaver::template::{write_entity, read_in, prepare_entity, roots, Header};
 
     let projet = tempfile::tempdir().expect("tempdir");
     let racine = projet.path();
 
     // Une entité comme un agent en construirait une : partie d'un gabarit
     // fourni, elle a divergé.
-    let base = lire_dans(&racines(None), Family::Entity, "user").expect("user fourni");
-    let mut config = preparer_entity(&base, &[]).expect("config");
+    let base = read_in(&roots(None), Family::Entity, "user").expect("user fourni");
+    let mut config = prepare_entity(&base, &[]).expect("config");
     config.fields.insert(
         "avatarUrl".into(),
         rag3weaver::config::SimpleFieldDef {
@@ -472,14 +472,15 @@ fn un_gabarit_adopte_se_repose() {
         category: "auth".into(),
         description: "Un compte avec son portrait : de quoi afficher qui parle.".into(),
         note: "Adopté par un test.".into(),
+        ..Header::default()
     };
-    let chemin = ecrire_entity(racine, "user_avec_portrait", &config, &header).expect("écriture");
+    let chemin = write_entity(racine, "user_avec_portrait", &config, &header).expect("écriture");
     assert!(chemin.exists(), "le gabarit n'a pas été écrit : {}", chemin.display());
 
     // Et il se relit par les mêmes chemins que les gabarits fournis.
-    let toutes = racines(Some(racine));
-    let relu = lire_dans(&toutes, Family::Entity, "user_avec_portrait").expect("relecture");
-    let config2 = preparer_entity(&relu, &[]).expect("config relue");
+    let toutes = roots(Some(racine));
+    let relu = read_in(&toutes, Family::Entity, "user_avec_portrait").expect("relecture");
+    let config2 = prepare_entity(&relu, &[]).expect("config relue");
     assert!(config2.fields.contains_key("avatarUrl"), "le champ ajouté a survécu à l'aller-retour");
     assert_eq!(config2.fields.len(), config.fields.len());
 }
@@ -490,13 +491,13 @@ fn un_gabarit_adopte_se_repose() {
 #[test]
 #[ignore]
 fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
-    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, scan_racines, Header};
+    use rag3weaver::template::{write_entity, read_in, prepare_entity, roots, scan_roots, Header};
 
     let projet = tempfile::tempdir().expect("tempdir");
     let racine = projet.path();
 
-    let fourni = lire_dans(&racines(None), Family::Entity, "user").expect("user fourni");
-    let mut config = preparer_entity(&fourni, &[]).expect("config");
+    let fourni = read_in(&roots(None), Family::Entity, "user").expect("user fourni");
+    let mut config = prepare_entity(&fourni, &[]).expect("config");
     config.fields.clear();
     config.fields.insert(
         "seulementCeci".into(),
@@ -506,7 +507,7 @@ fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
             ..Default::default()
         },
     );
-    ecrire_entity(
+    write_entity(
         racine,
         "user",
         &config,
@@ -514,18 +515,19 @@ fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
             category: "auth".into(),
             description: "La version de ce projet, volontairement différente.".into(),
             note: String::new(),
+            ..Header::default()
         },
     )
     .expect("écriture");
 
-    let toutes = racines(Some(racine));
-    let relu = preparer_entity(&lire_dans(&toutes, Family::Entity, "user").unwrap(), &[]).unwrap();
+    let toutes = roots(Some(racine));
+    let relu = prepare_entity(&read_in(&toutes, Family::Entity, "user").unwrap(), &[]).unwrap();
     assert!(relu.fields.contains_key("seulementCeci"), "c'est celui du projet qui doit gagner");
     assert!(!relu.fields.contains_key("email"), "celui de la bibliothèque ne doit pas transparaître");
 
     // Et il n'apparaît qu'une fois dans le catalogue : masquer n'est pas
     // ajouter. Deux fiches de même nom rendraient la recherche ambiguë.
-    let fiches = scan_racines(&toutes).unwrap();
+    let fiches = scan_roots(&toutes).unwrap();
     let users: Vec<_> = fiches.iter().filter(|f| f.family == Family::Entity && f.name == "user").collect();
     assert_eq!(users.len(), 1, "un seul 'user' visible, pas deux");
     assert_eq!(users[0].description, "La version de ce projet, volontairement différente.");
@@ -537,10 +539,10 @@ fn un_gabarit_de_projet_masque_celui_de_la_bibliotheque() {
 #[test]
 #[ignore]
 fn un_gabarit_sans_description_est_refuse() {
-    use rag3weaver::template::{ecrire_entity, lire_dans, preparer_entity, racines, Header};
+    use rag3weaver::template::{write_entity, read_in, prepare_entity, roots, Header};
     let projet = tempfile::tempdir().expect("tempdir");
-    let config = preparer_entity(&lire_dans(&racines(None), Family::Entity, "user").unwrap(), &[]).unwrap();
-    let e = ecrire_entity(projet.path(), "muet", &config, &Header::default())
+    let config = prepare_entity(&read_in(&roots(None), Family::Entity, "user").unwrap(), &[]).unwrap();
+    let e = write_entity(projet.path(), "muet", &config, &Header::default())
         .expect_err("une description vide doit être refusée");
     assert!(e.contains("description"), "{e}");
 }

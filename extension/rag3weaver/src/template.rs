@@ -93,12 +93,48 @@ impl Family {
     pub const ALL: [Family; 4] = [Family::Entity, Family::Graph, Family::Component, Family::Pattern];
 }
 
+/// **D'où vient un gabarit.** La bibliothèque fournie voyage avec le crate ;
+/// ce qu'un projet adopte lui appartient. En base c'est un filtre : « ce que ce
+/// projet a ajouté » est une recherche ordinaire
+/// ([doc 14h43](../docs/6-septembre-2026-14h43/01-la-couche-utilisateur-du-catalogue-de-gabarits.md)).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Origin {
+    #[default]
+    Builtin,
+    Project,
+}
+
+impl Origin {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Builtin => "builtin",
+            Self::Project => "project",
+        }
+    }
+}
+
+/// Une racine de gabarits, avec ce qu'elle est.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateRoot {
+    pub origin: Origin,
+    pub path: PathBuf,
+}
+
 /// **La fiche d'un gabarit** — ce qui va dans la base. Le contenu reste au
 /// bout de `path`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateRef {
     pub name: String,
     pub family: Family,
+    /// Bibliothèque ou projet. Vient de la racine, pas du fichier.
+    #[serde(default)]
+    pub origin: Origin,
+    /// L'empreinte du gabarit fourni de même nom au moment de l'adoption,
+    /// vide sinon. C'est ce qui permet de dire « il a bougé depuis que tu l'as
+    /// pris » sans lier le gabarit à son moule.
+    #[serde(default)]
+    pub derived_from: String,
     /// Thématique, ouverte : `auth`, `commerce`, `messagerie`… Vide si on n'en
     /// a pas déclaré.
     #[serde(default)]
@@ -138,6 +174,11 @@ pub struct Header {
     /// est ce qu'il est. Utile à qui le lit, invisible à la recherche.
     #[serde(default)]
     pub note: String,
+    /// L'empreinte du gabarit fourni de même nom quand celui-ci a été adopté.
+    /// Écrit par `adopt`, relu par la synchronisation ; vide si le gabarit ne
+    /// masque rien.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub derived_from: String,
 }
 
 fn field(t: FieldType) -> SimpleFieldDef {
@@ -163,6 +204,9 @@ pub fn template_config() -> EntityConfig {
     fields.insert("category".into(), field(FieldType::String));
     fields.insert("path".into(), field(FieldType::String));
     fields.insert("content_hash".into(), field(FieldType::String));
+    // La couche : `builtin` ou `project`. Un filtre, pas un signal.
+    fields.insert("origin".into(), field(FieldType::String));
+    fields.insert("derived_from".into(), field(FieldType::String));
     EntityConfig {
         fields,
         hashsafe: Some(vec!["family".into(), "name".into()]),
@@ -178,7 +222,7 @@ pub fn template_config() -> EntityConfig {
         // Le coût est d'un chunk par gabarit, ce qui est le plancher.
         // (Le catalogue refuse d'ailleurs la combinaison, et c'est ce refus
         // qui a rattrapé l'erreur.)
-        return_fields: Some(vec!["family".into(), "category".into(), "path".into()]),
+        return_fields: Some(vec!["family".into(), "category".into(), "path".into(), "origin".into()]),
         ..Default::default()
     }
 }
@@ -202,6 +246,8 @@ impl TemplateRef {
             ("description".to_string(), V::String(self.description.clone())),
             ("path".to_string(), V::String(self.path.clone())),
             ("content_hash".to_string(), V::String(self.content_hash.clone())),
+            ("origin".to_string(), V::String(self.origin.as_str().to_string())),
+            ("derived_from".to_string(), V::String(self.derived_from.clone())),
         ])
     }
 }
@@ -210,7 +256,8 @@ impl TemplateRef {
 ///
 /// Une racine, un sous-répertoire par famille. Ce qui n'a pas d'en-tête garde
 /// son nom de fichier et rien d'autre : on ne devine pas une description.
-pub fn scan(root: &Path) -> Result<Vec<TemplateRef>, String> {
+/// L'origine est celle de la racine : un fichier ne dit pas d'où il vient.
+pub fn scan(root: &Path, origin: Origin) -> Result<Vec<TemplateRef>, String> {
     let mut out = Vec::new();
     for family in Family::ALL {
         let dir = root.join(family.dir());
@@ -227,6 +274,8 @@ pub fn scan(root: &Path) -> Result<Vec<TemplateRef>, String> {
             out.push(TemplateRef {
                 name: nom,
                 family,
+                origin,
+                derived_from: header.derived_from,
                 category: header.category,
                 description: header.description,
                 path: format!("{}/{}", family.dir(), path.file_name().unwrap_or_default().to_string_lossy()),
@@ -281,13 +330,13 @@ fn header_of(path: &Path, contenu: &str) -> Header {
 pub fn place_entity(
     catalog: &mut crate::Catalog,
     contenu: &str,
-    sous_le_nom: &str,
+    alias: &str,
 ) -> Result<(), String> {
     let v: serde_json::Value = serde_json::from_str(contenu).map_err(|e| format!("gabarit illisible : {e}"))?;
     let config = v.get("entity").ok_or("gabarit d'entité sans clé 'entity'")?;
     let config: EntityConfig = serde_json::from_value(config.clone())
         .map_err(|e| format!("configuration d'entité illisible : {e}"))?;
-    catalog.register_entity(sous_le_nom, config).map_err(|e| e.to_string())
+    catalog.register_entity(alias, config).map_err(|e| e.to_string())
 }
 
 /// **Un motif** : ce qu'il ajoute à une entité, et comment il en change
@@ -365,11 +414,11 @@ impl Pattern {
 pub fn place_entity_with(
     catalog: &mut crate::Catalog,
     contenu: &str,
-    motifs: &[&str],
-    sous_le_nom: &str,
+    patterns: &[&str],
+    alias: &str,
 ) -> Result<(), String> {
-    let config = preparer_entity(contenu, motifs)?;
-    catalog.register_entity(sous_le_nom, config).map_err(|e| e.to_string())
+    let config = prepare_entity(contenu, patterns)?;
+    catalog.register_entity(alias, config).map_err(|e| e.to_string())
 }
 
 /// **Ce qu'on va poser, avant de le poser.**
@@ -378,14 +427,14 @@ pub fn place_entity_with(
 /// pouvoir *dire ce qu'il a posé* — combien de champs, lesquels, quels signaux.
 /// Un outil qui répond « c'est fait » sans montrer le résultat oblige son
 /// appelant à une seconde requête pour savoir ce qu'il vient de créer.
-pub fn preparer_entity(contenu: &str, motifs: &[&str]) -> Result<EntityConfig, String> {
+pub fn prepare_entity(contenu: &str, patterns: &[&str]) -> Result<EntityConfig, String> {
     let v: serde_json::Value = serde_json::from_str(contenu).map_err(|e| format!("gabarit illisible : {e}"))?;
     let config = v.get("entity").ok_or("gabarit d'entité sans clé 'entity'")?;
     let mut config: EntityConfig = serde_json::from_value(config.clone())
         .map_err(|e| format!("configuration d'entité illisible : {e}"))?;
-    for m in motifs {
-        let motif = Pattern::parse(m)?;
-        config = motif.apply(config)?;
+    for m in patterns {
+        let pattern = Pattern::parse(m)?;
+        config = pattern.apply(config)?;
     }
     Ok(config)
 }
@@ -396,8 +445,9 @@ pub fn preparer_entity(contenu: &str, motifs: &[&str]) -> Result<EntityConfig, S
 /// qui se corrige en un tour et un agent qui redemande la liste : « gabarit
 /// 'users' inconnu » l'envoie deviner, « inconnu — il y a conversation,
 /// product, user » lui donne la réponse dans le refus.
-pub fn lire(root: &Path, family: Family, nom: &str) -> Result<String, String> {
-    let refs = scan(root)?;
+pub fn read(root: &Path, family: Family, nom: &str) -> Result<String, String> {
+    // L'origine n'importe pas pour lire ; on prend le défaut.
+    let refs = scan(root, Origin::Builtin)?;
     match refs.iter().find(|r| r.family == family && r.name == nom) {
         Some(r) => std::fs::read_to_string(root.join(&r.path))
             .map_err(|e| format!("gabarit '{}' illisible : {e}", r.path)),
@@ -429,7 +479,7 @@ pub fn builtin_root() -> PathBuf {
 /// pas. Ceux qu'un agent adopte appartiennent au projet — les écrire dans le
 /// crate reviendrait à faire grossir la bibliothèque de tout le monde avec ce
 /// qui n'intéresse qu'un dépôt.
-pub const DOSSIER_PROJET: &str = ".rag3weaver/templates";
+pub const PROJECT_DIR: &str = ".rag3weaver/templates";
 
 /// Les racines à consulter, **du plus proche au plus lointain** : celle du
 /// projet d'abord, la bibliothèque ensuite.
@@ -437,21 +487,21 @@ pub const DOSSIER_PROJET: &str = ".rag3weaver/templates";
 /// L'ordre décide qui gagne quand un nom existe des deux côtés, et il gagne
 /// dans le bon sens : un projet doit pouvoir remplacer un gabarit fourni sans
 /// demander la permission, et sans que le nom change.
-pub fn racines(projet: Option<&Path>) -> Vec<PathBuf> {
+pub fn roots(project: Option<&Path>) -> Vec<TemplateRoot> {
     let mut out = Vec::new();
-    if let Some(p) = projet {
-        out.push(p.join(DOSSIER_PROJET));
+    if let Some(p) = project {
+        out.push(TemplateRoot { origin: Origin::Project, path: p.join(PROJECT_DIR) });
     }
-    out.push(builtin_root());
+    out.push(TemplateRoot { origin: Origin::Builtin, path: builtin_root() });
     out
 }
 
 /// [`scan`] sur plusieurs racines, le premier trouvé l'emportant.
-pub fn scan_racines(racines: &[PathBuf]) -> Result<Vec<TemplateRef>, String> {
+pub fn scan_roots(roots: &[TemplateRoot]) -> Result<Vec<TemplateRef>, String> {
     let mut vus: std::collections::HashSet<(Family, String)> = std::collections::HashSet::new();
     let mut out = Vec::new();
-    for r in racines {
-        for t in scan(r)? {
+    for r in roots {
+        for t in scan(&r.path, r.origin)? {
             if vus.insert((t.family, t.name.clone())) {
                 out.push(t);
             }
@@ -461,14 +511,14 @@ pub fn scan_racines(racines: &[PathBuf]) -> Result<Vec<TemplateRef>, String> {
     Ok(out)
 }
 
-/// [`lire`] sur plusieurs racines.
-pub fn lire_dans(racines: &[PathBuf], family: Family, nom: &str) -> Result<String, String> {
+/// [`read`] sur plusieurs racines.
+pub fn read_in(roots: &[TemplateRoot], family: Family, nom: &str) -> Result<String, String> {
     let mut voisins: Vec<String> = Vec::new();
-    for r in racines {
-        match lire(r, family, nom) {
+    for r in roots {
+        match read(&r.path, family, nom) {
             Ok(c) => return Ok(c),
             Err(_) => {
-                for t in scan(r).unwrap_or_default() {
+                for t in scan(&r.path, r.origin).unwrap_or_default() {
                     if t.family == family {
                         voisins.push(t.name);
                     }
@@ -495,8 +545,8 @@ pub fn lire_dans(racines: &[PathBuf], family: Family, nom: &str) -> Result<Strin
 /// champ embarqué, donc celui qui décide de ce qu'une recherche par sens
 /// trouve. Un gabarit sans description est un gabarit qu'on ne retrouvera pas,
 /// et l'accepter reviendrait à laisser un agent enterrer son propre travail.
-pub fn ecrire_entity(
-    racine_projet: &Path,
+pub fn write_entity(
+    project_root: &Path,
     nom: &str,
     config: &EntityConfig,
     header: &Header,
@@ -507,7 +557,7 @@ pub fn ecrire_entity(
     if nom.trim().is_empty() || nom.contains('/') || nom.contains("..") {
         return Err(format!("nom de gabarit refusé : '{nom}'"));
     }
-    let dir = racine_projet.join(DOSSIER_PROJET).join(Family::Entity.dir());
+    let dir = project_root.join(PROJECT_DIR).join(Family::Entity.dir());
     std::fs::create_dir_all(&dir).map_err(|e| format!("{} : {e}", dir.display()))?;
     let contenu = serde_json::json!({ "template": header, "entity": config });
     let texte = serde_json::to_string_pretty(&contenu).map_err(|e| e.to_string())?;
@@ -520,6 +570,39 @@ pub fn ecrire_entity(
 mod tests {
     use super::*;
 
+    /// **La fiche dit d'où elle vient, et ce qu'elle masque.** L'origine est
+    /// celle de la racine — un fichier ne la porte pas ; `derived_from` vient
+    /// de l'en-tête, parce que c'est un fait daté (le moment de l'adoption).
+    #[test]
+    fn la_fiche_porte_son_origine_et_ce_qu_elle_masque() {
+        let projet = tempfile::tempdir().unwrap();
+        let fourni = read(&builtin_root(), Family::Entity, "user").unwrap();
+        let config = prepare_entity(&fourni, &[]).unwrap();
+        let header = Header {
+            description: "Le user de ce projet.".into(),
+            derived_from: "abc123".into(),
+            ..Header::default()
+        };
+        write_entity(projet.path(), "user", &config, &header).unwrap();
+
+        let toutes = roots(Some(projet.path()));
+        assert_eq!(toutes[0].origin, Origin::Project);
+        assert_eq!(toutes[1].origin, Origin::Builtin);
+
+        let fiches = scan_roots(&toutes).unwrap();
+        let user = fiches.iter().find(|f| f.family == Family::Entity && f.name == "user").unwrap();
+        assert_eq!(user.origin, Origin::Project, "le projet masque, donc c'est lui qu'on voit");
+        assert_eq!(user.derived_from, "abc123");
+        let product = fiches.iter().find(|f| f.family == Family::Entity && f.name == "product").unwrap();
+        assert_eq!(product.origin, Origin::Builtin);
+        assert!(product.derived_from.is_empty());
+
+        // Et les colonnes suivent : c'est ce qui rend l'origine filtrable.
+        let data = user.data();
+        assert_eq!(data["origin"], crate::connection::CypherValue::String("project".into()));
+        assert_eq!(data["derived_from"], crate::connection::CypherValue::String("abc123".into()));
+    }
+
     /// **Le catalogue se lit depuis le disque, en-têtes compris.**
     ///
     /// Ce que le test fixe n'est pas le nombre de gabarits — il va grandir —
@@ -527,7 +610,7 @@ mod tests {
     /// Un gabarit sans description est un gabarit qu'on trouvera mal.
     #[test]
     fn le_catalogue_fourni_se_lit() {
-        let fiches = scan(&builtin_root()).expect("lire les gabarits fournis");
+        let fiches = scan(&builtin_root(), Origin::Builtin).expect("lire les gabarits fournis");
         assert!(!fiches.is_empty());
 
         let par_nom = |n: &str| fiches.iter().find(|f| f.name == n).cloned();
@@ -561,7 +644,7 @@ mod tests {
     /// l'écran.
     #[test]
     fn la_famille_et_la_categorie_sont_deux_questions() {
-        let fiches = scan(&builtin_root()).unwrap();
+        let fiches = scan(&builtin_root(), Origin::Builtin).unwrap();
         let auth: Vec<&TemplateRef> = fiches.iter().filter(|f| f.category == "auth").collect();
         assert!(!auth.is_empty());
 
