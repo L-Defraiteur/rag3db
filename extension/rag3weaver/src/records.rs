@@ -66,6 +66,11 @@ impl From<&str> for RefOrUuid {
 pub enum UpdateStatus {
     Updated,
     Unchanged,
+    /// La mise à jour n'a pas abouti — la cause est dans
+    /// [`FlushResult::warnings`] et dans le canal d'échecs. Avant le
+    /// 6 septembre 2026, ce cas n'existait pas : une ligne refusée faisait
+    /// tomber tout le graphe, ou passait pour `Updated`.
+    Failed,
 }
 
 #[derive(Debug)]
@@ -84,7 +89,37 @@ pub struct DeleteResult {
     pub entity: String,
     pub chunks_deleted: usize,
     pub relations_deleted: usize,
+    /// `Some(cause)` : la suppression n'a pas abouti.
+    pub echec: Option<String>,
 }
+
+/// **Un groupe d'enregistrements qui n'a pas abouti**, dit par le nœud qui
+/// l'a vu — c'est le canal d'échec par groupe (réconciliation, A5).
+///
+/// Onze nœuds sur douze n'avaient que deux façons de finir : `?`, qui fait
+/// tomber tout le graphe sans annuler ce qui est déjà écrit, ou `ctx.warn`,
+/// que personne ne compte. Ici un nœud dit *ce* groupe, *combien*
+/// d'opérations, *ce qui* est perdu, *pourquoi* — et continue les autres.
+///
+/// `operations` compte des opérations **en file** (insertion, lien, mise à
+/// jour, suppression, agrégat) : celles-là entrent dans `FlushResult::failed`.
+/// Un échec **dérivé** — commit d'index, découpage, embarquement — n'en
+/// compte aucune (`operations: 0`) mais retire `perdu` de `rendu_pret` : un
+/// drain dont le commit plein texte a raté ne dit plus `textsearch`.
+#[derive(Debug, Clone)]
+pub struct EchecDeGroupe {
+    pub noeud: String,
+    pub table: String,
+    pub operations: usize,
+    pub perdu: crate::disponibilite::Disponibilites,
+    pub cause: String,
+}
+
+/// Le nom du service qui porte le canal d'échecs :
+/// `Arc<Mutex<Vec<EchecDeGroupe>>>`, ouvert par l'appelant du graphe et
+/// relu après — le même patron que `update_results` et `delete_results`,
+/// écrit **pendant** l'exécution, donc survivant à l'abandon d'une phase.
+pub const SERVICE_ECHECS: &str = "echecs";
 
 // ─── FlushResult ────────────────────────────────────────────────────────────
 
@@ -130,6 +165,34 @@ pub struct FlushResult {
     pub rendu_pret: Option<crate::disponibilite::Disponibilites>,
     pub update_results: Vec<UpdateResult>,
     pub delete_results: Vec<DeleteResult>,
+}
+
+impl FlushResult {
+    /// **Absorbe le canal d'échecs** : les opérations ratées quittent
+    /// `processed` pour `failed`, les disponibilités perdues quittent
+    /// `rendu_pret`, et chaque échec se dit dans `warnings`.
+    pub fn absorber_les_echecs(&mut self, echecs: &[EchecDeGroupe]) {
+        for e in echecs {
+            self.failed += e.operations;
+            self.processed = self.processed.saturating_sub(e.operations);
+            if e.operations == 0 {
+                if let Some(pret) = self.rendu_pret.as_mut() {
+                    *pret = pret.sans(e.perdu);
+                }
+            }
+            self.warnings.push(if e.operations == 0 {
+                format!(
+                    "{} : « {} » — {} ({}) : {}",
+                    e.noeud, e.table, "disponibilité perdue", e.perdu, e.cause
+                )
+            } else {
+                format!(
+                    "{} : « {} » — {} opération(s) en échec : {}",
+                    e.noeud, e.table, e.operations, e.cause
+                )
+            });
+        }
+    }
 }
 
 // ─── DrainStats ─────────────────────────────────────────────────────────────
@@ -603,6 +666,25 @@ impl PendingWork {
 mod tests {
     use super::*;
     use crate::refs::EntityRef;
+
+    /// **Les comptes cessent de mentir.** Une opération ratée quitte
+    /// `processed` pour `failed` ; un échec dérivé retire sa disponibilité
+    /// de `rendu_pret` sans toucher aux comptes ; les deux se disent.
+    #[test]
+    fn absorber_les_echecs_deplace_les_comptes_et_retire_les_disponibilites() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut res = FlushResult { processed: 10, rendu_pret: Some(D::TOUT), ..Default::default() };
+        res.absorber_les_echecs(&[
+            EchecDeGroupe { noeud: "InsertRecordNode".into(), table: "Note".into(), operations: 3, perdu: D::TOUT, cause: "boum".into() },
+            EchecDeGroupe { noeud: "FlushNode".into(), table: "Document".into(), operations: 0, perdu: D::PLEIN_TEXTE, cause: "commit".into() },
+        ]);
+        assert_eq!(res.failed, 3);
+        assert_eq!(res.processed, 7);
+        assert_eq!(res.rendu_pret, Some(D::DONNEE | D::SPARSE | D::DENSE), "le plein texte est perdu, le reste tient");
+        assert_eq!(res.warnings.len(), 2);
+        assert!(res.warnings[0].contains("Note") && res.warnings[0].contains("3 opération"));
+        assert!(res.warnings[1].contains("disponibilité perdue"));
+    }
 
     #[test]
     fn entity_record_take_resolver() {

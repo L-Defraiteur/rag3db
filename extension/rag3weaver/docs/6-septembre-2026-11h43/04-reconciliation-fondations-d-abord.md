@@ -331,8 +331,10 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | A3 A4 | faits — 26 suites e2e vertes |
 | A5 | en conception (cartographie des nœuds d'écriture) |
 | B | en conception (cartographie de `Catalog::search` contre les nœuds) |
-| C2 | écrit, 950 tests de bibliothèque verts, passe e2e en cours |
-| C3 C4 C5, D, E | à faire |
+| C2 | fait — onze suites e2e vertes |
+| A5 | écrit, 953 tests de bibliothèque verts, passe e2e en cours |
+| D (cartographie) | en cours — relecture du MVCC de Vela par un agent, en doc |
+| C3 C4 C5, E | à faire |
 
 
 ```

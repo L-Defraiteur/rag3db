@@ -233,24 +233,44 @@ impl DbConnection for CallbackConnection {
 
 /// Mock database connection for testing. Returns empty result sets.
 #[derive(Debug, Default)]
-pub struct MockConnection;
+pub struct MockConnection {
+    /// Toute requête contenant ce motif échoue. C'est ce qui permet
+    /// d'éprouver un groupe qui rate au milieu des autres.
+    echoue_sur: Option<String>,
+}
 
 impl MockConnection {
     pub fn new() -> Self {
-        Self
+        Self { echoue_sur: None }
+    }
+
+    /// Un mock dont toute requête contenant `motif` rend une erreur.
+    pub fn qui_echoue_sur(motif: &str) -> Self {
+        Self { echoue_sur: Some(motif.to_string()) }
+    }
+
+    fn verifier(&self, cypher: &str) -> Result<(), DbError> {
+        match &self.echoue_sur {
+            Some(m) if cypher.contains(m.as_str()) => Err(DbError::QueryError(format!(
+                "échec simulé : la requête contient « {m} »"
+            ))),
+            _ => Ok(()),
+        }
     }
 }
 
 impl DbConnection for MockConnection {
-    fn execute(&self, _cypher: &str) -> Result<QueryResult, DbError> {
+    fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
+        self.verifier(cypher)?;
         Ok(QueryResult::default())
     }
 
     fn execute_with_params(
         &self,
-        _cypher: &str,
+        cypher: &str,
         _params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
+        self.verifier(cypher)?;
         Ok(QueryResult::default())
     }
 }

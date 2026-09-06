@@ -30,9 +30,11 @@ use crate::embedder::{budget_batches, embed_char_budget, souffler};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
+use crate::disponibilite::Disponibilites;
 use crate::records::{
-    AggregateRecord, DeleteRecord, DeleteResult, EntityRecord, KBContentRecord,
+    AggregateRecord, DeleteRecord, DeleteResult, EchecDeGroupe, EntityRecord, KBContentRecord,
     RecordSourceContent, RefOrUuid, RelationRecord, UpdateRecord, UpdateResult, UpdateStatus,
+    SERVICE_ECHECS,
 };
 use crate::refs::{EntityRef, RelationRef};
 use crate::search;
@@ -102,6 +104,40 @@ pub(crate) fn tables_sans_index_plein_texte<T>(
     manquantes.sort();
     manquantes.dedup();
     manquantes
+}
+
+/// **Consigne un groupe qui n'a pas abouti**, sans faire tomber le graphe.
+///
+/// Le canal est le service [`SERVICE_ECHECS`], ouvert par l'appelant du
+/// graphe et relu par lui. Sans le service — un montage de test, un graphe
+/// monté à la main — l'échec va au journal du nœud, pour ne jamais se taire.
+pub(crate) fn consigner_l_echec(
+    ctx: &mut NodeContext,
+    noeud: &str,
+    table: &str,
+    operations: usize,
+    perdu: Disponibilites,
+    cause: String,
+) {
+    match ctx.service::<Arc<Mutex<Vec<EchecDeGroupe>>>>(SERVICE_ECHECS).cloned() {
+        Some(canal) => {
+            if let Ok(mut v) = canal.lock() {
+                v.push(EchecDeGroupe {
+                    noeud: noeud.to_string(),
+                    table: table.to_string(),
+                    operations,
+                    perdu,
+                    cause,
+                });
+                return;
+            }
+            ctx.warn(&format!("{noeud} : « {table} » — {operations} opération(s) en échec : {cause}"));
+        }
+        None => ctx.warn(&format!(
+            "{noeud} : « {table} » — {operations} opération(s) en échec : {cause} \
+             (aucun canal d'échecs monté : ceci n'est pas compté)"
+        )),
+    }
 }
 
 impl Node for InsertRecordNode {
@@ -221,15 +257,28 @@ impl Node for InsertRecordNode {
                     .collect(),
             );
 
-            let result = conn
-                .execute_with_params(
-                    &cypher,
-                    &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }],
-                )
-                .map_err(|e| e.to_string())?;
+            // **Un groupe qui échoue ne tue plus le graphe.** Il se compte,
+            // ses refs sont résolus en échec — un lien vers une de ces lignes
+            // échouera tout de suite et se comptera, au lieu d'attendre
+            // trente secondes — et les autres groupes passent.
+            let result = match conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".to_string(), value: items_param }],
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    let cause = e.to_string();
+                    for &i in indices {
+                        if let Some(r) = items[i].take_resolver() {
+                            r.fail(format!("insertion dans « {entity_name} » échouée : {cause}"));
+                        }
+                    }
+                    consigner_l_echec(
+                        ctx, "InsertRecordNode", entity_name, indices.len(), Disponibilites::TOUT, cause,
+                    );
+                    continue;
+                }
+            };
 
             // Build UUID → node_id map for safe matching (don't rely on row order)
             let mut uuid_to_node_id: HashMap<String, String> = HashMap::new();
@@ -298,12 +347,20 @@ impl Node for InsertRecordNode {
                                         v.as_str().map(|s| (k.clone(), s.to_string()))
                                     })
                                     .collect();
-                                crate::fts_handle::upsert_document(
+                                // Une ligne posée mais non indexée : la donnée
+                                // est là, le plein texte non. Ça se dit comme une
+                                // disponibilité perdue, pas comme une opération.
+                                if let Err(e) = crate::fts_handle::upsert_document(
                                     handle,
                                     &text_fields,
                                     node_id.offset,
-                                )
-                                .map_err(|e| format!("indexation FTS de {entity_name}: {e}"))?;
+                                ) {
+                                    consigner_l_echec(
+                                        ctx, "InsertRecordNode", entity_name, 0,
+                                        Disponibilites::PLEIN_TEXTE,
+                                        format!("indexation FTS de la ligne {uuid} : {e}"),
+                                    );
+                                }
                             }
                         }
                     }
@@ -428,15 +485,29 @@ impl Node for LinkRecordNode {
         }
         let mut resolved: Vec<ResolvedLink> = Vec::with_capacity(items.len());
         for (i, rel) in items.iter_mut().enumerate() {
-            let from_uuid = rel
+            // Un bout qui ne se résout pas — l'insertion de sa ligne a échoué —
+            // ne fait plus tomber tous les liens du lot : celui-ci se compte,
+            // son ref est résolu en échec, les autres partent.
+            let bouts = rel
                 .from
                 .resolve()
-                .map_err(|e| format!("link from resolution failed: {e}"))?;
-            let to_uuid = rel
-                .to
-                .resolve()
-                .map_err(|e| format!("link to resolution failed: {e}"))?;
-            resolved.push(ResolvedLink { from_uuid, to_uuid, index: i });
+                .map_err(|e| format!("bout source : {e}"))
+                .and_then(|de| {
+                    rel.to
+                        .resolve()
+                        .map(|vers| (de, vers))
+                        .map_err(|e| format!("bout cible : {e}"))
+                });
+            match bouts {
+                Ok((from_uuid, to_uuid)) => resolved.push(ResolvedLink { from_uuid, to_uuid, index: i }),
+                Err(cause) => {
+                    let nom = rel.rel_name.clone();
+                    if let Some(r) = rel.take_resolver() {
+                        r.fail(format!("lien « {nom} » : {cause}"));
+                    }
+                    consigner_l_echec(ctx, "LinkRecordNode", &nom, 1, Disponibilites::TOUT, cause);
+                }
+            }
         }
 
         // Group by (rel_name, sorted property keys) for UNWIND batching.
@@ -490,15 +561,19 @@ impl Node for LinkRecordNode {
                     .collect(),
             );
 
-            conn
-                .execute_with_params(
-                    &cypher,
-                    &[QueryParam {
-                        name: "items".to_string(),
-                        value: items_param,
-                    }],
-                )
-                .map_err(|e| e.to_string())?;
+            if let Err(e) = conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".to_string(), value: items_param }],
+            ) {
+                let cause = e.to_string();
+                for &ri in indices {
+                    if let Some(r) = items[resolved[ri].index].take_resolver() {
+                        r.fail(format!("lien « {rel_name} » : {cause}"));
+                    }
+                }
+                consigner_l_echec(ctx, "LinkRecordNode", rel_name, indices.len(), Disponibilites::TOUT, cause);
+                continue;
+            }
 
             // Resolve relation refs
             for &ri in indices {
@@ -2689,9 +2764,18 @@ impl Node for KBGatherNode {
                 None => continue,
             };
 
-            let (changed, skipped, n_queries) = Self::gather_batch(
+            let (changed, skipped, n_queries) = match Self::gather_batch(
                 &*conn, &*dialect, &config, kb_meta, kb_name, _title_entity, &group_ops,
-            )?;
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    consigner_l_echec(
+                        ctx, "KBGatherNode", &format!("{kb_name}_Index"), group_ops.len(),
+                        Disponibilites::TOUT, e,
+                    );
+                    continue;
+                }
+            };
 
             total_skipped += skipped;
             total_queries += n_queries;
@@ -2867,10 +2951,15 @@ impl Node for KBUpdateNode {
                     &["_title", "_content", "_content_hash"],
                 );
 
-                conn.execute_with_params(
+                if let Err(e) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
-                ).map_err(|e| e.to_string())?;
+                ) {
+                    consigner_l_echec(
+                        ctx, "KBUpdateNode", &index_table, indices.len(), Disponibilites::TOUT, e.to_string(),
+                    );
+                    continue;
+                }
                 total_updated += indices.len();
 
                 // Indexation FTS des lignes de {KB}_Index.
@@ -3207,7 +3296,12 @@ impl Node for FlushNode {
             // Les merges partent en tâche de fond selon la policy.
             match handle.commit() {
                 Ok(()) => flushed += 1,
-                Err(e) => return Err(format!("FlushNode: commit FTS '{table}' échoué: {e}")),
+                // Une table qui ne commite pas ne tue plus les autres : le
+                // plein texte de celle-ci est perdu, et ça se dit comme tel.
+                Err(e) => consigner_l_echec(
+                    ctx, "FlushNode", table, 0, Disponibilites::PLEIN_TEXTE,
+                    format!("commit FTS échoué : {e}"),
+                ),
             }
         }
 
@@ -3522,11 +3616,27 @@ impl Node for DeleteRecordNode {
         let mut undo_groups: HashMap<String, Vec<BTreeMap<String, CypherValue>>> = HashMap::new();
 
         for (entity_name, uuids) in &groups {
-            let entity_def = match config.entities.get(entity_name) {
-                Some(def) => def,
-                None => continue,
+            let Some(entity_def) = config.entities.get(entity_name) else {
+                // Un groupe entier disparaissait ici : ni résultat, ni mot.
+                let cause = format!("entité « {entity_name} » absente de la configuration");
+                consigner_l_echec(
+                    ctx, "DeleteRecordNode", entity_name, uuids.len(), Disponibilites::TOUT, cause.clone(),
+                );
+                for uuid in uuids {
+                    all_results.push(DeleteResult {
+                        uuid: uuid.clone(),
+                        entity: entity_name.clone(),
+                        chunks_deleted: 0,
+                        relations_deleted: 0,
+                        echec: Some(cause.clone()),
+                    });
+                }
+                continue;
             };
             let entity_kbs = resolve_entity_kbs(entity_def);
+            // **Le groupe en fermeture** : un `?` dedans n'abandonne que ce
+            // groupe, qui se consigne ; les autres entités du lot passent.
+            let issue: Result<(), String> = (|| {
             let mut per_uuid_chunks: HashMap<String, usize> = HashMap::new();
 
             // --- KB handling ---
@@ -3762,6 +3872,7 @@ impl Node for DeleteRecordNode {
                     entity: entity_name.clone(),
                     chunks_deleted,
                     relations_deleted: 0,
+                    echec: None,
                 });
                 if existing.contains(uuid.as_str()) {
                     if let Some(ref bus) = event_bus {
@@ -3771,6 +3882,22 @@ impl Node for DeleteRecordNode {
                             chunks_deleted,
                         });
                     }
+                }
+            }
+            Ok(())
+            })();
+            if let Err(cause) = issue {
+                consigner_l_echec(
+                    ctx, "DeleteRecordNode", entity_name, uuids.len(), Disponibilites::TOUT, cause.clone(),
+                );
+                for uuid in uuids {
+                    all_results.push(DeleteResult {
+                        uuid: uuid.clone(),
+                        entity: entity_name.clone(),
+                        chunks_deleted: 0,
+                        relations_deleted: 0,
+                        echec: Some(cause.clone()),
+                    });
                 }
             }
         }
@@ -3957,11 +4084,32 @@ impl Node for UpdateRecordNode {
         let mut undo_snapshots: HashMap<String, Vec<BTreeMap<String, CypherValue>>> = HashMap::new();
 
         for (entity_name, entity_indices) in &entity_groups {
-            let entity_def = match config.entities.get(entity_name) {
-                Some(def) => def,
-                None => continue,
+            let Some(entity_def) = config.entities.get(entity_name) else {
+                // Un groupe entier disparaissait ici : ni résultat, ni mot, et
+                // `drainer` le comptait quand même dans `processed`.
+                let cause = format!("entité « {entity_name} » absente de la configuration");
+                consigner_l_echec(
+                    ctx, "UpdateRecordNode", entity_name, entity_indices.len(), Disponibilites::TOUT, cause,
+                );
+                for &i in entity_indices.iter() {
+                    all_results.push(UpdateResult {
+                        uuid: items[i].uuid.clone(),
+                        entity: entity_name.clone(),
+                        status: UpdateStatus::Failed,
+                        reembedded: false,
+                        chunks_created: 0,
+                        chunks_deleted: 0,
+                    });
+                }
+                continue;
             };
             let entity_kbs = resolve_entity_kbs(entity_def);
+            // Les lignes refusées une à une (transition non déclarée) : elles
+            // sortent du groupe, se comptent, et les autres passent.
+            let mut rejetes: HashSet<usize> = HashSet::new();
+            // **Le groupe en fermeture** : un `?` dedans n'abandonne que ce
+            // groupe, qui se consigne ; les autres entités du lot passent.
+            let issue: Result<(), String> = (|| {
 
             // 1. Batch-read old entity data (for hashes + undo)
             let uuid_list = CypherValue::List(
@@ -4067,13 +4215,24 @@ impl Node for UpdateRecordNode {
                             } else {
                             format!("depuis '{depuis}' : {}", permis.join(", "))
                         };
-                        return Err(format!(
-                            "{entity_name} '{}' : transition '{depuis}' → '{vers}' non déclarée ({permis})",
-                            rec.uuid
-                        ));
+                        // Une ligne refusée ne fait plus tomber l'ingestion :
+                        // elle se compte, se dit, et les autres passent.
+                        consigner_l_echec(
+                            ctx, "UpdateRecordNode", entity_name, 1, Disponibilites::TOUT,
+                            format!(
+                                "{entity_name} '{}' : transition '{depuis}' → '{vers}' non déclarée ({permis})",
+                                rec.uuid
+                            ),
+                        );
+                        rejetes.insert(i);
                     }
                 }
             }
+
+            // Ce qui reste du groupe une fois les refus retirés.
+            let retenus: Vec<usize> =
+                entity_indices.iter().copied().filter(|i| !rejetes.contains(i)).collect();
+            let entity_indices = &retenus;
 
             // 2. Detect content changes
             let changed: Vec<bool> = entity_indices.iter()
@@ -4135,7 +4294,10 @@ impl Node for UpdateRecordNode {
                                 .iter()
                                 .map(|&i| CypherValue::String(items[i].uuid.clone()))
                                 .collect();
-                            reindex_fts_rows(
+                            // Les champs sont posés ; si l'index ne suit pas,
+                            // c'est le plein texte qui est perdu, pas la
+                            // mise à jour.
+                            if let Err(e) = reindex_fts_rows(
                                 conn.as_ref(),
                                 dialect.as_ref(),
                                 handle,
@@ -4143,7 +4305,13 @@ impl Node for UpdateRecordNode {
                                 entity_name,
                                 uuids,
                                 &schema_fields,
-                            )?;
+                            ) {
+                                consigner_l_echec(
+                                    ctx, "UpdateRecordNode", entity_name, 0,
+                                    Disponibilites::PLEIN_TEXTE,
+                                    format!("réindexation plein texte : {e}"),
+                                );
+                            }
                         }
                     }
                 }
@@ -4298,6 +4466,35 @@ impl Node for UpdateRecordNode {
                     chunks_created: 0,
                     chunks_deleted: 0,
                 });
+            }
+            Ok(())
+            })();
+
+            let en_echec = |all_results: &mut Vec<UpdateResult>, i: usize| {
+                all_results.push(UpdateResult {
+                    uuid: items[i].uuid.clone(),
+                    entity: entity_name.clone(),
+                    status: UpdateStatus::Failed,
+                    reembedded: false,
+                    chunks_created: 0,
+                    chunks_deleted: 0,
+                });
+            };
+            for &i in entity_indices.iter().filter(|i| rejetes.contains(i)) {
+                en_echec(&mut all_results, i);
+            }
+            if let Err(cause) = issue {
+                // Le groupe s'est arrêté en route. Ce qui a pu être posé avant
+                // l'arrêt l'est ; on le compte quand même comme échoué — dire
+                // moins que fait est le sens sûr, l'inverse est le mensonge.
+                let restants: Vec<usize> =
+                    entity_indices.iter().copied().filter(|i| !rejetes.contains(i)).collect();
+                consigner_l_echec(
+                    ctx, "UpdateRecordNode", entity_name, restants.len(), Disponibilites::TOUT, cause,
+                );
+                for i in restants {
+                    en_echec(&mut all_results, i);
+                }
             }
         }
 

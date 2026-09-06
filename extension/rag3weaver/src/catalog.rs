@@ -2148,7 +2148,10 @@ impl Catalog {
     /// Un seul registre, donc. Ce qui est propre à **un** graphe reste chez son
     /// appelant, nommé : les résultats partagés du drain, le cache de
     /// découpage (qu'on *prend* au catalogue, donc pas deux fois), `fail_node`.
-    fn enregistrer_les_services_d_ingestion(&self, services: &mut ServiceRegistry) {
+    fn enregistrer_les_services_d_ingestion(
+        &self,
+        services: &mut ServiceRegistry,
+    ) -> Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
         services.register("scope", self.scope.clone());
@@ -2205,6 +2208,24 @@ impl Catalog {
         // écrire.
         services.register("event_bus", Arc::new(self.event_bus.in_scope(&self.scope)));
         services.register("run_topic", crate::events::topic::CATALOG.to_string());
+        Self::ouvrir_le_canal_d_echecs(services)
+    }
+
+    /// **Le canal d'échecs par groupe**, ouvert pour un graphe et relu après
+    /// (`FlushResult::absorber_les_echecs`). Voir `EchecDeGroupe`.
+    fn ouvrir_le_canal_d_echecs(
+        services: &mut ServiceRegistry,
+    ) -> Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> {
+        let canal: Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> = Arc::new(Mutex::new(Vec::new()));
+        services.register(crate::records::SERVICE_ECHECS, canal.clone());
+        canal
+    }
+
+    /// Vide le canal d'échecs d'un graphe qui vient de tourner.
+    fn relever_les_echecs(
+        canal: &Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>,
+    ) -> Vec<crate::records::EchecDeGroupe> {
+        std::mem::take(&mut *canal.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
     /// Les tables des deux bouts d'une relation, d'après la config. Ce que
@@ -2432,11 +2453,17 @@ impl Catalog {
             );
 
             let mut services = ServiceRegistry::new();
-                self.enregistrer_les_services_d_ingestion(&mut services);
+            let canal = self.enregistrer_les_services_d_ingestion(&mut services);
 
             let runtime = DataflowRuntime::with_services(8, services);
             let mut ecoute = runtime.subscribe();
             let issue = runtime.execute(&mut graph);
+            for e in Self::relever_les_echecs(&canal) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage".to_string(),
+                    message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
+                });
+            }
             for a in ramasser_les_avertissements(&mut ecoute) {
                 self.emit_event(CatalogEvent::Warning {
                     context: "rattrapage".to_string(),
@@ -3695,7 +3722,7 @@ impl Catalog {
 
         // Build services
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_d_ingestion(&mut services);
+        let canal = self.enregistrer_les_services_d_ingestion(&mut services);
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
 
         // Execute
@@ -3795,7 +3822,7 @@ impl Catalog {
                 // prochain drain — ou au Drop.
                 self.flush_blob_store("ingest");
                 self.signaler_les_troncatures("ingest_entities");
-                Ok(FlushResult {
+                let mut res = FlushResult {
                     processed: record_count,
                     failed: kb_failed,
                     unchanged,
@@ -3806,7 +3833,9 @@ impl Catalog {
                         crate::disponibilite::Disponibilites::RECHERCHE_TEXTE
                     }),
                     ..Default::default()
-                })
+                };
+                res.absorber_les_echecs(&Self::relever_les_echecs(&canal));
+                Ok(res)
             }
             Err(e) => Err(CatalogError::DbError(format!("ingest_entities failed: {e}"))),
         }
@@ -4443,6 +4472,8 @@ impl Catalog {
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
         // (chunks supprimés, chunks créés) par uuid, mesurés en aval
         Arc<Mutex<HashMap<String, (usize, usize)>>>,
+        // les groupes qui n'ont pas abouti
+        Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>,
     ) {
         // Le lot est choisi par l'appelant — la file entière, ou la fermeture
         // d'une cible. Ce graphe ne touche plus à `self.pending`.
@@ -4451,6 +4482,7 @@ impl Catalog {
             DataflowGraph::new(), ServiceRegistry::new(), 0,
             Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(HashMap::new())),
+            Arc::new(Mutex::new(Vec::new())),
         );
         if pending.is_empty() {
             return empty_results();
@@ -4643,7 +4675,7 @@ impl Catalog {
 
         // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_d_ingestion(&mut services);
+        let canal = self.enregistrer_les_services_d_ingestion(&mut services);
 
         // Ce que seul ce graphe partage entre ses nœuds : les résultats des
         // mises à jour et des suppressions, mesurés en aval.
@@ -4660,7 +4692,7 @@ impl Catalog {
             services.register("fail_node", fail_node.clone());
         }
 
-        (graph, services, op_count, update_results, delete_results, chunk_counts)
+        (graph, services, op_count, update_results, delete_results, chunk_counts, canal)
     }
 
     /// Drain all pending operations via the dataflow runtime with checkpoint persistence.
@@ -4727,7 +4759,7 @@ impl Catalog {
                 self.pending.extraire_les_tables(&tables, &bouts)
             }
         };
-        let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
+        let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
             self.build_ingestion_graph(lot, avec_embarquement);
         if graph.nodes.is_empty() {
             // La marque dit ce qui reste — rien, ou ce que d'autres cibles
@@ -4759,6 +4791,7 @@ impl Catalog {
         // Dans les deux branches : un drain qui échoue a d'autant plus de
         // raisons d'avoir prévenu avant de mourir.
         let avertissements = ramasser_les_avertissements(&mut ecoute);
+        let echecs = Self::relever_les_echecs(&canal);
 
         let outcome = match result {
             Ok(_output) => {
@@ -4807,7 +4840,7 @@ impl Catalog {
                     .iter()
                     .filter(|u| u.status == crate::records::UpdateStatus::Unchanged)
                     .count();
-                FlushResult {
+                let mut res = FlushResult {
                     processed: op_count,
                     failed: 0,
                     unchanged: inchanges,
@@ -4822,7 +4855,13 @@ impl Catalog {
                     }),
                     update_results: updates,
                     delete_results: deletes,
-                }
+                };
+                // **Les comptes cessent de mentir** : ce que les nœuds ont
+                // consigné en échec quitte `processed`, retire sa
+                // disponibilité de `rendu_pret`, et se dit.
+                res.absorber_les_echecs(&echecs);
+                self.drain_counters.total_failed += res.failed;
+                res
             }
             Err(e) => {
                 eprintln!("[rag3weaver] drain FAILED: {e}");
@@ -4832,12 +4871,18 @@ impl Catalog {
                 });
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult {
+                let mut res = FlushResult {
                     processed: 0,
                     failed: op_count,
                     warnings: avertissements,
                     ..Default::default()
+                };
+                // Le graphe est tombé ; ce que les nœuds avaient consigné avant
+                // se dit quand même — sans recompter : tout est déjà en échec.
+                for e in &echecs {
+                    res.warnings.push(format!("{} : « {} » — {}", e.noeud, e.table, e.cause));
                 }
+                res
             }
         };
 
@@ -5071,11 +5116,13 @@ impl Catalog {
         services.register("fts_handles", self.fts_handles.clone());
         services.register("entity_configs", self.entity_configs.clone());
         services.register("plein_texte_natif", self.plein_texte_natif());
+        let canal = Self::ouvrir_le_canal_d_echecs(&mut services);
 
         let runtime = DataflowRuntime::with_services(5, services);
         let mut ecoute = runtime.subscribe();
         let resultat = runtime.execute(&mut graph);
         let avertissements = ramasser_les_avertissements(&mut ecoute);
+        let echecs = Self::relever_les_echecs(&canal);
 
         // Ce qui reste en file a changé : la marque le redit.
         self.annoncer_travail_en_attente();
@@ -5085,7 +5132,7 @@ impl Catalog {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
                 self.signaler_les_troncatures("flush_insertions");
-                FlushResult {
+                let mut res = FlushResult {
                     processed: op_count,
                     failed: 0,
                     warnings: avertissements,
@@ -5095,7 +5142,10 @@ impl Catalog {
                     // pas — conservateur, jamais menteur.
                     rendu_pret: Some(crate::disponibilite::Disponibilites::DONNEE),
                     ..Default::default()
-                }
+                };
+                res.absorber_les_echecs(&echecs);
+                self.drain_counters.total_failed += res.failed;
+                res
             }
             Err(e) => {
                 self.emit_event(CatalogEvent::Error {
@@ -5183,7 +5233,13 @@ impl Catalog {
 
         // Rebuild the ServiceRegistry (same as build_ingestion_graph)
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_d_ingestion(&mut services);
+        let canal = self.enregistrer_les_services_d_ingestion(&mut services);
+        // Les résultats partagés que les nœuds d'écriture exigent — une reprise
+        // sans eux tombait sur `ok_or` dès le premier nœud de mise à jour.
+        services.register("update_results", Arc::new(Mutex::new(Vec::<UpdateResult>::new())));
+        services.register("delete_results", Arc::new(Mutex::new(Vec::<DeleteResult>::new())));
+        services.register("chunk_counts", Arc::new(Mutex::new(HashMap::<String, (usize, usize)>::new())));
+        services.register("pending_aggregates", Arc::new(Mutex::new(Vec::<AggregateRecord>::new())));
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();
@@ -5200,11 +5256,13 @@ impl Catalog {
         {
             Ok(_) => {
                 self.drain_counters.flush_count += 1;
-                Ok(FlushResult {
+                let mut res = FlushResult {
                     processed: node_count,
                     failed: 0,
                     ..Default::default()
-                })
+                };
+                res.absorber_les_echecs(&Self::relever_les_echecs(&canal));
+                Ok(res)
             }
             Err(e) => {
                 self.emit_event(CatalogEvent::Error {
@@ -7582,6 +7640,10 @@ mod tests {
     /// `Document`. C'est le minimum pour éprouver l'invariant — il faut deux
     /// ressources qui ne se touchent pas, et une façon de les faire se toucher.
     fn make_catalog_a_deux_entites() -> Catalog {
+        make_catalog_a_deux_entites_sur(MockConnection::new())
+    }
+
+    fn make_catalog_a_deux_entites_sur(conn: MockConnection) -> Catalog {
         let mut config = make_test_config();
         let mut fields = HashMap::new();
         fields.insert(
@@ -7607,7 +7669,7 @@ mod tests {
             },
         );
         Catalog::new(
-            Box::new(MockConnection::new()),
+            Box::new(conn),
             Box::new(MockEmbedder::new(384)),
             config,
         )
@@ -7723,6 +7785,47 @@ mod tests {
         assert_eq!(reste, 1, "l'agrégat, du dérivé : {w:?}");
         assert!(catalog.pending_work().entities.is_empty());
         assert!(catalog.pending_work().relations.is_empty());
+    }
+
+    // ── Le canal d'échecs par groupe ──────────────────────────────────
+
+    /// **Un groupe qui rate se compte, et les autres passent.** L'insertion
+    /// de `Note` échoue ; celle de `Document` aboutit ; le drain rend
+    /// `failed = 1`, ne tombe pas, et le ref de la note dit son échec.
+    #[test]
+    fn un_groupe_d_insertion_rate_se_compte_et_les_autres_passent() {
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        catalog.initialize().unwrap();
+        let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        let n = catalog.create("Note", note("N")).unwrap();
+        let total = catalog.pending_work().total_count();
+
+        let res = catalog.drain();
+        assert_eq!(res.failed, 1, "{res:?}");
+        assert_eq!(res.processed, total - 1);
+        assert!(res.warnings.iter().any(|w| w.contains("Note") && w.contains("échec simulé")), "{:?}", res.warnings);
+        assert!(d.uuid().is_ok(), "Document est posé");
+        assert!(n.uuid().is_err(), "le ref de Note dit son échec");
+        assert!(catalog.pending_work().is_empty(), "rien ne reste en file : l'échec est dit, pas gardé");
+    }
+
+    /// **Un lien vers une ligne ratée échoue tout de suite**, se compte, et
+    /// n'attend pas trente secondes un ref que rien ne résoudra.
+    #[test]
+    fn un_lien_vers_une_ligne_ratee_echoue_tout_de_suite_et_se_compte() {
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        catalog.initialize().unwrap();
+        let n = catalog.create("Note", note("N")).unwrap();
+        let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        let lien = catalog.link("CITES", n.clone(), d.clone(), BTreeMap::new()).unwrap();
+
+        let debut = std::time::Instant::now();
+        let res = catalog.drain();
+        assert!(debut.elapsed().as_secs() < 5, "pas d'attente d'un ref mort");
+        assert_eq!(res.failed, 2, "la note et le lien qui en part : {res:?}");
+        assert!(lien.resolved().is_err(), "le lien dit son échec");
+        assert!(d.uuid().is_ok());
+        assert!(res.warnings.iter().any(|w| w.contains("CITES")), "{:?}", res.warnings);
     }
 
     // ── La marque, par niveau et par table ────────────────────────────

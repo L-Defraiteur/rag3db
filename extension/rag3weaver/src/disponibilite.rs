@@ -152,6 +152,11 @@ impl Disponibilites {
         self.0 & autre.0 != 0
     }
 
+    /// `self` moins `autre`.
+    pub const fn sans(self, autre: Self) -> Self {
+        Self(self.0 & !autre.0)
+    }
+
     /// Les noms, pour un message lisible par un humain ou un agent.
     pub fn noms(self) -> Vec<&'static str> {
         let mut v = Vec::new();
