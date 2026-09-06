@@ -172,9 +172,11 @@ fn checkpoint_encode_batch(payload: &BatchPayload) -> Result<Vec<u8>, String> {
             let records = boxed
                 .downcast_ref::<Vec<EntityRecord>>()
                 .ok_or("type mismatch: expected Vec<EntityRecord>")?;
-            let checkpoint: Vec<CheckpointEntityRecord> =
-                records.iter().map(|r| r.to_checkpoint()).collect();
-            enc(&checkpoint)
+            // Emprunté, pas cloné : un lot de 18 140 scopes avec leur source
+            // se sérialise sans en refaire une copie.
+            let vue: Vec<crate::records::CheckpointEntityRecordRef<'_>> =
+                records.iter().map(|r| r.to_checkpoint_ref()).collect();
+            enc(&vue)
         }
         PortType::Relations => {
             let records = boxed

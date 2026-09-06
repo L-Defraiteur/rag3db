@@ -701,14 +701,26 @@ impl DataflowRuntime {
                         let mut checkpoint_outputs = HashMap::new();
                         let mut output_snapshots: Vec<PortSnapshot> = Vec::new();
                         for (port, value) in &outputs {
-                            let cpv = port_value_to_checkpoint(value)?;
-                            output_snapshots.push(PortSnapshot {
-                                name: port.clone(),
-                                port_type: cpv.port_type,
-                                count: cpv.record_count,
-                                data_json: cpv.data_json.clone(),
-                            });
-                            checkpoint_outputs.insert(port.clone(), cpv);
+                            // **Une sortie que personne ne consomme ne se
+                            // checkpointe pas** : une reprise n'en aura pas
+                            // besoin. Les 20 132 chunks avec leurs vecteurs
+                            // en sortie de `chunk_insert` coûtaient 360 ms de
+                            // sérialisation pour rien (6 septembre 2026).
+                            let consommee = remaining_consumers
+                                .get(&(node_name.clone(), port.clone()))
+                                .is_some_and(|n| *n > 0);
+                            if consommee {
+                                let cpv = port_value_to_checkpoint(value)?;
+                                output_snapshots.push(PortSnapshot {
+                                    name: port.clone(),
+                                    port_type: cpv.port_type,
+                                    count: cpv.record_count,
+                                    data_json: cpv.data_json.clone(),
+                                });
+                                checkpoint_outputs.insert(port.clone(), cpv);
+                            } else {
+                                output_snapshots.push(PortSnapshot::from_port(port, value));
+                            }
                         }
 
                         let serialisation_ms = horloge.elapsed().as_millis();

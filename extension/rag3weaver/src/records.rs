@@ -228,7 +228,7 @@ pub struct EntityRecord {
 }
 
 /// Les vecteurs d'un enregistrement, calculés en mémoire, à poser avec la ligne.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RecordVectors {
     /// Le vecteur dense et la colonne qui le reçoit.
     pub dense: Option<DenseVector>,
@@ -238,10 +238,51 @@ pub struct RecordVectors {
 }
 
 /// Un vecteur dense et sa colonne.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DenseVector {
     pub column: String,
+    /// En octets bruts (petit-boutiste) dans un checkpoint : quatre octets
+    /// par case au lieu de cinq et d'une boucle, pour 20 000 vecteurs de 384.
+    #[serde(with = "f32_octets")]
     pub values: Vec<f32>,
+}
+
+/// Un `Vec<f32>` sérialisé comme une suite d'octets petit-boutistes.
+mod f32_octets {
+    pub fn serialize<S: serde::Serializer>(v: &[f32], s: S) -> Result<S::Ok, S::Error> {
+        let mut octets = Vec::with_capacity(v.len() * 4);
+        for f in v {
+            octets.extend_from_slice(&f.to_le_bytes());
+        }
+        s.serialize_bytes(&octets)
+    }
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<f32>, D::Error> {
+        struct Visiteur;
+        impl<'de> serde::de::Visitor<'de> for Visiteur {
+            type Value = Vec<f32>;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("des octets de f32 petit-boutistes, ou une liste de nombres")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, octets: &[u8]) -> Result<Self::Value, E> {
+                if octets.len() % 4 != 0 {
+                    return Err(E::custom("longueur non multiple de quatre"));
+                }
+                Ok(octets.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+            }
+            fn visit_byte_buf<E: serde::de::Error>(self, octets: Vec<u8>) -> Result<Self::Value, E> {
+                self.visit_bytes(&octets)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let mut v = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                while let Some(f) = seq.next_element::<f32>()? {
+                    v.push(f);
+                }
+                Ok(v)
+            }
+        }
+        d.deserialize_byte_buf(Visiteur)
+    }
 }
 
 impl EntityRecord {
@@ -405,6 +446,22 @@ pub struct CheckpointEntityRecord {
     pub entity_name: String,
     pub data: BTreeMap<String, CypherValue>,
     pub ref_state: CheckpointRefState,
+    /// **Les vecteurs voyagent avec le checkpoint.** Sans eux, une reprise
+    /// après l'embarquement d'une première ingestion posait des chunks sans
+    /// vecteur, marqueur posé — un trou silencieux (6 septembre 2026).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vectors: Option<RecordVectors>,
+}
+
+/// La même chose, **empruntée** : pour sérialiser un lot sans le cloner.
+/// Mêmes noms de champs que [`CheckpointEntityRecord`], qui la relit.
+#[derive(Serialize)]
+pub struct CheckpointEntityRecordRef<'a> {
+    pub entity_name: &'a str,
+    pub data: &'a BTreeMap<String, CypherValue>,
+    pub ref_state: CheckpointRefState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vectors: Option<&'a RecordVectors>,
 }
 
 /// Serializable form of RelationRecord (no channels, no resolver).
@@ -422,19 +479,34 @@ pub struct CheckpointRelationRecord {
 impl EntityRecord {
     /// Convert to a serializable checkpoint form.
     pub fn to_checkpoint(&self) -> CheckpointEntityRecord {
+        CheckpointEntityRecord {
+            entity_name: self.entity_name.clone(),
+            data: self.data.clone(),
+            ref_state: self.ref_state_for_checkpoint(),
+            vectors: self.vectors.clone(),
+        }
+    }
+
+    /// La forme empruntée, pour sérialiser sans cloner.
+    pub fn to_checkpoint_ref(&self) -> CheckpointEntityRecordRef<'_> {
+        CheckpointEntityRecordRef {
+            entity_name: &self.entity_name,
+            data: &self.data,
+            ref_state: self.ref_state_for_checkpoint(),
+            vectors: self.vectors.as_ref(),
+        }
+    }
+
+    fn ref_state_for_checkpoint(&self) -> CheckpointRefState {
         let status = match self.entity_ref.uuid() {
             Ok(uuid) => CheckpointRefStatus::Ready { uuid },
             Err(RefError::Pending) => CheckpointRefStatus::Pending,
             Err(RefError::Failed(e)) => CheckpointRefStatus::Failed { error: e },
         };
-        CheckpointEntityRecord {
-            entity_name: self.entity_name.clone(),
-            data: self.data.clone(),
-            ref_state: CheckpointRefState {
-                type_name: self.entity_ref.entity().to_string(),
-                temp_uuid: self.entity_ref.cle_de_correlation().to_string(),
-                status,
-            },
+        CheckpointRefState {
+            type_name: self.entity_ref.entity().to_string(),
+            temp_uuid: self.entity_ref.cle_de_correlation().to_string(),
+            status,
         }
     }
 }
@@ -469,7 +541,7 @@ impl CheckpointEntityRecord {
             data: self.data,
             entity_ref,
             resolver: None,
-            vectors: None,
+            vectors: self.vectors,
         }
     }
 }

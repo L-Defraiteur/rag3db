@@ -1259,12 +1259,16 @@ impl Catalog {
             .collect();
         let source_commune = analysis.files.first().map(|f| f.source.as_str()).unwrap_or("");
 
+        let mut par_relation: std::collections::BTreeMap<&str, Vec<(String, String, BTreeMap<String, CypherValue>)>> = Default::default();
         for r in &analysis.relations {
             let from_src = source_of.get(r.from_key.as_str()).copied().unwrap_or(source_commune);
             let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
             let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
-            self.link_jusqu_a(&r.rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+            par_relation.entry(r.rel.as_str()).or_default().push((from, to, BTreeMap::new()));
+        }
+        for (rel, liens) in par_relation {
+            self.mettre_en_file_les_liens(rel, liens)?;
         }
         let linked = self.drain();
         report.relations = linked.processed;
@@ -1327,20 +1331,24 @@ impl Catalog {
             cat.entity_uuid(SYMBOL, &d)
         };
 
-        // Ce que le lot offre, et ce qu'il attend.
+        // Ce que le lot offre, et ce qu'il attend — en file par relation.
+        let mut definitions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.scopes.len());
+        let mut mentions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending.len());
         for sc in &analysis.scopes {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
-            self.link_jusqu_a("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+            definitions.push((from, to, BTreeMap::new()));
         }
+        self.mettre_en_file_les_liens("DEFINES", definitions)?;
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera.
             let props = BTreeMap::from([("kind".to_string(), s(kind))]);
-            self.link_jusqu_a("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), props, crate::disponibilite::Disponibilites::AUCUNE)?;
+            mentions.push((from, to, props));
         }
+        self.mettre_en_file_les_liens("MENTIONS", mentions)?;
         etape("mise en file DEFINES/MENTIONS", &mut t);
         let drained = self.drain();
         report.failed += drained.failed;

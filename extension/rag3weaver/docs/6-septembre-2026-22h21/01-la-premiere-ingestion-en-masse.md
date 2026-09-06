@@ -180,16 +180,86 @@ catalogue) :
 Éprouvé dans `e2e_chemin_de_masse` (les quatre cas, dont l'entité qui
 déroge) et au runtime (`en_mode_operations_la_reprise_rejoue_tout`).
 
+## 3 ter. Pas 4 : les postes hors modèle, un par un — 31,7 s
+
+Sur le feu vert « on continue sur les 17 s hors modèle » :
+
+- **les vecteurs voyagent avec le checkpoint** (`CheckpointEntityRecord.vectors`) :
+  sans eux, une reprise après l'embarquement d'une première ingestion posait
+  des chunks sans vecteur, marqueur posé — une faute, pas une optimisation ;
+- **la sérialisation emprunte au lieu de cloner** (`CheckpointEntityRecordRef`) ;
+- **chaque uuid n'est vérifié qu'une fois par drain** avant un `COPY` de liens
+  (`presents_connus`) : six relations sur les mêmes scopes demandaient six
+  fois la même liste — MENTIONS passe de 765 ms d'existence+csv à 101 + 498 ;
+- **la mise en file par relation** (`Catalog::mettre_en_file_les_liens`) :
+  les vérifications, la recherche de la relation et l'annonce de dette une
+  fois par relation et non par lien ; 803 → 594 ms sur 224 000 liens ;
+- **des profils fins** : `[copy-profile] table : n lignes, csv, COPY,
+  identifiants relus`, `[link-profile] … existence, csv, COPY`, `resolve_ms`.
+
+| poste (mesure 6) | temps |
+|---|---|
+| `COPY` Scope_Chunk (20 132 lignes avec vecteurs) | csv 836 ms + **COPY 1 415 ms** |
+| `COPY` File_Chunk (1 642) | csv 66 + COPY 366 ms |
+| `COPY` Scope / Symbol / File | 186 + 62 + 36 ms (csv 225 + 83 + 14) |
+| sérialisation des checkpoints (Scope) | insert 78, chunk 232, embed 361, chunk_insert 363 ms |
+| départs de drains (entrées sérialisées) | 173 + 366 + 87 ms |
+| nœud de liens des relations (154 000) | 1 261 ms, dont csv ~320, existence ~95, COPY ~50 |
+| nœud de liens des rendez-vous (225 000) | 1 255 ms, dont csv 536, existence 119, COPY 54 |
+| mise en file DEFINES/MENTIONS | 594 ms |
+| flush plein texte (×3) | 555 ms |
+| **total** | **31,7 s**, dont ~20,4 s de modèle |
+
+Ce que ça laisse, et ce qui est en cours : la lecture séquentielle du CSV
+des chunks par le moteur (1,4 s) est **une demande pour le cœur C++** — un
+lecteur parallèle qui découpe aux vraies frontières de lignes, sauts de ligne
+entre guillemets compris ; deux fois 360 ms de sérialisation pour les mêmes
+chunks (la sortie de `chunk_insert` que personne ne lit) et des vecteurs
+encodés flottant par flottant — corrigés au pas 5 ; le CSV des liens qui
+alloue deux chaînes par arête — idem.
+
+## 3 quater. Pas 5 — et la flash attention du pair : 27,5 s
+
+Trois choses sûres, mesurées :
+
+- **une sortie que personne ne consomme ne se checkpointe pas** (le runtime
+  regarde ses consommateurs) : la sortie de `chunk_insert`, 20 132 chunks
+  avec vecteurs, coûtait 363 ms de sérialisation pour rien ;
+- **les vecteurs en octets bruts** dans le checkpoint (`f32_octets`) : la
+  sortie d'`embed` passe de 361 à 183 ms ;
+- **les uuids du CSV des liens écrits sans allocation** (`ecrire_cellule_texte`).
+
+Et, au même moment, la session moteur a réparé la flash attention de burn
+(elle ne se lançait jamais en Flex32 ; commit `3bfb65ca0`, forks bumpés) :
+granite-107m passe de 110 000 à 416 000 jetons/s sur les lots de 512. Sur le
+cœur C++, l'embarquement des scopes tombe de 19,5 à **10,7 s**.
+
+| | mesure 7 (forks bumpés) |
+|---|---|
+| `embed` Scope (mur, 2 fils) | 10 675 ms (modèle 21 084 ms cumulés) |
+| checkpoint `embed` / `chunk` / `insert` | 184 / 133 / 86 ms ; `chunk_insert` : rien |
+| **total** | **27,5 s** ; **26,1 s** une fois le dossier purgé (CSV des chunks 925 ms, `symboles/ingestion` 779 ms) |
+
+**Le bruit, et sa cause probable.** Le CSV des chunks a coûté 843, 2 366 et
+1 179 ms sur trois mesures du même code ; `symboles/ingestion` 718 et
+2 491 ms. `/tmp` est sur le disque racine, plein à 93 %, et les fichiers de
+checkpoint des tests de la soirée y pesaient déjà **1,3 Go** :
+`mark_completed` effaçait les sorties, pas les entrées. Corrigé : une
+exécution finie ne garde que ses contextes d'undo (`nettoyer_apres_fin`), et
+le dossier a été purgé. Le reste des chiffres (liens, drains, relecture) est
+stable à quelques ms d'une mesure à l'autre.
+
 ## 4. Ce qui reste, et pourquoi
 
 | reste | la raison vraie |
 |---|---|
-| **Le runtime hors nœuds, encore ~4 s sur trois drains** (1,4 + 2,2 + 0,6 s d'écart entre `drain/exécution` et le nœud de liens) | les instantanés JSON n'étaient qu'une des causes ; la suivante se cherche par phase du runtime (préparation, niveau, rangement), pas encore instrumentée |
-| **Le `COPY` des chunks, 2,4 s** | le lecteur CSV séquentiel ; Parquet ou flottants courts, à mesurer |
-| **`symboles/mise en file`, 0,8 s** | 224 000 `link_jusqu_a` à 3,5 µs : un `RelationRef` (canal) par lien. Un `link_batch` sans canal ferait mieux, mais c'est une API de plus |
-| **L'existence des bouts avant un `COPY` de liens, ~1,1 s** | `select_by_uuids` par tranches sur les deux tables. Un ensemble en mémoire des uuids posés dans la session l'éviterait ; c'est de l'état de plus dans le catalogue |
-| **`flush_fts`, 0,6 s** | plein texte, hors périmètre |
-| **Le modèle, 19 s** | la carte à 99 % ; c'est le chantier de la session moteur (fp16, fused attention) |
+| **La lecture séquentielle du CSV des chunks par le moteur, 1,4 s** (+ 0,9 s pour l'écrire) | le lecteur parallèle refuse un saut de ligne entre guillemets. Une demande pour le cœur C++ : découper aux vraies frontières de lignes, guillemets compris. Ou Parquet, que le moteur lit en parallèle, au prix d'une dépendance lourde |
+| **La sérialisation des checkpoints, ~1,2 s** | sur le fil du graphe, avant que le nœud suivant consomme le lot ; l'écriture, elle, est déjà sur le fil de fond |
+| **La mécanique des nœuds de liens, ~0,7 s par gros drain** hors existence, CSV et COPY | résolution des refs, regroupement, `resolve` par arête — à profiler plus finement si on y revient |
+| **`symboles/mise en file`, 0,6 s** | un `RelationRef` (uuid temporaire, canal) par lien, que personne n'attend sur ce chemin |
+| **`flush_fts`, 0,55 s** | plein texte, hors périmètre |
+| **Le modèle, 10,7 s** | la flash attention réparée ; le reste est à la session moteur |
+| **Un index, plusieurs embarquements** (Lucie) | une colonne de vecteurs et un marqueur par modèle, un HNSW par colonne, la liste des modèles disponibles dans la méta ; ré-embarquer sans redécouper ; la recherche prend la colonne du modèle courant. Le garde-fou « un index, un modèle » en est le cas dégénéré. Un chantier de schéma |
 
 ## 5. Les bases de connaissances, en passant
 

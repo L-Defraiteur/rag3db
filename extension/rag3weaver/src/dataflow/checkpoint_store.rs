@@ -168,15 +168,23 @@ impl Spiller {
         }
     }
 
-    /// Les fichiers de sorties d'une exécution finie : la base a oublié ses
-    /// `output_ports`, les fichiers suivent.
-    pub fn nettoyer_les_sorties(&self, execution_id: &str) {
+    /// **Une exécution finie ne garde que ses contextes d'undo.** Entrées et
+    /// sorties ne servent qu'à une reprise, et on ne reprend pas ce qui est
+    /// fini ; la base a oublié ses `output_ports`, les fichiers suivent. Sans
+    /// ça, une soirée de tests laissait 1,3 Go sous /tmp (6 septembre 2026).
+    pub fn nettoyer_apres_fin(&self, execution_id: &str) {
         let dossier = self.dossier.join(Self::nom_sur(execution_id));
         let Ok(entrees) = std::fs::read_dir(&dossier) else { return };
+        let mut reste = false;
         for entree in entrees.flatten() {
-            if entree.file_name().to_string_lossy().ends_with(".sortie.bin") {
+            if entree.file_name().to_string_lossy().ends_with(".undo.json") {
+                reste = true;
+            } else {
                 let _ = std::fs::remove_file(entree.path());
             }
+        }
+        if !reste {
+            let _ = std::fs::remove_dir(&dossier);
         }
     }
 }
@@ -508,7 +516,7 @@ impl CheckpointStore for CypherCheckpointStore {
 
     fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
         self.spiller.flush()?;
-        self.spiller.nettoyer_les_sorties(execution_id);
+        self.spiller.nettoyer_apres_fin(execution_id);
         let now = timestamp_ms();
 
         // Update execution status
@@ -910,7 +918,7 @@ impl CheckpointStore for PostgresCheckpointStore {
 
     fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
         self.spiller.flush()?;
-        self.spiller.nettoyer_les_sorties(execution_id);
+        self.spiller.nettoyer_apres_fin(execution_id);
         let now = timestamp_ms();
         self.conn
             .execute_with_params(

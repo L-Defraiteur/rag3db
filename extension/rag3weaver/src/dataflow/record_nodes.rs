@@ -611,6 +611,16 @@ fn cellule_csv(v: &CypherValue) -> String {
     }
 }
 
+/// Écrire une chaîne en cellule CSV sans allouer quand elle n'a rien à
+/// échapper — le cas des uuids, deux par arête, 205 000 arêtes.
+fn ecrire_cellule_texte(w: &mut impl std::io::Write, texte: &str) -> Result<(), String> {
+    if texte.contains([',', '"', '\n', '\r']) || texte.is_empty() {
+        w.write_all(cellule_csv(&CypherValue::String(texte.to_string())).as_bytes()).map_err(|e| e.to_string())
+    } else {
+        w.write_all(texte.as_bytes()).map_err(|e| e.to_string())
+    }
+}
+
 /// Une valeur qu'on sait écrire en CSV pour le moteur : les scalaires, et
 /// les listes de nombres. Une liste de chaînes ou une carte a une syntaxe
 /// qu'on n'a pas éprouvée, et un NULL se lit différemment selon le type de
@@ -644,6 +654,8 @@ fn copier_les_noeuds(
     if indices.iter().any(|&i| items[i].data.values().any(|v| !csv_sait_ecrire(v))) {
         return Ok(None);
     }
+    let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+    let t0 = std::time::Instant::now();
 
     {
         use std::io::Write;
@@ -683,8 +695,19 @@ fn copier_les_noeuds(
         w.flush().map_err(|e| e.to_string())?;
     }
 
+    let t_csv = t0.elapsed().as_millis();
+    let t1 = std::time::Instant::now();
     let resultat = conn.execute(&copie).map_err(|e| e.to_string());
     let _ = std::fs::remove_file(&chemin);
+    let t_copy = t1.elapsed().as_millis();
+    let t2 = std::time::Instant::now();
+    if profil {
+        eprintln!(
+            "[copy-profile] {table} : {} lignes, csv {t_csv} ms, COPY {t_copy} ms{}",
+            indices.len(),
+            resultat.as_ref().err().map(|e| format!(" — refusé : {e}")).unwrap_or_default()
+        );
+    }
     resultat?;
 
     let mut ids = HashMap::new();
@@ -696,6 +719,9 @@ fn copier_les_noeuds(
                 .execute_with_params(&dialect.select_node_ids(table), &[QueryParam { name: "uuids".into(), value: param }])
                 .map_err(|e| e.to_string())?;
             ids.extend(identifiants_par_uuid(&lu.rows, true));
+        }
+        if profil {
+            eprintln!("[copy-profile] {table} : identifiants relus en {} ms", t2.elapsed().as_millis());
         }
     }
     Ok(Some(ids))
@@ -715,6 +741,7 @@ fn copier_les_liens(
     indices: &[usize],
     resolved: &[ResolvedLink],
     items: &[RelationRecord],
+    presents_connus: &mut HashMap<String, HashSet<String>>,
 ) -> Result<bool, String> {
     let chemin = fichier_csv("liens", rel_name);
     let Some(copie) = dialect.copy_links_from_csv(rel_name, ends, prop_refs, &chemin.to_string_lossy()) else {
@@ -748,67 +775,78 @@ fn copier_les_liens(
     // MENTIONS vers un symbole absent. On vérifie les uuids par table, en
     // une requête par tranche, et on n'écrit que les paires dont les deux
     // bouts sont là ; les autres sont comptées, pas perdues en silence.
-    let presents = |table: &str, uuids: &[String]| -> Result<HashSet<String>, String> {
-        let mut ok = HashSet::with_capacity(uuids.len());
+    // **Chaque uuid n'est vérifié qu'une fois par drain** : six relations
+    // sur les mêmes scopes demandaient six fois la même liste.
+    let mut verifier = |table: &str, uuids: &mut Vec<&str>| -> Result<(), String> {
+        let connus = presents_connus.entry(table.to_string()).or_default();
+        uuids.retain(|u| !connus.contains(*u));
         for tranche in uuids.chunks(5_000) {
-            let param = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.clone())).collect());
+            let param = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.to_string())).collect());
             let lu = conn
                 .execute_with_params(&dialect.select_by_uuids(table, &["_uuid"]), &[QueryParam { name: "uuids".into(), value: param }])
                 .map_err(|e| e.to_string())?;
             for row in &lu.rows {
                 if let Some(u) = row.first().and_then(|v| v.as_str()) {
-                    ok.insert(u.to_string());
+                    connus.insert(u.to_string());
                 }
             }
         }
-        Ok(ok)
+        Ok(())
     };
-    let mut froms_tous: Vec<String> = indices.iter().map(|&ri| resolved[ri].from_uuid.clone()).collect();
+    let mut froms_tous: Vec<&str> = indices.iter().map(|&ri| resolved[ri].from_uuid.as_str()).collect();
     froms_tous.sort_unstable();
     froms_tous.dedup();
-    let mut tos_tous: Vec<String> = indices.iter().map(|&ri| resolved[ri].to_uuid.clone()).collect();
+    let mut tos_tous: Vec<&str> = indices.iter().map(|&ri| resolved[ri].to_uuid.as_str()).collect();
     tos_tous.sort_unstable();
     tos_tous.dedup();
-    let froms_presents = presents(ends.0, &froms_tous)?;
-    let tos_presents = presents(ends.1, &tos_tous)?;
+    verifier(ends.0, &mut froms_tous)?;
+    verifier(ends.1, &mut tos_tous)?;
+    let vide_connus = HashSet::new();
+    let froms_presents = presents_connus.get(ends.0).unwrap_or(&vide_connus);
+    let tos_presents = presents_connus.get(ends.1).unwrap_or(&vide_connus);
+    let t_existence = t0.elapsed();
+    let t_csv0 = std::time::Instant::now();
     let mut absents = 0usize;
 
-    // Le fichier : une ligne par paire neuve, dédoublonnée dans le lot.
-    let mut vues: HashSet<(String, String)> = HashSet::new();
+    let mut vues: HashSet<(&str, &str)> = HashSet::with_capacity(indices.len());
     let mut ecrites = 0usize;
     {
         use std::io::Write;
         let f = std::fs::File::create(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
-        let mut w = std::io::BufWriter::new(f);
+        let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
         for &ri in indices {
             let rl = &resolved[ri];
-            let paire = (rl.from_uuid.clone(), rl.to_uuid.clone());
-            if !froms_presents.contains(&paire.0) || !tos_presents.contains(&paire.1) {
+            let paire = (rl.from_uuid.as_str(), rl.to_uuid.as_str());
+            if !froms_presents.contains(paire.0) || !tos_presents.contains(paire.1) {
                 absents += 1;
                 continue;
             }
-            if deja.contains(&paire) || !vues.insert(paire.clone()) {
+            if !vues.insert(paire) || (!deja.is_empty() && deja.contains(&(paire.0.to_string(), paire.1.to_string()))) {
                 continue;
             }
             let rel = &items[rl.index];
-            let mut ligne = vec![cellule_csv(&CypherValue::String(rl.from_uuid.clone())), cellule_csv(&CypherValue::String(rl.to_uuid.clone()))];
+            ecrire_cellule_texte(&mut w, &rl.from_uuid)?;
+            w.write_all(b",").map_err(|e| e.to_string())?;
+            ecrire_cellule_texte(&mut w, &rl.to_uuid)?;
             for key in prop_keys {
-                ligne.push(cellule_csv(rel.properties.get(key).unwrap_or(&CypherValue::Null)));
+                w.write_all(b",").map_err(|e| e.to_string())?;
+                w.write_all(cellule_csv(rel.properties.get(key).unwrap_or(&CypherValue::Null)).as_bytes()).map_err(|e| e.to_string())?;
             }
-            writeln!(w, "{}", ligne.join(",")).map_err(|e| e.to_string())?;
+            w.write_all(b"\n").map_err(|e| e.to_string())?;
             ecrites += 1;
         }
         w.flush().map_err(|e| e.to_string())?;
     }
-    let t_csv = t0.elapsed();
+    let t_csv = t_csv0.elapsed();
     let t1 = std::time::Instant::now();
     let resultat = if ecrites > 0 { conn.execute(&copie).map(|_| ()).map_err(|e| e.to_string()) } else { Ok(()) };
     let _ = std::fs::remove_file(&chemin);
     if profil {
         eprintln!(
-            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, existence+csv {} ms, COPY {} ms{}",
+            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, existence {} ms, csv {} ms, COPY {} ms{}",
             ecrites,
             indices.len() - ecrites - absents,
+            t_existence.as_millis(),
             t_csv.as_millis(),
             t1.elapsed().as_millis(),
             resultat.as_ref().err().map(|e| format!(" — refusé : {e}")).unwrap_or_default()
@@ -844,6 +882,7 @@ impl Node for LinkRecordNode {
             .ok_or("LinkRecordNode: 'conn' service not registered")?;
 
         // Resolve all refs first (should be instant — InsertRecordNode already completed)
+        let t_resolution = std::time::Instant::now();
         let mut resolved: Vec<ResolvedLink> = Vec::with_capacity(items.len());
         for (i, rel) in items.iter_mut().enumerate() {
             // Un bout qui ne se résout pas — l'insertion de sa ligne a échoué —
@@ -885,9 +924,12 @@ impl Node for LinkRecordNode {
 
         ctx.metric("items", items.len() as f64);
         ctx.metric("groups", groups.len() as f64);
+        ctx.metric("resolve_ms", t_resolution.elapsed().as_millis() as f64);
         ctx.info(&format!("group_summary: {}", groups.iter()
             .map(|((name, _), idxs)| format!("{}×{}", name, idxs.len()))
             .collect::<Vec<_>>().join(", ")));
+        // Les uuids dont l'existence est acquise, par table, pour tout ce drain.
+        let mut presents_connus: HashMap<String, HashSet<String>> = HashMap::new();
 
         for ((rel_name, prop_keys), indices) in &groups {
             // Build batch link via dialect (idempotent — skip if relation already exists)
@@ -915,7 +957,7 @@ impl Node for LinkRecordNode {
             // les paires déjà posées écartées quand la table n'est pas vide.
             if indices.len() >= COPY_SEUIL {
                 if let Some((from, to)) = ends.as_ref() {
-                    match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, &prop_refs, indices, &resolved, &items) {
+                    match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, &prop_refs, indices, &resolved, &items, &mut presents_connus) {
                         Ok(true) => {
                             for &ri in indices {
                                 let rl = &resolved[ri];

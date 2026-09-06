@@ -4,7 +4,7 @@
 ///
 /// Invariant: `indices.len() == values.len()`.
 /// Indices should be sorted for efficient dot product with another sparse vector.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SparseVector {
     pub indices: Vec<u32>,
     pub values: Vec<f32>,

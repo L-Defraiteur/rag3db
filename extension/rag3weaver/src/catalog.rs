@@ -4663,6 +4663,54 @@ impl Catalog {
         Ok((r, res))
     }
 
+    /// **Mettre en file beaucoup de liens d'une même relation.** Le même
+    /// résultat que [`Self::link_jusqu_a`] sans exigence, sans payer par lien
+    /// les vérifications, la recherche de la relation et l'annonce de dette :
+    /// 380 000 liens à 3,5 µs, c'était 1,3 s sur le cœur C++ (6 septembre
+    /// 2026). Les bases de connaissances écoutent chaque lien : quand il y en
+    /// a, on repasse lien à lien. Rend le nombre mis en file.
+    pub(crate) fn mettre_en_file_les_liens(
+        &mut self,
+        rel_name: &str,
+        liens: impl IntoIterator<Item = (String, String, BTreeMap<String, CypherValue>)>,
+    ) -> Result<usize, CatalogError> {
+        self.check_initialized()?;
+        self.check_ecriture("link")?;
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let (from_entity, to_entity) = (rel_def.from.clone(), rel_def.to.clone());
+        if !self.kb_metadata.is_empty() {
+            let mut n = 0usize;
+            for (de, vers, props) in liens {
+                self.mettre_en_file_le_lien(rel_name, RefOrUuid::Uuid(de), RefOrUuid::Uuid(vers), props)?;
+                n += 1;
+            }
+            return Ok(n);
+        }
+        let mut n = 0usize;
+        for (de, vers, props) in liens {
+            let (relation_ref, resolver) = RelationRef::new(rel_name);
+            self.pending.relations.push(RelationRecord::new(
+                rel_name.to_string(),
+                RefOrUuid::Uuid(de),
+                RefOrUuid::Uuid(vers),
+                props,
+                resolver,
+                relation_ref,
+            ));
+            n += 1;
+        }
+        if n > 0 {
+            self.devoir(&from_entity, crate::disponibilite::Disponibilites::TOUT);
+            self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
+            self.drain_counters.total_queued += n;
+        }
+        Ok(n)
+    }
+
     fn mettre_en_file_le_lien(
         &mut self,
         rel_name: &str,
