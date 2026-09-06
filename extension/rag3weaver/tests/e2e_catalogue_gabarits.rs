@@ -546,3 +546,138 @@ fn un_gabarit_sans_description_est_refuse() {
         .expect_err("une description vide doit être refusée");
     assert!(e.contains("description"), "{e}");
 }
+
+// ─── La couche utilisateur (doc 6 septembre 2026, 14h43) ────────────────────
+
+/// Les fiches visibles par la recherche, avec leur origine, pour un filtre.
+fn fiches_par_origine(cat: &Arc<std::sync::Mutex<Catalog>>, origine: &str) -> Vec<(String, String)> {
+    let mut o = SearchOptions { limit: 50, ..Default::default() };
+    o.filters.insert(
+        "origin".to_string(),
+        rag3weaver::filter::FilterValue::Direct(rag3weaver::connection::CypherValue::String(origine.into())),
+    );
+    let out = Catalog::rechercher(cat, TEMPLATE_ENTITY, "gabarit", o).expect("recherche");
+    let mut v: Vec<(String, String)> = out
+        .results
+        .iter()
+        .map(|r| {
+            let d = r.data.as_ref().expect("data");
+            (
+                d.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                r.uuid.clone(),
+            )
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// **La synchronisation alimente la couche du projet, par identité.**
+///
+/// Avant le 6 septembre, seuls les tests indexaient des fiches ; en production
+/// `search(target='Template')` ne trouvait rien parce que rien n'existait.
+/// Ici : la bibliothèque entre, une seconde passe ne touche rien, un gabarit
+/// de projet **prend la place** de celui qu'il masque (même `_uuid`, origine
+/// changée) — même quand seule l'origine change —, un gabarit propre au
+/// projet s'ajoute puis disparaît avec son fichier, et « il a bougé depuis »
+/// est signalé, pas migré.
+#[test]
+#[ignore]
+fn la_synchronisation_alimente_la_couche_du_projet() {
+    use rag3weaver::template::{prepare_entity, read, roots, write_entity, Header, Origin};
+
+    let mut catalog = setup();
+    let fournis = scan(&builtin_root(), Origin::Builtin).unwrap();
+
+    // 1. La bibliothèque entre, une fois.
+    let r1 = catalog.sync_templates(None).unwrap();
+    assert_eq!(r1.added.len(), fournis.len(), "{r1:?}");
+    assert!(r1.updated.is_empty() && r1.removed.is_empty() && r1.stale.is_empty(), "{r1:?}");
+    let r2 = catalog.sync_templates(None).unwrap();
+    assert_eq!(r2.added.len() + r2.updated.len() + r2.removed.len(), 0, "{r2:?}");
+    assert_eq!(r2.unchanged, fournis.len());
+
+    // 2. Un projet masque `user` : même identité, autre couche.
+    let projet = tempfile::tempdir().unwrap();
+    let racine = projet.path();
+    let user_fourni = read(&builtin_root(), Family::Entity, "user").unwrap();
+    let hash_user_fourni = fournis.iter().find(|f| f.name == "user" && f.family == Family::Entity).unwrap().content_hash.clone();
+    let config = prepare_entity(&user_fourni, &[]).unwrap();
+    write_entity(
+        racine,
+        "user",
+        &config,
+        &Header {
+            category: "auth".into(),
+            description: "Le compte de ce projet : de quoi savoir qui est connecté, avec un portrait.".into(),
+            derived_from: hash_user_fourni.clone(),
+            ..Header::default()
+        },
+    )
+    .unwrap();
+    let r3 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r3.updated, vec!["entity/user".to_string()], "{r3:?}");
+    assert!(r3.added.is_empty() && r3.removed.is_empty(), "{r3:?}");
+    assert!(r3.stale.is_empty(), "l'empreinte est celle d'aujourd'hui : rien n'a bougé — {r3:?}");
+
+    let cat = Arc::new(std::sync::Mutex::new(catalog));
+    let projet_seul = fiches_par_origine(&cat, "project");
+    assert_eq!(projet_seul.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), vec!["user"]);
+    let uuid_user = projet_seul[0].1.clone();
+    let fournis_visibles = fiches_par_origine(&cat, "builtin");
+    assert!(!fournis_visibles.iter().any(|(n, _)| n == "user"), "masquer n'est pas ajouter");
+    assert!(fournis_visibles.iter().any(|(n, _)| n == "product"));
+
+    // 3. Seule l'origine change : un `product` copié tel quel dans le projet.
+    let dir = racine.join(rag3weaver::template::PROJECT_DIR).join("entities");
+    std::fs::copy(builtin_root().join("entities/product.json"), dir.join("product.json")).unwrap();
+    let mut catalog = Arc::try_unwrap(cat).ok().unwrap().into_inner().unwrap();
+    let r4 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r4.updated, vec!["entity/product".to_string()], "{r4:?}");
+    let cat = Arc::new(std::sync::Mutex::new(catalog));
+    let noms: Vec<String> = fiches_par_origine(&cat, "project").into_iter().map(|(n, _)| n).collect();
+    assert_eq!(noms, vec!["product", "user"], "la description n'a pas changé, l'origine si");
+
+    // 4. Un gabarit propre au projet : il s'ajoute, puis part avec son fichier.
+    let mut catalog = Arc::try_unwrap(cat).ok().unwrap().into_inner().unwrap();
+    write_entity(
+        racine,
+        "pet",
+        &config,
+        &Header { description: "Un animal de compagnie et son maître.".into(), ..Header::default() },
+    )
+    .unwrap();
+    let r5 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r5.added, vec!["entity/pet".to_string()], "{r5:?}");
+    std::fs::remove_file(dir.join("pet.json")).unwrap();
+    let r6 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r6.removed, vec!["entity/pet".to_string()], "{r6:?}");
+
+    // 5. Le fichier du projet disparaît : la fiche fournie reprend sa place,
+    //    sous le même uuid.
+    std::fs::remove_file(dir.join("user.json")).unwrap();
+    let r7 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r7.updated, vec!["entity/user".to_string()], "{r7:?}");
+    let cat = Arc::new(std::sync::Mutex::new(catalog));
+    let fournis_visibles = fiches_par_origine(&cat, "builtin");
+    let user = fournis_visibles.iter().find(|(n, _)| n == "user").expect("user revenu à la bibliothèque");
+    assert_eq!(user.1, uuid_user, "même identité des deux côtés du masque");
+
+    // 6. « Il a bougé depuis que tu l'as pris » : une empreinte d'hier.
+    let mut catalog = Arc::try_unwrap(cat).ok().unwrap().into_inner().unwrap();
+    write_entity(
+        racine,
+        "user",
+        &config,
+        &Header {
+            description: "Le compte de ce projet, pris sur une vieille bibliothèque.".into(),
+            derived_from: "empreinte-d-hier".into(),
+            ..Header::default()
+        },
+    )
+    .unwrap();
+    let r8 = catalog.sync_templates(Some(racine)).unwrap();
+    assert_eq!(r8.stale, vec!["entity/user".to_string()], "{r8:?}");
+    assert_eq!(r8.updated, vec!["entity/user".to_string()]);
+    let _ = roots(Some(racine));
+}

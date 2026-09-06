@@ -566,6 +566,138 @@ pub fn write_entity(
     Ok(chemin)
 }
 
+// ─── La synchronisation ──────────────────────────────────────────────────────
+
+/// **Ce qu'une synchronisation a fait.** Les clés sont `famille/nom`.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TemplateSync {
+    /// Fiches qui n'étaient pas en base.
+    pub added: Vec<String>,
+    /// Fiches dont une colonne a changé — contenu, origine, catégorie, chemin.
+    pub updated: Vec<String>,
+    /// Fiches dont plus aucune racine n'a le fichier.
+    pub removed: Vec<String>,
+    pub unchanged: usize,
+    /// Fiches de projet dont `derived_from` n'est plus l'empreinte du gabarit
+    /// fourni de même nom : « il a bougé depuis que tu l'as pris ». Signalé,
+    /// jamais migré — poser est un acte daté (doc 08 §4).
+    pub stale: Vec<String>,
+}
+
+impl TemplateSync {
+    pub fn key(t: &TemplateRef) -> String {
+        format!("{}/{}", t.family.as_str(), t.name)
+    }
+}
+
+/// Les colonnes qu'une synchronisation compare, dans l'ordre où elle les lit.
+const SYNC_COLUMNS: [&str; 8] =
+    ["family", "name", "content_hash", "origin", "derived_from", "category", "path", "description"];
+
+impl crate::Catalog {
+    /// **Synchroniser le catalogue de gabarits avec le disque.**
+    ///
+    /// Enregistre l'entité si besoin, lit les racines (le projet masque la
+    /// bibliothèque, par identité : même `family/name`, même `_uuid`), pose ce
+    /// qui manque, met à jour ce qui a changé, **efface** ce dont plus aucune
+    /// racine n'a le fichier. Idempotent : une seconde passe ne touche rien.
+    ///
+    /// C'est le seul chemin qui alimente la couche utilisateur. Avant le
+    /// 6 septembre 2026, seuls les tests indexaient des fiches, et `adopt`
+    /// terminait par « réindexez » sans que personne ne le fasse.
+    ///
+    /// Tout est posé jusqu'au vecteur : une synchronisation précède une
+    /// recherche, elle n'a pas le droit de laisser une dette derrière elle.
+    pub fn sync_templates(&mut self, project: Option<&Path>) -> Result<TemplateSync, crate::catalog::CatalogError> {
+        use crate::connection::CypherValue as V;
+        use crate::disponibilite::Disponibilites;
+        register_template_schema(self)?;
+
+        let toutes = roots(project);
+        let fiches = scan_roots(&toutes).map_err(crate::catalog::CatalogError::DbError)?;
+        // La bibliothèque seule, pour savoir ce qu'un gabarit de projet masque
+        // et si ce qu'il masque a bougé.
+        let fournis: HashMap<(Family, String), String> = scan(&builtin_root(), Origin::Builtin)
+            .map_err(crate::catalog::CatalogError::DbError)?
+            .into_iter()
+            .map(|t| ((t.family, t.name), t.content_hash))
+            .collect();
+
+        // Ce qui est en base : uuid → colonnes.
+        let mut cols = vec!["_uuid"];
+        cols.extend(SYNC_COLUMNS);
+        let lu = self
+            .conn()
+            .execute(&self.dialect_arc().select_all(TEMPLATE_ENTITY, &cols, None))
+            .map_err(|e| crate::catalog::CatalogError::DbError(e.to_string()))?;
+        let mut en_base: HashMap<String, Vec<String>> = HashMap::new();
+        for row in &lu.rows {
+            let Some(uuid) = row.first().and_then(V::as_str) else { continue };
+            en_base.insert(
+                uuid.to_string(),
+                row.iter().skip(1).map(|v| v.as_str().unwrap_or("").to_string()).collect(),
+            );
+        }
+
+        let mut rapport = TemplateSync::default();
+        let mut a_poser = Vec::new();
+        let mut vus = std::collections::HashSet::new();
+        for fiche in &fiches {
+            let data = fiche.data();
+            let uuid = self.entity_uuid(TEMPLATE_ENTITY, &data)?;
+            vus.insert(uuid.clone());
+            let voulu: Vec<String> =
+                SYNC_COLUMNS.iter().map(|c| data[*c].as_str().unwrap_or("").to_string()).collect();
+            match en_base.get(&uuid) {
+                None => {
+                    rapport.added.push(TemplateSync::key(fiche));
+                    a_poser.push(data);
+                }
+                Some(actuel) if *actuel == voulu => rapport.unchanged += 1,
+                Some(_) => {
+                    rapport.updated.push(TemplateSync::key(fiche));
+                    let res = self.update_jusqu_a(TEMPLATE_ENTITY, &uuid, data, Disponibilites::TOUT)?;
+                    if res.failed > 0 {
+                        return Err(crate::catalog::CatalogError::DbError(format!(
+                            "gabarit {} : mise à jour refusée — {}",
+                            TemplateSync::key(fiche),
+                            res.warnings.join(" ; ")
+                        )));
+                    }
+                }
+            }
+            if fiche.origin == Origin::Project && !fiche.derived_from.is_empty() {
+                if let Some(h) = fournis.get(&(fiche.family, fiche.name.clone())) {
+                    if *h != fiche.derived_from {
+                        rapport.stale.push(TemplateSync::key(fiche));
+                    }
+                }
+            }
+        }
+        if !a_poser.is_empty() {
+            let res = self.ingest_entities(TEMPLATE_ENTITY, a_poser)?;
+            if res.failed > 0 {
+                return Err(crate::catalog::CatalogError::DbError(format!(
+                    "gabarits : {} fiche(s) refusée(s) — {}",
+                    res.failed,
+                    res.warnings.join(" ; ")
+                )));
+            }
+        }
+        for (uuid, colonnes) in &en_base {
+            if !vus.contains(uuid) {
+                rapport.removed.push(format!("{}/{}", colonnes[0], colonnes[1]));
+                self.delete_jusqu_a(TEMPLATE_ENTITY, uuid, Disponibilites::TOUT)?;
+            }
+        }
+        rapport.added.sort_unstable();
+        rapport.updated.sort_unstable();
+        rapport.removed.sort_unstable();
+        rapport.stale.sort_unstable();
+        Ok(rapport)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
