@@ -305,7 +305,7 @@ impl Submodule1 {
         };
         let unsqueeze4_out1: Tensor<3, Int> = attention_mask.unsqueeze_dims::<3>(&[1]);
         let unsqueeze5_out1: Tensor<4, Int> = unsqueeze4_out1.unsqueeze_dims::<4>(&[2]);
-        let cast1_out1 = unsqueeze5_out1.float().cast(burn::tensor::DType::F32);
+        let cast1_out1 = unsqueeze5_out1.float();
         let constant399_out1 = self.constant399.val();
         let sub1_out1 = (constant399_out1)
             .unsqueeze_dims(&[0isize, 1isize, 2isize])
@@ -425,14 +425,24 @@ impl Submodule1 {
             .unwrap();
         let reshape4_out1 = linear1_out1.reshape(concat4_out1);
         let transpose2_out1 = reshape4_out1.permute([0, 2, 1, 3]);
-        let transpose3_out1 = reshape2_out1.permute([0, 2, 3, 1]);
-        let matmul4_out1 = transpose2_out1.matmul(transpose3_out1);
-        let constant418_out1 = self.constant418.val();
-        let div2_out1 = matmul4_out1
-            .div((constant418_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add6_out1 = div2_out1.add(mul2_out1.clone());
-        let softmax1_out1 = burn::tensor::activation::softmax(add6_out1, 3);
-        let matmul5_out1 = softmax1_out1.matmul(transpose1_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant418`.
+        let transpose3_out1 = reshape2_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant418.val();
+        let matmul5_out1 = {
+            let [b, h, sq, _] = transpose2_out1.dims();
+            let sk = transpose3_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose2_out1,
+                transpose3_out1,
+                transpose1_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose4_out1 = matmul5_out1.permute([0, 2, 1, 3]);
         let shape10_out1: [i64; 4] = {
             let axes = &transpose4_out1.clone().dims()[0..4];
@@ -777,14 +787,24 @@ impl Submodule2 {
             .unwrap();
         let reshape8_out1 = linear7_out1.reshape(concat8_out1);
         let transpose6_out1 = reshape8_out1.permute([0, 2, 1, 3]);
-        let transpose7_out1 = reshape6_out1.permute([0, 2, 3, 1]);
-        let matmul12_out1 = transpose6_out1.matmul(transpose7_out1);
-        let constant441_out1 = self.constant441.val();
-        let div6_out1 = matmul12_out1
-            .div((constant441_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add14_out1 = div6_out1.add(mul2_out1);
-        let softmax2_out1 = burn::tensor::activation::softmax(add14_out1, 3);
-        let matmul13_out1 = softmax2_out1.matmul(transpose5_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant441`.
+        let transpose7_out1 = reshape6_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant441.val();
+        let matmul13_out1 = {
+            let [b, h, sq, _] = transpose6_out1.dims();
+            let sk = transpose7_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose6_out1,
+                transpose7_out1,
+                transpose5_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose8_out1 = matmul13_out1.permute([0, 2, 1, 3]);
         let shape18_out1: [i64; 4] = {
             let axes = &transpose8_out1.clone().dims()[0..4];
@@ -1129,14 +1149,24 @@ impl Submodule3 {
             .unwrap();
         let reshape12_out1 = linear13_out1.reshape(concat12_out1);
         let transpose10_out1 = reshape12_out1.permute([0, 2, 1, 3]);
-        let transpose11_out1 = reshape10_out1.permute([0, 2, 3, 1]);
-        let matmul20_out1 = transpose10_out1.matmul(transpose11_out1);
-        let constant464_out1 = self.constant464.val();
-        let div10_out1 = matmul20_out1
-            .div((constant464_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add22_out1 = div10_out1.add(mul2_out1);
-        let softmax3_out1 = burn::tensor::activation::softmax(add22_out1, 3);
-        let matmul21_out1 = softmax3_out1.matmul(transpose9_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant464`.
+        let transpose11_out1 = reshape10_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant464.val();
+        let matmul21_out1 = {
+            let [b, h, sq, _] = transpose10_out1.dims();
+            let sk = transpose11_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose10_out1,
+                transpose11_out1,
+                transpose9_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose12_out1 = matmul21_out1.permute([0, 2, 1, 3]);
         let shape26_out1: [i64; 4] = {
             let axes = &transpose12_out1.clone().dims()[0..4];
@@ -1481,14 +1511,24 @@ impl Submodule4 {
             .unwrap();
         let reshape16_out1 = linear19_out1.reshape(concat16_out1);
         let transpose14_out1 = reshape16_out1.permute([0, 2, 1, 3]);
-        let transpose15_out1 = reshape14_out1.permute([0, 2, 3, 1]);
-        let matmul28_out1 = transpose14_out1.matmul(transpose15_out1);
-        let constant487_out1 = self.constant487.val();
-        let div14_out1 = matmul28_out1
-            .div((constant487_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add30_out1 = div14_out1.add(mul2_out1);
-        let softmax4_out1 = burn::tensor::activation::softmax(add30_out1, 3);
-        let matmul29_out1 = softmax4_out1.matmul(transpose13_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant487`.
+        let transpose15_out1 = reshape14_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant487.val();
+        let matmul29_out1 = {
+            let [b, h, sq, _] = transpose14_out1.dims();
+            let sk = transpose15_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose14_out1,
+                transpose15_out1,
+                transpose13_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose16_out1 = matmul29_out1.permute([0, 2, 1, 3]);
         let shape34_out1: [i64; 4] = {
             let axes = &transpose16_out1.clone().dims()[0..4];
@@ -1833,14 +1873,24 @@ impl Submodule5 {
             .unwrap();
         let reshape20_out1 = linear25_out1.reshape(concat20_out1);
         let transpose18_out1 = reshape20_out1.permute([0, 2, 1, 3]);
-        let transpose19_out1 = reshape18_out1.permute([0, 2, 3, 1]);
-        let matmul36_out1 = transpose18_out1.matmul(transpose19_out1);
-        let constant510_out1 = self.constant510.val();
-        let div18_out1 = matmul36_out1
-            .div((constant510_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add38_out1 = div18_out1.add(mul2_out1);
-        let softmax5_out1 = burn::tensor::activation::softmax(add38_out1, 3);
-        let matmul37_out1 = softmax5_out1.matmul(transpose17_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant510`.
+        let transpose19_out1 = reshape18_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant510.val();
+        let matmul37_out1 = {
+            let [b, h, sq, _] = transpose18_out1.dims();
+            let sk = transpose19_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose18_out1,
+                transpose19_out1,
+                transpose17_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose20_out1 = matmul37_out1.permute([0, 2, 1, 3]);
         let shape42_out1: [i64; 4] = {
             let axes = &transpose20_out1.clone().dims()[0..4];
@@ -2185,14 +2235,24 @@ impl Submodule6 {
             .unwrap();
         let reshape24_out1 = linear31_out1.reshape(concat24_out1);
         let transpose22_out1 = reshape24_out1.permute([0, 2, 1, 3]);
-        let transpose23_out1 = reshape22_out1.permute([0, 2, 3, 1]);
-        let matmul44_out1 = transpose22_out1.matmul(transpose23_out1);
-        let constant533_out1 = self.constant533.val();
-        let div22_out1 = matmul44_out1
-            .div((constant533_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add46_out1 = div22_out1.add(mul2_out1);
-        let softmax6_out1 = burn::tensor::activation::softmax(add46_out1, 3);
-        let matmul45_out1 = softmax6_out1.matmul(transpose21_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant533`.
+        let transpose23_out1 = reshape22_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant533.val();
+        let matmul45_out1 = {
+            let [b, h, sq, _] = transpose22_out1.dims();
+            let sk = transpose23_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose22_out1,
+                transpose23_out1,
+                transpose21_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose24_out1 = matmul45_out1.permute([0, 2, 1, 3]);
         let shape50_out1: [i64; 4] = {
             let axes = &transpose24_out1.clone().dims()[0..4];
@@ -2537,14 +2597,24 @@ impl Submodule7 {
             .unwrap();
         let reshape28_out1 = linear37_out1.reshape(concat28_out1);
         let transpose26_out1 = reshape28_out1.permute([0, 2, 1, 3]);
-        let transpose27_out1 = reshape26_out1.permute([0, 2, 3, 1]);
-        let matmul52_out1 = transpose26_out1.matmul(transpose27_out1);
-        let constant556_out1 = self.constant556.val();
-        let div26_out1 = matmul52_out1
-            .div((constant556_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add54_out1 = div26_out1.add(mul2_out1);
-        let softmax7_out1 = burn::tensor::activation::softmax(add54_out1, 3);
-        let matmul53_out1 = softmax7_out1.matmul(transpose25_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant556`.
+        let transpose27_out1 = reshape26_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant556.val();
+        let matmul53_out1 = {
+            let [b, h, sq, _] = transpose26_out1.dims();
+            let sk = transpose27_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose26_out1,
+                transpose27_out1,
+                transpose25_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose28_out1 = matmul53_out1.permute([0, 2, 1, 3]);
         let shape58_out1: [i64; 4] = {
             let axes = &transpose28_out1.clone().dims()[0..4];
@@ -2889,14 +2959,24 @@ impl Submodule8 {
             .unwrap();
         let reshape32_out1 = linear43_out1.reshape(concat32_out1);
         let transpose30_out1 = reshape32_out1.permute([0, 2, 1, 3]);
-        let transpose31_out1 = reshape30_out1.permute([0, 2, 3, 1]);
-        let matmul60_out1 = transpose30_out1.matmul(transpose31_out1);
-        let constant579_out1 = self.constant579.val();
-        let div30_out1 = matmul60_out1
-            .div((constant579_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add62_out1 = div30_out1.add(mul2_out1);
-        let softmax8_out1 = burn::tensor::activation::softmax(add62_out1, 3);
-        let matmul61_out1 = softmax8_out1.matmul(transpose29_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant579`.
+        let transpose31_out1 = reshape30_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant579.val();
+        let matmul61_out1 = {
+            let [b, h, sq, _] = transpose30_out1.dims();
+            let sk = transpose31_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose30_out1,
+                transpose31_out1,
+                transpose29_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose32_out1 = matmul61_out1.permute([0, 2, 1, 3]);
         let shape66_out1: [i64; 4] = {
             let axes = &transpose32_out1.clone().dims()[0..4];
@@ -3241,14 +3321,24 @@ impl Submodule9 {
             .unwrap();
         let reshape36_out1 = linear49_out1.reshape(concat36_out1);
         let transpose34_out1 = reshape36_out1.permute([0, 2, 1, 3]);
-        let transpose35_out1 = reshape34_out1.permute([0, 2, 3, 1]);
-        let matmul68_out1 = transpose34_out1.matmul(transpose35_out1);
-        let constant602_out1 = self.constant602.val();
-        let div34_out1 = matmul68_out1
-            .div((constant602_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add70_out1 = div34_out1.add(mul2_out1);
-        let softmax9_out1 = burn::tensor::activation::softmax(add70_out1, 3);
-        let matmul69_out1 = softmax9_out1.matmul(transpose33_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant602`.
+        let transpose35_out1 = reshape34_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant602.val();
+        let matmul69_out1 = {
+            let [b, h, sq, _] = transpose34_out1.dims();
+            let sk = transpose35_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose34_out1,
+                transpose35_out1,
+                transpose33_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose36_out1 = matmul69_out1.permute([0, 2, 1, 3]);
         let shape74_out1: [i64; 4] = {
             let axes = &transpose36_out1.clone().dims()[0..4];
@@ -3593,14 +3683,24 @@ impl Submodule10 {
             .unwrap();
         let reshape40_out1 = linear55_out1.reshape(concat40_out1);
         let transpose38_out1 = reshape40_out1.permute([0, 2, 1, 3]);
-        let transpose39_out1 = reshape38_out1.permute([0, 2, 3, 1]);
-        let matmul76_out1 = transpose38_out1.matmul(transpose39_out1);
-        let constant625_out1 = self.constant625.val();
-        let div38_out1 = matmul76_out1
-            .div((constant625_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add78_out1 = div38_out1.add(mul2_out1);
-        let softmax10_out1 = burn::tensor::activation::softmax(add78_out1, 3);
-        let matmul77_out1 = softmax10_out1.matmul(transpose37_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant625`.
+        let transpose39_out1 = reshape38_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant625.val();
+        let matmul77_out1 = {
+            let [b, h, sq, _] = transpose38_out1.dims();
+            let sk = transpose39_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose38_out1,
+                transpose39_out1,
+                transpose37_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose40_out1 = matmul77_out1.permute([0, 2, 1, 3]);
         let shape82_out1: [i64; 4] = {
             let axes = &transpose40_out1.clone().dims()[0..4];
@@ -3945,14 +4045,24 @@ impl Submodule11 {
             .unwrap();
         let reshape44_out1 = linear61_out1.reshape(concat44_out1);
         let transpose42_out1 = reshape44_out1.permute([0, 2, 1, 3]);
-        let transpose43_out1 = reshape42_out1.permute([0, 2, 3, 1]);
-        let matmul84_out1 = transpose42_out1.matmul(transpose43_out1);
-        let constant648_out1 = self.constant648.val();
-        let div42_out1 = matmul84_out1
-            .div((constant648_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add86_out1 = div42_out1.add(mul2_out1);
-        let softmax11_out1 = burn::tensor::activation::softmax(add86_out1, 3);
-        let matmul85_out1 = softmax11_out1.matmul(transpose41_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant648`.
+        let transpose43_out1 = reshape42_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant648.val();
+        let matmul85_out1 = {
+            let [b, h, sq, _] = transpose42_out1.dims();
+            let sk = transpose43_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose42_out1,
+                transpose43_out1,
+                transpose41_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose44_out1 = matmul85_out1.permute([0, 2, 1, 3]);
         let shape90_out1: [i64; 4] = {
             let axes = &transpose44_out1.clone().dims()[0..4];
@@ -4297,14 +4407,24 @@ impl Submodule12 {
             .unwrap();
         let reshape48_out1 = linear67_out1.reshape(concat48_out1);
         let transpose46_out1 = reshape48_out1.permute([0, 2, 1, 3]);
-        let transpose47_out1 = reshape46_out1.permute([0, 2, 3, 1]);
-        let matmul92_out1 = transpose46_out1.matmul(transpose47_out1);
-        let constant671_out1 = self.constant671.val();
-        let div46_out1 = matmul92_out1
-            .div((constant671_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add94_out1 = div46_out1.add(mul2_out1);
-        let softmax12_out1 = burn::tensor::activation::softmax(add94_out1, 3);
-        let matmul93_out1 = softmax12_out1.matmul(transpose45_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant671`.
+        let transpose47_out1 = reshape46_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant671.val();
+        let matmul93_out1 = {
+            let [b, h, sq, _] = transpose46_out1.dims();
+            let sk = transpose47_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose46_out1,
+                transpose47_out1,
+                transpose45_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose48_out1 = matmul93_out1.permute([0, 2, 1, 3]);
         let shape98_out1: [i64; 4] = {
             let axes = &transpose48_out1.clone().dims()[0..4];
@@ -4649,14 +4769,24 @@ impl Submodule13 {
             .unwrap();
         let reshape52_out1 = linear73_out1.reshape(concat52_out1);
         let transpose50_out1 = reshape52_out1.permute([0, 2, 1, 3]);
-        let transpose51_out1 = reshape50_out1.permute([0, 2, 3, 1]);
-        let matmul100_out1 = transpose50_out1.matmul(transpose51_out1);
-        let constant694_out1 = self.constant694.val();
-        let div50_out1 = matmul100_out1
-            .div((constant694_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add102_out1 = div50_out1.add(mul2_out1);
-        let softmax13_out1 = burn::tensor::activation::softmax(add102_out1, 3);
-        let matmul101_out1 = softmax13_out1.matmul(transpose49_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant694`.
+        let transpose51_out1 = reshape50_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant694.val();
+        let matmul101_out1 = {
+            let [b, h, sq, _] = transpose50_out1.dims();
+            let sk = transpose51_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose50_out1,
+                transpose51_out1,
+                transpose49_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose52_out1 = matmul101_out1.permute([0, 2, 1, 3]);
         let shape106_out1: [i64; 4] = {
             let axes = &transpose52_out1.clone().dims()[0..4];
@@ -5001,14 +5131,24 @@ impl Submodule14 {
             .unwrap();
         let reshape56_out1 = linear79_out1.reshape(concat56_out1);
         let transpose54_out1 = reshape56_out1.permute([0, 2, 1, 3]);
-        let transpose55_out1 = reshape54_out1.permute([0, 2, 3, 1]);
-        let matmul108_out1 = transpose54_out1.matmul(transpose55_out1);
-        let constant717_out1 = self.constant717.val();
-        let div54_out1 = matmul108_out1
-            .div((constant717_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add110_out1 = div54_out1.add(mul2_out1);
-        let softmax14_out1 = burn::tensor::activation::softmax(add110_out1, 3);
-        let matmul109_out1 = softmax14_out1.matmul(transpose53_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant717`.
+        let transpose55_out1 = reshape54_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant717.val();
+        let matmul109_out1 = {
+            let [b, h, sq, _] = transpose54_out1.dims();
+            let sk = transpose55_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose54_out1,
+                transpose55_out1,
+                transpose53_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose56_out1 = matmul109_out1.permute([0, 2, 1, 3]);
         let shape114_out1: [i64; 4] = {
             let axes = &transpose56_out1.clone().dims()[0..4];
@@ -5353,14 +5493,24 @@ impl Submodule15 {
             .unwrap();
         let reshape60_out1 = linear85_out1.reshape(concat60_out1);
         let transpose58_out1 = reshape60_out1.permute([0, 2, 1, 3]);
-        let transpose59_out1 = reshape58_out1.permute([0, 2, 3, 1]);
-        let matmul116_out1 = transpose58_out1.matmul(transpose59_out1);
-        let constant740_out1 = self.constant740.val();
-        let div58_out1 = matmul116_out1
-            .div((constant740_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add118_out1 = div58_out1.add(mul2_out1);
-        let softmax15_out1 = burn::tensor::activation::softmax(add118_out1, 3);
-        let matmul117_out1 = softmax15_out1.matmul(transpose57_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant740`.
+        let transpose59_out1 = reshape58_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant740.val();
+        let matmul117_out1 = {
+            let [b, h, sq, _] = transpose58_out1.dims();
+            let sk = transpose59_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose58_out1,
+                transpose59_out1,
+                transpose57_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose60_out1 = matmul117_out1.permute([0, 2, 1, 3]);
         let shape122_out1: [i64; 4] = {
             let axes = &transpose60_out1.clone().dims()[0..4];
@@ -5705,14 +5855,24 @@ impl Submodule16 {
             .unwrap();
         let reshape64_out1 = linear91_out1.reshape(concat64_out1);
         let transpose62_out1 = reshape64_out1.permute([0, 2, 1, 3]);
-        let transpose63_out1 = reshape62_out1.permute([0, 2, 3, 1]);
-        let matmul124_out1 = transpose62_out1.matmul(transpose63_out1);
-        let constant763_out1 = self.constant763.val();
-        let div62_out1 = matmul124_out1
-            .div((constant763_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add126_out1 = div62_out1.add(mul2_out1);
-        let softmax16_out1 = burn::tensor::activation::softmax(add126_out1, 3);
-        let matmul125_out1 = softmax16_out1.matmul(transpose61_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant763`.
+        let transpose63_out1 = reshape62_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant763.val();
+        let matmul125_out1 = {
+            let [b, h, sq, _] = transpose62_out1.dims();
+            let sk = transpose63_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose62_out1,
+                transpose63_out1,
+                transpose61_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose64_out1 = matmul125_out1.permute([0, 2, 1, 3]);
         let shape130_out1: [i64; 4] = {
             let axes = &transpose64_out1.clone().dims()[0..4];
@@ -6057,14 +6217,24 @@ impl Submodule17 {
             .unwrap();
         let reshape68_out1 = linear97_out1.reshape(concat68_out1);
         let transpose66_out1 = reshape68_out1.permute([0, 2, 1, 3]);
-        let transpose67_out1 = reshape66_out1.permute([0, 2, 3, 1]);
-        let matmul132_out1 = transpose66_out1.matmul(transpose67_out1);
-        let constant786_out1 = self.constant786.val();
-        let div66_out1 = matmul132_out1
-            .div((constant786_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add134_out1 = div66_out1.add(mul2_out1);
-        let softmax17_out1 = burn::tensor::activation::softmax(add134_out1, 3);
-        let matmul133_out1 = softmax17_out1.matmul(transpose65_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant786`.
+        let transpose67_out1 = reshape66_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant786.val();
+        let matmul133_out1 = {
+            let [b, h, sq, _] = transpose66_out1.dims();
+            let sk = transpose67_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose66_out1,
+                transpose67_out1,
+                transpose65_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose68_out1 = matmul133_out1.permute([0, 2, 1, 3]);
         let shape138_out1: [i64; 4] = {
             let axes = &transpose68_out1.clone().dims()[0..4];
@@ -6409,14 +6579,24 @@ impl Submodule18 {
             .unwrap();
         let reshape72_out1 = linear103_out1.reshape(concat72_out1);
         let transpose70_out1 = reshape72_out1.permute([0, 2, 1, 3]);
-        let transpose71_out1 = reshape70_out1.permute([0, 2, 3, 1]);
-        let matmul140_out1 = transpose70_out1.matmul(transpose71_out1);
-        let constant809_out1 = self.constant809.val();
-        let div70_out1 = matmul140_out1
-            .div((constant809_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add142_out1 = div70_out1.add(mul2_out1);
-        let softmax18_out1 = burn::tensor::activation::softmax(add142_out1, 3);
-        let matmul141_out1 = softmax18_out1.matmul(transpose69_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant809`.
+        let transpose71_out1 = reshape70_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant809.val();
+        let matmul141_out1 = {
+            let [b, h, sq, _] = transpose70_out1.dims();
+            let sk = transpose71_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose70_out1,
+                transpose71_out1,
+                transpose69_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose72_out1 = matmul141_out1.permute([0, 2, 1, 3]);
         let shape146_out1: [i64; 4] = {
             let axes = &transpose72_out1.clone().dims()[0..4];
@@ -6761,14 +6941,24 @@ impl Submodule19 {
             .unwrap();
         let reshape76_out1 = linear109_out1.reshape(concat76_out1);
         let transpose74_out1 = reshape76_out1.permute([0, 2, 1, 3]);
-        let transpose75_out1 = reshape74_out1.permute([0, 2, 3, 1]);
-        let matmul148_out1 = transpose74_out1.matmul(transpose75_out1);
-        let constant832_out1 = self.constant832.val();
-        let div74_out1 = matmul148_out1
-            .div((constant832_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add150_out1 = div74_out1.add(mul2_out1);
-        let softmax19_out1 = burn::tensor::activation::softmax(add150_out1, 3);
-        let matmul149_out1 = softmax19_out1.matmul(transpose73_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant832`.
+        let transpose75_out1 = reshape74_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant832.val();
+        let matmul149_out1 = {
+            let [b, h, sq, _] = transpose74_out1.dims();
+            let sk = transpose75_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose74_out1,
+                transpose75_out1,
+                transpose73_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose76_out1 = matmul149_out1.permute([0, 2, 1, 3]);
         let shape154_out1: [i64; 4] = {
             let axes = &transpose76_out1.clone().dims()[0..4];
@@ -7113,14 +7303,24 @@ impl Submodule20 {
             .unwrap();
         let reshape80_out1 = linear115_out1.reshape(concat80_out1);
         let transpose78_out1 = reshape80_out1.permute([0, 2, 1, 3]);
-        let transpose79_out1 = reshape78_out1.permute([0, 2, 3, 1]);
-        let matmul156_out1 = transpose78_out1.matmul(transpose79_out1);
-        let constant855_out1 = self.constant855.val();
-        let div78_out1 = matmul156_out1
-            .div((constant855_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add158_out1 = div78_out1.add(mul2_out1);
-        let softmax20_out1 = burn::tensor::activation::softmax(add158_out1, 3);
-        let matmul157_out1 = softmax20_out1.matmul(transpose77_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant855`.
+        let transpose79_out1 = reshape78_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant855.val();
+        let matmul157_out1 = {
+            let [b, h, sq, _] = transpose78_out1.dims();
+            let sk = transpose79_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose78_out1,
+                transpose79_out1,
+                transpose77_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose80_out1 = matmul157_out1.permute([0, 2, 1, 3]);
         let shape162_out1: [i64; 4] = {
             let axes = &transpose80_out1.clone().dims()[0..4];
@@ -7465,14 +7665,24 @@ impl Submodule21 {
             .unwrap();
         let reshape84_out1 = linear121_out1.reshape(concat84_out1);
         let transpose82_out1 = reshape84_out1.permute([0, 2, 1, 3]);
-        let transpose83_out1 = reshape82_out1.permute([0, 2, 3, 1]);
-        let matmul164_out1 = transpose82_out1.matmul(transpose83_out1);
-        let constant878_out1 = self.constant878.val();
-        let div82_out1 = matmul164_out1
-            .div((constant878_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add166_out1 = div82_out1.add(mul2_out1);
-        let softmax21_out1 = burn::tensor::activation::softmax(add166_out1, 3);
-        let matmul165_out1 = softmax21_out1.matmul(transpose81_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant878`.
+        let transpose83_out1 = reshape82_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant878.val();
+        let matmul165_out1 = {
+            let [b, h, sq, _] = transpose82_out1.dims();
+            let sk = transpose83_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose82_out1,
+                transpose83_out1,
+                transpose81_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose84_out1 = matmul165_out1.permute([0, 2, 1, 3]);
         let shape170_out1: [i64; 4] = {
             let axes = &transpose84_out1.clone().dims()[0..4];
@@ -7817,14 +8027,24 @@ impl Submodule22 {
             .unwrap();
         let reshape88_out1 = linear127_out1.reshape(concat88_out1);
         let transpose86_out1 = reshape88_out1.permute([0, 2, 1, 3]);
-        let transpose87_out1 = reshape86_out1.permute([0, 2, 3, 1]);
-        let matmul172_out1 = transpose86_out1.matmul(transpose87_out1);
-        let constant901_out1 = self.constant901.val();
-        let div86_out1 = matmul172_out1
-            .div((constant901_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add174_out1 = div86_out1.add(mul2_out1);
-        let softmax22_out1 = burn::tensor::activation::softmax(add174_out1, 3);
-        let matmul173_out1 = softmax22_out1.matmul(transpose85_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant901`.
+        let transpose87_out1 = reshape86_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant901.val();
+        let matmul173_out1 = {
+            let [b, h, sq, _] = transpose86_out1.dims();
+            let sk = transpose87_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose86_out1,
+                transpose87_out1,
+                transpose85_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose88_out1 = matmul173_out1.permute([0, 2, 1, 3]);
         let shape178_out1: [i64; 4] = {
             let axes = &transpose88_out1.clone().dims()[0..4];
@@ -8169,14 +8389,24 @@ impl Submodule23 {
             .unwrap();
         let reshape92_out1 = linear133_out1.reshape(concat92_out1);
         let transpose90_out1 = reshape92_out1.permute([0, 2, 1, 3]);
-        let transpose91_out1 = reshape90_out1.permute([0, 2, 3, 1]);
-        let matmul180_out1 = transpose90_out1.matmul(transpose91_out1);
-        let constant924_out1 = self.constant924.val();
-        let div90_out1 = matmul180_out1
-            .div((constant924_out1).unsqueeze_dims(&[0isize, 1isize, 2isize]));
-        let add182_out1 = div90_out1.add(mul2_out1);
-        let softmax23_out1 = burn::tensor::activation::softmax(add182_out1, 3);
-        let matmul181_out1 = softmax23_out1.matmul(transpose89_out1);
+        // rag3weaver : attention fusionnée (flash, accumulation f32) à la place de
+        // QKᵀ/÷√d/+masque/softmax/·V — patch_attention.py, 6 septembre 2026.
+        // L'échelle par défaut de `attention` est 1/√d, ce que faisait `constant924`.
+        let transpose91_out1 = reshape90_out1.permute([0, 2, 1, 3]);
+        let _ = self.constant924.val();
+        let matmul181_out1 = {
+            let [b, h, sq, _] = transpose90_out1.dims();
+            let sk = transpose91_out1.dims()[2];
+            let masque = mul2_out1.clone().lower_elem(0.0).expand([b, h, sq, sk]);
+            burn::tensor::module::attention(
+                transpose90_out1,
+                transpose91_out1,
+                transpose89_out1,
+                Some(masque),
+                None,
+                burn::tensor::ops::AttentionModuleOptions::default(),
+            )
+        };
         let transpose92_out1 = matmul181_out1.permute([0, 2, 1, 3]);
         let shape186_out1: [i64; 4] = {
             let axes = &transpose92_out1.clone().dims()[0..4];

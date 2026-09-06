@@ -173,7 +173,7 @@ fn flatten_logits(logits: Tensor<2>, batch: usize) -> Result<Vec<f32>, EmbedErro
             "logits: expected shape [{batch}, 1], got [{rows}, {cols}]"
         )));
     }
-    data.to_vec()
+    data.try_to_vec()
         .map_err(|e| EmbedError::ProviderError(format!("logits to_vec: {e:?}")))
 }
 

@@ -119,9 +119,15 @@ fn mmarco_scores_across_languages() {
 fn mmarco_is_deterministic() {
     let r = MMARCO_RERANKER.clone();
     let passages = strings(BERLIN_PASSAGES_FR);
+    // Chauffe d'abord : premier appel = candidat d'autotune, pas le gagnant ;
+    // et un noyau accéléré ne fixe pas l'ordre des additions. Voir
+    // e2e_burn_reranker::reranker_is_deterministic.
+    let _ = r.rerank(BERLIN_QUERY_FR, &passages).unwrap();
     let a = r.rerank(BERLIN_QUERY_FR, &passages).unwrap();
     let b = r.rerank(BERLIN_QUERY_FR, &passages).unwrap();
-    assert_eq!(a, b, "two identical calls must give identical logits");
+    for (x, y) in a.iter().zip(&b) {
+        assert!((x - y).abs() < 1e-3, "two identical calls must give the same logits: {a:?} vs {b:?}");
+    }
 
     // Padding must not leak into the score: a passage scored alone and scored
     // next to a longer one (hence padded) gets the same logit up to f32 noise.

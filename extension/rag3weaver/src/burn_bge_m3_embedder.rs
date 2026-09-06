@@ -140,8 +140,15 @@ impl BurnBgeM3Embedder {
             let mut store = burn_store::BurnpackStore::from_bytes(Some(
                 burn::tensor::Bytes::from_bytes_vec(weights.to_vec()),
             ));
-            if let Some(dtype) = crate::burn_device::float_dtype_voulu() {
-                store = store.with_from_adapter(burn_store::FloatCastAdapter::to(dtype.into()));
+            match crate::burn_device::float_dtype_voulu() {
+                // Flex32 : les octets f32 restent, l'étiquette change — voir `Flex32Adapter`.
+                Some(burn::tensor::FloatDType::Flex32) => {
+                    store = store.with_from_adapter(crate::burn_device::Flex32Adapter);
+                }
+                Some(dtype) => {
+                    store = store.with_from_adapter(burn_store::FloatCastAdapter::to(dtype.into()));
+                }
+                None => {}
             }
             model
                 .load_from(&mut store)
@@ -217,11 +224,14 @@ impl BurnBgeM3Embedder {
 
     /// `sentence_embedding` is already CLS-pooled and L2-normalized by the graph.
     fn extract_dense(sentence_embedding: Tensor<2>) -> Result<Vec<Vec<f32>>, EmbedError> {
-        // Quelle que soit la précision de calcul, on rend du f32.
-        let data = sentence_embedding.cast(burn::tensor::FloatDType::F32).to_data();
+        // Quelle que soit la précision de calcul, on rend du f32. Le `cast` ne
+        // suffit pas : sur Flex32 (stockage f32), burn-cubecl en fait un no-op
+        // qui garde l'étiquette, et `to_vec::<f32>` refuse alors les octets —
+        // pourtant les bons. `convert::<f32>` sur les données, lui, ré-étiquette.
+        let data = sentence_embedding.cast(burn::tensor::FloatDType::F32).to_data().convert::<f32>();
         let [batch, dim] = [data.shape[0], data.shape[1]];
         let flat: Vec<f32> = data
-            .to_vec()
+            .try_to_vec()
             .map_err(|e| EmbedError::ProviderError(format!("dense to_vec: {e:?}")))?;
         Ok((0..batch)
             .map(|i| flat[i * dim..(i + 1) * dim].to_vec())
@@ -242,10 +252,10 @@ impl BurnBgeM3Embedder {
                 .forward(token_embeddings.cast(burn::tensor::FloatDType::F32))
                 .squeeze_dim::<2>(2),
         );
-        let data = scores.to_data();
+        let data = scores.to_data().convert::<f32>();
         let seq = data.shape[1];
         let flat: Vec<f32> = data
-            .to_vec()
+            .try_to_vec()
             .map_err(|e| EmbedError::ProviderError(format!("sparse to_vec: {e:?}")))?;
 
         let mut out = Vec::with_capacity(ids_per_row.len());

@@ -96,9 +96,18 @@ fn recognizes_the_fixture() {
 #[ignore]
 fn is_deterministic() {
     let image = fixture();
+    // Chauffe d'abord (premier appel = candidat d'autotune), puis même texte,
+    // mêmes boîtes, et confiances égales à 1e-3 près : un noyau accéléré ne
+    // fixe pas l'ordre des additions. Voir e2e_burn_reranker::reranker_is_deterministic.
+    let _ = PPOCR.recognize(&image).expect("chauffe");
     let a = PPOCR.recognize(&image).expect("first");
     let b = PPOCR.recognize(&image).expect("second");
-    assert_eq!(a, b);
+    assert_eq!((a.width, a.height, a.lines.len()), (b.width, b.height, b.lines.len()), "{a:?} vs {b:?}");
+    for (x, y) in a.lines.iter().zip(&b.lines) {
+        assert_eq!(x.text, y.text);
+        assert_eq!(x.quad, y.quad);
+        assert!((x.confidence - y.confidence).abs() < 1e-3, "{x:?} vs {y:?}");
+    }
 }
 
 #[test]

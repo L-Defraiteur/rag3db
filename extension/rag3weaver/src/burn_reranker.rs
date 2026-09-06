@@ -174,7 +174,7 @@ impl BurnMiniLmReranker {
                 "logits: expected shape [{batch}, 1], got [{rows}, {cols}]"
             )));
         }
-        data.to_vec()
+        data.try_to_vec()
             .map_err(|e| EmbedError::ProviderError(format!("logits to_vec: {e:?}")))
     }
 }

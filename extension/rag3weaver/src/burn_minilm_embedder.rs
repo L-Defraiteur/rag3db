@@ -162,7 +162,14 @@ impl BurnMiniLmEmbedder {
 
         // Mean pooling with the attention mask — same arithmetic as the candle path:
         // sum(hidden * mask) / sum(mask), then divide by the L2 norm.
-        let mask_f: Tensor<3> = attention_mask.float().unsqueeze_dim(2); // [B, S, 1]
+        // **Le masque prend le dtype de la sortie.** `float()` rend le flottant
+        // par défaut de la carte (Flex32), et la sortie du graphe est f32 (le
+        // graphe généré caste son propre masque en f32) : sous fusion, l'IR
+        // refuse de mélanger les deux (6 septembre 2026).
+        let mask_f: Tensor<3> = attention_mask
+            .float()
+            .cast(burn::tensor::FloatDType::from(hidden.dtype()))
+            .unsqueeze_dim(2); // [B, S, 1]
         let summed: Tensor<2> = (hidden * mask_f.clone()).sum_dim(1).squeeze_dim(1); // [B, 384]
         let counts: Tensor<2> = mask_f.sum_dim(1).squeeze_dim(1); // [B, 1]
         let pooled = summed / counts;
@@ -172,13 +179,17 @@ impl BurnMiniLmEmbedder {
         let data = normalized.to_data();
         let [b, dim] = [data.shape[0], data.shape[1]];
         let flat: Vec<f32> = data
-            .to_vec()
+            .try_to_vec()
             .map_err(|e| EmbedError::ProviderError(format!("dense to_vec: {e:?}")))?;
         Ok((0..b).map(|i| flat[i * dim..(i + 1) * dim].to_vec()).collect())
     }
 }
 
 impl Embedder for BurnMiniLmEmbedder {
+    fn name(&self) -> &str {
+        "minilm"
+    }
+
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(vec![]);

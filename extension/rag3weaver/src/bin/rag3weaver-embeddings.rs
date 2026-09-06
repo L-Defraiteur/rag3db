@@ -25,6 +25,10 @@ use rag3weaver::burn_device::{BurnDevice, BurnRole};
 use rag3weaver::daemon::EmbedDaemon;
 
 fn main() -> std::process::ExitCode {
+    // Ce que burn et cubecl disent de la carte passe par `log` : sans
+    // collecteur, ça n'existe pas. `RUST_LOG=cubecl_wgpu=debug,cubecl_runtime=info`
+    // pour les tailles CMMA vues et chaque autotune ; `warn` par défaut.
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
     match servir() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {

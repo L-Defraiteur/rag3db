@@ -273,7 +273,7 @@ impl BurnPpOcr {
         if dims != [1, 1, input.height, input.width] {
             return Err(OcrError::Model(format!("det output {dims:?}, expected [1, 1, {}, {}]", input.height, input.width)));
         }
-        y.into_data().to_vec::<f32>().map_err(|e| OcrError::Model(format!("det map to_vec: {e:?}")))
+        y.into_data().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("det map to_vec: {e:?}")))
     }
 
     /// Carte de probabilité du détecteur pour une image : `(carte, width, height)`
@@ -345,7 +345,7 @@ impl BurnPpOcr {
                 self.dict.len()
             )));
         }
-        let all = y.into_data().to_vec::<f32>().map_err(|e| OcrError::Model(format!("rec probs to_vec: {e:?}")))?;
+        let all = y.into_data().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("rec probs to_vec: {e:?}")))?;
         Ok(all
             .chunks_exact(steps * classes)
             .map(|c| RecLogits { steps, classes, data: c.to_vec() })

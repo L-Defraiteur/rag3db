@@ -194,12 +194,27 @@ impl BurnDevice {
         // avant le premier tenseur ; on la pose ici parce que c'est le seul
         // endroit par où passent tous les modèles. Mesuré le 6 septembre 2026
         // sur BGE-M3 (voir `e2e_banc_bge_m3`).
+        let mut precision = String::from("f32");
         if let Some(d) = float_dtype_voulu() {
             match device.configure(d) {
-                Ok(()) => eprintln!("[rag3weaver] précision flottante {d:?} (RAG3WEAVER_BURN_FLOAT)"),
+                Ok(()) => {
+                    precision = format!(
+                        "{d:?} ({})",
+                        if std::env::var_os("RAG3WEAVER_BURN_FLOAT").is_some() { "RAG3WEAVER_BURN_FLOAT" } else { "défaut" }
+                    )
+                }
                 Err(e) => eprintln!("[rag3weaver] précision {d:?} refusée : {e:?} — précision par défaut"),
             }
         }
+        // **Dire ce qui tourne, en une ligne.** On a mesuré deux semaines sans
+        // savoir que l'autotune était éteint, que la flash attention retombait
+        // sur la voie naïve, ou que Flex32 rendait du f32 déguisé. Cette ligne
+        // est ce qu'on aurait voulu lire.
+        eprintln!(
+            "[rag3weaver] burn : {self:?} → {device:?} · précision {precision} · autotune {} · fusion {}",
+            if cfg!(feature = "burn-autotune") { "oui" } else { "non (stratégies par défaut, attention naïve)" },
+            if cfg!(feature = "burn-fusion") { "oui" } else { "non" },
+        );
         device
     }
 
@@ -230,9 +245,9 @@ impl BurnDevice {
 mod tests {
     use super::*;
 
-    /// **Le chiffre qui décide de ne pas activer ROCm.**
+    /// **Le chiffre qui décidait de ne pas activer ROCm — et ce qu'il mesurait.**
     ///
-    /// Mesuré le 28 août 2026, même test, mêmes 12 documents, `drain` seul :
+    /// Mesuré le 28 août 2026, `drain` de 12 documents, dépendances en -O0 :
     ///
     /// | | gpu:0 | gpu:1 | rocm:0 | rocm:1 |
     /// |---|---|---|---|---|
@@ -240,22 +255,19 @@ mod tests {
     /// | SPIR-V épinglé, rocm compilé | 40,7 s | 40,7 s | 7,9 s | 7,5 s |
     /// | **SPIR-V épinglé, sans rocm** | **2,94 s** | **2,99 s** | — | — |
     ///
-    /// Trois choses, dans l'ordre de ce qu'elles coûtent :
+    /// Le 6 septembre, on a compris ce que ces 40,7 s étaient : `burn-rocm`
+    /// 0.22.0-pre.2 déclare `burn-cubecl` avec ses features par défaut, donc
+    /// **allume l'autotune** pour les deux piles — que notre binaire Vulkan n'avait
+    /// jamais eu. Le facteur 14, c'était une chauffe d'autotune (des dizaines
+    /// de candidats par classe de forme) avec burn compilé en -O0, pas ROCm ; le
+    /// débit chaud, lui, montait. Depuis, l'autotune est une feature à nous
+    /// (`burn-autotune`), les dépendances compilent en -O3, et Vulkan en Flex32
+    /// dépasse ROCm f32 sur les lots courts. Voir
+    /// docs/issues/6-septembre-2026/03.
     ///
-    /// 1. **ROCm marche** — 4 tests verts sur les deux cartes — et il est
-    ///    **2,6× plus lent** que wgpu/SPIR-V ici (7,5 s contre 2,94 s). Le
-    ///    chemin natif d'une carte AMD n'est pas le plus rapide sur ce travail.
-    /// 2. **Compiler `burn-rocm` dégrade le chemin wgpu d'un facteur 14**
-    ///    (2,94 s → 40,7 s) sans qu'une ligne de notre code ne change. Ce n'est
-    ///    donc pas une feature qu'on peut laisser dormir « au cas où » : elle
-    ///    est exclusive en pratique.
-    /// 3. **Épingler SPIR-V** vaut de toute façon : ça retire la variance
-    ///    entre cartes (60/71 s devenus 40,7/40,7) et gagne 6 % sur le chemin
-    ///    normal.
-    ///
-    /// Conclusion : le code ROCm reste — vingt lignes, il fonctionne, et la
-    /// question se reposera à la prochaine version de burn. La feature reste
-    /// **éteinte**.
+    /// Ce qui reste vrai : ROCm est un choix mesuré par carte, jamais un défaut —
+    /// Vulkan tourne partout, ROCm demande `/opt/rocm` et, jusqu'à burn pre.3,
+    /// ne compile pas le f16 sur gfx12 (RDNA4).
     #[test]
     fn rocm_is_a_measured_choice_not_a_default() {
         // `rocm:N` se lit toujours, feature ou non : c'est `resolve()` qui
@@ -294,17 +306,68 @@ mod tests {
 }
 
 /// La précision flottante demandée par `RAG3WEAVER_BURN_FLOAT` (`f16`, `bf16`,
-/// `f32`), ou rien. Lue par la carte (défaut des tenseurs neufs) **et** par le
+/// `flex32`, `f32`), Flex32 sans la variable. Lue par la carte (défaut des tenseurs neufs) **et** par le
 /// chargement des poids, qui sans ça restent dans la précision du fichier.
 pub(crate) fn float_dtype_voulu() -> Option<burn::tensor::FloatDType> {
-    let voulu = std::env::var("RAG3WEAVER_BURN_FLOAT").ok().filter(|v| !v.trim().is_empty())?;
+    // **Flex32 par défaut** depuis burn pre.3 (6 septembre 2026, soir) : les six
+    // suites de modèles passent, parité 0,999999 contre f32, et c'est ×2 à ×3
+    // sur Vulkan avec les matrices coopératives. `f32` reste à portée de
+    // variable pour comparer ou pour une carte sans elles (où Flex32 vaut f32).
+    let voulu = std::env::var("RAG3WEAVER_BURN_FLOAT")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "flex32".to_string());
     match voulu.trim().to_ascii_lowercase().as_str() {
         "f16" => Some(burn::tensor::FloatDType::F16),
         "bf16" => Some(burn::tensor::FloatDType::BF16),
         "f32" => Some(burn::tensor::FloatDType::F32),
+        // **Flex32 : stockage f32, matmul f16 sur les tensor cores, accumulation
+        // f32.** La précision mixte sans un cast à écrire : cubek-matmul
+        // (`blueprint::adjust_dtypes`) ne descend en f16 que les étages du
+        // matmul accéléré, tout le reste — LayerNorm, softmax, réductions —
+        // reste en f32. Trouvé le 6 septembre 2026 en cherchant comment
+        // exclure les LayerNorm d'un graphe généré qui n'a pas de LayerNorm.
+        "flex32" => Some(burn::tensor::FloatDType::Flex32),
         autre => {
-            eprintln!("[rag3weaver] RAG3WEAVER_BURN_FLOAT={autre} : f16, bf16 ou f32 — précision par défaut");
+            eprintln!("[rag3weaver] RAG3WEAVER_BURN_FLOAT={autre} : f16, bf16, flex32 ou f32 — précision par défaut");
             None
         }
+    }
+}
+
+/// **Flex32 se pose, il ne se convertit pas.**
+///
+/// `FloatCastAdapter::to(Flex32)` passe par `TensorData::convert_dtype`, qui
+/// convertit vers `f32` et ré-étiquette… `f32` (burn-std 0.22.0-pre.2,
+/// `convert_inplace_with` : `self.dtype = Target::dtype()`). Les poids restent
+/// f32, l'embedding rend du f32, et cubek-matmul ne voit jamais deux opérandes
+/// Flex32 : la branche « flex32 → f16 sur les tensor cores » n'est jamais prise.
+/// Mesuré le 6 septembre 2026 : Flex32 rendait des vecteurs identiques au bit
+/// près à f32, et le même débit. L'autre porte, `tensor.cast(Flex32)` sur du
+/// f32, est un no-op qui garde l'étiquette f32 (burn-cubecl `kernel/cast`).
+///
+/// Ici on garde les octets et on change l'étiquette — c'est ce que Flex32 est
+/// par définition : un stockage f32 dont les matmuls ont le droit de descendre
+/// en f16.
+pub(crate) struct Flex32Adapter;
+
+impl burn_store::ModuleAdapter for Flex32Adapter {
+    fn adapt(
+        &self,
+        tensor: burn_store::burn_pack::Tensor,
+        _ctx: burn_store::ModuleContext<'_>,
+    ) -> burn_store::burn_pack::Tensor {
+        use burn::tensor::DType;
+        if tensor.dtype != DType::F32 {
+            return tensor;
+        }
+        let (name, shape) = (tensor.name.clone(), tensor.shape.clone());
+        burn_store::bridge::map_data(tensor, name, DType::Flex32, shape, |d| {
+            burn::tensor::TensorData::from_bytes(d.bytes, d.shape, DType::Flex32)
+        })
+    }
+
+    fn clone_box(&self) -> Box<dyn burn_store::ModuleAdapter> {
+        Box::new(Flex32Adapter)
     }
 }

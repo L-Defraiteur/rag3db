@@ -74,9 +74,18 @@ fn reranker_orders_the_model_card_example() {
 fn reranker_is_deterministic() {
     let r = MSMARCO_RERANKER.clone();
     let passages = strings(BERLIN_PASSAGES);
+    // **Chauffe d'abord.** Avec l'autotune, le premier appel d'un processus
+    // est rendu par un candidat en cours de banc, pas forcément par le noyau
+    // gagnant ; et un noyau accéléré (Flex32, tensor cores) ne garantit pas
+    // l'ordre des additions d'une réduction. Ce que ce test veut, c'est « pas
+    // de dropout, pas d'effet d'ordre » : deux appels à noyaux fixés, égaux à
+    // 1e-3 près (6 septembre 2026, 8,648816 contre 8,648815 en Flex32).
+    let _ = r.rerank(BERLIN_QUERY, &passages).unwrap();
     let a = r.rerank(BERLIN_QUERY, &passages).unwrap();
     let b = r.rerank(BERLIN_QUERY, &passages).unwrap();
-    assert_eq!(a, b, "two identical calls must give identical logits");
+    for (x, y) in a.iter().zip(&b) {
+        assert!((x - y).abs() < 1e-3, "two identical calls must give the same logits: {a:?} vs {b:?}");
+    }
 
     // Padding must not leak into the score: a passage scored alone and scored
     // next to a longer one (hence padded) gets the same logit up to f32 noise.

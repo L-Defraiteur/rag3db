@@ -28,7 +28,29 @@ fn jetons(e: &dyn Embedder, textes: &[String]) -> usize {
 #[test]
 #[ignore]
 fn jetons_par_seconde() {
-    let e: &dyn Embedder = common::burn::BGE_M3.as_ref();
+    // `RUST_LOG=cubecl_wgpu=debug,cubecl_runtime=info` : les tailles CMMA vues et chaque autotune.
+    let _ = env_logger::try_init();
+    banc(common::burn::BGE_M3.as_ref());
+}
+
+/// **MiniLM sur les mêmes lots** : 22 M de paramètres contre 560 M, 384 dim
+/// contre 1 024. Le code est en anglais ; sur un corpus de la taille d'un
+/// noyau, c'est le rapport entre ces deux lignes qui décide (6 septembre 2026).
+#[test]
+#[ignore]
+fn jetons_par_seconde_minilm() {
+    let _ = env_logger::try_init();
+    banc(common::burn::MINILM.as_ref());
+}
+
+#[test]
+#[ignore]
+fn jetons_par_seconde_multilingual_minilm() {
+    let _ = env_logger::try_init();
+    banc(common::burn::MULTILINGUAL_MINILM.as_ref());
+}
+
+fn banc(e: &dyn Embedder) {
     eprintln!("[banc] modèle {} — {}", e.name(), if std::env::var_os("RAG3WEAVER_SANS_DEMON").is_some() { "local" } else { "par le démon" });
 
     // Chauffe : compilation des noyaux pour une première forme.
@@ -76,7 +98,7 @@ fn jetons_par_seconde() {
 #[ignore]
 fn le_f16_rend_les_memes_vecteurs() {
     let e: &dyn Embedder = common::burn::BGE_M3.as_ref();
-    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "f32".into());
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
     let textes: Vec<String> = [
         "de quoi savoir qui est connecté sur mon site",
         "vendre des articles avec un prix",
@@ -92,9 +114,17 @@ fn le_f16_rend_les_memes_vecteurs() {
     let dir = std::env::temp_dir().join("rag3weaver-parite");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(format!("{precision}.json")), serde_json::to_string(&vecs).unwrap()).unwrap();
-    let autre = if precision == "f32" { "f16" } else { "f32" };
+    // **f32 dépose, l'autre précision compare.** Un passage f32 ne juge rien :
+    // il n'a aucun moyen de savoir quel `f16.json` ou `flex32.json` traîne
+    // d'un essai précédent, et comparer au premier venu faisait échouer le
+    // banc par défaut (6 septembre 2026).
+    if precision == "f32" {
+        eprintln!("[parité] f32 déposé ; relancer sans variable (Flex32) ou avec RAG3WEAVER_BURN_FLOAT=f16 pour comparer");
+        return;
+    }
+    let autre = "f32";
     let Ok(texte_autre) = std::fs::read_to_string(dir.join(format!("{autre}.json"))) else {
-        eprintln!("[parité] {precision} déposé ; relancer avec RAG3WEAVER_BURN_FLOAT={autre} pour comparer");
+        eprintln!("[parité] {precision} déposé ; relancer d'abord avec RAG3WEAVER_BURN_FLOAT=f32 pour avoir la référence");
         return;
     };
     let ref_: Vec<Vec<f32>> = serde_json::from_str(&texte_autre).unwrap();
@@ -105,5 +135,5 @@ fn le_f16_rend_les_memes_vecteurs() {
         pire = pire.min(cos);
     }
     eprintln!("[parité] {precision} contre {autre} sur {} textes : cosinus minimal {pire:.5}", vecs.len());
-    assert!(pire > 0.999, "le f16 change les vecteurs : cosinus {pire}");
+    assert!(pire > 0.999, "{precision} change les vecteurs : cosinus {pire}");
 }

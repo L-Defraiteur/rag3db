@@ -68,9 +68,15 @@ sparse-vector = "4.0.1"
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
 
+# **Un collecteur de `log`, partout.** cubecl dit beaucoup (tailles CMMA vues,
+# chaque autotune et son gagnant, chaque compilation de noyau) en `log::debug!`
+# — sans collecteur, ces lignes n'existent nulle part, et on a mesuré à
+# l'aveugle deux semaines. `RUST_LOG=cubecl_wgpu=debug,cubecl_runtime=info`.
+log = "0.4"
+env_logger = "0.11"
 # burn (GPU-agnostique : Vulkan/WebGPU/Metal/CUDA — feature flag)
-burn = { version = "0.22.0-pre.2", optional = true, default-features = false, features = ["std", "wgpu"] }
-burn-store = { version = "0.22.0-pre.2", optional = true }
+burn = { version = "0.22.0-pre.3", optional = true, default-features = false, features = ["std", "wgpu"] }
+burn-store = { version = "0.22.0-pre.3", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
 # Parseurs de code (tree-sitter, 12 langages) : entités File / Scope et
@@ -124,7 +130,25 @@ postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types",
 # Embedder BGE-M3 via burn — pas de candle, pas de CUDA, pas de hf-hub.
 # Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
 # depuis un .bpk fourni par l'appelant (cf generated/README.md).
-burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan"]
+burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan", "burn-autotune", "burn-fusion"]
+# **Autotune et fusion, nommées chez nous.** Deux features de burn qu'on croyait
+# avoir et qu'on n'avait pas : `burn` est pris sans ses defaults, et seule
+# `burn-rocm` les rallumait — d'où le « facteur 14 » du 28 août (une chauffe
+# d'autotune en -O0). Nommées ici pour que `cfg!(feature = …)` les voie et
+# que `burn_device.rs` puisse dire ce qui tourne. Mesuré le 6 septembre 2026
+# sur BGE-M3, Vulkan : l'autotune seul rend la flash attention (sans lui, la
+# stratégie par défaut est le repli naïf) et les noyaux CMMA ; la fusion
+# reprend les LayerNorm déroulées. Ensemble, avec Flex32 : 5 300 → 15 000
+# jetons/s sur 8×100 mots. Voir docs/issues/6-septembre-2026/03.
+#
+# **La fusion est dans le défaut depuis pre.3.** En 0.22.0-pre.2 elle cassait
+# les deux rerankers (la matmul fusionnée de la tête `n = 1` n'avait aucun
+# candidat viable, cubecl paniquait) et faussait l'OCR ; sur pre.3 les six
+# suites de modèles passent avec (6 septembre 2026, soir). Une feature par
+# binaire, pas par modèle : si un modèle la refuse un jour, c'est tout le
+# binaire qui s'en passe.
+burn-autotune = ["burn/autotune"]
+burn-fusion = ["burn/fusion"]
 # OCR : décodage d'images (PNG/JPEG/WebP…) pour `OcrImage::decode` et le nœud
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
 # PP-OCRv6 sur burn est sous `burn-ocr`.
@@ -287,3 +311,82 @@ debug = "line-tables-only"
 
 [profile.dev]
 split-debuginfo = "unpacked"
+
+# **Les dépendances optimisées, même en debug.** Trouvé le 6 septembre 2026 :
+# `run_e2e.sh` lance `cargo test` sans `--release`, donc burn, cubecl et
+# tokenizers tournaient en -O0 dans tous les bancs — la compilation SPIR-V,
+# l'autotune, les lancements de noyaux, la tokenisation. Le GPU ne le voyait
+# pas, la chauffe et les petits lots, si. Notre crate reste en debug (compile
+# incrémentale rapide), les dépendances non.
+[profile.dev.package."*"]
+opt-level = 3
+
+# **Trois forks, une ligne chacun** (6 septembre 2026) : sans elles, Flex32 —
+# stockage f32, matmul f16 sur les tensor cores, accumulation f32 — n'était
+# utilisable nulle part, et le disait par des vecteurs identiques au bit près à
+# f32. Chaque branche `rag3weaver/pre.3` part du tag exact du lock
+# (`v0.11.0-pre.3`, `v0.22.0-pre.3`, `v0.3.0-pre.3`) et porte un commit,
+# épinglé ici par sa révision (un poste sans réseau compile dès que
+# `~/.cargo/git` a le clone ; sinon c'est le même besoin que crates.io) ; les
+# branches `rag3weaver/pre.2` portent le même sur la version d'avant, d'où on
+# vient (montée le 6 septembre 2026 : Flex32 y fait ×2, les formes inédites
+# ×4, et le f16 ROCm sur RDNA4 y compile). Liste dans docs/forks-burn-cubecl-cubek.md, récit dans
+# docs/issues/6-septembre-2026/03, PR amont à ouvrir ; ce
+# bloc disparaît le jour où elles sont fusionnées.
+#
+# **Chaque atelier en entier**, pas trois crates : patcher un seul crate d'un
+# dépôt tire ses voisins du même dépôt en double de ceux du registre, et deux
+# `cubecl_common::Device` ne sont pas le même trait. Les trois forks sont au
+# tag exact du lock ; tout le reste est identique à crates.io.
+[patch.crates-io]
+burn = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-autodiff = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-backend = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-backend-extension = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-core = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-cpu = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-cuda = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-derive = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-dispatch = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-flex = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-fusion = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-ir = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-ndarray = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-nn = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-optim = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-pack = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-remote = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-rocm = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-router = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-std = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-store = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-tch = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-tensor = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-vision = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+burn-wgpu = { git = "https://github.com/L-Defraiteur/burn", rev = "669686ec" }
+cubecl = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-common = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-core = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-cpp = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-cpu = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-cuda = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-environment = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-hip = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-ir = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-macros = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-macros-internal = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-opt = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-runtime = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-std = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubecl-zspace = { git = "https://github.com/L-Defraiteur/cubecl", rev = "0565518f" }
+cubek = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-attention = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-convolution = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-fft = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-interpolate = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-pool = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-quant = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-random = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-reduce = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-std = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }
+cubek-tile = { git = "https://github.com/L-Defraiteur/cubek", rev = "3062b6a1" }

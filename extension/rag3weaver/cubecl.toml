@@ -1,0 +1,9 @@
+# Une seule base d'autotune par poste, quel que soit le cwd. Par défaut cubecl
+# écrit sous `<workspace>/target/environment/` quand il trouve un Cargo.toml
+# au-dessus du cwd, et sous `~/.cache/cubecl/` sinon : le démon lancé d'un
+# service et le banc lancé d'ici ne partageaient pas leurs réglages, et chacun
+# repayait la chauffe (6 septembre 2026). Lu par cubecl depuis le cwd en
+# remontant ; un binaire installé n'a pas ce fichier, et `global` est aussi
+# son défaut quand aucun Cargo.toml n'est en vue.
+[environment]
+path = "global"
