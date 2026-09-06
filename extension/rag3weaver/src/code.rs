@@ -1309,7 +1309,16 @@ impl Catalog {
             })
             .collect();
         report.symbols = records.len();
+        let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        let mut t = std::time::Instant::now();
+        let etape = |nom: &str, t: &mut std::time::Instant| {
+            if profil {
+                eprintln!("[ingest-profile] {:>6} ms  symboles/{nom}", t.elapsed().as_millis());
+            }
+            *t = std::time::Instant::now();
+        };
         let ingested = self.ingest_entities(SYMBOL, records)?;
+        etape("ingestion", &mut t);
         report.failed += ingested.failed;
 
         let symbol_uuid = |cat: &Self, name: &str| -> Result<String, CatalogError> {
@@ -1332,8 +1341,10 @@ impl Catalog {
             let props = BTreeMap::from([("kind".to_string(), s(kind))]);
             self.link_jusqu_a("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), props, crate::disponibilite::Disponibilites::AUCUNE)?;
         }
+        etape("mise en file DEFINES/MENTIONS", &mut t);
         let drained = self.drain();
         report.failed += drained.failed;
+        etape("drain des rendez-vous", &mut t);
 
         // Matérialisation, dans les deux sens. **Deux requêtes en tout** :
         // une par relation, en `UNWIND` sur tous les symboles du lot. Une
@@ -1341,6 +1352,7 @@ impl Catalog {
         let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
         let definers_by_symbol = self.linked_from_many("DEFINES", &uuids)?;
         let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", &uuids, true)?;
+        etape("relecture des rendez-vous", &mut t);
         for sym in &uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<(String, String)> = Vec::new();
@@ -1371,7 +1383,9 @@ impl Catalog {
                 report.linked_across_batches += 1;
             }
         }
+        etape("mise en file des arêtes résolues", &mut t);
         let linked = self.drain();
+        etape("drain des arêtes résolues", &mut t);
         report.failed += linked.failed;
         Ok(())
     }

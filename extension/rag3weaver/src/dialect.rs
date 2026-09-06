@@ -237,6 +237,17 @@ pub trait SchemaDialect: Send + Sync {
     /// Expects `$items` param as List<Map{from_uuid, to_uuid, ...}>.
     fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String;
 
+    /// [`Self::batch_link`] **avec les étiquettes des deux bouts**, quand la
+    /// relation les déclare. Sans étiquette, un `MATCH (a {_uuid: …})`
+    /// balaie toutes les tables de nœuds pour chaque élément : 1,6 s pour
+    /// 5 000 arêtes de symboles sur 30 fichiers (6 septembre 2026). Avec,
+    /// c'est l'index de clé primaire de la table nommée. Le défaut ignore
+    /// les étiquettes — SQL n'en a pas besoin, la table est déjà nommée.
+    fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
+        let _ = ends;
+        self.batch_link(rel_table, prop_columns)
+    }
+
     /// Batch update specific fields on entities matched by UUID.
     /// Expects `$items` param as List<Map{_uuid, field1, field2, ...}>.
     fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String;
@@ -747,6 +758,21 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "UNWIND $items AS item \
              MATCH (a {{_uuid: item.from_uuid}}), (b {{_uuid: item.to_uuid}}) \
+             MERGE (a)-[r:{rel_table}]->(b){prop_set}"
+        )
+    }
+
+    fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
+        let Some((from, to)) = ends else { return self.batch_link(rel_table, prop_columns) };
+        let prop_set = if prop_columns.is_empty() {
+            String::new()
+        } else {
+            let assigns: Vec<String> = prop_columns.iter().map(|c| format!("r.{c} = item.{c}")).collect();
+            format!(" SET {}", assigns.join(", "))
+        };
+        format!(
+            "UNWIND $items AS item \
+             MATCH (a:{from} {{_uuid: item.from_uuid}}), (b:{to} {{_uuid: item.to_uuid}}) \
              MERGE (a)-[r:{rel_table}]->(b){prop_set}"
         )
     }

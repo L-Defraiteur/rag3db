@@ -533,7 +533,12 @@ impl Node for LinkRecordNode {
             let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
                 .ok_or("LinkRecordNode: 'dialect' service not registered")?;
             let prop_refs: Vec<&str> = prop_keys.iter().map(|s| s.as_str()).collect();
-            let cypher = dialect.batch_link(rel_name, &prop_refs);
+            // Les bouts déclarés de la relation, pour un MATCH étiqueté.
+            let ends = ctx
+                .service::<crate::config::CatalogConfig>("config")
+                .and_then(|c| c.relations.get(rel_name.as_str()))
+                .map(|d| (d.from.clone(), d.to.clone()));
+            let cypher = dialect.batch_link_labeled(rel_name, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &prop_refs);
 
             let items_param = CypherValue::List(
                 indices

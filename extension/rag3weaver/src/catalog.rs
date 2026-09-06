@@ -5284,6 +5284,9 @@ impl Catalog {
         let runtime = DataflowRuntime::with_services(node_count + 20, services);
         // S'abonner **avant** d'exécuter, sinon on ne voit rien.
         let mut ecoute = runtime.subscribe();
+        // Le même profil par nœud que l'ingestion, sous la même variable :
+        // un drain de liens qui prend 1,6 s sans ventilation n'a pas de suite.
+        let mut profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok().then(|| runtime.subscribe());
 
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
@@ -5299,6 +5302,20 @@ impl Catalog {
         } else {
             runtime.execute(&mut graph)
         };
+
+        if let Some(rx) = profil.as_mut() {
+            let mut par_noeud: Vec<(String, u64)> = Vec::new();
+            while let Ok(event) = rx.try_recv() {
+                if let crate::dataflow::DataflowEvent::NodeCompleted { node, duration_ms, metrics, .. } = event {
+                    let extra: Vec<String> = metrics.iter().map(|(k, v)| format!("{k}={v}")).collect();
+                    par_noeud.push((format!("{node} {}", extra.join(" ")), duration_ms));
+                }
+            }
+            par_noeud.sort_by(|a, b| b.1.cmp(&a.1));
+            for (noeud, ms) in par_noeud {
+                eprintln!("[drain-profile] {ms:>6} ms  {noeud}");
+            }
+        }
 
         // Dans les deux branches : un drain qui échoue a d'autant plus de
         // raisons d'avoir prévenu avant de mourir.

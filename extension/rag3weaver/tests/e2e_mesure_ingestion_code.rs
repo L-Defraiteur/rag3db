@@ -67,6 +67,11 @@ fn combien_coute_l_indexation_de_src_dataflow() {
         "[mesure] analyse en {:?} — parse {} ms, relations {} ms, {} relations, {} sautés",
         t_analyse.elapsed(), analysis.parse_ms, analysis.relation_ms, analysis.relations.len(), analysis.skipped.len()
     );
+    {
+        let uniques: std::collections::HashSet<(&str, &str, &str)> =
+            analysis.pending.iter().map(|(k, n, g)| (k.as_str(), n.as_str(), g.as_str())).collect();
+        eprintln!("[mesure] rendez-vous en attente : {} dont {} uniques", analysis.pending.len(), uniques.len());
+    }
     let texte: usize = analysis.scopes.iter().map(|s| s.content.len() + s.signature.len() + s.docstring.len()).collect::<Vec<_>>().iter().sum();
     let source_len: usize = analysis.files.iter().map(|f| f.size_bytes as usize).sum();
     eprintln!(
