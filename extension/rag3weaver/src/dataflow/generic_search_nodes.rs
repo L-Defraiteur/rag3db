@@ -704,7 +704,14 @@ impl Node for SparseSearchNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SparseSearchNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
+
+        // Ce que l'agent doit entendre — par la méta, pas par le journal du
+        // nœud, que personne ne lit du côté de l'appelant. Même règle que
+        // `VectorSearchNode`, appliquée ici avec un jour de retard : le
+        // demi-portage que la réconciliation du 6 septembre a relevé.
+        let mut node_warnings: Vec<String> = Vec::new();
 
         // Même règle que pour le vecteur : une cible qui ne déclare pas
         // `sparse` rend vide, elle ne casse pas le graphe qui la traverse.
@@ -770,7 +777,13 @@ impl Node for SparseSearchNode {
                 Some(ids),
             ),
             (Some(_), None) => {
-                ctx.warn("SparseSearchNode: un filtre est demandé mais aucun backend de recherche — résultats non restreints");
+                // Un filtre non appliqué touche à la justesse du résultat :
+                // il passe par la méta, où l'agent l'entend.
+                node_warnings.push(
+                    "SparseSearchNode: un filtre est demandé mais aucun backend de \
+                     recherche — les résultats ne sont PAS restreints au domaine demandé"
+                        .to_string(),
+                );
                 search_sparse(handle, &*conn, &target.chunk_table, &sparse_vec, self.limit, &[])
             }
             (None, _) => search_sparse(
@@ -796,7 +809,48 @@ impl Node for SparseSearchNode {
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode, &label)?;
+        for w in &node_warnings {
+            ctx.warn(w);
+        }
+        let nombre = unified.len();
+
+        // **Un signal muet dit pourquoi.** Zéro résultat sparse peut vouloir
+        // dire « ça n'existe pas » ou « ce n'est pas encore embarqué » ; le
+        // marqueur `_sparse_hash` sait répondre, et le compte n'est fait que
+        // dans ce cas-là. `Catalog::search` le faisait pour les deux signaux ;
+        // ce chemin ne le faisait que pour le vecteur.
+        if nombre == 0 {
+            if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+                if let Ok(c) = cat.lock() {
+                    c.expliquer_le_silence_d_un_signal(
+                        &target.chunk_table,
+                        crate::search::SearchSignals::SPARSE,
+                        &mut node_warnings,
+                    );
+                }
+            }
+        }
+
         ctx.set_output("results", PortValue::new(unified));
+        ctx.set_output(
+            "meta",
+            PortValue::new(crate::search::SearchMeta {
+                query: query_str.clone(),
+                target: target.name.clone(),
+                signals: crate::search::SearchSignals::SPARSE,
+                consistency: options.consistency,
+                partial: false,
+                pending_count: 0,
+                vector_count: 0,
+                bm25_count: 0,
+                sparse_count: nombre,
+                fused_count: nombre,
+                reranked_count: 0,
+                warnings: node_warnings,
+                search_time_ms: debut.elapsed().as_millis() as u64,
+                diagnostics: None,
+            }),
+        );
         Ok(())
     }
 }
@@ -1483,7 +1537,13 @@ mod tests {
     fn sparse_search_node_ports() {
         let node = SparseSearchNode::new("sparse", 10);
         assert_eq!(node.inputs().len(), 1);
-        assert_eq!(node.outputs().len(), 1);
+        assert_eq!(node.outputs().len(), 2);
+        assert_eq!(node.outputs()[0].name, "results");
+        // Le canal des avertissements, comme sur le vecteur et BM25. C'est
+        // par lui qu'un zéro sparse dit s'il est une dette d'embarquement ou
+        // une absence — le troisième signal était le seul à ne pas le dire.
+        assert_eq!(node.outputs()[1].name, "meta");
+        assert_eq!(node.outputs()[1].port_type, PortType::Meta);
         assert_eq!(node.node_type(), "SparseSearchNode");
     }
 

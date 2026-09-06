@@ -37,9 +37,9 @@
 //! | demandé | ce qui se passe | exact ? |
 //! |---|---|---|
 //! | rien | rien | **oui** |
-//! | `Donnee` | les entités en file sont posées (`flush_insertions`) | non — relations et agrégats peuvent rester |
+//! | `Donnee` | les entités en file sont posées, et les relations entre elles (`flush_insertions`) | **oui** — les agrégats restent, et un agrégat *est* du dérivé |
 //! | `PleinTexte` | le graphe est drainé **sans l'étage GPU** | **oui** |
-//! | `Sparse` ou `Dense` | le graphe entier, étage GPU compris | non — les deux signaux GPU partent ensemble |
+//! | `Sparse` ou `Dense` | le graphe entier, étage GPU compris | non — les deux signaux GPU partent ensemble ; sur un embarqueur dual c'est gratuit, ils sortent de la même passe |
 //!
 //! La ligne `PleinTexte` est devenue exacte le 6 septembre 2026 : les nœuds
 //! d'embarquement sont des **feuilles** du graphe de drain, donc les omettre ne

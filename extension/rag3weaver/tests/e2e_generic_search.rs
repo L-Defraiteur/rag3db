@@ -17,10 +17,10 @@ use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::{
     BM25SearchNode, DataflowGraph, DataflowRuntime, ResolveParentNode,
-    SearchSourceNode, ServiceRegistry,
+    SearchSourceNode, ServiceRegistry, SparseSearchNode,
 };
 #[cfg(feature = "burn-embedder")]
-use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, SparseSearchNode, VectorSearchNode};
+use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, VectorSearchNode};
 use rag3weaver::reranker::Reranker;
 use rag3weaver::search::BM25Mode;
 use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
@@ -341,6 +341,90 @@ fn le_graphe_applique_la_consigne_de_coherence() {
     // Et la file a bien été vidée de ses entités par le nœud, pas par nous.
     let restant = cat_arc.lock().unwrap().pending_work().entities.len();
     assert_eq!(restant, 0, "les entités ont été posées par la consigne");
+}
+
+/// **Le troisième signal dit aussi pourquoi il se tait.**
+///
+/// `Catalog::search` expliquait un zéro dense *et* un zéro sparse par la dette
+/// d'embarquement ; sur ce chemin, seul `VectorSearchNode` le faisait. Un
+/// agent qui cherchait en sparse sur des chunks posés sans passe GPU concluait
+/// « ça n'existe pas ». C'est le demi-portage relevé par la réconciliation du
+/// 6 septembre 2026, et la raison pour laquelle `Catalog::search` doit devenir
+/// ce gabarit.
+///
+/// La coupe est faite par le verbe de lot qui dit sa portée ; le rattrapage
+/// solde la dette ; entre les deux, le nœud sparse rend zéro **en le disant**.
+#[test]
+#[ignore]
+fn le_noeud_sparse_explique_son_silence() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    use rag3weaver::embedder::MockSparseEmbedder;
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let sparse: Arc<dyn SparseEmbedder> = Arc::new(MockSparseEmbedder);
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_empty_config(4));
+    catalog.set_sparse_embedder(sparse.clone());
+    catalog.initialize().unwrap();
+    let mut product_config = make_product_config();
+    product_config.signals = SearchSignals::BM25 | SearchSignals::SPARSE;
+    catalog.register_entity("Product", product_config).unwrap();
+
+    // Posé et indexé en plein texte, sans passe GPU : la dette sparse est là.
+    let res = catalog
+        .ingest_entities_jusqu_a("Product", test_products(), D::RECHERCHE_TEXTE)
+        .expect("ingestion sans GPU");
+    assert_eq!(res.rendu_pret, Some(D::RECHERCHE_TEXTE));
+
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let cat_arc = Arc::new(Mutex::new(catalog));
+    // Le même montage que `build_services`, mais rejouable : le catalogue est
+    // interrogé deux fois, avant et après le rattrapage.
+    let services_de = |cat: &Arc<Mutex<Catalog>>| {
+        let mut services = ServiceRegistry::new();
+        cat.lock().unwrap().register_search_services(&mut services);
+        services.register("catalog", cat.clone());
+        services.register::<Arc<dyn Embedder>>("embedder", embedder.clone());
+        services.register::<Arc<dyn SparseEmbedder>>("sparse_embedder", sparse.clone());
+        services
+    };
+
+    let chercher = |services| {
+        let mut graph = DataflowGraph::new();
+        graph.add_node(Box::new(SearchSourceNode::new(
+            "source", "Product", "programming",
+            SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+        ))).unwrap();
+        graph.add_node(Box::new(SparseSearchNode::new("sparse", 10))).unwrap();
+        graph.connect("source", "query", "sparse", "query").unwrap();
+        let runtime = DataflowRuntime::with_services(100, services);
+        let output = runtime.execute(&mut graph).unwrap();
+        output
+            .get("sparse", "meta")
+            .and_then(|v| v.downcast::<SearchMeta>())
+            .cloned()
+            .expect("SparseSearchNode doit rendre une méta")
+    };
+
+    let meta = chercher(services_de(&cat_arc));
+    eprintln!("[sparse muet] sparse_count={} avertissements={:?}", meta.sparse_count, meta.warnings);
+    assert_eq!(meta.sparse_count, 0, "rien n'est embarqué en sparse : zéro, forcément");
+    assert!(
+        meta.warnings.iter().any(|a| a.contains("pas encore été embarqués")),
+        "le zéro doit dire qu'il est une dette, pas une absence : {:?}", meta.warnings
+    );
+
+    // Le rattrapage solde la dette ; le même nœud ne s'en plaint plus.
+    let repris = cat_arc.lock().unwrap().embarquer_le_retard(D::SPARSE, 512).expect("rattrapage");
+    assert!(repris > 0, "la dette doit être retrouvée dans la base");
+
+    let meta = chercher(services_de(&cat_arc));
+    eprintln!("[sparse rattrapé] sparse_count={} avertissements={:?}", meta.sparse_count, meta.warnings);
+    assert!(
+        meta.warnings.iter().all(|a| !a.contains("pas encore été embarqués")),
+        "plus rien de dû après le rattrapage : {:?}", meta.warnings
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1998,20 +1998,29 @@ impl Catalog {
     /// Trois façons de ne pas aboutir, et toutes se **disent** :
     /// le délai expire, une marque est périmée (processus mort), ou la lecture
     /// des marques échoue. Aucune ne se déguise en succès.
-    /// **Les services que tout graphe d'ingestion attend**, et rien de plus.
+    /// **Tout ce qu'un graphe d'ingestion peut lire**, à un seul endroit.
     ///
-    /// Extrait le 6 septembre 2026 de **trois** registres écrits à la main —
-    /// `ingest_entities`, `build_ingestion_graph`, `drain_resume` — au moment
-    /// où un quatrième appelant est apparu. Ajouter `plein_texte_natif` avait
-    /// demandé de l'écrire quatre fois : c'était la preuve du coût, en écrire
-    /// une cinquième aurait été la payer.
+    /// Quatre registres étaient écrits à la main — `ingest_entities`,
+    /// `build_ingestion_graph`, `drain_resume`, `embarquer_le_retard` — et ils
+    /// divergeaient : `ingest_entities` et `drain_resume` n'enregistraient ni
+    /// `kb_metadata`, ni `event_bus`, ni `run_topic`. Le matin du 6 septembre
+    /// 2026 j'avais extrait le noyau identique en laissant la divergence
+    /// « faute de savoir si elle est voulue ». L'après-midi, vérifié :
     ///
-    /// **Seul le noyau strictement identique aux trois est ici.** Ce qui
-    /// diverge reste chez chacun, sans arbitrage de ma part : `ingest_entities`
-    /// n'enregistre ni `kb_metadata` ni `event_bus`, et je ne sais pas si c'est
-    /// voulu. Unifier ce qu'on ne comprend pas, c'est changer le comportement
-    /// en silence — exactement ce qu'on reproche au reste.
-    fn enregistrer_les_services_communs(&self, services: &mut ServiceRegistry) {
+    /// - `kb_metadata` : aucun nœud du graphe d'`ingest_entities` ne le lit
+    ///   (ses lecteurs sont `KBChunkRecordNode`, `KBGatherNode`,
+    ///   `KBUpdateNode`, `KBChunkNode`, `DeleteRecordNode`, `UpdateRecordNode`,
+    ///   et aucun n'y est). L'absence était sans effet.
+    /// - `event_bus` : c'est le **runtime** qui le lit, pour publier
+    ///   `RunStarted` / `RunFinished` sur le sujet `catalog`. Les runs du drain
+    ///   étaient donc sur le bus, ceux d'`ingest_entities` et de `drain_resume`
+    ///   **non** — un graphe de trace voyait la moitié des ingestions. Ce n'était
+    ///   pas voulu, c'était oublié.
+    ///
+    /// Un seul registre, donc. Ce qui est propre à **un** graphe reste chez son
+    /// appelant, nommé : les résultats partagés du drain, le cache de
+    /// découpage (qu'on *prend* au catalogue, donc pas deux fois), `fail_node`.
+    fn enregistrer_les_services_d_ingestion(&self, services: &mut ServiceRegistry) {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
         services.register("scope", self.scope.clone());
@@ -2026,6 +2035,48 @@ impl Catalog {
             register_builtins(&mut tool_registry);
             services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
         }
+        services.register("embedding_dim", self.config.embedding_dim);
+        services.register("config", self.config.clone());
+        services.register("kb_metadata", self.kb_metadata.clone());
+        services.register("entity_configs", self.entity_configs.clone());
+        services.register("has_sparse",
+            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
+        services.register("has_dual", self.dual_embedder.is_some());
+        services.register("sparse_handles", self.sparse_handles.clone());
+        services.register("fts_handles", self.fts_handles.clone());
+        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
+        // sur le chemin natif l'index vit avec les données et il n'y a rien à
+        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
+        // que `has_sparse` et `has_dual` juste au-dessus.
+        services.register("plein_texte_natif", self.plein_texte_natif());
+        // Le plein texte servi par la base : présent **seulement** si c'est le
+        // chemin choisi. Passer par un service et non par le catalogue est
+        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
+        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
+        // c'est-à-dire un repli silencieux sur lucivy.
+        if self.plein_texte_natif() {
+            if let Some(b) = self.search_backend.clone() {
+                services.register("texte_natif", b);
+            }
+            // La cellule voyage avec le backend, pour la même raison : le nœud
+            // ne peut pas la demander au catalogue, dont le verrou est déjà
+            // tenu quand le graphe s'exécute. Absente = base à une cellule.
+            if self.multi_cell {
+                services.register("cellule", self.scope.clone());
+            }
+        }
+        if let Some(ref sparse_emb) = self.sparse_embedder {
+            services.register("sparse_embedder", sparse_emb.clone());
+        }
+        if let Some(ref dual_emb) = self.dual_embedder {
+            services.register("dual_embedder", dual_emb.clone());
+        }
+        // Le bus, pour ce que les nœuds émettent et pour les `RunStarted` /
+        // `RunFinished` que le runtime publie. Sur le sujet `catalog`, pas
+        // `dataflow` : un graphe de trace qui écrit ici ne doit pas se voir
+        // écrire.
+        services.register("event_bus", Arc::new(self.event_bus.in_scope(&self.scope)));
+        services.register("run_topic", crate::events::topic::CATALOG.to_string());
     }
 
     /// **La passe de rattrapage** : embarquer ce que la coupe a laissé dû.
@@ -2153,22 +2204,7 @@ impl Catalog {
             );
 
             let mut services = ServiceRegistry::new();
-            self.enregistrer_les_services_communs(&mut services);
-            services.register("embedding_dim", self.config.embedding_dim);
-            services.register("config", self.config.clone());
-            services.register("kb_metadata", self.kb_metadata.clone());
-            services.register("entity_configs", self.entity_configs.clone());
-            services.register("has_sparse",
-                self.sparse_embedder.is_some() || self.dual_embedder.is_some());
-            services.register("has_dual", self.dual_embedder.is_some());
-            services.register("sparse_handles", self.sparse_handles.clone());
-            services.register("plein_texte_natif", self.plein_texte_natif());
-            if let Some(ref sp) = self.sparse_embedder {
-                services.register("sparse_embedder", sp.clone());
-            }
-            if let Some(ref du) = self.dual_embedder {
-                services.register("dual_embedder", du.clone());
-            }
+                self.enregistrer_les_services_d_ingestion(&mut services);
 
             let runtime = DataflowRuntime::with_services(8, services);
             let mut ecoute = runtime.subscribe();
@@ -2322,9 +2358,10 @@ impl Catalog {
         if reste > 0 {
             warnings.push(format!(
                 "{reste} écriture(s) sont encore en file au moment de cette recherche \
-                 (relations, agrégats de base de connaissances, ou entités non posées) : \
-                 le résultat peut être incomplet. Vous avez exigé « {exige} » ; \
-                 exigez « tout » pour attendre le reste avant de chercher."
+                 (agrégats de base de connaissances, entités non posées, ou relations \
+                 vers une entité encore en file) : le résultat peut être incomplet. \
+                 Vous avez exigé « {exige} » ; exigez « tout » pour attendre le reste \
+                 avant de chercher."
             ));
         }
 
@@ -3328,44 +3365,8 @@ impl Catalog {
 
         // Build services
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_communs(&mut services);
-        services.register("embedding_dim", self.config.embedding_dim);
-        services.register("config", self.config.clone());
-        services.register("entity_configs", self.entity_configs.clone());
+        self.enregistrer_les_services_d_ingestion(&mut services);
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
-        services.register("has_sparse",
-            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
-        services.register("has_dual", self.dual_embedder.is_some());
-        services.register("sparse_handles", self.sparse_handles.clone());
-        services.register("fts_handles", self.fts_handles.clone());
-        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
-        // sur le chemin natif l'index vit avec les données et il n'y a rien à
-        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
-        // que `has_sparse` et `has_dual` juste au-dessus.
-        services.register("plein_texte_natif", self.plein_texte_natif());
-        // Le plein texte servi par la base : présent **seulement** si c'est le
-        // chemin choisi. Passer par un service et non par le catalogue est
-        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
-        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
-        // c'est-à-dire un repli silencieux sur lucivy.
-        if self.plein_texte_natif() {
-            if let Some(b) = self.search_backend.clone() {
-                services.register("texte_natif", b);
-            }
-            // La cellule voyage avec le backend, pour la même raison : le nœud
-            // ne peut pas la demander au catalogue, dont le verrou est déjà
-            // tenu quand le graphe s'exécute. Absente = base à une cellule.
-            if self.multi_cell {
-                services.register("cellule", self.scope.clone());
-            }
-        }
-
-        if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register("sparse_embedder", sparse_emb.clone());
-        }
-        if let Some(ref dual_emb) = self.dual_embedder {
-            services.register("dual_embedder", dual_emb.clone());
-        }
 
         // Execute
         let node_count = graph.nodes.len();
@@ -3489,16 +3490,19 @@ impl Catalog {
         self.check_initialized()?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
-        // Generate UUID (hashsafe if configured, otherwise random)
-        let uuid = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
-            let field_values: Vec<&str> = hashsafe_fields
-                .iter()
-                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
-                .collect();
-            hashsafe_uuid(entity_name, &field_values)
-        } else {
-            crate::refs::generate_temp_uuid()
-        };
+        // **L'identité est une propriété de l'entité, pas du verbe.** La même
+        // règle que `ingest_entities` : la clé déclarée (`hashsafe`) si elle
+        // existe, sinon le contenu. Deux verbes, une identité — une ligne
+        // posée par `create` puis réingérée par lot est la même ligne.
+        //
+        // Jusqu'au 6 septembre 2026, sans clé déclarée, `create` prenait la
+        // clé de corrélation du ref comme `_uuid` : blake3 d'un compteur qui
+        // repart de zéro à chaque processus. Deux runs se donnaient donc les
+        // **mêmes** `_uuid` dans le même ordre, et le second écrasait le
+        // premier. Ce qui n'a pas de clé déclarée et doit rester distinct à
+        // contenu égal — un achat sans numéro — déclare une clé ; le moteur
+        // ne peut pas la deviner, et il ne l'invente plus.
+        let uuid = Self::uuid_for(entity_name, &entity_def, &data);
 
         // Compute content hash
         let content_text = self.build_content_text(entity_name, &data);
@@ -4117,64 +4121,18 @@ impl Catalog {
 
         // ─── Services ──────────────────────────────────────────────
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_communs(&mut services);
-        services.register("embedding_dim", self.config.embedding_dim);
-        services.register("config", self.config.clone());
-        services.register("kb_metadata", self.kb_metadata.clone());
-        services.register("has_sparse",
-            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
-        services.register("has_dual", self.dual_embedder.is_some());
-        services.register("sparse_handles", self.sparse_handles.clone());
-        services.register("fts_handles", self.fts_handles.clone());
-        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
-        // sur le chemin natif l'index vit avec les données et il n'y a rien à
-        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
-        // que `has_sparse` et `has_dual` juste au-dessus.
-        services.register("plein_texte_natif", self.plein_texte_natif());
-        // Le plein texte servi par la base : présent **seulement** si c'est le
-        // chemin choisi. Passer par un service et non par le catalogue est
-        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
-        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
-        // c'est-à-dire un repli silencieux sur lucivy.
-        if self.plein_texte_natif() {
-            if let Some(b) = self.search_backend.clone() {
-                services.register("texte_natif", b);
-            }
-            // La cellule voyage avec le backend, pour la même raison : le nœud
-            // ne peut pas la demander au catalogue, dont le verrou est déjà
-            // tenu quand le graphe s'exécute. Absente = base à une cellule.
-            if self.multi_cell {
-                services.register("cellule", self.scope.clone());
-            }
-        }
+        self.enregistrer_les_services_d_ingestion(&mut services);
 
-        // Shared services for delete/update nodes
+        // Ce que seul ce graphe partage entre ses nœuds : les résultats des
+        // mises à jour et des suppressions, mesurés en aval.
         services.register("pending_aggregates", pending_aggregates);
         services.register("update_results", update_results.clone());
         services.register("chunk_counts", chunk_counts.clone());
         services.register("delete_results", delete_results.clone());
 
-        // Event bus for node-emitted lifecycle events + warnings
-        services.register("event_bus", Arc::new(self.event_bus.in_scope(&self.scope)));
-        // Les graphes internes du catalogue publient leurs runs sur `catalog`,
-        // pas sur `dataflow` : un graphe de trace qui écrit ici ne doit pas
-        // se voir écrire.
-        services.register("run_topic", crate::events::topic::CATALOG.to_string());
-
-        // entity_configs needed by DeleteRecordNode, UpdateRecordNode, ChunkRecordNode
-        if has_deletes || has_updates || needs_kb {
-            services.register("entity_configs", self.entity_configs.clone());
-        }
-
         // chunker_cache needed by KBChunkNode and ChunkRecordNode (rechunk)
         if needs_kb || has_updates {
             services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
-        }
-        if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register("sparse_embedder", sparse_emb.clone());
-        }
-        if let Some(ref dual_emb) = self.dual_embedder {
-            services.register("dual_embedder", dual_emb.clone());
         }
         if let Some(ref fail_node) = self.fail_node {
             services.register("fail_node", fail_node.clone());
@@ -4440,6 +4398,28 @@ impl Catalog {
             return FlushResult::default();
         }
 
+        // **Les relations dont les deux bouts seront posés partent avec la
+        // donnée** — c'est ce qui rend `Donnee` exact, et non « les entités,
+        // sans les liens ». Un bout est posable s'il est déjà un uuid, déjà
+        // résolu, ou le ref d'une entité de ce lot — reconnu par sa clé de
+        // corrélation, qui existe précisément pour ça. Une relation vers une
+        // entité qui reste en file attendrait un ref que rien ne résoudra dans
+        // ce graphe : elle reste en file avec lui, et le compte le dit.
+        let cles: HashSet<&str> = entities
+            .iter()
+            .map(|r| r.entity_ref.cle_de_correlation())
+            .collect();
+        let posable = |bout: &RefOrUuid| match bout {
+            RefOrUuid::Uuid(_) => true,
+            RefOrUuid::Ref(r) => r.uuid().is_ok() || cles.contains(r.cle_de_correlation()),
+        };
+        let (relations, restent): (Vec<RelationRecord>, Vec<RelationRecord>) =
+            std::mem::take(&mut self.pending.relations)
+                .into_iter()
+                .partition(|rel| posable(&rel.from) && posable(&rel.to));
+        drop(cles);
+        self.pending.relations = restent;
+
         // Le quatrième point d'entrée, enfin.
         let noms: Vec<String> = {
             let mut n: Vec<String> = entities.iter().map(|r| r.entity_name.clone()).collect();
@@ -4449,11 +4429,19 @@ impl Catalog {
         };
         self.open_fts_handles_for(&noms);
 
-        let op_count = entities.len();
+        let op_count = entities.len() + relations.len();
         let mut graph = DataflowGraph::new();
         graph.add_node(Box::new(InsertRecordNode::new("inserts"))).unwrap();
         graph.set_initial_input("inserts", "entities",
             PortValue::new(BatchPayload::new(PortType::Entities, entities)));
+        if !relations.is_empty() {
+            // Même câblage que le drain : les liens partent quand les lignes
+            // sont posées, et pas avant.
+            graph.add_node(Box::new(LinkRecordNode::new("links"))).unwrap();
+            graph.set_initial_input("links", "relations",
+                PortValue::new(BatchPayload::new(PortType::Relations, relations)));
+            graph.connect("inserts", "done", "links", "trigger").unwrap();
+        }
 
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
@@ -4479,6 +4467,11 @@ impl Catalog {
                     processed: op_count,
                     failed: 0,
                     warnings: avertissements,
+                    // La donnée, liens compris. Le plein texte des entités
+                    // simples arrive avec elle par construction, mais celui
+                    // des lignes d'index KB attend l'agrégat : on ne l'annonce
+                    // pas — conservateur, jamais menteur.
+                    rendu_pret: Some(crate::disponibilite::Disponibilites::DONNEE),
                     ..Default::default()
                 }
             }
@@ -4568,47 +4561,11 @@ impl Catalog {
 
         // Rebuild the ServiceRegistry (same as build_ingestion_graph)
         let mut services = ServiceRegistry::new();
-        self.enregistrer_les_services_communs(&mut services);
-        services.register("embedding_dim", self.config.embedding_dim);
-        services.register("config", self.config.clone());
-        services.register("kb_metadata", self.kb_metadata.clone());
-        services.register("has_sparse",
-            self.sparse_embedder.is_some() || self.dual_embedder.is_some());
-        services.register("has_dual", self.dual_embedder.is_some());
-        services.register("sparse_handles", self.sparse_handles.clone());
-        services.register("fts_handles", self.fts_handles.clone());
-        // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
-        // sur le chemin natif l'index vit avec les données et il n'y a rien à
-        // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
-        // que `has_sparse` et `has_dual` juste au-dessus.
-        services.register("plein_texte_natif", self.plein_texte_natif());
-        // Le plein texte servi par la base : présent **seulement** si c'est le
-        // chemin choisi. Passer par un service et non par le catalogue est
-        // nécessaire, pas cosmétique — `search()` tient déjà son verrou quand
-        // le graphe s'exécute, et un `lock()` depuis un nœud rendrait `None`,
-        // c'est-à-dire un repli silencieux sur lucivy.
-        if self.plein_texte_natif() {
-            if let Some(b) = self.search_backend.clone() {
-                services.register("texte_natif", b);
-            }
-            // La cellule voyage avec le backend, pour la même raison : le nœud
-            // ne peut pas la demander au catalogue, dont le verrou est déjà
-            // tenu quand le graphe s'exécute. Absente = base à une cellule.
-            if self.multi_cell {
-                services.register("cellule", self.scope.clone());
-            }
-        }
+        self.enregistrer_les_services_d_ingestion(&mut services);
 
         // Chunker cache: rebuild for KB nodes
         self.warm_chunker_cache();
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
-
-        if let Some(ref sparse_emb) = self.sparse_embedder {
-            services.register("sparse_embedder", sparse_emb.clone());
-        }
-        if let Some(ref dual_emb) = self.dual_embedder {
-            services.register("dual_embedder", dual_emb.clone());
-        }
         if let Some(ref fail_node) = self.fail_node {
             services.register("fail_node", fail_node.clone());
         }
@@ -6636,17 +6593,17 @@ mod tests {
         let data = make_doc_data("Partial", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
-        // Flush prio <= 1.0: 2 InsertOps (entity + {KB}_Index)
+        // La donnée : l'entité, sa ligne d'index KB, **et le lien entre les
+        // deux** — depuis le 6 septembre 2026, `Donnee` est exact.
         let result = catalog.flush_insertions();
-        assert_eq!(result.processed, 2);
+        assert_eq!(result.processed, 3);
         assert!(entity_ref.is_ready());
 
-        // LinkOp (prio 2.0) + AggregateOp (prio 2.5) still pending
+        // Reste l'agrégat : du dérivé.
         assert!(catalog.has_pending());
 
-        // Drain the rest: 1 link + 1 aggregate
         let result = catalog.drain();
-        assert_eq!(result.processed, 2);
+        assert_eq!(result.processed, 1);
         assert!(!catalog.has_pending());
     }
 
@@ -6909,6 +6866,86 @@ mod tests {
         assert_eq!(w.len(), 1);
         assert!(w[0].contains("data"), "l'exigence doit être nommée : {w:?}");
         assert!(w[0].contains("exigez « tout »"), "et la sortie aussi : {w:?}");
+    }
+
+    /// **`Donnee` est exact depuis le 6 septembre après-midi** : les relations
+    /// dont les deux bouts sont dans le lot partent avec la donnée. Ici,
+    /// `create` sur un `Document` enfile l'entité, sa ligne d'index KB, le lien
+    /// entre les deux et l'agrégat ; `flush_insertions` pose les trois premiers
+    /// et laisse le quatrième — un agrégat *est* du dérivé.
+    #[test]
+    fn flush_insertions_pose_les_relations_entre_ce_qu_il_pose() {
+        use crate::disponibilite::Disponibilites as D;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("Lié", "corps")).unwrap();
+        let avant = catalog.pending_work();
+        assert_eq!(avant.entities.len(), 2, "l'entité et sa ligne d'index");
+        assert_eq!(avant.relations.len(), 1, "le lien entre les deux");
+        assert_eq!(avant.aggregates.len(), 1);
+
+        let res = catalog.flush_insertions();
+        assert_eq!(res.processed, 3, "deux entités et un lien : {res:?}");
+        assert_eq!(res.rendu_pret, Some(D::DONNEE));
+        let apres = catalog.pending_work();
+        assert!(apres.entities.is_empty());
+        assert!(apres.relations.is_empty(), "le lien est parti avec la donnée");
+        assert_eq!(apres.aggregates.len(), 1, "l'agrégat reste : c'est du dérivé");
+    }
+
+    /// **Une relation vers une entité encore en file reste en file avec elle.**
+    /// Sans ce tri, `LinkRecordNode` attendrait un ref que rien ne résout
+    /// dans son graphe — trente secondes puis une erreur.
+    #[test]
+    fn flush_insertions_laisse_le_lien_dont_un_bout_n_est_pas_pose() {
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        let a = catalog.create("Document", make_doc_data("A", "corps")).unwrap();
+        // Un ref d'entité qui n'est dans aucune file : jamais résolu.
+        let (fantome, _resolveur) = crate::refs::EntityRef::new("Document");
+        catalog
+            .link("REFERENCES", a, fantome, BTreeMap::new())
+            .unwrap();
+
+        let relations_avant = catalog.pending_work().relations.len();
+        let res = catalog.flush_insertions();
+        assert!(res.failed == 0, "{res:?}");
+        let apres = catalog.pending_work();
+        assert!(apres.entities.is_empty());
+        assert_eq!(
+            apres.relations.len(),
+            relations_avant - 1,
+            "le lien vers le fantôme reste, celui de la ligne d'index part : {:?}",
+            apres.relations.iter().map(|r| r.rel_name.as_str()).collect::<Vec<_>>()
+        );
+    }
+
+    /// **L'identité est une propriété de l'entité, pas du verbe.** Sans clé
+    /// déclarée, `create` dérive l'`_uuid` du contenu, comme `ingest_entities`.
+    /// Avant, il prenait la clé de corrélation du ref — blake3 d'un compteur
+    /// qui repart de zéro à chaque processus : deux runs se donnaient les mêmes
+    /// `_uuid` dans le même ordre.
+    #[test]
+    fn create_derive_l_identite_du_contenu_comme_le_lot() {
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        // La fiche de test déclare une clé ; c'est le cas **sans** clé qu'on
+        // éprouve, celui où le compteur servait d'identité.
+        catalog.config.entities.get_mut("Document").unwrap().hashsafe = None;
+        let def = catalog.config.entities["Document"].clone();
+
+        let data = make_doc_data("Même", "contenu");
+        catalog.create("Document", data.clone()).unwrap();
+        let pose = catalog.pending_work().entities[0].data["_uuid"].as_str().unwrap().to_string();
+        assert_eq!(pose, Catalog::uuid_for("Document", &def, &data));
+
+        // Et la clé de corrélation, elle, n'est plus l'identité : deux refs
+        // pour un même contenu ont deux clés, un seul uuid.
+        let (r1, _) = crate::refs::EntityRef::new("Document");
+        let (r2, _) = crate::refs::EntityRef::new("Document");
+        assert_ne!(r1.cle_de_correlation(), r2.cle_de_correlation());
+        assert_ne!(r1.cle_de_correlation(), pose);
     }
 
     /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc

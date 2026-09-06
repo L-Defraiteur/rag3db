@@ -344,7 +344,7 @@ impl EntityRecord {
             data: self.data.clone(),
             ref_state: CheckpointRefState {
                 type_name: self.entity_ref.entity().to_string(),
-                temp_uuid: self.entity_ref.temp_uuid().to_string(),
+                temp_uuid: self.entity_ref.cle_de_correlation().to_string(),
                 status,
             },
         }
@@ -390,11 +390,11 @@ impl RelationRecord {
     pub fn to_checkpoint(&self) -> CheckpointRelationRecord {
         let (from_uuid, from_temp_uuid) = match &self.from {
             RefOrUuid::Uuid(s) => (Some(s.clone()), None),
-            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.temp_uuid().to_string())),
+            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.cle_de_correlation().to_string())),
         };
         let (to_uuid, to_temp_uuid) = match &self.to {
             RefOrUuid::Uuid(s) => (Some(s.clone()), None),
-            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.temp_uuid().to_string())),
+            RefOrUuid::Ref(r) => (r.uuid().ok(), Some(r.cle_de_correlation().to_string())),
         };
         let status = match self.relation_ref.resolved() {
             Ok(r) => CheckpointRefStatus::ReadyRel {
@@ -413,7 +413,7 @@ impl RelationRecord {
             properties: self.properties.clone(),
             ref_state: CheckpointRefState {
                 type_name: self.relation_ref.relation().to_string(),
-                temp_uuid: self.relation_ref.temp_uuid().to_string(),
+                temp_uuid: self.relation_ref.cle_de_correlation().to_string(),
                 status,
             },
         }

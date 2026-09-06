@@ -981,7 +981,12 @@ impl NodeFactory for SparseSearchNodeFactory {
             node_type: "SparseSearchNode",
             description: "Sparse vector search (SPLADE/BGE-M3)",
             inputs: vec![query_in()],
-            outputs: vec![results_out()],
+            // `meta` depuis le 6 septembre 2026 : c'est le seul canal qui
+            // remonte jusqu'à la fiche rendue à un agent. Sans lui, un zéro
+            // sparse sur des chunks non embarqués ne pouvait pas dire qu'il
+            // était une dette et non une absence — le vecteur le disait, le
+            // sparse non : le demi-portage que `Catalog::search` n'avait pas.
+            outputs: vec![results_out(), meta_out()],
             config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }

@@ -19,13 +19,39 @@ use tokio::sync::watch;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Generate a unique temp UUID from an atomic counter + blake3 hash.
+/// Le sel de ce processus, tiré une fois.
 ///
-/// Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (32 hex chars + 4 dashes).
-/// Guaranteed unique within a process (monotonic counter).
+/// Sans lui, la clé ne dépendait que du compteur : **chaque processus
+/// produisait la même suite** — blake3(0), blake3(1), … — et deux runs du même
+/// programme se donnaient les mêmes clés. Pour une clé de corrélation, ça
+/// mélange les refs d'une reprise après checkpoint avec ceux du run qui
+/// reprend ; pour ce qui servait d'identité de ligne (voir `Catalog::create`
+/// jusqu'au 6 septembre 2026), c'était une collision d'`_uuid` entre runs.
+///
+/// `RandomState` est semé par le système à chaque processus : c'est de
+/// l'aléa d'OS sans dépendance de plus.
+static SEL: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
+fn sel_du_processus() -> u64 {
+    *SEL.get_or_init(|| {
+        use std::hash::{BuildHasher, RandomState};
+        RandomState::new().hash_one((std::process::id(), std::time::SystemTime::now()))
+    })
+}
+
+/// Génère une **clé de corrélation** unique : sel du processus + compteur,
+/// hachés par blake3, au format d'un UUID.
+///
+/// Format : `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Unique dans le processus
+/// (compteur monotone) **et entre processus** (le sel). Ce n'est pas une
+/// identité de ligne : pour ça, `Catalog::uuid_for`, qui dérive l'identité de
+/// l'entité elle-même — sa clé déclarée, ou son contenu.
 pub fn generate_temp_uuid() -> String {
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let hash = blake3::hash(&count.to_le_bytes());
+    let mut graine = [0u8; 16];
+    graine[..8].copy_from_slice(&sel_du_processus().to_le_bytes());
+    graine[8..].copy_from_slice(&count.to_le_bytes());
+    let hash = blake3::hash(&graine);
     let b = hash.as_bytes();
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
@@ -121,13 +147,14 @@ impl EntityRef {
     /// checkpoint ou une annulation retrouve le même ref. C'est pour cela
     /// qu'elle survit à la résolution.
     ///
-    /// Elle n'a pas été renommée : son nom voyage dans des champs sérialisés
-    /// (`RecordRefState.temp_uuid`, `from_temp_uuid`, `to_temp_uuid`), et un
-    /// renommage traverserait des checkpoints déjà écrits. Le nom reste, le
-    /// contrat est ici.
+    /// Le **champ** garde son nom, `temp_uuid` : il voyage dans des états
+    /// sérialisés (`RecordRefState.temp_uuid`, `from_temp_uuid`,
+    /// `to_temp_uuid`), et le renommer traverserait des checkpoints déjà
+    /// écrits. La **méthode**, elle, ne voyage nulle part : elle porte le nom
+    /// de ce qu'elle rend.
     ///
     /// **Pour l'identité, et seulement elle : [`Self::uuid`].**
-    pub fn temp_uuid(&self) -> &str {
+    pub fn cle_de_correlation(&self) -> &str {
         &self.temp_uuid
     }
 
@@ -294,8 +321,9 @@ impl RelationRef {
         &self.relation
     }
 
-    /// Temp UUID assigned at creation.
-    pub fn temp_uuid(&self) -> &str {
+    /// Clé de corrélation, même contrat que [`EntityRef::cle_de_correlation`] :
+    /// pas une identité, et le champ sérialisé garde son nom.
+    pub fn cle_de_correlation(&self) -> &str {
         &self.temp_uuid
     }
 
@@ -449,7 +477,7 @@ mod tests {
         assert_eq!(r.entity(), "Document");
         assert!(!r.is_ready());
         assert!(matches!(r.uuid(), Err(RefError::Pending)));
-        assert!(!r.temp_uuid().is_empty());
+        assert!(!r.cle_de_correlation().is_empty());
     }
 
     #[test]
@@ -485,9 +513,9 @@ mod tests {
     #[test]
     fn entity_ref_temp_uuid_preserved_after_resolve() {
         let (r, resolver) = EntityRef::new("Document");
-        let temp = r.temp_uuid().to_string();
+        let temp = r.cle_de_correlation().to_string();
         resolver.resolve("final-uuid".to_string());
-        assert_eq!(r.temp_uuid(), temp);
+        assert_eq!(r.cle_de_correlation(), temp);
         assert_eq!(r.uuid().unwrap(), "final-uuid");
     }
 
