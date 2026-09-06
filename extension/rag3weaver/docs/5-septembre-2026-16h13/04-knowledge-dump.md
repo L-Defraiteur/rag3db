@@ -70,6 +70,28 @@ binaires de test** qu'ils ont lancés. Il faut viser `target/debug/deps/e2e_*`
 aussi. Et toujours la lettre entre crochets — `pkill -f 'nom[x]'` — sinon on tue
 son propre shell.
 
+## 3 bis. Ce qu'une ingestion coûte — la mesure de référence
+
+Il n'y en avait aucune d'écrite. Prise le **6 septembre 2026 à 03 h 22**, régime
+`confort`, sur notre propre source :
+
+```
+95 fichiers · 4 438 scopes · 46 698 relations · 9 226 symboles · 0 perdu
+ingestion : 1 911 366 ms  (31 min 51 s)
+  dont entities_ms  1 895 158   (99,1 %)
+       symbols_ms      12 287   ( 0,6 %)
+       relations_ms      3 920   ( 0,2 %)
+GPU card0 : moyenne 31 %, p90 100 %, 3 024 rafales, la plus longue 1 180 ms
+pic RAM 25 % · pic swap 9,6 Go
+```
+
+**Ce que ce partage dit :** les relations et les symboles ne coûtent rien. La
+totalité du temps est dans `entities_ms`, c'est-à-dire découpage + embarquement.
+Toute optimisation qui vise autre chose vise 0,8 % du problème. Et le rapport
+cyclique de `confort` (60 %) est dans ce chiffre : c'est un coût **choisi**.
+
+À rejouer avec `./run_e2e.sh --test e2e_charge_ingestion`, qui met ~32 minutes.
+
 ## 4. Le PostgreSQL de test
 
 ```sh

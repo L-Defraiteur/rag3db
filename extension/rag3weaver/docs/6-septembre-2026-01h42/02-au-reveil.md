@@ -5,10 +5,14 @@ attend ta décision, et ce qu'il faut regarder en premier.
 
 ## En trois lignes
 
-Neuf commits. Le plus important n'était pas sur ma liste : **le chemin par
+Treize commits. Le plus important n'était pas sur ma liste : **le chemin par
 défaut de la lecture n'indexait rien en plein texte**. Tout le reste est du même
 genre — des choses qui ne cassaient pas, qui ne levaient aucune erreur, et qui
 rendaient faux.
+
+Et trois fois je me suis corrigée moi-même dans la nuit. C'est noté avec le
+mécanisme à chaque fois, pas seulement la conclusion : une correction sans son
+mécanisme se refait.
 
 ## À regarder en premier
 
@@ -88,19 +92,51 @@ Je n'y ai pas touché — chacun force un choix qui t'appartient.
 `open_fts_handles_for` à chaque recherche `Eventual` avec du travail en file, et
 cette fonction balaie **toutes** les KB en posant du DDL — idempotent, mais pas
 gratuit. Le balayage des KB est justifié (`create()` enfile aussi des lignes
-`{KB}_Index`, qui ont besoin de leur handle), donc je ne l'ai pas réduit. Si le
-test de charge s'est allongé, c'est là qu'il faut regarder ; une mémoïsation des
-index déjà posés est possible, mais elle peut masquer un index tombé, donc elle
-se décide.
+`{KB}_Index`, qui ont besoin de leur handle), donc je ne l'ai pas réduit. Une
+mémoïsation des index déjà posés est possible, mais elle peut masquer un index
+tombé, donc elle se décide.
 
-**Le régime.** `confort` mettait vingt minutes de mur pour trois minutes de CPU
-sur un seul test — c'est son travail, il existait pour la contrainte que tu as
-levée. Tout a été relancé en `plein`. C'est noté dans le knowledge dump du 5.
+**Vérifié depuis :** le test de charge passe par `ingest_code` → `drain`, pas par
+`flush_insertions` — ma correction ne le traverse donc pas, et ses 32 minutes ne
+lui doivent rien. Le coût reste à mesurer là où il tombe vraiment : une recherche
+`Eventual` répétée avec du travail en file.
+
+**Le régime — et ma bévue dessus.** J'ai d'abord conclu que `confort` ne servait
+qu'à ménager ton poste, donc que ta consigne levée autorisait `plein`. La passe
+est morte par manque de mémoire ; j'ai corrigé la note en accusant le régime ;
+puis la passe en `confort` est morte au même endroit. **Ce n'était pas le
+régime.** Le vrai mécanisme est le cgroup à 16 Go, décrit plus bas.
+
+Ce que ta consigne levée autorisait, c'était de **lancer** la passe sans
+demander. Pas de la lancer autrement. Les deux se ressemblaient assez pour que je
+confonde, et il a fallu deux morts pour les séparer.
 
 ## L'état des tests
 
 - **924 tests de bibliothèque** verts, dont **huit neufs** cette nuit.
-- La passe e2e complète a été relancée en `plein` avec l'ensemble des commits.
-  Son verdict est en fin de ce document, ajouté quand elle a rendu.
-- Un test e2e neuf, `une_recherche_eventual_indexe_ce_qu_elle_pose`, tient le
-  chemin qui manquait : la ligne existe **et** on la retrouve.
+- **La suite e2e : 301 tests verts, zéro échec**, PostgreSQL compris (17), le
+  test de charge compris (4 438 scopes, 46 698 relations, rien de perdu).
+- Trois tests e2e neufs :
+  `une_recherche_eventual_indexe_ce_qu_elle_pose` (la ligne existe **et** on la
+  retrouve), `le_graphe_applique_la_consigne_de_coherence` (le chemin des agents
+  applique enfin la consigne — 1 résultat depuis une file jamais vidée, contre
+  zéro avant), et l'invariant de `partial`.
+
+### La passe complète ne tient pas en une seule tâche de fond
+
+Deux tentatives tuées par le veilleur mémoire du harnais, la première en
+`plein`, la seconde en `confort` — donc **ce n'était pas le régime**, contrairement
+à ce que j'ai d'abord écrit. Le script confine délibérément la passe dans un
+cgroup à `MemoryHigh=16G`, pour que ce soit *son* cache qui soit récupéré plutôt
+que les pages de tes applications ; la passe entière dépasse ce plafond, part en
+récupération — 9,6 Go de swap mesurés — et ralentit jusqu'à se faire tuer.
+
+**Suite par suite, tout passe et va vite.** C'est la façon de faire tant que ce
+plafond vaut 16 Go ; `RAG3WEAVER_BUILD_MEMORY_HIGH` le change si tu préfères
+l'autre compromis.
+
+### Une mesure de référence, enfin posée
+
+`e2e_charge_ingestion` n'en avait aucune d'écrite. Elle est dans le knowledge
+dump du 5 (§3 bis). Le partage compte plus que le total : **99,1 % du temps est
+dans `entities_ms`** — découpage et embarquement. Les relations coûtent 0,2 %.
