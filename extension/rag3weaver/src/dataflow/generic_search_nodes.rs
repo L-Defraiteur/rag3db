@@ -138,8 +138,9 @@ impl Node for SearchSourceNode {
         let (reste_en_file, partiel, mut avertissements) = {
             let mut cat = catalog.lock().unwrap();
             let mut w: Vec<String> = Vec::new();
+            let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
             let (reste, partiel) =
-                cat.appliquer_la_consigne(options.consistency, options.timeout_ms, &mut w);
+                cat.appliquer_la_consigne(exige, attendre_ailleurs, options.timeout_ms, &mut w);
             (reste, partiel, w)
         };
         for a in &avertissements {

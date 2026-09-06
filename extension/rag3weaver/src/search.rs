@@ -35,6 +35,28 @@ impl Default for Consistency {
     }
 }
 
+impl Consistency {
+    /// **Trois raccourcis nommés vers l'ensemble des disponibilités.**
+    ///
+    /// `Consistency` reste la surface simple — trois mots qu'on retient — mais
+    /// il n'y a plus qu'une seule représentation de ce qu'on exige, et c'est
+    /// [`Disponibilites`]. Deux façons de dire la même chose dans un même état
+    /// finissent toujours par diverger ; ici l'énumération ne porte pas d'état,
+    /// elle le **traduit**.
+    ///
+    /// Rend `(ce qui doit être prêt, faut-il attendre les autres processus)`.
+    /// La seconde question est indépendante de la première : on ne peut pas
+    /// drainer la file d'un autre processus, seulement attendre la sienne.
+    pub fn en_disponibilites(self) -> (crate::disponibilite::Disponibilites, bool) {
+        use crate::disponibilite::Disponibilites as D;
+        match self {
+            Self::Immediate => (D::AUCUNE, false),
+            Self::Eventual => (D::DONNEE, false),
+            Self::Strict => (D::TOUT, true),
+        }
+    }
+}
+
 /// Fusion strategy for combining search signals.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -344,12 +366,52 @@ impl Default for RerankOptions {
     }
 }
 
+impl SearchOptions {
+    /// **Ce que cette recherche exige, et faut-il attendre les autres.**
+    ///
+    /// L'unique endroit qui arbitre entre le raccourci nommé (`consistency`) et
+    /// la déclaration précise (`exige`, `attendre_les_autres`). Le précis
+    /// l'emporte sur le grossier, champ par champ — on peut donc affiner les
+    /// disponibilités sans renoncer au défaut d'attente, et l'inverse.
+    ///
+    /// Deux façons de dire la même chose ne divergent que si deux endroits les
+    /// lisent. Celui-ci est le seul.
+    pub fn ce_qui_doit_etre_pret(&self) -> (crate::disponibilite::Disponibilites, bool) {
+        let (par_defaut, attente_par_defaut) = self.consistency.en_disponibilites();
+        (
+            self.exige.unwrap_or(par_defaut),
+            self.attendre_les_autres.unwrap_or(attente_par_defaut),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchOptions {
     pub limit: usize,
     pub offset: usize,
+    /// Le raccourci nommé — trois mots qu'on retient. Traduit en
+    /// [`Disponibilites`] par [`Consistency::en_disponibilites`].
     pub consistency: Consistency,
+    /// **Ce qu'on exige d'être prêt, nommément.** Quand il est posé, il
+    /// l'emporte sur `consistency` — même précédence que `filter_condition`
+    /// face à `filters` : ce que l'appelant a dit précisément gagne sur ce
+    /// qu'il a dit grossièrement.
+    ///
+    /// `None` — le défaut — laisse `consistency` décider, donc rien ne change
+    /// pour qui ne s'en sert pas.
+    ///
+    /// Voir [`crate::disponibilite`] pour ce que le moteur sait tenir
+    /// exactement et où il approxime, dans le sens sûr.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exige: Option<crate::disponibilite::Disponibilites>,
+    /// Attendre les écritures **des autres processus** avant de chercher.
+    ///
+    /// Question indépendante de `exige` : on ne peut pas vider la file d'un
+    /// autre processus, seulement attendre qu'il la vide. `None` laisse
+    /// `consistency` décider (seul `Strict` attend).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attendre_les_autres: Option<bool>,
     pub timeout_ms: u64,
     pub filters: HashMap<String, FilterValue>,
     /// Structured filter condition (takes priority over `filters` HashMap).
@@ -385,6 +447,8 @@ impl Default for SearchOptions {
             limit: 10,
             offset: 0,
             consistency: Consistency::default(),
+            exige: None,
+            attendre_les_autres: None,
             timeout_ms: 5000,
             filters: HashMap::new(),
             filter_condition: None,
@@ -3148,6 +3212,49 @@ fn explore_relation_batch(
 
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests_disponibilites {
+    use super::*;
+    use crate::disponibilite::Disponibilites as D;
+
+    /// Sans rien de précis, le raccourci décide — donc rien ne change pour qui
+    /// ne se sert pas de la nouvelle surface.
+    #[test]
+    fn le_raccourci_decide_quand_rien_de_precis_n_est_pose() {
+        let o = SearchOptions::default();
+        assert_eq!(o.consistency, Consistency::Eventual, "le défaut du produit");
+        assert_eq!(o.ce_qui_doit_etre_pret(), (D::DONNEE, false));
+
+        let strict = SearchOptions { consistency: Consistency::Strict, ..Default::default() };
+        assert_eq!(strict.ce_qui_doit_etre_pret(), (D::TOUT, true));
+
+        let immediat = SearchOptions { consistency: Consistency::Immediate, ..Default::default() };
+        assert_eq!(immediat.ce_qui_doit_etre_pret(), (D::AUCUNE, false));
+    }
+
+    /// Le précis l'emporte sur le grossier, **champ par champ** : on peut
+    /// affiner les disponibilités sans renoncer au défaut d'attente.
+    #[test]
+    fn le_precis_l_emporte_champ_par_champ() {
+        let o = SearchOptions {
+            consistency: Consistency::Strict,
+            exige: Some(D::RECHERCHE_TEXTE),
+            ..Default::default()
+        };
+        // `exige` gagne sur les quatre de Strict…
+        assert_eq!(o.ce_qui_doit_etre_pret().0, D::RECHERCHE_TEXTE);
+        // …mais l'attente des autres processus reste celle de Strict.
+        assert!(o.ce_qui_doit_etre_pret().1);
+
+        let o = SearchOptions {
+            consistency: Consistency::Eventual,
+            attendre_les_autres: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(o.ce_qui_doit_etre_pret(), (D::DONNEE, true));
+    }
+}
 
 #[cfg(test)]
 mod tests {

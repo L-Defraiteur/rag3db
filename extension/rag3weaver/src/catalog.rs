@@ -2005,35 +2005,37 @@ impl Catalog {
     /// qu'un `partial: true` dans la méta ne s'affiche nulle part.
     pub fn appliquer_la_consigne(
         &mut self,
-        consistency: search::Consistency,
+        exige: crate::disponibilite::Disponibilites,
+        attendre_les_autres: bool,
         timeout_ms: u64,
         warnings: &mut Vec<String>,
     ) -> (usize, bool) {
-        // Les écritures des **autres** processus ont-elles été attendues avec
-        // succès ? Faux seulement en `Strict`, et seulement si l'attente a
-        // échoué — marques illisibles, marques périmées, ou délai dépassé.
+        // **Ce que le moteur sait tenir, et où il approxime.** Voir la table en
+        // tête de `disponibilite` : la garantie est conservatrice — on ne dit
+        // jamais « prêt » quand ça ne l'est pas — mais on attend parfois plus
+        // que demandé, parce que le graphe de drain ne sait pas encore
+        // s'arrêter par étage.
+        if exige.exige_un_derive() {
+            // Un seul drain pour `textsearch`, `sparse` ou `dense` : ils
+            // vivent dans le même graphe. Le jour où il saura s'arrêter après
+            // `chunk_insert`, c'est **ici** que la distinction se fera, et
+            // nulle part ailleurs.
+            self.drain();
+        } else if exige.donnee() && self.has_pending() {
+            // `flush_insertions` ne pose que les entités : relations et
+            // agrégats restent en file, et c'est ce reste que le compte
+            // ci-dessous va voir.
+            self.flush_insertions();
+        }
+
+        // Les écritures des **autres** processus. Question indépendante de la
+        // précédente : on ne peut pas vider la file d'un autre processus, on
+        // peut seulement attendre qu'il la vide — et **dire** quand on n'y
+        // arrive pas. Son verdict était calculé puis jeté : une attente qui
+        // expirait rendait un résultat annoncé complet.
         let mut ecritures_ailleurs_atteintes = true;
-        match consistency {
-            search::Consistency::Strict => {
-                // Notre file d'abord — c'est tout ce que `Strict` savait faire.
-                self.drain();
-                // Puis celle des autres. Un lecteur d'un autre processus ne
-                // peut pas la vider ; il peut attendre qu'elle le soit, et
-                // **dire** quand il n'y arrive pas. Son verdict comptait pour
-                // les avertissements mais pas pour `partial` : une attente qui
-                // expirait rendait donc un résultat annoncé complet.
-                ecritures_ailleurs_atteintes =
-                    self.attendre_les_ecritures(timeout_ms, warnings);
-            }
-            search::Consistency::Eventual => {
-                // `flush_insertions` ne pose que les entités : relations et
-                // agrégats restent en file, et c'est ce reste que le compte
-                // ci-dessous va voir.
-                if self.has_pending() {
-                    self.flush_insertions();
-                }
-            }
-            search::Consistency::Immediate => {}
+        if attendre_les_autres {
+            ecritures_ailleurs_atteintes = self.attendre_les_ecritures(timeout_ms, warnings);
         }
 
         let reste = self.pending.total_count();
@@ -2043,8 +2045,8 @@ impl Catalog {
             warnings.push(format!(
                 "{reste} écriture(s) sont encore en file au moment de cette recherche \
                  (relations, agrégats de base de connaissances, ou entités non posées) : \
-                 le résultat peut être incomplet. Demandez « consistency: strict » \
-                 pour les attendre avant de chercher."
+                 le résultat peut être incomplet. Vous avez exigé « {exige} » ; \
+                 exigez « tout » pour attendre le reste avant de chercher."
             ));
         }
 
@@ -4648,8 +4650,10 @@ impl Catalog {
 
         // Consistency — voir `appliquer_la_consigne`, l'unique écrivain.
         let mut strict_warnings: Vec<String> = Vec::new();
+        let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
         let (pending_count, partiel) = self.appliquer_la_consigne(
-            options.consistency,
+            exige,
+            attendre_ailleurs,
             options.timeout_ms,
             &mut strict_warnings,
         );
@@ -6463,18 +6467,85 @@ mod tests {
             .create("Document", make_doc_data("Reste", "corps"))
             .unwrap();
 
+        // Par le raccourci nommé, comme le fait `Catalog::search` : c'est lui
+        // qu'on veut éprouver, la traduction comprise.
+        let (exige, attendre_ailleurs) = Consistency::Eventual.en_disponibilites();
+        assert_eq!(exige, crate::disponibilite::Disponibilites::DONNEE);
+        assert!(!attendre_ailleurs, "Eventual n'attend pas les autres processus");
+
         let mut avertissements: Vec<String> = Vec::new();
-        let (reste, partiel) =
-            catalog.appliquer_la_consigne(Consistency::Eventual, 5_000, &mut avertissements);
+        let (reste, partiel) = catalog.appliquer_la_consigne(
+            exige,
+            attendre_ailleurs,
+            5_000,
+            &mut avertissements,
+        );
 
         assert!(reste > 0, "relations et agrégats restent après flush_insertions");
         assert!(partiel);
         assert_eq!(avertissements.len(), 1);
         assert!(
-            avertissements[0].contains("consistency: strict"),
+            avertissements[0].contains("exigez « tout »"),
             "l'avertissement doit dire comment attendre, pas seulement qu'il reste \
              du travail : {avertissements:?}"
         );
+    }
+
+    /// **Ce que l'ensemble change vraiment**, et pas seulement dans les types.
+    ///
+    /// `data` seul pose les entités et laisse le reste ; dès qu'un dérivé est
+    /// exigé — ici le plein texte — le graphe entier est drainé. C'est
+    /// l'approximation conservatrice décrite en tête de `disponibilite` : on
+    /// attend plus que demandé, jamais moins.
+    #[test]
+    fn exiger_un_derive_draine_la_ou_la_donnee_seule_ne_le_fait_pas() {
+        use crate::disponibilite::Disponibilites as D;
+
+        // 1 · `data` seul : les entités sont posées, le reste attend.
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("A", "corps")).unwrap();
+        let mut w = Vec::new();
+        let (reste, partiel) = catalog.appliquer_la_consigne(D::DONNEE, false, 5_000, &mut w);
+        assert!(reste > 0, "le lien et l'agrégat restent : {reste}");
+        assert!(partiel);
+        assert!(catalog.pending_work().entities.is_empty(), "les entités, elles, sont posées");
+
+        // 2 · le plein texte exigé : tout est drainé.
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("B", "corps")).unwrap();
+        let mut w = Vec::new();
+        let (reste, partiel) =
+            catalog.appliquer_la_consigne(D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+        assert_eq!(reste, 0, "un dérivé exigé draine tout : {w:?}");
+        assert!(!partiel);
+        assert!(w.is_empty(), "rien à signaler quand rien ne reste : {w:?}");
+
+        // 3 · rien exigé : rien fait, et la file est intacte.
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("C", "corps")).unwrap();
+        let avant = catalog.pending_work().total_count();
+        let mut w = Vec::new();
+        let (reste, _) = catalog.appliquer_la_consigne(D::AUCUNE, false, 5_000, &mut w);
+        assert_eq!(reste, avant, "AUCUNE ne touche à rien");
+    }
+
+    /// L'avertissement nomme ce qui a été exigé — sinon il dit « c'est
+    /// incomplet » sans dire par rapport à quoi.
+    #[test]
+    fn l_avertissement_nomme_ce_qui_etait_exige() {
+        use crate::disponibilite::Disponibilites as D;
+
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        let mut w = Vec::new();
+        catalog.appliquer_la_consigne(D::DONNEE, false, 5_000, &mut w);
+        assert_eq!(w.len(), 1);
+        assert!(w[0].contains("data"), "l'exigence doit être nommée : {w:?}");
+        assert!(w[0].contains("exigez « tout »"), "et la sortie aussi : {w:?}");
     }
 
     /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc

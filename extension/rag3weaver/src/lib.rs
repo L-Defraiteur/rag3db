@@ -126,6 +126,7 @@ pub mod openai_llm;
 pub mod events;
 pub mod filter;
 pub mod fts_handle;
+pub mod disponibilite;
 pub mod fusion;
 pub mod hash;
 pub mod node_id_cache;
