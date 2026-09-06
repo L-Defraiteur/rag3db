@@ -1881,6 +1881,45 @@ struct SimpleEmbedWork {
 }
 
 
+/// **Embarquer en pipeline.** Un fil de fond envoie les lots au modèle, dans
+/// l'ordre, avec au plus deux lots d'avance ; le fil appelant écrit chaque
+/// lot rendu. Le modèle ne voit pas les écritures, la base ne voit pas le
+/// modèle — sans ça les deux s'attendaient l'un l'autre (6 septembre 2026 :
+/// carte à 36 % pendant une ingestion). Une erreur d'un côté arrête l'autre.
+fn embed_pipeline<W: Sync, V: Send>(
+    works: &[W],
+    plages: Vec<std::ops::Range<usize>>,
+    text_of: impl Fn(&W) -> &str + Sync + Send,
+    distant: bool,
+    embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
+    mut write: impl FnMut(&[W], V) -> Result<(), String>,
+) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(std::ops::Range<usize>, V), String>>(2);
+    std::thread::scope(|s| {
+        let text_of = &text_of;
+        s.spawn(move || {
+            for plage in plages {
+                let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
+                let t = std::time::Instant::now();
+                let rendu = embed(&texts);
+                // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
+                if !distant {
+                    souffler(t.elapsed());
+                }
+                let echec = rendu.is_err();
+                if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
+                    return;
+                }
+            }
+        });
+        for message in rx {
+            let (plage, v) = message?;
+            write(&works[plage], v)?;
+        }
+        Ok(())
+    })
+}
+
 impl Node for EmbedNode {
     fn name(&self) -> &str {
         &self.name
@@ -2064,15 +2103,13 @@ impl Node for EmbedNode {
             // les résultats se relisent par position.
             dense_works.sort_by_key(|w| w.text.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
-            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                let chunk = &dense_works[plage];
-                let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                let t = std::time::Instant::now();
-                let vectors = embedder
-                    .embed(&texts)
-                    .map_err(|e| format!("dense embedding failed: {e}"))?;
-                souffler(t.elapsed());
-
+            // **En pipeline** : la carte calcule le lot suivant pendant que ce
+            // fil écrit le précédent en base. Mesuré le 6 septembre 2026 : la
+            // carte était à 36 % en moyenne pendant une ingestion, le reste
+            // du temps elle attendait le JSON et les écritures.
+            let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+            let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
+            embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -2112,7 +2149,8 @@ impl Node for EmbedNode {
                         &[QueryParam { name: "items".into(), value: items_param }],
                     ).map_err(|e| e.to_string())?;
                 }
-            }
+                Ok(())
+            })?;
         }
 
         // ── Sparse embedding (GPU mini-batches) → insert into SparseHandle ──
