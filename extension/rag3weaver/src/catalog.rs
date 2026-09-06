@@ -5826,6 +5826,65 @@ impl Catalog {
         Ok(first)
     }
 
+    /// **Embarque une requête, une seule fois**, selon les signaux demandés :
+    /// une passe avant sur l'embarqueur dual quand dense et sparse sont
+    /// voulus ensemble, le cache d'embarquement sinon. Extrait du monolithe le
+    /// 6 septembre 2026 pour que `SearchSourceNode` fasse la même chose — les
+    /// nœuds vecteur et sparse embarquaient chacun de leur côté, deux passes
+    /// avant pour une requête, et sans le cache (B6 de la réconciliation).
+    pub fn embarquer_la_requete(
+        &mut self,
+        query: &str,
+        need_dense: bool,
+        need_sparse: bool,
+    ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
+        let vecteurs = if need_dense && need_sparse {
+            if let Some(ref dual_emb) = self.dual_embedder {
+                // Single forward pass → dense + sparse
+                let (dense_vecs, sparse_vecs) = dual_emb
+                    .embed_dual(&[query.to_string()])
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                (
+                    dense_vecs.into_iter().next().unwrap_or_default(),
+                    sparse_vecs.into_iter().next(),
+                )
+            } else {
+                // Fallback: separate embedders
+                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?;
+                let sparse = if let Some(ref sparse_emb) = self.sparse_embedder {
+                    sparse_emb.embed_sparse(&[query.to_string()])
+                        .map_err(|e| CatalogError::EmbedError(e.to_string()))?
+                        .into_iter().next()
+                } else { None };
+                (dense, sparse)
+            }
+        } else if need_dense {
+            let dense = if let Some(ref dual_emb) = self.dual_embedder {
+                let (dense_vecs, _) = dual_emb.embed_dual(&[query.to_string()])
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                dense_vecs.into_iter().next().unwrap_or_default()
+            } else {
+                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?
+            };
+            (dense, None)
+        } else if need_sparse {
+            let sparse = if let Some(ref dual_emb) = self.dual_embedder {
+                let (_, sparse_vecs) = dual_emb.embed_dual(&[query.to_string()])
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
+                sparse_vecs.into_iter().next()
+            } else if let Some(ref sparse_emb) = self.sparse_embedder {
+                sparse_emb.embed_sparse(&[query.to_string()])
+                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?
+                    .into_iter().next()
+            } else { None };
+            (vec![], sparse)
+        } else {
+            (vec![], None)
+        };
+
+        Ok(vecteurs)
+    }
+
     pub fn search(
         &mut self,
         name: &str,
@@ -5930,50 +5989,7 @@ impl Catalog {
         let need_sparse = signals.sparse();
 
         let t_embed = Instant::now();
-        let (embedding, query_sparse) = if need_dense && need_sparse {
-            if let Some(ref dual_emb) = self.dual_embedder {
-                // Single forward pass → dense + sparse
-                let (dense_vecs, sparse_vecs) = dual_emb
-                    .embed_dual(&[query.to_string()])
-                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
-                (
-                    dense_vecs.into_iter().next().unwrap_or_default(),
-                    sparse_vecs.into_iter().next(),
-                )
-            } else {
-                // Fallback: separate embedders
-                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?;
-                let sparse = if let Some(ref sparse_emb) = self.sparse_embedder {
-                    sparse_emb.embed_sparse(&[query.to_string()])
-                        .map_err(|e| CatalogError::EmbedError(e.to_string()))?
-                        .into_iter().next()
-                } else { None };
-                (dense, sparse)
-            }
-        } else if need_dense {
-            let dense = if let Some(ref dual_emb) = self.dual_embedder {
-                let (dense_vecs, _) = dual_emb.embed_dual(&[query.to_string()])
-                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
-                dense_vecs.into_iter().next().unwrap_or_default()
-            } else {
-                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?
-            };
-            (dense, None)
-        } else if need_sparse {
-            let sparse = if let Some(ref dual_emb) = self.dual_embedder {
-                let (_, sparse_vecs) = dual_emb.embed_dual(&[query.to_string()])
-                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
-                sparse_vecs.into_iter().next()
-            } else if let Some(ref sparse_emb) = self.sparse_embedder {
-                sparse_emb.embed_sparse(&[query.to_string()])
-                    .map_err(|e| CatalogError::EmbedError(e.to_string()))?
-                    .into_iter().next()
-            } else { None };
-            (vec![], sparse)
-        } else {
-            (vec![], None)
-        };
-
+        let (embedding, query_sparse) = self.embarquer_la_requete(query, need_dense, need_sparse)?;
         if let Some(ref mut d) = diag { d.embed_ms = t_embed.elapsed().as_millis() as u64; }
 
         // ── Run searches based on signals ─────────────────────────────────

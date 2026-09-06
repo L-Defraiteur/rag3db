@@ -178,6 +178,12 @@ pub struct QueryPayload {
     pub query: String,
     pub options: SearchOptions,
     pub target: Option<SearchTarget>,
+    /// Le vecteur dense de la requête, embarqué **une fois** par la source
+    /// (`Catalog::embarquer_la_requete`). `None` : le nœud vectoriel embarque
+    /// lui-même — c'est le montage minimal des tests.
+    pub embedding: Option<Vec<f32>>,
+    /// Le vecteur sparse de la requête, même règle.
+    pub sparse: Option<crate::sparse_index::SparseVector>,
 }
 
 // ─── Fan-in merge ───────────────────────────────────────────────────────────

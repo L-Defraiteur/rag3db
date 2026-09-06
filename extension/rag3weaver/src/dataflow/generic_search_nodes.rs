@@ -142,7 +142,7 @@ impl Node for SearchSourceNode {
         // branches, et `Consistency::Strict` n'était construit nulle part.
         // C'est ici le seul endroit qui convienne — après la résolution de la
         // cible, avant que les signaux ne lisent quoi que ce soit.
-        let (reste_en_file, partiel, mut avertissements) = {
+        let (reste_en_file, partiel, mut avertissements, embedding, sparse) = {
             let mut cat = catalog.lock().unwrap();
             let mut w: Vec<String> = Vec::new();
             let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
@@ -151,7 +151,36 @@ impl Node for SearchSourceNode {
             let (reste, partiel) = cat.appliquer_la_consigne_pour(
                 &self.target_name, exige, attendre_ailleurs, options.timeout_ms, &mut w,
             );
-            (reste, partiel, w)
+            let signaux = options.signals.unwrap_or(target.default_signals);
+            // **L'index plein texte s'ouvre ici, paresseusement**, comme dans le
+            // monolithe : c'est le seul endroit qui connaisse à la fois la
+            // table, ses champs et le verrou. Un handle non ouvert était une
+            // erreur dure sur ce chemin — B9 de la réconciliation.
+            if signaux.bm25() && !cat.plein_texte_natif() {
+                cat.ensure_fts_handle(
+                    &target.parent_table,
+                    &target.bm25_fields,
+                    &crate::scope::fts_filter_fields(),
+                );
+            }
+            // **La requête s'embarque une fois**, dual si les deux signaux sont
+            // demandés, avec le cache du catalogue — B6. Un échec ne casse pas
+            // la recherche : les nœuds savent embarquer eux-mêmes, et ça se dit.
+            let (embedding, sparse) = if signaux.vector() || signaux.sparse() {
+                match cat.embarquer_la_requete(&self.query, signaux.vector(), signaux.sparse()) {
+                    Ok((e, s)) => ((!e.is_empty()).then_some(e), s),
+                    Err(e) => {
+                        w.push(format!(
+                            "embarquement de la requête impossible ici ({e}) : les signaux \
+                             vectoriels embarqueront eux-mêmes"
+                        ));
+                        (None, None)
+                    }
+                }
+            } else {
+                (None, None)
+            };
+            (reste, partiel, w, embedding, sparse)
         };
         for a in &avertissements {
             ctx.warn(a);
@@ -164,6 +193,8 @@ impl Node for SearchSourceNode {
                 query: self.query.clone(),
                 options: options.clone(),
                 target: Some(target.clone()),
+                embedding,
+                sparse,
             }),
         );
 
@@ -266,7 +297,7 @@ impl Node for VectorSearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options) = extract_query_and_target(ctx, "VectorSearchNode")?;
+        let (query_str, target, options, vecteurs) = extract_query_and_target(ctx, "VectorSearchNode")?;
         let limite = budget_de_recherche(self.limit, &options);
 
         // Une cible sans vecteurs n'est pas une panne, c'est une cible sans
@@ -327,9 +358,16 @@ impl Node for VectorSearchNode {
             },
         };
 
-        let mut cache = HashMap::new();
-        let embedding = embed_query(&*embedder, &query_str, &mut cache)
-            .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?;
+        // Le vecteur de la requête, embarqué une fois par la source ; sinon
+        // on l'embarque ici — le montage minimal des tests.
+        let embedding = match vecteurs.0 {
+            Some(e) => e,
+            None => {
+                let mut cache = HashMap::new();
+                embed_query(&*embedder, &query_str, &mut cache)
+                    .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?
+            }
+        };
 
         let backend = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog")
@@ -435,9 +473,11 @@ pub struct BM25SearchNode {
     node_name: String,
     /// `None` : le budget vient de la requête (`budget_de_recherche`).
     limit: Option<usize>,
-    fuzzy_distance: u8,
+    /// `None` : celui de la requête (`options.fuzzy_distance`).
+    fuzzy_distance: Option<u8>,
     result_mode: ResultMode,
-    mode: BM25Mode,
+    /// `None` : celui de la requête (`options.bm25_mode`, `Auto` par défaut).
+    mode: Option<BM25Mode>,
     fields: Option<Vec<String>>,
     signal: Option<String>,
 }
@@ -457,16 +497,16 @@ impl BM25SearchNode {
         Self {
             node_name: name.to_string(),
             limit,
-            fuzzy_distance: 0,
+            fuzzy_distance: None,
             result_mode: ResultMode::Aggregated,
-            mode: BM25Mode::Contains,
+            mode: None,
             fields: None,
             signal: None,
         }
     }
 
     pub fn with_fuzzy(mut self, distance: u8) -> Self {
-        self.fuzzy_distance = distance;
+        self.fuzzy_distance = Some(distance);
         self
     }
 
@@ -476,7 +516,7 @@ impl BM25SearchNode {
     }
 
     pub fn with_mode(mut self, mode: BM25Mode) -> Self {
-        self.mode = mode;
+        self.mode = Some(mode);
         self
     }
 
@@ -519,7 +559,17 @@ impl Node for BM25SearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options) = extract_query_and_target(ctx, "BM25SearchNode")?;
+        let (query_str, target, options, _vecteurs) = extract_query_and_target(ctx, "BM25SearchNode")?;
+        // Même règle que pour le vecteur et le sparse : une cible qui ne
+        // déclare pas BM25 rend vide et le dit, elle ne casse pas le graphe.
+        if !declares(&target, &options, "bm25") {
+            ctx.warn(&format!(
+                "BM25SearchNode: '{}' ne déclare pas le signal 'bm25' — aucun résultat plein texte",
+                target.name
+            ));
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+            return Ok(());
+        }
         let limite = budget_de_recherche(self.limit, &options);
 
         let conn = ctx
@@ -640,8 +690,12 @@ impl Node for BM25SearchNode {
             &target,
             &query_str,
             fields,
-            self.mode,
-            self.fuzzy_distance,
+            // Le gabarit s'il a parlé, sinon la requête — dont les défauts sont
+            // ceux du monolithe (`Auto`, distance 1). Le nœud disait
+            // `Contains` et 0 : celui-là même qui rend zéro sur une phrase
+            // française — B10 de la réconciliation.
+            self.mode.unwrap_or(options.bm25_mode),
+            self.fuzzy_distance.unwrap_or(options.fuzzy_distance),
             limite,
             allowed.as_deref(),
             &target.enrich_fields,
@@ -758,7 +812,7 @@ impl Node for SparseSearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
+        let (query_str, target, options, vecteurs) = extract_query_and_target(ctx, "SparseSearchNode")?;
         let limite = budget_de_recherche(self.limit, &options);
 
         // Ce que l'agent doit entendre — par la méta, pas par le journal du
@@ -794,7 +848,11 @@ impl Node for SparseSearchNode {
         // Try dual embedder first, then sparse embedder
         let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
         let sparse_emb = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
-        let sparse_vec = if let Some(dual) = dual_emb {
+        let sparse_vec = if let Some(sv) = vecteurs.1 {
+            // Embarqué une fois par la source, dual si le dense était demandé
+            // aussi : pas de seconde passe avant ici.
+            sv
+        } else if let Some(dual) = dual_emb {
             let (_, sparse_vecs) = dual
                 .embed_dual(&[query_str.clone()])
                 .map_err(|e| format!("SparseSearchNode: dual embed failed: {e}"))?;
@@ -1590,6 +1648,36 @@ impl Node for ResolveParentNode {
         }
         .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
+        // **Vers l'entité source, après la page** (`SourceResolved`), avec la
+        // déduplication du monolithe : deux lignes d'index du même document
+        // ne rendent qu'un document. La provenance suit par la source : c'est
+        // le signal du meilleur original qui reste.
+        let signals: Vec<Option<String>> = if qp.options.result_mode == ResultMode::SourceResolved
+            && target.has_source_refs
+        {
+            let mut par_source: HashMap<String, Option<String>> = HashMap::new();
+            for (r, sig) in search_results.iter().zip(signals.iter()) {
+                if let Some(src) = r.data.as_ref().and_then(|d| d.get("_source_uuid")).and_then(|v| v.as_str()) {
+                    par_source.entry(src.to_string()).or_insert_with(|| sig.clone());
+                }
+            }
+            let catalog = ctx
+                .service::<Arc<Mutex<Catalog>>>("catalog")
+                .cloned()
+                .ok_or("ResolveParentNode: result_mode=source_resolved needs the 'catalog' service")?;
+            catalog
+                .lock()
+                .unwrap()
+                .resolve_to_source_entities(&mut search_results)
+                .map_err(|e| format!("ResolveParentNode: source resolution failed: {e}"))?;
+            search_results
+                .iter()
+                .map(|r| par_source.get(&r.uuid).cloned().flatten())
+                .collect()
+        } else {
+            signals
+        };
+
         let enriched: Vec<UnifiedResult> = search_results
             .into_iter()
             .zip(signals)
@@ -1608,19 +1696,23 @@ impl Node for ResolveParentNode {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /// Extract query string and resolved SearchTarget from a Query input.
+/// Les vecteurs de la requête, quand la source les a embarqués.
+type VecteursDeRequete = (Option<Vec<f32>>, Option<crate::sparse_index::SparseVector>);
+
 fn extract_query_and_target(
     ctx: &mut NodeContext,
     node_type: &str,
-) -> Result<(String, SearchTarget, crate::search::SearchOptions), String> {
+) -> Result<(String, SearchTarget, crate::search::SearchOptions, VecteursDeRequete), String> {
     let qp = ctx.take_input("query")
         .and_then(|pv| take_or_clone::<QueryPayload>(pv))
         .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
+    let vecteurs = (qp.embedding, qp.sparse);
     match qp.target {
         // Les options **voyagent avec la requête**. Elles étaient jetées ici
         // jusqu'au 27 août : un graphe composé à la main filtrait ou ne
         // filtrait pas selon le nœud branché, sans rien dire
         // (`e2e_code::the_per_signal_path_drops_the_search_options_today`).
-        Some(t) => Ok((qp.query, t, qp.options)),
+        Some(t) => Ok((qp.query, t, qp.options, vecteurs)),
         None => Err(format!("{node_type}: Query has no resolved SearchTarget (use SearchSourceNode upstream)")),
     }
 }
@@ -1737,22 +1829,17 @@ fn declares(target: &SearchTarget, options: &SearchOptions, signal: &str) -> boo
 /// — leurs lignes d'index diffèrent, leurs entités sont les mêmes.
 fn finish_signal(
     ctx: &mut NodeContext,
-    node_type: &str,
+    _node_type: &str,
     target: &SearchTarget,
-    mut results: Vec<SearchResult>,
+    results: Vec<SearchResult>,
     result_mode: ResultMode,
     label: &str,
 ) -> Result<Vec<UnifiedResult>, String> {
-    if result_mode == ResultMode::SourceResolved && target.has_source_refs {
-        let catalog = ctx
-            .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
-            .ok_or_else(|| format!("{node_type}: result_mode=source_resolved needs the 'catalog' service"))?;
-        catalog
-            .lock()
-            .unwrap()
-            .resolve_to_source_entities(&mut results)
-            .map_err(|e| format!("{node_type}: source resolution failed: {e}"))?;
-    }
+    // La résolution vers l'entité **source** ne se fait plus ici, par signal
+    // et avant la fusion : elle se fait dans `ResolveParentNode`, après la
+    // page, comme le monolithe — sinon la déduplication par source n'était
+    // pas celle de la liste rendue (B11 de la réconciliation).
+    let _ = (result_mode, target, ctx);
     let mut unified: Vec<UnifiedResult> = results.into_iter().map(UnifiedResult::from).collect();
     retag(&mut unified, label);
     Ok(unified)
@@ -1985,6 +2072,8 @@ mod tests {
             query: "comment un nœud signale son échec".into(),
             options: SearchOptions::default(),
             target: None,
+            embedding: None,
+            sparse: None,
         }));
         let mut node = RerankNode::new("rerank").with_candidates(0);
         node.execute(&mut ctx).unwrap();
@@ -2007,6 +2096,8 @@ mod tests {
             query: "une vraie question".into(),
             options: SearchOptions::default(),
             target: None,
+            embedding: None,
+            sparse: None,
         };
 
         let mut ctx = NodeContext::new();
@@ -2139,7 +2230,7 @@ mod tests {
     }
 
     fn query_payload(q: &str) -> QueryPayload {
-        QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None }
+        QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None, embedding: None, sparse: None }
     }
 
     /// **Le budget d'un signal** : la limite du nœud si le gabarit l'a
@@ -2267,7 +2358,7 @@ mod tests {
             .with_fuzzy(2)
             .with_result_mode(ResultMode::Detailed);
         assert_eq!(node.limit, Some(20));
-        assert_eq!(node.fuzzy_distance, 2);
+        assert_eq!(node.fuzzy_distance, Some(2));
         assert!(matches!(node.result_mode, ResultMode::Detailed));
     }
 

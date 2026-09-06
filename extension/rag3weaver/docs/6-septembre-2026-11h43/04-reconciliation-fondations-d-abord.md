@@ -186,6 +186,21 @@ Trois choses n'existent **que** sur le chemin composable et ne doivent pas
 se perdre : le domaine de travail (`SearchSourceNode`), la provenance des
 signaux (`bm25+vector`), le rendu markdown avec lentille de chemins.
 
+**La contrainte de B13, trouvée en l'écrivant.** Les nœuds prennent le
+catalogue par le service `catalog`, un `Arc<Mutex<Catalog>>`, et le
+verrouillent le temps d'un appel. `Catalog::search` a `&mut self` : il ne
+peut pas se donner lui-même derrière un `Arc<Mutex>` sans se déplacer. Le
+lanceur honnête est donc une fonction **sur l'`Arc`** —
+`rechercher(&Arc<Mutex<Catalog>>, cible, requête, options)` — qui est la
+forme que le produit tient déjà (le registre de services des agents porte
+exactement cet `Arc`). `Catalog::search(&mut self)` devient alors soit un
+pont qui déplace le catalogue dans un `Arc` le temps du graphe et le reprend
+(`Arc::try_unwrap`, avec une erreur nommée si un nœud l'a retenu), soit un
+chemin déclaré ancien dont les appelants — tous des tests — migrent sur
+l'`Arc`. La première forme évite la migration, la seconde évite le pont.
+**C'est une décision de surface, à prendre avec Lucie** ; le lanceur sur
+l'`Arc` se fait dans les deux cas.
+
 **Le plan de B, dans l'ordre :** B1 B2 (les deux défauts en exercice, une
 demi-heure), B3 (un nœud de pagination, le sur-fetch par les paramètres du
 gabarit), B4 B5 (la précédence : `options` > déclaration de la cible >
@@ -352,8 +367,9 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | E | fait — `fusion.rs` retiré |
 | C4 | fait — PostgreSQL à deux catalogues, dix suites vertes |
 | B1 B2 | faits — `cda21d1a3` |
-| B3 B7 | écrits (sur-fetch, `PaginateNode`, méta du rerank), 947 tests de bibliothèque verts, passe e2e en cours |
-| B4 B5 B6 B8 B9 B10 B11 B12 B13, C5 | à faire |
+| B3 B4 B5 B7 | faits — `e842c4a3e`, huit suites vertes |
+| B6 B9 B10 B11 | écrits (embarquement unique par la source, index ouvert paresseusement, défauts BM25 de la requête, `SourceResolved` après la page), 948 tests de bibliothèque verts, passe e2e en cours |
+| B8 B12 B13, C5 | à faire — voir la note sur B13 |
 
 
 ```

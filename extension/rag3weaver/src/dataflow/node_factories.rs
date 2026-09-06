@@ -904,15 +904,17 @@ impl NodeFactory for BM25SearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let fuzzy_distance = config.get("fuzzy_distance").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
         // Sans `limit`, le budget vient de la requête — le sur-fetch du
-        // monolithe. Avec, le gabarit décide.
+        // monolithe. Avec, le gabarit décide. Même règle pour `fuzzy_distance`
+        // et `mode` : absents, ce sont ceux de la requête.
         let mut node = match config.get("limit").and_then(|v| v.as_u64()) {
             Some(l) => BM25SearchNode::new(name, l as usize),
             None => BM25SearchNode::depuis_la_requete(name),
         }
-            .with_fuzzy(fuzzy_distance)
             .with_result_mode(parse_result_mode(config, "BM25SearchNode")?);
+        if let Some(f) = config.get("fuzzy_distance").and_then(|v| v.as_u64()) {
+            node = node.with_fuzzy(f as u8);
+        }
         if let Some(mode) = config.get("mode") {
             let mode: crate::search::BM25Mode = serde_json::from_value(mode.clone())
                 .map_err(|e| format!("BM25SearchNode: invalid 'mode': {e}"))?;

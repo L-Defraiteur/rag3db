@@ -72,6 +72,8 @@ impl Node for KBQuerySourceNode {
                 query: self.query.clone(),
                 options: self.options.clone(),
                 target: None,
+                embedding: None,
+                sparse: None,
             }),
         );
         Ok(())

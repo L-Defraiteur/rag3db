@@ -189,7 +189,10 @@ fn a_tool_call_runs_a_graph_against_a_real_catalog() {
     // c'est ce que le modèle lit (doc 11).
     eprintln!("[search]\n{}", turn.content);
     assert!(turn.content.starts_with("# Search:"), "{}", turn.content);
-    assert!(turn.content.contains("### 1. Rust Book ★ 0."), "{}", turn.content);
+    // Le score n'est plus borné à `0.x` : depuis le 6 septembre 2026, le mode
+    // BM25 par défaut est celui de la requête (`Auto`, donc `Parse` sur deux
+    // mots — comme le monolithe), et `Parse` additionne un score par mot.
+    assert!(turn.content.contains("### 1. Rust Book ★ "), "{}", turn.content);
     assert!(turn.content.contains("description=A comprehensive guide"), "{}", turn.content);
     assert!(!turn.content.contains("uuid"), "pas d'uuid pour le modèle : {}", turn.content);
     assert!(!turn.content.contains("_content_hash"), "{}", turn.content);
