@@ -863,9 +863,117 @@ pub fn budget_batches(lens: &[usize], max_items: usize, max_chars: usize) -> Vec
     out
 }
 
+/// **Le lot que ce modèle demande**, en éléments et en caractères.
+///
+/// Si le modèle dit ce qui le sature (`budget_conseille` : séquences ×
+/// jetons), le lot suit — 256 séquences pour un 12 × 384, 32 pour BGE-M3 —
+/// à trois caractères par jeton, ce que vaut du code. Sinon le budget en
+/// caractères de l'environnement et du régime, comme avant. Un réglage
+/// explicite (`RAG3WEAVER_EMBED_CHAR_BUDGET`) garde le dernier mot ; une
+/// carte partagée avec le compositeur aussi (issue 01 du 6 septembre 2026).
+pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> LotBudget {
+    let explicite = std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);
+    match (conseille, explicite) {
+        (_, Some(chars)) => LotBudget { max_items: defaut_items.max(1), max_chars: chars, max_area: LotBudget::AREA_DEFAUT },
+        (Some((seq, jetons)), None) if !crate::regime::Regime::courant().carte_partagee() => LotBudget {
+            max_items: seq.max(1),
+            max_chars: seq.max(1) * jetons.max(1) * 3,
+            // **La surface d'attention borne aussi.** 256 séquences de 512
+            // jetons, c'est 256 × 12 têtes × 512² × 4 octets = 3,2 Go d'un
+            // coup : la carte a refusé un tampon de 2,6 Go (6 septembre 2026,
+            // granite-107m). Le conseil vaut pour des textes courts ; sur des
+            // longs, on divise le nombre d'éléments par le carré de la
+            // longueur : seq × jetons² / 8 — 32 séquences de 512 pour un
+            // 256 × 512, 256 de 180.
+            max_area: seq.max(1) * jetons.max(1) * jetons.max(1) / 8,
+        },
+        _ => LotBudget { max_items: defaut_items.max(1), max_chars: embed_char_budget(), max_area: LotBudget::AREA_DEFAUT },
+    }
+}
+
+/// Les trois bornes d'un lot : éléments, caractères, et surface d'attention
+/// (éléments × jetons du plus long², jetons ≈ caractères / 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LotBudget {
+    pub max_items: usize,
+    pub max_chars: usize,
+    pub max_area: usize,
+}
+
+impl LotBudget {
+    /// 32 × 512² / 8 : ce que BGE-M3 tenait avec 8 192 caractères par appel.
+    pub const AREA_DEFAUT: usize = 32 * 512 * 512 / 8;
+}
+
+/// Comme [`budget_batches`], mais chaque lot compte une **puissance de deux**
+/// d'éléments — 1, 2, 4 … 256 — pour que les formes de lot se répètent et
+/// que l'autotune de burn ne recompile pas à chaque lot (issue 02). Les
+/// textes étant triés par longueur, un lot de 2ⁿ voisins reste homogène.
+pub fn stable_batches(lens: &[usize], budget: LotBudget) -> Vec<std::ops::Range<usize>> {
+    let LotBudget { max_items, max_chars, max_area } = budget;
+    let jetons = |chars: usize| (chars / 3).max(1);
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    while start < lens.len() {
+        let mut n = 0usize;
+        let mut chars = 0usize;
+        let mut plus_long = 0usize;
+        while start + n < lens.len() && n < max_items.max(1) {
+            let l = lens[start + n];
+            let plus_long_apres = plus_long.max(l);
+            let surface = (n + 1) * jetons(plus_long_apres) * jetons(plus_long_apres);
+            if n > 0 && (chars + l > max_chars || surface > max_area) {
+                break;
+            }
+            chars += l;
+            plus_long = plus_long_apres;
+            n += 1;
+        }
+        let n = 1usize << (usize::BITS - 1 - n.max(1).leading_zeros());
+        out.push(start..start + n);
+        start += n;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests_rythme_et_lots {
     use super::*;
+
+    /// **Des lots en puissances de deux, sous les deux bornes.** 100 textes
+    /// de 10 caractères, 32 par lot au plus : 32, 32, 32, 4. Avec 70
+    /// caractères par lot : 4, 4, … — jamais 7.
+    #[test]
+    fn les_lots_stables_comptent_des_puissances_de_deux() {
+        let large = |max_items, max_chars| LotBudget { max_items, max_chars, max_area: usize::MAX };
+        let lens = vec![10; 100];
+        let l = stable_batches(&lens, large(32, 100_000));
+        assert_eq!(l.iter().map(|r| r.len()).collect::<Vec<_>>(), vec![32, 32, 32, 4]);
+        let l = stable_batches(&lens, large(32, 70));
+        assert!(l.iter().all(|r| r.len() == 4), "{:?}", l.iter().map(|r| r.len()).collect::<Vec<_>>());
+        assert_eq!(l.last().unwrap().end, 100, "tout est couvert");
+        // Un texte plus long que le budget fait un lot à lui seul.
+        let l = stable_batches(&[500, 10, 10], large(32, 100));
+        assert_eq!(l.iter().map(|r| r.len()).collect::<Vec<_>>(), vec![1, 2]);
+        // **La surface d'attention** : 256 textes de 1 500 caractères (~500
+        // jetons) sous une surface de 256 × 512² / 8 → 32 par lot, pas 256.
+        let longs = vec![1500; 256];
+        let l = stable_batches(&longs, lot_budget(Some((256, 512)), 32));
+        assert!(l.iter().all(|r| r.len() <= 32), "{:?}", l.iter().map(|r| r.len()).collect::<Vec<_>>());
+        assert!(l.iter().any(|r| r.len() == 32));
+    }
+
+    /// **Le modèle décide de son lot** ; l'environnement garde le dernier mot.
+    #[test]
+    fn le_lot_suit_le_modele_sauf_reglage_explicite() {
+        std::env::remove_var("RAG3WEAVER_EMBED_CHAR_BUDGET");
+        let b = lot_budget(Some((256, 512)), 32);
+        if !crate::regime::Regime::courant().carte_partagee() {
+            assert_eq!((b.max_items, b.max_chars), (256, 256 * 512 * 3));
+            assert_eq!(b.max_area, 256 * 512 * 512 / 8);
+        }
+        assert_eq!(lot_budget(None, 32).max_chars, embed_char_budget());
+    }
 
     /// **Le rapport cyclique, en règle de trois.**
     ///

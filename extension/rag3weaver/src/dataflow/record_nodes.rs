@@ -26,7 +26,7 @@ use crate::events::{CatalogEvent, EventBus};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::config::CatalogConfig;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
-use crate::embedder::{budget_batches, embed_char_budget, souffler};
+use crate::embedder::{lot_budget, souffler, stable_batches};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
@@ -892,7 +892,7 @@ impl Node for KBEmbedNode {
             // les résultats se relisent par position.
             dense_works.sort_by_key(|w| w.text.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
-            let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+            let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
             let appel = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
             embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &appel, |chunk, part| {
                 if part.len() != chunk.len() {
@@ -956,7 +956,7 @@ impl Node for KBEmbedNode {
                 // les résultats se relisent par position.
                 sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
                 embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, part| {
                     if part.len() != chunk.len() {
@@ -1095,7 +1095,7 @@ impl Node for KBEmbedNode {
                 dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
                 embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
@@ -2087,7 +2087,7 @@ impl Node for EmbedNode {
             // fil écrit le précédent en base. Mesuré le 6 septembre 2026 : la
             // carte était à 36 % en moyenne pendant une ingestion, le reste
             // du temps elle attendait le JSON et les écritures.
-            let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+            let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
             let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
             embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
@@ -2144,7 +2144,7 @@ impl Node for EmbedNode {
                 // les résultats se relisent par position.
                 sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
                 embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
@@ -2256,7 +2256,7 @@ impl Node for EmbedNode {
                 dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
                 embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {

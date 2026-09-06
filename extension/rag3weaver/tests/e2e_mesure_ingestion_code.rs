@@ -37,12 +37,25 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
-    let config = CatalogConfig { name: Some("mesure".into()), embedding_dim: 1024, ..Default::default() };
-    let dense: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
+    // **Le modèle se choisit par `RAG3WEAVER_MESURE_MODELE`** : `bge-m3`
+    // (défaut, par le démon, dual), `granite-107m` (384) ou `granite-278m`
+    // (768), en local. La dimension du catalogue suit — sinon l'erreur ne
+    // sort qu'au drain.
+    let modele = std::env::var("RAG3WEAVER_MESURE_MODELE").unwrap_or_else(|_| "bge-m3".into());
+    let (dense, dim): (Arc<dyn Embedder>, usize) = match modele.as_str() {
+        "granite-107m" => (common::burn::GRANITE_107M.clone(), 384),
+        "granite-278m" => (common::burn::GRANITE_278M.clone(), 768),
+        _ => (common::burn::BGE_M3.clone(), 1024),
+    };
+    let config = CatalogConfig { name: Some("mesure".into()), embedding_dim: dim, ..Default::default() };
+    let lot_conseille = dense.budget_conseille();
     let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.initialize().unwrap();
-    let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
-    catalog.set_dual_embedder(bge);
+    if modele == "bge-m3" {
+        let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
+        catalog.set_dual_embedder(bge);
+    }
+    eprintln!("[mesure] modèle {modele} (dim {dim}), lot conseillé {:?}", lot_conseille);
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
 
     let root = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
