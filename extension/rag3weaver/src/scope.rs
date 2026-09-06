@@ -38,7 +38,13 @@ pub const SCHEMA_VERSION_KEY: &str = "schema_version";
 /// **4** le même jour : `_embed_claim`, la réclamation qu'une passe de
 /// rattrapage pose sur les chunks qu'elle prend — pour que deux processus ne
 /// calculent pas deux fois le même vecteur (réconciliation, C4).
-pub const SCHEMA_VERSION: &str = "4";
+///
+/// **5** le même jour encore : `_chunked_hash` sur les tables d'entités
+/// simples — le hash du contenu à partir duquel les chunks ont été découpés.
+/// Quand il diffère de `_content_hash`, les chunks sont en retard : c'est la
+/// **dette de découpage**, en base et non en mémoire, qui permet à une mise à
+/// jour de se poser au niveau donnée sans redécouper (réconciliation, C5).
+pub const SCHEMA_VERSION: &str = "5";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

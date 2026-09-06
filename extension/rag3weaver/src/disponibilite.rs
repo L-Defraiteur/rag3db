@@ -53,11 +53,14 @@
 //! le dit au lieu de rendre zéro en silence.
 //!
 //! `Donnee` est devenue exacte le 6 septembre après-midi : `flush_insertions`
-//! pose aussi les relations dont les deux bouts sont posés. Ce qui reste
-//! approché va dans le sens sûr : les deux signaux GPU partent ensemble (sans
-//! coût sur un embarqueur dual), et une **mise à jour** ou une **suppression**
-//! emmène le graphe sans GPU même au niveau donnée, parce que la dette de
-//! découpage n'a pas encore de place en base (réconciliation, C5).
+//! pose aussi les relations dont les deux bouts sont posés, et une **mise à
+//! jour** d'entité simple se pose sans redécouper — ses chunks deviennent une
+//! **dette de découpage en base** (`_chunked_hash <> _content_hash`, schéma v5)
+//! que `Catalog::rattraper_le_decoupage` solde quand le plein texte est exigé.
+//! Ce qui reste approché va dans le sens sûr : les deux signaux GPU partent
+//! ensemble (sans coût sur un embarqueur dual), et les agrégats d'une base de
+//! connaissances touchée par une mise à jour partent avec le graphe sans GPU
+//! — leur dette n'a pas encore de forme en base (C5 bis).
 
 use serde::{Deserialize, Serialize};
 

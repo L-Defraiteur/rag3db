@@ -188,6 +188,10 @@ pub fn generate_node_table_ddl_with_dialect(
     let mut columns = vec![
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
+        // **La dette de découpage** : le hash du contenu dont les chunks
+        // actuels sont issus. `<> _content_hash` = chunks en retard. Vide =
+        // jamais découpé.
+        ColumnDef { name: "_chunked_hash".into(), col_type: ColumnType::Text },
     ];
     columns.extend(crate::scope::scope_columns());
 

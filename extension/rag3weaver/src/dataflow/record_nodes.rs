@@ -1706,11 +1706,102 @@ impl Node for ChunkRecordNode {
         ctx.set_output("chunk_links", PortValue::new(
             BatchPayload::new(PortType::Relations, all_chunk_relations),
         ));
+        // Les parents, tels quels : c'est ce que `MarquerDecoupeNode` attend
+        // pour poser `_chunked_hash` une fois les chunks posés et liés.
+        ctx.set_output("parents", PortValue::new(
+            BatchPayload::new(PortType::Entities, items),
+        ));
         Ok(())
     }
 
     // Read-only: nothing to undo, but must return true so rollback doesn't fail
     fn can_undo(&self) -> bool { true }
+}
+
+// ─── MarquerDecoupeNode ─────────────────────────────────────────────────────
+
+/// **Pose `_chunked_hash = _content_hash`** sur les parents dont les chunks
+/// viennent d'être posés et liés — après, jamais avant : marquer avant que
+/// les chunks existent serait le mensonge que `_embed_hash` a appris à ne
+/// plus dire.
+///
+/// C'est la dette de découpage qui devient une ligne de base (réconciliation,
+/// C5) : une mise à jour posée au niveau donnée laisse `_content_hash` neuf
+/// et `_chunked_hash` ancien, et `Catalog::rattraper_le_decoupage` retrouve
+/// ces parents par une requête, sans rien avoir gardé en mémoire.
+///
+/// **Input**: `entities` — les parents (`EntityRecord`, avec `_uuid` et
+/// `_content_hash` dans `data`) ; `trigger` — quand les chunks sont liés.
+/// **Output**: `done`.
+pub struct MarquerDecoupeNode {
+    name: String,
+}
+
+impl MarquerDecoupeNode {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+impl Node for MarquerDecoupeNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "MarquerDecoupeNode"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::MarquerDecoupeNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::MarquerDecoupeNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let items: Vec<EntityRecord> = ctx.take_input("entities")
+            .and_then(|pv| pv.take::<BatchPayload>())
+            .and_then(|bp| bp.take::<EntityRecord>())
+            .unwrap_or_default();
+        let conn = ctx.service::<Arc<dyn DbConnection>>("conn").cloned()
+            .ok_or("MarquerDecoupeNode: 'conn' service not registered")?;
+        let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
+            .ok_or("MarquerDecoupeNode: 'dialect' service not registered")?;
+
+        let mut par_table: HashMap<String, Vec<CypherValue>> = HashMap::new();
+        for rec in &items {
+            let (Some(uuid), Some(hash)) = (
+                rec.data.get("_uuid").and_then(|v| v.as_str()),
+                rec.data.get("_content_hash").and_then(|v| v.as_str()),
+            ) else {
+                continue;
+            };
+            let mut m = BTreeMap::new();
+            m.insert("_uuid".to_string(), CypherValue::String(uuid.to_string()));
+            m.insert("_chunked_hash".to_string(), CypherValue::String(hash.to_string()));
+            par_table.entry(rec.entity_name.clone()).or_default().push(CypherValue::Map(m));
+        }
+        let mut marques = 0usize;
+        for (table, lignes) in par_table {
+            let n = lignes.len();
+            let cypher = dialect.batch_update_fields(&table, &["_chunked_hash"]);
+            // Un marquage raté laisse la dette visible : ces parents seront
+            // redécoupés une fois de trop, jamais une fois de moins. Ce n'est
+            // pas une disponibilité perdue, c'est un travail en double.
+            if let Err(e) = conn.execute_with_params(
+                &cypher,
+                &[QueryParam { name: "items".into(), value: CypherValue::List(lignes) }],
+            ) {
+                ctx.warn(&format!(
+                    "MarquerDecoupeNode: « {table} » — {n} parent(s) non marqués ({e}) : ils \
+                     seront redécoupés une fois de trop"
+                ));
+                continue;
+            }
+            marques += n;
+        }
+        ctx.metric("marques", marques as f64);
+        ctx.trigger("done");
+        Ok(())
+    }
 }
 
 // ─── EmbedNode (simple entities) ────────────────────────────────────────────

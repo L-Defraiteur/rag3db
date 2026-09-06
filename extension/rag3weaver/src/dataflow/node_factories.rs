@@ -21,7 +21,7 @@ use super::generic_search_nodes::{
 use super::record_nodes::{
     ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
     FlushNode, SparseCommitNode, KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode,
-    RechunkDeleteNode, UpdateRecordNode,
+    MarquerDecoupeNode, RechunkDeleteNode, UpdateRecordNode,
 };
 use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
 
@@ -111,6 +111,22 @@ named_factory!(
         PortDef { name: "done", port_type: PortType::Empty, required: false },
         PortDef { name: "chunks", port_type: PortType::Entities, required: false },
         PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
+        // Les parents, pour `MarquerDecoupeNode`.
+        PortDef { name: "parents", port_type: PortType::Entities, required: false },
+    ],
+);
+
+named_factory!(
+    MarquerDecoupeNodeFactory,
+    MarquerDecoupeNode,
+    "MarquerDecoupeNode",
+    "Pose _chunked_hash = _content_hash sur les parents dont les chunks viennent d'être posés",
+    &[
+        PortDef { name: "entities", port_type: PortType::Entities, required: true },
+        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+    ],
+    &[
+        PortDef { name: "done", port_type: PortType::Empty, required: false },
     ],
 );
 
@@ -1333,6 +1349,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(RerankNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     registry.register(Box::new(PaginateNodeFactory));
+    registry.register(Box::new(MarquerDecoupeNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
@@ -1373,7 +1390,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 35 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 36 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

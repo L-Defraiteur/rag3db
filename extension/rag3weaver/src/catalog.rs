@@ -36,8 +36,8 @@ use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
     ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode,
-    KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode, RechunkDeleteNode,
-    UpdateRecordNode,
+    KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode, MarquerDecoupeNode,
+    RechunkDeleteNode, UpdateRecordNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
 use crate::dataflow::services::ServiceRegistry;
@@ -144,6 +144,10 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
+    /// jour au niveau donnée sans redécouper ? La vérité est en base
+    /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
+    peut_devoir_un_redecoupage: bool,
     /// Ce qu'un verbe unitaire rend prêt quand on ne lui dit rien. Voir
     /// [`RegimeEcriture`] : au tick par défaut, par lot quand on le déclare.
     regime_d_ecriture: crate::disponibilite::RegimeEcriture,
@@ -250,6 +254,7 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
+            peut_devoir_un_redecoupage: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
             lecture_seule: false,
             troncatures_signalees: 0,
@@ -2546,6 +2551,130 @@ impl Catalog {
         Ok(total)
     }
 
+    /// **La passe de rattrapage du découpage** : redécouper les entités dont
+    /// les chunks sont en retard sur le contenu (`_chunked_hash <>
+    /// _content_hash`), bornée par table, sur `tables` ou toutes.
+    ///
+    /// C'est le pendant de [`Catalog::embarquer_le_retard`] pour la dette de
+    /// découpage (réconciliation, C5) : rien n'est gardé en mémoire, une
+    /// requête retrouve les parents, et le même graphe que la mise à jour —
+    /// suppression des anciens chunks, découpage, insertion, liens, marqueur,
+    /// commit plein texte — les remet à jour. Avec `embarquer`, l'étage GPU
+    /// suit ; sans, les chunks neufs partent en dette d'embarquement.
+    ///
+    /// Rend le nombre d'entités redécoupées.
+    pub fn rattraper_le_decoupage(
+        &mut self,
+        tables: Option<&HashSet<String>>,
+        limite: usize,
+        embarquer: bool,
+    ) -> Result<usize, CatalogError> {
+        let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
+        let cibles: Vec<(String, search::SearchSignals)> = self
+            .entity_configs
+            .iter()
+            .filter(|(nom, cfg)| cfg.chunked != Some(false) && retenue(nom))
+            .map(|(nom, cfg)| (nom.clone(), cfg.signals))
+            .collect();
+
+        let mut total = 0usize;
+        for (table, signaux) in cibles {
+            let uuids: Vec<CypherValue> = {
+                let requete = self.dialect.select_entites_a_redecouper(&table, limite);
+                let res = self.conn.execute(&requete).map_err(|e| CatalogError::DbError(format!(
+                    "lecture de la dette de découpage sur « {table} » : {e}"
+                )))?;
+                res.rows
+                    .iter()
+                    .filter_map(|l| l.first().and_then(|v| v.as_str()).map(|u| CypherValue::String(u.to_string())))
+                    .collect()
+            };
+            if uuids.is_empty() {
+                continue;
+            }
+            // Les lignes entières : le découpage lit les champs de contenu.
+            let lecture = self.dialect.select_entity_all_by_uuids(&table);
+            let res = self
+                .conn
+                .execute_with_params(&lecture, &[QueryParam::new("uuids", CypherValue::List(uuids))])
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let mut records: Vec<EntityRecord> = Vec::new();
+            for ligne in &res.rows {
+                let Some(CypherValue::Map(props)) = ligne.first() else { continue };
+                let Some(uuid) = props.get("_uuid").and_then(|v| v.as_str()) else { continue };
+                let data: BTreeMap<String, CypherValue> = props
+                    .iter()
+                    .filter(|(k, _)| !matches!(k.as_str(), "_id" | "_label"))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                records.push(EntityRecord::deja_resolu(table.clone(), data, uuid));
+            }
+            if records.is_empty() {
+                continue;
+            }
+            let nombre = records.len();
+
+            self.warm_chunker_cache();
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(RechunkDeleteNode::new("rechunk_delete"))).unwrap();
+            graph.set_initial_input("rechunk_delete", "entities",
+                PortValue::new(BatchPayload::new(PortType::Entities, records)));
+            graph.add_node(Box::new(ChunkRecordNode::new("rechunk_chunk"))).unwrap();
+            graph.connect("rechunk_delete", "entities", "rechunk_chunk", "entities").unwrap();
+            graph.add_node(Box::new(InsertRecordNode::new("rechunk_insert"))).unwrap();
+            graph.connect("rechunk_chunk", "chunks", "rechunk_insert", "entities").unwrap();
+            graph.add_node(Box::new(LinkRecordNode::new("rechunk_link"))).unwrap();
+            graph.connect("rechunk_chunk", "chunk_links", "rechunk_link", "relations").unwrap();
+            graph.connect("rechunk_insert", "done", "rechunk_link", "trigger").unwrap();
+            graph.add_node(Box::new(MarquerDecoupeNode::new("rechunk_marquer"))).unwrap();
+            graph.connect("rechunk_chunk", "parents", "rechunk_marquer", "entities").unwrap();
+            graph.connect("rechunk_link", "done", "rechunk_marquer", "trigger").unwrap();
+            graph.add_node(Box::new(FlushNode::new("rechunk_flush", vec![table.clone()]))).unwrap();
+            if embarquer {
+                graph.add_node(Box::new(EmbedNode::new("rechunk_embed", signaux, 32))).unwrap();
+                graph.connect("rechunk_insert", "inserted", "rechunk_embed", "entities").unwrap();
+                graph.connect("rechunk_link", "done", "rechunk_embed", "trigger").unwrap();
+                graph.connect("rechunk_embed", "done", "rechunk_flush", "trigger").unwrap();
+            } else {
+                graph.connect("rechunk_link", "done", "rechunk_flush", "trigger").unwrap();
+            }
+
+            let mut services = ServiceRegistry::new();
+            let canal = self.enregistrer_les_services_d_ingestion(&mut services);
+            services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
+            services.register("chunk_counts",
+                Arc::new(Mutex::new(HashMap::<String, (usize, usize)>::new())));
+
+            let runtime = DataflowRuntime::with_services(12, services);
+            let mut ecoute = runtime.subscribe();
+            let issue = runtime.execute(&mut graph);
+            for e in Self::relever_les_echecs(&canal) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage_decoupage".to_string(),
+                    message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
+                });
+            }
+            for a in ramasser_les_avertissements(&mut ecoute) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage_decoupage".to_string(),
+                    message: a,
+                });
+            }
+            match issue {
+                Ok(_) => total += nombre,
+                Err(e) => self.emit_event(CatalogEvent::Error {
+                    context: "rattrapage_decoupage".to_string(),
+                    message: format!("redécoupage de « {table} » : {e}"),
+                }),
+            }
+        }
+        self.flush_blob_store("rattrapage_decoupage");
+        if total < limite {
+            self.peut_devoir_un_redecoupage = false;
+        }
+        Ok(total)
+    }
+
     /// **Pourquoi un signal n'a rien rendu : parce qu'il n'a pas encore été
     /// calculé.**
     ///
@@ -2664,10 +2793,30 @@ impl Catalog {
             // base, pas en mémoire, et une recherche qui bute dessus le dit
             // (`expliquer_le_silence_d_un_signal`).
             let gpu = exige.dense() || exige.sparse();
-            self.drainer(gpu, cible.map(|c| (c, false)));
+            self.drainer(gpu, true, cible.map(|c| (c, false)));
             // Ce que la file contenait est fait. Reste ce que des coupes
             // précédentes ont laissé dû — dans la base, pas en mémoire. Un
-            // lecteur ne rattrape que sa fermeture.
+            // lecteur ne rattrape que sa fermeture. Le découpage d'abord : les
+            // chunks qu'il crée sont eux-mêmes une dette d'embarquement.
+            if self.lecture_seule {
+                if self.peut_devoir_un_redecoupage {
+                    warnings.push(
+                        "catalogue en lecture seule : une dette de découpage éventuelle ne \
+                         peut pas être soldée d'ici"
+                            .to_string(),
+                    );
+                }
+            } else if self.peut_devoir_un_redecoupage {
+                let tables = fermeture(self);
+                match self.rattraper_le_decoupage(tables.as_ref(), RATTRAPAGE_PAR_PASSE, gpu) {
+                    Ok(n) if n > 0 => self.peut_devoir_un_embarquement |= !gpu,
+                    Ok(_) => {}
+                    Err(e) => warnings.push(format!(
+                        "le rattrapage de découpage a échoué ({e}) : des entités gardent \
+                         des chunks périmés"
+                    )),
+                }
+            }
             if gpu && self.lecture_seule {
                 // Un lecteur ne solde pas la dette d'un écrivain. Il la voit
                 // comme tout le monde — `expliquer_le_silence_d_un_signal` la
@@ -2703,7 +2852,8 @@ impl Catalog {
                 None => !self.pending.updates.is_empty() || !self.pending.deletes.is_empty(),
             };
             if a_des_mises_a_jour {
-                self.drainer(false, cible.map(|c| (c, false)));
+                // Sans GPU et **sans redécouper** : la donnée, exactement.
+                self.drainer(false, false, cible.map(|c| (c, false)));
             } else {
                 match cible {
                     Some(c) => { self.flush_insertions_de(c); }
@@ -3064,6 +3214,46 @@ impl Catalog {
             eprintln!(
                 "[rag3weaver] schéma v{SCHEMA_VERSION}: _embed_claim ajouté sur \
                  {reclamations_ajoutees} table(s) de chunks"
+            );
+        }
+
+        // ── v5 : `_chunked_hash` sur les tables d'entités simples ──────
+        //
+        // **Copié depuis `_content_hash`**, pas laissé vide : avant cette
+        // colonne, le redécoupage était toujours synchrone de la mise à jour,
+        // donc l'invariant « chunks issus du contenu courant » tenait pour
+        // toute ligne existante. Le laisser vide déclarerait toute la base en
+        // retard et la redécouperait — puis la réembarquerait — entière.
+        let decoupe = crate::dialect::ColumnDef {
+            name: "_chunked_hash".into(),
+            col_type: crate::dialect::ColumnType::Text,
+        };
+        let mut decoupes_ajoutes = 0usize;
+        for table in tables.iter().filter(|t| !t.ends_with("_Chunk") && !t.ends_with("_Index")) {
+            let ddl = self.dialect.alter_add_column_default(table, &decoupe, "''");
+            match self.conn.execute(&ddl) {
+                Ok(_) => {
+                    decoupes_ajoutes += 1;
+                    let copie = self.dialect.copier_colonne(table, "_content_hash", "_chunked_hash");
+                    self.conn.execute(&copie).map_err(|e| CatalogError::DbError(format!(
+                        "migration _chunked_hash {table} (copie) : {e}"
+                    )))?;
+                }
+                Err(e) => {
+                    let msg = e.to_string().to_lowercase();
+                    if !(msg.contains("exist") || msg.contains("already has")
+                        || msg.contains("not found") || msg.contains("does not")) {
+                        return Err(CatalogError::DbError(format!(
+                            "migration _chunked_hash {table}: {e}"
+                        )));
+                    }
+                }
+            }
+        }
+        if decoupes_ajoutes > 0 {
+            eprintln!(
+                "[rag3weaver] schéma v{SCHEMA_VERSION}: _chunked_hash ajouté sur \
+                 {decoupes_ajoutes} table(s) d'entités, copié depuis _content_hash"
             );
         }
 
@@ -3797,6 +3987,13 @@ impl Catalog {
         graph.connect("chunk", "chunk_links", "chunk_link", "relations").unwrap();
         graph.connect("chunk_insert", "done", "chunk_link", "trigger").unwrap();
 
+        // 4 bis. Le marqueur de découpage, **après** les liens : `_chunked_hash`
+        // dit que les chunks de ce contenu existent, il ne le dit qu'une fois
+        // que c'est vrai.
+        graph.add_node(Box::new(MarquerDecoupeNode::new("marquer_decoupe"))).unwrap();
+        graph.connect("chunk", "parents", "marquer_decoupe", "entities").unwrap();
+        graph.connect("chunk_link", "done", "marquer_decoupe", "trigger").unwrap();
+
         // 5. Embed chunks
         let signals = entity_config.signals;
         // Une feuille : le flush FTS se déclenche depuis l'insertion, pas
@@ -3903,7 +4100,9 @@ impl Catalog {
                     // pour ses entités — et **sa fermeture d'écrivain** : ce que
                     // cette ingestion a mis en file pour ses bases, et rien de
                     // ce qu'un autre a laissé.
-                    kb_failed = self.drainer(avec_embarquement, Some((entity_name, true))).failed;
+                    kb_failed = self
+                        .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
+                        .failed;
                 }
 
                 // The KB aggregation runs as a second drain, and its result used
@@ -4111,11 +4310,18 @@ impl Catalog {
             return FlushResult { rendu_pret: Some(D::AUCUNE), ..Default::default() };
         }
         if exige.exige_un_derive() {
-            return self.drainer(exige.dense() || exige.sparse(), Some((graine, true)));
+            return self.drainer(
+                exige.dense() || exige.sparse(),
+                Self::decoupage_pour(exige),
+                Some((graine, true)),
+            );
         }
         let tables = self.fermeture(graine, true);
         if self.pending.a_des_mises_a_jour_dans(&tables) {
-            self.drainer(false, Some((graine, true)))
+            // La donnée, **sans redécouper** : les champs sont posés, les
+            // chunks restent en dette en base (C5). Le graphe est encore
+            // nécessaire pour la mise à jour elle-même et la suppression.
+            self.drainer(false, false, Some((graine, true)))
         } else {
             self.poser_la_donnee_de(graine, true)
         }
@@ -4704,7 +4910,12 @@ impl Catalog {
     /// forme de chunks dont `_embed_hash` ou `_sparse_hash` est vide. Elle
     /// survit donc à un processus qui meurt, et elle s'interroge
     /// (`count_marqueur_manquant`).
-    fn build_ingestion_graph(&mut self, lot: PendingWork, avec_embarquement: bool) -> (
+    fn build_ingestion_graph(
+        &mut self,
+        lot: PendingWork,
+        avec_embarquement: bool,
+        avec_decoupage: bool,
+    ) -> (
         DataflowGraph, ServiceRegistry, usize,
         Arc<Mutex<Vec<UpdateResult>>>, Arc<Mutex<Vec<DeleteResult>>>,
         // (chunks supprimés, chunks créés) par uuid, mesurés en aval
@@ -4836,7 +5047,19 @@ impl Catalog {
         }
 
         // ─── 4. Rechunk pipeline (updated simple entities) ─────────
-        if has_updates {
+        //
+        // **La coupe du découpage** (réconciliation, C5). Sans lui, la mise à
+        // jour pose ses champs et son `_content_hash` neuf, et les chunks
+        // restent ceux de l'ancien contenu : `_chunked_hash` le dit, et
+        // `rattraper_le_decoupage` les retrouve. L'index plein texte de
+        // l'entité, lui, est déjà réindexé par `UpdateRecordNode` — il ne
+        // reste qu'à le committer.
+        if has_updates && !avec_decoupage {
+            self.peut_devoir_un_redecoupage = true;
+            graph.add_node(Box::new(FlushNode::new("rechunk_flush", update_entity_tables.clone()))).unwrap();
+            graph.connect("updates", "done", "rechunk_flush", "trigger").unwrap();
+        }
+        if has_updates && avec_decoupage {
             graph.add_node(Box::new(RechunkDeleteNode::new("rechunk_delete"))).unwrap();
             graph.connect("updates", "rechunk_entities", "rechunk_delete", "entities").unwrap();
 
@@ -4849,6 +5072,11 @@ impl Catalog {
             graph.add_node(Box::new(LinkRecordNode::new("rechunk_link"))).unwrap();
             graph.connect("rechunk_chunk", "chunk_links", "rechunk_link", "relations").unwrap();
             graph.connect("rechunk_insert", "done", "rechunk_link", "trigger").unwrap();
+
+            // Le marqueur de découpage, après les liens.
+            graph.add_node(Box::new(MarquerDecoupeNode::new("rechunk_marquer"))).unwrap();
+            graph.connect("rechunk_chunk", "parents", "rechunk_marquer", "entities").unwrap();
+            graph.connect("rechunk_link", "done", "rechunk_marquer", "trigger").unwrap();
 
             // Signals resolved per-entity inside EmbedNode via entity_configs service.
             // The fallback signal here is unused when entity_configs is registered.
@@ -4940,14 +5168,20 @@ impl Catalog {
     /// s'arrête quand les chunks sont posés et indexés en plein texte, et le
     /// reste devient une dette interrogeable dans la base.
     pub fn drain_jusqu_a(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
-        self.drainer(exige.dense() || exige.sparse(), None)
+        self.drainer(exige.dense() || exige.sparse(), Self::decoupage_pour(exige), None)
+    }
+
+    /// Le découpage est du voyage dès que le plein texte ou un vecteur est
+    /// exigé ; la donnée seule s'en passe et le laisse en dette.
+    const fn decoupage_pour(exige: crate::disponibilite::Disponibilites) -> bool {
+        exige.plein_texte() || exige.dense() || exige.sparse()
     }
 
     /// Le drain complet, étage GPU compris. C'est le contrat historique, et il
     /// ne bouge pas : tout appelant qui écrivait `drain()` obtient la même
     /// chose qu'avant.
     pub fn drain(&mut self) -> FlushResult {
-        self.drainer(true, None)
+        self.drainer(true, true, None)
     }
 
     /// **Draine la fermeture d'une cible**, jusqu'aux disponibilités demandées,
@@ -4960,12 +5194,17 @@ impl Catalog {
         cible: &str,
         exige: crate::disponibilite::Disponibilites,
     ) -> FlushResult {
-        self.drainer(exige.dense() || exige.sparse(), Some((cible, false)))
+        self.drainer(exige.dense() || exige.sparse(), Self::decoupage_pour(exige), Some((cible, false)))
     }
 
     /// `cible` : `None` draine la file entière ; `Some((graine, pour_ecrire))`
     /// n'emporte que sa fermeture et **remet le reste en file**.
-    fn drainer(&mut self, avec_embarquement: bool, cible: Option<(&str, bool)>) -> FlushResult {
+    fn drainer(
+        &mut self,
+        avec_embarquement: bool,
+        avec_decoupage: bool,
+        cible: Option<(&str, bool)>,
+    ) -> FlushResult {
         if !avec_embarquement && self.has_pending() {
             // On s'apprête à poser des chunks sans les embarquer : la dette
             // naît ici, et l'indice la note.
@@ -4997,7 +5236,7 @@ impl Catalog {
             }
         };
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
-            self.build_ingestion_graph(lot, avec_embarquement);
+            self.build_ingestion_graph(lot, avec_embarquement, avec_decoupage);
         if graph.nodes.is_empty() {
             // La marque dit ce qui reste — rien, ou ce que d'autres cibles
             // doivent encore.
@@ -5087,8 +5326,10 @@ impl Catalog {
                     // leur embarquement reste dû, dans la base.
                     rendu_pret: Some(if avec_embarquement {
                         crate::disponibilite::Disponibilites::TOUT
-                    } else {
+                    } else if avec_decoupage {
                         crate::disponibilite::Disponibilites::RECHERCHE_TEXTE
+                    } else {
+                        crate::disponibilite::Disponibilites::DONNEE
                     }),
                     update_results: updates,
                     delete_results: deletes,
@@ -8550,28 +8791,32 @@ mod tests {
         assert_eq!(p.aggregates.len(), 1, "l'agrégat de Document reste : du dérivé");
     }
 
-    /// **Une mise à jour emmène ses chunks, sans GPU.** Au niveau donnée, une
-    /// mise à jour ne peut pas se poser seule (ses conséquences sur les chunks
-    /// n'ont pas encore de place en base — C5) : le graphe part sans l'étage
-    /// GPU, et le verbe **dit** qu'il a rendu plus que demandé.
+    /// **Une mise à jour se pose au niveau donnée sans redécouper** (C5) :
+    /// ses champs sont posés, son `_content_hash` est neuf, et ses chunks —
+    /// issus de l'ancien contenu — sont une dette **en base**
+    /// (`_chunked_hash <> _content_hash`), que l'indice note et que
+    /// `rattraper_le_decoupage` soldera. Le verbe dit exactement ce qu'il a
+    /// rendu : la donnée, pas plus.
     #[test]
-    fn au_tick_une_mise_a_jour_emmene_ses_chunks_et_le_dit() {
+    fn au_tick_une_mise_a_jour_se_pose_sans_redecouper_et_le_dit() {
         use crate::disponibilite::Disponibilites as D;
         let mut catalog = au_tick(make_catalog());
         catalog.initialize().unwrap();
         let r = catalog.create("Document", make_doc_data("M", "corps")).unwrap();
         let uuid = r.uuid().unwrap();
+        assert!(!catalog.peut_devoir_un_redecoupage);
 
         let mut maj = BTreeMap::new();
         maj.insert("body".to_string(), CypherValue::String("autre corps".to_string()));
         let res = catalog.update_jusqu_a("Document", &uuid, maj, D::DONNEE).unwrap();
         assert!(catalog.pending_work().updates.is_empty(), "la mise à jour est passée");
-        assert_eq!(
-            res.rendu_pret,
-            Some(D::RECHERCHE_TEXTE),
-            "plus que demandé — et dit : {res:?}"
-        );
-        assert!(catalog.pending_work().is_empty(), "le graphe a aussi soldé l'agrégat de sa fermeture");
+        assert_eq!(res.rendu_pret, Some(D::DONNEE), "la donnée, exactement : {res:?}");
+        assert!(catalog.peut_devoir_un_redecoupage, "les chunks sont en dette, et l'indice le note");
+
+        // Exiger le plein texte redécoupe, et l'indice retombe (le mock ne
+        // rend aucune ligne en retard : la passe trouve zéro, sous la borne).
+        let res = catalog.update_jusqu_a("Document", &uuid, BTreeMap::new(), D::RECHERCHE_TEXTE).unwrap();
+        assert_eq!(res.rendu_pret, Some(D::RECHERCHE_TEXTE), "{res:?}");
     }
 
     /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc

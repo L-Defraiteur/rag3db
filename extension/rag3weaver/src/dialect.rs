@@ -361,6 +361,14 @@ pub trait SchemaDialect: Send + Sync {
         avec_kb_name: bool,
     ) -> String;
 
+    /// Copie une colonne dans une autre, sur toute la table. Sert à une
+    /// migration qui pose un marqueur là où l'invariant tenait déjà.
+    fn copier_colonne(&self, table: &str, de: &str, vers: &str) -> String;
+
+    /// **Les entités dont les chunks sont en retard** : `_chunked_hash` nul,
+    /// vide ou différent de `_content_hash`. Rend `_uuid`, borné.
+    fn select_entites_a_redecouper(&self, table: &str, limite: usize) -> String;
+
     /// **Réclame des chunks en retard, et les rend** — en une seule
     /// instruction, pour que deux processus qui rattrapent ne prennent pas
     /// les mêmes.
@@ -941,6 +949,19 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
              RETURN n._uuid, n._text, n._text_hash{kb} LIMIT {limite}"
+        )
+    }
+
+    fn copier_colonne(&self, table: &str, de: &str, vers: &str) -> String {
+        format!("MATCH (n:{table}) SET n.{vers} = n.{de}")
+    }
+
+    fn select_entites_a_redecouper(&self, table: &str, limite: usize) -> String {
+        format!(
+            "MATCH (n:{table}) \
+             WHERE n._chunked_hash IS NULL OR n._chunked_hash = '' \
+                OR n._chunked_hash <> n._content_hash \
+             RETURN n._uuid LIMIT {limite}"
         )
     }
 
@@ -1630,6 +1651,19 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "SELECT _uuid, _text, _text_hash{kb} FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = '' LIMIT {limite}"
+        )
+    }
+
+    fn copier_colonne(&self, table: &str, de: &str, vers: &str) -> String {
+        format!("UPDATE {table} SET {vers} = {de}")
+    }
+
+    fn select_entites_a_redecouper(&self, table: &str, limite: usize) -> String {
+        format!(
+            "SELECT _uuid FROM {table} \
+             WHERE _chunked_hash IS NULL OR _chunked_hash = '' \
+                OR _chunked_hash <> _content_hash \
+             LIMIT {limite}"
         )
     }
 

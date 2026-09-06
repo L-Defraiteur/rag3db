@@ -1758,3 +1758,74 @@ fn une_transition_non_declaree_ne_passe_pas() {
     assert_eq!(flush.failed, 0, "état inchangé : {flush:?}");
     assert_eq!(ticket_status(&catalog), "in_progress");
 }
+
+
+/// **La dette de découpage vit dans la base** (C5). Une mise à jour posée au
+/// niveau donnée pose ses champs et laisse ses chunks tels quels ;
+/// `_chunked_hash` dit qu'ils sont en retard. Exiger le plein texte les
+/// redécoupe — par une requête, rien n'a été gardé en mémoire — et la liste
+/// des chunks reflète alors le nouveau contenu.
+///
+/// On compte les chunks : le texte de départ tient en un, celui de la mise à
+/// jour en plusieurs. Tant que la dette n'est pas soldée, le compte ne bouge
+/// pas ; après, il grandit.
+#[test]
+#[ignore]
+fn une_mise_a_jour_au_niveau_donnee_laisse_une_dette_de_decoupage_qui_se_solde() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+
+    let mut catalog = setup_simple_catalog(4);
+    catalog
+        .ingest_entities("Product", vec![make_product(
+            "Rust Book", "Un guide court.", "Bref.", 49.99,
+        )])
+        .expect("ingestion");
+    let uuid = catalog
+        .search("Product", "guide", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche")
+        .results.first().map(|r| r.uuid.clone()).expect("le produit posé");
+    // `count` ne connaît que les entités déclarées : la table de chunks se
+    // compte par la connexion.
+    let compter_les_chunks = |c: &Catalog| -> usize {
+        c.conn_arc()
+            .execute("MATCH (n:Product_Chunk) RETURN count(n) AS n")
+            .expect("compte des chunks")
+            .rows
+            .first()
+            .and_then(|l| l.first())
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as usize
+    };
+    let chunks_avant = compter_les_chunks(&catalog);
+    assert!(chunks_avant >= 1);
+
+    // Une description longue : plusieurs chunks, une fois découpée.
+    let long = "clavecin ".repeat(600);
+    let mut maj = BTreeMap::new();
+    maj.insert("description".to_string(), CypherValue::String(long));
+    let res = catalog.update_jusqu_a("Product", &uuid, maj, D::DONNEE).expect("mise à jour");
+    assert_eq!(res.rendu_pret, Some(D::DONNEE), "la donnée, exactement : {res:?}");
+    assert_eq!(
+        compter_les_chunks(&catalog),
+        chunks_avant,
+        "au niveau donnée, les chunks ne bougent pas : ils sont en dette"
+    );
+
+    // Le plein texte exigé solde la dette de découpage.
+    let mut w = Vec::new();
+    catalog.appliquer_la_consigne_pour("Product", D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+    let chunks_apres = compter_les_chunks(&catalog);
+    eprintln!("[découpage] avant={chunks_avant} après={chunks_apres} avertissements={w:?}");
+    assert!(
+        chunks_apres > chunks_avant,
+        "la dette de découpage doit être soldée : {chunks_avant} → {chunks_apres} ({w:?})"
+    );
+
+    // Et une seconde passe n'a plus rien à redécouper.
+    let encore = catalog.rattraper_le_decoupage(None, 512, false).expect("rattrapage");
+    assert_eq!(encore, 0, "plus rien en retard");
+}
