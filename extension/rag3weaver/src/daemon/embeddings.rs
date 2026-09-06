@@ -97,6 +97,11 @@ pub struct EmbedDaemon {
 
 impl EmbedDaemon {
     /// Un démon qui sert cet embedder.
+    /// L'embarqueur servi — pour le chauffer avant d'écouter.
+    pub fn embedder(&self) -> &Arc<dyn Embedder> {
+        &self.embedder
+    }
+
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
         Self {
             embedder,

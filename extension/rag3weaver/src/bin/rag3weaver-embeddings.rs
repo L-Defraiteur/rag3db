@@ -104,6 +104,30 @@ fn servir() -> Result<(), String> {
     if !expose && !rag3weaver::daemon::est_local(&adresse) {
         return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.to_string());
     }
+    // **Chauffer avant de servir.** Le cache d'autotune est global et chaud,
+    // mais chaque processus recompile ses noyaux (SPIR-V, puis le pipeline
+    // radv) à la première rencontre de chaque classe de forme : un démon
+    // fraîchement remplacé faisait payer ça au premier drain (36 s → 44 s sur
+    // src/dataflow, 6 septembre 2026). Ici on passe les classes typiques —
+    // longueurs 64, 128, 256, 512 jetons, lots 1, 8, 32 et le conseil du
+    // modèle — avant d'annoncer l'adresse. `RAG3WEAVER_DEMON_CHAUFFE=0` pour
+    // s'en passer.
+    if std::env::var("RAG3WEAVER_DEMON_CHAUFFE").map(|v| v != "0").unwrap_or(true) {
+        let t = std::time::Instant::now();
+        let (lot_max, _) = demon.identite().lot_conseille.unwrap_or((32, 512));
+        let mut formes = 0;
+        for mots in [40usize, 90, 190, 380] {
+            for lot in [1usize, 8, 32, lot_max] {
+                let textes: Vec<String> = (0..lot)
+                    .map(|i| (0..mots).map(|j| format!("m{}", (i * 7 + j * 13) % 97)).collect::<Vec<_>>().join(" "))
+                    .collect();
+                if demon.embedder().embed(&textes).is_ok() {
+                    formes += 1;
+                }
+            }
+        }
+        eprintln!("  chauffe : {formes} classes de forme en {:?}", t.elapsed());
+    }
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
     demon.servir(&adresse).map_err(|e| e.to_string())
 }

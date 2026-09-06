@@ -105,10 +105,13 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
         "de vrais embeddings rapprochent les deux animaux : {anima:.3} contre {hors:.3}"
     );
 
-    // Le second client doit obtenir **exactement** les mêmes vecteurs : c'est
-    // le même modèle, pas une seconde copie.
+    // Le second client doit obtenir les mêmes vecteurs : c'est le même modèle,
+    // pas une seconde copie. « Les mêmes » à 1e-3 près : ici le texte part
+    // seul, là il partait dans un lot de trois, et en Flex32 la forme du lot
+    // choisit un autre pavage de matmul (6 septembre 2026).
     let encore = second.embed(&textes[..1].to_vec()).expect("embed depuis le second");
-    assert_eq!(encore[0], vecteurs[0], "un seul modèle, une seule réponse");
+    let ecart = encore[0].iter().zip(&vecteurs[0]).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+    assert!(ecart < 1e-3, "un seul modèle, une seule réponse : écart {ecart}");
 
     // Le creux traverse aussi.
     let (dense, creux) = second.embed_dual(&textes[..1].to_vec()).expect("embed_dual");
