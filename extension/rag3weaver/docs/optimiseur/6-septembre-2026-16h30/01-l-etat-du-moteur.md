@@ -98,6 +98,9 @@ llama.cpp** sur la même carte (22 000–23 000 j/s sur les lots courts). Vertex
 `text-embedding-005`, au quota du compte, plafonne à 8 000 j/s à un appel et
 répond 429 dès huit en vol.
 
+Qualité sur notre code (45 questions fr/en, 67 scopes réels, [04](04-le-banc-de-qualite.md)) :
+granite-278m MRR 0,844, BGE-M3 0,793, granite-107m 0,779, MiniLM 0,61 et 0,57.
+
 Parité : Flex32 contre f32, cosinus 0,999999 (BGE-M3), 0,99999 (Granite sur
 ROCm). Granite : paraphrase fr/en 0,977 contre 0,479 pour un texte étranger ;
 une question en français retrouve `budget_batches` à 0,70 contre 0,53 et 0,52.

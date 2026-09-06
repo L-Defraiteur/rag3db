@@ -203,6 +203,23 @@ impl BurnDevice {
                         if std::env::var_os("RAG3WEAVER_BURN_FLOAT").is_some() { "RAG3WEAVER_BURN_FLOAT" } else { "défaut" }
                     )
                 }
+                // **Une carte ne se configure qu'une fois par processus.** Le
+                // second modèle chargé sur la même carte (BGE-M3 puis le
+                // reranker, ou les cinq du banc de qualité) reçoit
+                // `AlreadyInitialized` : la précision est celle que le premier a
+                // posée, pas « f32 ». On la relit plutôt que de la deviner — la
+                // ligne ci-dessous a dit « f32 » pour quatre modèles en Flex32
+                // avant le 6 septembre 2026 au soir.
+                // (`DeviceError` vit dans burn-std, que burn ne réexporte pas :
+                // on reconnaît la variante à son nom.)
+                Err(e) if format!("{e:?}").starts_with("AlreadyInitialized") => {
+                    let posee = device.settings().float_dtype;
+                    precision = if posee == d {
+                        format!("{d:?} (déjà posée sur cette carte)")
+                    } else {
+                        format!("{posee:?} (carte déjà initialisée ainsi, {d:?} demandé)")
+                    };
+                }
                 Err(e) => eprintln!("[rag3weaver] précision {d:?} refusée : {e:?} — précision par défaut"),
             }
         }

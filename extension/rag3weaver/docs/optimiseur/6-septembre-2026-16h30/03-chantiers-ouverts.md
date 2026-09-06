@@ -16,8 +16,15 @@ lots, pipeline, base) est à la session architecture, pas ici.
 | chauffe du démon avant d'écouter | 9a05d749a |
 | flash attention sur tous les graphes BERT (masque booléen) | 02d709e13 |
 | docs 02, 03, 04, banc Vertex, scripts pre.3 | 10d7e7114 |
+| le banc de qualité (chantier A, ci-dessous), la ligne de précision honnête | [04](04-le-banc-de-qualite.md) |
 
 ## A. Le banc de qualité : granite-107m, granite-278m, BGE-M3 sur des requêtes de code
+
+**Fait le 6 septembre au soir**, résultats et recommandation dans le
+[04](04-le-banc-de-qualite.md) : granite-278m devant BGE-M3 sur notre code
+(MRR 0,844 contre 0,793), granite-107m à 6–9 points derrière, les MiniLM
+hors jeu. Reste à Lucie de trancher ; le banc s'affine avec des requêtes
+réelles de `e2e_search` et un corpus anglais (le noyau). Le texte d'origine :
 
 **Pourquoi.** Lucie tranche sur deux chiffres, vitesse et qualité. La vitesse
 est mesurée (01 §4) ; la qualité relative des trois sur *nos* requêtes ne
