@@ -61,7 +61,12 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     let root = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let all = read_sources(&root).unwrap();
     let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("mesure", all.into_iter()));
+    let t_analyse = Instant::now();
     let analysis = analyze_source(source.as_ref()).unwrap();
+    eprintln!(
+        "[mesure] analyse en {:?} — parse {} ms, relations {} ms, {} relations, {} sautés",
+        t_analyse.elapsed(), analysis.parse_ms, analysis.relation_ms, analysis.relations.len(), analysis.skipped.len()
+    );
     let texte: usize = analysis.scopes.iter().map(|s| s.content.len() + s.signature.len() + s.docstring.len()).collect::<Vec<_>>().iter().sum();
     let source_len: usize = analysis.files.iter().map(|f| f.size_bytes as usize).sum();
     eprintln!(

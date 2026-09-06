@@ -1861,11 +1861,17 @@ struct SimpleEmbedWork {
 }
 
 
-/// **Embarquer en pipeline.** Un fil de fond envoie les lots au modèle, dans
-/// l'ordre, avec au plus deux lots d'avance ; le fil appelant écrit chaque
-/// lot rendu. Le modèle ne voit pas les écritures, la base ne voit pas le
-/// modèle — sans ça les deux s'attendaient l'un l'autre (6 septembre 2026 :
-/// carte à 36 % pendant une ingestion). Une erreur d'un côté arrête l'autre.
+/// **Embarquer en pipeline.** Des fils de fond envoient les lots au modèle,
+/// avec au plus deux lots d'avance ; le fil appelant écrit chaque lot rendu,
+/// dans l'ordre où il revient. Le modèle ne voit pas les écritures, la base
+/// ne voit pas le modèle — sans ça les deux s'attendaient l'un l'autre
+/// (6 septembre 2026 : carte à 36 % pendant une ingestion). Une erreur d'un
+/// côté arrête l'autre.
+///
+/// **Deux producteurs par défaut** (`RAG3WEAVER_EMBED_THREADS`) : en local,
+/// `embed` tokenise sur le processeur puis calcule sur la carte, l'un après
+/// l'autre — avec deux fils, l'un tokenise pendant que l'autre calcule. Par
+/// le démon, deux requêtes en vol font la même chose de son côté.
 fn embed_pipeline<W: Sync, V: Send>(
     works: &[W],
     plages: Vec<std::ops::Range<usize>>,
@@ -1874,11 +1880,23 @@ fn embed_pipeline<W: Sync, V: Send>(
     embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
     mut write: impl FnMut(&[W], V) -> Result<(), String>,
 ) -> Result<(), String> {
+    let producteurs = std::env::var("RAG3WEAVER_EMBED_THREADS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(2)
+        .min(plages.len().max(1));
     let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(std::ops::Range<usize>, V), String>>(2);
+    let suivant = std::sync::atomic::AtomicUsize::new(0);
     std::thread::scope(|s| {
         let text_of = &text_of;
-        s.spawn(move || {
-            for plage in plages {
+        let plages = &plages;
+        let suivant = &suivant;
+        for _ in 0..producteurs {
+            let tx = tx.clone();
+            s.spawn(move || loop {
+                let i = suivant.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some(plage) = plages.get(i).cloned() else { return };
                 let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
                 let t = std::time::Instant::now();
                 let rendu = embed(&texts);
@@ -1890,8 +1908,9 @@ fn embed_pipeline<W: Sync, V: Send>(
                 if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
                     return;
                 }
-            }
-        });
+            });
+        }
+        drop(tx);
         for message in rx {
             let (plage, v) = message?;
             write(&works[plage], v)?;

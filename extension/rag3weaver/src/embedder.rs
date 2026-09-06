@@ -883,9 +883,10 @@ pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> Lot
             // coup : la carte a refusé un tampon de 2,6 Go (6 septembre 2026,
             // granite-107m). Le conseil vaut pour des textes courts ; sur des
             // longs, on divise le nombre d'éléments par le carré de la
-            // longueur : seq × jetons² / 8 — 32 séquences de 512 pour un
-            // 256 × 512, 256 de 180.
-            max_area: seq.max(1) * jetons.max(1) * jetons.max(1) / 8,
+            // longueur : seq × jetons² / 2 — 32 séquences de 512 pour un
+            // 64 × 512 (400 Mo d'attention), 64 de 360. À /8, les lots de
+            // chunks longs tombaient à 8 et la carte restait à 37 %.
+            max_area: seq.max(1) * jetons.max(1) * jetons.max(1) / 2,
             // Des comptes stables : le modèle est local, ses formes se
             // répètent et l'autotune les retrouve.
             stable: true,
@@ -910,8 +911,8 @@ pub struct LotBudget {
 }
 
 impl LotBudget {
-    /// 32 × 512² / 8 : ce que BGE-M3 tenait avec 8 192 caractères par appel.
-    pub const AREA_DEFAUT: usize = 32 * 512 * 512 / 8;
+    /// 32 × 512² / 2 : seize séquences de 512 jetons, ce que BGE-M3 tient sans peine.
+    pub const AREA_DEFAUT: usize = 32 * 512 * 512 / 2;
 }
 
 /// Comme [`budget_batches`], mais chaque lot compte une **puissance de deux**
@@ -977,9 +978,9 @@ mod tests_rythme_et_lots {
         let l = stable_batches(&[500, 10, 10], large(32, 100));
         assert_eq!(l.iter().map(|r| r.len()).collect::<Vec<_>>(), vec![1, 2]);
         // **La surface d'attention** : 256 textes de 1 500 caractères (~500
-        // jetons) sous une surface de 256 × 512² / 8 → 32 par lot, pas 256.
+        // jetons) sous une surface de 64 × 512² / 2 → 32 par lot, pas 64.
         let longs = vec![1500; 256];
-        let l = stable_batches(&longs, lot_budget(Some((256, 512)), 32));
+        let l = stable_batches(&longs, lot_budget(Some((64, 512)), 32));
         assert!(l.iter().all(|r| r.len() <= 32), "{:?}", l.iter().map(|r| r.len()).collect::<Vec<_>>());
         assert!(l.iter().any(|r| r.len() == 32));
     }
@@ -991,7 +992,7 @@ mod tests_rythme_et_lots {
         let b = lot_budget(Some((256, 512)), 32);
         if !crate::regime::Regime::courant().carte_partagee() {
             assert_eq!((b.max_items, b.max_chars), (256, 256 * 512 * 3));
-            assert_eq!(b.max_area, 256 * 512 * 512 / 8);
+            assert_eq!(b.max_area, 256 * 512 * 512 / 2);
         }
         assert_eq!(lot_budget(None, 32).max_chars, embed_char_budget());
         assert!(!lot_budget(None, 32).stable, "sans conseil, pas d'arrondi");
