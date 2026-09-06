@@ -172,7 +172,18 @@ fn content(t: FieldType) -> SimpleFieldDef {
 /// Chunking des scopes : 1000 / 100 depuis février (« ~250 tokens »). À
 /// dériver de la fenêtre du modèle d'embedding quand on saura la lire.
 pub fn default_scope_chunking() -> ChunkingConfig {
-    ChunkingConfig { max_size: 1000, overlap: 100, strategy: ChunkStrategy::Semantic, ..Default::default() }
+    // **Par lignes, façon ragforge** (6 septembre 2026) : 30 lignes ou 1 500
+    // caractères, jamais au milieu d'une ligne, 5 lignes de recouvrement
+    // seulement au-delà. Avant : sémantique 1 000 / 100, une découpe de prose
+    // qui ne connaît ni bloc ni accolade.
+    ChunkingConfig {
+        max_size: 1500,
+        overlap: 0,
+        strategy: ChunkStrategy::Lines,
+        max_lines: 30,
+        overlap_lines: 5,
+        ..Default::default()
+    }
 }
 
 pub fn file_config() -> EntityConfig {
@@ -214,8 +225,14 @@ pub fn file_config() -> EntityConfig {
 pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     let mut fields = HashMap::new();
     fields.insert("name".into(), title(FieldType::String));
-    fields.insert("signature".into(), content(FieldType::Text));
+    // **La signature n'est plus un champ de contenu** (6 septembre 2026) :
+    // c'est la première ligne du texte propre, déjà dans `content`. L'embarquer
+    // à part faisait un vecteur de plus par scope — 1 633 sur 4 240 — pour un
+    // texte que le premier chunk porte déjà. Elle reste rendue et filtrable.
+    fields.insert("signature".into(), field(FieldType::Text));
     fields.insert("content".into(), content(FieldType::Text));
+    // La docstring, elle, précède la déclaration : hors de l'empan, donc hors
+    // de `content`. Elle reste embarquée à part, comme chez ragforge.
     fields.insert("docstring".into(), content(FieldType::Text));
     // **Le vocabulaire, déclaré.** Les douze premiers viennent de
     // `ScopeInfoType` ; `texte_brut` est ce qu'on n'a pas essayé de parser.
@@ -565,6 +582,9 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         named.get(rel).cloned().unwrap_or_else(|| (rel.to_string(), BTreeMap::new()))
     };
 
+    // Le texte brut de chaque fichier, gardé pour le texte propre des scopes
+    // (`own_texts`) : l'analyseur ne le rend pas.
+    let raw: HashMap<String, String> = content_map.clone();
     let parser = ProjectParser::new(ProjectParserOptions { verbose: false });
     let result = parser.parse_project(ParseProjectOptions {
         root: root.to_string(),
@@ -704,12 +724,22 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         let repo = coords.get("repo").cloned().unwrap_or_default();
         let repo_path = coords.get("repo_path").cloned().unwrap_or_default();
         let language = language_name(abs);
-        for s in &fa.scopes {
+        // **Le texte propre de chaque scope**, calculé sur le fichier entier :
+        // sa déclaration et son corps, chaque enfant direct remplacé par sa
+        // ligne de signature. Décidé le 6 septembre 2026 (doc 19h57) : avant,
+        // le `content` d'un `impl` était le corps entier, méthodes comprises,
+        // et une méthode était embarquée deux ou trois fois.
+        let owned = raw.get(abs).map(|texte| own_texts(texte, &fa.scopes)).unwrap_or_default();
+        for (i, s) in fa.scopes.iter().enumerate() {
             let type_str = scope_type_name(&s.r#type).to_string();
             let Some(key) = by_position.get(&(rel.clone(), s.name.clone(), type_str.clone(), s.scope_start_line)) else {
                 continue;
             };
-            let content = if s.content_dedented.is_empty() { s.content.clone() } else { s.content_dedented.clone() };
+            let content = match owned.get(i) {
+                Some(Some(propre)) => propre.clone(),
+                _ if s.content_dedented.is_empty() => s.content.clone(),
+                _ => s.content_dedented.clone(),
+            };
             analysis.scopes.push(ScopeRecord {
                 key: key.clone(),
                 source: source.clone(),
@@ -1388,11 +1418,142 @@ impl Catalog {
     }
 }
 
+/// **Le texte propre de chaque scope d'un fichier.**
+///
+/// Pour un scope, c'est la tranche du fichier de sa déclaration à sa fin,
+/// où chaque **enfant direct** (le scope le plus large strictement contenu)
+/// est remplacé par sa ligne de signature suivie de `…`. Une méthode garde
+/// tout son texte ; un `impl` garde ce qu'il déclare et la liste de ses
+/// méthodes ; un module, ses déclarations. Puis dé-indenté comme l'analyseur
+/// le fait, en sautant la première ligne.
+///
+/// `None` pour un scope sans empan (les `file_scope_NN`, dont le texte est
+/// déjà celui d'un trou entre déclarations) : on garde ce que l'analyseur a
+/// donné. Les fermetures et les blocs ne sont pas des enfants à remplacer :
+/// ils font partie du corps qui les contient.
+///
+/// C'est ce que ragforge fait dans son analyseur (une classe = sa ligne de
+/// déclaration, la hiérarchie en relations). Ici comme là, c'est
+/// l'**analyseur** qui décide ce qu'est le contenu d'un scope ; le catalogue
+/// ne sait pas ce qu'est du code, et `content` reste son champ de contenu
+/// (doc du 6 septembre 2026, 19h57).
+fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeInfo]) -> Vec<Option<String>> {
+    let n = scopes.len();
+    let empan_valide = |i: usize| {
+        let s = &scopes[i];
+        s.scope_end_byte > s.scope_start_byte
+            && s.scope_end_byte <= texte.len()
+            && texte.is_char_boundary(s.scope_start_byte)
+            && texte.is_char_boundary(s.scope_end_byte)
+    };
+    // Les empans réels, du plus large au plus étroit à même début.
+    let mut ordre: Vec<usize> = (0..n).filter(|&i| empan_valide(i)).collect();
+    ordre.sort_by_key(|&i| (scopes[i].scope_start_byte, std::cmp::Reverse(scopes[i].scope_end_byte)));
+    // Le parent direct de chaque scope, par imbrication d'empans.
+    let mut enfants: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut pile: Vec<usize> = Vec::new();
+    for &i in &ordre {
+        let (debut, fin) = (scopes[i].scope_start_byte, scopes[i].scope_end_byte);
+        while let Some(&haut) = pile.last() {
+            if debut >= scopes[haut].scope_start_byte && fin <= scopes[haut].scope_end_byte {
+                break;
+            }
+            pile.pop();
+        }
+        let remplacable = !matches!(scope_type_name(&scopes[i].r#type), "lambda" | "block");
+        if let Some(&parent) = pile.last() {
+            if remplacable {
+                enfants[parent].push(i);
+            }
+        }
+        pile.push(i);
+    }
+    (0..n)
+        .map(|i| {
+            if !empan_valide(i) {
+                return None;
+            }
+            let s = &scopes[i];
+            let mut propre = String::new();
+            let mut curseur = s.scope_start_byte;
+            for &c in &enfants[i] {
+                let (cd, cf) = (scopes[c].scope_start_byte, scopes[c].scope_end_byte);
+                if cd < curseur || cf > s.scope_end_byte {
+                    continue;
+                }
+                propre.push_str(&texte[curseur..cd]);
+                let tranche = &texte[cd..cf];
+                propre.push_str(tranche.lines().next().unwrap_or("").trim_end());
+                if tranche.contains('\n') {
+                    propre.push_str(" …");
+                }
+                curseur = cf;
+            }
+            propre.push_str(&texte[curseur..s.scope_end_byte]);
+            Some(dedent_after_first_line(&propre))
+        })
+        .collect()
+}
+
+/// Retire l'indentation commune des lignes **après la première** — la
+/// première est livrée sans indentation par tree-sitter, comme dans
+/// `codeparsers::dedent_content`.
+fn dedent_after_first_line(texte: &str) -> String {
+    let lignes: Vec<&str> = texte.lines().collect();
+    let commun = lignes
+        .iter()
+        .skip(1)
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    let mut out = String::with_capacity(texte.len());
+    for (i, l) in lignes.iter().enumerate() {
+        if i == 0 {
+            // L'empan commence au début de la ligne, indentation comprise.
+            out.push_str(l.trim_start());
+            continue;
+        }
+        {
+            out.push('\n');
+            if !l.trim().is_empty() {
+                let coupe = l.char_indices().nth(commun).map(|(b, _)| b).unwrap_or(l.len());
+                out.push_str(&l[coupe..]);
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const RUST_SRC: &str = "use serde::Serialize;\n\npub struct Point {\n    x: i32,\n}\n\nimpl Point {\n    pub fn norm(&self) -> i32 {\n        self.x.abs()\n    }\n}\n\npub fn twice(p: &Point) -> i32 {\n    p.norm() * 2\n}\n";
+
+    /// **Un scope embarque son texte propre, pas celui de ses enfants.** Un
+    /// `impl` à deux méthodes garde ses deux signatures et aucun corps ; une
+    /// méthode garde tout son texte, signature comprise ; le module qui
+    /// contient l'impl ne voit que la ligne `impl`.
+    #[test]
+    fn un_scope_embarque_son_texte_propre_pas_celui_de_ses_enfants() {
+        let src = "mod calcul {\n    pub struct Compteur { n: u32 }\n\n    impl Compteur {\n        pub fn inc(&mut self) {\n            self.n += 1;\n        }\n\n        pub fn total(&self) -> u32 {\n            let f = |x: u32| x * 2;\n            f(self.n)\n        }\n    }\n}\n";
+        let a = analyze("/virtual", vec![("c.rs".into(), src.into())]);
+        let par_nom = |nom: &str| a.scopes.iter().find(|s| s.name == nom).unwrap_or_else(|| panic!("scope {nom}"));
+        let imp = a.scopes.iter().find(|s| s.content.starts_with("impl Compteur")).expect("l'impl");
+        assert!(imp.content.contains("pub fn inc(&mut self) {"), "{}", imp.content);
+        assert!(imp.content.contains("pub fn total(&self) -> u32 {"), "{}", imp.content);
+        assert!(!imp.content.contains("self.n += 1"), "le corps d'une méthode n'est pas dans l'impl : {}", imp.content);
+        assert!(imp.content.contains("…"), "{}", imp.content);
+        let inc = par_nom("inc");
+        assert!(inc.content.starts_with("pub fn inc"), "la méthode garde sa signature : {}", inc.content);
+        assert!(inc.content.contains("self.n += 1"), "{}", inc.content);
+        let total = par_nom("total");
+        assert!(total.content.contains("|x: u32| x * 2"), "une fermeture fait partie du corps : {}", total.content);
+        let m = par_nom("calcul");
+        assert!(m.content.contains("impl Compteur {"), "{}", m.content);
+        assert!(!m.content.contains("pub fn inc"), "le module ne voit que la ligne impl : {}", m.content);
+    }
 
     #[test]
     fn analyze_yields_files_scopes_and_relations_by_key() {

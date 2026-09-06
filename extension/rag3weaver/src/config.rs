@@ -158,6 +158,13 @@ pub enum ChunkStrategy {
     Semantic,
     Fixed,
     Sentence,
+    /// **Par lignes**, pour du code : jusqu'à `max_lines` lignes ou `max_size`
+    /// caractères par chunk, jamais coupé au milieu d'une ligne, et
+    /// `overlap_lines` lignes de recouvrement **seulement** quand le texte
+    /// dépasse. Un texte qui tient est un seul chunk, tel quel. C'est la
+    /// découpe de ragforge (30 lignes, 1 500 caractères, 5 de recouvrement),
+    /// reprise le 6 septembre 2026 pour les scopes.
+    Lines,
     /// Markdown-aware splitting (respects headers, code blocks, lists).
     Markdown,
 }
@@ -188,6 +195,15 @@ pub struct ChunkingConfig {
     /// Set to 0 to disable title prefix in embeddings.
     #[serde(default = "default_title_max_chars", alias = "title_max_chars")]
     pub title_max_chars: usize,
+
+    /// Stratégie `Lines` : lignes par chunk, au plus. 0 = pas de borne.
+    #[serde(alias = "max_lines")]
+    pub max_lines: usize,
+
+    /// Stratégie `Lines` : lignes partagées entre deux chunks voisins, quand
+    /// le texte dépasse.
+    #[serde(alias = "overlap_lines")]
+    pub overlap_lines: usize,
 }
 
 fn default_title_max_chars() -> usize { 256 }
@@ -222,6 +238,8 @@ impl Default for ChunkingConfig {
             strategy: ChunkStrategy::Semantic,
             fulltext_on_chunks: true,
             title_max_chars: default_title_max_chars(),
+            max_lines: 30,
+            overlap_lines: 5,
         }
     }
 }

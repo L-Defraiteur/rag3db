@@ -67,6 +67,11 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     let total = t.elapsed();
     let chunks = catalog.conn().execute("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap();
     let n_chunks = match chunks.rows[0][0] { rag3weaver::connection::CypherValue::Int(n) => n, _ => -1 };
+    // D'où viennent les chunks : par champ de contenu.
+    if let Ok(par_champ) = catalog.conn().execute("MATCH (c:Scope_Chunk) RETURN c._parent_field, count(c)") {
+        let detail: Vec<String> = par_champ.rows.iter().map(|r| format!("{}={}", r[0].as_str().unwrap_or("?"), match r[1] { rag3weaver::connection::CypherValue::Int(n) => n, _ => -1 })).collect();
+        eprintln!("[mesure] chunks par champ : {}", detail.join(" "));
+    }
     eprintln!(
         "[mesure] ingéré en {:?} — entités {} ms, relations {} ms, symboles {} ms ; chunks={} ; appels GPU ≈ {}",
         total, report.entities_ms, report.relations_ms, report.symbols_ms, n_chunks,

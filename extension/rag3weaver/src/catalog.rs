@@ -3895,21 +3895,10 @@ impl Catalog {
         self.open_fts_handles_for(&[entity_name.to_string()]);
 
         // Ensure chunker is cached for this entity's config
-        let chunker_key = ChunkerConfig {
-            max_size: entity_config.chunking.max_size,
-            overlap: entity_config.chunking.overlap,
-            strategy: entity_config.chunking.strategy.clone(),
-        };
+        let chunker_key = ChunkerConfig::from(&entity_config.chunking);
         self.chunker_cache
-            .entry(chunker_key)
-            .or_insert_with(|| {
-                let key = ChunkerConfig {
-                    max_size: entity_config.chunking.max_size,
-                    overlap: entity_config.chunking.overlap,
-                    strategy: entity_config.chunking.strategy.clone(),
-                };
-                Chunker::new(key)
-            });
+            .entry(chunker_key.clone())
+            .or_insert_with(|| Chunker::new(chunker_key));
 
         // Build entity records with UUIDs and content hashes
         let entity_def = self.config.entities.get(entity_name)
@@ -6970,21 +6959,13 @@ impl Catalog {
     /// Pre-warm the chunker cache for all KB and simple entity chunking configs.
     fn warm_chunker_cache(&mut self) {
         for kb in self.kb_metadata.values() {
-            let key = ChunkerConfig {
-                max_size: kb.chunking.max_size,
-                overlap: kb.chunking.overlap,
-                strategy: kb.chunking.strategy.clone(),
-            };
+            let key = ChunkerConfig::from(&kb.chunking);
             self.chunker_cache
                 .entry(key.clone())
                 .or_insert_with(|| Chunker::new(key));
         }
         for ec in self.entity_configs.values() {
-            let key = ChunkerConfig {
-                max_size: ec.chunking.max_size,
-                overlap: ec.chunking.overlap,
-                strategy: ec.chunking.strategy.clone(),
-            };
+            let key = ChunkerConfig::from(&ec.chunking);
             self.chunker_cache
                 .entry(key.clone())
                 .or_insert_with(|| Chunker::new(key));

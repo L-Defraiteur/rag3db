@@ -62,6 +62,7 @@ fn small_chunking() -> ChunkingConfig {
         strategy: ChunkStrategy::Semantic,
         fulltext_on_chunks: false,
         title_max_chars: 0,
+        ..Default::default()
     }
 }
 

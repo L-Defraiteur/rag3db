@@ -57,6 +57,10 @@ pub struct ChunkerConfig {
     pub overlap: usize,
     /// Chunking strategy.
     pub strategy: ChunkStrategy,
+    /// `Lines` : lignes par chunk, au plus (0 = sans borne).
+    pub max_lines: usize,
+    /// `Lines` : lignes partagées entre voisins, quand le texte dépasse.
+    pub overlap_lines: usize,
 }
 
 impl Default for ChunkerConfig {
@@ -65,6 +69,23 @@ impl Default for ChunkerConfig {
             max_size: 1500,
             overlap: 200,
             strategy: ChunkStrategy::Semantic,
+            max_lines: 30,
+            overlap_lines: 5,
+        }
+    }
+}
+
+/// **Une seule source** pour passer de la configuration déclarée au découpeur :
+/// neuf littéraux faisaient cette copie champ par champ, et chaque champ
+/// nouveau les cassait tous (6 septembre 2026).
+impl From<&crate::config::ChunkingConfig> for ChunkerConfig {
+    fn from(c: &crate::config::ChunkingConfig) -> Self {
+        Self {
+            max_size: c.max_size,
+            overlap: c.overlap,
+            strategy: c.strategy.clone(),
+            max_lines: c.max_lines,
+            overlap_lines: c.overlap_lines,
         }
     }
 }
@@ -90,7 +111,11 @@ impl Chunker {
             return vec![];
         }
 
-        if text.len() <= self.config.max_size {
+        // Par lignes, la borne en lignes compte autant que celle en octets.
+        let tient_en_lignes = self.config.strategy != ChunkStrategy::Lines
+            || self.config.max_lines == 0
+            || text.lines().count() <= self.config.max_lines;
+        if text.len() <= self.config.max_size && tient_en_lignes {
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 return vec![];
@@ -112,8 +137,73 @@ impl Chunker {
 
         match self.config.strategy {
             ChunkStrategy::Fixed => self.chunk_fixed(text),
+            ChunkStrategy::Lines => self.chunk_lines(text),
             _ => self.chunk_with_text_splitter(text),
         }
+    }
+
+    /// **Par lignes** : des cœurs de lignes entières, jusqu'à `max_lines`
+    /// lignes ou `max_size` octets, puis `overlap_lines` lignes de contexte
+    /// de chaque côté. Un dernier cœur trop court (moins de 50 octets) rejoint
+    /// le précédent plutôt que de faire un chunk qui ne dit rien. Une ligne
+    /// plus longue que `max_size` fait un cœur à elle seule.
+    fn chunk_lines(&self, text: &str) -> Vec<Chunk> {
+        let line_at = build_line_index(text);
+        // Les débuts de ligne, plus la fin du texte.
+        let mut debuts: Vec<usize> = vec![0];
+        for (i, b) in text.bytes().enumerate() {
+            if b == b'\n' && i + 1 < text.len() {
+                debuts.push(i + 1);
+            }
+        }
+        let n = debuts.len();
+        let fin_de = |l: usize| if l + 1 < n { debuts[l + 1] } else { text.len() };
+        let max_lines = if self.config.max_lines == 0 { usize::MAX } else { self.config.max_lines };
+
+        // Phase 1 : les cœurs, en lignes.
+        let mut cores: Vec<(usize, usize)> = Vec::new(); // (première ligne, dernière ligne exclue)
+        let mut l = 0;
+        while l < n {
+            let mut fin = l + 1;
+            while fin < n && fin - l < max_lines && fin_de(fin) - debuts[l] <= self.config.max_size {
+                fin += 1;
+            }
+            cores.push((l, fin));
+            l = fin;
+        }
+        if cores.len() >= 2 {
+            let (d, f) = cores[cores.len() - 1];
+            if fin_de(f - 1) - debuts[d] < 50 {
+                cores.pop();
+                cores.last_mut().expect("au moins un cœur").1 = f;
+            }
+        }
+
+        // Phase 2 : le contexte, en lignes.
+        let mut chunks = Vec::new();
+        for (index, &(d, f)) in cores.iter().enumerate() {
+            let start_line = d.saturating_sub(self.config.overlap_lines);
+            let end_line = (f + self.config.overlap_lines).min(n);
+            let (start_byte, end_byte) = (debuts[start_line], fin_de(end_line - 1));
+            let (core_start, core_end) = (debuts[d], fin_de(f - 1));
+            let chunk_text = text[start_byte..end_byte].trim_end();
+            if chunk_text.trim().is_empty() {
+                continue;
+            }
+            chunks.push(Chunk {
+                text: chunk_text.to_string(),
+                index,
+                start_byte,
+                end_byte,
+                start_line: line_at[start_byte],
+                end_line: line_at[end_byte],
+                core_start_byte: core_start,
+                core_end_byte: core_end,
+                core_start_line: line_at[core_start],
+                core_end_line: line_at[core_end],
+            });
+        }
+        chunks
     }
 
     /// Fixed-size chunking: core-first, then extend with overlap.
@@ -252,11 +342,62 @@ fn count_newlines(text: &str) -> usize {
 mod tests {
     use super::*;
 
+    fn par_lignes(max_lines: usize, max_size: usize, overlap_lines: usize) -> Chunker {
+        Chunker::new(ChunkerConfig { strategy: ChunkStrategy::Lines, max_lines, max_size, overlap_lines, overlap: 0 })
+    }
+
+    /// **Un texte qui tient est un seul chunk, tel quel.** Pas de
+    /// recouvrement, pas de coupe : la découpe ne touche qu'à ce qui dépasse.
+    #[test]
+    fn par_lignes_un_texte_qui_tient_reste_entier() {
+        let texte = (0..20).map(|i| format!("ligne {i}")).collect::<Vec<_>>().join("\n");
+        let c = par_lignes(30, 1500, 5).chunk(&texte);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].text, texte);
+    }
+
+    /// **Au-delà, des cœurs de lignes entières et cinq lignes partagées.**
+    /// 70 lignes en cœurs de 30 : 30 + 30 + 10. Le second chunk commence 5
+    /// lignes avant son cœur et finit 5 lignes après ; jamais au milieu d'une
+    /// ligne ; les cœurs sont disjoints et couvrent tout.
+    #[test]
+    fn par_lignes_les_coeurs_sont_disjoints_et_le_contexte_partage() {
+        let texte = (0..70).map(|i| format!("ligne {i:02}")).collect::<Vec<_>>().join("\n");
+        let c = par_lignes(30, 100_000, 5).chunk(&texte);
+        assert_eq!(c.len(), 3, "{:?}", c.iter().map(|k| (k.core_start_line, k.core_end_line)).collect::<Vec<_>>());
+        assert_eq!((c[0].core_start_line, c[1].core_start_line, c[2].core_start_line), (0, 30, 60));
+        assert_eq!(c[0].core_end_byte, c[1].core_start_byte, "les cœurs se touchent");
+        assert_eq!(c[2].core_end_byte, texte.len(), "et couvrent tout");
+        assert_eq!(c[1].start_line, 25, "cinq lignes avant le cœur");
+        assert!(c[1].text.starts_with("ligne 25"), "{}", c[1].text);
+        assert!(c[1].text.ends_with("ligne 64"), "cinq lignes après : {}", c[1].text);
+        assert!(c[0].text.starts_with("ligne 00") && c[0].text.ends_with("ligne 34"));
+        for k in &c {
+            assert!(!k.text.ends_with('\n') && k.text.lines().all(|l| l.starts_with("ligne")), "jamais au milieu d'une ligne");
+        }
+    }
+
+    /// **La borne en caractères vaut autant que la borne en lignes**, et un
+    /// reste trop court rejoint le chunk précédent.
+    #[test]
+    fn par_lignes_la_borne_en_caracteres_et_le_reste_court() {
+        let texte = (0..12).map(|i| format!("{i:02} {}", "x".repeat(40))).collect::<Vec<_>>().join("\n");
+        // 44 octets par ligne : 3 lignes par cœur à 150, 12 lignes → 4 cœurs.
+        let c = par_lignes(30, 150, 1).chunk(&texte);
+        assert_eq!(c.len(), 4, "{:?}", c.iter().map(|k| (k.core_start_line, k.core_end_line)).collect::<Vec<_>>());
+        // 10 lignes : le dernier cœur d'une ligne (43 octets < 50) rejoint le précédent.
+        let texte = (0..10).map(|i| format!("{i:02} {}", "x".repeat(40))).collect::<Vec<_>>().join("\n");
+        let c = par_lignes(30, 150, 1).chunk(&texte);
+        assert_eq!(c.len(), 3, "{:?}", c.iter().map(|k| (k.core_start_line, k.core_end_line)).collect::<Vec<_>>());
+        assert_eq!(c[2].core_end_byte, texte.len());
+    }
+
     fn semantic_chunker(max_size: usize, overlap: usize) -> Chunker {
         Chunker::new(ChunkerConfig {
             max_size,
             overlap,
             strategy: ChunkStrategy::Semantic,
+            ..ChunkerConfig::default()
         })
     }
 
@@ -265,6 +406,7 @@ mod tests {
             max_size,
             overlap,
             strategy: ChunkStrategy::Fixed,
+            ..ChunkerConfig::default()
         })
     }
 
@@ -273,6 +415,7 @@ mod tests {
             max_size,
             overlap,
             strategy: ChunkStrategy::Markdown,
+            ..ChunkerConfig::default()
         })
     }
 

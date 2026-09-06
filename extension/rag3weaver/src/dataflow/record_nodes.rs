@@ -1345,11 +1345,7 @@ impl KBChunkRecordNode {
             };
 
             let chunking = &kb_meta.chunking;
-            let chunker_key = ChunkerConfig {
-                max_size: chunking.max_size,
-                overlap: chunking.overlap,
-                strategy: chunking.strategy.clone(),
-            };
+            let chunker_key = ChunkerConfig::from(chunking);
             let chunker = match chunker_cache.get(&chunker_key) {
                 Some(c) => c,
                 None => continue,
@@ -1545,11 +1541,7 @@ impl ChunkRecordNode {
         }
 
         // Get chunker from cache
-        let chunker_key = ChunkerConfig {
-            max_size: entity_config.chunking.max_size,
-            overlap: entity_config.chunking.overlap,
-            strategy: entity_config.chunking.strategy.clone(),
-        };
+        let chunker_key = ChunkerConfig::from(&entity_config.chunking);
         let chunker = match chunker_cache.get(&chunker_key) {
             Some(c) => c,
             None => return (vec![], vec![]),
@@ -3338,11 +3330,7 @@ impl Node for KBChunkNode {
                 None => continue,
             };
             let chunking = &kb_meta.chunking;
-            let chunker_key = ChunkerConfig {
-                max_size: chunking.max_size,
-                overlap: chunking.overlap,
-                strategy: chunking.strategy.clone(),
-            };
+            let chunker_key = ChunkerConfig::from(chunking);
             let chunker = chunker_cache
                 .get(&chunker_key)
                 .expect("chunker must be pre-warmed");
@@ -4892,11 +4880,7 @@ mod tests {
     }
 
     fn make_chunker_cache(config: &EntityConfig) -> HashMap<ChunkerConfig, Chunker> {
-        let key = ChunkerConfig {
-            max_size: config.chunking.max_size,
-            overlap: config.chunking.overlap,
-            strategy: config.chunking.strategy.clone(),
-        };
+        let key = ChunkerConfig::from(&config.chunking);
         let mut cache = HashMap::new();
         cache.insert(key.clone(), Chunker::new(key));
         cache
