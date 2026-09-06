@@ -206,6 +206,25 @@ if [ "$PG_DANS_LA_PASSE" = false ]; then
   echo "▸ ⚠ e2e_postgres NON JOUÉE : $PG_RAISON"
 fi
 
+# ── Les suites qui appellent un vrai modèle ────────────────────────────────
+#
+# Cinq fichiers portent `#![cfg(all(..., feature = "openai-llm", ...))]` : sans
+# cette feature, ils sont **compilés hors du lot** et rendent « ok. 0 passed »,
+# ce qui s'aligne dans le résumé exactement comme un succès. Le tableau final
+# les nomme désormais ; on l'annonce aussi **au lancement**, comme PostgreSQL,
+# parce que c'est là qu'on décide quoi lancer.
+#
+# L'exclusion est délibérée : ces suites dépensent le quota Vertex à chaque
+# passe. `--features openai-llm` les fait entrer.
+case ",$FEATURES," in
+  *,openai-llm,*) ;;
+  *)
+    echo "▸ ⚠ 5 suites NON JOUÉES (feature openai-llm absente, exclusion délibérée —"
+    echo "    elles appellent un vrai modèle) : e2e_avis_du_modele, e2e_cloud_code_agent,"
+    echo "    e2e_cloud_schema_probe, e2e_conversation_a_plusieurs, e2e_lecture_mermaid"
+    ;;
+esac
+
 CARGO_ARGS=(
   --features "$FEATURES"
 )
