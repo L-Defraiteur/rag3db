@@ -1851,6 +1851,11 @@ mod tests {
                     config: json!({}),
                 },
                 NodeDef {
+                    name: "sparse".into(),
+                    node_type: "SparseSearchNode".into(),
+                    config: json!({}),
+                },
+                NodeDef {
                     name: "fuse".into(),
                     node_type: "FuseResultsNode".into(),
                     config: json!({"weights": "bm25:0.6,vector:0.4"}),
@@ -1879,6 +1884,7 @@ mod tests {
             edges: vec![
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "bm25".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "vector".into(), to_port: "query".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "sparse".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "resolve".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "render".into(), to_port: "query".into() },
                 EdgeDef { from_node: "bm25".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "bm25".into() },
@@ -1891,7 +1897,9 @@ mod tests {
                 // Et ceux du chemin vectoriel, qui n'avaient jamais de canal :
                 // deux métas sur un même port se fusionnent.
                 EdgeDef { from_node: "vector".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
+                EdgeDef { from_node: "sparse".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
+                EdgeDef { from_node: "sparse".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "sparse".into() },
                 // D'où viennent les poids : l'appelant, la base de
                 // connaissances, ou le gabarit — la fusion doit voir la requête.
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "fuse".into(), to_port: "query".into() },
@@ -1984,8 +1992,8 @@ mod tests {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 8);
-        assert_eq!(def.edges.len(), 17);
+        assert_eq!(def.nodes.len(), 9);
+        assert_eq!(def.edges.len(), 20);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -2497,7 +2505,7 @@ mod tests {
         let g = base.build(&inner, &json!({"target": "Product", "query": "rust"})).unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["bm25", "fuse", "paginate", "render", "rerank", "resolve", "source", "vector"]);
+        assert_eq!(names, vec!["bm25", "fuse", "paginate", "render", "rerank", "resolve", "source", "sparse", "vector"]);
     }
 
     /// **`search_base` n'est offert à personne.** Un gabarit peut exister pour

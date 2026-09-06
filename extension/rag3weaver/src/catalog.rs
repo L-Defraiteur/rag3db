@@ -5582,6 +5582,233 @@ impl Catalog {
                 dual.clone(),
             );
         }
+        // Ce que le chemin composable attendait sans que personne ne le monte
+        // (cartographie du 6 septembre 2026, §2 bis) : le cross-encoder du
+        // catalogue, le plein texte natif et sa cellule.
+        if let Some(ref rk) = self.reranker {
+            services.register::<Arc<dyn crate::reranker::Reranker>>("reranker", rk.clone());
+        }
+        if self.plein_texte_natif() {
+            if let Some(b) = self.search_backend.clone() {
+                services.register("texte_natif", b);
+            }
+            if self.multi_cell {
+                services.register("cellule", self.scope.clone());
+            }
+        }
+    }
+
+    /// Le cross-encoder du catalogue, s'il y en a un.
+    pub fn reranker(&self) -> Option<Arc<dyn crate::reranker::Reranker>> {
+        self.reranker.clone()
+    }
+
+    /// **La recherche du produit : le graphe `search_base`, lancé sur le
+    /// catalogue.** C'est B13 de la réconciliation du 6 septembre 2026 — la
+    /// fin des deux chemins. Ce que `Catalog::search` fait en 416 lignes,
+    /// cette fonction le fait en montant les services, en instanciant le
+    /// gabarit que les agents empruntent déjà, en l'exécutant, et en relisant
+    /// ses ports : mêmes nœuds, mêmes corrections, un seul endroit.
+    ///
+    /// Sur l'`Arc<Mutex<Catalog>>` et non sur `&mut self`, parce que les
+    /// nœuds prennent le catalogue par le service `catalog` et le
+    /// verrouillent le temps d'un appel — un `&mut self` ne peut pas se
+    /// donner lui-même. C'est la forme que le produit tient déjà.
+    ///
+    /// Le fan-out de cellules et la bascule de cellule (`options.scopes`,
+    /// `options.scope`) se font **autour** du graphe, comme dans le
+    /// monolithe, en changeant la cellule du catalogue le temps de l'appel.
+    /// Ce n'est pas plus sûr qu'avant face à une recherche concurrente sur le
+    /// même catalogue — c'est la même limite, nommée : des cellules **par
+    /// requête**, sans bascule d'état global, sont un chantier à part.
+    pub fn rechercher(
+        catalogue: &Arc<Mutex<Catalog>>,
+        cible: &str,
+        requete: &str,
+        options: search::SearchOptions,
+    ) -> Result<search::SearchResponse, CatalogError> {
+        use crate::dataflow::graph_tool::{build_definition, GraphTool, NodeTypePolicy, SEARCH_BASE_MERMAID};
+        use crate::dataflow::{DataflowRuntime, NodeRegistry, ServiceRegistry};
+
+        // ── Plusieurs cellules : une recherche par cellule, fondues par rang ──
+        if !options.scopes.is_empty() {
+            let mut cells: Vec<crate::scope::Scope> = Vec::new();
+            for c in &options.scopes {
+                if !cells.contains(c) {
+                    cells.push(c.clone());
+                }
+            }
+            let saved = catalogue.lock().unwrap().scope().clone();
+            let mut base = options.clone();
+            base.scopes.clear();
+            base.scope = None;
+            base.limit = options.limit + options.offset;
+            base.offset = 0;
+            let mut per_cell: Vec<search::SearchResponse> = Vec::new();
+            let mut first_err: Option<CatalogError> = None;
+            for cell in &cells {
+                if let Err(e) = catalogue.lock().unwrap().set_scope(cell.clone()) {
+                    first_err = Some(e);
+                    break;
+                }
+                match Self::rechercher(catalogue, cible, requete, base.clone()) {
+                    Ok(r) => per_cell.push(r),
+                    Err(e) => {
+                        first_err = Some(e);
+                        break;
+                    }
+                }
+            }
+            catalogue.lock().unwrap().set_scope(saved)?;
+            if let Some(e) = first_err {
+                return Err(e);
+            }
+            return fusionner_par_cellule(per_cell, cells.len(), options.offset, options.limit);
+        }
+        // ── Une autre cellule que la courante ──────────────────────────────
+        if let Some(wanted) = options.scope.clone() {
+            let courant = catalogue.lock().unwrap().scope().clone();
+            if wanted != courant {
+                catalogue.lock().unwrap().set_scope(wanted)?;
+                let mut inner = options.clone();
+                inner.scope = None;
+                let out = Self::rechercher(catalogue, cible, requete, inner);
+                catalogue.lock().unwrap().set_scope(courant)?;
+                return out;
+            }
+        }
+
+        let debut = Instant::now();
+
+        // ── Les services : ce que le catalogue sait offrir, et lui-même ────
+        let mut services = ServiceRegistry::new();
+        {
+            let cat = catalogue.lock().unwrap();
+            cat.check_initialized()?;
+            cat.register_search_services(&mut services);
+        }
+        services.register("catalog", catalogue.clone());
+
+        // ── Le gabarit, avec toutes les options — pas seulement sa fiche ───
+        let mut registry = NodeRegistry::new();
+        crate::dataflow::node_factories::register_builtins(&mut registry);
+        let outil = GraphTool::from_mermaid(SEARCH_BASE_MERMAID)
+            .and_then(|t| t.bind(&registry))
+            .map_err(|e| CatalogError::SchemaError(format!("gabarit search_base : {e}")))?;
+        let candidats = options.rerank.as_ref().map(|r| r.candidates).unwrap_or(0);
+        let args = serde_json::json!({
+            "target": cible,
+            "query": requete,
+            "limit": options.limit,
+            "rerank": candidats,
+            "consistency": serde_json::to_value(options.consistency)
+                .map_err(|e| CatalogError::SchemaError(e.to_string()))?,
+        });
+        let mut def = outil
+            .instantiate(&args)
+            .map_err(|e| CatalogError::SchemaError(format!("search_base : {e}")))?;
+        // La fiche ne porte que cinq paramètres ; la requête en porte bien
+        // plus (signaux, filtres, mode de résultat, fusion, page, cellule,
+        // diagnostics, exigence). Ils entrent par `options` de la source,
+        // que sa fabrique lit avant ses paramètres nommés.
+        if let Some(source) = def.nodes.iter_mut().find(|n| n.name == "source") {
+            if let serde_json::Value::Object(ref mut cfg) = source.config {
+                cfg.insert(
+                    "options".to_string(),
+                    serde_json::to_value(&options)
+                        .map_err(|e| CatalogError::SchemaError(e.to_string()))?,
+                );
+            }
+        }
+        // **Sans le rendu.** Le gabarit finit par `RenderResultsNode`, qui
+        // consomme les résultats et les métas pour en faire du markdown : un
+        // port consommé n'est plus lisible après coup. Ici on veut les
+        // structures, pas le texte — on retire le rendu, et `resolve.results`
+        // comme les métas des nœuds deviennent des feuilles qu'on relit.
+        def.nodes.retain(|n| n.name != "render");
+        def.edges.retain(|e| e.to_node != "render" && e.from_node != "render");
+        let mut graph = build_definition(&def, &registry, &NodeTypePolicy::All)
+            .map_err(|e| CatalogError::SchemaError(format!("search_base : {e}")))?;
+
+        // ── L'exécution, en écoutant ce que chaque nœud a coûté ────────────
+        let runtime = DataflowRuntime::with_services(graph.nodes.len() + 8, services);
+        let mut ecoute = runtime.subscribe();
+        let sortie = runtime
+            .execute(&mut graph)
+            .map_err(|e| CatalogError::DbError(format!("recherche « {cible} » : {e}")))?;
+        let mut durees: HashMap<String, u64> = HashMap::new();
+        let mut avant_la_page: usize = 0;
+        while let Ok(ev) = ecoute.try_recv() {
+            if let crate::dataflow::DataflowEvent::NodeCompleted { node, duration_ms, metrics, .. } = ev {
+                if node == "paginate" {
+                    avant_la_page = metrics
+                        .get("avant")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as usize;
+                }
+                durees.insert(node, duration_ms);
+            }
+        }
+
+        // ── Les résultats, et les métas fondues ────────────────────────────
+        let resultats: Vec<search::SearchResult> = sortie
+            .get("resolve", "results")
+            .and_then(|v| v.downcast::<Vec<crate::search_strategy::UnifiedResult>>())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(search::SearchResult::from)
+            .collect();
+        let mut meta: Option<search::SearchMeta> = None;
+        for n in ["source", "bm25", "vector", "sparse", "rerank"] {
+            if let Some(m) = sortie.get(n, "meta").and_then(|v| v.downcast::<search::SearchMeta>()).cloned() {
+                meta = Some(match meta {
+                    None => m,
+                    Some(a) => fondre_les_metas(a, m),
+                });
+            }
+        }
+        let mut meta = meta.unwrap_or_else(|| search::SearchMeta {
+            query: requete.to_string(),
+            target: cible.to_string(),
+            signals: search::SearchSignals::NONE,
+            consistency: options.consistency,
+            partial: false,
+            pending_count: 0,
+            vector_count: 0,
+            bm25_count: 0,
+            sparse_count: 0,
+            fused_count: 0,
+            reranked_count: 0,
+            warnings: Vec::new(),
+            search_time_ms: 0,
+            diagnostics: None,
+        });
+        meta.query = requete.to_string();
+        meta.target = cible.to_string();
+        meta.fused_count = avant_la_page;
+        let total_ms = debut.elapsed().as_millis() as u64;
+        meta.search_time_ms = total_ms;
+        if options.diagnostics {
+            let d = |n: &str| durees.get(n).copied().unwrap_or(0);
+            let mut diag = meta.diagnostics.take().unwrap_or_default();
+            diag.bm25_ms = d("bm25");
+            diag.vector_ms = d("vector");
+            diag.sparse_ms = d("sparse");
+            diag.fuse_ms = d("fuse");
+            diag.rerank_ms = d("rerank");
+            diag.resolve_ms = d("resolve");
+            diag.embed_ms = d("source");
+            diag.total_ms = total_ms;
+            meta.diagnostics = Some(diag);
+        }
+
+        catalogue.lock().unwrap().emit_event(CatalogEvent::SearchCompleted {
+            kb: cible.to_string(),
+            results: resultats.len(),
+            duration_ms: total_ms,
+        });
+        Ok(search::SearchResponse { results: resultats, meta })
     }
 
     pub fn conn_arc(&self) -> Arc<dyn DbConnection> {
@@ -5776,6 +6003,20 @@ impl Catalog {
         if let Some(e) = first_err {
             return Err(e);
         }
+        fusionner_par_cellule(per_cell, cells.len(), options.offset, options.limit)
+    }
+}
+
+/// **Fond les réponses de plusieurs cellules par rang (RRF)**, et pagine.
+/// Les scores ne sont pas comparables entre cellules, et la réponse le dit.
+/// Partagé par le monolithe et par le lanceur composable.
+fn fusionner_par_cellule(
+    per_cell: Vec<search::SearchResponse>,
+    nombre_de_cellules: usize,
+    offset: usize,
+    limit: usize,
+) -> Result<search::SearchResponse, CatalogError> {
+    {
         let Some(mut first) = per_cell.first().cloned() else {
             return Err(CatalogError::ValidationFailed("scopes: aucune cellule".into()));
         };
@@ -5806,8 +6047,8 @@ impl Catalog {
         });
         let results: Vec<search::SearchResult> = fused
             .into_iter()
-            .skip(options.offset)
-            .take(options.limit)
+            .skip(offset)
+            .take(limit)
             .map(|(score, mut r)| {
                 r.score = score;
                 r
@@ -5819,12 +6060,38 @@ impl Catalog {
         first.meta.fused_count = results.len();
         first.meta.search_time_ms = time_ms;
         first.meta.warnings.push(format!(
-            "fan-out sur {} cellule(s) : fusion par rang (RRF), les scores ne sont pas comparables entre cellules",
-            cells.len()
+            "fan-out sur {nombre_de_cellules} cellule(s) : fusion par rang (RRF), les scores ne sont pas comparables entre cellules"
         ));
         first.results = results;
         Ok(first)
     }
+}
+
+/// Fond deux métas de nœuds, comme `merge_port_values` le fait sur un port :
+/// avertissements concaténés sans doublon, comptes de signaux additionnés,
+/// `partial` par `|=`, le reste au plus grand.
+fn fondre_les_metas(mut a: search::SearchMeta, b: search::SearchMeta) -> search::SearchMeta {
+    for w in b.warnings {
+        if !a.warnings.contains(&w) {
+            a.warnings.push(w);
+        }
+    }
+    a.signals |= b.signals;
+    a.partial |= b.partial;
+    a.pending_count = a.pending_count.max(b.pending_count);
+    a.vector_count += b.vector_count;
+    a.bm25_count += b.bm25_count;
+    a.sparse_count += b.sparse_count;
+    a.fused_count = a.fused_count.max(b.fused_count);
+    a.reranked_count = a.reranked_count.max(b.reranked_count);
+    a.search_time_ms = a.search_time_ms.max(b.search_time_ms);
+    if a.diagnostics.is_none() {
+        a.diagnostics = b.diagnostics;
+    }
+    a
+}
+
+impl Catalog {
 
     /// **Embarque une requête, une seule fois**, selon les signaux demandés :
     /// une passe avant sur l'embarqueur dual quand dense et sparse sont

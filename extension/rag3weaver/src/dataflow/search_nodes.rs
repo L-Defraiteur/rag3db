@@ -119,12 +119,11 @@ impl Node for KBSearchNode {
             .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("KBSearchNode: 'catalog' service not found")?;
 
-        let response = {
-            let mut catalog = catalog.lock().unwrap();
-            catalog
-                .search(&target_name, &query, options)
-                .map_err(|e| e.to_string())?
-        };
+        // Par le lanceur composable, plus par le monolithe : le dernier
+        // appelant de `Catalog::search` en production passe par le même
+        // graphe que les agents (B13 de la réconciliation du 6 septembre 2026).
+        let response = Catalog::rechercher(&catalog, &target_name, &query, options)
+            .map_err(|e| e.to_string())?;
 
         let results: Vec<UnifiedResult> = response
             .results

@@ -60,15 +60,24 @@ pub enum FilterOp {
 }
 
 /// A filter value: direct value, list (IN shorthand), or operator list.
+///
+/// **L'ordre des variantes est celui de la lecture** (`untagged` essaie dans
+/// l'ordre). `Ops` d'abord : une liste d'objets `{op, value}` relue comme une
+/// valeur directe — une `CypherValue::List` de cartes — donnait un filtre
+/// d'égalité sur des cartes, que rien ne compile, et une recherche **non
+/// restreinte** annoncée au journal seulement. C'est ce qui arrivait dès
+/// qu'un `SearchOptions` traversait du JSON (le lanceur, une fiche d'outil)
+/// — trouvé le 6 septembre 2026 par le domaine de travail qui ne rétrécissait
+/// plus rien.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FilterValue {
-    /// Direct value: equality check, or IS NULL if `CypherValue::Null`.
-    Direct(CypherValue),
-    /// Array shorthand for IN clause.
-    List(Vec<CypherValue>),
     /// One or more operators (combined with AND).
     Ops(Vec<FilterOp>),
+    /// Array shorthand for IN clause.
+    List(Vec<CypherValue>),
+    /// Direct value: equality check, or IS NULL if `CypherValue::Null`.
+    Direct(CypherValue),
 }
 
 /// Composable filter condition (Qdrant-like Must/Should/MustNot).
@@ -1541,4 +1550,35 @@ mod tests {
         assert_eq!(map.len(), 2);
     }
 
+}
+
+#[cfg(test)]
+mod tests_aller_retour {
+    use super::*;
+
+    /// Un filtre à opérateurs survit à un aller-retour JSON en restant un
+    /// filtre à opérateurs — pas une égalité sur une liste de cartes.
+    #[test]
+    fn un_filtre_a_operateurs_survit_au_json() {
+        let cond = FilterCondition::Field {
+            key: "file_path".into(),
+            value: FilterValue::Ops(vec![FilterOp::StartsWith("/projets/alpha".into())]),
+        };
+        let json = serde_json::to_string(&cond).unwrap();
+        let relu: FilterCondition = serde_json::from_str(&json).unwrap();
+        match relu {
+            FilterCondition::Field { value: FilterValue::Ops(ops), .. } => {
+                assert!(matches!(ops.as_slice(), [FilterOp::StartsWith(p)] if p == "/projets/alpha"));
+            }
+            autre => panic!("relu comme {autre:?}"),
+        }
+
+        // Et les deux autres formes restent ce qu'elles sont.
+        let liste: FilterValue = serde_json::from_str(r#"["a","b"]"#).unwrap();
+        assert!(matches!(liste, FilterValue::List(v) if v.len() == 2));
+        let direct: FilterValue = serde_json::from_str(r#""x""#).unwrap();
+        assert!(matches!(direct, FilterValue::Direct(CypherValue::String(s)) if s == "x"));
+        let nul: FilterValue = serde_json::from_str("null").unwrap();
+        assert!(matches!(nul, FilterValue::Direct(CypherValue::Null)));
+    }
 }

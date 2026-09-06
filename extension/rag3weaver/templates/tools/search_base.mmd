@@ -82,6 +82,10 @@
 %% rerank, **avant** la résolution — `offset` était inerte et la liste rendue
 %% pouvait faire `2 × limit`. B3 et B7 de la réconciliation.
 %%
+%% **Et la branche sparse**, pour que ce gabarit soit tout ce que le monolithe
+%% savait faire (B13) : une cible qui ne déclare pas le signal rend vide, sans
+%% casser le graphe ; une qui le déclare fusionne les trois.
+%%
 %% La fiche reste la même surface : `fuzzy_distance`, `result_mode`, les
 %% poids de fusion et les `return_fields` de la résolution restent en dedans.
 
@@ -89,6 +93,7 @@ graph LR
     source["SearchSourceNode(target_name=$target, query=$query, consistency=$consistency, limit=$limit, rerank=$rerank)"]
     bm25["BM25SearchNode"]
     vector["VectorSearchNode"]
+    sparse["SparseSearchNode"]
     fuse["FuseResultsNode(weights='bm25:0.6,vector:0.4')"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
@@ -97,6 +102,7 @@ graph LR
 
     source -->|query| bm25
     source -->|query| vector
+    source -->|query| sparse
     source -->|query| fuse
     source -->|query| rerank
     source -->|query| paginate
@@ -105,9 +111,11 @@ graph LR
     source -->|meta| render
     bm25 -->|meta| render
     vector -->|meta| render
+    sparse -->|meta| render
     rerank -->|meta| render
     bm25 -->|results:bm25| fuse
     vector -->|results:vector| fuse
+    sparse -->|results:sparse| fuse
     fuse -->|results| rerank
     rerank -->|results| paginate
     paginate -->|results| resolve

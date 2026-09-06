@@ -1157,3 +1157,81 @@ fn le_filtre_herite_descend_sur_le_chemin_composable() {
     assert_eq!(resultats.len(), 2, "le couteau à 129,99 doit être filtré : {noms:?}");
     assert!(noms.iter().all(|n| !n.contains("Knife")), "{noms:?}");
 }
+
+
+// ═══ Le lanceur : un seul chemin de recherche ═══════════════════════════════
+
+/// **`Catalog::rechercher` rend ce que `Catalog::search` rend.** C'est B13 de
+/// la réconciliation : le graphe `search_base`, lancé sur le catalogue, avec
+/// toutes les options de la requête — pas seulement les cinq de la fiche. Sur
+/// BM25 seul, sur le vecteur seul, sur l'hybride ; mêmes identifiants, même
+/// pagination, et une méta qui porte les comptes des signaux.
+#[test]
+#[ignore]
+fn le_lanceur_rend_ce_que_le_monolithe_rend() {
+    use std::sync::Mutex;
+    // `HashEmbedder`, pas `MockEmbedder` : le second rend des vecteurs nuls,
+    // et l'ordre vectoriel de deux appels n'aurait rien de comparable.
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let mut catalog = Catalog::new(
+        boxed,
+        Box::new(rag3weaver::embedder::HashEmbedder::new(4)),
+        make_empty_config(4),
+    );
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
+
+    for signals in [SearchSignals::BM25, SearchSignals::VECTOR, SearchSignals::HYBRID] {
+        let options = SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(signals),
+            limit: 2,
+            ..Default::default()
+        };
+        let reference = catalog.search("Product", "programming language", options.clone()).unwrap();
+        let cat = Arc::new(Mutex::new(catalog));
+        let reponse = Catalog::rechercher(&cat, "Product", "programming language", options).unwrap();
+        eprintln!(
+            "[lanceur {signals:?}] monolithe={} lanceur={} bm25={}/{} vecteur={}/{} avertissements={:?}",
+            reference.results.len(), reponse.results.len(),
+            reference.meta.bm25_count, reponse.meta.bm25_count,
+            reference.meta.vector_count, reponse.meta.vector_count,
+            reponse.meta.warnings,
+        );
+        assert_eq!(reponse.results.len(), reference.results.len(), "{signals:?} : la page a la même taille");
+        let mut a: Vec<&str> = reference.results.iter().map(|r| r.uuid.as_str()).collect();
+        let mut b: Vec<&str> = reponse.results.iter().map(|r| r.uuid.as_str()).collect();
+        a.sort();
+        b.sort();
+        assert_eq!(a, b, "{signals:?} : mêmes identifiants");
+        assert_eq!(reponse.meta.bm25_count > 0, reference.meta.bm25_count > 0, "{signals:?}");
+        assert_eq!(reponse.meta.vector_count > 0, reference.meta.vector_count > 0, "{signals:?}");
+        assert!(reponse.results.iter().all(|r| r.data.is_some()), "{signals:?} : enrichis");
+        catalog = Arc::try_unwrap(cat).ok().expect("le graphe ne retient pas le catalogue").into_inner().unwrap();
+    }
+
+    // La page : `offset` n'est plus inerte.
+    let cat = Arc::new(Mutex::new(catalog));
+    let tout = Catalog::rechercher(&cat, "Product", "Rust Python French", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::ContainsSplit,
+        limit: 10,
+        ..Default::default()
+    }).unwrap();
+    let page2 = Catalog::rechercher(&cat, "Product", "Rust Python French", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::ContainsSplit,
+        limit: 1,
+        offset: 1,
+        ..Default::default()
+    }).unwrap();
+    assert_eq!(tout.results.len(), 3);
+    assert_eq!(page2.results.len(), 1);
+    assert_eq!(page2.results[0].uuid, tout.results[1].uuid, "la seconde page est le deuxième de la liste");
+    assert_eq!(page2.meta.fused_count, 3, "la méta dit combien il y avait avant la page");
+}
