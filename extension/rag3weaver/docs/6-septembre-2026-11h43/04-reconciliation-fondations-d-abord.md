@@ -290,6 +290,20 @@ n'ont pas changé depuis le 5 :
 Ce qui reste à D après ça est du C++ dans le cœur, et il est **au-dessus** de
 F dans l'ordre, pas en dessous.
 
+**La relecture est faite** — [`docs/6-septembre-2026-13h08/01-relecture-du-mvcc-de-vela.md`](../../../../docs/6-septembre-2026-13h08/01-relecture-du-mvcc-de-vela.md)
+à la racine du dépôt — et elle change deux choses. D'abord, **le port de Vela
+n'est pas dans l'arbre** : trois lignes en ont été reprises (les lecteurs
+pendant qu'un écrivain tient), le reste — rotation du WAL, checkpoint non
+bloquant, instantanés de catalogue — est dans un commit qu'aucune branche ne
+contient. Ensuite, **un arbitre inter-processus par-dessus le MVCC existant
+n'est pas plausible en l'état** : l'horloge de transaction, l'allocation
+d'offsets de nœuds (dérivée au commit, sans allocateur) et le cache de pages
+sont enfermés dans le processus par construction. L'ordre de D devient :
+fusion de Vela (une demi-journée, concurrence intra-processus propre) → un
+arbitre externe qui **met les écrivains en file** au lieu du refus sec
+(confort, pas de concurrence) → et seulement ensuite le monument, dans cet
+ordre : horloge partagée, allocateur d'offsets, cohérence de cache.
+
 ### E. Ce qui se retire
 
 - `fusion.rs` : supprimé. Supplanté, aucun appelant, ses tests éprouvent la
@@ -333,8 +347,9 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | B | en conception (cartographie de `Catalog::search` contre les nœuds) |
 | C2 | fait — onze suites e2e vertes |
 | A5 | écrit, 953 tests de bibliothèque verts, passe e2e en cours |
-| D (cartographie) | en cours — relecture du MVCC de Vela par un agent, en doc |
-| C3 C4 C5, E | à faire |
+| D (cartographie) | faite — `docs/6-septembre-2026-13h08/01` à la racine |
+| C3 | fait — test à deux processus dans `e2e_prise_atomique` |
+| C4 C5, B, E | à faire |
 
 
 ```
