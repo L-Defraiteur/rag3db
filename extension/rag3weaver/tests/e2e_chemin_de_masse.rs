@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use rag3weaver::config::FieldType;
+use rag3weaver::config::{CheckpointMode, FieldType};
 use rag3weaver::connection::{CypherValue, DbConnection};
 use rag3weaver::dialect::{Rag3dbDialect, SchemaDialect};
 use rag3weaver::disponibilite::RegimeEcriture;
@@ -54,13 +54,19 @@ fn product(name: &str, description: &str, price: f64) -> BTreeMap<String, Cypher
 }
 
 fn catalogue(dim: usize) -> Catalog {
+    catalogue_avec(dim, CheckpointMode::Full, None)
+}
+
+fn catalogue_avec(dim: usize, mode: CheckpointMode, mode_entite: Option<CheckpointMode>) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
-    let config = CatalogConfig { name: Some("chemin-de-masse".into()), embedding_dim: dim, ..Default::default() };
+    let config = CatalogConfig { name: Some("chemin-de-masse".into()), embedding_dim: dim, checkpoint_mode: mode, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(dim)), config);
     catalog.initialize().unwrap();
-    catalog.register_entity("Product", product_config()).unwrap();
+    let mut produit = product_config();
+    produit.checkpoint = mode_entite;
+    catalog.register_entity("Product", produit).unwrap();
     catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
@@ -165,4 +171,39 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
     assert_eq!(lu.rows[0][1], CypherValue::Float(99.0));
     let wok = catalog.search("Product", "wok", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
     assert!(!wok.results.is_empty(), "le nouveau venu se trouve");
+}
+
+/// **Les trois modes de checkpoint** (Lucie, 6 septembre 2026) : complet,
+/// opérations (les entrées, pas l'état des nœuds), aucun — au catalogue, et
+/// par entité pour une ingestion.
+#[test]
+#[ignore]
+fn les_modes_de_checkpoint_gardent_ce_qu_ils_disent() {
+    let lot = || vec![product("Rust Book", "A guide to Rust.", 49.99), product("Wok", "A carbon steel wok.", 59.0)];
+    let executions = |c: &Catalog| compte(c, "MATCH (n:_DataflowExecution) RETURN count(n)");
+    let etats = |c: &Catalog| compte(c, "MATCH (n:_DataflowNodeState) RETURN count(n)");
+
+    // Complet : une exécution, des états de nœuds (ceux qui ont un undo).
+    let mut complet = catalogue_avec(4, CheckpointMode::Full, None);
+    assert_eq!(complet.ingest_entities("Product", lot()).unwrap().failed, 0);
+    assert_eq!(executions(&complet), 1);
+    assert!(etats(&complet) > 0, "le mode complet garde l'état des nœuds");
+
+    // Opérations : une exécution, aucun état de nœud.
+    let mut operations = catalogue_avec(4, CheckpointMode::Operations, None);
+    assert_eq!(operations.ingest_entities("Product", lot()).unwrap().failed, 0);
+    assert_eq!(executions(&operations), 1);
+    assert_eq!(etats(&operations), 0, "le mode opérations ne garde que les entrées");
+    assert_eq!(compte(&operations, "MATCH (p:Product) RETURN count(p)"), 2);
+
+    // Aucun : rien d'écrit.
+    let mut aucun = catalogue_avec(4, CheckpointMode::Off, None);
+    assert_eq!(aucun.ingest_entities("Product", lot()).unwrap().failed, 0);
+    assert_eq!(executions(&aucun), 0, "le mode off n'écrit aucun checkpoint");
+    assert_eq!(compte(&aucun, "MATCH (p:Product) RETURN count(p)"), 2);
+
+    // Par entité : le catalogue est complet, l'entité déroge en off.
+    let mut deroge = catalogue_avec(4, CheckpointMode::Full, Some(CheckpointMode::Off));
+    assert_eq!(deroge.ingest_entities("Product", lot()).unwrap().failed, 0);
+    assert_eq!(executions(&deroge), 0, "l'entité qui déroge n'écrit pas de checkpoint");
 }

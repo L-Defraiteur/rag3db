@@ -165,10 +165,20 @@ est fait à la place, sur sa piste :
   la sortie ne se relit pas est rejoué (ils sont idempotents) ; une entrée
   initiale qui ne se relit pas refuse la reprise en le disant.
 
-À venir, une fois ce chemin solide, à la demande de Lucie : trois modes —
-*complet* (celui-ci), *opérations* (les entrées seulement, la reprise rejoue
-tout depuis le début), *aucun* — au niveau du catalogue et, pour les
-ingestions, par entité.
+Et les trois modes demandés par Lucie (« en prod les gens voudront de
+tout, et peut-être seulement sur certaines données ») —
+`CatalogConfig.checkpoint_mode`, et `EntityConfig.checkpoint` pour qu'une
+entité déroge sur ses ingestions (un drain mêle des entités : il suit le
+catalogue) :
+
+| mode | ce qui est gardé | reprise | undo |
+|---|---|---|---|
+| `full` (défaut) | les entrées, la sortie et l'undo de chaque nœud | du nœud qui a échoué | oui |
+| `operations` | les entrées seulement, aucun état de nœud | rejoue le graphe entier (les nœuds sont idempotents) | rien à défaire |
+| `off` | rien | non | non |
+
+Éprouvé dans `e2e_chemin_de_masse` (les quatre cas, dont l'entité qui
+déroge) et au runtime (`en_mode_operations_la_reprise_rejoue_tout`).
 
 ## 4. Ce qui reste, et pourquoi
 

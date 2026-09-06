@@ -446,6 +446,12 @@ pub struct EntityConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<GroupBy>,
 
+    /// **Le mode de checkpoint des ingestions de cette entité**, s'il diffère
+    /// de celui du catalogue ([`CatalogConfig::checkpoint_mode`]). Un drain
+    /// mêle des entités : lui suit toujours le catalogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkpoint: Option<CheckpointMode>,
+
     /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
     /// indexée en plein texte et cherchable, mais sans ligne dans
     /// `{Entity}_Chunk` ni lien `CHUNKED_FROM`.
@@ -496,6 +502,7 @@ impl Default for EntityConfig {
             group_by: None,
             chunked: None,
             lifecycle: None,
+            checkpoint: None,
         }
     }
 }
@@ -898,6 +905,26 @@ pub struct CatalogConfig {
     /// survit au processus. Un déploiement le pose à côté de sa base.
     #[serde(default)]
     pub checkpoint_dir: Option<std::path::PathBuf>,
+    /// **Ce que le checkpoint garde** (Lucie, 6 septembre 2026 : « en prod les
+    /// gens voudront de tout, et peut-être seulement sur certaines données »).
+    #[serde(default)]
+    pub checkpoint_mode: CheckpointMode,
+}
+
+/// **Ce qu'un checkpoint garde d'un graphe.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckpointMode {
+    /// Les entrées, la sortie et le contexte d'undo de chaque nœud : la
+    /// reprise repart du nœud qui a échoué, l'undo défait tout. Le défaut.
+    #[default]
+    Full,
+    /// Les entrées seulement — les opérations demandées, pas l'état
+    /// intermédiaire. La reprise rejoue le graphe entier (les nœuds sont
+    /// idempotents) ; il n'y a rien à défaire automatiquement.
+    Operations,
+    /// Aucun checkpoint : ni reprise ni undo, et rien d'écrit à côté.
+    Off,
 }
 
 impl Default for CatalogConfig {
@@ -913,6 +940,7 @@ impl Default for CatalogConfig {
             // Le défaut refuse : un montage qui veut vraiment le factice le dit.
             allow_mock_embedder: false,
             checkpoint_dir: None,
+            checkpoint_mode: CheckpointMode::Full,
         }
     }
 }

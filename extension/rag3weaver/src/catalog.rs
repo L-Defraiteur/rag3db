@@ -4151,11 +4151,11 @@ impl Catalog {
             crate::dataflow::checkpoint::timestamp_ms(),
         );
 
-        let result = if let Some(ref store) = self.checkpoint_store {
-            runtime
-                .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
-        } else {
-            runtime.execute(&mut graph)
+        let mode = entity_config.checkpoint.unwrap_or(self.config.checkpoint_mode);
+        let result = match (&self.checkpoint_store, mode) {
+            (Some(store), crate::config::CheckpointMode::Full | crate::config::CheckpointMode::Operations) => runtime
+                .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
+            _ => runtime.execute(&mut graph),
         };
 
         if let Some(rx) = rx.as_mut() {
@@ -5388,11 +5388,11 @@ impl Catalog {
         );
         phase("runtime et abonnements", &mut horloge);
 
-        let result = if let Some(ref store) = self.checkpoint_store {
-            runtime
-                .execute_with_checkpoint(&mut graph, store.as_ref(), &execution_id)
-        } else {
-            runtime.execute(&mut graph)
+        let mode = self.config.checkpoint_mode;
+        let result = match (&self.checkpoint_store, mode) {
+            (Some(store), crate::config::CheckpointMode::Full | crate::config::CheckpointMode::Operations) => runtime
+                .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
+            _ => runtime.execute(&mut graph),
         };
         phase("exécution", &mut horloge);
 

@@ -319,6 +319,19 @@ impl DataflowRuntime {
         store: &dyn CheckpointStore,
         execution_id: &str,
     ) -> Result<DataflowOutput, String> {
+        self.execute_with_checkpoint_mode(graph, store, execution_id, crate::config::CheckpointMode::Full)
+    }
+
+    /// Le même, en disant ce que le checkpoint garde. `Operations` : les
+    /// entrées seulement, aucun état de nœud — une reprise rejoue tout.
+    /// `Off` : l'appelant n'a pas de magasin à donner, il appelle `execute`.
+    pub fn execute_with_checkpoint_mode(
+        &self,
+        graph: &mut DataflowGraph,
+        store: &dyn CheckpointStore,
+        execution_id: &str,
+        mode: crate::config::CheckpointMode,
+    ) -> Result<DataflowOutput, String> {
         // L'identifiant du checkpoint est celui du run : une reprise garde
         // son adresse.
         let run_id = execution_id.to_string();
@@ -415,7 +428,7 @@ impl DataflowRuntime {
         let run_started = Instant::now();
         self.emit_run_started(&run_id, graph);
         let result = self
-            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint);
+            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint, mode);
         self.emit_run_finished(&run_id, run_started.elapsed().as_millis() as u64, result.is_ok());
 
         match &result {
@@ -437,8 +450,10 @@ impl DataflowRuntime {
         store: &dyn CheckpointStore,
         execution_id: &str,
         checkpoint: &ExecutionCheckpoint,
+        mode: crate::config::CheckpointMode,
     ) -> Result<DataflowOutput, String> {
         let run_id = execution_id.to_string();
+        let garde_l_etat = mode == crate::config::CheckpointMode::Full;
         let start = Instant::now();
         graph.validate()?;
 
@@ -698,15 +713,18 @@ impl DataflowRuntime {
 
                         let serialisation_ms = horloge.elapsed().as_millis();
                         let horloge = Instant::now();
-                        // Persist to checkpoint store
-                        store
-                            .save_node_completed(
-                                execution_id,
-                                node_name,
-                                &checkpoint_outputs,
-                                undo_ctx.as_ref(),
-                                duration_ms,
-                            )?;
+                        // Persist to checkpoint store — en mode Operations,
+                        // aucun état de nœud : la reprise rejouera tout.
+                        if garde_l_etat {
+                            store
+                                .save_node_completed(
+                                    execution_id,
+                                    node_name,
+                                    &checkpoint_outputs,
+                                    undo_ctx.as_ref(),
+                                    duration_ms,
+                                )?;
+                        }
                         if profil {
                             let ecriture_ms = horloge.elapsed().as_millis();
                             if serialisation_ms + ecriture_ms >= 20 {
@@ -1890,6 +1908,44 @@ mod tests {
             assert_eq!(recus.load(std::sync::atomic::Ordering::Relaxed), n, "le second nœud a reçu le lot relu");
             let cp = store.load_execution("exec-octets").unwrap().unwrap();
             assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
+        }
+
+        /// **En mode opérations, le checkpoint ne garde que les entrées** :
+        /// aucun état de nœud, et la reprise rejoue le graphe entier.
+        #[test]
+        fn en_mode_operations_la_reprise_rejoue_tout() {
+            use crate::config::CheckpointMode;
+            let store = MockCheckpointStore::new();
+            let n = 50;
+            let recus = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let passes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(PassBatchNode { name: "pass".into(), fail_once: false, recus: passes.clone() })).unwrap();
+            graph.add_node(Box::new(PassBatchNode { name: "suite".into(), fail_once: true, recus: recus.clone() })).unwrap();
+            graph.connect("pass", "out", "suite", "entities").unwrap();
+            graph.set_initial_input("pass", "entities", lot_d_entites(n));
+
+            let runtime = DataflowRuntime::new(10);
+            let err = runtime.execute_with_checkpoint_mode(&mut graph, &store, "exec-ops", CheckpointMode::Operations).unwrap_err();
+            assert!(err.contains("panne simulée"), "{err}");
+            assert_eq!(passes.load(std::sync::atomic::Ordering::Relaxed), n, "le premier nœud a tourné");
+
+            let cp = store.load_execution("exec-ops").unwrap().unwrap();
+            assert_eq!(cp.initial_inputs["pass"]["entities"].record_count, Some(n), "les entrées sont gardées");
+            assert!(
+                cp.nodes.values().all(|nc| nc.status != NodeCheckpointStatus::Completed),
+                "aucun nœud n'est réputé fait"
+            );
+
+            passes.store(0, std::sync::atomic::Ordering::Relaxed);
+            let mut graph2 = DataflowGraph::new();
+            graph2.add_node(Box::new(PassBatchNode { name: "pass".into(), fail_once: false, recus: passes.clone() })).unwrap();
+            graph2.add_node(Box::new(PassBatchNode { name: "suite".into(), fail_once: false, recus: recus.clone() })).unwrap();
+            graph2.connect("pass", "out", "suite", "entities").unwrap();
+            runtime.execute_with_checkpoint_mode(&mut graph2, &store, "exec-ops", CheckpointMode::Operations).unwrap();
+            assert_eq!(passes.load(std::sync::atomic::Ordering::Relaxed), n, "le premier nœud est rejoué, pas sauté");
+            assert_eq!(recus.load(std::sync::atomic::Ordering::Relaxed), n, "le second reçoit le lot");
         }
     }
 }
