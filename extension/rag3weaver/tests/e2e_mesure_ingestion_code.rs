@@ -58,8 +58,13 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     eprintln!("[mesure] modèle {modele} (dim {dim}), lot conseillé {:?}", lot_conseille);
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
 
-    let root = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    // **La racine se choisit par `RAG3WEAVER_MESURE_RACINE`** : `src/dataflow`
+    // (30 fichiers) par défaut ; le cœur C++ de rag3db (`src`, 1 538 fichiers,
+    // 11 Mo) pour la cible de Lucie — un dépôt de 5 000 fichiers en 30 minutes.
+    let root = std::env::var("RAG3WEAVER_MESURE_RACINE")
+        .unwrap_or_else(|_| format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap()));
     let all = read_sources(&root).unwrap();
+    eprintln!("[mesure] racine {root} : {} fichiers lus", all.len());
     let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("mesure", all.into_iter()));
     let t_analyse = Instant::now();
     let analysis = analyze_source(source.as_ref()).unwrap();
@@ -86,8 +91,20 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     );
 
     let t = Instant::now();
-    let report = catalog.ingest_code(&analysis).unwrap();
+    // **En masse** : les index HNSW tombent avant, se reconstruisent après
+    // (doc 18 : 24 fois moins cher que ligne à ligne). L'appelant sait que
+    // son lot est gros ; ici c'est tout un dépôt.
+    let en_masse = std::env::var("RAG3WEAVER_MESURE_LIGNE_A_LIGNE").is_err();
+    let report = if en_masse {
+        catalog
+            .bulk_vector_index(&[rag3weaver::code::SCOPE, rag3weaver::code::FILE, rag3weaver::code::SYMBOL], |c| c.ingest_code(&analysis))
+            .unwrap()
+            .unwrap()
+    } else {
+        catalog.ingest_code(&analysis).unwrap()
+    };
     let total = t.elapsed();
+    eprintln!("[mesure] index vectoriel {}", if en_masse { "en masse (HNSW reconstruit après)" } else { "ligne à ligne" });
     let chunks = catalog.conn().execute("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap();
     let n_chunks = match chunks.rows[0][0] { rag3weaver::connection::CypherValue::Int(n) => n, _ => -1 };
     // D'où viennent les chunks : par champ de contenu.

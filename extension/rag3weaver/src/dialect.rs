@@ -770,6 +770,9 @@ impl SchemaDialect for Rag3dbDialect {
             let assigns: Vec<String> = prop_columns.iter().map(|c| format!("r.{c} = item.{c}")).collect();
             format!(" SET {}", assigns.join(", "))
         };
+        // Mesuré le 6 septembre 2026 sur 225 000 arêtes : CREATE au lieu de
+        // MERGE ne change rien (98 s dans les deux cas) — le coût n'est pas
+        // la vérification d'existence, c'est l'insertion elle-même.
         format!(
             "UNWIND $items AS item \
              MATCH (a:{from} {{_uuid: item.from_uuid}}), (b:{to} {{_uuid: item.to_uuid}}) \

@@ -533,15 +533,27 @@ impl Node for LinkRecordNode {
             let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
                 .ok_or("LinkRecordNode: 'dialect' service not registered")?;
             let prop_refs: Vec<&str> = prop_keys.iter().map(|s| s.as_str()).collect();
-            // Les bouts déclarés de la relation, pour un MATCH étiqueté.
+            // Les bouts déclarés de la relation, pour un MATCH étiqueté — et
+            // ceux d'un lien de chunk, que le nom porte : `X_CHUNKED_FROM`
+            // va de `X_Chunk` à `X`.
             let ends = ctx
                 .service::<crate::config::CatalogConfig>("config")
                 .and_then(|c| c.relations.get(rel_name.as_str()))
-                .map(|d| (d.from.clone(), d.to.clone()));
+                .map(|d| (d.from.clone(), d.to.clone()))
+                .or_else(|| {
+                    rel_name
+                        .strip_suffix("_CHUNKED_FROM")
+                        .map(|entity| (format!("{entity}_Chunk"), entity.to_string()))
+                });
             let cypher = dialect.batch_link_labeled(rel_name, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &prop_refs);
 
+            // **Par tranches.** Un seul UNWIND de 225 000 éléments prenait
+            // 97 s là où 30 000 en prenaient 1,2 s : superlinéaire au-delà de
+            // quelques dizaines de milliers (6 septembre 2026, cœur C++ de
+            // rag3db). Cinq mille par requête.
+            for tranche in indices.chunks(5_000) {
             let items_param = CypherValue::List(
-                indices
+                tranche
                     .iter()
                     .map(|&ri| {
                         let rl = &resolved[ri];
@@ -571,22 +583,23 @@ impl Node for LinkRecordNode {
                 &[QueryParam { name: "items".to_string(), value: items_param }],
             ) {
                 let cause = e.to_string();
-                for &ri in indices {
+                for &ri in tranche {
                     if let Some(r) = items[resolved[ri].index].take_resolver() {
                         r.fail(format!("lien « {rel_name} » : {cause}"));
                     }
                 }
-                consigner_l_echec(ctx, "LinkRecordNode", rel_name, indices.len(), Disponibilites::TOUT, cause);
+                consigner_l_echec(ctx, "LinkRecordNode", rel_name, tranche.len(), Disponibilites::TOUT, cause);
                 continue;
             }
 
             // Resolve relation refs
-            for &ri in indices {
+            for &ri in tranche {
                 let rl = &resolved[ri];
                 let rel = &mut items[rl.index];
                 if let Some(resolver) = rel.take_resolver() {
                     resolver.resolve(rl.from_uuid.clone(), rl.to_uuid.clone());
                 }
+            }
             }
         }
 
@@ -899,7 +912,7 @@ impl Node for KBEmbedNode {
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
             let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
             let appel = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
-            embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &appel, |chunk, part| {
+            let stats = embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &appel, |chunk, part| {
                 if part.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -909,6 +922,8 @@ impl Node for KBEmbedNode {
                 vectors.extend(part);
                 Ok(())
             })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
 
             // Group by (entity_name, embedding_col)
             let mut groups: HashMap<(&str, String), Vec<(&EmbedWork, &Vec<f32>)>> = HashMap::new();
@@ -963,7 +978,7 @@ impl Node for KBEmbedNode {
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
-                embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, part| {
+                let stats = embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, part| {
                     if part.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -973,6 +988,8 @@ impl Node for KBEmbedNode {
                     sparse_vecs.extend(part);
                     Ok(())
                 })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
 
                 let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &SparseVector)>> =
                     HashMap::new();
@@ -1102,7 +1119,7 @@ impl Node for KBEmbedNode {
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
-                embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
+                let stats = embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "dual embedder returned {}/{} vectors for {} texts",
@@ -1119,6 +1136,8 @@ impl Node for KBEmbedNode {
                     }
                     Ok(())
                 })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
 
                 // UNWIND dense
                 {
@@ -1877,6 +1896,14 @@ struct SimpleEmbedWork {
 /// `embed` tokenise sur le processeur puis calcule sur la carte, l'un après
 /// l'autre — avec deux fils, l'un tokenise pendant que l'autre calcule. Par
 /// le démon, deux requêtes en vol font la même chose de son côté.
+/// Ce que le pipeline a mesuré : le temps passé dans le modèle (cumulé sur
+/// les producteurs) et dans les écritures.
+#[derive(Debug, Default, Clone, Copy)]
+struct PipelineStats {
+    embed_ms: u64,
+    write_ms: u64,
+}
+
 fn embed_pipeline<W: Sync, V: Send>(
     works: &[W],
     plages: Vec<std::ops::Range<usize>>,
@@ -1884,7 +1911,9 @@ fn embed_pipeline<W: Sync, V: Send>(
     distant: bool,
     embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
     mut write: impl FnMut(&[W], V) -> Result<(), String>,
-) -> Result<(), String> {
+) -> Result<PipelineStats, String> {
+    let embed_ms = std::sync::atomic::AtomicU64::new(0);
+    let mut write_ms = 0u64;
     let producteurs = std::env::var("RAG3WEAVER_EMBED_THREADS")
         .ok()
         .and_then(|v| v.trim().parse::<usize>().ok())
@@ -1897,6 +1926,7 @@ fn embed_pipeline<W: Sync, V: Send>(
         let text_of = &text_of;
         let plages = &plages;
         let suivant = &suivant;
+        let embed_ms = &embed_ms;
         for _ in 0..producteurs {
             let tx = tx.clone();
             s.spawn(move || loop {
@@ -1905,6 +1935,7 @@ fn embed_pipeline<W: Sync, V: Send>(
                 let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
                 let t = std::time::Instant::now();
                 let rendu = embed(&texts);
+                embed_ms.fetch_add(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
                 // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
                 if !distant {
                     souffler(t.elapsed());
@@ -1918,9 +1949,11 @@ fn embed_pipeline<W: Sync, V: Send>(
         drop(tx);
         for message in rx {
             let (plage, v) = message?;
+            let t = std::time::Instant::now();
             write(&works[plage], v)?;
+            write_ms += t.elapsed().as_millis() as u64;
         }
-        Ok(())
+        Ok(PipelineStats { embed_ms: embed_ms.load(std::sync::atomic::Ordering::Relaxed), write_ms })
     })
 }
 
@@ -2113,7 +2146,7 @@ impl Node for EmbedNode {
             // du temps elle attendait le JSON et les écritures.
             let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
             let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
-            embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
+            let stats = embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -2155,6 +2188,8 @@ impl Node for EmbedNode {
                 }
                 Ok(())
             })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
         }
 
         // ── Sparse embedding (GPU mini-batches) → insert into SparseHandle ──
@@ -2170,7 +2205,7 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
-                embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
+                let stats = embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -2258,6 +2293,8 @@ impl Node for EmbedNode {
                     }
                     Ok(())
                 })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
             }
         }
 
@@ -2282,7 +2319,7 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
-                embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
+                let stats = embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "dual embedder returned {}/{} vectors for {} texts",
@@ -2299,6 +2336,8 @@ impl Node for EmbedNode {
                     }
                     Ok(())
                 })?;
+            ctx.metric("model_ms", stats.embed_ms as f64);
+            ctx.metric("write_ms", stats.write_ms as f64);
 
                 // UNWIND dense (sets embedding + _embed_hash)
                 {
