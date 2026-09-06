@@ -65,6 +65,33 @@ Deux leçons, et la seconde vaut plus que la première : un commentaire n'est pa
 un contrat ; et **une suite peut être verte sur tous les chemins sauf celui que
 les gens empruntent**.
 
+### Le balayage des silences, et ce qu'il a rendu
+
+La méthode qui a trouvé `flush_insertions` a été appliquée systématiquement :
+chercher les endroits où une erreur est **avalée** ou une absence traitée comme
+un cas normal. Cinq trouvailles de plus, toutes réparées.
+
+| où | ce qui se taisait |
+|---|---|
+| `KBUpdateNode`, suppression des anciens chunks | erreur avalée **et** compte incrémenté quand même — des chunks périmés restaient en base, annoncés supprimés, et une recherche rendait l'ancienne version à côté de la nouvelle |
+| `KBUpdateNode`, lien source → ligne d'index | erreur avalée : la ligne existe mais n'est rattachée à rien, ce qui ne se voit qu'à la lecture |
+| `DeleteRecordNode`, suppression des lignes d'index | erreur avalée : une ligne survit à son entité source, et la recherche la rend encore |
+| trois `create_vector_index` | erreur avalée alors que le DDL est **idempotent** des deux côtés — donc l'erreur avalée était toujours la seule qui compte : index absent, recherche sémantique à zéro |
+| `KBEmbedNode`, insertion sparse | le vecteur est **déjà calculé** — du temps GPU — et partait à la poubelle sans un mot si aucun handle n'était ouvert |
+
+Le dernier est le plus cher : la seule trace du travail était la chaleur de la
+carte.
+
+Trois `let _ =` ont été **laissés** : ils sont dans des chemins d'`undo()` ou
+des nettoyages `skip_if_not_exists`, où le best-effort est documenté et
+légitime. Le tri compte autant que la correction — tout convertir en
+avertissement aurait noyé les cinq vrais.
+
+**Ce qui a rendu ces corrections utiles**, et pas seulement plus bavardes :
+depuis `42d40a8b1`, les avertissements de nœuds remontent dans
+`FlushResult.warnings`. Sans cette pièce, chaque `ctx.warn` ajouté ici aurait
+été un autre silence — écrit, jamais lu.
+
 ### Ce qui reste ouvert dans le point 1.a
 
 `FlushResult.failed` vaut toujours `0` en dur au succès, et `processed` compte
