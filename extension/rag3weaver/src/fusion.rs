@@ -1,5 +1,25 @@
 //! Score fusion strategies for hybrid search.
 //!
+//! # ⚠ Aucun appelant — supplanté par `search::fuse_by_strategy`
+//!
+//! Vérifié le 6 septembre 2026 : rien dans `src/`, `tests/` ni `examples/`
+//! n'appelle ce module. La fusion réelle vit dans
+//! [`crate::search`] (`fuse_results` → `fuse_by_strategy`) et dans le nœud
+//! `FuseResultsNode`, et elle **généralise** ce qui est ici : N signaux
+//! étiquetés au lieu de deux, un poids par signal, et des `f64`. Le RRF d'ici
+//! est `1 / (k + rang)` sur des listes non pondérées ; celui de là-bas est
+//! `poids / (k + rang + 1)`. Ce ne sont donc pas deux écritures de la même
+//! chose : c'est l'ancienne version, et elle ne peut pas servir de socle à la
+//! nouvelle sans lui retirer les poids.
+//!
+//! **Il reste à trancher, et ce n'est pas une décision de maintenance :** soit
+//! on le supprime, soit on assume qu'il fait partie de la surface publique du
+//! crate et on l'écrit. Le laisser sans mention était le tort — une pièce
+//! écrite mais jamais appelée se dégrade sans bruit, et ses neuf tests verts
+//! donnent l'illusion inverse.
+//!
+//! Voir `docs/6-septembre-2026-01h42/01-les-mensonges-et-l-ordre-pour-les-regler.md` §6.
+//!
 //! Combines vector similarity scores and BM25 keyword scores into a single
 //! ranking. Three strategies are supported:
 //!

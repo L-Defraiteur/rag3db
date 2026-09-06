@@ -2829,10 +2829,19 @@ impl Node for KBUpdateNode {
                         }).collect()
                     );
                     let cypher = dialect.batch_link(&in_rel, &[]);
-                    let _ = conn.execute_with_params(
+                    // Avalé jusqu'au 6 septembre 2026. Une ligne d'index qui
+                    // n'est rattachée à rien ne se voit qu'à la lecture, quand
+                    // la résolution vers l'entité parente rend vide.
+                    if let Err(e) = conn.execute_with_params(
                         &cypher,
                         &[QueryParam { name: "items".into(), value: items_param }],
-                    );
+                    ) {
+                        ctx.warn(&format!(
+                            "lien « {in_rel} » entre l'entité source et sa ligne d'index : \
+                             {e} — la ligne existe mais n'est rattachée à rien, et une \
+                             recherche ne saura pas de quelle entité elle vient"
+                        ));
+                    }
                 }
             }
 
@@ -2844,11 +2853,22 @@ impl Node for KBUpdateNode {
                     }).collect()
                 );
                 let cypher = dialect.batch_delete_by_field(&chunk_table, "_parent_uuid");
-                let _ = conn.execute_with_params(
+                // Deux torts en une ligne : l'erreur était avalée, **et** le
+                // compte s'incrémentait quand même. Des chunks périmés
+                // restaient en base, annoncés supprimés — une recherche rendait
+                // alors l'ancienne version à côté de la nouvelle, ce qui est
+                // pire que rien rendre.
+                match conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuids_param }],
-                );
-                total_deleted += indices.len();
+                ) {
+                    Ok(_) => total_deleted += indices.len(),
+                    Err(e) => ctx.warn(&format!(
+                        "suppression des anciens chunks de « {chunk_table} » : {e} — les \
+                         chunks périmés restent en base ; une recherche peut rendre \
+                         l'ancienne version à côté de la nouvelle"
+                    )),
+                }
             }
         }
 
@@ -3432,12 +3452,19 @@ impl Node for DeleteRecordNode {
                     // Delete index entries
                     let index_table = format!("{kb_name}_Index");
                     let del_idx = dialect.batch_cascade_delete(&index_table);
-                    let _ = conn
-                        .execute_with_params(
-                            &del_idx,
-                            &[QueryParam { name: "uuids".into(), value: idx_list }],
-                        )
-                        ;
+                    // Une ligne d'index qui survit à la suppression de son
+                    // entité source est un résultat de recherche qui pointe
+                    // vers rien. Avalé jusqu'au 6 septembre 2026.
+                    if let Err(e) = conn.execute_with_params(
+                        &del_idx,
+                        &[QueryParam { name: "uuids".into(), value: idx_list }],
+                    ) {
+                        ctx.warn(&format!(
+                            "suppression des lignes de « {index_table} » : {e} — des \
+                             lignes d'index survivent à leur entité source et une \
+                             recherche les rendra encore"
+                        ));
+                    }
                 } else {
                     // contentFor: delete SOURCED chunks, enqueue re-aggregation
                     let kb_meta = match kb_metadata.get(kb_name.as_str()) {
