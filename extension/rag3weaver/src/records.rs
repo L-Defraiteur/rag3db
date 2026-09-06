@@ -117,6 +117,17 @@ pub struct FlushResult {
     /// ancien** quand il déborde : sur un très gros drain, des lignes peuvent
     /// manquer. Quand ça arrive, c'est dit ici aussi.
     pub warnings: Vec<String>,
+    /// **Ce que ce verbe a rendu prêt**, nommément.
+    ///
+    /// `None` : ce verbe ne le dit pas — file vide, échec, ou chemin qui n'a
+    /// pas encore appris à répondre. Dire « je ne sais pas » est un état ; le
+    /// deviner n'en est pas un.
+    ///
+    /// C'est la moitié écriture des quatre disponibilités : un acquittement qui
+    /// annonce sa portée cesse de laisser croire qu'il a tout fait. Un verbe qui
+    /// rend `data + textsearch` a laissé une dette d'embarquement dans la base,
+    /// et `Catalog::embarquer_le_retard` la soldera.
+    pub rendu_pret: Option<crate::disponibilite::Disponibilites>,
     pub update_results: Vec<UpdateResult>,
     pub delete_results: Vec<DeleteResult>,
 }

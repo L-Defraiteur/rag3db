@@ -3160,11 +3160,47 @@ impl Catalog {
         (todo, skipped)
     }
 
+    /// Le verbe de lot, **complet** : quand il rend, tout est prêt, étage GPU
+    /// compris. C'est son contrat depuis toujours et il ne bouge pas.
     pub fn ingest_entities(
         &mut self,
         entity_name: &str,
         records: Vec<BTreeMap<String, CypherValue>>,
     ) -> Result<FlushResult, CatalogError> {
+        self.ingest_entities_jusqu_a(
+            entity_name,
+            records,
+            crate::disponibilite::Disponibilites::TOUT,
+        )
+    }
+
+    /// **Le même verbe, qui rend moins — et qui le dit.**
+    ///
+    /// Pour l'écrivain que Lucie décrit le 6 septembre 2026 : celui qui ingère
+    /// « tout plein tout le temps, un par un », et qu'il faut chaperonner. Poser
+    /// la ligne et l'indexer en plein texte est bon marché à l'unité ;
+    /// l'embarquement, lui, est **moins cher à calculer en groupe** — c'est une
+    /// passe GPU sur un tenseur, cent textes d'un coup ne coûtent pas cent fois
+    /// un texte. La mesure du 6 septembre le dit sans ambiguïté : 99,1 % du
+    /// temps d'une ingestion est dans le découpage et l'embarquement.
+    ///
+    /// Sans `dense` ni `sparse` dans `exige`, l'étage GPU est sauté et la dette
+    /// part dans la base — chunks au marqueur vide. Rien n'est gardé en
+    /// mémoire, donc rien n'est perdu si le processus meurt, et
+    /// [`Catalog::embarquer_le_retard`] la soldera : périodiquement pour un
+    /// tick, ou tout de suite si quelqu'un exige le signal.
+    ///
+    /// **Ce n'est pas une entorse au contrat, c'est le contrat qui se nomme.**
+    /// Le `FlushResult` rendu porte `rendu_pret` : l'appelant sait ce qu'il a,
+    /// au lieu de croire qu'il a tout. Un verbe qui rend moins sans le dire
+    /// serait le mensonge qu'on a passé la nuit à enlever.
+    pub fn ingest_entities_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        records: Vec<BTreeMap<String, CypherValue>>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        let avec_embarquement = exige.dense() || exige.sparse();
         self.check_initialized()?;
 
         let entity_config = self.entity_configs.get(entity_name)
@@ -3275,9 +3311,16 @@ impl Catalog {
 
         // 5. Embed chunks
         let signals = entity_config.signals;
-        graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
-        graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
-        graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
+        // Une feuille : le flush FTS se déclenche depuis l'insertion, pas
+        // depuis l'embarquement. L'omettre ne déséquilibre donc rien, et les
+        // chunks restent posés et indexés en plein texte.
+        if avec_embarquement {
+            graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
+            graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
+            graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
+        } else {
+            self.peut_devoir_un_embarquement = true;
+        }
 
         // 6. Flush FTS on entity table
         graph.add_node(Box::new(FlushNode::new("flush_fts", vec![entity_name.to_string()]))).unwrap();
@@ -3403,7 +3446,10 @@ impl Catalog {
                         });
                         self.annoncer_travail_en_attente();
                     }
-                    kb_failed = self.drain().failed;
+                    // Le drain secondaire suit la même consigne : si
+                    // l'appelant n'a pas demandé le GPU pour ses entités, il ne
+                    // le veut pas davantage pour leurs lignes d'index.
+                    kb_failed = self.drain_jusqu_a(exige).failed;
                 }
 
                 // The KB aggregation runs as a second drain, and its result used
@@ -3421,6 +3467,11 @@ impl Catalog {
                     failed: kb_failed,
                     unchanged,
                     warnings: ramasser_les_avertissements(&mut ecoute),
+                    rendu_pret: Some(if avec_embarquement {
+                        crate::disponibilite::Disponibilites::TOUT
+                    } else {
+                        crate::disponibilite::Disponibilites::RECHERCHE_TEXTE
+                    }),
                     ..Default::default()
                 })
             }
@@ -4252,6 +4303,14 @@ impl Catalog {
                     failed: 0,
                     unchanged: inchanges,
                     warnings: avertissements,
+                    // Ce que ce drain a rendu prêt, et pas plus. Sans l'étage
+                    // GPU, les chunks sont posés et trouvables en plein texte ;
+                    // leur embarquement reste dû, dans la base.
+                    rendu_pret: Some(if avec_embarquement {
+                        crate::disponibilite::Disponibilites::TOUT
+                    } else {
+                        crate::disponibilite::Disponibilites::RECHERCHE_TEXTE
+                    }),
                     update_results: updates,
                     delete_results: deletes,
                 }

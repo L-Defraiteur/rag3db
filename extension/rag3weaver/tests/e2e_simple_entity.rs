@@ -431,6 +431,95 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
     );
 }
 
+/// **Le verbe de lot qui rend moins, et qui le dit.**
+///
+/// Le cas de l'écrivain qu'il faut chaperonner : il ingère sans arrêt, et on ne
+/// veut pas une passe GPU par item. `ingest_entities_jusqu_a(…, RECHERCHE_TEXTE)`
+/// pose les lignes, découpe, indexe en plein texte — et laisse l'embarquement
+/// dû dans la base.
+///
+/// Ce qui distingue ça d'un mensonge : le `FlushResult` **porte sa portée**.
+/// L'appelant sait qu'il a `data + textsearch` et pas `dense`, au lieu de
+/// croire qu'il a tout.
+#[test]
+#[ignore]
+fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+
+    let mut catalog = setup_simple_catalog(4);
+    let res = catalog
+        .ingest_entities_jusqu_a(
+            "Product",
+            vec![make_product(
+                "Rust Book",
+                "A comprehensive guide to Rust programming language covering ownership.",
+                "Systems programming, memory safety.",
+                49.99,
+            )],
+            D::RECHERCHE_TEXTE,
+        )
+        .expect("ingestion partielle");
+
+    // **L'acquittement dit sa portée.** C'est ce qui rend l'omission honnête.
+    assert_eq!(
+        res.rendu_pret,
+        Some(D::RECHERCHE_TEXTE),
+        "un verbe qui rend moins doit dire quoi, sinon c'est le mensonge d'hier"
+    );
+
+    // Le plein texte trouve, sans qu'aucun GPU ait tourné.
+    let bm25 = catalog
+        .search("Product", "programming language", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche");
+    assert!(!bm25.results.is_empty(), "le plein texte est prêt");
+
+    // Le dense est dû, et le zéro vectoriel le dit.
+    let dense = catalog
+        .search("Product", "programming language", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    eprintln!("[lot] avertissements : {:?}", dense.meta.warnings);
+    assert!(
+        dense.meta.warnings.iter().any(|a| a.contains("pas encore été embarqués")),
+        "la dette laissée par le lot doit se dire : {:?}", dense.meta.warnings
+    );
+
+    // Et le rattrapage la solde — c'est le tick, appelé à la demande.
+    let repris = catalog.embarquer_le_retard(D::TOUT, 512).expect("rattrapage");
+    assert!(repris > 0, "le rattrapage doit retrouver la dette dans la base");
+
+    let dense = catalog
+        .search("Product", "programming language", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    assert!(
+        dense.meta.warnings.iter().all(|a| !a.contains("pas encore été embarqués")),
+        "plus rien de dû : {:?}", dense.meta.warnings
+    );
+
+    // Et le verbe complet, lui, n'a rien changé : il rend toujours tout.
+    let res = catalog
+        .ingest_entities("Product", vec![make_product(
+            "Python Cookbook", "Recipes for data science.", "pandas, numpy.", 39.99,
+        )])
+        .expect("ingestion complète");
+    assert_eq!(
+        res.rendu_pret,
+        Some(D::TOUT),
+        "le contrat historique d'ingest_entities ne bouge pas"
+    );
+}
+
 /// **La coupe, sur le chemin où elle existe.**
 ///
 /// Le graphe de drain ne découpe pas les entités simples — leurs chunks
