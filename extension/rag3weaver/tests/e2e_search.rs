@@ -2208,3 +2208,59 @@ fn phase6_sparse_mmap_persistence() {
         eprintln!("✓ sparse mmap persistence roundtrip: search works after close + reopen");
     }
 }
+
+
+// ═══ Le chemin composable sur une base de connaissances ══════════════════════
+
+/// **Une cible KB sur le chemin des agents.** Jusqu'au 6 septembre 2026,
+/// `ResolveParentNode` enrichissait sur `target.name` — `main` — là où la
+/// table qui porte les lignes est `main_Index` : un `MATCH (n:main)` sur une
+/// table qui n'existe pas. Le monolithe passait la table ; le nœud passait le
+/// nom. Aucun test n'empruntait une KB par ce chemin — c'est B1 de la
+/// réconciliation.
+#[test]
+#[ignore]
+fn le_chemin_composable_enrichit_une_base_de_connaissances() {
+    use rag3weaver::dataflow::{
+        BM25SearchNode, DataflowGraph, DataflowRuntime, ResolveParentNode, SearchSourceNode,
+        ServiceRegistry,
+    };
+    use rag3weaver::embedder::Embedder;
+    use rag3weaver::search_strategy::UnifiedResult;
+    use std::sync::{Arc, Mutex};
+
+    let mut catalog = setup_bm25_catalog();
+    catalog.drain();
+
+    let mut services = ServiceRegistry::new();
+    catalog.register_search_services(&mut services);
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    services.register::<Arc<dyn Embedder>>("embedder", embedder);
+    services.register("catalog", Arc::new(Mutex::new(catalog)));
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "main", "Rust programming",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("bm25", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).expect("le graphe doit tourner sur une KB");
+    let resultats = output
+        .get("resolve", "results")
+        .and_then(|v| v.downcast::<Vec<UnifiedResult>>())
+        .cloned()
+        .expect("des résultats résolus");
+    eprintln!("[KB composable] {} résultats", resultats.len());
+    assert!(!resultats.is_empty(), "la KB doit répondre par le chemin composable");
+    assert!(
+        resultats.iter().all(|r| r.data.as_ref().is_some_and(|d| !d.is_empty())),
+        "chaque résultat doit être enrichi depuis main_Index : {:?}",
+        resultats.iter().map(|r| r.data.is_some()).collect::<Vec<_>>()
+    );
+}

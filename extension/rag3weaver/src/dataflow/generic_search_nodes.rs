@@ -31,7 +31,7 @@ use crate::catalog::Catalog;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::reranker::{passage_text, Reranker};
 use crate::search::{
-    embed_query, enrich_results_with_data, fuse_signals, resolve_vector_chunks,
+    embed_query, enrich_results_with_data, fuse_signals,
     search_bm25_chunked, search_sparse, search_vector, search_vector_via_backend, BM25Mode,
     FusionConfig, FusionStrategy, ResultMode, SearchOptions, SearchResult, SearchTarget,
     SignalConfig, SignalRole, DEFAULT_RRF_K,
@@ -284,7 +284,7 @@ impl Node for VectorSearchNode {
             None => (None, vec![], None),
             Some(cond) => match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
                 Some(catalog) => {
-                    let compiled = catalog.lock().unwrap().compile_filter_for_vector(&target.name, Some(cond));
+                    let compiled = catalog.lock().unwrap().compile_filter_for_vector(&target.parent_table, Some(cond));
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {
@@ -340,12 +340,20 @@ impl Node for VectorSearchNode {
         .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
-        let results = resolve_vector_chunks(
+        // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
+        // résolvait les chunks en Cypher sur PostgreSQL — B2 de la
+        // réconciliation du 6 septembre 2026.
+        let dialect = ctx
+            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .cloned()
+            .ok_or("'dialect' service not found")?;
+        let results = crate::search::resolve_vector_chunks_with_dialect(
             &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
             self.result_mode,
+            dialect.as_ref(),
         )
         .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
 
@@ -801,12 +809,20 @@ impl Node for SparseSearchNode {
         .map_err(|e| format!("SparseSearchNode: search failed: {e}"))?;
 
         // Resolve chunk-level results → parent-level with data enrichment
-        let results = resolve_vector_chunks(
+        // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
+        // résolvait les chunks en Cypher sur PostgreSQL — B2 de la
+        // réconciliation du 6 septembre 2026.
+        let dialect = ctx
+            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .cloned()
+            .ok_or("'dialect' service not found")?;
+        let results = crate::search::resolve_vector_chunks_with_dialect(
             &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
             self.result_mode,
+            dialect.as_ref(),
         )
         .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
 
@@ -1322,8 +1338,27 @@ impl Node for ResolveParentNode {
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
-        enrich_results_with_data(&*conn, &target.name, return_fields, &mut search_results)
-            .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
+        // **`parent_table`, pas `name`.** Pour une base de connaissances, le nom
+        // est `MaKB` et la table qui porte les lignes est `MaKB_Index` :
+        // enrichir sur le nom faisait un `MATCH (n:MaKB)` sur une table qui
+        // n'existe pas. Le monolithe passait la table ; ce nœud passait le
+        // nom — B1 de la réconciliation du 6 septembre 2026.
+        //
+        // **Et par le backend quand il y en a un** : l'enrichissement direct
+        // est du Cypher, qui ne parle à aucune base SQL. Le monolithe passait
+        // par `enrich_results_with_data_via_backend` ; ce nœud non, et sur
+        // PostgreSQL il échouait sur `MATCH`. Sans service `catalog`, le
+        // Cypher direct reste le chemin — c'est le montage minimal des tests.
+        let backend = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog")
+            .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()));
+        match backend {
+            Some(b) => crate::search::enrich_results_with_data_via_backend(
+                b.as_ref(), &target.parent_table, return_fields, &mut search_results,
+            ),
+            None => enrich_results_with_data(&*conn, &target.parent_table, return_fields, &mut search_results),
+        }
+        .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
         let enriched: Vec<UnifiedResult> = search_results
             .into_iter()
@@ -1381,7 +1416,9 @@ fn allowed_ids_for(
         ctx.warn(&format!("{node_type}: un filtre est demandé mais le service 'catalog' manque — la recherche n'est pas restreinte"));
         return None;
     };
-    let resolved = catalog.lock().unwrap().resolve_filter_to_ids(&target.name, condition, target);
+    // `parent_table` : la table qui porte les lignes, `MaKB_Index` pour une
+    // base de connaissances — voir `ResolveParentNode`.
+    let resolved = catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target);
     match resolved {
         Ok(ids) => ids,
         Err(e) => {
@@ -1415,7 +1452,7 @@ fn filtre_utilisateur_for(
     let compile = catalog
         .lock()
         .unwrap()
-        .compile_filter_utilisateur(&target.name, Some(condition));
+        .compile_filter_utilisateur(&target.parent_table, Some(condition));
     match compile {
         Ok((Some(w), params, Some(j))) => Some((j, w, params)),
         Ok(_) => None,

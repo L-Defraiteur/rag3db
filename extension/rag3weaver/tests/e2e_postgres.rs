@@ -1652,3 +1652,65 @@ fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
         "plus rien de dû : {:?}", apres.meta.warnings
     );
 }
+
+
+/// **Le chemin composable résout ses chunks avec le dialecte de la base.**
+///
+/// `resolve_vector_chunks` codait `Rag3dbDialect` en dur : sur PostgreSQL, le
+/// nœud vectoriel résolvait ses chunks en Cypher. Le monolithe passait
+/// `self.dialect` ; les nœuds prennent maintenant le service — B2 de la
+/// réconciliation du 6 septembre 2026.
+#[test]
+#[ignore]
+fn le_chemin_composable_resout_les_chunks_avec_le_dialecte_postgres() {
+    use rag3weaver::dataflow::{
+        DataflowGraph, DataflowRuntime, ResolveParentNode, SearchSourceNode, ServiceRegistry,
+        VectorSearchNode,
+    };
+    use rag3weaver::embedder::Embedder;
+    use rag3weaver::search_strategy::UnifiedResult;
+    use std::sync::Mutex;
+
+    let (_garde, _ctx, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Rust Book", "Ownership, lifetimes and concurrency in Rust.", 49.99),
+                produit("Python Cookbook", "Data science and automation in Python.", 39.99),
+            ],
+        )
+        .unwrap();
+
+    let mut services = ServiceRegistry::new();
+    catalog.register_search_services(&mut services);
+    let embedder: Arc<dyn Embedder> = Arc::new(HashEmbedder::new(8));
+    services.register::<Arc<dyn Embedder>>("embedder", embedder);
+    services.register("catalog", Arc::new(Mutex::new(catalog)));
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Ownership, lifetimes and concurrency in Rust.",
+        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(VectorSearchNode::new("vector", 10))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "vector", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("vector", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).expect("le graphe doit tourner sur postgres");
+    let resultats = output
+        .get("resolve", "results")
+        .and_then(|v| v.downcast::<Vec<UnifiedResult>>())
+        .cloned()
+        .expect("des résultats résolus");
+    eprintln!("[postgres composable] {} résultats", resultats.len());
+    assert!(!resultats.is_empty(), "le vecteur doit répondre par le chemin composable");
+    assert!(
+        resultats.iter().all(|r| r.data.as_ref().is_some_and(|d| !d.is_empty())),
+        "chaque résultat doit être enrichi par le dialecte postgres"
+    );
+}
