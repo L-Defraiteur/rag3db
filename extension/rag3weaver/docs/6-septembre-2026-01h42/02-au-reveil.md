@@ -5,7 +5,7 @@ attend ta décision, et ce qu'il faut regarder en premier.
 
 ## En trois lignes
 
-Treize commits. Le plus important n'était pas sur ma liste : **le chemin par
+Dix-neuf commits. Le plus important n'était pas sur ma liste : **le chemin par
 défaut de la lecture n'indexait rien en plein texte**. Tout le reste est du même
 genre — des choses qui ne cassaient pas, qui ne levaient aucune erreur, et qui
 rendaient faux.
@@ -71,6 +71,21 @@ sans un mot faute de handle.
 appliqués. Ils le disent maintenant au montage. En écrivant le test, j'ai
 découvert que **notre propre fiche de test pose un `boost`** : l'alarme ne vise
 pas un cas de laboratoire.
+
+## Deux choses réglées en plus, hors inventaire
+
+**L'issue 06 est close.** Elle disait « ce qu'il reste à faire » pour trois
+choses **faites** — la fabrique unique de `Llm` et ses cinq appelants, les trois
+rôles burn sur la carte libre sous `confort`, et le test des quatre promesses.
+Un document qui décrit un manque comblé envoie quelqu'un le combler deux fois.
+Vérifié point par point avant de l'écrire, avec l'endroit et le test qui tient.
+
+**Le rapport de la passe ne ment plus par omission.** Cinq suites sont derrière
+`openai-llm` — elles appellent un vrai modèle et dépensent le quota Vertex — et
+sortaient du lot en silence, en rendant « ok. 0 passed » que le tableau alignait
+comme un succès. Elles sont maintenant annoncées **au lancement** comme
+PostgreSQL, et nommées dans le résumé. Un écart découvert à la fin est un écart
+qu'on ne corrige pas dans la même passe.
 
 ## Ce qui attend ta décision
 
