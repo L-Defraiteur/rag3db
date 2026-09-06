@@ -44,12 +44,15 @@
 graph LR
     inner["SearchTool(target=$target, query=$query, limit=$limit, rerank=$rerank, consistency=$consistency)"]
     fetch["FetchRelatedNode(relation=$relation, direction=$direction, limit=$expand_limit)"]
+    frame["GroupFrameNode"]
     compose["ComposeNode"]
     render["RenderResultsNode"]
 
     inner -->|render.results:results| fetch
+    inner -->|render.results:results| frame
     inner -->|render.results:results| compose
     inner -->|render.query:query| render
     inner -->|render.meta:meta| render
     fetch -->|children| compose
+    frame -->|frames| compose
     compose -->|results| render

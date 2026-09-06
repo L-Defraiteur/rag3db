@@ -242,74 +242,181 @@ impl Node for FetchRelatedNode {
             return Ok(());
         }
 
-        let uuids_param = CypherValue::List(
-            source_uuids
-                .iter()
-                .map(|u| CypherValue::String(u.clone()))
-                .collect(),
-        );
+        let children_map = fetch_related(conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit)?;
+        ctx.set_output("children", PortValue::new(children_map));
+        Ok(())
+    }
+}
 
-        let cypher = match self.direction {
-            ExpansionDirection::Outgoing => format!(
-                "UNWIND $uuids AS uid \
-                 MATCH (n {{_uuid: uid}})-[:{}]->(m) \
-                 RETURN uid, m._uuid, label(m), m",
-                self.relation
-            ),
-            ExpansionDirection::Incoming => format!(
-                "UNWIND $uuids AS uid \
-                 MATCH (n {{_uuid: uid}})<-[:{}]-(m) \
-                 RETURN uid, m._uuid, label(m), m",
-                self.relation
-            ),
+/// **Les voisins d'une liste d'uuids par une relation**, en une requête.
+/// Partagé par [`FetchRelatedNode`] et [`GroupFrameNode`].
+pub fn fetch_related(
+    conn: &dyn crate::connection::DbConnection,
+    source_uuids: &[String],
+    relation: &str,
+    direction: ExpansionDirection,
+    limit: usize,
+) -> Result<HashMap<String, Vec<ChildSummary>>, String> {
+    let uuids_param = CypherValue::List(
+        source_uuids
+            .iter()
+            .map(|u| CypherValue::String(u.clone()))
+            .collect(),
+    );
+
+    let cypher = match direction {
+        ExpansionDirection::Outgoing => format!(
+            "UNWIND $uuids AS uid \
+             MATCH (n {{_uuid: uid}})-[:{}]->(m) \
+             RETURN uid, m._uuid, label(m), m",
+            relation
+        ),
+        ExpansionDirection::Incoming => format!(
+            "UNWIND $uuids AS uid \
+             MATCH (n {{_uuid: uid}})<-[:{}]-(m) \
+             RETURN uid, m._uuid, label(m), m",
+            relation
+        ),
+    };
+
+    let result = conn
+        .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
+        .map_err(|e| e.to_string())?;
+
+    let mut children_map: HashMap<String, Vec<ChildSummary>> = HashMap::new();
+
+    for row in &result.rows {
+        let parent_uuid = row
+            .get(0)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let child_uuid = row
+            .get(1)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let child_entity = row
+            .get(2)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let child_data = match row.get(3) {
+            Some(CypherValue::Map(m)) => m.clone(),
+            _ => BTreeMap::new(),
         };
 
-        let result = conn
-            .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
-            .map_err(|e| e.to_string())?;
+        children_map
+            .entry(parent_uuid)
+            .or_default()
+            .push(ChildSummary {
+                uuid: child_uuid,
+                entity: child_entity,
+                relation: relation.to_string(),
+                data: child_data,
+            });
+    }
 
-        let mut children_map: HashMap<String, Vec<ChildSummary>> = HashMap::new();
-
-        for row in &result.rows {
-            let parent_uuid = row
-                .get(0)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let child_uuid = row
-                .get(1)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let child_entity = row
-                .get(2)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let child_data = match row.get(3) {
-                Some(CypherValue::Map(m)) => m.clone(),
-                _ => BTreeMap::new(),
-            };
-
-            children_map
-                .entry(parent_uuid)
-                .or_default()
-                .push(ChildSummary {
-                    uuid: child_uuid,
-                    entity: child_entity,
-                    relation: self.relation.clone(),
-                    data: child_data,
-                });
+    // Truncate per parent if limit > 0
+    if limit > 0 {
+        for children in children_map.values_mut() {
+            children.truncate(limit);
         }
+    }
 
-        // Truncate per parent if limit > 0
-        if self.limit > 0 {
-            for children in children_map.values_mut() {
-                children.truncate(self.limit);
+    Ok(children_map)
+}
+
+// ─── GroupFrameNode ──────────────────────────────────────────────────────────
+
+/// Clés réservées que [`ComposeNode`] pose dans `data` pour la vue par parent.
+pub const FRAME_UUID: &str = "_frame_uuid";
+pub const FRAME_TITLE: &str = "_frame_title";
+pub const FRAME_TEXT: &str = "_frame";
+
+/// **Le parent de chaque résultat, pour l'encadrer au rendu.**
+///
+/// Lit la déclaration `group_by` de l'entité des résultats (relation vers
+/// le parent, champ de cadre) et va chercher les parents en une requête.
+/// Rend, par uuid de résultat, un `ChildSummary` du parent dont `data`
+/// porte `_frame_title` (le titre du parent) et `_frame` (son champ de
+/// cadre). Sans `group_by`, un port vide : le rendu regroupe comme avant.
+///
+/// Rien ici ne sait ce qu'est un scope : une entité de messages déclarerait
+/// son fil et son titre, et aurait la même vue.
+pub struct GroupFrameNode {
+    node_name: String,
+}
+
+impl GroupFrameNode {
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string() }
+    }
+}
+
+impl Node for GroupFrameNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+
+    fn node_type(&self) -> &'static str {
+        "GroupFrameNode"
+    }
+
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::GroupFrameNodeFactory).0
+    }
+
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::GroupFrameNodeFactory).1
+    }
+
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let results = match ctx.take_input("results") {
+            Some(pv) => take_or_clone::<Vec<UnifiedResult>>(pv).ok_or("expected Vec<UnifiedResult>")?,
+            _ => return Err("GroupFrameNode: missing 'results' input".into()),
+        };
+        let mut frames: HashMap<String, Vec<ChildSummary>> = HashMap::new();
+        let Some(catalog) = ctx.service::<std::sync::Arc<std::sync::Mutex<crate::Catalog>>>("catalog").cloned() else {
+            ctx.set_output("frames", PortValue::new(frames));
+            return Ok(());
+        };
+        // Par entité : sa déclaration, ses uuids.
+        let mut par_entite: HashMap<String, Vec<String>> = HashMap::new();
+        for r in &results {
+            if let Some((entite, uuid)) = source_info(r) {
+                par_entite.entry(entite).or_default().push(uuid);
             }
         }
-
-        ctx.set_output("children", PortValue::new(children_map));
+        for (entite, uuids) in par_entite {
+            let (group_by, title_field) = {
+                let c = catalog.lock().map_err(|_| "GroupFrameNode: catalogue empoisonné")?;
+                let Some(config) = c.entity_config(&entite) else { continue };
+                let Some(g) = config.group_by.clone() else { continue };
+                // Le titre du **parent** : même entité que l'enfant quand la
+                // relation reste dans la table ; sinon celui du parent.
+                (g, config.title_field().map(str::to_string))
+            };
+            let conn = ctx.service::<ConnService>("conn").ok_or("GroupFrameNode: 'conn' service not found")?.0.clone();
+            let parents = fetch_related(conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1)?;
+            for (uuid, mut liste) in parents {
+                let Some(mut parent) = liste.drain(..).next() else { continue };
+                let titre = title_field
+                    .as_deref()
+                    .and_then(|t| parent.data.get(t))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+                    .or_else(|| parent.data.get("name").and_then(|v| v.as_str()).map(str::to_string))
+                    .unwrap_or_else(|| parent.uuid.clone());
+                let cadre = parent.data.get(&group_by.frame_field).and_then(|v| v.as_str()).map(str::to_string);
+                parent.data.insert(FRAME_TITLE.into(), CypherValue::String(titre));
+                if let Some(c) = cadre {
+                    parent.data.insert(FRAME_TEXT.into(), CypherValue::String(c));
+                }
+                frames.insert(uuid, vec![parent]);
+            }
+        }
+        ctx.set_output("frames", PortValue::new(frames));
         Ok(())
     }
 }
@@ -352,11 +459,25 @@ impl Node for ComposeNode {
             Some(pv) => take_or_clone::<HashMap<String, Vec<ChildSummary>>>(pv).ok_or("expected Children")?,
             _ => HashMap::new(),
         };
-
+        // Le cadre de chaque résultat (voir `GroupFrameNode`) : trois clés
+        // réservées dans `data`, que le rendu lit pour regrouper par parent.
+        let frames = match ctx.take_input("frames") {
+            Some(pv) => take_or_clone::<HashMap<String, Vec<ChildSummary>>>(pv).ok_or("expected Children")?,
+            _ => HashMap::new(),
+        };
         for result in &mut results {
             if let Some((_, source_uuid)) = source_info(result) {
                 if let Some(c) = children.get(&source_uuid) {
                     result.other_children = Some(c.clone());
+                }
+                if let Some(cadre) = frames.get(&source_uuid).and_then(|v| v.first()) {
+                    let data = result.data.get_or_insert_with(BTreeMap::new);
+                    data.insert(FRAME_UUID.into(), CypherValue::String(cadre.uuid.clone()));
+                    for (cle, valeur) in &cadre.data {
+                        if cle == FRAME_TITLE || cle == FRAME_TEXT {
+                            data.insert(cle.clone(), valeur.clone());
+                        }
+                    }
                 }
             }
         }

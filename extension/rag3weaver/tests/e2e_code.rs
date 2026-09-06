@@ -1647,3 +1647,33 @@ fn where_the_vector_pre_filter_stands_today() {
         match &native { Ok(v) => verdict(v), Err(_) => "refusée" },
     );
 }
+
+/// **La vue par parent.** Plusieurs méthodes d'un même `impl` trouvées par
+/// une seule recherche sont rendues ensemble, sous la signature de l'impl —
+/// que l'impl soit ou non un résultat. Déclaré par `Scope.group_by`
+/// (`HAS_PARENT`, `signature`), lu par `GroupFrameNode`, posé par
+/// `ComposeNode`, regroupé par arête au rendu. Lucie, 6 septembre 2026.
+#[test]
+#[ignore]
+fn les_methodes_d_un_meme_impl_sont_rendues_sous_sa_signature() {
+    let root = dataflow_dir();
+    let all = read_sources(&root).unwrap();
+    let snapshot: Arc<dyn FileSource> = Arc::new(Snapshot::new("remote-demo", all.into_iter().filter(|(p, _)| p == "port.rs")));
+    let catalog = setup();
+    let analysis = analyze_source(snapshot.as_ref()).unwrap();
+    catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+    let (nodes, tools) = builtin_graph_tools().unwrap();
+    let services = Arc::new(rag3weaver::agent::mount_agent_services_on(&catalog, snapshot.clone()).unwrap());
+    let call = |name: &str, args: serde_json::Value| -> String {
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        tools.call(&tc, &nodes, services.clone()).content.clone()
+    };
+    let md = call("search", serde_json::json!({ "target": "Scope", "query": "downcast take new PortValue", "limit": 8 }));
+    eprintln!("{md}");
+    // Le parent que la relation `HAS_PARENT` donne à une méthode est le scope
+    // nommé comme son impl — ici l'`enum PortValue`, que codeparsers résout
+    // par nom. Le cadre est donc la déclaration du type, pas la ligne `impl`.
+    // C'est la vue voulue : les méthodes sous ce qu'elles étendent.
+    let cadre = md.lines().find(|l| l.starts_with("┌ `")).unwrap_or_default().to_string();
+    assert!(md.contains("**PortValue** ·") && cadre.contains("PortValue"), "les méthodes de PortValue doivent être encadrées par la signature de leur parent :\n{md}");
+}

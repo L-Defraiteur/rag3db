@@ -72,6 +72,29 @@ pub mod burn {
         Arc::new(e)
     });
 
+    /// granite-embedding-107m-multilingual sur burn (384 d, 6 couches, texte et
+    /// code, multilingue). 428 Mo ; chargé une fois par binaire.
+    pub static GRANITE_107M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_GRANITE_107M_BPK", "granite-107m", "model.bpk");
+        let tok = artifact("RAG3WEAVER_GRANITE_107M_TOKENIZER", "granite-107m", "tokenizer.json");
+        eprintln!("▸ Loading granite-107m on burn from {}...", bpk.display());
+        let e = rag3weaver::BurnGranite107m::from_files(&bpk, &tok, BurnDevice::default()).expect("build BurnGranite107m");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(e)
+    });
+
+    /// granite-embedding-278m-multilingual sur burn (768 d, 12 couches). 1,1 Go.
+    pub static GRANITE_278M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
+        let t0 = std::time::Instant::now();
+        let bpk = artifact("RAG3WEAVER_GRANITE_278M_BPK", "granite-278m", "model.bpk");
+        let tok = artifact("RAG3WEAVER_GRANITE_278M_TOKENIZER", "granite-278m", "tokenizer.json");
+        eprintln!("▸ Loading granite-278m on burn from {}...", bpk.display());
+        let e = rag3weaver::BurnGranite278m::from_files(&bpk, &tok, BurnDevice::default()).expect("build BurnGranite278m");
+        eprintln!("  loaded in {:?}", t0.elapsed());
+        Arc::new(e)
+    });
+
     /// **BGE-M3, ici ou ailleurs.**
     ///
     /// Le modèle fait 2,2 Go. Chaque binaire de test qui le charge paie

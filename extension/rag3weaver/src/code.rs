@@ -281,6 +281,9 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
             "scope_type".into(), "parent_name".into(),
             "docstring".into(), "signature".into(),
         ]),
+        // La vue par parent : les méthodes d'un même impl rendues ensemble,
+        // sous sa signature, que l'impl soit ou non un résultat.
+        group_by: Some(crate::config::GroupBy { relation: "HAS_PARENT".into(), frame_field: "signature".into() }),
         ..Default::default()
     }
 }

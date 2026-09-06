@@ -429,9 +429,10 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     // nœuds extérieurs (inner, fetch, compose, render), et le `SearchTool`
     // qu'il contient est un run à lui seul — son début, sa fin, et ses neuf
     // nœuds (source, bm25, vector, sparse, fuse, rerank, paginate, resolve,
-    // render ; `paginate` et `sparse` depuis le 6 septembre 2026). Quinze en
-    // tout. Chaque appel au modèle est suivi de sa consommation (3).
-    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 15, "{n} événements tracés");
+    // render ; `paginate` et `sparse` depuis le 6 septembre 2026), plus le
+    // nœud `frame` de l'étage `search` (la vue par parent, même jour). Seize
+    // en tout. Chaque appel au modèle est suivi de sa consommation (3).
+    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 16, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -735,7 +736,8 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     // la trace, et c'est voulu : on veut pouvoir lire les deux étages.
     // 25 depuis le 6 septembre 2026 : `PaginateNode` et `SparseSearchNode`
     // dans le graphe de base.
-    let expected = 25;
+    // 26 depuis la vue par parent (`GroupFrameNode` dans `search`).
+    let expected = 26;
     let start = Instant::now();
     loop {
         let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();

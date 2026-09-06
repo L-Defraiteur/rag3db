@@ -2540,7 +2540,7 @@ mod tests {
             .unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["compose", "fetch", "inner", "render"]);
+        assert_eq!(names, vec!["compose", "fetch", "frame", "inner", "render"]);
     }
 
     /// **L'avertissement traverse les deux étages.**

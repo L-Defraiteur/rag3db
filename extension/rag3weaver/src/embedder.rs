@@ -77,6 +77,15 @@ pub trait Embedder: Send + Sync {
     ///
     /// Le compte est **cumulé depuis l'ouverture** : à l'appelant de mémoriser
     /// ce qu'il a déjà signalé.
+    /// **Le lot qui sature la carte pour ce modèle** : `(séquences, jetons par
+    /// séquence)`, ou `None` si le modèle ne le sait pas. Un 6 × 384 veut 256
+    /// séquences et plus par appel, un 24 × 1 024 en tient 32 : un budget en
+    /// caractères réglé pour l'un affame l'autre. Lu par le découpage en lots
+    /// (6 septembre 2026, demandé par la session d'indexation).
+    fn budget_conseille(&self) -> Option<(usize, usize)> {
+        None
+    }
+
     fn troncatures(&self) -> Option<(usize, usize)> {
         None
     }
@@ -117,6 +126,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn name(&self) -> &str {
         (**self).name()
+    }
+    fn budget_conseille(&self) -> Option<(usize, usize)> {
+        (**self).budget_conseille()
     }
     fn distant(&self) -> bool {
         (**self).distant()

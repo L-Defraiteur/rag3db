@@ -103,5 +103,5 @@ Suites vertes : `e2e_code` 23, `e2e_symbol_search` 12,
 |---|---|
 | D1 | fait |
 | D2 | fait |
-| D3 | à faire |
-| D4 | mesuré pour D1 + D2 ; à refaire après D3 |
+| D3 | fait — `EntityConfig.group_by`, `GroupFrameNode` dans `search`, regroupement par arête au rendu, cadre `┌ …` ; le parent d'une méthode par `HAS_PARENT` est le scope nommé comme son impl (l'enum ou la struct), résolu par nom dans codeparsers |
+| D4 | fait : `e2e_code` 24, `e2e_graph_tool` 4, `e2e_agent_loop` 8 (un nœud de plus dans la trace), bibliothèque 986 |

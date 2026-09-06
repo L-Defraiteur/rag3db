@@ -50,6 +50,20 @@ fn jetons_par_seconde_multilingual_minilm() {
     banc(common::burn::MULTILINGUAL_MINILM.as_ref());
 }
 
+#[test]
+#[ignore]
+fn jetons_par_seconde_granite_107m() {
+    let _ = env_logger::try_init();
+    banc(common::burn::GRANITE_107M.as_ref());
+}
+
+#[test]
+#[ignore]
+fn jetons_par_seconde_granite_278m() {
+    let _ = env_logger::try_init();
+    banc(common::burn::GRANITE_278M.as_ref());
+}
+
 fn banc(e: &dyn Embedder) {
     eprintln!("[banc] modèle {} — {}", e.name(), if std::env::var_os("RAG3WEAVER_SANS_DEMON").is_some() { "local" } else { "par le démon" });
 

@@ -436,6 +436,16 @@ pub struct EntityConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_fields: Option<Vec<String>>,
 
+    /// **La vue par parent.** La relation qui mène de cette entité à son
+    /// parent, et le champ du parent qui sert de cadre au rendu. Déclaré,
+    /// les résultats d'une recherche se regroupent par parent — même quand le
+    /// parent n'est pas lui-même un résultat — encadrés par ce champ : des
+    /// méthodes sous `impl Catalog {`, des messages sous le titre de leur
+    /// fil. Lucie, 6 septembre 2026. Générique : aucun nœud ne sait ce qu'est
+    /// un scope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<GroupBy>,
+
     /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
     /// indexée en plein texte et cherchable, mais sans ligne dans
     /// `{Entity}_Chunk` ni lien `CHUNKED_FROM`.
@@ -463,6 +473,18 @@ pub struct EntityConfig {
     pub lifecycle: Option<Lifecycle>,
 }
 
+/// Ce qui regroupe une entité sous son parent au rendu (voir
+/// [`EntityConfig::group_by`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupBy {
+    /// La relation sortante qui mène au parent (`HAS_PARENT`).
+    pub relation: String,
+    /// Le champ du parent affiché en cadre (`signature`).
+    #[serde(alias = "frame_field")]
+    pub frame_field: String,
+}
+
 impl Default for EntityConfig {
     fn default() -> Self {
         Self {
@@ -471,6 +493,7 @@ impl Default for EntityConfig {
             chunking: ChunkingConfig::default(),
             hashsafe: None,
             return_fields: None,
+            group_by: None,
             chunked: None,
             lifecycle: None,
         }

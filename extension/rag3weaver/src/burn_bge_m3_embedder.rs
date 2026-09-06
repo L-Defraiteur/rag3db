@@ -301,6 +301,12 @@ impl Embedder for BurnBgeM3Embedder {
         HIDDEN_SIZE
     }
 
+    /// 32 séquences de 512 : la mesure du 27 août (8 192 caractères ≈ 2 048
+    /// jetons par appel était l'optimum d'un modèle 24 × 1 024).
+    fn budget_conseille(&self) -> Option<(usize, usize)> {
+        Some((32, 512))
+    }
+
     /// Le nom devient porteur dès qu'un démon le sert : c'est ce que
     /// `GET /sante` déclare, et ce sur quoi un client vérifie qu'il parle bien
     /// au modèle qu'il croit (`crate::daemon`).

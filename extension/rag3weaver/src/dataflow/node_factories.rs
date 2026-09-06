@@ -12,7 +12,7 @@ use super::node_registry::{
 };
 use super::port::{PortDef, PortType};
 use super::search_nodes::{
-    ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
+    ComposeNode, FetchRelatedNode, GroupFrameNode, KBSearchNode, KBQuerySourceNode,
 };
 use super::generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,
@@ -37,8 +37,19 @@ named_factory!(
     &[
         PortDef { name: "results", port_type: PortType::Results, required: true },
         PortDef { name: "children", port_type: PortType::Children, required: false },
+        // Le parent de chaque résultat, pour la vue par parent (`GroupFrameNode`).
+        PortDef { name: "frames", port_type: PortType::Children, required: false },
     ],
     &[PortDef { name: "results", port_type: PortType::Results, required: false }],
+);
+
+named_factory!(
+    GroupFrameNodeFactory,
+    GroupFrameNode,
+    "GroupFrameNode",
+    "Le parent de chaque résultat, selon le group_by déclaré par son entité — pour l'encadrer au rendu",
+    &[PortDef { name: "results", port_type: PortType::Results, required: true }],
+    &[PortDef { name: "frames", port_type: PortType::Children, required: false }],
 );
 
 named_factory!(
@@ -1334,6 +1345,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(KBSearchNodeFactory));
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
+    registry.register(Box::new(GroupFrameNodeFactory));
     // Trace : le consommateur du bus d'événements, en graphe.
     registry.register(Box::new(super::trace_nodes::EventSourceNodeFactory));
     registry.register(Box::new(super::trace_nodes::TraceSinkNodeFactory));
@@ -1390,7 +1402,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 36 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 37 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

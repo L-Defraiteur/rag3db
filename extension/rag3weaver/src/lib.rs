@@ -44,6 +44,21 @@ pub mod multilingual_minilm_onnx;
 pub mod burn_multilingual_minilm_embedder;
 #[cfg(feature = "burn-embedder")]
 pub use burn_multilingual_minilm_embedder::BurnMultilingualMiniLmEmbedder;
+// **Granite embedding 107m / 278m** (IBM, Apache-2.0, XLM-R, texte et code,
+// multilingue) : le premier étage d'indexation, classe bge-base mais
+// multilingue (6 septembre 2026). Deux graphes, un seul embarqueur générique.
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/granite_107m_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod granite_107m_onnx;
+#[cfg(feature = "burn-embedder")]
+#[path = "../generated/granite_278m_onnx.rs"]
+#[allow(clippy::all, dead_code, unused_imports)]
+pub mod granite_278m_onnx;
+#[cfg(feature = "burn-embedder")]
+pub mod burn_granite_embedder;
+#[cfg(feature = "burn-embedder")]
+pub use burn_granite_embedder::{BurnGranite107m, BurnGranite278m};
 /// cross-encoder/ms-marco-MiniLM-L-6-v2 généré par burn-onnx depuis l'ONNX du
 /// modèle — code machine, non édité. Voir `generated/README.md`.
 #[cfg(feature = "burn-embedder")]

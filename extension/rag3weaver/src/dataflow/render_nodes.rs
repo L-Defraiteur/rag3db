@@ -196,6 +196,10 @@ fn fields_of(
 /// La clé de regroupement : le parent, dans son fichier. Vide = pas de
 /// groupe.
 fn group_key(r: &UnifiedResult, lens: &PathLens) -> Option<(String, String)> {
+    // Par arête quand `GroupFrameNode` a posé le parent ; par nom sinon.
+    if let Some(uuid) = text_field(r.data.as_ref(), crate::dataflow::search_nodes::FRAME_UUID) {
+        return Some((String::new(), format!("@{uuid}")));
+    }
     let parent = text_field(r.data.as_ref(), "parent_name")?;
     let file = lens.path_of(r.data.as_ref()).unwrap_or_default();
     Some((file, parent))
@@ -273,6 +277,9 @@ pub struct GroupView {
     pub title: String,
     pub file: String,
     pub count: usize,
+    /// Le cadre : le champ déclaré du parent (`impl Catalog {`), quand
+    /// l'entité a un `group_by`.
+    pub frame: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -352,10 +359,14 @@ pub fn build_view(
         order.clear();
         for (key, members) in groups {
             if let (Some((file, parent)), true) = (key, members.len() > 1) {
-                header_at.insert(
-                    members[0],
-                    GroupView { title: parent, file, count: members.len() },
-                );
+                let premier = &results[members[0]];
+                let (title, file) = match text_field(premier.data.as_ref(), crate::dataflow::search_nodes::FRAME_TITLE) {
+                    Some(t) => (t, lens.path_of(premier.data.as_ref()).unwrap_or_default()),
+                    None => (parent, file),
+                };
+                let frame = text_field(premier.data.as_ref(), crate::dataflow::search_nodes::FRAME_TEXT)
+                    .map(|f| ellipsize(&f, FIELD_CHARS));
+                header_at.insert(members[0], GroupView { title, file, count: members.len(), frame });
             }
             order.extend(members);
         }

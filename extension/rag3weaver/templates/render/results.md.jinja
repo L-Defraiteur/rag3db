@@ -39,6 +39,9 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {% for r in results %}
 {%- if r.group %}
 **{{ r.group.title }}** · `{{ r.group.file }}` — {{ r.group.count }} matches
+{%- if r.group.frame %}
+┌ `{{ r.group.frame }}`
+{%- endif %}
 {% endif %}
 ### {{ r.rank }}. {{ r.title }}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.signal %} · {{ r.signal }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}
 {% if r.location %}📍 `{{ r.location }}`
