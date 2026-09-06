@@ -52,12 +52,53 @@
 //! (`SchemaDialect::count_marqueur_manquant`), et une recherche qui bute dessus
 //! le dit au lieu de rendre zéro en silence.
 //!
-//! Les deux approximations restantes vont dans le sens sûr. Celle de `Donnee`
-//! se resserrera quand `flush_insertions` saura poser aussi les relations ;
-//! celle des deux signaux GPU, quand les nœuds d'embarquement sauront n'en
-//! calculer qu'un — le schéma v3 sait déjà les distinguer par leurs marqueurs.
+//! `Donnee` est devenue exacte le 6 septembre après-midi : `flush_insertions`
+//! pose aussi les relations dont les deux bouts sont posés. Ce qui reste
+//! approché va dans le sens sûr : les deux signaux GPU partent ensemble (sans
+//! coût sur un embarqueur dual), et une **mise à jour** ou une **suppression**
+//! emmène le graphe sans GPU même au niveau donnée, parce que la dette de
+//! découpage n'a pas encore de place en base (réconciliation, C5).
 
 use serde::{Deserialize, Serialize};
+
+/// **Le régime d'écriture d'un catalogue** : ce qu'un verbe unitaire
+/// (`create`, `update`, `delete`, `link`) rend prêt quand on ne lui dit rien.
+///
+/// Lucie, le 5 septembre 2026 :
+///
+/// > pour une ingestion c'est compréhensible que ce soit en arrière-plan,
+/// > mais pour un truc genre « tiens, mon consumer a acheté un produit
+/// > aujourd'hui », bof.
+///
+/// | régime | ce qu'il fait | pour qui |
+/// |---|---|---|
+/// | **au tick** (défaut) | chaque écriture pose sa donnée avant de rendre — la fermeture de ce qu'elle a causé, rien d'autre | « mon client a acheté un produit » |
+/// | **par lot** | on accumule volontairement, on vide quand on le dit (`drain`) | une ingestion massive |
+///
+/// Le lot n'est un tort *que lorsqu'il n'a pas été choisi*. `ingest_entities`
+/// est le verbe de lot par nature et ignore ce régime ; ici, c'est le verbe
+/// **par item** qui cesse de se comporter comme un lot en silence. Un appel
+/// peut toujours dire plus précisément ce qu'il veut par sa variante
+/// `_jusqu_a(…, exige)` — le précis l'emporte sur le régime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RegimeEcriture {
+    /// Chaque écriture pose sa donnée avant de rendre.
+    #[default]
+    AuTick,
+    /// Les écritures s'accumulent ; `drain` les vide.
+    ParLot,
+}
+
+impl RegimeEcriture {
+    /// Ce qu'un verbe unitaire exige d'être prêt sous ce régime.
+    pub const fn exigence_par_defaut(self) -> Disponibilites {
+        match self {
+            Self::AuTick => Disponibilites::DONNEE,
+            Self::ParLot => Disponibilites::AUCUNE,
+        }
+    }
+}
 
 /// Les quatre disponibilités, comme un ensemble de drapeaux.
 ///

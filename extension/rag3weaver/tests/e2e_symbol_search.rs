@@ -21,6 +21,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ fn setup() -> Catalog {
 
     let result = catalog.drain();
     assert_eq!(result.failed, 0, "drain must not fail");
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

@@ -20,6 +20,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -127,6 +128,7 @@ fn setup_simple_catalog() -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
     catalog.initialize().unwrap();
     catalog.register_entity("Article", make_article_config()).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -564,6 +566,7 @@ fn setup_kb_catalog() -> Catalog {
     let config = make_kb_config_small_chunks();
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
     catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

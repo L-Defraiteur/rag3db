@@ -35,6 +35,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 fn artifact(env_var: &str, default_name: &str) -> std::path::PathBuf {
     let path = std::env::var(env_var)
@@ -142,6 +143,7 @@ fn setup() -> Catalog {
     let r = catalog.drain();
     eprintln!("  [minilm] drain: {:?} (processed={}, failed={})", t.elapsed(), r.processed, r.failed);
     assert_eq!(r.failed, 0, "drain must not fail");
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

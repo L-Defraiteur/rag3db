@@ -1172,7 +1172,10 @@ pub fn reingest_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str,
             let uuid = catalog
                 .entity_uuid(SCOPE, &BTreeMap::from([("key".to_string(), CypherValue::String(key.to_string()))]))
                 .map_err(|e| e.to_string())?;
-            catalog.delete(SCOPE, &uuid).map_err(|e| e.to_string())?;
+            // Le lot déclaré : `ingest_code` draine juste après.
+            catalog
+                .delete_jusqu_a(SCOPE, &uuid, crate::disponibilite::Disponibilites::AUCUNE)
+                .map_err(|e| e.to_string())?;
             deleted += 1;
         }
     }

@@ -398,7 +398,7 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 d.insert("domain".into(), CypherValue::String(s(e, "domain")));
                 d.insert("parent_run_id".into(), CypherValue::String(parent.clone()));
                 if cat.exists(RUN_ENTITY, &uuid).map_err(|e| e.to_string())? {
-                    cat.update(RUN_ENTITY, &uuid, d).map_err(|e| e.to_string())?;
+                    cat.update_jusqu_a(RUN_ENTITY, &uuid, d, crate::disponibilite::Disponibilites::AUCUNE).map_err(|e| e.to_string())?;
                 } else {
                     d.insert("ms".into(), CypherValue::Int(0));
                     d.insert("ok".into(), CypherValue::Bool(true));
@@ -427,7 +427,7 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                 let mut d = BTreeMap::new();
                 d.insert("ms".into(), CypherValue::Int(e.get("ms").and_then(|v| v.as_i64()).unwrap_or(0)));
                 d.insert("ok".into(), CypherValue::Bool(e.get("ok").and_then(|v| v.as_bool()).unwrap_or(true)));
-                cat.update(RUN_ENTITY, &uuid, d).map_err(|e| e.to_string())?;
+                cat.update_jusqu_a(RUN_ENTITY, &uuid, d, crate::disponibilite::Disponibilites::AUCUNE).map_err(|e| e.to_string())?;
             }
             "Message" => {
                 let (run, from, to, content) = (s(e, "run"), s(e, "from"), s(e, "to"), s(e, "content"));
@@ -463,11 +463,12 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
                         let p_uuid = ensure_participant(cat, &identity, &mut seen)?;
                         let mut props = BTreeMap::new();
                         props.insert("nature".to_string(), CypherValue::String(nature.to_string()));
-                        cat.link(
+                        cat.link_jusqu_a(
                             PARTICIPATES_IN,
                             RefOrUuid::Uuid(p_uuid),
                             RefOrUuid::Uuid(conv_uuid.clone()),
                             props,
+                            crate::disponibilite::Disponibilites::AUCUNE,
                         )
                         .map_err(|e| e.to_string())?;
                     }
@@ -484,8 +485,12 @@ pub fn record_runs_and_messages(cat: &mut Catalog, events: &[serde_json::Value],
             _ => {}
         }
     }
+    // **Le lot déclaré** : ce graphe pose un tour entier d'un coup, et le
+    // draine à la fin. Chaque verbe le dit — sinon, au tick, chacun paierait
+    // son propre graphe.
     for (rel, from, to) in links {
-        cat.link(rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new()).map_err(|e| e.to_string())?;
+        cat.link_jusqu_a(rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)
+            .map_err(|e| e.to_string())?;
     }
     let _ = cat.drain();
     Ok((runs, messages))

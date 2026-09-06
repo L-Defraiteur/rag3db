@@ -19,6 +19,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 const CORPUS: &[(&str, &str)] = &[
     ("arrow", "let value = foo->bar;"),
@@ -142,7 +143,8 @@ fn profile_full_catalog_path() {
     let ext_ms = ms(t);
 
     let t = Instant::now();
-    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config());
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config())
+        .avec_regime(RegimeEcriture::ParLot);
     catalog.initialize().unwrap();
     let init_ms = ms(t);
 
@@ -253,7 +255,8 @@ fn profile_drain_scaling() {
         ] {
             boxed.execute(&format!("LOAD EXTENSION '{path}'")).expect("load extension");
         }
-        let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config());
+        let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config())
+        .avec_regime(RegimeEcriture::ParLot);
         catalog.initialize().unwrap();
 
         let t = Instant::now();

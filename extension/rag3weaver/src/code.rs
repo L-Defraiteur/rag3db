@@ -1231,7 +1231,7 @@ impl Catalog {
             let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
             let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
-            self.link(&r.rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
+            self.link_jusqu_a(&r.rel, RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
         }
         let linked = self.drain();
         report.relations = linked.processed;
@@ -1289,7 +1289,7 @@ impl Catalog {
         for sc in &analysis.scopes {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
-            self.link("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new())?;
+            self.link_jusqu_a("DEFINES", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
         }
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
@@ -1297,7 +1297,7 @@ impl Catalog {
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera.
             let props = BTreeMap::from([("kind".to_string(), s(kind))]);
-            self.link("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), props)?;
+            self.link_jusqu_a("MENTIONS", RefOrUuid::Uuid(from), RefOrUuid::Uuid(to), props, crate::disponibilite::Disponibilites::AUCUNE)?;
         }
         let drained = self.drain();
         report.failed += drained.failed;
@@ -1331,9 +1331,9 @@ impl Catalog {
                 // a une réciproque déclarée ; `IMPLEMENTS` et `INHERITS_FROM`
                 // n'en ont pas, et on n'en invente pas.
                 let rel = if RELATIONS.iter().any(|(r, _, _)| *r == kind) { kind.as_str() } else { "CONSUMES" };
-                self.link(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new())?;
+                self.link_jusqu_a(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
-                    self.link("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new())?;
+                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 }
                 report.linked_across_batches += 1;
             }

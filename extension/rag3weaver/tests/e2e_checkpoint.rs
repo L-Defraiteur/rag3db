@@ -20,6 +20,7 @@ use rag3weaver::config::{EntityDef, FieldDef, FieldType, RelationDef};
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ fn make_catalog() -> Catalog {
         Box::new(MockEmbedder::new(4)),
         make_config(),
     )
+    .avec_regime(RegimeEcriture::ParLot)
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

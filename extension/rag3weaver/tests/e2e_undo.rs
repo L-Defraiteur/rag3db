@@ -22,6 +22,7 @@ use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::embedder::DualEmbedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 mod common;
 
@@ -91,6 +92,7 @@ fn setup() -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
     catalog.initialize().unwrap();
     catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -404,6 +406,7 @@ fn setup_bgem3_kb() -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.set_dual_embedder(dual);
     catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -444,6 +447,7 @@ fn setup_bgem3_simple() -> Catalog {
         ..Default::default()
     };
     catalog.register_entity("Product", product_config).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

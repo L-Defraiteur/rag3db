@@ -241,7 +241,7 @@ fn make_catalog_with_extensions() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("failed to create in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
-    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_kb_config())
+    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_kb_config()).avec_regime(RegimeEcriture::ParLot)
 }
 
 /// Extract a property from the node map returned by catalog.get().
@@ -687,6 +687,7 @@ fn setup_bm25_catalog() -> Catalog {
     assert!(result.processed >= 4);
     assert_eq!(result.failed, 0);
 
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -917,6 +918,7 @@ fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
         eprintln!("  Chunk: uuid={} parent={} dim={} text='{}'", &uuid[..8], &parent[..8], dim, snippet);
     }
 
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -1284,6 +1286,7 @@ fn setup_sparse_catalog() -> Catalog {
     assert_eq!(result.failed, 0);
 
     eprintln!("  [timing] total setup: {:?}", t0.elapsed());
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 
@@ -1748,6 +1751,7 @@ fn phase4_all_three() {
 
 #[cfg(feature = "burn-embedder")]
 use rag3weaver::embedder::DualEmbedder;
+use rag3weaver::disponibilite::RegimeEcriture;
 
 /// Setup catalog with BGE-M3 as DualEmbedder (single forward pass for dense+sparse).
 /// Same 3 docs as phase3, but uses the dual path.
@@ -1792,6 +1796,7 @@ fn setup_dual_catalog() -> Catalog {
     );
     assert_eq!(result.failed, 0);
     eprintln!("  [dual] total setup: {:?}", t0.elapsed());
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

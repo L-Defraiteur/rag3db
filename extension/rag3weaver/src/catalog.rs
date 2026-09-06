@@ -140,6 +140,9 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// Ce qu'un verbe unitaire rend prêt quand on ne lui dit rien. Voir
+    /// [`RegimeEcriture`] : au tick par défaut, par lot quand on le déclare.
+    regime_d_ecriture: crate::disponibilite::RegimeEcriture,
     /// Combien de troncatures d'embarquement ont **déjà été dites**. Le modèle
     /// compte depuis son ouverture ; c'est ici qu'on sait ce qui est neuf.
     troncatures_signalees: usize,
@@ -235,6 +238,7 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
+            regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
             troncatures_signalees: 0,
             drain_counters: DrainCounters::default(),
             // 1024 : un agent émet quelques événements par appel d'outil et
@@ -3639,9 +3643,104 @@ impl Catalog {
         }
     }
 
-    // ── CRUD (synchronous, enqueue operations) ─────────────────────────
+    // ── Les verbes unitaires ────────────────────────────────────────────
 
+    /// **Déclare le régime d'écriture** — au tick (défaut) ou par lot. Voir
+    /// [`RegimeEcriture`]. Se déclare, ne se devine pas.
+    pub fn regime_d_ecriture(&mut self, regime: crate::disponibilite::RegimeEcriture) {
+        self.regime_d_ecriture = regime;
+    }
+
+    /// La même déclaration, à la construction : `Catalog::new(…).avec_regime(…)`.
+    pub fn avec_regime(mut self, regime: crate::disponibilite::RegimeEcriture) -> Self {
+        self.regime_d_ecriture = regime;
+        self
+    }
+
+    /// Ce que ce catalogue rend prêt sur un verbe unitaire sans consigne.
+    pub fn exigence_d_ecriture_par_defaut(&self) -> crate::disponibilite::Disponibilites {
+        self.regime_d_ecriture.exigence_par_defaut()
+    }
+
+    /// **Tient l'exigence d'un verbe unitaire** après sa mise en file : rien,
+    /// la donnée, ou le dérivé jusqu'au GPU — sur la **fermeture d'écrivain**
+    /// de `graine`, c'est-à-dire ce que cette écriture a causé et rien de ce
+    /// qu'un autre a laissé.
+    ///
+    /// Une mise à jour ou une suppression dans cette fermeture emmène le
+    /// graphe sans GPU même au niveau donnée : ses conséquences sur les
+    /// chunks n'ont pas encore de place en base (réconciliation, C5).
+    fn tenir_l_exigence_d_ecriture(
+        &mut self,
+        graine: &str,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> FlushResult {
+        use crate::disponibilite::Disponibilites as D;
+        if exige.est_vide() {
+            return FlushResult { rendu_pret: Some(D::AUCUNE), ..Default::default() };
+        }
+        if exige.exige_un_derive() {
+            return self.drainer(exige.dense() || exige.sparse(), Some((graine, true)));
+        }
+        let tables = self.fermeture(graine, true);
+        if self.pending.a_des_mises_a_jour_dans(&tables) {
+            self.drainer(false, Some((graine, true)))
+        } else {
+            self.poser_la_donnee_de(graine, true)
+        }
+    }
+
+    /// Les avertissements d'un verbe qui ne rend pas de `FlushResult` partent
+    /// sur le bus du catalogue — là où tout ce qu'il dit de lui-même va.
+    fn dire_les_avertissements(&self, contexte: &str, res: &FlushResult) {
+        for a in &res.warnings {
+            self.emit_event(CatalogEvent::Warning {
+                context: contexte.to_string(),
+                message: a.clone(),
+            });
+        }
+    }
+
+    /// **Crée une entité, et pose sa donnée avant de rendre** — sous le régime
+    /// au tick, qui est le défaut. Le `EntityRef` rendu est résolu :
+    /// `uuid()` répond tout de suite. Ce qui reste en file est le dérivé
+    /// (l'agrégat de sa base de connaissances), et `has_pending` le dit.
+    ///
+    /// Sous le régime par lot, ou par [`Catalog::create_jusqu_a`] avec
+    /// `AUCUNE`, l'entité est seulement mise en file — c'est le lot déclaré,
+    /// pour qui empile puis draine. **Dix mille `create` au tick paient dix
+    /// mille graphes** : qui ingère en masse le dit, par `ingest_entities` ou
+    /// par le lot ; le défaut protège l'achat d'un client, pas l'importateur
+    /// qui ne se nomme pas.
+    ///
+    /// L'identité de la ligne est celle de l'entité — sa clé déclarée
+    /// (`hashsafe`), sinon son contenu — la même règle qu'`ingest_entities`.
     pub fn create(
+        &mut self,
+        entity_name: &str,
+        data: BTreeMap<String, CypherValue>,
+    ) -> Result<EntityRef, CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let (r, res) = self.create_jusqu_a(entity_name, data, exige)?;
+        self.dire_les_avertissements("create", &res);
+        Ok(r)
+    }
+
+    /// Le même verbe, en disant **ce qui doit être prêt** quand il rend :
+    /// `AUCUNE` met en file, `DONNEE` pose la ligne, `TOUT` va jusqu'au GPU.
+    /// Le `FlushResult` rendu porte `rendu_pret` et les avertissements.
+    pub fn create_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        data: BTreeMap<String, CypherValue>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<(EntityRef, FlushResult), CatalogError> {
+        let r = self.mettre_en_file_la_creation(entity_name, data)?;
+        let res = self.tenir_l_exigence_d_ecriture(entity_name, exige);
+        Ok((r, res))
+    }
+
+    fn mettre_en_file_la_creation(
         &mut self,
         entity_name: &str,
         data: BTreeMap<String, CypherValue>,
@@ -3775,7 +3874,44 @@ impl Catalog {
         Ok(entity_ref)
     }
 
+    /// **Pose une relation, et sa donnée avant de rendre** — même contrat que
+    /// [`Catalog::create`]. La fermeture d'écrivain part de l'entité source
+    /// et amène l'autre bout : une entité encore en file à l'un des bouts est
+    /// posée avec le lien.
     pub fn link(
+        &mut self,
+        rel_name: &str,
+        from: impl Into<RefOrUuid>,
+        to: impl Into<RefOrUuid>,
+        properties: BTreeMap<String, CypherValue>,
+    ) -> Result<RelationRef, CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let (r, res) = self.link_jusqu_a(rel_name, from, to, properties, exige)?;
+        self.dire_les_avertissements("link", &res);
+        Ok(r)
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn link_jusqu_a(
+        &mut self,
+        rel_name: &str,
+        from: impl Into<RefOrUuid>,
+        to: impl Into<RefOrUuid>,
+        properties: BTreeMap<String, CypherValue>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<(RelationRef, FlushResult), CatalogError> {
+        let r = self.mettre_en_file_le_lien(rel_name, from, to, properties)?;
+        let graine = self
+            .config
+            .relations
+            .get(rel_name)
+            .map(|d| d.from.clone())
+            .unwrap_or_else(|| rel_name.to_string());
+        let res = self.tenir_l_exigence_d_ecriture(&graine, exige);
+        Ok((r, res))
+    }
+
+    fn mettre_en_file_le_lien(
         &mut self,
         rel_name: &str,
         from: impl Into<RefOrUuid>,
@@ -3964,14 +4100,41 @@ impl Catalog {
         Ok(count as usize)
     }
 
-    // ── Update / Delete (sync enqueue, executed at drain) ─────────────
+    // ── Update / Delete ────────────────────────────────────────────────
 
-    /// Enqueue a field update. Executed at the next `drain()` call.
+    /// **Met à jour des champs, et pose la mise à jour avant de rendre** —
+    /// même contrat que [`Catalog::create`]. Une mise à jour emmène ses
+    /// conséquences sur les chunks (redécoupage, index plein texte) même au
+    /// niveau donnée, sans GPU ; voir `tenir_l_exigence_d_ecriture`.
     ///
-    /// Content hash is pre-computed; at drain time, `UpdateRecordNode` reads the
-    /// old hash from DB, detects changes, batch-SETs fields, and emits rechunk
-    /// requests for changed simple entities.
+    /// `UpdateRecordNode` relit l'ancien hash en base, détecte le changement,
+    /// pose les champs par lot et émet les redécoupages des entités simples
+    /// changées.
     pub fn update(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+        data: BTreeMap<String, CypherValue>,
+    ) -> Result<(), CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let res = self.update_jusqu_a(entity_name, uuid, data, exige)?;
+        self.dire_les_avertissements("update", &res);
+        Ok(())
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn update_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+        data: BTreeMap<String, CypherValue>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        self.mettre_en_file_la_mise_a_jour(entity_name, uuid, data)?;
+        Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
+    }
+
+    fn mettre_en_file_la_mise_a_jour(
         &mut self,
         entity_name: &str,
         uuid: &str,
@@ -3991,11 +4154,32 @@ impl Catalog {
         Ok(())
     }
 
-    /// Enqueue an entity deletion. Executed at the next `drain()` call.
-    ///
-    /// At drain time, `DeleteRecordNode` cascade-deletes chunks, index entries,
-    /// and the entity itself, then emits aggregate requests for affected KBs.
+    /// **Supprime une entité, et pose la suppression avant de rendre** — même
+    /// contrat que [`Catalog::create`]. `DeleteRecordNode` supprime en cascade
+    /// chunks, lignes d'index et l'entité, puis demande les agrégats touchés.
     pub fn delete(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+    ) -> Result<(), CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let res = self.delete_jusqu_a(entity_name, uuid, exige)?;
+        self.dire_les_avertissements("delete", &res);
+        Ok(())
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn delete_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        uuid: &str,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        self.mettre_en_file_la_suppression(entity_name, uuid)?;
+        Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
+    }
+
+    fn mettre_en_file_la_suppression(
         &mut self,
         entity_name: &str,
         uuid: &str,
@@ -4488,6 +4672,39 @@ impl Catalog {
         // boundary, never dropped.
         self.flush_blob_store("drain");
         self.signaler_les_troncatures("drain");
+
+        // **Le rattrapage opportuniste** (réconciliation, A4). Qui paie déjà
+        // une passe GPU solde aussi la dette d'hier — celle que des coupes ont
+        // laissée dans la base, sur **toutes** les tables, bornée par passe.
+        // C'est ce qui tient lieu de tick tant qu'aucun processus ne garde un
+        // catalogue en vie : l'embarquement se groupe là où le GPU tourne
+        // déjà, et un lecteur qui n'exige pas le dense ne le paie jamais.
+        //
+        // **Seulement sur le drain complet** (`drain()`, sans cible) : c'est le
+        // point de regroupement que Lucie décrit, « un plus gros tick qui
+        // regroupe en un checkpoint ». Un drain borné à une fermeture ne paie
+        // que sa fermeture — un écrivain qui exige le GPU pour son entité ne
+        // règle pas la dette d'un autre, ce serait le couplage que
+        // l'invariant interdit.
+        if cible.is_none() && avec_embarquement && outcome.failed == 0 && self.peut_devoir_un_embarquement {
+            // Le compte d'un rattrapage réussi n'est pas un avertissement :
+            // c'est du travail normal, et la dette restante s'interroge
+            // (`count_marqueur_manquant`). Seul l'échec se dit.
+            if let Err(e) = self.embarquer_le_retard(
+                crate::disponibilite::Disponibilites::TOUT,
+                RATTRAPAGE_PAR_PASSE,
+                None,
+            ) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage".to_string(),
+                    message: format!(
+                        "le rattrapage d'embarquement a échoué ({e}) : des chunks restent \
+                         sans vecteur ; le prochain drain ou une recherche exigeant « dense » \
+                         le retentera"
+                    ),
+                });
+            }
+        }
         outcome
     }
 
@@ -4594,7 +4811,13 @@ impl Catalog {
     /// de sa fermeture. Le dérivé de cette fermeture (agrégats, mises à jour,
     /// suppressions) reste en file, comme tout ce qui n'est pas en lien.
     pub fn flush_insertions_de(&mut self, cible: &str) -> FlushResult {
-        let tables = self.fermeture(cible, false);
+        self.poser_la_donnee_de(cible, false)
+    }
+
+    /// La donnée d'une fermeture — de lecteur, ou d'écrivain (voir
+    /// [`Catalog::fermeture`]).
+    fn poser_la_donnee_de(&mut self, cible: &str, pour_ecrire: bool) -> FlushResult {
+        let tables = self.fermeture(cible, pour_ecrire);
         let mut lot = {
             let bouts = Self::bouts_des_relations(&self.config);
             self.pending.extraire_les_tables(&tables, &bouts)
@@ -6401,12 +6624,16 @@ mod tests {
         }
     }
 
+    /// **Par lot** : ces tests éprouvent la file — ce qu'un `create` met en
+    /// attente, ce qu'un drain en fait. Le régime au tick, lui, a ses propres
+    /// tests plus bas.
     fn make_catalog() -> Catalog {
         Catalog::new(
             Box::new(MockConnection::new()),
             Box::new(MockEmbedder::new(384)),
             make_test_config(),
         )
+        .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
     }
 
     fn make_doc_data(title: &str, body: &str) -> BTreeMap<String, CypherValue> {
@@ -7206,6 +7433,7 @@ mod tests {
             Box::new(MockEmbedder::new(384)),
             config,
         )
+        .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
     }
 
     fn note(title: &str) -> BTreeMap<String, CypherValue> {
@@ -7317,6 +7545,130 @@ mod tests {
         assert_eq!(reste, 1, "l'agrégat, du dérivé : {w:?}");
         assert!(catalog.pending_work().entities.is_empty());
         assert!(catalog.pending_work().relations.is_empty());
+    }
+
+    // ── Les verbes unitaires, au tick ─────────────────────────────────
+
+    fn au_tick(catalog: Catalog) -> Catalog {
+        catalog.avec_regime(crate::disponibilite::RegimeEcriture::AuTick)
+    }
+
+    /// **L'acquittement veut dire fait.** Au tick — le défaut — `create` pose
+    /// sa ligne avant de rendre : le ref est résolu, `uuid()` répond, et il
+    /// ne reste en file que le dérivé de la base de connaissances.
+    #[test]
+    fn au_tick_create_pose_la_donnee_avant_de_rendre() {
+        let mut catalog = au_tick(make_catalog());
+        catalog.initialize().unwrap();
+        let r = catalog.create("Document", make_doc_data("Achat", "corps")).unwrap();
+        assert!(r.is_ready(), "le ref rendu est résolu");
+        assert!(r.uuid().is_ok());
+        let p = catalog.pending_work();
+        assert!(p.entities.is_empty(), "l'entité et sa ligne d'index sont posées");
+        assert!(p.relations.is_empty(), "et le lien entre elles");
+        assert_eq!(p.aggregates.len(), 1, "reste l'agrégat : du dérivé, et il se dit");
+        assert!(catalog.has_pending());
+    }
+
+    /// Le régime par défaut d'un catalogue neuf est **au tick** : c'est la
+    /// décision du 5 septembre, pas un réglage.
+    #[test]
+    fn le_regime_par_defaut_est_au_tick() {
+        let catalog = Catalog::new(
+            Box::new(MockConnection::new()),
+            Box::new(MockEmbedder::new(384)),
+            make_test_config(),
+        );
+        assert_eq!(
+            catalog.exigence_d_ecriture_par_defaut(),
+            crate::disponibilite::Disponibilites::DONNEE
+        );
+    }
+
+    /// **Le lot déclaré ne pose rien** — c'est l'ancien comportement, et il
+    /// se demande. `make_catalog()` le déclare pour tous les tests de file.
+    #[test]
+    fn par_lot_create_met_en_file_et_rend_un_ref_en_attente() {
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        let r = catalog.create("Document", make_doc_data("Lot", "corps")).unwrap();
+        assert!(!r.is_ready());
+        assert_eq!(catalog.pending_work().entities.len(), 2);
+    }
+
+    /// **Un verbe qui rend moins le dit, un verbe qui rend plus aussi.**
+    /// `create_jusqu_a` porte sa portée dans le `FlushResult` : `AUCUNE`
+    /// n'a rien fait, `DONNEE` a posé trois choses, `TOUT` a tout drainé.
+    #[test]
+    fn create_jusqu_a_dit_sa_portee() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut catalog = au_tick(make_catalog());
+        catalog.initialize().unwrap();
+
+        let (r, res) = catalog.create_jusqu_a("Document", make_doc_data("A", "corps"), D::AUCUNE).unwrap();
+        assert!(!r.is_ready());
+        assert_eq!(res.rendu_pret, Some(D::AUCUNE));
+        assert_eq!(res.processed, 0);
+
+        let (r, res) = catalog.create_jusqu_a("Document", make_doc_data("B", "corps"), D::DONNEE).unwrap();
+        assert!(r.is_ready());
+        assert_eq!(res.rendu_pret, Some(D::DONNEE));
+        // B, sa ligne d'index, son lien — et A, sa ligne, son lien : la
+        // fermeture d'écrivain de `Document` emporte ce qui attendait dans
+        // les mêmes tables. C'est en lien.
+        assert_eq!(res.processed, 6, "{res:?}");
+
+        let (_, res) = catalog.create_jusqu_a("Document", make_doc_data("C", "corps"), D::TOUT).unwrap();
+        assert_eq!(res.rendu_pret, Some(D::TOUT));
+        assert!(catalog.pending_work().is_empty(), "TOUT solde aussi les agrégats");
+    }
+
+    /// **Un lien pose l'autre bout.** Deux entités en file, un lien déclaré
+    /// entre elles posé au niveau donnée : les deux entités partent avec le
+    /// lien, parce qu'elles sont en lien — c'est la définition.
+    #[test]
+    fn un_lien_pose_au_tick_emmene_les_deux_bouts() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut catalog = make_catalog_a_deux_entites();
+        catalog.initialize().unwrap();
+        let (n, _) = catalog.create_jusqu_a("Note", note("N"), D::AUCUNE).unwrap();
+        let (d, _) = catalog.create_jusqu_a("Document", make_doc_data("D", "corps"), D::AUCUNE).unwrap();
+        assert!(!n.is_ready() && !d.is_ready());
+
+        let (lien, res) = catalog
+            .link_jusqu_a("CITES", n.clone(), d.clone(), BTreeMap::new(), D::DONNEE)
+            .unwrap();
+        assert!(lien.is_ready(), "le lien est posé");
+        assert!(n.is_ready() && d.is_ready(), "et ses deux bouts avec lui");
+        assert_eq!(res.rendu_pret, Some(D::DONNEE));
+        let p = catalog.pending_work();
+        assert!(p.entities.is_empty());
+        assert!(p.relations.is_empty());
+        assert_eq!(p.aggregates.len(), 1, "l'agrégat de Document reste : du dérivé");
+    }
+
+    /// **Une mise à jour emmène ses chunks, sans GPU.** Au niveau donnée, une
+    /// mise à jour ne peut pas se poser seule (ses conséquences sur les chunks
+    /// n'ont pas encore de place en base — C5) : le graphe part sans l'étage
+    /// GPU, et le verbe **dit** qu'il a rendu plus que demandé.
+    #[test]
+    fn au_tick_une_mise_a_jour_emmene_ses_chunks_et_le_dit() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut catalog = au_tick(make_catalog());
+        catalog.initialize().unwrap();
+        let r = catalog.create("Document", make_doc_data("M", "corps")).unwrap();
+        let uuid = r.uuid().unwrap();
+
+        let mut maj = BTreeMap::new();
+        maj.insert("body".to_string(), CypherValue::String("autre corps".to_string()));
+        let res = catalog.update_jusqu_a("Document", &uuid, maj, D::DONNEE).unwrap();
+        assert!(catalog.pending_work().updates.is_empty(), "la mise à jour est passée");
+        assert_eq!(
+            res.rendu_pret,
+            Some(D::RECHERCHE_TEXTE),
+            "plus que demandé — et dit : {res:?}"
+        );
+        assert!(catalog.pending_work().is_empty(), "le graphe a aussi soldé l'agrégat de sa fermeture");
     }
 
     /// Et `Immediate` ne perd rien au passage : il ne touche à aucune file, donc

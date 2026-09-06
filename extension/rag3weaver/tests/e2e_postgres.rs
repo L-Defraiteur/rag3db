@@ -48,6 +48,7 @@ use rag3weaver::postgres_search_backend::PostgresSearchBackend;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::scope::Scope;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, SimpleFieldDef};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Le socle ────────────────────────────────────────────────────────────────
 
@@ -201,7 +202,8 @@ fn catalogue_avec(
             .expect("seconde connexion"),
     );
 
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(dim)), config_vide(dim));
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(dim)), config_vide(dim))
+        .avec_regime(RegimeEcriture::ParLot);
     let partagee = catalog.conn_arc();
     catalog.set_dialect(Arc::new(PostgresDialect));
     catalog.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));

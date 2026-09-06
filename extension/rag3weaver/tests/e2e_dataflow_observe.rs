@@ -25,6 +25,7 @@ use rag3weaver::search_strategy::{
     ExpansionDirection, ExpansionRule, SearchStrategy,
 };
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers (same schema as e2e_search_queue) ──────────────────────────────
 
@@ -199,6 +200,7 @@ fn setup_catalog() -> Catalog {
 
     let result = catalog.drain();
     assert_eq!(result.failed, 0);
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

@@ -35,6 +35,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 mod common;
 use common::burn::MULTILINGUAL_MINILM;
@@ -118,6 +119,7 @@ fn setup() -> Catalog {
     let r = catalog.drain();
     eprintln!("  [multilingual-minilm] drain: {:?} (processed={}, failed={})", t.elapsed(), r.processed, r.failed);
     assert_eq!(r.failed, 0, "drain must not fail");
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

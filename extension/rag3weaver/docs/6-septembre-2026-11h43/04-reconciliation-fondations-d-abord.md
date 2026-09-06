@@ -278,6 +278,18 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 
 ## 4. L'ordre d'exécution de cette passe
 
+**État au fil de la passe** (mis à jour à chaque commit) :
+
+| | état |
+|---|---|
+| A1 A2 A6 A7 | faits — `864779778` |
+| C1 | fait — `9fae08275`, 25 suites e2e vertes |
+| A3 A4 | écrits, 947 tests de bibliothèque verts, passe e2e en cours |
+| A5 | en conception (cartographie des nœuds d'écriture) |
+| B | en conception (cartographie de `Catalog::search` contre les nœuds) |
+| C2 C3 C4 C5, D, E | à faire |
+
+
 ```
 A1  A2  A6  A7  E        — les lignes qui ne se décident pas, un commit chacune
 C1                       — la fermeture de ressource

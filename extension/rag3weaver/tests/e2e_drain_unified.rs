@@ -14,6 +14,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::SearchSignals;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ fn setup() -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
     catalog.initialize().unwrap();
     catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

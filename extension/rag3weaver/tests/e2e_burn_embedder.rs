@@ -38,6 +38,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::{DualEmbedder, MockEmbedder};
 use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 /// **Le modèle vient de `common::burn`**, donc du démon s'il tourne.
 ///
@@ -179,6 +180,7 @@ fn setup() -> Catalog {
     );
     assert_eq!(result.failed, 0, "drain must not fail");
     eprintln!("  [burn] setup total: {:?}", t0.elapsed());
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

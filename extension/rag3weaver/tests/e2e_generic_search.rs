@@ -27,6 +27,7 @@ use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder}
 use rag3weaver::search::{Consistency, SearchMeta, SearchOptions, SearchResult, SearchSignals};
 use rag3weaver::search_strategy::UnifiedResult;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 mod common;
 
@@ -147,6 +148,7 @@ fn setup_simple_catalog(embedder_dim: usize) -> Catalog {
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(embedder_dim)), config);
     catalog.initialize().unwrap();
     catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

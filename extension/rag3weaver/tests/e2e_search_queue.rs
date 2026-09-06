@@ -20,6 +20,7 @@ use rag3weaver::search_strategy::{
     ExpansionDirection, ExpansionRule, SearchStrategy,
 };
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
-    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_config())
+    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_config()).avec_regime(RegimeEcriture::ParLot)
 }
 
 /// Setup: 1 Directory ("src") with 2 Files, linked via HAS_FILE.
@@ -207,6 +208,7 @@ fn setup_catalog() -> Catalog {
     );
     assert_eq!(result.failed, 0);
 
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

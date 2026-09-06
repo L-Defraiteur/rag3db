@@ -17,6 +17,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::SearchSignals;
 use rag3weaver::{Catalog, Rag3dbConnection};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
-    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_batch_config())
+    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_batch_config()).avec_regime(RegimeEcriture::ParLot)
 }
 
 fn make_file(name: &str) -> BTreeMap<String, CypherValue> {

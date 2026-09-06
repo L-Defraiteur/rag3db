@@ -17,6 +17,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection, hashsafe_uuid};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
-    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_phase0b_config())
+    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_phase0b_config()).avec_regime(RegimeEcriture::ParLot)
 }
 
 /// Same as make_catalog but with a custom ChunkingConfig override.
@@ -175,7 +176,7 @@ fn make_catalog_with_chunking(chunking: ChunkingConfig) -> Catalog {
     for kb in config.knowledge_bases.values_mut() {
         kb.chunking = chunking.clone();
     }
-    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config)
+    Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config).avec_regime(RegimeEcriture::ParLot)
 }
 
 fn make_directory(name: &str, absolute_path: &str) -> BTreeMap<String, CypherValue> {

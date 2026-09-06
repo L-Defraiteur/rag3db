@@ -28,6 +28,7 @@ use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::llm::ToolCall;
 use rag3weaver::search::SearchSignals;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
+use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Catalogue de test ───────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ fn setup_catalog() -> Catalog {
 
     let flush = catalog.drain();
     assert_eq!(flush.failed, 0, "drain a échoué : {flush:?}");
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
     catalog
 }
 

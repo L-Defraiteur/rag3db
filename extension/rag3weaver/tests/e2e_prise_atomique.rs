@@ -28,6 +28,7 @@ use std::sync::{Arc, Mutex};
 
 use rag3weaver::connection::{CypherValue, DbConnection};
 use rag3weaver::Rag3dbConnection;
+use rag3weaver::disponibilite::RegimeEcriture;
 
 const TRAVAUX: usize = 40;
 const FILS: usize = 8;
@@ -499,7 +500,8 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
         Box::new(Rag3dbConnection::new(&dossier).expect("écrivain")),
         Box::new(rag3weaver::embedder::MockEmbedder::new(4)),
         config,
-    );
+    )
+    .avec_regime(RegimeEcriture::ParLot);
     ecrivain.initialize().expect("initialize");
     // Un champ de contenu et le seul signal BM25 : ce test ne parle pas de
     // recherche, il parle de la marque — inutile de traîner un embarqueur.
