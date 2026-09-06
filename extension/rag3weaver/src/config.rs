@@ -893,6 +893,11 @@ pub struct CatalogConfig {
     pub embedding: Option<EmbeddingConfig>,
 
     pub flush: FlushConfig,
+    /// **Le dossier des lots de checkpoints** (fichiers horodatés, un par lot,
+    /// écrits par un fil de fond). `None` : sous le dossier temporaire, qui
+    /// survit au processus. Un déploiement le pose à côté de sa base.
+    #[serde(default)]
+    pub checkpoint_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for CatalogConfig {
@@ -907,6 +912,7 @@ impl Default for CatalogConfig {
             flush: FlushConfig::default(),
             // Le défaut refuse : un montage qui veut vraiment le factice le dit.
             allow_mock_embedder: false,
+            checkpoint_dir: None,
         }
     }
 }

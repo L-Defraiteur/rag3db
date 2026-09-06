@@ -559,10 +559,11 @@ pub trait SchemaDialect: Send + Sync {
     fn nouveau_magasin_de_checkpoints(
         &self,
         conn: std::sync::Arc<dyn crate::connection::DbConnection>,
+        dossier: std::path::PathBuf,
     ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
         // Le défaut est le Cypher, comme partout ici.
         Some(std::sync::Arc::new(
-            crate::dataflow::checkpoint_store::CypherCheckpointStore::new(conn),
+            crate::dataflow::checkpoint_store::CypherCheckpointStore::with_directory(conn, dossier),
         ))
     }
 
@@ -1965,9 +1966,10 @@ impl SchemaDialect for PostgresDialect {
     fn nouveau_magasin_de_checkpoints(
         &self,
         conn: std::sync::Arc<dyn crate::connection::DbConnection>,
+        dossier: std::path::PathBuf,
     ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
         Some(std::sync::Arc::new(
-            crate::dataflow::checkpoint_store::PostgresCheckpointStore::new(conn),
+            crate::dataflow::checkpoint_store::PostgresCheckpointStore::with_directory(conn, dossier),
         ))
     }
 

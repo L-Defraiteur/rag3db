@@ -892,7 +892,12 @@ impl Catalog {
             // sur son nom serait refaire la fragilité qu'on a payée toute la
             // journée : un backend neuf n'aurait qu'à s'appeler autrement pour
             // repartir en silence sans reprise après incident.
-            match self.dialect.nouveau_magasin_de_checkpoints(self.conn.clone()) {
+            let dossier = self
+                .config
+                .checkpoint_dir
+                .clone()
+                .unwrap_or_else(crate::dataflow::checkpoint_store::Spiller::dossier_par_defaut);
+            match self.dialect.nouveau_magasin_de_checkpoints(self.conn.clone(), dossier) {
                 Some(cp_store) => {
                     cp_store.initialize().map_err(CatalogError::DbError)?;
                     self.checkpoint_store = Some(cp_store);
@@ -5381,6 +5386,7 @@ impl Catalog {
             &graph_def.hash()[..12],
             crate::dataflow::checkpoint::timestamp_ms(),
         );
+        phase("runtime et abonnements", &mut horloge);
 
         let result = if let Some(ref store) = self.checkpoint_store {
             runtime

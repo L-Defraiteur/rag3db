@@ -33,10 +33,21 @@ pub struct CheckpointPortValue {
     pub port_type: PortType,
     /// Whether this is a Batch or a direct value.
     pub is_batch: bool,
-    /// JSON-serialized content. `None` for `Empty`.
+    /// JSON-serialized content, for the direct values (a query, results) and
+    /// the checkpoints d'avant le 6 septembre 2026. `None` for `Empty` and
+    /// for a batch.
     pub data_json: Option<String>,
     /// Number of records (for Batch payloads).
     pub record_count: Option<usize>,
+    /// **Le lot, en octets** (MessagePack), le temps de traverser le magasin,
+    /// qui le pose dans un fichier et ne garde ici que son chemin. Jamais
+    /// dans une ligne de la base : sérialiser 225 000 liens en JSON et les
+    /// passer en paramètre d'un MERGE coûtait 8,5 s sur 42 (6 septembre 2026).
+    #[serde(skip)]
+    pub data_bytes: Option<std::sync::Arc<Vec<u8>>>,
+    /// Le fichier où le lot a été posé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_file: Option<String>,
 }
 
 // ─── PortValue → CheckpointPortValue ────────────────────────────────────────
@@ -56,50 +67,55 @@ pub fn port_value_to_checkpoint(value: &PortValue) -> Result<CheckpointPortValue
             is_batch: false,
             data_json: None,
             record_count: None,
+            data_bytes: None,
+            data_file: None,
+
         });
     }
 
     // BatchPayload (ingestion data)
     if let Some(payload) = value.downcast::<BatchPayload>() {
-        let json = checkpoint_serialize_batch(payload)?;
+        let bytes = checkpoint_encode_batch(payload)?;
         return Ok(CheckpointPortValue {
             port_type: payload.batch_type,
             is_batch: true,
-            data_json: Some(json),
+            data_json: None,
             record_count: Some(payload.count()),
+            data_bytes: Some(std::sync::Arc::new(bytes)),
+            data_file: None,
         });
     }
 
     // Search value types (serializable)
     if let Some(v) = value.downcast::<Vec<UnifiedResult>>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Results, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Results, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     if let Some(v) = value.downcast::<HashMap<String, Vec<ChildSummary>>>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Children, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Children, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     if let Some(v) = value.downcast::<Vec<(String, String)>>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Uuids, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Uuids, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     if let Some(v) = value.downcast::<SearchMeta>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Meta, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Meta, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     if let Some(v) = value.downcast::<Vec<ExpansionRule>>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Rules, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Rules, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     // Texte brut (markdown d'un outil, réponse d'un modèle) : encodé en
     // chaîne JSON, que `render_port_value` rend telle quelle au modèle.
     if let Some(v) = value.downcast::<String>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Text, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Text, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
     if let Some(v) = value.downcast::<serde_json::Value>() {
         let json = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        return Ok(CheckpointPortValue { port_type: PortType::Map, is_batch: false, data_json: Some(json), record_count: None });
+        return Ok(CheckpointPortValue { port_type: PortType::Map, is_batch: false, data_json: Some(json), record_count: None, data_bytes: None, data_file: None });
     }
 
     // Unknown type — store as empty
@@ -108,6 +124,9 @@ pub fn port_value_to_checkpoint(value: &PortValue) -> Result<CheckpointPortValue
         is_batch: false,
         data_json: None,
         record_count: None,
+        data_bytes: None,
+        data_file: None,
+
     })
 }
 
@@ -117,32 +136,37 @@ pub fn port_value_from_checkpoint(cpv: CheckpointPortValue) -> Result<PortValue,
         return Ok(PortValue::Trigger);
     }
 
+    if cpv.is_batch {
+        // Les octets, d'abord en mémoire, sinon depuis le fichier ; et le
+        // JSON pour un checkpoint d'avant.
+        let bytes: std::sync::Arc<Vec<u8>> = match (cpv.data_bytes, cpv.data_file.as_deref(), cpv.data_json) {
+            (Some(b), _, _) => b,
+            (None, Some(f), _) => std::sync::Arc::new(std::fs::read(f).map_err(|e| {
+                format!("fichier de checkpoint « {f} » : {e} — le lot n'est plus là")
+            })?),
+            (None, None, Some(json)) => return Ok(PortValue::new(checkpoint_deserialize_batch(cpv.port_type, &json)?)),
+            (None, None, None) => return Err(format!("missing data for {:?}", cpv.port_type)),
+        };
+        return Ok(PortValue::new(checkpoint_decode_batch(cpv.port_type, &bytes)?));
+    }
     let json = cpv
         .data_json
         .ok_or_else(|| format!("missing data_json for {:?}", cpv.port_type))?;
-
-    if cpv.is_batch {
-        let payload = checkpoint_deserialize_batch(cpv.port_type, &json)?;
-        Ok(PortValue::new(payload))
-    } else {
-        deserialize_non_batch_port_value(cpv.port_type, &json)
-    }
+    deserialize_non_batch_port_value(cpv.port_type, &json)
 }
 
-// ─── BatchPayload checkpoint serialization ──────────────────────────────────
-
-/// Serialize a [`BatchPayload`]'s contents to JSON without consuming the data.
-///
-/// Uses `downcast_ref` to borrow the inner `Vec<T>` based on `batch_type`,
-/// converts records to their checkpoint form, and serializes.
-fn checkpoint_serialize_batch(payload: &BatchPayload) -> Result<String, String> {
+/// **Un lot en octets** (MessagePack, champs nommés) : auto-décrit comme le
+/// JSON, sans l'échappement ni la relecture de chaînes.
+fn checkpoint_encode_batch(payload: &BatchPayload) -> Result<Vec<u8>, String> {
     let guard = payload
         .data_lock()
         .map_err(|_| "failed to lock BatchPayload data")?;
     let boxed = guard
         .as_ref()
         .ok_or("BatchPayload data already consumed")?;
-
+    fn enc<T: serde::Serialize>(v: &T) -> Result<Vec<u8>, String> {
+        rmp_serde::to_vec_named(v).map_err(|e| e.to_string())
+    }
     match payload.batch_type {
         PortType::Entities => {
             let records = boxed
@@ -150,7 +174,7 @@ fn checkpoint_serialize_batch(payload: &BatchPayload) -> Result<String, String> 
                 .ok_or("type mismatch: expected Vec<EntityRecord>")?;
             let checkpoint: Vec<CheckpointEntityRecord> =
                 records.iter().map(|r| r.to_checkpoint()).collect();
-            serde_json::to_string(&checkpoint).map_err(|e| e.to_string())
+            enc(&checkpoint)
         }
         PortType::Relations => {
             let records = boxed
@@ -158,37 +182,39 @@ fn checkpoint_serialize_batch(payload: &BatchPayload) -> Result<String, String> 
                 .ok_or("type mismatch: expected Vec<RelationRecord>")?;
             let checkpoint: Vec<CheckpointRelationRecord> =
                 records.iter().map(|r| r.to_checkpoint()).collect();
-            serde_json::to_string(&checkpoint).map_err(|e| e.to_string())
+            enc(&checkpoint)
         }
-        PortType::Aggregates => {
-            let records = boxed
-                .downcast_ref::<Vec<AggregateRecord>>()
-                .ok_or("type mismatch: expected Vec<AggregateRecord>")?;
-            serde_json::to_string(records).map_err(|e| e.to_string())
-        }
-        PortType::KBContent => {
-            let records = boxed
-                .downcast_ref::<Vec<KBContentRecord>>()
-                .ok_or("type mismatch: expected Vec<KBContentRecord>")?;
-            serde_json::to_string(records).map_err(|e| e.to_string())
-        }
-        PortType::Updates => {
-            let records = boxed
-                .downcast_ref::<Vec<UpdateRecord>>()
-                .ok_or("type mismatch: expected Vec<UpdateRecord>")?;
-            serde_json::to_string(records).map_err(|e| e.to_string())
-        }
-        PortType::Deletes => {
-            let records = boxed
-                .downcast_ref::<Vec<DeleteRecord>>()
-                .ok_or("type mismatch: expected Vec<DeleteRecord>")?;
-            serde_json::to_string(records).map_err(|e| e.to_string())
-        }
-        other => Err(format!(
-            "unsupported batch_type for checkpoint: {other:?}"
-        )),
+        PortType::Aggregates => enc(boxed.downcast_ref::<Vec<AggregateRecord>>().ok_or("type mismatch: expected Vec<AggregateRecord>")?),
+        PortType::KBContent => enc(boxed.downcast_ref::<Vec<KBContentRecord>>().ok_or("type mismatch: expected Vec<KBContentRecord>")?),
+        PortType::Updates => enc(boxed.downcast_ref::<Vec<UpdateRecord>>().ok_or("type mismatch: expected Vec<UpdateRecord>")?),
+        PortType::Deletes => enc(boxed.downcast_ref::<Vec<DeleteRecord>>().ok_or("type mismatch: expected Vec<DeleteRecord>")?),
+        other => Err(format!("unsupported batch_type for checkpoint: {other:?}")),
     }
 }
+
+fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPayload, String> {
+    fn dec<T: serde::de::DeserializeOwned>(b: &[u8]) -> Result<T, String> {
+        rmp_serde::from_slice(b).map_err(|e| e.to_string())
+    }
+    match port_type {
+        PortType::Entities => {
+            let checkpoint: Vec<CheckpointEntityRecord> = dec(bytes)?;
+            Ok(BatchPayload::new(PortType::Entities, checkpoint.into_iter().map(|c| c.into_entity_record()).collect::<Vec<EntityRecord>>()))
+        }
+        PortType::Relations => {
+            let checkpoint: Vec<CheckpointRelationRecord> = dec(bytes)?;
+            Ok(BatchPayload::new(PortType::Relations, checkpoint.into_iter().map(|c| c.into_relation_record()).collect::<Vec<RelationRecord>>()))
+        }
+        PortType::Aggregates => Ok(BatchPayload::new(PortType::Aggregates, dec::<Vec<AggregateRecord>>(bytes)?)),
+        PortType::KBContent => Ok(BatchPayload::new(PortType::KBContent, dec::<Vec<KBContentRecord>>(bytes)?)),
+        PortType::Updates => Ok(BatchPayload::new(PortType::Updates, dec::<Vec<UpdateRecord>>(bytes)?)),
+        PortType::Deletes => Ok(BatchPayload::new(PortType::Deletes, dec::<Vec<DeleteRecord>>(bytes)?)),
+        other => Err(format!("unsupported batch_type for checkpoint: {other:?}")),
+    }
+}
+
+// ─── BatchPayload checkpoint serialization ──────────────────────────────────
+
 
 /// Deserialize a [`BatchPayload`] from checkpoint JSON.
 fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<BatchPayload, String> {
@@ -517,7 +543,7 @@ mod tests {
         assert_eq!(cpv.port_type, PortType::Entities);
         assert!(cpv.is_batch);
         assert_eq!(cpv.record_count, Some(1));
-        assert!(cpv.data_json.is_some());
+        assert!(cpv.data_json.is_none() && cpv.data_bytes.is_some(), "un lot voyage en octets, pas en JSON");
 
         // Deserialize from checkpoint
         let restored = port_value_from_checkpoint(cpv).unwrap();

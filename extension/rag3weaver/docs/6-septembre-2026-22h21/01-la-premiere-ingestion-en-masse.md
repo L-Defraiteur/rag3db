@@ -112,6 +112,12 @@ montré les secondes hors nœuds.
 | symboles, en tout | 9 461 ms | 9 248 ms | 7 288 ms |
 | **total** | **51,5 s** | **47,4 s** | **42,5 s** |
 
+Pas 3, le checkpoint en fichiers binaires (§3 bis) : **36,4 s**. Le
+checkpoint coûte encore ~2,1 s (la sérialisation MessagePack des lots, sur le
+fil du graphe : 320 ms pour les trois sorties de `chunk`, 364 ms pour les
+225 000 liens à l'entrée du drain des rendez-vous ; l'écriture, elle, est
+sur le fil de fond). Symboles 9,5 → 5,0 s, relations 4,4 → 3,0 s.
+
 Ce que dit la colonne « pas 1 » : le modèle est maintenant le mur (19,4 s
 d'`embed` pour 38,6 s de modèle sur deux fils, la carte à 99 %), et le
 `COPY` des chunks avec leurs vecteurs coûte 2,4 s — c'est le lecteur CSV
@@ -119,6 +125,50 @@ séquentiel qui parse 85 Mo de flottants. Deux pistes pour lui, non prises :
 des flottants plus courts (`{:.5}` : −25 % de fichier, au prix d'un arrondi
 à éprouver par l'écart absolu max, pas par un cosinus), ou le Parquet, que
 le moteur lit en parallèle mais qui coûte une dépendance.
+
+## 3 bis. Le checkpoint : des fichiers binaires, un fil d'écriture
+
+Le profil du pas 2 a montré le poste suivant, et il n'était dans aucun
+nœud : sur rag3db, `initialize()` monte un magasin de checkpoints, donc
+chaque graphe passe par `execute_with_checkpoint`, qui **sérialisait en JSON
+le lot d'entrée entier et la sortie de chaque nœud, et les écrivait dans une
+ligne de la base** (`inputs_json`, `output_ports`, `undo_json`). Mesuré :
+
+| | sérialisation | écriture en base |
+|---|---|---|
+| départ du drain des rendez-vous (225 000 liens) | — | 1 855 ms |
+| départ de l'ingestion des scopes (18 140) | — | 591 ms |
+| `chunk` (20 132 chunks + 20 132 liens + 18 140 parents) | 707 ms | 613 ms |
+| `insert`, `embed`, `chunk_insert` (18–20 k chacun) | ~300 ms | ~280 ms |
+| **en tout** | | **8,5 s sur 42,7** |
+
+Une première idée — un « checkpoint léger » qui ne garde plus les lots
+au-delà de 5 000 enregistrements — a été écrite puis **retirée** : Lucie a
+raison, un checkpoint qui ne reprend plus n'est pas un checkpoint. Ce qui
+est fait à la place, sur sa piste :
+
+- **les lots en octets** (`rmp-serde`, MessagePack à champs nommés :
+  auto-décrit comme le JSON, sans l'échappement) — `CheckpointPortValue`
+  porte `data_bytes` le temps de traverser le magasin, puis `data_file` ;
+  `data_json` reste pour les valeurs directes (une requête) et les
+  checkpoints d'avant ;
+- **des fichiers horodatés, un par lot**, sous
+  `<dossier>/<exécution>/<horodatage>-<nœud>-<port>.{entree,sortie}.bin`
+  (`CatalogConfig.checkpoint_dir`, défaut sous le dossier temporaire) ; la
+  base ne garde que l'état des nœuds et les chemins ; les gros contextes
+  d'undo (> 64 Ko) suivent, en `@file:` ;
+- **un fil d'écriture de fond** (`checkpoint_store::Spiller`) : le graphe
+  tend les octets, le fil écrit, `mark_completed` et `mark_failed`
+  attendent qu'il ait tout posé, et les sorties d'une exécution finie sont
+  effacées avec ses `output_ports` ;
+- **un fichier absent n'est pas un nœud fait** : à la reprise, un nœud dont
+  la sortie ne se relit pas est rejoué (ils sont idempotents) ; une entrée
+  initiale qui ne se relit pas refuse la reprise en le disant.
+
+À venir, une fois ce chemin solide, à la demande de Lucie : trois modes —
+*complet* (celui-ci), *opérations* (les entrées seulement, la reprise rejoue
+tout depuis le début), *aucun* — au niveau du catalogue et, pour les
+ingestions, par entité.
 
 ## 4. Ce qui reste, et pourquoi
 

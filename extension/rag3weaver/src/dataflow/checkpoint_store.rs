@@ -5,7 +5,8 @@
 //! - `_DataflowNodeState` — one row per node (outputs JSON, status, timing)
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 
 use crate::connection::{CypherValue, DbConnection, QueryParam};
@@ -19,13 +20,180 @@ use super::checkpoint::{
 /// Checkpoint store backed by Cypher queries against the graph database.
 ///
 /// Uses MERGE for upserts (idempotent) and parameterized queries for JSON data.
+/// **Les lots d'un checkpoint vivent dans des fichiers**, pas dans une ligne
+/// de la base : un fichier par lot, horodaté, sous
+/// `<dossier>/<exécution>/<horodatage>-<nœud>-<port>.{entree,sortie}.bin`,
+/// écrit par un fil de fond. Le graphe sérialise (MessagePack) et tend les
+/// octets ; le fil écrit ; la fin du graphe (`mark_completed`, `mark_failed`)
+/// attend que tout soit posé. Un crash entre les deux laisse un fichier
+/// absent : à la reprise, ce nœud est rejoué, pas sauté. Les gros contextes
+/// d'undo (au-delà de 64 Ko) suivent le même chemin, en JSON.
+///
+/// Mesuré le 6 septembre 2026 sur le cœur C++ de rag3db : les lots en JSON
+/// dans des lignes de base coûtaient 8,5 s sur 42.
+pub struct Spiller {
+    dossier: PathBuf,
+    fil: Mutex<Option<FilDEcriture>>,
+}
+
+struct FilDEcriture {
+    tx: std::sync::mpsc::Sender<(PathBuf, Arc<Vec<u8>>)>,
+    poignee: std::thread::JoinHandle<Vec<String>>,
+}
+
+impl Spiller {
+    /// Le dossier par défaut, sous le dossier temporaire : il survit au
+    /// processus, ce qu'une reprise après crash demande.
+    pub fn dossier_par_defaut() -> PathBuf {
+        std::env::temp_dir().join("rag3weaver-checkpoints")
+    }
+
+    pub fn new(dossier: PathBuf) -> Self {
+        Self { dossier, fil: Mutex::new(None) }
+    }
+
+    fn nom_sur(execution_id: &str) -> String {
+        execution_id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' }).collect()
+    }
+
+    fn chemin(&self, execution_id: &str, nom: &str) -> PathBuf {
+        self.dossier.join(Self::nom_sur(execution_id)).join(format!("{}-{}", timestamp_ms(), Self::nom_sur(nom)))
+    }
+
+    /// Tendre des octets au fil, qui démarre au premier envoi.
+    fn envoyer(&self, chemin: PathBuf, octets: Arc<Vec<u8>>) -> Result<(), String> {
+        let mut fil = self.fil.lock().map_err(|_| "fil d'écriture des checkpoints : verrou empoisonné")?;
+        if fil.is_none() {
+            let (tx, rx) = std::sync::mpsc::channel::<(PathBuf, Arc<Vec<u8>>)>();
+            let poignee = std::thread::Builder::new()
+                .name("rag3weaver-checkpoints".into())
+                .spawn(move || {
+                    let mut erreurs = Vec::new();
+                    for (chemin, octets) in rx {
+                        if let Some(parent) = chemin.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        if let Err(e) = std::fs::write(&chemin, &*octets) {
+                            erreurs.push(format!("{} : {e}", chemin.display()));
+                        }
+                    }
+                    erreurs
+                })
+                .map_err(|e| format!("fil d'écriture des checkpoints : {e}"))?;
+            *fil = Some(FilDEcriture { tx, poignee });
+        }
+        fil.as_ref()
+            .expect("le fil vient d'être posé")
+            .tx
+            .send((chemin, octets))
+            .map_err(|_| "fil d'écriture des checkpoints : parti".to_string())
+    }
+
+    /// **Attendre que tout soit écrit.** Le fil se termine ; le prochain envoi
+    /// en démarre un autre.
+    pub fn flush(&self) -> Result<(), String> {
+        let fil = self.fil.lock().map_err(|_| "fil d'écriture des checkpoints : verrou empoisonné")?.take();
+        let Some(FilDEcriture { tx, poignee }) = fil else { return Ok(()) };
+        drop(tx);
+        let erreurs = poignee.join().map_err(|_| "fil d'écriture des checkpoints : panique")?;
+        if erreurs.is_empty() { Ok(()) } else { Err(erreurs.join(" ; ")) }
+    }
+
+    /// Les valeurs de ports, les lots partis en fichiers.
+    fn poser(
+        &self,
+        execution_id: &str,
+        prefixe: &str,
+        suffixe: &str,
+        ports: &HashMap<String, CheckpointPortValue>,
+    ) -> Result<HashMap<String, CheckpointPortValue>, String> {
+        let mut poses = HashMap::with_capacity(ports.len());
+        for (port, cpv) in ports {
+            let mut copie = CheckpointPortValue {
+                port_type: cpv.port_type,
+                is_batch: cpv.is_batch,
+                data_json: cpv.data_json.clone(),
+                record_count: cpv.record_count,
+                data_bytes: None,
+                data_file: cpv.data_file.clone(),
+            };
+            if let Some(octets) = cpv.data_bytes.as_ref() {
+                let chemin = self.chemin(execution_id, &format!("{prefixe}-{port}.{suffixe}.bin"));
+                self.envoyer(chemin.clone(), octets.clone())?;
+                copie.data_file = Some(chemin.to_string_lossy().into_owned());
+            }
+            poses.insert(port.clone(), copie);
+        }
+        Ok(poses)
+    }
+
+    pub fn poser_les_entrees(
+        &self,
+        execution_id: &str,
+        entrees: &HashMap<String, HashMap<String, CheckpointPortValue>>,
+    ) -> Result<HashMap<String, HashMap<String, CheckpointPortValue>>, String> {
+        let mut posees = HashMap::with_capacity(entrees.len());
+        for (noeud, ports) in entrees {
+            posees.insert(noeud.clone(), self.poser(execution_id, noeud, "entree", ports)?);
+        }
+        Ok(posees)
+    }
+
+    pub fn poser_les_sorties(
+        &self,
+        execution_id: &str,
+        noeud: &str,
+        sorties: &HashMap<String, CheckpointPortValue>,
+    ) -> Result<HashMap<String, CheckpointPortValue>, String> {
+        self.poser(execution_id, noeud, "sortie", sorties)
+    }
+
+    /// Un contexte d'undo : en ligne s'il est petit, en fichier sinon
+    /// (`@file:<chemin>`).
+    pub fn poser_l_undo(&self, execution_id: &str, noeud: &str, undo_json: String) -> Result<String, String> {
+        const EN_LIGNE_MAX: usize = 64 * 1024;
+        if undo_json.len() <= EN_LIGNE_MAX {
+            return Ok(undo_json);
+        }
+        let chemin = self.chemin(execution_id, &format!("{noeud}.undo.json"));
+        self.envoyer(chemin.clone(), Arc::new(undo_json.into_bytes()))?;
+        Ok(format!("@file:{}", chemin.display()))
+    }
+
+    /// Relire un texte posé en ligne ou en fichier.
+    pub fn lire_texte(texte: &str) -> Result<String, String> {
+        match texte.strip_prefix("@file:") {
+            Some(chemin) => std::fs::read_to_string(chemin).map_err(|e| format!("fichier de checkpoint « {chemin} » : {e}")),
+            None => Ok(texte.to_string()),
+        }
+    }
+
+    /// Les fichiers de sorties d'une exécution finie : la base a oublié ses
+    /// `output_ports`, les fichiers suivent.
+    pub fn nettoyer_les_sorties(&self, execution_id: &str) {
+        let dossier = self.dossier.join(Self::nom_sur(execution_id));
+        let Ok(entrees) = std::fs::read_dir(&dossier) else { return };
+        for entree in entrees.flatten() {
+            if entree.file_name().to_string_lossy().ends_with(".sortie.bin") {
+                let _ = std::fs::remove_file(entree.path());
+            }
+        }
+    }
+}
+
 pub struct CypherCheckpointStore {
     conn: Arc<dyn DbConnection>,
+    spiller: Spiller,
 }
 
 impl CypherCheckpointStore {
     pub fn new(conn: Arc<dyn DbConnection>) -> Self {
-        Self { conn }
+        Self::with_directory(conn, Spiller::dossier_par_defaut())
+    }
+
+    /// Le dossier où les lots des checkpoints sont posés.
+    pub fn with_directory(conn: Arc<dyn DbConnection>, dossier: PathBuf) -> Self {
+        Self { conn, spiller: Spiller::new(dossier) }
     }
 }
 
@@ -74,8 +242,8 @@ impl CheckpointStore for CypherCheckpointStore {
     fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
         let graph_json =
             serde_json::to_string(&checkpoint.graph_def).map_err(|e| e.to_string())?;
-        let inputs_json =
-            serde_json::to_string(&checkpoint.initial_inputs).map_err(|e| e.to_string())?;
+        let entrees = self.spiller.poser_les_entrees(&checkpoint.execution_id, &checkpoint.initial_inputs)?;
+        let inputs_json = serde_json::to_string(&entrees).map_err(|e| e.to_string())?;
         let now = timestamp_ms();
 
         self.conn
@@ -139,6 +307,8 @@ impl CheckpointStore for CypherCheckpointStore {
         &self,
         execution_id: &str,
     ) -> Result<Option<ExecutionCheckpoint>, String> {
+        // Tout ce qui est en route doit être posé avant qu'on relise.
+        self.spiller.flush()?;
         // Load execution header
         let result = self
             .conn
@@ -201,7 +371,7 @@ impl CheckpointStore for CypherCheckpointStore {
             let undo_context = if undo_json_str.is_empty() {
                 None
             } else {
-                serde_json::from_str(undo_json_str).ok()
+                Spiller::lire_texte(undo_json_str).ok().and_then(|t| serde_json::from_str(&t).ok())
             };
 
             nodes.insert(
@@ -268,9 +438,10 @@ impl CheckpointStore for CypherCheckpointStore {
     ) -> Result<(), String> {
         let uuid = format!("{execution_id}:{node_name}");
         let now = timestamp_ms();
-        let outputs_json = serde_json::to_string(outputs).map_err(|e| e.to_string())?;
+        let sorties = self.spiller.poser_les_sorties(execution_id, node_name, outputs)?;
+        let outputs_json = serde_json::to_string(&sorties).map_err(|e| e.to_string())?;
         let undo_json = match undo_context {
-            Some(ctx) => serde_json::to_string(ctx).map_err(|e| e.to_string())?,
+            Some(ctx) => self.spiller.poser_l_undo(execution_id, node_name, serde_json::to_string(ctx).map_err(|e| e.to_string())?)?,
             None => String::new(),
         };
 
@@ -336,6 +507,8 @@ impl CheckpointStore for CypherCheckpointStore {
     }
 
     fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
+        self.spiller.flush()?;
+        self.spiller.nettoyer_les_sorties(execution_id);
         let now = timestamp_ms();
 
         // Update execution status
@@ -376,6 +549,7 @@ impl CheckpointStore for CypherCheckpointStore {
     }
 
     fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+        self.spiller.flush()?;
         let now = timestamp_ms();
 
         self.conn
@@ -431,11 +605,17 @@ impl CheckpointStore for CypherCheckpointStore {
 /// réelle reste le test de conformité, joué contre les deux.
 pub struct PostgresCheckpointStore {
     conn: Arc<dyn DbConnection>,
+    spiller: Spiller,
 }
 
 impl PostgresCheckpointStore {
     pub fn new(conn: Arc<dyn DbConnection>) -> Self {
-        Self { conn }
+        Self::with_directory(conn, Spiller::dossier_par_defaut())
+    }
+
+    /// Le dossier où les lots des checkpoints sont posés.
+    pub fn with_directory(conn: Arc<dyn DbConnection>, dossier: PathBuf) -> Self {
+        Self { conn, spiller: Spiller::new(dossier) }
     }
 }
 
@@ -493,8 +673,8 @@ impl CheckpointStore for PostgresCheckpointStore {
 
     fn create_execution(&self, checkpoint: &ExecutionCheckpoint) -> Result<(), String> {
         let graph_json = serde_json::to_string(&checkpoint.graph_def).map_err(|e| e.to_string())?;
-        let inputs_json =
-            serde_json::to_string(&checkpoint.initial_inputs).map_err(|e| e.to_string())?;
+        let entrees = self.spiller.poser_les_entrees(&checkpoint.execution_id, &checkpoint.initial_inputs)?;
+        let inputs_json = serde_json::to_string(&entrees).map_err(|e| e.to_string())?;
         let now = timestamp_ms();
 
         self.conn
@@ -554,6 +734,8 @@ impl CheckpointStore for PostgresCheckpointStore {
     }
 
     fn load_execution(&self, execution_id: &str) -> Result<Option<ExecutionCheckpoint>, String> {
+        // Tout ce qui est en route doit être posé avant qu'on relise.
+        self.spiller.flush()?;
         let result = self
             .conn
             .execute_with_params(
@@ -607,7 +789,7 @@ impl CheckpointStore for PostgresCheckpointStore {
                     undo_context: if undo_json_str.is_empty() {
                         None
                     } else {
-                        serde_json::from_str(undo_json_str).ok()
+                        Spiller::lire_texte(undo_json_str).ok().and_then(|t| serde_json::from_str(&t).ok())
                     },
                     duration_ms: (duration_ms > 0).then_some(duration_ms),
                     error: (!error_str.is_empty()).then_some(error_str),
@@ -653,9 +835,10 @@ impl CheckpointStore for PostgresCheckpointStore {
     ) -> Result<(), String> {
         let uuid = format!("{execution_id}:{node_name}");
         let now = timestamp_ms();
-        let outputs_json = serde_json::to_string(outputs).map_err(|e| e.to_string())?;
+        let sorties = self.spiller.poser_les_sorties(execution_id, node_name, outputs)?;
+        let outputs_json = serde_json::to_string(&sorties).map_err(|e| e.to_string())?;
         let undo_json = match undo_context {
-            Some(ctx) => serde_json::to_string(ctx).map_err(|e| e.to_string())?,
+            Some(ctx) => self.spiller.poser_l_undo(execution_id, node_name, serde_json::to_string(ctx).map_err(|e| e.to_string())?)?,
             None => String::new(),
         };
 
@@ -726,6 +909,8 @@ impl CheckpointStore for PostgresCheckpointStore {
     }
 
     fn mark_completed(&self, execution_id: &str) -> Result<(), String> {
+        self.spiller.flush()?;
+        self.spiller.nettoyer_les_sorties(execution_id);
         let now = timestamp_ms();
         self.conn
             .execute_with_params(
@@ -758,6 +943,7 @@ impl CheckpointStore for PostgresCheckpointStore {
     }
 
     fn mark_failed(&self, execution_id: &str, error: &str) -> Result<(), String> {
+        self.spiller.flush()?;
         let now = timestamp_ms();
         self.conn
             .execute_with_params(
@@ -820,6 +1006,9 @@ pub fn verifier_conformite(store: &dyn CheckpointStore, etiquette: &str) -> Resu
         is_batch: false,
         data_json: Some("{\"a\":1}".to_string()),
         record_count: Some(1),
+        data_bytes: None,
+        data_file: None,
+
     };
     let noeud = |statut: NodeCheckpointStatus| NodeCheckpoint {
         status: statut,
@@ -1203,6 +1392,9 @@ mod tests {
                 is_batch: false,
                 data_json: None,
                 record_count: None,
+                data_bytes: None,
+                data_file: None,
+
             },
         );
         store
@@ -1263,6 +1455,9 @@ mod tests {
                 is_batch: false,
                 data_json: None,
                 record_count: None,
+                data_bytes: None,
+                data_file: None,
+
             },
         );
         store

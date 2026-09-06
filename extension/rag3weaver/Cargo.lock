@@ -6339,6 +6339,7 @@ dependencies = [
  "regex",
  "reqwest",
  "ring",
+ "rmp-serde",
  "serde",
  "serde_json",
  "sparse-vector",

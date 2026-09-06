@@ -349,7 +349,9 @@ impl DataflowRuntime {
                 // Resume: restore initial_inputs from checkpoint into the graph
                 for (node_name, ports) in &cp.initial_inputs {
                     for (port_name, cpv) in ports {
-                        let port_value = port_value_from_checkpoint(cpv.clone())?;
+                        let port_value = port_value_from_checkpoint(cpv.clone()).map_err(|e| {
+                            format!("reprise de « {execution_id} » impossible, l'entrée {node_name}.{port_name} ne se relit pas : {e}")
+                        })?;
                         graph
                             .initial_inputs
                             .entry(node_name.clone())
@@ -377,6 +379,7 @@ impl DataflowRuntime {
                 }
 
                 // Serialize initial_inputs for resume
+                let horloge = Instant::now();
                 let mut cp_initial_inputs = HashMap::new();
                 for (node_name, ports) in &graph.initial_inputs {
                     let mut cp_ports = HashMap::new();
@@ -398,6 +401,12 @@ impl DataflowRuntime {
                     updated_at: now,
                 };
                 store.create_execution(&cp)?;
+                if std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some() {
+                    let ms = horloge.elapsed().as_millis();
+                    if ms >= 20 {
+                        eprintln!("[runtime-profile] {ms:>6} ms  checkpoint/départ (entrées initiales sérialisées et écrites)");
+                    }
+                }
                 cp
             }
         };
@@ -451,12 +460,32 @@ impl DataflowRuntime {
         // Inject saved outputs from completed nodes in the checkpoint
         for (node_name, node_cp) in &checkpoint.nodes {
             if node_cp.status == NodeCheckpointStatus::Completed {
-                completed.insert(node_name.clone());
-
-                // Restore output port values into port_data
+                // **Un lot qui ne se relit pas n'est pas un nœud fait.** Le fil
+                // d'écriture des checkpoints peut être mort avant d'avoir posé
+                // le fichier : le nœud est rejoué (ils sont idempotents), pas
+                // sauté sur un lot vide.
+                let mut restaures: Vec<((String, String), PortValue)> = Vec::new();
+                let mut manquant: Option<String> = None;
                 for (port_name, cpv) in &node_cp.output_ports {
-                    let port_value = port_value_from_checkpoint(cpv.clone())?;
-                    let key = (node_name.clone(), port_name.clone());
+                    match port_value_from_checkpoint(cpv.clone()) {
+                        Ok(v) => restaures.push(((node_name.clone(), port_name.clone()), v)),
+                        Err(e) => {
+                            manquant = Some(e);
+                            break;
+                        }
+                    }
+                }
+                if let Some(e) = manquant {
+                    self.emit(DataflowEvent::NodeLog {
+                        node: node_name.clone(),
+                        node_type: String::new(),
+                        level: NodeLogLevel::Warn,
+                        text: format!("checkpoint : sortie non relue, le nœud sera rejoué ({e})"),
+                    });
+                    continue;
+                }
+                completed.insert(node_name.clone());
+                for (key, port_value) in restaures {
                     port_data_available.insert(key.clone());
                     port_data.insert(key, port_value);
                 }
@@ -652,6 +681,8 @@ impl DataflowRuntime {
                         });
 
                         // Serialize outputs for checkpoint persistence + snapshots
+                        let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+                        let horloge = Instant::now();
                         let mut checkpoint_outputs = HashMap::new();
                         let mut output_snapshots: Vec<PortSnapshot> = Vec::new();
                         for (port, value) in &outputs {
@@ -665,6 +696,8 @@ impl DataflowRuntime {
                             checkpoint_outputs.insert(port.clone(), cpv);
                         }
 
+                        let serialisation_ms = horloge.elapsed().as_millis();
+                        let horloge = Instant::now();
                         // Persist to checkpoint store
                         store
                             .save_node_completed(
@@ -674,6 +707,15 @@ impl DataflowRuntime {
                                 undo_ctx.as_ref(),
                                 duration_ms,
                             )?;
+                        if profil {
+                            let ecriture_ms = horloge.elapsed().as_millis();
+                            if serialisation_ms + ecriture_ms >= 20 {
+                                eprintln!(
+                                    "[runtime-profile] {:>6} ms  checkpoint/{node_name} (sérialisation {serialisation_ms} ms, écriture {ecriture_ms} ms)",
+                                    serialisation_ms + ecriture_ms
+                                );
+                            }
+                        }
 
                         for (port, value) in outputs {
                             let key = (node_name.clone(), port.clone());
@@ -890,6 +932,18 @@ impl DataflowRuntime {
                 return Err(error);
             }
 
+            // `RAG3WEAVER_INGEST_PROFILE=1` : le temps du runtime lui-même,
+            // par phase et par niveau, pour ce qui n'est dans aucun nœud.
+            let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+            let mut horloge = Instant::now();
+            let phase = |nom: &str, horloge: &mut Instant, ready: &[String]| {
+                let ms = horloge.elapsed().as_millis();
+                if profil && ms >= 20 {
+                    eprintln!("[runtime-profile] {ms:>6} ms  {nom} ({})", ready.join(","));
+                }
+                *horloge = Instant::now();
+            };
+
             // ── Phase 1 : préparer chaque nœud prêt (séquentiel) ──────────
             // Les entrées sortent du magasin de ports avec le décompte des
             // consommateurs ; l'ordre est celui du tri topologique.
@@ -964,7 +1018,9 @@ impl DataflowRuntime {
 
             // ── Phase 2 : exécuter le niveau — en parallèle s'il a plusieurs
             // nœuds (un fil par nœud, portée bornée), en place sinon. ──────
+            phase("runtime/préparation", &mut horloge, &ready);
             let results = run_level(&mut graph.nodes, prepared);
+            phase("runtime/exécution du niveau", &mut horloge, &ready);
 
             // ── Phase 3 : ranger, dans l'ordre (séquentiel) ──────────────
             for done in results {
@@ -1023,6 +1079,8 @@ impl DataflowRuntime {
                     }
                 }
             }
+
+            phase("runtime/rangement", &mut horloge, &ready);
 
             // Check if all done
             if completed.len() == graph.nodes.len() {
@@ -1749,6 +1807,89 @@ mod tests {
                 .unwrap();
 
             assert!(output.get("trigger", "done").is_none());
+        }
+
+        /// Un nœud qui reçoit un lot d'entités et le passe, ou meurt une fois.
+        struct PassBatchNode {
+            name: String,
+            fail_once: bool,
+            recus: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        }
+
+        impl Node for PassBatchNode {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn node_type(&self) -> &'static str {
+                "PassBatchNode"
+            }
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![PortDef { name: "entities", port_type: PortType::Entities, required: true }]
+            }
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef { name: "out", port_type: PortType::Entities, required: false }]
+            }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                if self.fail_once {
+                    self.fail_once = false;
+                    return Err("panne simulée".into());
+                }
+                let value = ctx.take_input("entities").ok_or("entrée absente")?;
+                let n = value.downcast::<crate::dataflow::port::BatchPayload>().map(|p| p.count()).unwrap_or(0);
+                self.recus.store(n, std::sync::atomic::Ordering::Relaxed);
+                ctx.set_output("out", value);
+                Ok(())
+            }
+        }
+
+        fn lot_d_entites(n: usize) -> PortValue {
+            use crate::dataflow::port::BatchPayload;
+            use crate::records::EntityRecord;
+            let records: Vec<EntityRecord> = (0..n)
+                .map(|i| {
+                    let mut data = std::collections::BTreeMap::new();
+                    data.insert("_uuid".to_string(), crate::connection::CypherValue::String(format!("u{i}")));
+                    data.insert("texte".to_string(), crate::connection::CypherValue::String(format!("ligne « {i} », avec\nun saut")));
+                    EntityRecord::deja_resolu("T".into(), data, &format!("u{i}"))
+                })
+                .collect();
+            PortValue::new(BatchPayload::new(PortType::Entities, records))
+        }
+
+        /// **Un lot se checkpointe en octets, pas en JSON, et se reprend.**
+        /// Le premier nœud passe, le second meurt ; à la reprise, le premier
+        /// est sauté et le second reçoit le lot entier, relu depuis les octets.
+        #[test]
+        fn un_lot_se_checkpointe_en_octets_et_se_reprend() {
+            let store = MockCheckpointStore::new();
+            let n = 6_000;
+            let recus = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(PassBatchNode { name: "pass".into(), fail_once: false, recus: recus.clone() })).unwrap();
+            graph.add_node(Box::new(PassBatchNode { name: "suite".into(), fail_once: true, recus: recus.clone() })).unwrap();
+            graph.connect("pass", "out", "suite", "entities").unwrap();
+            graph.set_initial_input("pass", "entities", lot_d_entites(n));
+
+            let runtime = DataflowRuntime::new(10);
+            let err = runtime.execute_with_checkpoint(&mut graph, &store, "exec-octets").unwrap_err();
+            assert!(err.contains("panne simulée"), "{err}");
+
+            let cp = store.load_execution("exec-octets").unwrap().unwrap();
+            let entree = &cp.initial_inputs["pass"]["entities"];
+            assert!(entree.data_json.is_none() && entree.data_bytes.is_some(), "le lot voyage en octets");
+            assert_eq!(entree.record_count, Some(n));
+            assert_eq!(cp.nodes["pass"].status, NodeCheckpointStatus::Completed);
+
+            recus.store(0, std::sync::atomic::Ordering::Relaxed);
+            let mut graph2 = DataflowGraph::new();
+            graph2.add_node(Box::new(PassBatchNode { name: "pass".into(), fail_once: false, recus: recus.clone() })).unwrap();
+            graph2.add_node(Box::new(PassBatchNode { name: "suite".into(), fail_once: false, recus: recus.clone() })).unwrap();
+            graph2.connect("pass", "out", "suite", "entities").unwrap();
+            runtime.execute_with_checkpoint(&mut graph2, &store, "exec-octets").unwrap();
+            assert_eq!(recus.load(std::sync::atomic::Ordering::Relaxed), n, "le second nœud a reçu le lot relu");
+            let cp = store.load_execution("exec-octets").unwrap().unwrap();
+            assert_eq!(cp.status, CheckpointExecutionStatus::Completed);
         }
     }
 }
