@@ -127,6 +127,65 @@ impl<T: ToolBox + ?Sized> ToolBox for Arc<T> {
 ///
 /// C'est l'adaptateur qui referme les trois arguments de
 /// [`crate::dataflow::GraphToolRegistry::call`] en un seul objet.
+/// **Monter les services d'un agent sur un catalogue.**
+///
+/// Une seule source pour ce qu'un agent voit : la liste dont les nœuds de
+/// recherche ont besoin (`register_search_services`), le catalogue lui-même,
+/// et le catalogue de gabarits **synchronisé** — la bibliothèque, plus ce que
+/// le projet a adopté quand sa racine est connue. Avant le 6 septembre 2026,
+/// chaque test refaisait ce montage à la main, aucun code de production ne le
+/// faisait, et `search(target='Template')` ne trouvait rien parce que rien
+/// n'indexait les fiches.
+///
+/// Rend un registre **possédé** : l'appelant y ajoute ce qui lui est propre
+/// (un embarqueur pour le graphe, un bus d'événements) avant de le partager.
+pub fn mount_agent_services(
+    catalog: &Arc<std::sync::Mutex<crate::Catalog>>,
+    project: Option<&std::path::Path>,
+) -> Result<crate::dataflow::ServiceRegistry, crate::catalog::CatalogError> {
+    let mut services = crate::dataflow::ServiceRegistry::new();
+    {
+        let mut c = catalog
+            .lock()
+            .map_err(|_| crate::catalog::CatalogError::DbError("catalogue empoisonné".into()))?;
+        c.register_search_services(&mut services);
+        let sync = c.sync_templates(project)?;
+        if !sync.stale.is_empty() {
+            eprintln!(
+                "[gabarits] {} gabarit(s) de projet pris sur une bibliothèque qui a bougé depuis : {}",
+                sync.stale.len(),
+                sync.stale.join(", ")
+            );
+        }
+    }
+    services.register("catalog", catalog.clone());
+    Ok(services)
+}
+
+/// [`mount_agent_services`] avec une source de fichiers : la racine du projet
+/// vient de son curseur (`worktree:<racine>`), la source entre dans le
+/// registre pour `read`, `grep`, `edit`, `run`, `place`, `adopt` — et la
+/// **porte des commandes** avec elle, en mode `Auto`, le défaut décidé le
+/// 30 août 2026. Sans porte, `run` refuse tout ; le 6 septembre un agent
+/// Gemini a voulu lancer `cargo test` avant d'éditer, s'est vu répondre deux
+/// fois que le service était absent, et a rendu sa mission sans rien écrire.
+/// Un autre mode se pose par-dessus (`register` remplace).
+#[cfg(feature = "code")]
+pub fn mount_agent_services_on(
+    catalog: &Arc<std::sync::Mutex<crate::Catalog>>,
+    source: Arc<dyn crate::code_tools::FileSource>,
+) -> Result<crate::dataflow::ServiceRegistry, crate::catalog::CatalogError> {
+    let cursor = source.cursor();
+    let project = cursor.strip_prefix("worktree:").map(std::path::PathBuf::from);
+    let mut services = mount_agent_services(catalog, project.as_deref())?;
+    services.register::<Arc<dyn crate::code_tools::FileSource>>(crate::code_tools::FILE_SOURCE_SERVICE, source);
+    services.register(
+        crate::dataflow::run_nodes::GARDE_SERVICE,
+        Arc::new(crate::commande::Garde::new(crate::commande::Mode::Auto)),
+    );
+    Ok(services)
+}
+
 pub struct GraphToolBox<'a> {
     tools: &'a crate::dataflow::GraphToolRegistry,
     nodes: &'a crate::dataflow::NodeRegistry,

@@ -117,15 +117,13 @@ fn setup_catalog() -> Catalog {
 }
 
 fn services(catalog: Catalog) -> Arc<ServiceRegistry> {
-    let mut services = ServiceRegistry::new();
-    // **Une seule source pour la liste.** Le catalogue monte lui-même ce dont
-    // les nœuds de recherche ont besoin — connexion, dialecte, cellule, index
-    // FTS et sparse, embarqueur. Ce montage la reconstruisait à la main, et
-    // c'est comme ça qu'il a perdu le dialecte le jour où `BM25SearchNode` s'est
-    // mis à en avoir besoin.
-    catalog.register_search_services(&mut services);
-    services.register("catalog", Arc::new(Mutex::new(catalog)));
-    Arc::new(services)
+    // **Le montage de production, pas un montage de test.** Avant le
+    // 6 septembre 2026 ce test reconstruisait la liste à la main — et c'est
+    // comme ça qu'il a perdu le dialecte le jour où `BM25SearchNode` s'est mis
+    // à en avoir besoin. `mount_agent_services` est la seule source ; sans
+    // racine de projet, il monte la bibliothèque de gabarits et rien d'autre.
+    let catalog = Arc::new(Mutex::new(catalog));
+    Arc::new(rag3weaver::agent::mount_agent_services(&catalog, None).unwrap())
 }
 
 /// Les mêmes services, plus le bus **en publication** (`event_bus`) : les

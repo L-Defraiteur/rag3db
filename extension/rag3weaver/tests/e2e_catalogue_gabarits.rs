@@ -681,3 +681,74 @@ fn la_synchronisation_alimente_la_couche_du_projet() {
     assert_eq!(r8.updated, vec!["entity/user".to_string()]);
     let _ = roots(Some(racine));
 }
+
+/// **Un agent monté comme en production trouve, pose et adopte.**
+///
+/// Le montage est celui de `mount_agent_services_on` — le seul, depuis le
+/// 6 septembre 2026 ; avant, chaque test refaisait le sien et aucun code de
+/// production n'en avait. Par les outils, pas par les fonctions : `search`
+/// avec la cible `Template` trouve `user` ; `place` le pose ; `adopt` écrit,
+/// **réindexe**, et se souvient de ce qu'il masque.
+#[test]
+#[ignore]
+fn un_agent_monte_comme_en_production_trouve_pose_et_adopte() {
+    use rag3weaver::agent::mount_agent_services_on;
+    use rag3weaver::code_tools::{FileSource, WorkingTree};
+    use rag3weaver::dataflow::graph_tool::builtin_graph_tools;
+    use rag3weaver::llm::ToolCall;
+    use rag3weaver::template::{scan_roots, roots, Origin};
+
+    let projet = tempfile::tempdir().unwrap();
+    let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(projet.path()));
+    let catalog = Arc::new(std::sync::Mutex::new(setup()));
+    let services = Arc::new(mount_agent_services_on(&catalog, source).unwrap());
+    let (nodes, tools) = builtin_graph_tools().unwrap();
+    let call = |name: &str, args: serde_json::Value| -> String {
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        tools.call(&tc, &nodes, services.clone()).content.clone()
+    };
+
+    // 1. Chercher : la bibliothèque est là sans qu'on l'ait indexée à la main.
+    let trouve = call("search", serde_json::json!({
+        "target": "Template", "query": "de quoi savoir qui est connecté sur mon site", "limit": 3
+    }));
+    eprintln!("[agent] search → {trouve}");
+    assert!(trouve.contains("user"), "{trouve}");
+
+    // 2. Poser.
+    let pose = call("place", serde_json::json!({ "template": "user", "as": "Member" }));
+    eprintln!("[agent] place → {pose}");
+    assert!(pose.contains("Member"), "{pose}");
+    assert!(catalog.lock().unwrap().is_registered_entity("Member"));
+
+    // 3. Adopter sous un nom neuf : indexé aussitôt, ne masque rien.
+    let adopte = call("adopt", serde_json::json!({
+        "entity": "Member", "as": "member",
+        "description": "Un membre du club : son adhésion, ses cotisations, ce qu'il a le droit de faire.",
+        "category": "auth"
+    }));
+    eprintln!("[agent] adopt → {adopte}");
+    assert!(adopte.contains("indexé"), "{adopte}");
+    assert!(!adopte.contains("masque"), "{adopte}");
+    let trouve = call("search", serde_json::json!({
+        "target": "Template", "query": "adhésion et cotisations d'un membre", "limit": 3
+    }));
+    eprintln!("[agent] search → {trouve}");
+    assert!(trouve.contains("member"), "l'adoption doit se retrouver sans autre appel — {trouve}");
+
+    // 4. Adopter sous le nom d'un gabarit fourni : masqué, et l'empreinte gardée.
+    let adopte = call("adopt", serde_json::json!({
+        "entity": "Member", "as": "user",
+        "description": "Le compte de ce projet : un membre, avec son adhésion.",
+        "category": "auth"
+    }));
+    eprintln!("[agent] adopt user → {adopte}");
+    assert!(adopte.contains("masque le `user` fourni"), "{adopte}");
+    let fiches = scan_roots(&roots(Some(projet.path()))).unwrap();
+    let user = fiches.iter().find(|f| f.family == Family::Entity && f.name == "user").unwrap();
+    assert_eq!(user.origin, Origin::Project);
+    let fourni = scan(&builtin_root(), Origin::Builtin).unwrap().into_iter().find(|f| f.name == "user").unwrap();
+    assert_eq!(user.derived_from, fourni.content_hash, "l'empreinte d'aujourd'hui, pour dire demain qu'elle a bougé");
+    let n_projet = fiches.iter().filter(|f| f.origin == Origin::Project).count();
+    assert_eq!(n_projet, 2, "member et user");
+}

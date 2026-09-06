@@ -16,9 +16,9 @@ use std::time::Instant;
 
 use rag3weaver::agent::{Agent, AgentLimits, GraphToolBox, ToolBox};
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
-use rag3weaver::code_tools::{FileSource, WorkingTree, FILE_SOURCE_SERVICE};
-use rag3weaver::dataflow::{builtin_graph_tools, ConnService, ServiceRegistry};
-use rag3weaver::embedder::{DualEmbedder, Embedder, HashEmbedder};
+use rag3weaver::code_tools::{FileSource, WorkingTree};
+use rag3weaver::dataflow::{builtin_graph_tools, ServiceRegistry};
+use rag3weaver::embedder::{DualEmbedder, Embedder};
 use rag3weaver::llm::{dangling_tool_results, orphan_tool_calls, GenOptions, StringSink, ToolChoice, Turn};
 use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -39,7 +39,12 @@ fn setup_on(source: Arc<dyn FileSource>) -> Arc<ServiceRegistry> {
     let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
     // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des
     // étapes en plus, et un agent qui le boude a raison de le bouder.
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
+    // **Le même modèle des deux côtés.** Le catalogue refuse depuis le
+    // 5 septembre qu'un signal `vector` soit indexé par BGE-M3 et interrogé
+    // par un embarqueur factice : deux espaces sans rapport, des scores
+    // plausibles et faux. Cette suite, jouée hors du lot, l'avait manqué.
+    let dense: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.initialize().unwrap();
     let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
     catalog.set_dual_embedder(bge);
@@ -48,18 +53,10 @@ fn setup_on(source: Arc<dyn FileSource>) -> Arc<ServiceRegistry> {
     let analysis = analyze_source(source.as_ref()).unwrap();
     let report = catalog.ingest_code(&analysis).unwrap();
     eprintln!("[cloud-agent] ingéré {:?} en {:?}", report, t.elapsed());
-    let mut services = ServiceRegistry::new();
-    // Le catalogue monte lui-même la liste — une seule source.
-    catalog.register_search_services(&mut services);
-    // **L'embarqueur du graphe n'est pas celui du catalogue**, et c'est voulu :
-    // le catalogue garde un `HashEmbedder` pour son ingestion, le graphe reçoit
-    // le vrai BGE-M3. Enregistré **après** la liste commune, qui poserait sinon
-    // celui du catalogue — un agent qui cherche sur des vecteurs de hachage
-    // aurait raison de bouder la recherche.
-    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
-    services.register::<Arc<dyn Embedder>>("embedder", embedder);
-    services.register("catalog", Arc::new(Mutex::new(catalog)));
-    services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, source);
+    // Le montage de production — une seule source, gabarits synchronisés
+    // depuis la racine de la source (`worktree:`).
+    let catalog = Arc::new(Mutex::new(catalog));
+    let services = rag3weaver::agent::mount_agent_services_on(&catalog, source).unwrap();
     Arc::new(services)
 }
 
@@ -89,7 +86,12 @@ fn setup() -> Arc<ServiceRegistry> {
     let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
     // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des
     // étapes en plus, et un agent qui le boude a raison de le bouder.
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(1024)), config);
+    // **Le même modèle des deux côtés.** Le catalogue refuse depuis le
+    // 5 septembre qu'un signal `vector` soit indexé par BGE-M3 et interrogé
+    // par un embarqueur factice : deux espaces sans rapport, des scores
+    // plausibles et faux. Cette suite, jouée hors du lot, l'avait manqué.
+    let dense: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
+    let mut catalog = Catalog::new(boxed, Box::new(dense), config);
     catalog.initialize().unwrap();
     let bge: Arc<dyn DualEmbedder> = common::burn::BGE_M3.clone();
     catalog.set_dual_embedder(bge);
@@ -100,18 +102,10 @@ fn setup() -> Arc<ServiceRegistry> {
     let analysis = analyze_source(source.as_ref()).unwrap();
     let report = catalog.ingest_code(&analysis).unwrap();
     eprintln!("[cloud-agent] ingéré {:?} en {:?}", report, t.elapsed());
-    let mut services = ServiceRegistry::new();
-    // Le catalogue monte lui-même la liste — une seule source.
-    catalog.register_search_services(&mut services);
-    // **L'embarqueur du graphe n'est pas celui du catalogue**, et c'est voulu :
-    // le catalogue garde un `HashEmbedder` pour son ingestion, le graphe reçoit
-    // le vrai BGE-M3. Enregistré **après** la liste commune, qui poserait sinon
-    // celui du catalogue — un agent qui cherche sur des vecteurs de hachage
-    // aurait raison de bouder la recherche.
-    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
-    services.register::<Arc<dyn Embedder>>("embedder", embedder);
-    services.register("catalog", Arc::new(Mutex::new(catalog)));
-    services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, source);
+    // Le montage de production — une seule source, gabarits synchronisés
+    // depuis la racine de la source (`worktree:`).
+    let catalog = Arc::new(Mutex::new(catalog));
+    let services = rag3weaver::agent::mount_agent_services_on(&catalog, source).unwrap();
     Arc::new(services)
 }
 

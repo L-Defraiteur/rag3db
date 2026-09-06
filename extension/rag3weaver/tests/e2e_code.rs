@@ -9,7 +9,7 @@
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, FILE, SCOPE};
-use rag3weaver::code_tools::{edit_file, grep_files, list_files, read_file, EditOp, FileSource, GrepOptions, Snapshot, FILE_SOURCE_SERVICE};
+use rag3weaver::code_tools::{edit_file, grep_files, list_files, read_file, EditOp, FileSource, GrepOptions, Snapshot};
 use rag3weaver::dataflow::graph_tool::builtin_graph_tools;
 use rag3weaver::llm::ToolCall;
 use rag3weaver::dataflow::{CodeIngestNode, DataflowGraph, DataflowRuntime, ParseCodeNode, ServiceRegistry};
@@ -276,18 +276,10 @@ fn read_and_grep_as_graph_tools() {
     let rel_desc = expand.parameters["properties"]["relation"]["description"].as_str().unwrap();
     assert!(rel_desc.contains("DEFINED_IN (Scope→File)"), "{rel_desc}");
     assert_eq!(expand.parameters["properties"]["direction"]["enum"], serde_json::json!(["Outgoing", "Incoming"]));
-    let mut services = ServiceRegistry::new();
-    {
-        let cat = catalog.lock().unwrap();
-        // Le catalogue monte lui-même la liste dont les nœuds de recherche
-
-        // ont besoin — une seule source, au lieu d'un montage par test.
-
-        cat.register_search_services(&mut services);
-    }
-    services.register("catalog", catalog.clone());
-    services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, snapshot.clone());
-    let services = Arc::new(services);
+    // Le montage de production : une seule source, au lieu d'un montage par
+    // test. La source est un instantané sans racine — `run` et `place` le
+    // diront, et c'est le cas qu'on veut voir ici.
+    let services = Arc::new(rag3weaver::agent::mount_agent_services_on(&catalog, snapshot.clone()).unwrap());
 
     let call = |name: &str, args: serde_json::Value| -> String {
         let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };

@@ -26,7 +26,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::catalog::Catalog;
-use crate::template::{prepare_entity, read_in, roots, write_entity, Family, Header};
+use crate::template::{builtin_root, prepare_entity, read_in, roots, scan, write_entity, Family, Header, Origin};
 
 use super::node::{Node, NodeContext};
 use super::port::{PortDef, PortType, PortValue};
@@ -323,30 +323,59 @@ impl Node for AdoptTemplateNode {
         };
 
         let nom = if self.alias.is_empty() { self.entity.clone() } else { self.alias.clone() };
+        // **Ce qu'il masque, on s'en souvient.** Si la bibliothèque a un
+        // gabarit de ce nom, son empreinte d'aujourd'hui entre dans l'en-tête :
+        // c'est ce qui permettra de dire « il a bougé depuis que tu l'as pris »
+        // sans lier le gabarit à son moule.
+        let derived_from = scan(&builtin_root(), Origin::Builtin)
+            .map_err(|e| format!("adopt: {e}"))?
+            .into_iter()
+            .find(|t| t.family == Family::Entity && t.name == nom)
+            .map(|t| t.content_hash)
+            .unwrap_or_default();
+        let masque = !derived_from.is_empty();
         let header = Header {
             category: self.category.clone(),
             description: self.description.clone(),
             note: self.note.clone(),
-            // Posé à l'étape E3 : l'empreinte du gabarit fourni masqué.
-            derived_from: String::new(),
+            derived_from,
         };
         let chemin = write_entity(&racine, &nom, &config, &header)
             .map_err(|e| format!("adopt: {e}"))?;
+
+        // **Et la recherche le trouve tout de suite.** Le fichier écrit,
+        // la fiche entre en base par la même synchronisation que celle du
+        // montage — avant, l'outil terminait par « réindexez » et personne
+        // ne le faisait.
+        let sync = {
+            let mut c = catalog.lock().map_err(|_| "adopt: catalogue empoisonné")?;
+            c.sync_templates(Some(&racine)).map_err(|e| format!("adopt: {e}"))?
+        };
 
         let mut champs: Vec<String> = config.fields.keys().cloned().collect();
         champs.sort_unstable();
         ctx.metric("fields", champs.len() as f64);
 
-        let rapport = format!(
+        let mut rapport = format!(
             "**{nom}** adopté depuis l'entité `{}`.\n\n\
-             Écrit dans `{}`.\n\n\
-             Champs ({}) : {}\n\n\
-             _Réindexez le catalogue de gabarits pour que la recherche le trouve._\n",
+             Écrit dans `{}`, indexé : `search(target='Template')` le trouve (origine `project`).\n\n\
+             Champs ({}) : {}\n",
             self.entity,
             chemin.display(),
             champs.len(),
             champs.join(", ")
         );
+        if masque {
+            rapport.push_str(&format!(
+                "\nCe gabarit masque le `{nom}` fourni : à nom égal, c'est celui du projet qui gagne.\n"
+            ));
+        }
+        if !sync.stale.is_empty() {
+            rapport.push_str(&format!(
+                "\nGabarits pris sur une bibliothèque qui a bougé depuis : {}.\n",
+                sync.stale.join(", ")
+            ));
+        }
         ctx.set_output("result", PortValue::new(serde_json::Value::String(rapport)));
         Ok(())
     }

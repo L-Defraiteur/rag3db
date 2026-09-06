@@ -124,13 +124,31 @@ parce qu'il ne dépend d'aucun des deux : la recherche des fiches suit le
 gabarit `search_base`, donc le chemin qui reste. E6 en est un morceau. Après
 lui, dans l'ordre : le renommage, puis la migration.
 
-## 5. État
+## 5. Ce qu'on a trouvé en le faisant
+
+- **Aucun montage d'agent en production.** La cartographie l'a dit avant la
+  première ligne : la chaîne catalogue + source `worktree:` + palette
+  n'existait que dans les tests, chacun avec son montage à la main, et aucun
+  code de production n'appelait `builtin_graph_tools`. Le montage a
+  maintenant un nom, `agent::mount_agent_services` (et `_on` avec une source),
+  et les trois tests d'agent passent par lui.
+- **La suite cloud était cassée derrière sa porte.** `e2e_cloud_code_agent`
+  n'entre dans la passe qu'avec `--features openai-llm` ; jouée, elle tombait
+  avant tout appel de modèle, sur la garde du 5 septembre (un `vector`
+  indexé par BGE-M3 et interrogé par `HashEmbedder`). Personne ne l'avait
+  jouée depuis. Corrigé : le même modèle des deux côtés, comme les autres
+  suites.
+- **Les suites e2e ne s'exécutent qu'avec `--ignored`.** Un test e2e sans
+  `#[ignore]` n'est pas joué par `run_e2e.sh` et passe pour filtré. À savoir
+  quand on en ajoute un.
+
+## 6. État
 
 | étape | état |
 |---|---|
-| E1 | à faire |
-| E2 | à faire |
-| E3 | à faire |
-| E4 | à faire, cartographie lancée |
-| E5 | à faire |
-| E6 | à faire |
+| E1 | fait — `d5e1618c8` |
+| E2 | fait — `c32bff1ff` |
+| E3 | fait — `adopt` réindexe et garde l'empreinte de ce qu'il masque |
+| E4 | fait — `mount_agent_services`, les trois montages de test migrés ; suite cloud en cours de jeu |
+| E5 | fait, dans E2 — `stale` dans le rapport de synchronisation, relayé par `adopt` et par le montage |
+| E6 | fait pour `template.rs` et `template_nodes.rs` (dans E1) ; le reste du crate suit dans le renommage général |
