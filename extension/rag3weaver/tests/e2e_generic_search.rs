@@ -24,7 +24,7 @@ use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, SparseS
 use rag3weaver::reranker::Reranker;
 use rag3weaver::search::BM25Mode;
 use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
-use rag3weaver::search::{Consistency, SearchOptions, SearchResult, SearchSignals};
+use rag3weaver::search::{Consistency, SearchMeta, SearchOptions, SearchResult, SearchSignals};
 use rag3weaver::search_strategy::UnifiedResult;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 
@@ -264,6 +264,83 @@ fn generic_bm25_pipeline_matches_catalog() {
         pipe_results[0].uuid, cat_response.results[0].uuid,
         "top result UUID should match"
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// La consigne de cohérence, sur le chemin composable
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// **Le chemin que les agents empruntent applique-t-il la consigne ?**
+///
+/// Jusqu'au 6 septembre 2026, non. `Consistency` vivait dans le corps de
+/// `Catalog::search`, que ce graphe **n'emprunte pas** : l'outil `search` offert
+/// aux agents passe par `SearchSourceNode`, qui ne traversait aucune des trois
+/// branches. `Consistency::Strict` n'était d'ailleurs construit nulle part dans
+/// `src/`, et la marque d'eau d'ingestion — bâtie et éprouvée sur deux processus
+/// réels — n'avait aucun appelant en production.
+///
+/// Le test met le moteur dans l'état exact où ça se voit : des entités **en
+/// file**, jamais posées. Avant, le graphe cherchait dans une base vide et
+/// rendait zéro, sans une erreur. Maintenant `SearchSourceNode` applique
+/// `Eventual`, pose les entités, et les trouve.
+#[test]
+#[ignore]
+fn le_graphe_applique_la_consigne_de_coherence() {
+    let mut catalog = setup_simple_catalog(4);
+
+    // `create()` met en file et ne pose rien : c'est tout l'intérêt.
+    for produit in test_products() {
+        catalog.create("Product", produit).expect("mise en file");
+    }
+    assert!(catalog.has_pending(), "rien n'est posé avant la recherche");
+
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (services, cat_arc) = build_services(catalog, embedder, None, None);
+
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "programming language",
+        SearchOptions { consistency: Consistency::Eventual, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("bm25", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    let resultats = extract_results(&output, "resolve");
+
+    eprintln!("[consigne] {} résultats depuis une file non vidée", resultats.len());
+    assert!(
+        !resultats.is_empty(),
+        "le graphe doit appliquer la consigne et poser les entités avant de \
+         chercher — zéro résultat ici veut dire qu'il a cherché dans une base \
+         vide sans le dire"
+    );
+
+    // Le port `meta` du nœud source existe pour que ça se **dise**. Il porte la
+    // consigne appliquée et ce qui reste en file.
+    let meta = output
+        .get("source", "meta")
+        .and_then(|v| v.downcast::<SearchMeta>())
+        .cloned()
+        .expect("SearchSourceNode doit rendre une méta");
+    eprintln!(
+        "[consigne] méta : consistency={:?} partiel={} en file={} avertissements={:?}",
+        meta.consistency, meta.partial, meta.pending_count, meta.warnings
+    );
+    assert_eq!(meta.consistency, Consistency::Eventual);
+    assert_eq!(
+        meta.partial,
+        meta.pending_count > 0,
+        "« partiel » dit exactement s'il reste du travail"
+    );
+
+    // Et la file a bien été vidée de ses entités par le nœud, pas par nous.
+    let restant = cat_arc.lock().unwrap().pending_work().entities.len();
+    assert_eq!(restant, 0, "les entités ont été posées par la consigne");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

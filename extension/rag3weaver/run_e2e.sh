@@ -345,6 +345,8 @@ if [ "$SUMMARY" = true ]; then
 
   TOTAL_PASSED=0
   TOTAL_FAILED=0
+  # Suites qui ont rendu un résultat sans jouer un seul test.
+  VIDES=0
 
   # Collect Running/result lines in order
   mapfile -t SUITE_NAMES < <(grep -oP '(?<=Running tests/)\w+' "$TMPLOG")
@@ -358,12 +360,26 @@ if [ "$SUMMARY" = true ]; then
     TOTAL_PASSED=$((TOTAL_PASSED + ${passed:-0}))
     TOTAL_FAILED=$((TOTAL_FAILED + ${failed:-0}))
 
-    if [ "${failed:-0}" -eq 0 ]; then
-      say "  %-30s %3d passed\n" "$suite" "$passed"
-    else
+    if [ "${failed:-0}" -ne 0 ]; then
       say "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
+    elif [ "${passed:-0}" -eq 0 ]; then
+      # **Zéro test n'est pas une réussite.** Une suite entièrement compilée
+      # hors du lot — un `#![cfg(feature = ...)]` que le lot de features
+      # n'active pas — rend « ok. 0 passed », ce qui s'aligne dans ce tableau
+      # exactement comme un succès. C'est le même défaut que les vingt-deux
+      # tests sans `#[ignore]` du 5 septembre : une suite verte qui ne joue
+      # rien. Elle se nomme maintenant.
+      VIDES=$((VIDES + 1))
+      say "  %-30s AUCUN TEST — compilée hors du lot ? (feature manquante)\n" "$suite"
+    else
+      say "  %-30s %3d passed\n" "$suite" "$passed"
     fi
   done
+
+  if [ "$VIDES" -gt 0 ]; then
+    say "\n  ⚠ %d suite(s) n'ont joué aucun test. Vérifier leur attribut cfg de module :\n" "$VIDES"
+    say "    une suite compilée hors du lot ne prouve rien, et le total non plus.\n"
+  fi
 
   # **Nommer ce qui a cassé.** Un compteur dit qu'il y a un problème ; il ne
   # dit pas lequel, et c'est justement ce qu'on vient chercher.
