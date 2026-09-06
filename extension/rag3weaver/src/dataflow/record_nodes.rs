@@ -913,6 +913,24 @@ impl Node for KBEmbedNode {
                     ).map_err(|e| e.to_string())?;
 
                     // Insert into SparseHandle using offsets
+                    //
+                    // **Le silence le plus cher du chemin d'écriture.** Le
+                    // vecteur sparse est déjà calculé ici — du temps GPU
+                    // dépensé — et s'il n'y a pas de handle ouvert pour cette
+                    // entité, il partait à la poubelle sans un mot. La
+                    // recherche sparse rendait alors zéro, et la seule trace du
+                    // travail était la chaleur de la carte.
+                    let absent = sparse_handles
+                        .as_ref()
+                        .is_none_or(|h| !h.contains_key(*entity_name));
+                    if absent {
+                        ctx.warn(&format!(
+                            "aucun index sparse ouvert pour « {entity_name} » : {} vecteur(s) \
+                             ont été calculés puis jetés, et une recherche sparse rendra \
+                             zéro sans autre explication",
+                            group.len()
+                        ));
+                    }
                     if let Some(ref handles) = sparse_handles {
                         if let Some(handle) = handles.get(*entity_name) {
                             let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
