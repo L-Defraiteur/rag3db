@@ -352,6 +352,23 @@ impl Node for VectorSearchNode {
             ctx.warn(w);
         }
         let nombre = unified.len();
+
+        // **Un signal muet dit pourquoi.** Zéro résultat vectoriel peut vouloir
+        // dire « ça n'existe pas » ou « ce n'est pas encore embarqué ».
+        // L'appelant ne peut pas distinguer, et c'est le chemin que les agents
+        // empruntent. Le compte n'est fait que dans ce cas-là.
+        if nombre == 0 {
+            if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+                if let Ok(c) = cat.lock() {
+                    c.expliquer_le_silence_d_un_signal(
+                        &target.chunk_table,
+                        crate::search::SearchSignals::VECTOR,
+                        &mut node_warnings,
+                    );
+                }
+            }
+        }
+
         ctx.set_output("results", PortValue::new(unified));
         ctx.set_output(
             "meta",

@@ -327,6 +327,17 @@ pub trait SchemaDialect: Send + Sync {
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 
+    /// **Combien de chunks doivent encore un embarquement**, pour un marqueur
+    /// donné (`_embed_hash` pour le dense, `_sparse_hash` pour le sparse).
+    ///
+    /// « Doit encore » = marqueur nul **ou vide** : le vide est la valeur qu'un
+    /// chunk porte à sa naissance, le nul celle qu'un `undo` y remet.
+    ///
+    /// C'est la dette rendue interrogeable. Elle ne vit pas en mémoire — elle
+    /// est dans la base, donc elle survit à un processus qui meurt, et une
+    /// passe de rattrapage la retrouve telle quelle.
+    fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String;
+
     // ── Search resolution ────────────────────────────────────────────
 
     /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
@@ -867,6 +878,13 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("MATCH (n:{table}) RETURN count(n) AS cnt")
+    }
+
+    fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String {
+        format!(
+            "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
+             RETURN count(n) AS cnt"
+        )
     }
 
     fn resolve_chunks_with_parent(
@@ -1516,6 +1534,13 @@ impl SchemaDialect for PostgresDialect {
 
     fn count_rows(&self, table: &str) -> String {
         format!("SELECT count(*) AS cnt FROM {table}")
+    }
+
+    fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String {
+        format!(
+            "SELECT count(*) AS cnt FROM {table} \
+             WHERE {marqueur} IS NULL OR {marqueur} = ''"
+        )
     }
 
     fn resolve_chunks_with_parent(

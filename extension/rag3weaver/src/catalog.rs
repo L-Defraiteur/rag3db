@@ -1980,6 +1980,52 @@ impl Catalog {
     /// Trois façons de ne pas aboutir, et toutes se **disent** :
     /// le délai expire, une marque est périmée (processus mort), ou la lecture
     /// des marques échoue. Aucune ne se déguise en succès.
+    /// **Pourquoi un signal n'a rien rendu : parce qu'il n'a pas encore été
+    /// calculé.**
+    ///
+    /// Distinguer « ça n'existe pas » de « je n'ai pas encore embarqué ça » est
+    /// la même règle que partout ailleurs, appliquée à la dette d'embarquement.
+    /// Sans elle, une recherche vectorielle sur des chunks non embarqués rend
+    /// zéro, sans erreur, et l'appelant conclut que le contenu n'existe pas.
+    ///
+    /// **Appelée seulement quand le signal a rendu zéro.** Un `COUNT` à chaque
+    /// recherche serait un coût payé pour rien dans le cas nominal ; ici il
+    /// n'est payé que lorsqu'il y a quelque chose à expliquer.
+    ///
+    /// `signals` est ce que la requête a **demandé** : on ne se plaint pas d'un
+    /// index dense en retard si personne n'a demandé le dense.
+    pub fn expliquer_le_silence_d_un_signal(
+        &self,
+        chunk_table: &str,
+        signals: search::SearchSignals,
+        warnings: &mut Vec<String>,
+    ) {
+        let compte = |marqueur: &str| -> usize {
+            let requete = self.dialect.count_marqueur_manquant(chunk_table, marqueur);
+            self.conn
+                .execute(&requete)
+                .ok()
+                .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+                .unwrap_or(0) as usize
+        };
+        for (demande, marqueur, nom) in [
+            (signals.vector(), "_embed_hash", "dense"),
+            (signals.sparse(), "_sparse_hash", "sparse"),
+        ] {
+            if !demande {
+                continue;
+            }
+            let dus = compte(marqueur);
+            if dus > 0 {
+                warnings.push(format!(
+                    "le signal {nom} n'a rien rendu, et {dus} chunk(s) de « {chunk_table} » \
+                     n'ont pas encore été embarqués : ce n'est pas la preuve que le contenu \
+                     n'existe pas. Exigez « {nom} » pour attendre leur embarquement."
+                ));
+            }
+        }
+    }
+
     /// Applique la consigne de cohérence d'une recherche, et rend de quoi le
     /// dire honnêtement.
     ///
@@ -4857,6 +4903,27 @@ impl Catalog {
         };
         if let Some(ref mut d) = diag { d.sparse_ms = t_sparse.elapsed().as_millis() as u64; }
         let sparse_count = sparse_results.len();
+
+        // **Un signal muet doit dire pourquoi il l'est.** Zéro résultat sur le
+        // dense ou le sparse peut vouloir dire « ça n'existe pas » ou « ce
+        // n'est pas encore embarqué », et l'appelant ne peut pas distinguer.
+        // Le compte n'est fait que dans ce cas-là, pas à chaque recherche.
+        {
+            let mut muets = search::SearchSignals::NONE;
+            if signals.vector() && vector_count == 0 {
+                muets |= search::SearchSignals::VECTOR;
+            }
+            if signals.sparse() && sparse_count == 0 {
+                muets |= search::SearchSignals::SPARSE;
+            }
+            if !muets.is_empty() {
+                self.expliquer_le_silence_d_un_signal(
+                    &target.chunk_table,
+                    muets,
+                    &mut search_warnings,
+                );
+            }
+        }
 
         // Resolve chunk-level results to parent-level with ChunkInfo + enrichment
         let t_resolve = Instant::now();
