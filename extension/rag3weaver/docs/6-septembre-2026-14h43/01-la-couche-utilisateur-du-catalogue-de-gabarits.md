@@ -138,6 +138,17 @@ lui, dans l'ordre : le renommage, puis la migration.
   indexé par BGE-M3 et interrogé par `HashEmbedder`). Personne ne l'avait
   jouée depuis. Corrigé : le même modèle des deux côtés, comme les autres
   suites.
+- **Le montage d'agent n'avait pas la porte des commandes.** Ni les montages
+  à la main, ni le mien au premier jet. Sur la mission 1 de la suite cloud,
+  Gemini a voulu lancer `cargo test` avant d'éditer, s'est vu répondre deux
+  fois que le service de garde était absent, et a rendu sa mission sans rien
+  écrire — et la suite passait, parce qu'elle observe sans affirmer. La porte
+  est dans `mount_agent_services_on`, en mode `Auto`.
+- **Le vrai modèle des deux côtés coûte 14 minutes d'ingestion** dans la
+  suite cloud (30 fichiers, 1633 scopes, BGE-M3 par le démon, deux tests en
+  parallèle). C'est le prix de la garde du 5 septembre ; l'ancienne suite
+  cherchait avec BGE-M3 dans des vecteurs de hachage. **À décider** : ingérer
+  moins de fichiers dans cette suite, ou vivre avec.
 - **Les suites e2e ne s'exécutent qu'avec `--ignored`.** Un test e2e sans
   `#[ignore]` n'est pas joué par `run_e2e.sh` et passe pour filtré. À savoir
   quand on en ajoute un.
@@ -148,7 +159,7 @@ lui, dans l'ordre : le renommage, puis la migration.
 |---|---|
 | E1 | fait — `d5e1618c8` |
 | E2 | fait — `c32bff1ff` |
-| E3 | fait — `adopt` réindexe et garde l'empreinte de ce qu'il masque |
-| E4 | fait — `mount_agent_services`, les trois montages de test migrés ; suite cloud en cours de jeu |
+| E3 | fait — `4d7fcf9b8` : `adopt` réindexe et garde l'empreinte de ce qu'il masque |
+| E4 | fait — `4d7fcf9b8` : `mount_agent_services`, la porte des commandes, les trois montages de test migrés ; suite cloud 2/2 |
 | E5 | fait, dans E2 — `stale` dans le rapport de synchronisation, relayé par `adopt` et par le montage |
 | E6 | fait pour `template.rs` et `template_nodes.rs` (dans E1) ; le reste du crate suit dans le renommage général |
