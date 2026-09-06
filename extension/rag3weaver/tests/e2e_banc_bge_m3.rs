@@ -67,3 +67,43 @@ fn jetons_par_seconde() {
     }
     eprintln!("[banc] 12 formes inédites (16 textes chacune, {total} jetons) : {:?} → {:.0} jetons/s", t.elapsed(), total as f64 / t.elapsed().as_secs_f64());
 }
+
+/// **Le f16 rend-il les mêmes vecteurs ?** Deux passages, un par précision
+/// (`RAG3WEAVER_BURN_FLOAT`), qui déposent leurs vecteurs dans un fichier ;
+/// le second compare au premier par le cosinus. Une précision qui change
+/// l'ordre des résultats n'est pas une optimisation.
+#[test]
+#[ignore]
+fn le_f16_rend_les_memes_vecteurs() {
+    let e: &dyn Embedder = common::burn::BGE_M3.as_ref();
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "f32".into());
+    let textes: Vec<String> = [
+        "de quoi savoir qui est connecté sur mon site",
+        "vendre des articles avec un prix",
+        "fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult>",
+        "Le catalogue de gabarits se cherche comme un document depuis le 29 août.",
+        "un fil de discussion entre plusieurs personnes : son sujet, son état",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .chain((0..11).map(|i| texte(40 + i * 60, i)))
+    .collect();
+    let vecs = e.embed(&textes).unwrap();
+    let dir = std::env::temp_dir().join("rag3weaver-parite");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{precision}.json")), serde_json::to_string(&vecs).unwrap()).unwrap();
+    let autre = if precision == "f32" { "f16" } else { "f32" };
+    let Ok(texte_autre) = std::fs::read_to_string(dir.join(format!("{autre}.json"))) else {
+        eprintln!("[parité] {precision} déposé ; relancer avec RAG3WEAVER_BURN_FLOAT={autre} pour comparer");
+        return;
+    };
+    let ref_: Vec<Vec<f32>> = serde_json::from_str(&texte_autre).unwrap();
+    let mut pire = 1.0f32;
+    for (a, b) in vecs.iter().zip(&ref_) {
+        let cos: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>()
+            / (a.iter().map(|x| x * x).sum::<f32>().sqrt() * b.iter().map(|x| x * x).sum::<f32>().sqrt());
+        pire = pire.min(cos);
+    }
+    eprintln!("[parité] {precision} contre {autre} sur {} textes : cosinus minimal {pire:.5}", vecs.len());
+    assert!(pire > 0.999, "le f16 change les vecteurs : cosinus {pire}");
+}

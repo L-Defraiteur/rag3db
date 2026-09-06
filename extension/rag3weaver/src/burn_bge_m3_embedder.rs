@@ -130,10 +130,24 @@ impl BurnBgeM3Embedder {
             ..Default::default()
         }));
 
-        let graph = BgeM3Graph::from_bytes(
-            burn::tensor::Bytes::from_bytes_vec(weights.to_vec()),
-            &device,
-        );
+        // **Les poids dans la précision demandée.** Le fichier est en f32 ;
+        // sans adaptateur ils le restent, quoi que la carte ait pour défaut —
+        // mesuré le 6 septembre 2026 : `RAG3WEAVER_BURN_FLOAT=f16` ne changeait
+        // rien tant que le chargement ne convertissait pas.
+        let graph = {
+            use burn_store::ModuleSnapshot;
+            let mut model = BgeM3Graph::new(&device);
+            let mut store = burn_store::BurnpackStore::from_bytes(Some(
+                burn::tensor::Bytes::from_bytes_vec(weights.to_vec()),
+            ));
+            if let Some(dtype) = crate::burn_device::float_dtype_voulu() {
+                store = store.with_from_adapter(burn_store::FloatCastAdapter::to(dtype.into()));
+            }
+            model
+                .load_from(&mut store)
+                .map_err(|e| EmbedError::ProviderError(format!("poids BGE-M3 : {e:?}")))?;
+            model
+        };
         let sparse_head = SparseHead::from_embedded(&device)?;
 
         Ok(Self {
@@ -203,7 +217,8 @@ impl BurnBgeM3Embedder {
 
     /// `sentence_embedding` is already CLS-pooled and L2-normalized by the graph.
     fn extract_dense(sentence_embedding: Tensor<2>) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let data = sentence_embedding.to_data();
+        // Quelle que soit la précision de calcul, on rend du f32.
+        let data = sentence_embedding.cast(burn::tensor::FloatDType::F32).to_data();
         let [batch, dim] = [data.shape[0], data.shape[1]];
         let flat: Vec<f32> = data
             .to_vec()
@@ -223,7 +238,8 @@ impl BurnBgeM3Embedder {
         let scores = relu(
             self.sparse_head
                 .linear
-                .forward(token_embeddings)
+                // La tête creuse est en f32 : on lui donne du f32.
+                .forward(token_embeddings.cast(burn::tensor::FloatDType::F32))
                 .squeeze_dim::<2>(2),
         );
         let data = scores.to_data();

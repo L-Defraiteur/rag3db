@@ -48,6 +48,6 @@ le poste, carte libre (32 Go).
 | reste | mesure | à décider |
 |---|---|---|
 | l'imbrication embarque 1,5 fois la source | scopes emboîtés, chacun avec son texte entier | un scope pourrait embarquer son texte **moins celui de ses enfants** (signature, docstring, corps propre). Question de fond sur l'index de code, pas de ce chantier |
-| le modèle en fp32 sur wgpu | ~15 chunks/s après tri, GPU à 88–95 % | fp16, ou un backend natif ; c'est le chantier burn, pas rag3weaver |
+| le modèle en fp32 sur wgpu | 36 chunks/s après tri, GPU à 88–95 % | **[issue 02](02-le-chemin-burn-wgpu-a-optimiser.md)** : ROCm vaut 1,5 à 2,3×, le f16 est faux sans précision mixte, les formes de lot inédites coûtent des secondes |
 | la simulation compte 3 532 chunks, la base 5 396 | l'écart vient de la découpe réelle (titre + contenu, recouvrement) | à regarder si on veut la simulation exacte ; elle a suffi à prédire le gain |
 | deux tests cloud en parallèle sur un démon | 862 s contre 450 s | la suite cloud pourrait ingérer moins (les missions touchent deux fichiers) |

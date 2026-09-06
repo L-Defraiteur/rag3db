@@ -188,6 +188,22 @@ impl BurnDevice {
 
     /// Shared with the other burn embedders in this crate.
     pub(crate) fn resolve(self) -> Device {
+        let mut device = self.resolve_sans_precision();
+        // **La précision flottante, par l'environnement** (`RAG3WEAVER_BURN_FLOAT`
+        // = `f16` | `bf16` | `f32`). burn 0.22 la fixe par carte, une fois,
+        // avant le premier tenseur ; on la pose ici parce que c'est le seul
+        // endroit par où passent tous les modèles. Mesuré le 6 septembre 2026
+        // sur BGE-M3 (voir `e2e_banc_bge_m3`).
+        if let Some(d) = float_dtype_voulu() {
+            match device.configure(d) {
+                Ok(()) => eprintln!("[rag3weaver] précision flottante {d:?} (RAG3WEAVER_BURN_FLOAT)"),
+                Err(e) => eprintln!("[rag3weaver] précision {d:?} refusée : {e:?} — précision par défaut"),
+            }
+        }
+        device
+    }
+
+    fn resolve_sans_precision(self) -> Device {
         match self {
             BurnDevice::Default => Device::default(),
             BurnDevice::DiscreteGpu(i) => wgpu_pinned(DeviceKind::DiscreteGpu(i)),
@@ -274,5 +290,21 @@ mod tests {
         sorted.dedup();
         assert_eq!(sorted.len(), 3, "{vars:?}");
         assert!(vars.iter().all(|v| v.starts_with("RAG3WEAVER_BURN_DEVICE_")));
+    }
+}
+
+/// La précision flottante demandée par `RAG3WEAVER_BURN_FLOAT` (`f16`, `bf16`,
+/// `f32`), ou rien. Lue par la carte (défaut des tenseurs neufs) **et** par le
+/// chargement des poids, qui sans ça restent dans la précision du fichier.
+pub(crate) fn float_dtype_voulu() -> Option<burn::tensor::FloatDType> {
+    let voulu = std::env::var("RAG3WEAVER_BURN_FLOAT").ok().filter(|v| !v.trim().is_empty())?;
+    match voulu.trim().to_ascii_lowercase().as_str() {
+        "f16" => Some(burn::tensor::FloatDType::F16),
+        "bf16" => Some(burn::tensor::FloatDType::BF16),
+        "f32" => Some(burn::tensor::FloatDType::F32),
+        autre => {
+            eprintln!("[rag3weaver] RAG3WEAVER_BURN_FLOAT={autre} : f16, bf16 ou f32 — précision par défaut");
+            None
+        }
     }
 }
