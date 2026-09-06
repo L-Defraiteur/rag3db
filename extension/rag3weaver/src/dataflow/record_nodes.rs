@@ -892,17 +892,9 @@ impl Node for KBEmbedNode {
             // les résultats se relisent par position.
             dense_works.sort_by_key(|w| w.text.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
-            for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                let chunk = &dense_works[plage];
-                let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                let t = std::time::Instant::now();
-                let part = embedder
-                    .embed(&texts)
-                    .map_err(|e| format!("dense embedding failed: {e}"))?;
-                // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
-                if !embedder.distant() {
-                    souffler(t.elapsed());
-                }
+            let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+            let appel = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
+            embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &appel, |chunk, part| {
                 if part.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -910,7 +902,8 @@ impl Node for KBEmbedNode {
                     ));
                 }
                 vectors.extend(part);
-            }
+                Ok(())
+            })?;
 
             // Group by (entity_name, embedding_col)
             let mut groups: HashMap<(&str, String), Vec<(&EmbedWork, &Vec<f32>)>> = HashMap::new();
@@ -963,16 +956,9 @@ impl Node for KBEmbedNode {
                 // les résultats se relisent par position.
                 sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                    let chunk = &sparse_works[plage];
-                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                    let t = std::time::Instant::now();
-                    let part = sparse_emb
-                        .embed_sparse(&texts)
-                        .map_err(|e| format!("sparse embedding failed: {e}"))?;
-                    if !sparse_emb.distant() {
-                        souffler(t.elapsed());
-                    }
+                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
+                embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, part| {
                     if part.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -980,7 +966,8 @@ impl Node for KBEmbedNode {
                         ));
                     }
                     sparse_vecs.extend(part);
-                }
+                    Ok(())
+                })?;
 
                 let mut groups: HashMap<(&str, &str), Vec<(&EmbedWork, &SparseVector)>> =
                     HashMap::new();
@@ -1108,17 +1095,9 @@ impl Node for KBEmbedNode {
                 dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                    let chunk = &dual_works[plage];
-                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                    let t = std::time::Instant::now();
-                    let (dense_vecs, sparse_vecs) = dual_emb
-                        .embed_dual(&texts)
-                        .map_err(|e| format!("dual embed failed: {e}"))?;
-                    if !dual_emb.distant() {
-                        souffler(t.elapsed());
-                    }
-
+                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
+                embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "dual embedder returned {}/{} vectors for {} texts",
@@ -1133,7 +1112,8 @@ impl Node for KBEmbedNode {
                         dense_results.push((&dual_works[base_idx + i], dense));
                         sparse_results.push((&dual_works[base_idx + i], sparse));
                     }
-                }
+                    Ok(())
+                })?;
 
                 // UNWIND dense
                 {
@@ -2164,15 +2144,9 @@ impl Node for EmbedNode {
                 // les résultats se relisent par position.
                 sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                    let chunk = &sparse_works[plage];
-                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                    let t = std::time::Instant::now();
-                    let sparse_vecs = sparse_emb
-                        .embed_sparse(&texts)
-                        .map_err(|e| format!("sparse embedding failed: {e}"))?;
-                    souffler(t.elapsed());
-
+                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
+                embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -2258,7 +2232,8 @@ impl Node for EmbedNode {
                             }
                         }
                     }
-                }
+                    Ok(())
+                })?;
             }
         }
 
@@ -2281,17 +2256,9 @@ impl Node for EmbedNode {
                 dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
-                    let chunk = &dual_works[plage];
-                    let texts: Vec<String> = chunk.iter().map(|w| w.text.clone()).collect();
-                    let t = std::time::Instant::now();
-                    let (dense_vecs, sparse_vecs) = dual_emb
-                        .embed_dual(&texts)
-                        .map_err(|e| format!("dual embed failed: {e}"))?;
-                    if !dual_emb.distant() {
-                        souffler(t.elapsed());
-                    }
-
+                let plages = budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget());
+                let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
+                embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "dual embedder returned {}/{} vectors for {} texts",
@@ -2306,7 +2273,8 @@ impl Node for EmbedNode {
                         dense_results.push((&dual_works[base_idx + i], dense));
                         sparse_results.push((&dual_works[base_idx + i], sparse));
                     }
-                }
+                    Ok(())
+                })?;
 
                 // UNWIND dense (sets embedding + _embed_hash)
                 {
