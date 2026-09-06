@@ -895,7 +895,22 @@ impl Node for KBEmbedNode {
                 }
 
                 for ((entity_name, _kb_name), group) in &groups {
-                    // Set _embed_hash + get offsets for handle.insert
+                    // **Le décalage d'abord, le marqueur en dernier.**
+                    //
+                    // Cette requête posait `_embed_hash` *et* rendait les
+                    // décalages, avant que le vecteur ne soit écrit dans le
+                    // handle. Un crash entre les deux — ou simplement un handle
+                    // absent, le cas juste en dessous — laissait un chunk
+                    // **marqué embarqué sans vecteur**, et aucune passe
+                    // ultérieure ne le reprenait jamais : le marqueur disait
+                    // que c'était fait. Un trou permanent et silencieux.
+                    //
+                    // Le dense n'a pas ce défaut : une seule instruction y pose
+                    // la colonne `embedding` et le marqueur ensemble.
+                    //
+                    // `embed_get_offset` existait déjà et ne pose rien. On lit
+                    // le décalage, on écrit le vecteur, **puis** on marque. Un
+                    // aller-retour de plus par lot et par entité, pas par item.
                     let items_param = CypherValue::List(
                         group.iter().map(|(work, _)| {
                             let mut map = BTreeMap::new();
@@ -905,11 +920,11 @@ impl Node for KBEmbedNode {
                         }).collect(),
                     );
 
-                    let cypher = dialect.embed_set_hash_returning_offset(entity_name);
+                    let cypher = dialect.embed_get_offset(entity_name);
 
                     let result = conn.execute_with_params(
                         &cypher,
-                        &[QueryParam { name: "items".into(), value: items_param }],
+                        &[QueryParam { name: "items".into(), value: items_param.clone() }],
                     ).map_err(|e| e.to_string())?;
 
                     // Insert into SparseHandle using offsets
@@ -950,6 +965,16 @@ impl Node for KBEmbedNode {
                                     }
                                 }
                             }
+
+                            // **Maintenant** le marqueur : le vecteur est écrit.
+                            // Si on n'est pas passé ici — handle absent —, le
+                            // chunk reste non embarqué, et une passe ultérieure
+                            // le reprendra au lieu de le croire fait.
+                            let pose = dialect.embed_set_hash_returning_offset(entity_name);
+                            conn.execute_with_params(
+                                &pose,
+                                &[QueryParam { name: "items".into(), value: items_param }],
+                            ).map_err(|e| e.to_string())?;
                         }
                     }
                 }
@@ -1890,7 +1915,17 @@ impl Node for EmbedNode {
                     }
 
                     for (entity_name, group) in &groups {
-                        // Set _embed_hash + get offsets for handle.insert
+                        // Même inversion qu'au chemin sparse pur, même
+                        // correction : on lit le décalage sans rien poser.
+                        //
+                        // **Mais ici elle ne suffit pas**, et il faut le dire :
+                        // sur le chemin dual, l'écriture dense pose le *même*
+                        // `_embed_hash` un peu plus bas. Un vecteur sparse
+                        // perdu reste donc marqué par le dense. Un marqueur
+                        // unique ne peut pas répondre séparément « dense
+                        // prêt ? » et « sparse prêt ? » — c'est ce que les
+                        // quatre disponibilités vont demander, et ça réclame
+                        // une seconde colonne. Migration, donc décision.
                         let items_param = CypherValue::List(
                             group.iter().map(|(work, _)| {
                                 let mut map = BTreeMap::new();
@@ -1900,7 +1935,7 @@ impl Node for EmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = dialect.embed_set_hash_returning_offset(entity_name);
+                        let cypher = dialect.embed_get_offset(entity_name);
 
                         let result = conn.execute_with_params(
                             &cypher,
