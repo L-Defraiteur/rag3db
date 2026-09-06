@@ -279,6 +279,11 @@ pub fn generate_index_chunk_table_ddl_with_dialect(
         // l'écriture dense marquait pour les deux — un vecteur sparse perdu
         // restait donc annoncé écrit. Vide = pas encore embarqué en sparse.
         ColumnDef { name: "_sparse_hash".into(), col_type: ColumnType::Text },
+        // **La réclamation d'une passe de rattrapage** : `horodatage|écrivain`,
+        // posée quand une passe prend ce chunk pour l'embarquer, périmée après
+        // `MARQUE_PERIMEE_MS`. Deux processus qui rattrapent ne calculent
+        // plus deux fois le même vecteur. Vide ou nulle = libre.
+        ColumnDef { name: "_embed_claim".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
@@ -332,6 +337,11 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
         // l'écriture dense marquait pour les deux — un vecteur sparse perdu
         // restait donc annoncé écrit. Vide = pas encore embarqué en sparse.
         ColumnDef { name: "_sparse_hash".into(), col_type: ColumnType::Text },
+        // **La réclamation d'une passe de rattrapage** : `horodatage|écrivain`,
+        // posée quand une passe prend ce chunk pour l'embarquer, périmée après
+        // `MARQUE_PERIMEE_MS`. Deux processus qui rattrapent ne calculent
+        // plus deux fois le même vecteur. Vide ou nulle = libre.
+        ColumnDef { name: "_embed_claim".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },

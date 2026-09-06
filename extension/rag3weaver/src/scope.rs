@@ -34,7 +34,11 @@ pub const DEFAULT_ID: &str = "default";
 pub const SCHEMA_VERSION_KEY: &str = "schema_version";
 /// **3** depuis le 6 septembre 2026 : les tables de chunks gagnent
 /// `_sparse_hash`, le marqueur d'embarquement sparse séparé du dense.
-pub const SCHEMA_VERSION: &str = "3";
+///
+/// **4** le même jour : `_embed_claim`, la réclamation qu'une passe de
+/// rattrapage pose sur les chunks qu'elle prend — pour que deux processus ne
+/// calculent pas deux fois le même vecteur (réconciliation, C4).
+pub const SCHEMA_VERSION: &str = "4";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

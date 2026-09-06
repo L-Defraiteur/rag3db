@@ -361,6 +361,26 @@ pub trait SchemaDialect: Send + Sync {
         avec_kb_name: bool,
     ) -> String;
 
+    /// **Réclame des chunks en retard, et les rend** — en une seule
+    /// instruction, pour que deux processus qui rattrapent ne prennent pas
+    /// les mêmes.
+    ///
+    /// Sélectionne jusqu'à `limite` chunks dont `marqueur` est vide **et**
+    /// dont `_embed_claim` est libre : vide, périmée (`< $perime`, un
+    /// horodatage zéro-rembourré suivi de `|`), ou **la nôtre** (`ENDS WITH
+    /// $mien`, soit `|écrivain`) — reprendre sa propre réclamation est
+    /// légitime, une passe interrompue ne doit pas s'attendre elle-même. Pose
+    /// `$reclamation` dessus, et rend `_uuid, _text, _text_hash[, _kb_name]`.
+    ///
+    /// Paramètres : `$reclamation`, `$perime`, `$mien`.
+    fn reclamer_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String;
+
     // ── Search resolution ────────────────────────────────────────────
 
     /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
@@ -921,6 +941,25 @@ impl SchemaDialect for Rag3dbDialect {
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
              RETURN n._uuid, n._text, n._text_hash{kb} LIMIT {limite}"
+        )
+    }
+
+    fn reclamer_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String {
+        let kb = if avec_kb_name { ", n._kb_name" } else { "" };
+        format!(
+            "MATCH (n:{table}) \
+             WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '') \
+               AND (n._embed_claim IS NULL OR n._embed_claim = '' \
+                    OR n._embed_claim < $perime OR n._embed_claim ENDS WITH $mien) \
+             WITH n LIMIT {limite} \
+             SET n._embed_claim = $reclamation \
+             RETURN n._uuid, n._text, n._text_hash{kb}"
         )
     }
 
@@ -1591,6 +1630,25 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "SELECT _uuid, _text, _text_hash{kb} FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = '' LIMIT {limite}"
+        )
+    }
+
+    fn reclamer_chunks_sans_marqueur(
+        &self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> String {
+        let kb = if avec_kb_name { ", _kb_name" } else { "" };
+        format!(
+            "UPDATE {table} SET _embed_claim = $reclamation \
+             WHERE _uuid IN (SELECT _uuid FROM {table} \
+                WHERE ({marqueur} IS NULL OR {marqueur} = '') \
+                  AND (_embed_claim IS NULL OR _embed_claim = '' \
+                       OR _embed_claim < $perime OR _embed_claim LIKE '%' || $mien) \
+                LIMIT {limite}) \
+             RETURNING _uuid, _text, _text_hash{kb}"
         )
     }
 

@@ -1572,3 +1572,83 @@ fn la_marque_de_confiance_nomme_son_signal() {
          {marque}"
     );
 }
+
+
+/// **Deux passes de rattrapage ne prennent pas les mêmes chunks.**
+///
+/// Deux catalogues sur la même base tiennent lieu de deux processus. Trois
+/// produits sont posés **sans GPU** : trois dettes denses. A en réclame un ;
+/// B, qui réclame tout ce qui est libre, ne reçoit pas celui de A ; A reprend
+/// le sien. Puis chacun solde ce qu'il a réclamé, et la somme fait exactement
+/// la dette — aucun vecteur calculé deux fois.
+#[test]
+#[ignore]
+fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    let (_garde, ctx, mut a) = catalogue(8);
+    a.register_entity("Product", config_produit()).unwrap();
+    let res = a
+        .ingest_entities_jusqu_a(
+            "Product",
+            vec![
+                produit("Rust Book", "A guide to the Rust programming language.", 49.99),
+                produit("Python Cookbook", "Recipes for the Python programming language.", 39.99),
+                produit("French Chef Knife", "A professional kitchen knife.", 129.99),
+            ],
+            D::RECHERCHE_TEXTE,
+        )
+        .expect("ingestion sans GPU");
+    assert_eq!(res.rendu_pret, Some(D::RECHERCHE_TEXTE), "{res:?}");
+
+    // Le second processus.
+    let boxed: Box<dyn DbConnection> = Box::new(
+        ctx.rt
+            .block_on(PostgresConnection::new(&conn_str()))
+            .expect("connexion du second catalogue"),
+    );
+    let mut b = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
+    let partagee = b.conn_arc();
+    b.set_dialect(Arc::new(PostgresDialect));
+    b.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));
+    b.set_blob_store(Arc::new(rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee)));
+    b.initialize().expect("initialize de B");
+    b.register_entity("Product", config_produit()).unwrap();
+
+    let uuid_de = |d: &BTreeMap<String, CypherValue>| d["_uuid"].as_str().unwrap().to_string();
+
+    let pris_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 1, false).expect("A réclame");
+    assert_eq!(pris_a.len(), 1, "A prend exactement un chunk");
+    let celui_de_a = uuid_de(&pris_a[0]);
+
+    let pris_b = b.reclamer_le_retard("Product_Chunk", "_embed_hash", 10, false).expect("B réclame");
+    eprintln!("[réclamation] A a pris 1, B a pris {}", pris_b.len());
+    assert!(!pris_b.is_empty(), "il reste de la dette libre pour B");
+    assert!(
+        pris_b.iter().all(|d| uuid_de(d) != celui_de_a),
+        "B ne doit pas prendre ce que A a réclamé"
+    );
+
+    // A reprend les siens, et seulement les siens.
+    let encore_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 10, false).expect("A reprend");
+    assert_eq!(encore_a.len(), 1);
+    assert_eq!(uuid_de(&encore_a[0]), celui_de_a, "une passe reprend sa propre réclamation");
+
+    // Chacun solde ce qu'il a réclamé : la somme est la dette, sans doublon.
+    let na = a.embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage A");
+    let nb = b.embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage B");
+    eprintln!("[rattrapage] A a embarqué {na}, B a embarqué {nb}");
+    assert_eq!(na, 1, "A n'embarque que le sien");
+    assert_eq!(nb, pris_b.len(), "B n'embarque que les siens");
+
+    let apres = a
+        .search("Product", "programming language", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        })
+        .expect("recherche");
+    assert!(
+        apres.meta.warnings.iter().all(|w| !w.contains("pas encore été embarqués")),
+        "plus rien de dû : {:?}", apres.meta.warnings
+    );
+}

@@ -349,7 +349,9 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | A5 | écrit, 953 tests de bibliothèque verts, passe e2e en cours |
 | D (cartographie) | faite — `docs/6-septembre-2026-13h08/01` à la racine |
 | C3 | fait — test à deux processus dans `e2e_prise_atomique` |
-| C4 C5, B, E | à faire |
+| E | fait — `fusion.rs` retiré |
+| C4 | écrit (schéma v4, `_embed_claim`), 943 tests de bibliothèque verts, passe e2e en cours |
+| C5, B | à faire |
 
 
 ```

@@ -2332,6 +2332,62 @@ impl Catalog {
         }
     }
 
+    /// **Réclame jusqu'à `limite` chunks en retard sur `marqueur`**, pour ce
+    /// processus, et les rend avec ce qu'il faut pour les embarquer.
+    ///
+    /// C'est la réclamation avec péremption (réconciliation, C4) — la forme
+    /// exacte de la marque d'ingestion, appliquée à la dette d'embarquement :
+    /// deux processus qui rattrapent ne calculent plus deux fois le même
+    /// vecteur. La réclamation vaut `horodatage|écrivain`, périme après
+    /// [`Self::MARQUE_PERIMEE_MS`], et une passe reprend les siennes.
+    ///
+    /// Une seule instruction sélectionne et pose (voir
+    /// `SchemaDialect::reclamer_chunks_sans_marqueur`) : c'est ce qui rend la
+    /// prise atomique par rapport à une autre passe.
+    pub fn reclamer_le_retard(
+        &mut self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        avec_kb_name: bool,
+    ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
+        let maintenant = crate::dataflow::checkpoint::timestamp_ms();
+        let reclamation = format!("{maintenant:020}|{}", self.writer_id);
+        let perime = format!("{:020}|", maintenant.saturating_sub(Self::MARQUE_PERIMEE_MS));
+        let mien = format!("|{}", self.writer_id);
+        let requete = self
+            .dialect
+            .reclamer_chunks_sans_marqueur(table, marqueur, limite, avec_kb_name);
+        let res = self
+            .conn
+            .execute_with_params(
+                &requete,
+                &[
+                    QueryParam::new("reclamation", CypherValue::String(reclamation)),
+                    QueryParam::new("perime", CypherValue::String(perime)),
+                    QueryParam::new("mien", CypherValue::String(mien)),
+                ],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut pris = Vec::with_capacity(res.rows.len());
+        for ligne in &res.rows {
+            let Some(uuid) = ligne.first().and_then(|v| v.as_str()) else { continue };
+            let mut data = BTreeMap::new();
+            data.insert("_uuid".to_string(), CypherValue::String(uuid.to_string()));
+            if let Some(t) = ligne.get(1).and_then(|v| v.as_str()) {
+                data.insert("_text".to_string(), CypherValue::String(t.to_string()));
+            }
+            if let Some(h) = ligne.get(2).and_then(|v| v.as_str()) {
+                data.insert("_text_hash".to_string(), CypherValue::String(h.to_string()));
+            }
+            if let Some(k) = ligne.get(3).and_then(|v| v.as_str()).filter(|k| !k.is_empty()) {
+                data.insert("_kb_name".to_string(), CypherValue::String(k.to_string()));
+            }
+            pris.push(data);
+        }
+        Ok(pris)
+    }
+
     /// **La passe de rattrapage** : embarquer ce que la coupe a laissé dû.
     ///
     /// Quand une recherche n'exige que `data` ou `textsearch`, le drain
@@ -2398,41 +2454,27 @@ impl Catalog {
             // qu'une fois — le nœud sait déjà ne recalculer que ce qui manque.
             let mut par_uuid: BTreeMap<String, BTreeMap<String, CypherValue>> = BTreeMap::new();
             for marqueur in marqueurs {
-                let requete = self.dialect
-                    .select_chunks_sans_marqueur(&table, marqueur, limite, est_kb);
-                // **Ne pas avaler cette erreur.** La première version le
-                // faisait, et elle a caché son propre défaut pendant une
-                // demi-heure : la requête demandait `_kb_name` sur une table de
-                // chunks d'entité simple, qui ne l'a pas, et le rattrapage
-                // reprenait zéro chunk en silence pendant que l'avertissement
-                // continuait d'en annoncer deux.
-                let res = match self.conn.execute(&requete) {
-                    Ok(r) => r,
+                // **Réclamés, pas seulement lus** : une autre passe, dans un
+                // autre processus, ne les prendra pas tant que la réclamation
+                // n'est pas périmée. Et **ne pas avaler cette erreur** : la
+                // première version le faisait, et elle a caché son propre
+                // défaut pendant une demi-heure.
+                let pris = match self.reclamer_le_retard(&table, marqueur, limite, est_kb) {
+                    Ok(p) => p,
                     Err(e) => {
                         self.emit_event(CatalogEvent::Warning {
                             context: "rattrapage".to_string(),
                             message: format!(
-                                "lecture du retard sur « {table} » ({marqueur}) : {e} — \
+                                "réclamation du retard sur « {table} » ({marqueur}) : {e} — \
                                  ces chunks ne seront pas rattrapés"
                             ),
                         });
                         continue;
                     }
                 };
-                for ligne in &res.rows {
-                    let Some(uuid) = ligne.first().and_then(|v| v.as_str()) else { continue };
-                    let mut data = BTreeMap::new();
-                    data.insert("_uuid".to_string(), CypherValue::String(uuid.to_string()));
-                    if let Some(t) = ligne.get(1).and_then(|v| v.as_str()) {
-                        data.insert("_text".to_string(), CypherValue::String(t.to_string()));
-                    }
-                    if let Some(h) = ligne.get(2).and_then(|v| v.as_str()) {
-                        data.insert("_text_hash".to_string(), CypherValue::String(h.to_string()));
-                    }
-                    if let Some(k) = ligne.get(3).and_then(|v| v.as_str()).filter(|k| !k.is_empty()) {
-                        data.insert("_kb_name".to_string(), CypherValue::String(k.to_string()));
-                    }
-                    par_uuid.insert(uuid.to_string(), data);
+                for data in pris {
+                    let Some(uuid) = data.get("_uuid").and_then(|v| v.as_str()) else { continue };
+                    par_uuid.insert(uuid.to_string(), data.clone());
                 }
             }
             if par_uuid.is_empty() {
@@ -2994,6 +3036,34 @@ impl Catalog {
                 "[rag3weaver] schéma v{SCHEMA_VERSION}: _sparse_hash ajouté sur \
                  {sparse_ajoutes} table(s) de chunks — les chunks déjà embarqués en \
                  sparse seront réembarqués une fois"
+            );
+        }
+
+        // ── v4 : `_embed_claim` sur les tables de chunks ────────────────
+        let reclamation = crate::dialect::ColumnDef {
+            name: "_embed_claim".into(),
+            col_type: crate::dialect::ColumnType::Text,
+        };
+        let mut reclamations_ajoutees = 0usize;
+        for table in tables.iter().filter(|t| t.ends_with("_Chunk")) {
+            let ddl = self.dialect.alter_add_column_default(table, &reclamation, "''");
+            match self.conn.execute(&ddl) {
+                Ok(_) => reclamations_ajoutees += 1,
+                Err(e) => {
+                    let msg = e.to_string().to_lowercase();
+                    if !(msg.contains("exist") || msg.contains("already has")
+                        || msg.contains("not found") || msg.contains("does not")) {
+                        return Err(CatalogError::DbError(format!(
+                            "migration _embed_claim {table}: {e}"
+                        )));
+                    }
+                }
+            }
+        }
+        if reclamations_ajoutees > 0 {
+            eprintln!(
+                "[rag3weaver] schéma v{SCHEMA_VERSION}: _embed_claim ajouté sur \
+                 {reclamations_ajoutees} table(s) de chunks"
             );
         }
 
