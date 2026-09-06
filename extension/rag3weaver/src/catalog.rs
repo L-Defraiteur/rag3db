@@ -3901,13 +3901,44 @@ impl Catalog {
         }
     }
 
-    /// Flush only entity inserts via a minimal dataflow graph.
-    /// Leaves relations and aggregates in `pending` for a later `drain()`.
+    /// Ne vide que les insertions d'entités, par un graphe minimal. Relations
+    /// et agrégats restent dans `pending` pour un `drain()` ultérieur.
+    ///
+    /// **C'est le chemin par défaut de la lecture** : une recherche en
+    /// `Consistency::Eventual` — la valeur par défaut — passe par ici dès qu'il
+    /// y a du travail en file.
+    ///
+    /// # Le défaut annoncé qui s'était réalisé ici
+    ///
+    /// `open_fts_handles_for` porte cette phrase : *« À appeler depuis **chaque**
+    /// point d'entrée d'ingestion : sans handle ouvert, `InsertRecordNode`
+    /// saute l'indexation en silence, et la recherche rend 0 sans que rien ne
+    /// le signale. »* Trois points d'entrée l'appelaient — `ingest_entities`,
+    /// `build_ingestion_graph`, `drain_resume` — et **celui-ci, non**.
+    ///
+    /// Son registre de services minimal ne portait pas non plus `fts_handles`.
+    /// Les entités qui passaient par là étaient donc **consommées**
+    /// (`mem::take`, elles ne repassent pas au drain) et jamais indexées en
+    /// plein texte. Sur le chemin par défaut de la lecture. Sans une erreur.
+    ///
+    /// « Minimal » désignait le graphe — un seul nœud — et s'était étendu au
+    /// registre, où il ne voulait plus rien dire : un nœud a besoin de ce dont
+    /// il a besoin. Le registre porte maintenant ce que lit `InsertRecordNode`,
+    /// ni plus ni moins.
     pub fn flush_insertions(&mut self) -> FlushResult {
         let entities = std::mem::take(&mut self.pending.entities);
         if entities.is_empty() {
             return FlushResult::default();
         }
+
+        // Le quatrième point d'entrée, enfin.
+        let noms: Vec<String> = {
+            let mut n: Vec<String> = entities.iter().map(|r| r.entity_name.clone()).collect();
+            n.sort();
+            n.dedup();
+            n
+        };
+        self.open_fts_handles_for(&noms);
 
         let op_count = entities.len();
         let mut graph = DataflowGraph::new();
@@ -3920,13 +3951,27 @@ impl Catalog {
         services.register("dialect", self.dialect.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
+        // Ce que lit `InsertRecordNode` et qui manquait ici.
+        services.register("fts_handles", self.fts_handles.clone());
+        services.register("entity_configs", self.entity_configs.clone());
+        services.register("plein_texte_natif", self.plein_texte_natif());
 
         let runtime = DataflowRuntime::with_services(5, services);
-        match runtime.execute(&mut graph) {
+        let mut ecoute = runtime.subscribe();
+        let resultat = runtime.execute(&mut graph);
+        let avertissements = ramasser_les_avertissements(&mut ecoute);
+
+        match resultat {
             Ok(_) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: op_count, failed: 0, ..Default::default() }
+                self.signaler_les_troncatures("flush_insertions");
+                FlushResult {
+                    processed: op_count,
+                    failed: 0,
+                    warnings: avertissements,
+                    ..Default::default()
+                }
             }
             Err(e) => {
                 self.emit_event(CatalogEvent::Error {
@@ -3935,7 +3980,12 @@ impl Catalog {
                 });
                 self.drain_counters.total_failed += op_count;
                 self.drain_counters.flush_count += 1;
-                FlushResult { processed: 0, failed: op_count, ..Default::default() }
+                FlushResult {
+                    processed: 0,
+                    failed: op_count,
+                    warnings: avertissements,
+                    ..Default::default()
+                }
             }
         }
     }

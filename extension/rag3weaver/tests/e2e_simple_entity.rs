@@ -322,6 +322,101 @@ fn simple_bm25_search_finds_results() {
     }
 }
 
+/// **Le chemin par défaut de la lecture indexe-t-il ce qu'il pose ?**
+///
+/// Toutes les recherches de ce fichier passaient par `ingest_entities` et
+/// `Consistency::Immediate`. Personne n'empruntait la combinaison qui est
+/// pourtant le défaut du produit : `create()` — qui met en file — suivi d'une
+/// recherche en `Eventual`, laquelle appelle `flush_insertions` pour poser les
+/// entités avant de chercher.
+///
+/// Ce chemin-là ne appelait pas `open_fts_handles_for` et n'enregistrait pas
+/// `fts_handles` : les entités étaient **consommées** — `mem::take`, elles ne
+/// repassent pas au drain — et jamais indexées en plein texte. Une recherche
+/// rendait zéro, sans erreur, pour des lignes bien présentes en base.
+///
+/// Le test tient les deux bouts : la ligne existe, **et** on la trouve.
+#[test]
+#[ignore]
+fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
+    let mut catalog = setup_simple_catalog(4);
+
+    for produit in [
+        make_product(
+            "Rust Book",
+            "A comprehensive guide to Rust programming language covering ownership.",
+            "Systems programming, memory safety, zero-cost abstractions.",
+            49.99,
+        ),
+        make_product(
+            "French Chef Knife",
+            "Professional kitchen knife forged from high-carbon stainless steel.",
+            "Perfect for slicing and dicing.",
+            129.99,
+        ),
+    ] {
+        catalog.create("Product", produit).expect("mise en file");
+    }
+
+    // `Eventual` est le défaut, et c'est lui qui appelle `flush_insertions`.
+    let reponse = catalog
+        .search(
+            "Product",
+            "programming language",
+            SearchOptions {
+                consistency: Consistency::Eventual,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("la recherche ne doit pas échouer");
+
+    eprintln!(
+        "[eventual] {} résultats, bm25={}, partiel={}, en file={}",
+        reponse.results.len(),
+        reponse.meta.bm25_count,
+        reponse.meta.partial,
+        reponse.meta.pending_count,
+    );
+    for a in &reponse.meta.warnings {
+        eprintln!("[eventual] avertissement : {a}");
+    }
+
+    // La file n'est pas vide : `flush_insertions` ne pose que les entités, et
+    // les agrégats restent. Le résultat doit donc s'annoncer partiel — c'est la
+    // correction du 6 septembre, éprouvée ici de bout en bout.
+    assert!(
+        reponse.meta.partial,
+        "du travail reste en file, le résultat doit le dire"
+    );
+
+    // La ligne est bien en base…
+    let compte = catalog.count("Product").expect("compte");
+    assert_eq!(compte, 2, "les deux produits sont posés");
+
+    // …et une seconde recherche, file vidée, doit la trouver. Sans handle FTS
+    // ouvert au moment du flush, elle rendait zéro pour toujours.
+    catalog.drain();
+    let reponse = catalog
+        .search(
+            "Product",
+            "programming language",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("la recherche ne doit pas échouer");
+
+    assert!(
+        !reponse.results.is_empty(),
+        "une entité posée par flush_insertions doit rester trouvable en plein texte — \
+         zéro résultat ici veut dire que l'indexation a été sautée en silence"
+    );
+    assert!(reponse.meta.bm25_count > 0, "le signal plein texte doit avoir répondu");
+}
+
 #[test]
 #[ignore]
 fn simple_bm25_no_results_for_nonsense() {
