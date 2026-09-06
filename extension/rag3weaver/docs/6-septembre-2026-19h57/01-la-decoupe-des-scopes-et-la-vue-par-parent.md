@@ -136,3 +136,34 @@ chiffres.
 **Reste, dans l'ordre** : la garde du modèle dans `_catalog_meta` (écrite,
 test en attente de compilation), l'incrémental par hash à trois niveaux
 (l'analyse re-parse tout aujourd'hui), la déduplication et les exclusions.
+
+## 8. À l'échelle de la cible — le cœur C++ de rag3db
+
+`RAG3WEAVER_MESURE_RACINE=…/rag3db/src`, 1 642 fichiers, 6,2 Mo, 18 140
+scopes, 20 132 chunks, granite-107m, carte TV. La petite mesure ne montrait
+pas ce que la grande révèle : au-delà de quelques dizaines de milliers de
+lignes, **la base l'emporte sur le modèle**.
+
+| passage | total | ce qui a changé |
+|---|---|---|
+| premier | 368 s | embarquement 125 s (modèle 18 s, écriture des vecteurs 120 s), liens 233 s |
+| index HNSW en masse (`bulk_vector_index`, doc 18) | 270 s | écriture des vecteurs 120 → 8 s |
+| liens par COPY | **51 s** | liens 233 → 4 s |
+
+Deux leçons, les mêmes : ligne à ligne, un index HNSW et une table d'arêtes
+coûtent cent fois le chargement en masse ; et **CREATE au lieu de MERGE ne
+change rien** — le coût n'était pas la vérification d'existence mais
+l'insertion elle-même (banc `e2e_banc_liens` : 158 s contre 47 ms pour
+200 000 arêtes). COPY refuse tout le fichier dès qu'une clé manque là où
+MERGE sautait la paire en silence : les bouts absents sont maintenant
+comptés (1 245 sur 207 000 rendez-vous).
+
+À 51 s pour 1 642 fichiers : **un dépôt de 5 000 fichiers en moins de trois
+minutes**, dix fois sous la cible. Ce qui reste : embarquement 23 s (le modèle
+lui-même, borné par la carte), symboles 9 s, insertions 5 s, analyse 2 s.
+
+Pas fait, et à décider : le chargement en masse est **explicite** (l'appelant
+sait que son lot est gros — la mesure le demande, `ingest_code` non) ; l'entrée
+« indexer tout un dépôt » du produit devra l'appeler. Et l'incrémental par
+hash reste à écrire : aujourd'hui une ré-ingestion re-parse tout et ne saute
+que le travail dérivé.
