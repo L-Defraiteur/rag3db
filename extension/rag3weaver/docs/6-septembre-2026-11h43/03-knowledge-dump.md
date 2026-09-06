@@ -52,12 +52,21 @@ RAG3WEAVER_REGIME=confort   # le DÉFAUT du script
 RAG3WEAVER_REGIME=plein     # ⚠ pas pour la passe complète
 ```
 
-`confort` borne trois choses : la carte (les **trois** rôles burn sur la moins
-chargée), le rapport cyclique (60 %) et la **rafale par lot** (2 048 caractères
-contre 8 192). C'est cette dernière qui décide du pic mémoire quand BGE-M3,
-MiniLM, deux rerankers et l'OCR sont chargés. **Le régime est un budget mémoire
-autant qu'un budget CPU** ; sa lenteur est le prix de ce budget, pas de la
-politesse.
+`confort` met les **trois** rôles burn sur la carte la moins chargée — et
+depuis le 6 septembre au soir, **c'est tout** quand le poste a deux cartes.
+Le rapport cyclique (60 %) et la rafale courte (2 048 caractères contre
+8 192) ne s'appliquent plus que si l'embarqueur **partage** la carte du
+compositeur, c'est-à-dire sur un poste à une seule carte
+(`Regime::carte_partagee`). Lucie demandait « la deuxième carte », pas une
+carte bridée ; le bridage sur une carte libre a coûté quatorze minutes pour
+trente fichiers dans la suite cloud.
+
+Ce que ce paragraphe disait avant — « la rafale décide du pic mémoire, le
+régime est un budget mémoire » — **n'avait pas été mesuré**. Les deux cartes
+ont 32 Go chacune, et le cgroup de 16 Go du script borne la mémoire hôte du
+build, pas la VRAM. La règle « la passe suite par suite, pas `plein` sur la
+passe entière » tient toujours, mais pour une autre raison : plusieurs
+binaires de test qui chargent chacun leurs modèles en même temps.
 
 `confort` envoie aussi l'agentique vers un fournisseur distant
 (`Origine::Distante`). `RAG3WEAVER_LLM=local` dit une intention **pour cette

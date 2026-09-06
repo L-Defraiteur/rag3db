@@ -7,11 +7,20 @@
 //!
 //! Un régime les nomme ensemble :
 //!
-//! | | `confort` | `plein` (défaut) |
-//! |---|---|---|
-//! | carte de l'embarqueur | la moins chargée | celle du système |
-//! | rapport cyclique | 60 % | 100 % |
-//! | rafale | 2 048 caractères | 8 192 |
+//! | | `confort`, deux cartes | `confort`, une carte | `plein` (défaut) |
+//! |---|---|---|---|
+//! | carte des modèles locaux | la moins chargée, **à fond** | la seule | celle du système |
+//! | rapport cyclique | 100 % | 60 % | 100 % |
+//! | rafale | 8 192 caractères | 2 048 | 8 192 |
+//!
+//! **Le confort, c'est l'autre carte, pas une carte bridée.** Les mots de
+//! Lucie (issue 06) : *« gemini + embedding et autres modèles locaux dans
+//! deuxième gpu »*. Le rapport cyclique et les rafales courtes n'existent que
+//! pour laisser passer le compositeur **quand il partage la carte** ; sur une
+//! carte qu'il n'utilise pas, ils ne protègent personne et coûtent quatre fois
+//! le temps. Le 6 septembre 2026, trente fichiers ont mis quatorze minutes à
+//! s'indexer sur une carte libre, deux chunks par appel et une pause après
+//! chacun — c'est ce que ce tableau corrige.
 //!
 //! # La précédence, la même que partout
 //!
@@ -93,21 +102,52 @@ impl Regime {
 
     /// Le rapport cyclique voulu, en pourcentage.
     pub fn duty(self) -> u32 {
+        self.duty_si(self.carte_partagee())
+    }
+
+    /// Le rapport cyclique, sachant si la carte est partagée avec le
+    /// compositeur. Pur, pour les tests.
+    pub fn duty_si(self, carte_partagee: bool) -> u32 {
         match self {
-            Self::Confort => 60,
-            Self::Plein => 100,
+            Self::Confort if carte_partagee => 60,
+            Self::Confort | Self::Plein => 100,
         }
     }
 
     /// La longueur d'une rafale, en caractères de texte par appel GPU.
     ///
-    /// 2 048 en confort : le débit y perd un peu — l'optimum mesuré est vers
-    /// 8 192 — mais une rafale quatre fois plus courte, c'est quatre fois plus
-    /// d'occasions pour le compositeur de passer.
+    /// 2 048 quand la carte est partagée : le débit y perd — l'optimum mesuré
+    /// est vers 8 192 — mais une rafale quatre fois plus courte, c'est quatre
+    /// fois plus d'occasions pour le compositeur de passer. Sur une carte à
+    /// soi, l'optimum.
     pub fn budget_caracteres(self) -> usize {
+        self.budget_caracteres_si(self.carte_partagee())
+    }
+
+    /// La rafale, sachant si la carte est partagée. Pur, pour les tests.
+    pub fn budget_caracteres_si(self, carte_partagee: bool) -> usize {
         match self {
-            Self::Confort => 2_048,
-            Self::Plein => crate::embedder::EMBED_CHAR_BUDGET,
+            Self::Confort if carte_partagee => 2_048,
+            Self::Confort | Self::Plein => crate::embedder::EMBED_CHAR_BUDGET,
+        }
+    }
+
+    /// **La carte des modèles est-elle celle du compositeur ?**
+    ///
+    /// Sous `plein`, la question ne se pose pas : on prend ce qu'il y a, sans
+    /// ménagement. Sous `confort`, elle se pose une fois : s'il y a une
+    /// deuxième carte, les modèles y vont et le compositeur garde la sienne —
+    /// rien à ménager. S'il n'y en a qu'une, elle est partagée, et c'est là
+    /// que le rapport cyclique et les rafales courtes servent.
+    ///
+    /// Mesuré **une fois** par processus, comme le choix de carte de
+    /// `burn_device.rs` : une carte occupée à l'instant du démarrage sera
+    /// écartée à tort, et `RAG3WEAVER_GPU_DUTY` / `RAG3WEAVER_EMBED_CHAR_BUDGET`
+    /// reprennent la main.
+    pub fn carte_partagee(self) -> bool {
+        match self {
+            Self::Plein => false,
+            Self::Confort => carte_libre_du_poste().is_none(),
         }
     }
 
@@ -134,7 +174,7 @@ impl Regime {
     pub fn carte_locale(self) -> Option<String> {
         match self {
             Self::Plein => None,
-            Self::Confort => carte_la_plus_libre(Path::new("/sys/class/drm")).map(|i| format!("gpu:{i}")),
+            Self::Confort => carte_libre_du_poste().map(|i| format!("gpu:{i}")),
         }
     }
 }
@@ -264,6 +304,12 @@ pub fn modele_agentique_nomme(etiquette: &str) -> Option<(OpenAiLlm, String)> {
 ///   instant par autre chose sera écartée à tort — c'est un défaut par défaut,
 ///   et `RAG3WEAVER_BURN_DEVICE_EMBEDDER` reprend la main.
 /// - Une seule carte : rien à choisir, on ne dit rien.
+/// [`carte_la_plus_libre`] sur le vrai `/sys/class/drm`, mesurée une fois.
+fn carte_libre_du_poste() -> Option<usize> {
+    static CARTE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
+    *CARTE.get_or_init(|| carte_la_plus_libre(Path::new("/sys/class/drm")))
+}
+
 pub fn carte_la_plus_libre(racine: &Path) -> Option<usize> {
     let mut cartes: Vec<(String, u64)> = Vec::new();
     for e in std::fs::read_dir(racine).ok()?.flatten() {
@@ -315,11 +361,19 @@ mod tests {
         assert_eq!(r.carte_embedder(), None, "aucune carte imposée");
     }
 
+    /// **Le confort ne bride que ce qui est partagé.** Sur une carte à soi,
+    /// l'embarqueur tourne comme sous `plein` ; sur la carte du compositeur,
+    /// il laisse des trous et raccourcit ses rafales. Le 6 septembre 2026,
+    /// le bridage s'appliquait aussi sur la carte libre : quatorze minutes
+    /// pour trente fichiers.
     #[test]
-    fn le_confort_laisse_des_trous_et_raccourcit_les_rafales() {
+    fn le_confort_ne_bride_que_la_carte_partagee() {
         let r = Regime::Confort;
-        assert_eq!(r.duty(), 60);
-        assert!(r.budget_caracteres() < Regime::Plein.budget_caracteres());
+        assert_eq!(r.duty_si(true), 60);
+        assert!(r.budget_caracteres_si(true) < Regime::Plein.budget_caracteres_si(false));
+        assert_eq!(r.duty_si(false), 100, "une carte à soi ne se ménage pas");
+        assert_eq!(r.budget_caracteres_si(false), Regime::Plein.budget_caracteres_si(false));
+        assert!(!Regime::Plein.carte_partagee(), "plein ne se pose pas la question");
     }
 
     /// Un faux `/sys/class/drm` : des cartes, leur adresse PCI, leur VRAM
@@ -385,10 +439,14 @@ mod tests {
     #[test]
     fn confort_tient_ses_quatre_promesses() {
         let r = Regime::Confort;
-        // 1 · le rapport cyclique laisse passer le compositeur
-        assert_eq!(r.duty(), 60);
-        // 2 · les rafales sont courtes, donc interruptibles souvent
-        assert_eq!(r.budget_caracteres(), 2_048);
+        // 1 · le rapport cyclique laisse passer le compositeur — **sur sa
+        //     carte** ; sur une autre, il n'a rien à laisser passer
+        assert_eq!(r.duty_si(true), 60);
+        assert_eq!(r.duty_si(false), 100);
+        // 2 · les rafales sont courtes, donc interruptibles souvent — même
+        //     condition
+        assert_eq!(r.budget_caracteres_si(true), 2_048);
+        assert_eq!(r.budget_caracteres_si(false), crate::embedder::EMBED_CHAR_BUDGET);
         // 3 · la carte : on ne peut pas exiger un index sans sysfs, mais on
         //     peut exiger que le régime *demande* à en choisir une — sous
         //     `plein` la réponse est `None` sans même regarder.

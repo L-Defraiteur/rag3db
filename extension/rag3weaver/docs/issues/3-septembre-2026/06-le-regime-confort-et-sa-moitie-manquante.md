@@ -15,6 +15,16 @@
 > `RAG3WEAVER_LOCAL_LLM`, qui traîne dans un profil, ne reprend pas la carte
 > sous `confort`. C'est écrit en tête de `regime.rs` et tenu par trois tests.
 >
+> **Rouvert et refermé le 6 septembre 2026, 15h30.** Les promesses 1 et 2
+> — rapport cyclique 60 %, rafales de 2 048 — étaient une lecture de travers
+> des mots de Lucie : elle demandait *la deuxième carte*, pas une carte
+> bridée. Le bridage n'a de sens que si l'embarqueur partage la carte du
+> compositeur. Sur une carte libre il ne protège personne et a coûté quatorze
+> minutes pour trente fichiers (suite cloud, deux chunks par appel GPU, une
+> pause après chacun). Depuis : `confort` bride **seulement quand il n'y a
+> qu'une carte** (`Regime::carte_partagee`, `duty_si`, `budget_caracteres_si`),
+> tenu par `le_confort_ne_bride_que_la_carte_partagee`.
+>
 > Ce qui reste vrai et vaut d'être gardé : la section « ce qui marche déjà »
 > ci-dessous documentait trois promesses sur quatre, et **rien ne disait que la
 > quatrième manquait**. C'est ce silence-là qui a rendu l'issue nécessaire.
