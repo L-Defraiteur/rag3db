@@ -8,7 +8,13 @@
    `.float()` : l'ONNX dit « float », pas « f32 », et sous Flex32 la fusion
    refuse le mélange avec les constantes du pack, elles aussi en Flex32.
 
-Usage : patch_attention.py <fichier.rs> [...]
+Usage : patch_attention.py [--casts-neutres] <fichier.rs> [...]
+  --casts-neutres : applique la règle 2 même sans bloc d'attention. La règle
+  dépend de la façon dont l'embarqueur CHARGE le graphe, pas du graphe : BGE-M3
+  et Granite passent par BurnpackStore + Flex32Adapter, la constante du masque
+  arrive donc en Flex32 et le cast f32 du masque casse la fusion ; MiniLM et
+  les rerankers passent par Model::from_bytes, tout reste f32, et le cast doit
+  rester. (Les deux sortes de graphes ont la même Param::uninitialized.)
 """
 import re, sys
 
@@ -63,14 +69,19 @@ def patcher(p):
     # initialisée dans le code par burn-onnx (pas dans le pack), l'adaptateur
     # Flex32 ne la voit jamais, elle reste f32, et c'est le cast qui garde le
     # masque cohérent avec elle. Retirer le cast là-bas casse tout (6 sept.).
+    # Granite : chargé par BurnpackStore + Flex32Adapter comme BGE-M3, donc la
+    # constante du masque est en Flex32 ; on force la règle avec `--casts-neutres`.
     m = 0
-    if n > 0:
+    if n > 0 or CASTS_NEUTRES:
         s2, m = re.subn(r'\.float\(\)\.cast\(burn::tensor::DType::F32\)', '.float()', s2)
     print(f"{m} casts vers F32 retirés")
-    if n == 0:
+    if n == 0 and m == 0:
         print("rien à faire"); return
+    if n == 0:
+        s2 = "// rag3weaver : casts « float » neutres (patch_attention.py --casts-neutres, 6 septembre 2026).\n" + s2
     open(p, 'w').write(s2)
 
 
-for p in sys.argv[1:]:
+CASTS_NEUTRES = "--casts-neutres" in sys.argv
+for p in [a for a in sys.argv[1:] if not a.startswith("--")]:
     patcher(p)

@@ -305,6 +305,14 @@ mod tests {
     }
 }
 
+/// Le nom de la précision que `resolve()` posera : pour l'Identite du démon.
+pub fn precision_par_defaut() -> String {
+    match float_dtype_voulu() {
+        Some(d) => format!("{d:?}"),
+        None => "f32".to_string(),
+    }
+}
+
 /// La précision flottante demandée par `RAG3WEAVER_BURN_FLOAT` (`f16`, `bf16`,
 /// `flex32`, `f32`), Flex32 sans la variable. Lue par la carte (défaut des tenseurs neufs) **et** par le
 /// chargement des poids, qui sans ça restent dans la précision du fichier.

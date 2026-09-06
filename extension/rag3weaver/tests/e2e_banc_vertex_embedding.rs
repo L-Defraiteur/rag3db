@@ -9,6 +9,8 @@
 //! GOOGLE_APPLICATION_CREDENTIALS=../../.vault/vertex-sa.json GOOGLE_CLOUD_PROJECT=lr-hub-472010 \
 //!   cargo test --test e2e_banc_vertex_embedding -- --ignored --nocapture
 //! ```
+#![cfg(feature = "openai-llm")]
+
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 

@@ -23,6 +23,7 @@ use std::sync::Arc;
 use rag3weaver::burn_bge_m3_embedder::BurnBgeM3Embedder;
 use rag3weaver::burn_device::{BurnDevice, BurnRole};
 use rag3weaver::daemon::EmbedDaemon;
+use rag3weaver::embedder::Embedder;
 
 fn main() -> std::process::ExitCode {
     // Ce que burn et cubecl disent de la carte passe par `log` : sans
@@ -40,13 +41,26 @@ fn main() -> std::process::ExitCode {
 
 fn servir() -> Result<(), String> {
     let (adresse, expose) = adresse()?;
-    let bpk = artefact("RAG3WEAVER_BGE_M3_BPK", "model.bpk")?;
-    let tokenizer = artefact("RAG3WEAVER_BGE_M3_TOKENIZER", "tokenizer.json")?;
+    // **Le modèle servi se choisit par `RAG3WEAVER_EMBED_MODEL`** (6 septembre
+    // 2026) : `bge-m3` (défaut, dense + creux, 1 024 d), `granite-107m` (384 d),
+    // `granite-278m` (768 d). Le nom et la dimension partent dans l'Identite ;
+    // c'est au catalogue de refuser un index construit avec l'un et interrogé
+    // avec l'autre. Les poids : `RAG3WEAVER_<MODELE>_BPK` / `_TOKENIZER`, sinon
+    // `~/.cache/rag3weaver/<modele>/`.
+    let nom = std::env::var("RAG3WEAVER_EMBED_MODEL").unwrap_or_else(|_| "bge-m3".into());
+    let (dossier, prefixe) = match nom.as_str() {
+        "bge-m3" => ("bge-m3", "RAG3WEAVER_BGE_M3"),
+        "granite-107m" => ("granite-107m", "RAG3WEAVER_GRANITE_107M"),
+        "granite-278m" => ("granite-278m", "RAG3WEAVER_GRANITE_278M"),
+        autre => return Err(format!("RAG3WEAVER_EMBED_MODEL={autre} : bge-m3, granite-107m ou granite-278m")),
+    };
+    let bpk = artefact(&format!("{prefixe}_BPK"), dossier, "model.bpk")?;
+    let tokenizer = artefact(&format!("{prefixe}_TOKENIZER"), dossier, "tokenizer.json")?;
 
     // Tracé sur la sortie d'erreur, donc dans le journal du serveur : c'est
     // là qu'on regarde quand `assurer` rend `Muet`.
     let debut = std::time::Instant::now();
-    eprintln!("▸ chargement de BGE-M3 depuis {}", bpk.display());
+    eprintln!("▸ chargement de {nom} depuis {}", bpk.display());
     let octets = std::fs::read(&bpk).map_err(|e| format!("lecture de {} : {e}", bpk.display()))?;
     // **Le rôle, pas le défaut.** Un démon qui vit des heures et tient 2,2 Go
     // sur la carte qui porte l'affichage rend le poste inutilisable — mesuré
@@ -54,19 +68,37 @@ fn servir() -> Result<(), String> {
     // passe. `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:N` le déplace ; sans elle on
     // reste sur le défaut, comme avant.
     let carte = BurnDevice::for_role(BurnRole::Embedder);
-    let modele = BurnBgeM3Embedder::from_bytes(&octets, &tokenizer, carte)
-        .map_err(|e| format!("construction du modèle : {e}"))?;
-    let modele = Arc::new(modele);
-    eprintln!("  chargé en {:?}", debut.elapsed());
-
-    // Le même objet des trois côtés : BGE-M3 rend dense et creux en une passe,
-    // c'est tout son intérêt — le démon n'a aucune raison de le couper en deux.
-    // Le creux seul est offert aussi, pour qui n'a pas besoin du dense : c'est
-    // du trafic en moins sur le fil, pas du calcul en moins.
-    let demon = EmbedDaemon::new(modele.clone())
-        .avec_dual(modele.clone())
-        .avec_sparse(modele)
-        .expose(expose);
+    let demon = match nom.as_str() {
+        "bge-m3" => {
+            let modele = BurnBgeM3Embedder::from_bytes(&octets, &tokenizer, carte)
+                .map_err(|e| format!("construction du modèle : {e}"))?;
+            let modele = Arc::new(modele);
+            eprintln!("  chargé en {:?}", debut.elapsed());
+            // Le même objet des trois côtés : BGE-M3 rend dense et creux en une
+            // passe, c'est tout son intérêt — le démon n'a aucune raison de le
+            // couper en deux. Le creux seul est offert aussi, pour qui n'a pas
+            // besoin du dense : c'est du trafic en moins sur le fil, pas du
+            // calcul en moins.
+            EmbedDaemon::new(modele.clone()).avec_dual(modele.clone()).avec_sparse(modele)
+        }
+        "granite-107m" => {
+            let modele: Arc<dyn Embedder> = Arc::new(
+                rag3weaver::BurnGranite107m::from_bytes(&octets, &tokenizer, carte)
+                    .map_err(|e| format!("construction du modèle : {e}"))?,
+            );
+            eprintln!("  chargé en {:?}", debut.elapsed());
+            EmbedDaemon::new(modele)
+        }
+        _ => {
+            let modele: Arc<dyn Embedder> = Arc::new(
+                rag3weaver::BurnGranite278m::from_bytes(&octets, &tokenizer, carte)
+                    .map_err(|e| format!("construction du modèle : {e}"))?,
+            );
+            eprintln!("  chargé en {:?}", debut.elapsed());
+            EmbedDaemon::new(modele)
+        }
+    }
+    .expose(expose);
     // **Refuser avant d'annoncer.** Sinon le journal dit « à l'écoute sur
     // 0.0.0.0 » juste avant d'échouer, et c'est la ligne qu'on croira.
     if !expose && !rag3weaver::daemon::est_local(&adresse) {
@@ -95,10 +127,10 @@ fn adresse() -> Result<(String, bool), String> {
 
 /// Un artefact du modèle : la variable d'environnement si elle est là, sinon
 /// `~/.cache/rag3weaver/bge-m3/<nom>` — la convention des tests E2E.
-fn artefact(variable: &str, nom: &str) -> Result<PathBuf, String> {
+fn artefact(variable: &str, dossier: &str, nom: &str) -> Result<PathBuf, String> {
     let chemin = match std::env::var(variable) {
         Ok(v) => PathBuf::from(v),
-        Err(_) => cache().join(nom),
+        Err(_) => cache(dossier).join(nom),
     };
     if !chemin.exists() {
         return Err(format!(
@@ -109,7 +141,8 @@ fn artefact(variable: &str, nom: &str) -> Result<PathBuf, String> {
     Ok(chemin)
 }
 
-fn cache() -> PathBuf {
+fn cache(dossier: &str) -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
-        .join(".cache/rag3weaver/bge-m3")
+        .join(".cache/rag3weaver")
+        .join(dossier)
 }

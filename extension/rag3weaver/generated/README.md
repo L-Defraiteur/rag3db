@@ -365,6 +365,44 @@ cargo run --release --example burn_multilingual_minilm_vs_candle --no-default-fe
 
 ---
 
+## `granite_107m_onnx.rs` et `granite_278m_onnx.rs`
+
+Traduction mécanique, par `burn-onnx 0.22.0-pre.3`, des `model.onnx` publiés
+dans **[ibm-granite/granite-embedding-107m-multilingual](https://huggingface.co/ibm-granite/granite-embedding-107m-multilingual)**
+(XLM-RoBERTa, 6 couches, hidden 384, 384 dim) et
+**[ibm-granite/granite-embedding-278m-multilingual](https://huggingface.co/ibm-granite/granite-embedding-278m-multilingual)**
+(12 couches, hidden 768, 768 dim). Vocabulaire XLM-R (250 002), positions 514
+(512 utiles), entraînés texte et code, douze langues dont le français.
+
+**Ce ne sont pas nos modèles.** Licence Apache-2.0, tout le mérite revient à IBM
+Research. Nous n'avons fait que changer le format pour les charger depuis Rust.
+
+### Les poids
+
+Pas dans ce dépôt. `~/.cache/rag3weaver/granite-107m/model.bpk` (428 007 424
+octets, sha256 `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1`)
+et `~/.cache/rag3weaver/granite-278m/model.bpk` (1 112 227 840 octets, sha256
+`a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3`), avec le
+`tokenizer.json` de chaque dépôt HF à côté. Produits le 6 septembre 2026 ; à
+publier sur Hugging Face comme BGE-M3 (même réserve : le `.bpk` n'est pas
+reproductible octet à octet).
+
+### Interface
+
+```rust
+pub fn forward(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> (Tensor<3>, Tensor<2>)
+```
+- `Tensor<3>` — `last_hidden_state [B, S, H]`.
+- `Tensor<2>` — le `pooler_output` de HF (`tanh(Linear(CLS))`), **à ignorer** :
+  la fiche fait `hidden[:, 0]` puis une normalisation L2, et c'est ce que fait
+  `src/burn_granite_embedder.rs`. Pas de `token_type_ids`.
+
+### Régénérer
+
+Même recette que BGE-M3 (`ModelGen` + `LoadStrategy::Bytes`, un `out_dir` par
+modèle), avec `burn-onnx = "0.22.0-pre.3"` ; le `model.onnx` est à la racine
+des dépôts HF, sans external data. 40 s pour les deux, aucun opérateur manquant.
+
 ## `msmarco_minilm_onnx.rs`
 
 Traduction mécanique, par `burn-onnx`, du graphe ONNX de

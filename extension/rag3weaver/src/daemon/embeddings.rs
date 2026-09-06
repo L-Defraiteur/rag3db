@@ -61,6 +61,11 @@ pub struct Identite {
     pub sparse: bool,
     /// **Est-ce un embedder factice ?** Relayé tel quel jusqu'au catalogue.
     pub factice: bool,
+    /// La précision de calcul du modèle (`f32`, `Flex32`…), telle que le démon
+    /// l'a réglée au chargement ; informative, pour que le client sache ce
+    /// qu'il compare (6 septembre 2026).
+    #[serde(default)]
+    pub precision: String,
     /// Le binaire qui répond (`chemin@mtime`), posé par [`super::servir`].
     /// Vide chez un démon d'avant le 6 septembre 2026 — donc périmé.
     #[serde(default)]
@@ -188,6 +193,7 @@ impl EmbedDaemon {
             dual: self.dual.is_some(),
             sparse: self.sparse.is_some(),
             factice: self.embedder.is_mock(),
+            precision: crate::burn_device::precision_par_defaut(),
             executable: String::new(),
         }
     }

@@ -135,13 +135,14 @@ fusion (les noyaux binaires prennent le dtype de gauche) et faisaient paniquer
 la fusion (`DTypeMismatch`, IR stricte). Le no-op est le bon comportement ;
 c'est au chargement qu'on pose Flex32, pas en cours de graphe.
 
-Et une subtilité qui a coûté une heure : dans BGE-M3 le cast se retire (la
-constante que le masque rencontre vient du pack, donc Flex32 par
-l'adaptateur), mais dans MiniLM et les rerankers **il faut le garder** — la
-constante y est initialisée dans le code par burn-onnx, jamais vue par
-l'adaptateur, donc f32, et le cast est ce qui garde le masque cohérent avec
-elle. `patch_attention.py` ne touche aux casts que là où il a fusionné
-l'attention. Même logique dans notre code : le masque du mean-pooling des
+Et une subtilité qui a coûté une heure : dans BGE-M3 (et Granite) le cast se
+retire, mais dans MiniLM et les rerankers **il faut le garder**. La règle
+dépend de la façon dont l'embarqueur *charge* le graphe, pas du graphe :
+BGE-M3 et Granite passent par `BurnpackStore` + `Flex32Adapter`, la constante
+que le masque rencontre arrive en Flex32 ; MiniLM et les rerankers passent par
+`Model::from_bytes`, tout y reste f32 (ils ne profitent d'ailleurs pas de
+Flex32), et le cast est ce qui garde le masque cohérent. `patch_attention.py`
+retire les casts là où il a fusionné l'attention, ou sur `--casts-neutres`. Même logique dans notre code : le masque du mean-pooling des
 MiniLM (`attention_mask.float()`, donc Flex32) prend maintenant le dtype de la
 sortie du graphe (f32), sinon la fusion refuse le produit.
 
