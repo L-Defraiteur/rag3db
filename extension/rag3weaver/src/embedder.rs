@@ -874,7 +874,7 @@ pub fn budget_batches(lens: &[usize], max_items: usize, max_chars: usize) -> Vec
 pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> LotBudget {
     let explicite = std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);
     match (conseille, explicite) {
-        (_, Some(chars)) => LotBudget { max_items: defaut_items.max(1), max_chars: chars, max_area: LotBudget::AREA_DEFAUT },
+        (_, Some(chars)) => LotBudget { max_items: defaut_items.max(1), max_chars: chars, max_area: LotBudget::AREA_DEFAUT, stable: false },
         (Some((seq, jetons)), None) if !crate::regime::Regime::courant().carte_partagee() => LotBudget {
             max_items: seq.max(1),
             max_chars: seq.max(1) * jetons.max(1) * 3,
@@ -886,8 +886,15 @@ pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> Lot
             // longueur : seq × jetons² / 8 — 32 séquences de 512 pour un
             // 256 × 512, 256 de 180.
             max_area: seq.max(1) * jetons.max(1) * jetons.max(1) / 8,
+            // Des comptes stables : le modèle est local, ses formes se
+            // répètent et l'autotune les retrouve.
+            stable: true,
         },
-        _ => LotBudget { max_items: defaut_items.max(1), max_chars: embed_char_budget(), max_area: LotBudget::AREA_DEFAUT },
+        // Sans conseil — un démon, un modèle qui ne dit rien — le lot glouton
+        // d'avant : par le démon, l'arrondi ne rapporte rien (le démon
+        // redécoupe de son côté) et coûte un lot sur cinq — 36 → 43 s sur
+        // src/dataflow, mesuré le 6 septembre 2026.
+        _ => LotBudget { max_items: defaut_items.max(1), max_chars: embed_char_budget(), max_area: LotBudget::AREA_DEFAUT, stable: false },
     }
 }
 
@@ -898,6 +905,8 @@ pub struct LotBudget {
     pub max_items: usize,
     pub max_chars: usize,
     pub max_area: usize,
+    /// Arrondir les comptes aux demi-pas de puissances de deux.
+    pub stable: bool,
 }
 
 impl LotBudget {
@@ -910,7 +919,7 @@ impl LotBudget {
 /// que l'autotune de burn ne recompile pas à chaque lot (issue 02). Les
 /// textes étant triés par longueur, un lot de 2ⁿ voisins reste homogène.
 pub fn stable_batches(lens: &[usize], budget: LotBudget) -> Vec<std::ops::Range<usize>> {
-    let LotBudget { max_items, max_chars, max_area } = budget;
+    let LotBudget { max_items, max_chars, max_area, stable } = budget;
     let jetons = |chars: usize| (chars / 3).max(1);
     let mut out = Vec::new();
     let mut start = 0usize;
@@ -929,11 +938,21 @@ pub fn stable_batches(lens: &[usize], budget: LotBudget) -> Vec<std::ops::Range<
             plus_long = plus_long_apres;
             n += 1;
         }
-        let n = 1usize << (usize::BITS - 1 - n.max(1).leading_zeros());
+        let n = if stable { stable_count(n) } else { n };
         out.push(start..start + n);
         start += n;
     }
     out
+}
+
+/// Le plus grand compte « stable » ≤ `n` : une puissance de deux, ou une
+/// fois et demie une puissance de deux (1, 2, 3, 4, 6, 8, 12, 16, 24 …).
+/// Arrondir aux seules puissances de deux perdait jusqu'à la moitié d'un
+/// lot (11 → 8, 15 → 8) ; avec les demi-pas, au plus un quart.
+pub fn stable_count(n: usize) -> usize {
+    let n = n.max(1);
+    let p = 1usize << (usize::BITS - 1 - n.leading_zeros());
+    if n >= p + p / 2 && p >= 2 { p + p / 2 } else { p }
 }
 
 #[cfg(test)]
@@ -945,12 +964,14 @@ mod tests_rythme_et_lots {
     /// caractères par lot : 4, 4, … — jamais 7.
     #[test]
     fn les_lots_stables_comptent_des_puissances_de_deux() {
-        let large = |max_items, max_chars| LotBudget { max_items, max_chars, max_area: usize::MAX };
+        let large = |max_items, max_chars| LotBudget { max_items, max_chars, max_area: usize::MAX, stable: true };
         let lens = vec![10; 100];
         let l = stable_batches(&lens, large(32, 100_000));
         assert_eq!(l.iter().map(|r| r.len()).collect::<Vec<_>>(), vec![32, 32, 32, 4]);
         let l = stable_batches(&lens, large(32, 70));
-        assert!(l.iter().all(|r| r.len() == 4), "{:?}", l.iter().map(|r| r.len()).collect::<Vec<_>>());
+        let tailles: Vec<usize> = l.iter().map(|r| r.len()).collect();
+        assert!(tailles[..tailles.len() - 1].iter().all(|&n| n == 6) && *tailles.last().unwrap() == 4, "{tailles:?}");
+        assert_eq!([stable_count(1), stable_count(5), stable_count(7), stable_count(11), stable_count(15), stable_count(16)], [1, 4, 6, 8, 12, 16]);
         assert_eq!(l.last().unwrap().end, 100, "tout est couvert");
         // Un texte plus long que le budget fait un lot à lui seul.
         let l = stable_batches(&[500, 10, 10], large(32, 100));
@@ -973,6 +994,7 @@ mod tests_rythme_et_lots {
             assert_eq!(b.max_area, 256 * 512 * 512 / 8);
         }
         assert_eq!(lot_budget(None, 32).max_chars, embed_char_budget());
+        assert!(!lot_budget(None, 32).stable, "sans conseil, pas d'arrondi");
     }
 
     /// **Le rapport cyclique, en règle de trois.**
