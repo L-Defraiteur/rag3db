@@ -186,3 +186,22 @@ dans ce que l'appel rend.
 - **La taille de chunk n'est pas dérivée de la limite du modèle.** Le MiniLM
   multilingue tronque à **128 jetons** ; c'est compté et dit
   (`Embedder::troncatures`), mais pas évité.
+
+## 11. Après la passe fondations (soirée du 6) — ce que la §10 ne dit plus juste
+
+- **`Catalog::search` fait toujours 417 lignes**, mais il n'est plus sur le
+  chemin du produit : `Catalog::rechercher` lance le gabarit `search_base`
+  sur le catalogue, et `KBSearchNode` passe par lui. Ses appelants sont des
+  tests ; son retrait est une décision de surface (bilan, §« ce qui reste »).
+- **`FlushResult.failed` ne vaut plus `0` en dur** : le canal d'échecs par
+  groupe le compte, et `rendu_pret` perd la disponibilité qu'un échec dérivé
+  a perdue.
+- **`PendingWork` n'est plus une barrière** : un drain emporte la fermeture
+  d'une cible et remet le reste en file. L'invariant tient sur les trois
+  niveaux, `AUCUNE` compris — et à travers la frontière du processus, par la
+  marque par niveau et par table.
+- **`crate::acces` a son appelant** (`Catalog::ouvrir_en_lecture`).
+  **`fusion.rs` n'existe plus.** `KBSearchNode` est devenu un alias du lanceur.
+- **Le miroir Rust de `search_base`** compte neuf nœuds et vingt arêtes ;
+  c'est toujours un miroir, et toujours une dette.
+- Ce qui reste faux est dans le bilan, avec sa raison.

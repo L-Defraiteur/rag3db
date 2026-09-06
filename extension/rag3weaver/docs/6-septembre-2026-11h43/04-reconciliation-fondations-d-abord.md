@@ -371,7 +371,9 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | B6 B9 B10 B11 | faits — `965988259`, douze suites vertes |
 | B8 B12 B13 | faits — le lanceur `Catalog::rechercher`, diagnostics depuis les durées de nœuds, fan-out autour du graphe ; `KBSearchNode` passe par lui |
 | `Catalog::search` (le monolithe) | **reste** : ses appelants sont des tests ; la décision de surface (pont par `Arc`, ou migration des tests sur le lanceur) est à Lucie — voir la note sur B13 |
-| C5 | écrit (schéma v5, `_chunked_hash`, `MarquerDecoupeNode`, `rattraper_le_decoupage`, la mise à jour se pose au niveau donnée), 949 tests de bibliothèque verts, passe e2e en cours. Reste C5 bis : les agrégats d'une base de connaissances comme dette en base |
+| C5 | fait — `a6e71bafa`, douze suites vertes. Reste C5 bis : les agrégats d'une base de connaissances comme dette en base |
+
+**Bilan de la passe** : [`05-bilan-de-la-passe-fondations.md`](05-bilan-de-la-passe-fondations.md).
 
 
 ```

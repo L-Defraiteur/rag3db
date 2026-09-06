@@ -190,3 +190,27 @@ pour le crate Rust ; `docs/` à la racine pour le fork kuzu et ses extensions C+
 
 `rag3db-57` travaille sur le cœur C++ (Vela, MVCC). Un message qui parle de
 **Sairen** ici est un collage égaré : le signaler, ne pas enquêter.
+
+## 9. Après la passe fondations (soirée du 6) — où regarder de plus
+
+Ajouté à la table de la §5, sans la réécrire :
+
+| la question | l'endroit |
+|---|---|
+| « la recherche du produit » | `Catalog::rechercher(&Arc<Mutex<Catalog>>, …)` — le gabarit `search_base` lancé sur le catalogue ; `Catalog::search` est le monolithe, ses appelants sont des tests |
+| « pourquoi ce drain n'a pas tout pris » | `Catalog::fermeture(graine, pour_ecrire)` — un drain n'emporte que ce qui est en lien ; `PendingWork::extraire_les_tables` |
+| « qu'est-ce qu'un `create` promet » | `RegimeEcriture` (`au tick` par défaut), `create_jusqu_a(…, exige)`, `tenir_l_exigence_d_ecriture` |
+| « qu'est-ce que l'autre processus doit encore » | la marque `_ingestion/pending/<écrivain>` : `horodatage\|Table:data,textsearch,…` ; `lire_une_marque`, `marque_nous_concerne` |
+| « pourquoi `failed` n'est plus zéro » | le service `echecs` (`EchecDeGroupe`), `consigner_l_echec` dans les nœuds, `FlushResult::absorber_les_echecs` |
+| « lire une base qu'un autre tient » | `Catalog::ouvrir_en_lecture` + `initialiser_en_lecture` ; `CatalogError::LectureSeule` |
+| « deux rattrapages sur la même dette » | `_embed_claim`, `reclamer_le_retard`, `SchemaDialect::reclamer_chunks_sans_marqueur` |
+| « une mise à jour sans redécoupage » | `_chunked_hash`, `MarquerDecoupeNode`, `rattraper_le_decoupage`, `build_ingestion_graph(…, avec_decoupage)` |
+| « le schéma d'une base » | `scope::SCHEMA_VERSION` = 5 ; les migrations v3 → v5 dans `migrate_scope_columns` ; un lecteur refuse une base en retard |
+| « les options traversent du JSON » | `FilterValue` est `untagged` avec `Ops` en premier — l'ordre des variantes est celui de la lecture |
+
+Deux pièges neufs :
+
+- **`MockEmbedder` rend des vecteurs nuls.** Deux appels ne se comparent pas
+  sur le vecteur ; prendre `HashEmbedder` dès qu'un test compare des ordres.
+- **Un port consommé n'est plus lisible** dans la sortie d'un graphe. Le
+  lanceur retire `render` pour relire `resolve.results` et les métas.
