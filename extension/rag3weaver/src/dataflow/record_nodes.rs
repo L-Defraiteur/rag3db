@@ -455,6 +455,158 @@ impl LinkRecordNode {
 }
 
 
+/// Un lien dont les deux bouts sont résolus, et son rang dans le lot.
+struct ResolvedLink {
+    from_uuid: String,
+    to_uuid: String,
+    index: usize,
+}
+
+/// Au-delà de ce nombre d'arêtes dans une relation, le lot part par COPY.
+const COPY_SEUIL: usize = 2_000;
+
+/// Une valeur Cypher dans une cellule CSV, entre guillemets doublés au besoin.
+fn cellule_csv(v: &CypherValue) -> String {
+    let brut = match v {
+        CypherValue::Null => return String::new(),
+        CypherValue::String(s) => s.clone(),
+        CypherValue::Int(i) => i.to_string(),
+        CypherValue::Float(f) => f.to_string(),
+        CypherValue::Bool(b) => b.to_string(),
+        autre => format!("{autre:?}"),
+    };
+    if brut.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", brut.replace('"', "\"\""))
+    } else {
+        brut
+    }
+}
+
+/// **Poser un lot d'arêtes par COPY.** Rend `Ok(true)` si le lot est posé,
+/// `Ok(false)` si le moteur n'a pas de chemin de masse.
+#[allow(clippy::too_many_arguments)]
+fn copier_les_liens(
+    ctx: &mut NodeContext,
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    rel_name: &str,
+    ends: (&str, &str),
+    prop_keys: &[String],
+    prop_refs: &[&str],
+    indices: &[usize],
+    resolved: &[ResolvedLink],
+    items: &[RelationRecord],
+) -> Result<bool, String> {
+    let chemin = std::env::temp_dir().join(format!(
+        "rag3weaver-liens-{}-{}-{}.csv",
+        std::process::id(),
+        rel_name,
+        crate::dataflow::checkpoint::timestamp_ms()
+    ));
+    let Some(copie) = dialect.copy_links_from_csv(rel_name, ends, prop_refs, &chemin.to_string_lossy()) else {
+        return Ok(false);
+    };
+    let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+    let t0 = std::time::Instant::now();
+    // Les paires déjà posées, seulement si la table a quelque chose.
+    let mut deja: HashSet<(String, String)> = HashSet::new();
+    let compte = conn.execute(&dialect.count_links(rel_name)).map_err(|e| e.to_string())?;
+    let vide = matches!(compte.rows.first().and_then(|r| r.first()), Some(CypherValue::Int(0)));
+    if !vide {
+        let mut froms: Vec<String> = indices.iter().map(|&ri| resolved[ri].from_uuid.clone()).collect();
+        froms.sort_unstable();
+        froms.dedup();
+        for tranche in froms.chunks(5_000) {
+            let param = CypherValue::List(tranche.iter().map(|f| CypherValue::String(f.clone())).collect());
+            let lu = conn
+                .execute_with_params(&dialect.existing_links(rel_name, ends), &[QueryParam { name: "froms".into(), value: param }])
+                .map_err(|e| e.to_string())?;
+            for row in &lu.rows {
+                if let (Some(a), Some(b)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_str())) {
+                    deja.insert((a.to_string(), b.to_string()));
+                }
+            }
+        }
+    }
+    // **Les bouts qui existent.** COPY refuse tout le fichier dès qu'une
+    // clé manque (« Unable to find primary key value ») là où MERGE sautait
+    // la paire en silence : un PARENT_OF vers une fermeture repliée, un
+    // MENTIONS vers un symbole absent. On vérifie les uuids par table, en
+    // une requête par tranche, et on n'écrit que les paires dont les deux
+    // bouts sont là ; les autres sont comptées, pas perdues en silence.
+    let presents = |table: &str, uuids: &[String]| -> Result<HashSet<String>, String> {
+        let mut ok = HashSet::with_capacity(uuids.len());
+        for tranche in uuids.chunks(5_000) {
+            let param = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.clone())).collect());
+            let lu = conn
+                .execute_with_params(&dialect.select_by_uuids(table, &["_uuid"]), &[QueryParam { name: "uuids".into(), value: param }])
+                .map_err(|e| e.to_string())?;
+            for row in &lu.rows {
+                if let Some(u) = row.first().and_then(|v| v.as_str()) {
+                    ok.insert(u.to_string());
+                }
+            }
+        }
+        Ok(ok)
+    };
+    let mut froms_tous: Vec<String> = indices.iter().map(|&ri| resolved[ri].from_uuid.clone()).collect();
+    froms_tous.sort_unstable();
+    froms_tous.dedup();
+    let mut tos_tous: Vec<String> = indices.iter().map(|&ri| resolved[ri].to_uuid.clone()).collect();
+    tos_tous.sort_unstable();
+    tos_tous.dedup();
+    let froms_presents = presents(ends.0, &froms_tous)?;
+    let tos_presents = presents(ends.1, &tos_tous)?;
+    let mut absents = 0usize;
+
+    // Le fichier : une ligne par paire neuve, dédoublonnée dans le lot.
+    let mut vues: HashSet<(String, String)> = HashSet::new();
+    let mut ecrites = 0usize;
+    {
+        use std::io::Write;
+        let f = std::fs::File::create(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let mut w = std::io::BufWriter::new(f);
+        for &ri in indices {
+            let rl = &resolved[ri];
+            let paire = (rl.from_uuid.clone(), rl.to_uuid.clone());
+            if !froms_presents.contains(&paire.0) || !tos_presents.contains(&paire.1) {
+                absents += 1;
+                continue;
+            }
+            if deja.contains(&paire) || !vues.insert(paire.clone()) {
+                continue;
+            }
+            let rel = &items[rl.index];
+            let mut ligne = vec![cellule_csv(&CypherValue::String(rl.from_uuid.clone())), cellule_csv(&CypherValue::String(rl.to_uuid.clone()))];
+            for key in prop_keys {
+                ligne.push(cellule_csv(rel.properties.get(key).unwrap_or(&CypherValue::Null)));
+            }
+            writeln!(w, "{}", ligne.join(",")).map_err(|e| e.to_string())?;
+            ecrites += 1;
+        }
+        w.flush().map_err(|e| e.to_string())?;
+    }
+    let t_csv = t0.elapsed();
+    let t1 = std::time::Instant::now();
+    let resultat = if ecrites > 0 { conn.execute(&copie).map(|_| ()).map_err(|e| e.to_string()) } else { Ok(()) };
+    let _ = std::fs::remove_file(&chemin);
+    if profil {
+        eprintln!(
+            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, existence+csv {} ms, COPY {} ms{}",
+            ecrites,
+            indices.len() - ecrites - absents,
+            t_csv.as_millis(),
+            t1.elapsed().as_millis(),
+            resultat.as_ref().err().map(|e| format!(" — refusé : {e}")).unwrap_or_default()
+        );
+    }
+    resultat?;
+    ctx.metric("copied", ecrites as f64);
+    ctx.metric("already_linked", (indices.len() - ecrites - absents) as f64);
+    ctx.metric("dangling", absents as f64);
+    Ok(true)
+}
+
 impl Node for LinkRecordNode {
     fn name(&self) -> &str {
         &self.name
@@ -478,11 +630,6 @@ impl Node for LinkRecordNode {
             .ok_or("LinkRecordNode: 'conn' service not registered")?;
 
         // Resolve all refs first (should be instant — InsertRecordNode already completed)
-        struct ResolvedLink {
-            from_uuid: String,
-            to_uuid: String,
-            index: usize,
-        }
         let mut resolved: Vec<ResolvedLink> = Vec::with_capacity(items.len());
         for (i, rel) in items.iter_mut().enumerate() {
             // Un bout qui ne se résout pas — l'insertion de sa ligne a échoué —
@@ -531,6 +678,7 @@ impl Node for LinkRecordNode {
         for ((rel_name, prop_keys), indices) in &groups {
             // Build batch link via dialect (idempotent — skip if relation already exists)
             let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+                .cloned()
                 .ok_or("LinkRecordNode: 'dialect' service not registered")?;
             let prop_refs: Vec<&str> = prop_keys.iter().map(|s| s.as_str()).collect();
             // Les bouts déclarés de la relation, pour un MATCH étiqueté — et
@@ -538,14 +686,38 @@ impl Node for LinkRecordNode {
             // va de `X_Chunk` à `X`.
             let ends = ctx
                 .service::<crate::config::CatalogConfig>("config")
-                .and_then(|c| c.relations.get(rel_name.as_str()))
-                .map(|d| (d.from.clone(), d.to.clone()))
+                .and_then(|c| c.relations.get(rel_name.as_str()).map(|d| (d.from.clone(), d.to.clone())))
                 .or_else(|| {
                     rel_name
                         .strip_suffix("_CHUNKED_FROM")
                         .map(|entity| (format!("{entity}_Chunk"), entity.to_string()))
                 });
             let cypher = dialect.batch_link_labeled(rel_name, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &prop_refs);
+
+            // **En masse, par COPY**, quand le lot est gros, que la relation
+            // a ses deux étiquettes et que le moteur sait le faire : 200 000
+            // arêtes en 47 ms au lieu de 158 s (6 septembre 2026). La
+            // sémantique de MERGE est gardée : dédoublonnage dans le lot, et
+            // les paires déjà posées écartées quand la table n'est pas vide.
+            if indices.len() >= COPY_SEUIL {
+                if let Some((from, to)) = ends.as_ref() {
+                    match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, &prop_refs, indices, &resolved, &items) {
+                        Ok(true) => {
+                            for &ri in indices {
+                                let rl = &resolved[ri];
+                                if let Some(resolver) = items[rl.index].take_resolver() {
+                                    resolver.resolve(rl.from_uuid.clone(), rl.to_uuid.clone());
+                                }
+                            }
+                            continue;
+                        }
+                        Ok(false) => {}
+                        Err(cause) => {
+                            ctx.warn(&format!("lien « {rel_name} » : chargement en masse refusé ({cause}), retour au chemin par lots"));
+                        }
+                    }
+                }
+            }
 
             // **Par tranches.** Un seul UNWIND de 225 000 éléments prenait
             // 97 s là où 30 000 en prenaient 1,2 s : superlinéaire au-delà de

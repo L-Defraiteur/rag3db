@@ -248,6 +248,34 @@ pub trait SchemaDialect: Send + Sync {
         self.batch_link(rel_table, prop_columns)
     }
 
+    /// **Charger des arêtes en masse depuis un CSV** (`from_uuid, to_uuid,
+    /// props…`, sans en-tête), quand le moteur sait le faire. `None` : pas
+    /// de chemin de masse, l'appelant reste sur [`Self::batch_link`].
+    ///
+    /// Mesuré le 6 septembre 2026 sur 200 000 arêtes : `UNWIND … MERGE`
+    /// 158 s (1 263 arêtes/s), `COPY … FROM` 47 ms (4,2 M arêtes/s). C'est le
+    /// chargement en masse du moteur, celui d'un index HNSW reconstruit sur
+    /// table pleine (doc 18). Il ne dédoublonne pas : l'appelant le fait.
+    fn copy_links_from_csv(&self, rel_table: &str, ends: (&str, &str), prop_columns: &[&str], path: &str) -> Option<String> {
+        let _ = (rel_table, ends, prop_columns, path);
+        None
+    }
+
+    /// Les paires `(from_uuid, to_uuid)` déjà posées pour ces sources —
+    /// pour qu'un chargement en masse garde la sémantique de `MERGE`.
+    /// Paramètre `$froms`.
+    fn existing_links(&self, rel_table: &str, ends: (&str, &str)) -> String {
+        let (from, to) = ends;
+        format!(
+            "UNWIND $froms AS f MATCH (a:{from} {{_uuid: f}})-[:{rel_table}]->(b:{to}) RETURN a._uuid, b._uuid"
+        )
+    }
+
+    /// Le nombre d'arêtes d'une relation.
+    fn count_links(&self, rel_table: &str) -> String {
+        format!("MATCH ()-[r:{rel_table}]->() RETURN count(r)")
+    }
+
     /// Batch update specific fields on entities matched by UUID.
     /// Expects `$items` param as List<Map{_uuid, field1, field2, ...}>.
     fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String;
@@ -760,6 +788,12 @@ impl SchemaDialect for Rag3dbDialect {
              MATCH (a {{_uuid: item.from_uuid}}), (b {{_uuid: item.to_uuid}}) \
              MERGE (a)-[r:{rel_table}]->(b){prop_set}"
         )
+    }
+
+    fn copy_links_from_csv(&self, rel_table: &str, ends: (&str, &str), prop_columns: &[&str], path: &str) -> Option<String> {
+        let _ = prop_columns;
+        let (from, to) = ends;
+        Some(format!("COPY {rel_table} FROM '{path}' (from='{from}', to='{to}')"))
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
