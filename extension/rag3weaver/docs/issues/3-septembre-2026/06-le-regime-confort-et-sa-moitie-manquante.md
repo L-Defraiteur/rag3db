@@ -1,5 +1,24 @@
 # Issue 06 — le régime `confort` et sa moitié manquante
 
+> **Close le 6 septembre 2026.** Les trois points sont faits, et vérifiés un par
+> un avant d'écrire cette ligne :
+>
+> | | où c'est fait | ce qui le tient |
+> |---|---|---|
+> | 1 · la fabrique unique de `Llm`, et les cinq copies remplacées | `regime::modele_agentique` / `modele_agentique_nomme` (`regime.rs:196`, `:203`) — appelée par les cinq suites, et par elles seules | `une_intention_explicite_reprend_la_main`, `sous_confort_une_variable_qui_traine_ne_reprend_pas_la_carte`, `sous_plein_la_variable_decide_comme_avant` |
+> | 2 · les trois rôles sur la carte libre sous `confort` | `burn_device.rs:138-152` — `carte_locale()` en dernier recours, `None` sous `plein` | `la_carte_ne_distingue_plus_les_roles` |
+> | 3 · un test des **quatre** promesses | — | `confort_tient_ses_quatre_promesses` (`regime.rs:386`) |
+>
+> La question de précédence que ce document laissait ouverte — « à confirmer
+> avec Lucie, pas à trancher seul » — a été tranchée dans le sens proposé :
+> `RAG3WEAVER_LLM=local` dit une intention **pour cette passe** et gagne ;
+> `RAG3WEAVER_LOCAL_LLM`, qui traîne dans un profil, ne reprend pas la carte
+> sous `confort`. C'est écrit en tête de `regime.rs` et tenu par trois tests.
+>
+> Ce qui reste vrai et vaut d'être gardé : la section « ce qui marche déjà »
+> ci-dessous documentait trois promesses sur quatre, et **rien ne disait que la
+> quatrième manquait**. C'est ce silence-là qui a rendu l'issue nécessaire.
+
 `src/regime.rs` cite « l'issue 06 » depuis le 30 août. **Elle n'avait jamais
 été écrite** — une référence vers un document qui n'existe pas, ce qui est la
 version documentaire du défaut qu'on passe la semaine à débusquer. La voici.
