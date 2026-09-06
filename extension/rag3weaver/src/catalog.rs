@@ -1186,7 +1186,12 @@ impl Catalog {
             let chunk_table = format!("{entity_name}_Chunk");
             let idx_name = format!("{entity_name}_Chunk_vec");
             let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
-            let _ = self.conn.execute(&vec_ddl);
+            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
+            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
+            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
+            // vectoriel absent — et une recherche sémantique qui rend zéro sans
+            // que rien ne le signale.
+            self.poser_index(vec![vec_ddl]);
         }
 
         // 6. Sparse vector index — handled by ensure_sparse_handle() in register_entity()
@@ -1383,7 +1388,12 @@ impl Catalog {
             let chunk_table = format!("{entity_name}_Chunk");
             let idx_name = format!("{entity_name}_Chunk_vec");
             let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
-            let _ = self.conn.execute(&vec_ddl);
+            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
+            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
+            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
+            // vectoriel absent — et une recherche sémantique qui rend zéro sans
+            // que rien ne le signale.
+            self.poser_index(vec![vec_ddl]);
         }
         // Sparse handle creation is handled by register_entity() after migrate_entity().
 
@@ -1713,7 +1723,12 @@ impl Catalog {
             let emb_col = format!("{kb_name}_embedding");
             let idx_name = format!("{kb_name}_Index_Chunk_vec");
             let vec_ddl = self.dialect.create_vector_index(&chunk_table, &emb_col, &idx_name);
-            let _ = self.conn.execute(&vec_ddl);
+            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
+            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
+            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
+            // vectoriel absent — et une recherche sémantique qui rend zéro sans
+            // que rien ne le signale.
+            self.poser_index(vec![vec_ddl]);
         }
 
         // 8. Sparse handle — created by register_kb() after create_kb_tables().
