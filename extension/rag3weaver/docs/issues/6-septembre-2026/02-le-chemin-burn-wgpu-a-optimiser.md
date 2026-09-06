@@ -1,5 +1,10 @@
 # Issue 02 — le moteur d'embarquement : ce qu'il vaut, et ce qu'une autre session peut y faire
 
+> **Dépassée le soir même par l'[issue 03](03-le-chemin-vulkan-ce-qu-il-valait-et-les-lignes-qui-manquaient.md)** :
+> les bancs ci-dessous mesuraient burn compilé en -O0, sans autotune ni fusion, et
+> plusieurs conclusions (cache d'autotune, coût des formes, f16 ROCm, ROCm par
+> défaut) sont réécrites là-bas. Les chiffres restent vrais pour ce qu'ils mesuraient.
+
 **6 septembre 2026, 16h30–17h15.** Suite de l'[issue 01](01-quatorze-minutes-pour-trente-fichiers.md) :
 une fois le chemin d'indexation réparé, il reste le modèle lui-même. Lucie :
 *« les gens ont pas souvent un setup d'embedder, faut que le mode par défaut
