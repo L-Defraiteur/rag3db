@@ -116,15 +116,33 @@ sortie. Qui paie le GPU solde aussi la dette d'hier ; qui ne le paie pas ne le
 paie pas. Ce n'est pas le tick, c'est ce qui en tient lieu tant qu'aucun
 processus ne garde un catalogue en vie (voir F).
 
-**A5. `FlushResult.failed` cesse d'être `0` en dur.** Le canal manquant se
-crée au niveau où les nœuds travaillent déjà : **le groupe** (une table, un
-jeu de colonnes, une instruction). Un nœud d'écriture dont une instruction de
-groupe échoue ne fait pas tomber le graphe : il compte les enregistrements du
-groupe en échec, dit l'erreur, et continue les autres groupes. Le compte
-remonte par un port de sortie `failed` que `drain` et `ingest_entities`
-additionnent. `UpdateResult` et `DeleteResult` gagnent un statut `Failed`
-avec sa cause. C'est un changement de structure publique, et il est **voulu**
-depuis le 5 : « les comptes cessent de mentir » était le point 1.
+**A5. `FlushResult.failed` cesse d'être `0` en dur.** La cartographie des
+douze nœuds d'écriture dit où : onze sur douze n'ont que deux façons de
+finir — `?` (tout le graphe tombe, sans undo, base partiellement écrite) ou
+`ctx.warn` (rien n'est compté). Les abandons silencieux sur config manquante
+(`DeleteRecordNode`, `UpdateRecordNode`) perdent un **groupe entier** sans
+résultat ni avertissement, et `drainer` le compte quand même dans
+`processed`. Une transition de cycle de vie non déclarée sur **une** ligne
+tue toute l'ingestion.
+
+Le canal se crée sur le patron qui existe déjà pour `update_results`,
+`chunk_counts`, `delete_results` : un service partagé
+`Arc<Mutex<Vec<EchecDeGroupe>>>` — nœud, table, nombre d'opérations, la
+disponibilité perdue, la cause — écrit **pendant** `execute` (il survit donc
+à l'abandon de la phase 3 du runtime, ce qu'un port ne fait pas), et lu par
+`drainer` à côté des trois autres. Un nœud dont un groupe échoue le consigne
+et **continue les autres groupes**. Les refs des entités d'un groupe
+d'insertion raté sont résolus en échec, pour qu'un lien vers elles échoue
+tout de suite et se compte, au lieu d'attendre trente secondes.
+
+Ce que `FlushResult` en fait : `failed` = les opérations en file dont
+l'écriture propre a échoué (insertion, lien, mise à jour, suppression,
+agrégat) ; `processed` = `op_count − failed` ; un échec **dérivé**
+(découpage, embarquement, commit d'index) ne compte pas une opération mais
+**retire la disponibilité perdue de `rendu_pret`** — un drain dont le commit
+FTS a échoué ne dit plus `textsearch`. `UpdateStatus` gagne `Failed`. Le
+rattrapage opportuniste (A4) reste conditionné à `failed == 0` : on ne
+solde pas la dette d'hier sur un drain qui vient de rater.
 
 **A6. `temp_uuid` → `cle_de_correlation`.** La méthode seulement. Le champ
 sérialisé garde son nom, avec une ligne qui dit pourquoi les deux diffèrent.
@@ -135,27 +153,53 @@ ne le fait, l'absence est sans effet et le commentaire le dit. Si un le fait,
 c'est un défaut à réparer sur-le-champ. Dans les deux cas le registre complet
 devient **un seul** constructeur, et la divergence cesse d'exister.
 
-### B. Un seul chemin de recherche
+### B. Un seul chemin de recherche — et ce que la cartographie a changé
 
-`Catalog::search` devient l'exécution d'un gabarit — le même
-`search_base.mmd` que les agents, augmenté de ce qu'il porte encore seul :
-le sparse, le rerank, le mode de résultat, les diagnostics, le filtre par
-indirection de titre. Ce n'est pas de la dette de structure, c'est **la
-fabrique des demi-portages** : deux corrections cette session, une à moitié,
-et A1 est la troisième.
+**La cartographie de l'après-midi renverse la question.** `Catalog::search`
+(416 lignes) n'a **aucun appelant de production** hors `KBSearchNode`, qui
+n'est atteint que par `search_with_strategy`, qui n'est appelé par personne.
+Le chemin que les agents empruntent — `search.mmd` → `SearchTool` →
+`search_base.mmd` — **ne passe déjà plus par lui**. B n'est donc pas « faire
+de `Catalog::search` un gabarit » ; c'est **rendre le chemin composable aussi
+complet et aussi juste que le monolithe**, puis faire de `Catalog::search` le
+lanceur de ce graphe, pour que ses tests l'éprouvent lui.
 
-Ce que B tranche en passant, par les faits et non par une question :
+Les douze écarts, mesurés dans le code (les références sont dans le rapport
+de cartographie ; les numéros sont ceux de l'ordre de traitement) :
 
-- `KBSearchNode` appelle `Catalog::search` ; si `Catalog::search` *est* le
-  gabarit, le nœud est une boucle. Il disparaît avec ses deux gabarits
-  (`templates/search.mmd`, `search_expansion.mmd`), ou devient l'alias du
-  gabarit unique si un test montre qu'un chemin en dépend.
-- La fiche d'outil parle `exige` avec la liste des quatre noms, comme la
-  bibliothèque. `consistency` reste accepté comme raccourci. `immediate` n'a
-  plus à être renommé : il n'est plus le vocabulaire principal.
-- Les tests qui comparent « le graphe rend la même chose que le catalogue »
-  deviennent tautologiques. On les garde comme test de non-régression du
-  gabarit, en le disant.
+| | l'écart sur le chemin des agents | gravité |
+|---|---|---|
+| B1 | `ResolveParentNode` et les trois compilations de filtre passent `target.name` là où il faut `target.parent_table` : **faux pour toute cible KB** (`MATCH (n:MaKB)` ne désigne aucune table) | défaut en exercice |
+| B2 | `resolve_vector_chunks` code en dur `Rag3dbDialect` : **faux sur PostgreSQL** | défaut en exercice |
+| B3 | aucune pagination : `offset` est inerte, la liste rendue peut faire `2 × limit` ; et aucun sur-fetch `(limit+offset)×2`, donc la fusion et le pool du rerank sont appauvris | défaut en exercice |
+| B4 | les poids de fusion sont figés dans le gabarit (`bm25:0.6,vector:0.4`) ; `options.fusion` et le `fusion` déclaré d'une KB sont ignorés | contrat ignoré |
+| B5 | `options.filters` (le `HashMap`) est ignoré ; seul `filter_condition` descend | contrat ignoré |
+| B6 | dense + sparse = deux passes avant au lieu d'une (`dual_embedder` jamais utilisé par le nœud vectoriel) ; le cache d'embarquement du catalogue jamais consulté | coût |
+| B7 | `RerankNode` sans port `meta` : « aucun reranker configuré » n'atteint jamais l'agent ; pas de plancher `max(limit+offset)` sur le pool ; pas d'enrichissement du pool avant le cross-encoder ; `reranked_count` jamais rendu | silence |
+| B8 | `diagnostics` jamais produit ; `search_time_ms` est un max de nœuds ; `fused_count` faux | mesure fausse |
+| B9 | pas d'ouverture paresseuse de l'index FTS : un handle non ouvert est une erreur dure | fragilité |
+| B10 | `BM25SearchNode` : défaut `Contains` là où `SearchOptions` dit `Auto`, `fuzzy_distance` 0 contre 1 ; ne vérifie pas que la cible déclare BM25 | divergence de défauts |
+| B11 | `SourceResolved` appliqué par signal avant la fusion, pas après la pagination : la déduplication par source n'est pas celle du monolithe | divergence |
+| B12 | pas de fan-out de cellules ni de bascule de cellule ; `SearchCompleted` jamais émis | manque |
+
+Trois choses n'existent **que** sur le chemin composable et ne doivent pas
+se perdre : le domaine de travail (`SearchSourceNode`), la provenance des
+signaux (`bm25+vector`), le rendu markdown avec lentille de chemins.
+
+**Le plan de B, dans l'ordre :** B1 B2 (les deux défauts en exercice, une
+demi-heure), B3 (un nœud de pagination, le sur-fetch par les paramètres du
+gabarit), B4 B5 (la précédence : `options` > déclaration de la cible >
+gabarit), B7 (un port `meta` au rerank, comme aux trois signaux), B6 (le
+`QueryPayload` porte les vecteurs de la requête, embarqués une fois par la
+source), B8 B9 B10 B11 ; puis **B13 : `Catalog::search` devient le lanceur**
+— il monte les services, exécute `search_base` (plus la branche sparse), fait
+le fan-out de cellules autour, convertit et émet `SearchCompleted`. Les cinq
+tests `generic_*_matches_catalog` deviennent alors tautologiques et sont
+gardés comme non-régression du gabarit ; les tests de diagnostics, de
+`result_mode`, de rerank et de cellules passent par le lanceur et éprouvent
+le graphe. `KBSearchNode`, `search_with_strategy` et les deux gabarits
+`templates/search*.mmd` n'ont plus d'objet : retirés avec B13, ou réécrits
+sur le lanceur si un test montre qu'un chemin en dépend.
 
 ### C. La ressource est l'unité — la moitié Rust de la concurrence
 
@@ -284,10 +328,11 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 |---|---|
 | A1 A2 A6 A7 | faits — `864779778` |
 | C1 | fait — `9fae08275`, 25 suites e2e vertes |
-| A3 A4 | écrits, 947 tests de bibliothèque verts, passe e2e en cours |
+| A3 A4 | faits — 26 suites e2e vertes |
 | A5 | en conception (cartographie des nœuds d'écriture) |
 | B | en conception (cartographie de `Catalog::search` contre les nœuds) |
-| C2 C3 C4 C5, D, E | à faire |
+| C2 | écrit, 950 tests de bibliothèque verts, passe e2e en cours |
+| C3 C4 C5, D, E | à faire |
 
 
 ```

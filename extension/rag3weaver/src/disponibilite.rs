@@ -147,6 +147,11 @@ impl Disponibilites {
         Self(autre.0 & !self.0)
     }
 
+    /// `self` et `autre` ont-ils au moins une disponibilité en commun ?
+    pub const fn recouvre(self, autre: Self) -> bool {
+        self.0 & autre.0 != 0
+    }
+
     /// Les noms, pour un message lisible par un humain ou un agent.
     pub fn noms(self) -> Vec<&'static str> {
         let mut v = Vec::new();

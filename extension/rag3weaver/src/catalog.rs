@@ -195,6 +195,9 @@ pub struct Catalog {
     /// La marque est-elle posée en base ? Évite un aller-retour par
     /// enregistrement : on n'écrit qu'à la **transition** file vide → non vide.
     marque_posee: bool,
+    /// **Ce que la marque dit qu'on doit**, table par table — la dernière
+    /// dette publiée. Sert à ne réécrire la marque que quand elle change.
+    dette_publiee: BTreeMap<String, crate::disponibilite::Disponibilites>,
     /// Base directory for sparse/FTS mmap caches.
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
@@ -267,6 +270,7 @@ impl Catalog {
                 &[&format!("{:?}", std::time::SystemTime::now()), &format!("{:?}", std::thread::current().id())],
             ),
             marque_posee: false,
+            dette_publiee: BTreeMap::new(),
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
             fail_node: None,
@@ -1819,7 +1823,7 @@ impl Catalog {
                 data,
                 new_content_hash,
             });
-            self.annoncer_travail_en_attente();
+            self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
             records_enqueued += 1;
         }
 
@@ -1950,17 +1954,106 @@ impl Catalog {
     /// L'attendre indéfiniment transformerait une panne en gel.
     const MARQUE_PERIMEE_MS: u64 = 60_000;
 
-    /// Annoncer qu'on a du travail non publié. Idempotent, et **une seule
-    /// écriture par cycle** : c'est la transition qui compte, pas chaque
-    /// enregistrement.
-    fn annoncer_travail_en_attente(&mut self) {
-        if self.marque_posee {
+    /// **Ce que notre file doit encore, table par table.** C'est la dette en
+    /// mémoire — invisible d'un autre processus tant qu'elle n'est pas
+    /// publiée. La dette d'embarquement, elle, est dans la base et se lit de
+    /// partout ; elle n'a pas à être ici.
+    ///
+    /// - une entité, une relation, une mise à jour, une suppression en file :
+    ///   la table ne tient **rien**, pas même la donnée ;
+    /// - un agrégat en file : la ligne d'index est peut-être posée, mais son
+    ///   contenu, son plein texte et ses vecteurs ne le sont pas.
+    fn ce_que_je_dois(&self) -> BTreeMap<String, crate::disponibilite::Disponibilites> {
+        use crate::disponibilite::Disponibilites as D;
+        let mut dette: BTreeMap<String, D> = BTreeMap::new();
+        let mut doit = |table: &str, d: D| {
+            let e = dette.entry(table.to_string()).or_insert(D::AUCUNE);
+            *e |= d;
+        };
+        for e in &self.pending.entities {
+            doit(&e.entity_name, D::TOUT);
+        }
+        let bouts = Self::bouts_des_relations(&self.config);
+        for r in &self.pending.relations {
+            if let Some((de, vers)) = bouts(&r.rel_name) {
+                doit(&de, D::TOUT);
+                doit(&vers, D::TOUT);
+            }
+        }
+        for u in &self.pending.updates {
+            doit(&u.entity_name, D::TOUT);
+        }
+        for d in &self.pending.deletes {
+            doit(&d.entity_name, D::TOUT);
+        }
+        for a in &self.pending.aggregates {
+            doit(&format!("{}_Index", a.kb_name), D::PLEIN_TEXTE | D::SPARSE | D::DENSE);
+        }
+        dette
+    }
+
+    /// Le texte d'une marque : `horodatage|Table:data,textsearch|Autre:dense`.
+    ///
+    /// Un lecteur d'une version antérieure y lit un nombre suivi d'autre
+    /// chose et le rejette ; c'est voulu — il attendra comme avant, sur tout.
+    /// Un lecteur d'aujourd'hui qui lit une marque ancienne (un nombre seul)
+    /// la tient pour « doit tout, partout ».
+    fn texte_de_la_marque(dette: &BTreeMap<String, crate::disponibilite::Disponibilites>) -> String {
+        let mut texte = crate::dataflow::checkpoint::timestamp_ms().to_string();
+        for (table, d) in dette {
+            texte.push('|');
+            texte.push_str(table);
+            texte.push(':');
+            texte.push_str(&d.noms().join(","));
+        }
+        texte
+    }
+
+    /// Lit une marque : `(horodatage, dette)` — `None` pour une marque effacée
+    /// (`"0"`) ou illisible. Une dette `None` veut dire « tout, partout »
+    /// (le format d'avant le 6 septembre 2026).
+    fn lire_une_marque(
+        valeur: &str,
+    ) -> Option<(u64, Option<BTreeMap<String, crate::disponibilite::Disponibilites>>)> {
+        if valeur == "0" {
+            return None;
+        }
+        let mut parts = valeur.split('|');
+        let ts = parts.next()?.parse::<u64>().ok()?;
+        let mut dette = BTreeMap::new();
+        let mut a_des_tables = false;
+        for part in parts {
+            a_des_tables = true;
+            let (table, noms) = part.split_once(':')?;
+            let d = crate::disponibilite::Disponibilites::depuis_liste(noms).ok()?;
+            dette.insert(table.to_string(), d);
+        }
+        Some((ts, a_des_tables.then_some(dette)))
+    }
+
+    /// Publie la dette telle qu'elle est — une écriture, seulement si elle a
+    /// changé ou si `rafraichir` (l'horodatage fait office de battement de
+    /// cœur : une marque figée plus de [`Self::MARQUE_PERIMEE_MS`] passe pour
+    /// celle d'un mort).
+    fn publier_la_dette(
+        &mut self,
+        dette: BTreeMap<String, crate::disponibilite::Disponibilites>,
+        rafraichir: bool,
+    ) {
+        if dette.is_empty() {
+            self.effacer_la_marque();
+            return;
+        }
+        if dette == self.dette_publiee && self.marque_posee && !rafraichir {
             return;
         }
         let cle = format!("{}{}", Self::PREFIXE_MARQUE, self.writer_id);
-        let maintenant = crate::dataflow::checkpoint::timestamp_ms();
-        match self.persist_meta_key(&cle, &maintenant.to_string()) {
-            Ok(()) => self.marque_posee = true,
+        let texte = Self::texte_de_la_marque(&dette);
+        match self.persist_meta_key(&cle, &texte) {
+            Ok(()) => {
+                self.marque_posee = true;
+                self.dette_publiee = dette;
+            }
             Err(e) => {
                 // Ne pas faire échouer une mise en file pour ça — mais ne pas
                 // se taire non plus : sans la marque, un lecteur d'un autre
@@ -1976,6 +2069,34 @@ impl Catalog {
         }
     }
 
+    /// **Une écriture vient d'être mise en file** pour `table`, qui doit
+    /// donc `dispo`. Incrémental et bon marché : une écriture en base
+    /// seulement quand une table ou un niveau apparaît — pas à chaque
+    /// enregistrement, sinon quarante-six mille liens paieraient quarante-six
+    /// mille marques.
+    fn devoir(&mut self, table: &str, dispo: crate::disponibilite::Disponibilites) {
+        let deja = self
+            .dette_publiee
+            .get(table)
+            .copied()
+            .unwrap_or(crate::disponibilite::Disponibilites::AUCUNE);
+        if self.marque_posee && deja.contient(dispo) {
+            return;
+        }
+        let mut dette = self.dette_publiee.clone();
+        *dette.entry(table.to_string()).or_insert(crate::disponibilite::Disponibilites::AUCUNE) |= dispo;
+        self.publier_la_dette(dette, false);
+    }
+
+    /// Republie **ce que la file doit vraiment**, recalculé. À appeler quand
+    /// la file a changé autrement que par une mise en file — après un drain
+    /// borné, qui en a retiré une partie — et comme filet quand un chemin a
+    /// oublié de déclarer sa dette.
+    fn annoncer_travail_en_attente(&mut self) {
+        let dette = self.ce_que_je_dois();
+        self.publier_la_dette(dette, true);
+    }
+
     /// Effacer la marque : plus rien n'attend chez nous.
     fn effacer_la_marque(&mut self) {
         if !self.marque_posee {
@@ -1983,7 +2104,10 @@ impl Catalog {
         }
         let cle = format!("{}{}", Self::PREFIXE_MARQUE, self.writer_id);
         match self.persist_meta_key(&cle, "0") {
-            Ok(()) => self.marque_posee = false,
+            Ok(()) => {
+                self.marque_posee = false;
+                self.dette_publiee.clear();
+            }
             Err(e) => self.emit_event(CatalogEvent::Warning {
                 context: "marque_ingestion".into(),
                 message: format!(
@@ -2503,7 +2627,9 @@ impl Catalog {
         // expirait rendait un résultat annoncé complet.
         let mut ecritures_ailleurs_atteintes = true;
         if attendre_les_autres {
-            ecritures_ailleurs_atteintes = self.attendre_les_ecritures(timeout_ms, warnings);
+            let tables = fermeture(self);
+            ecritures_ailleurs_atteintes =
+                self.attendre_les_ecritures_pour(tables.as_ref(), exige, timeout_ms, warnings);
         }
 
         // Le reste **de cette fermeture** : ce que B a en file ne rend pas
@@ -2530,6 +2656,39 @@ impl Catalog {
     }
 
     pub fn attendre_les_ecritures(&self, timeout_ms: u64, warnings: &mut Vec<String>) -> bool {
+        self.attendre_les_ecritures_pour(
+            None,
+            crate::disponibilite::Disponibilites::TOUT,
+            timeout_ms,
+            warnings,
+        )
+    }
+
+    /// Un écrivain nous concerne-t-il ? Il nous concerne s'il doit, sur une
+    /// de **nos** tables, un niveau que **nous** exigeons. Une marque
+    /// ancienne (sans détail) concerne tout le monde.
+    fn marque_nous_concerne(
+        dette: Option<&BTreeMap<String, crate::disponibilite::Disponibilites>>,
+        tables: Option<&HashSet<String>>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> bool {
+        let Some(dette) = dette else { return true };
+        dette.iter().any(|(table, d)| {
+            tables.is_none_or(|t| t.contains(table)) && exige.recouvre(*d)
+        })
+    }
+
+    /// **Attendre les écrivains qui nous concernent** — ceux qui doivent, sur
+    /// une table de notre fermeture, un niveau que nous exigeons. Les autres
+    /// ne nous font pas attendre : c'est l'invariant, à travers la frontière
+    /// du processus. `tables: None` = toutes.
+    pub fn attendre_les_ecritures_pour(
+        &self,
+        tables: Option<&HashSet<String>>,
+        exige: crate::disponibilite::Disponibilites,
+        timeout_ms: u64,
+        warnings: &mut Vec<String>,
+    ) -> bool {
         let debut = std::time::Instant::now();
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         loop {
@@ -2570,7 +2729,17 @@ impl Catalog {
                 if k.ends_with(&self.writer_id) {
                     continue;
                 }
-                let depuis = v.parse::<u64>().map(|t| maintenant.saturating_sub(t)).unwrap_or(0);
+                let Some((pose, dette)) = Self::lire_une_marque(v) else {
+                    // Illisible : on la tient pour vivante et totale. Une
+                    // marque qu'on ne sait pas lire n'est pas une marque qu'on
+                    // peut ignorer.
+                    vivants += 1;
+                    continue;
+                };
+                if !Self::marque_nous_concerne(dette.as_ref(), tables, exige) {
+                    continue;
+                }
+                let depuis = maintenant.saturating_sub(pose);
                 if depuis > Self::MARQUE_PERIMEE_MS {
                     perimes.push(k.trim_start_matches(Self::PREFIXE_MARQUE).to_string());
                 } else {
@@ -3606,7 +3775,7 @@ impl Catalog {
                             data: clean_data,
                             new_content_hash: String::new(),
                         });
-                        self.annoncer_travail_en_attente();
+                        self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
                     }
                     // Le drain secondaire suit la même consigne — pas de GPU
                     // pour les lignes d'index si l'appelant n'en a pas voulu
@@ -3785,7 +3954,7 @@ impl Catalog {
             resolver,
             entity_ref.clone(),
         ));
-        self.annoncer_travail_en_attente();
+        self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
 
         // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
@@ -3839,12 +4008,12 @@ impl Catalog {
             // Index entity with resolver
             let (index_ref, index_resolver) = EntityRef::new(&index_table);
             self.pending.entities.push(EntityRecord::new(
-                index_table,
+                index_table.clone(),
                 index_data,
                 index_resolver,
                 index_ref.clone(),
             ));
-            self.annoncer_travail_en_attente();
+            self.devoir(&index_table, crate::disponibilite::Disponibilites::TOUT);
 
             // Link: {Entity}_IN_{KB}
             let in_rel_name = format!("{entity_name}_IN_{kb_name}");
@@ -3857,7 +4026,7 @@ impl Catalog {
                 in_rel_resolver,
                 in_rel_ref,
             ));
-            self.annoncer_travail_en_attente();
+            // Les deux bouts sont déjà déclarés ; le lien ne doit rien de plus.
 
             // Aggregate (deferred: will rebuild _content + chunks at drain time)
             self.pending.aggregates.push(AggregateRecord {
@@ -3866,7 +4035,8 @@ impl Catalog {
                 title_entity: entity_name.to_string(),
                 source_uuid: uuid.clone(),
             });
-            self.annoncer_travail_en_attente();
+            // L'agrégat : la ligne d'index doit son contenu et ses index.
+            // Elle est déjà déclarée pour tout ; rien de plus à dire.
 
             self.drain_counters.total_queued += 3; // index entity + link + aggregate
         }
@@ -3939,14 +4109,16 @@ impl Catalog {
             resolver,
             relation_ref.clone(),
         ));
-        self.annoncer_travail_en_attente();
+        // Un lien en file : ses deux tables ne tiennent pas encore leur donnée.
+        self.devoir(&from_entity, crate::disponibilite::Disponibilites::TOUT);
+        self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
 
         // Incremental: if this relation connects a content entity to a title entity
         // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
         // Only when UUIDs are already resolved (incremental case). In batch mode,
         // UUIDs are pending EntityRefs and create() already enqueued AggregateRecords.
-        let mut annoncer_apres = false;
+        let mut annoncer_apres: Vec<String> = Vec::new();
         for (kb_name, kb_meta) in &self.kb_metadata {
             let title_entity = &kb_meta.title.entity;
             let title_uuid = if from_entity == *title_entity && kb_meta.entities.contains(&to_entity) {
@@ -3968,12 +4140,17 @@ impl Catalog {
                     source_uuid: t_uuid,
                 });
                 self.drain_counters.total_queued += 1;
-                annoncer_apres = true;
+                annoncer_apres.push(kb_name.clone());
             }
         }
         // Hors de la boucle : elle emprunte `self.kb_metadata`.
-        if annoncer_apres {
-            self.annoncer_travail_en_attente();
+        for kb in annoncer_apres {
+            self.devoir(
+                &format!("{kb}_Index"),
+                crate::disponibilite::Disponibilites::PLEIN_TEXTE
+                    | crate::disponibilite::Disponibilites::SPARSE
+                    | crate::disponibilite::Disponibilites::DENSE,
+            );
         }
 
         Ok(relation_ref)
@@ -4150,7 +4327,7 @@ impl Catalog {
             data,
             new_content_hash,
         });
-        self.annoncer_travail_en_attente();
+        self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         Ok(())
     }
 
@@ -4190,7 +4367,7 @@ impl Catalog {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),
         });
-        self.annoncer_travail_en_attente();
+        self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         Ok(())
     }
 
@@ -4553,11 +4730,9 @@ impl Catalog {
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts) =
             self.build_ingestion_graph(lot, avec_embarquement);
         if graph.nodes.is_empty() {
-            // La marque ne s'efface que si **plus rien** n'attend — pas
-            // seulement rien pour cette cible.
-            if self.pending.is_empty() {
-                self.effacer_la_marque();
-            }
+            // La marque dit ce qui reste — rien, ou ce que d'autres cibles
+            // doivent encore.
+            self.annoncer_travail_en_attente();
             return FlushResult::default();
         }
 
@@ -4602,9 +4777,9 @@ impl Catalog {
                 // file, pas seulement du lot de ce drain. Effacé **avant** de
                 // rendre, pour qu'un lecteur qui regarde juste après voie la
                 // base à jour.
-                if self.pending.is_empty() {
-                    self.effacer_la_marque();
-                }
+                // Un drain borné laisse le reste : la marque le dit table
+                // par table, et son horodatage se rafraîchit au passage.
+                self.annoncer_travail_en_attente();
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );
@@ -4901,6 +5076,9 @@ impl Catalog {
         let mut ecoute = runtime.subscribe();
         let resultat = runtime.execute(&mut graph);
         let avertissements = ramasser_les_avertissements(&mut ecoute);
+
+        // Ce qui reste en file a changé : la marque le redit.
+        self.annoncer_travail_en_attente();
 
         match resultat {
             Ok(_) => {
@@ -6511,7 +6689,7 @@ impl Catalog {
                     entity_ref,
                     resolver: None, // already resolved above
                 });
-                self.annoncer_travail_en_attente();
+                self.devoir(&entity_name, crate::disponibilite::Disponibilites::TOUT);
             }
         }
     }
@@ -7545,6 +7723,89 @@ mod tests {
         assert_eq!(reste, 1, "l'agrégat, du dérivé : {w:?}");
         assert!(catalog.pending_work().entities.is_empty());
         assert!(catalog.pending_work().relations.is_empty());
+    }
+
+    // ── La marque, par niveau et par table ────────────────────────────
+
+    /// Le texte de la marque fait l'aller-retour, et les deux formes
+    /// anciennes se lisent encore : un nombre seul veut dire « tout,
+    /// partout », `"0"` veut dire « rien ».
+    #[test]
+    fn la_marque_se_lit_et_s_ecrit() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut dette = BTreeMap::new();
+        dette.insert("Document".to_string(), D::TOUT);
+        dette.insert("main_Index".to_string(), D::PLEIN_TEXTE | D::DENSE);
+        let texte = Catalog::texte_de_la_marque(&dette);
+        assert!(texte.contains("|Document:data,textsearch,sparse,dense|main_Index:textsearch,dense"), "{texte}");
+        let (ts, lue) = Catalog::lire_une_marque(&texte).expect("lisible");
+        assert!(ts > 0);
+        assert_eq!(lue, Some(dette));
+
+        assert_eq!(Catalog::lire_une_marque("1234"), Some((1234, None)), "l'ancien format : tout, partout");
+        assert_eq!(Catalog::lire_une_marque("0"), None, "effacée");
+        assert_eq!(Catalog::lire_une_marque("n'importe quoi"), None);
+        assert_eq!(Catalog::lire_une_marque("12|Document:inconnu"), None, "un nom inconnu rend la marque illisible");
+    }
+
+    /// Un écrivain ne nous concerne que s'il doit, sur une de **nos** tables,
+    /// un niveau que **nous** exigeons.
+    #[test]
+    fn une_marque_ne_concerne_que_ses_tables_et_ses_niveaux() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut dette = BTreeMap::new();
+        dette.insert("Document".to_string(), D::DENSE | D::SPARSE);
+        let mien = |noms: &[&str]| noms.iter().map(|n| (*n).to_string()).collect::<HashSet<String>>();
+
+        // Même table, niveau exigé : concerne.
+        assert!(Catalog::marque_nous_concerne(Some(&dette), Some(&mien(&["Document"])), D::DENSE));
+        // Même table, mais je n'exige que la donnée : ne concerne pas.
+        assert!(!Catalog::marque_nous_concerne(Some(&dette), Some(&mien(&["Document"])), D::DONNEE));
+        // Autre table : ne concerne pas, quoi que j'exige.
+        assert!(!Catalog::marque_nous_concerne(Some(&dette), Some(&mien(&["Note"])), D::TOUT));
+        // Toutes les tables : concerne dès qu'un niveau exigé est dû.
+        assert!(Catalog::marque_nous_concerne(Some(&dette), None, D::TOUT));
+        // Une marque ancienne concerne tout le monde.
+        assert!(Catalog::marque_nous_concerne(None, Some(&mien(&["Note"])), D::DONNEE));
+    }
+
+    /// **La dette publiée suit la file** : elle grandit à chaque table qui
+    /// entre, se réduit après un drain borné, s'efface quand plus rien
+    /// n'attend — et une écriture en base seulement quand elle change.
+    #[test]
+    fn la_dette_publiee_suit_la_file() {
+        use crate::disponibilite::Disponibilites as D;
+        let mut catalog = make_catalog_a_deux_entites();
+        catalog.initialize().unwrap();
+
+        catalog.create("Document", make_doc_data("D", "corps")).unwrap();
+        assert!(catalog.marque_posee);
+        assert_eq!(catalog.dette_publiee.get("Document"), Some(&D::TOUT));
+        assert_eq!(catalog.dette_publiee.get("main_Index"), Some(&D::TOUT));
+        assert!(!catalog.dette_publiee.contains_key("Note"));
+
+        catalog.create("Note", note("N")).unwrap();
+        assert_eq!(catalog.dette_publiee.get("Note"), Some(&D::TOUT));
+
+        // Le drain de Note ne touche pas à ce que Document doit.
+        catalog.drain_de("Note", D::TOUT);
+        assert!(!catalog.dette_publiee.contains_key("Note"), "{:?}", catalog.dette_publiee);
+        assert_eq!(catalog.dette_publiee.get("Document"), Some(&D::TOUT));
+        assert!(catalog.marque_posee);
+
+        // La donnée de la base posée : sa ligne d'index ne doit plus que le
+        // dérivé.
+        catalog.flush_insertions_de("main");
+        assert!(!catalog.dette_publiee.contains_key("Document"), "{:?}", catalog.dette_publiee);
+        assert_eq!(
+            catalog.dette_publiee.get("main_Index"),
+            Some(&(D::PLEIN_TEXTE | D::SPARSE | D::DENSE)),
+            "{:?}", catalog.dette_publiee
+        );
+
+        catalog.drain();
+        assert!(!catalog.marque_posee);
+        assert!(catalog.dette_publiee.is_empty());
     }
 
     // ── Les verbes unitaires, au tick ─────────────────────────────────
