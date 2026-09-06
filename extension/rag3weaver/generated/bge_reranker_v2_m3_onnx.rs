@@ -1,3 +1,4 @@
+// rag3weaver : casts « float » neutres (patch_attention.py --casts-neutres, 6 septembre 2026).
 // Generated from ONNX "onnx-community/bge-reranker-v2-m3-ONNX onnx/model.onnx" by burn-onnx
 use burn::prelude::*;
 use burn::nn::Linear;
@@ -330,7 +331,7 @@ impl Submodule1 {
         let gather6_out1 = constant15_out1.take::<2, 3>(0, add1_out1);
         let constant16_out1 = self.constant16.val();
         let gather7_out1 = constant16_out1.take::<2, 3>(0, expand1_out1);
-        let cast3_out1 = expand2_out1.float().cast(burn::tensor::DType::F32);
+        let cast3_out1 = expand2_out1.float();
         let add2_out1 = gather1_out1.add(gather7_out1);
         let constant17_out1 = self.constant17.val();
         let sub1_out1 = (constant17_out1)

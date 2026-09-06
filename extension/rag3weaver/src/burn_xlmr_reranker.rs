@@ -67,16 +67,16 @@ const MAX_SEQ_LEN: usize = 512;
 const CHUNK: usize = 16;
 
 /// What the two generated graphs have in common, seen from the wrapper.
-trait XlmrGraph: Send + Sync + Sized {
-    /// `Model::from_bytes` of the generated module.
-    fn load(bytes: burn::tensor::Bytes, device: &Device) -> Self;
+trait XlmrGraph: Send + Sync + Sized + burn_store::ModuleSnapshot {
+    /// Le module vide sur la carte, à remplir par `charger_burnpack`.
+    fn new(device: &Device) -> Self;
     /// `Model::forward(input_ids, attention_mask)` → logits `[B, 1]`.
     fn logits(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> Tensor<2>;
 }
 
 impl XlmrGraph for MMarcoGraph {
-    fn load(bytes: burn::tensor::Bytes, device: &Device) -> Self {
-        MMarcoGraph::from_bytes(bytes, device)
+    fn new(device: &Device) -> Self {
+        MMarcoGraph::new(device)
     }
     fn logits(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> Tensor<2> {
         // (The generated file has one `forward` per submodule; only this one is the
@@ -86,8 +86,8 @@ impl XlmrGraph for MMarcoGraph {
 }
 
 impl XlmrGraph for BgeRerankerGraph {
-    fn load(bytes: burn::tensor::Bytes, device: &Device) -> Self {
-        BgeRerankerGraph::from_bytes(bytes, device)
+    fn new(device: &Device) -> Self {
+        BgeRerankerGraph::new(device)
     }
     fn logits(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> Tensor<2> {
         self.forward(input_ids, attention_mask)
@@ -165,7 +165,7 @@ fn encode_pairs(
 
 /// `[B, 1]` logits → `B` values, with the shape check.
 fn flatten_logits(logits: Tensor<2>, batch: usize) -> Result<Vec<f32>, EmbedError> {
-    let data = logits.to_data();
+    let data = logits.to_data().convert::<f32>();
     // Rank is 2 by type; only the extents can surprise.
     let (rows, cols) = (data.shape[0], data.shape[1]);
     if (rows, cols) != (batch, 1) {
@@ -185,7 +185,7 @@ impl<G: XlmrGraph> XlmrCrossEncoder<G> {
     ) -> Result<Self, EmbedError> {
         let device = device.or_role(crate::burn_device::BurnRole::Reranker).resolve();
         let tokenizer = xlmr_pair_tokenizer(tokenizer_path)?;
-        let graph = G::load(burn::tensor::Bytes::from_bytes_vec(weights.to_vec()), &device);
+        let graph = crate::burn_device::charger_burnpack(G::new(&device), weights, "reranker xlm-r", crate::burn_device::float_dtype_voulu()).map_err(EmbedError::ProviderError)?;
         Ok(Self {
             graph,
             tokenizer: Mutex::new(tokenizer),

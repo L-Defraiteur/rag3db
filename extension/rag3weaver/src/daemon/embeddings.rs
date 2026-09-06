@@ -66,6 +66,11 @@ pub struct Identite {
     /// qu'il compare (6 septembre 2026).
     #[serde(default)]
     pub precision: String,
+    /// Le lot qui sature la carte pour le modèle servi, `(séquences, jetons)` :
+    /// relayé tel quel par `DaemonEmbedder::budget_conseille`, pour que les
+    /// lots soient les mêmes en local et par le démon (6 septembre 2026).
+    #[serde(default)]
+    pub lot_conseille: Option<(usize, usize)>,
     /// Le binaire qui répond (`chemin@mtime`), posé par [`super::servir`].
     /// Vide chez un démon d'avant le 6 septembre 2026 — donc périmé.
     #[serde(default)]
@@ -194,6 +199,7 @@ impl EmbedDaemon {
             sparse: self.sparse.is_some(),
             factice: self.embedder.is_mock(),
             precision: crate::burn_device::precision_par_defaut(),
+            lot_conseille: self.embedder.budget_conseille(),
             executable: String::new(),
         }
     }
@@ -385,6 +391,9 @@ impl Embedder for DaemonEmbedder {
 
     fn name(&self) -> &str {
         &self.identite.modele
+    }
+    fn budget_conseille(&self) -> Option<(usize, usize)> {
+        self.identite.lot_conseille
     }
 
     /// **Oui, et c'est ce qui empêche les pauses de se multiplier.** Voir

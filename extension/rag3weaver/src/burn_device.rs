@@ -187,7 +187,7 @@ impl BurnDevice {
     }
 
     /// Shared with the other burn embedders in this crate.
-    pub(crate) fn resolve(self) -> Device {
+    pub fn resolve(self) -> Device {
         let mut device = self.resolve_sans_precision();
         // **La précision flottante, par l'environnement** (`RAG3WEAVER_BURN_FLOAT`
         // = `f16` | `bf16` | `f32`). burn 0.22 la fixe par carte, une fois,
@@ -305,6 +305,38 @@ mod tests {
     }
 }
 
+/// **Charger un burnpack dans la précision de la carte.** Tous les modèles
+/// passent par ici (6 septembre 2026, soir) : `Model::from_bytes` du code
+/// généré laisse les poids f32, et un graphe dont les poids sont f32 calcule
+/// en f32 quoi que la carte ait pour défaut — MiniLM, les rerankers et l'OCR
+/// ne profitaient pas de Flex32 pour cette seule raison. Ici on construit le
+/// module vide sur la carte, on lit le pack par le store, et l'adaptateur pose
+/// la précision voulue (`Flex32Adapter` ré-étiquette, `FloatCastAdapter`
+/// convertit).
+///
+/// `precision` : `float_dtype_voulu()` pour suivre la carte ; `None` pour
+/// garder la précision du fichier (f32) — ce que fait l'OCR, dont les
+/// convolutions en Flex32 rendaient une carte de détection vide (6 septembre
+/// 2026, à creuser côté cubek-convolution).
+pub(crate) fn charger_burnpack<M: burn_store::ModuleSnapshot>(
+    mut model: M,
+    weights: &[u8],
+    nom: &str,
+    precision: Option<burn::tensor::FloatDType>,
+) -> Result<M, String> {
+    let mut store = burn_store::BurnpackStore::from_bytes(Some(burn::tensor::Bytes::from_bytes_vec(weights.to_vec())));
+    match precision {
+        Some(burn::tensor::FloatDType::Flex32) => {
+            store = store.with_from_adapter(Flex32Adapter);
+        }
+        Some(dtype) => {
+            store = store.with_from_adapter(burn_store::FloatCastAdapter::to(dtype.into()));
+        }
+        None => {}
+    }
+    model.load_from(&mut store).map(|_| model).map_err(|e| format!("poids {nom} : {e:?}"))
+}
+
 /// Le nom de la précision que `resolve()` posera : pour l'Identite du démon.
 pub fn precision_par_defaut() -> String {
     match float_dtype_voulu() {
@@ -316,7 +348,7 @@ pub fn precision_par_defaut() -> String {
 /// La précision flottante demandée par `RAG3WEAVER_BURN_FLOAT` (`f16`, `bf16`,
 /// `flex32`, `f32`), Flex32 sans la variable. Lue par la carte (défaut des tenseurs neufs) **et** par le
 /// chargement des poids, qui sans ça restent dans la précision du fichier.
-pub(crate) fn float_dtype_voulu() -> Option<burn::tensor::FloatDType> {
+pub fn float_dtype_voulu() -> Option<burn::tensor::FloatDType> {
     // **Flex32 par défaut** depuis burn pre.3 (6 septembre 2026, soir) : les six
     // suites de modèles passent, parité 0,999999 contre f32, et c'est ×2 à ×3
     // sur Vulkan avec les matrices coopératives. `f32` reste à portée de

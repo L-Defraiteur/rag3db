@@ -40,8 +40,10 @@ pub trait GraniteGraph: Send + Sync + 'static {
     const DIM: usize;
     const NOM: &'static str;
     const NOM_LONG: &'static str;
-    fn new(device: &Device) -> Self;
-    fn load_from(&mut self, store: &mut burn_store::BurnpackStore) -> Result<(), String>;
+    /// Le graphe chargé dans la précision voulue (voir `burn_device::charger_burnpack`).
+    fn charger(device: &Device, weights: &[u8], precision: Option<burn::tensor::FloatDType>) -> Result<Self, String>
+    where
+        Self: Sized;
     /// `[B, S, DIM]`, les hidden states par jeton.
     fn hidden(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> Tensor<3>;
 }
@@ -54,12 +56,8 @@ macro_rules! granite_graph {
             const DIM: usize = $dim;
             const NOM: &'static str = $nom;
             const NOM_LONG: &'static str = $nom_long;
-            fn new(device: &Device) -> Self {
-                Self(crate::$module::Model::new(device))
-            }
-            fn load_from(&mut self, store: &mut burn_store::BurnpackStore) -> Result<(), String> {
-                use burn_store::ModuleSnapshot;
-                self.0.load_from(store).map(|_| ()).map_err(|e| format!("{e:?}"))
+            fn charger(device: &Device, weights: &[u8], precision: Option<burn::tensor::FloatDType>) -> Result<Self, String> {
+                crate::burn_device::charger_burnpack(crate::$module::Model::new(device), weights, $nom, precision).map(Self)
             }
             fn hidden(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>) -> Tensor<3> {
                 let (hidden, _pooler) = self.0.forward(input_ids, attention_mask);
@@ -112,21 +110,7 @@ impl<G: GraniteGraph> GraniteEmbedder<G> {
         // adaptateur ils restent f32 et le graphe entier calcule en f32,
         // quoi que la carte ait pour défaut (le MiniLM multilingue, chargé par
         // `from_bytes`, ne profite pas de Flex32 pour cette raison).
-        let graph = {
-            let mut model = G::new(&device);
-            let mut store = burn_store::BurnpackStore::from_bytes(Some(burn::tensor::Bytes::from_bytes_vec(weights.to_vec())));
-            match crate::burn_device::float_dtype_voulu() {
-                Some(burn::tensor::FloatDType::Flex32) => {
-                    store = store.with_from_adapter(crate::burn_device::Flex32Adapter);
-                }
-                Some(dtype) => {
-                    store = store.with_from_adapter(burn_store::FloatCastAdapter::to(dtype.into()));
-                }
-                None => {}
-            }
-            model.load_from(&mut store).map_err(|e| EmbedError::ProviderError(format!("poids {} : {e}", G::NOM)))?;
-            model
-        };
+        let graph = G::charger(&device, weights, crate::burn_device::float_dtype_voulu()).map_err(EmbedError::ProviderError)?;
 
         Ok(Self { graph, tokenizer: Mutex::new(tokenizer), troncatures: AtomicUsize::new(0), device })
     }
@@ -198,10 +182,12 @@ impl<G: GraniteGraph> Embedder for GraniteEmbedder<G> {
         Some((self.troncatures.load(Ordering::Relaxed), MAX_SEQ_LEN))
     }
 
-    /// 256 séquences de 512 pour le 107m (6 × 384), 128 pour le 278m (12 × 768) :
-    /// de quoi saturer une carte de 32 Go, à mesurer au banc.
+    /// 64 séquences de 512 : ces graphes matérialisent la matrice d'attention
+    /// (`séquences × 12 têtes × 512² × 4 octets` = 800 Mo à 64, 3,2 Go à 256,
+    /// refusé par la carte le 6 septembre 2026). Le jour où leur attention
+    /// est fusionnée comme celle de BGE-M3, le conseil remonte.
     fn budget_conseille(&self) -> Option<(usize, usize)> {
-        Some((if G::DIM <= 384 { 256 } else { 128 }, MAX_SEQ_LEN))
+        Some((64, MAX_SEQ_LEN))
     }
 }
 

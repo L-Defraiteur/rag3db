@@ -1383,6 +1383,14 @@ impl Model {
     }
 
     #[allow(clippy::let_and_return, clippy::approx_constant)]
+    /// rag3weaver, diagnostic (6 septembre 2026) : les quatre sorties du tronc
+    /// et la sortie finale, pour comparer étage par étage entre précisions.
+    pub fn stades(&self, x: Tensor<4>) -> Vec<Tensor<4>> {
+        let (a, b, c, d) = self.submodule1.forward(x);
+        let y = self.submodule2.forward(a.clone(), b.clone(), c.clone(), d.clone());
+        vec![d, c, b, a, y]
+    }
+
     pub fn forward(&self, x: Tensor<4>) -> Tensor<4> {
         let (add23_out1, add18_out1, add9_out1, add4_out1) = self.submodule1.forward(x);
         let sigmoid1_out1 = self

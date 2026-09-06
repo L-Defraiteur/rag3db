@@ -88,9 +88,11 @@ fn reranker_is_deterministic() {
     }
 
     // Padding must not leak into the score: a passage scored alone and scored
-    // next to a longer one (hence padded) gets the same logit up to f32 noise.
+    // next to a longer one (hence padded) gets the same logit up to noise —
+    // en Flex32 la forme du lot choisit un autre pavage de matmul, et l'écart
+    // monte à 1e-3 sur des logits d'ordre 10 (6 septembre 2026) : 1e-2.
     let alone = r.rerank(BERLIN_QUERY, &strings(&[BERLIN_PASSAGES[2]])).unwrap();
-    assert!((alone[0] - a[2]).abs() < 1e-3, "alone {} vs batched {}", alone[0], a[2]);
+    assert!((alone[0] - a[2]).abs() < 1e-2, "alone {} vs batched {}", alone[0], a[2]);
 }
 
 /// Empty pool → empty scores, no forward.

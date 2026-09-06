@@ -76,10 +76,8 @@ impl BurnMiniLmEmbedder {
             }))
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer truncation: {e}")))?;
 
-        let graph = MiniLmGraph::from_bytes(
-            burn::tensor::Bytes::from_bytes_vec(weights.to_vec()),
-            &device,
-        );
+        let graph = crate::burn_device::charger_burnpack(MiniLmGraph::new(&device), weights, "minilm", crate::burn_device::float_dtype_voulu())
+            .map_err(EmbedError::ProviderError)?;
 
         Ok(Self {
             graph,
@@ -176,7 +174,7 @@ impl BurnMiniLmEmbedder {
         let norms = pooled.clone().powf_scalar(2.0).sum_dim(1).sqrt(); // [B, 1]
         let normalized = pooled / norms;
 
-        let data = normalized.to_data();
+        let data = normalized.to_data().convert::<f32>();
         let [b, dim] = [data.shape[0], data.shape[1]];
         let flat: Vec<f32> = data
             .try_to_vec()

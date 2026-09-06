@@ -268,6 +268,28 @@ est rendu par un candidat en cours de banc, et un noyau accéléré ne fixe pas
 l'ordre des additions (8,648816 contre 8,648815). Réécrits : chauffe, puis
 égalité à 1e-3. Et **la fusion ne casse plus le reranker sur pre.3** (5/5).
 
+## 8 ter. Flex32 pour tous les modèles, et l'OCR qui refuse
+
+Le soir : tous les modèles passent par `burn_device::charger_burnpack`
+(store + adaptateur), et non plus `Model::from_bytes` du code généré qui
+laissait les poids en f32 — MiniLM, MiniLM multilingue, les trois rerankers
+et Granite calculent donc en Flex32 comme BGE-M3 (les graphes BERT passent
+par `patch_attention.py --casts-neutres`, voir §6). Suites vertes, à deux
+tests de déterminisme près réécrits avec une tolérance de 1e-2 (un passage
+noté seul et dans un lot : la forme du lot choisit un autre pavage de matmul).
+
+**L'OCR reste en f32.** En Flex32 le détecteur rend une carte vide (max
+0,0000). Bissection : chaque opération prise seule est exacte en Flex32
+(convolutions larges, depthwise, 1×1, à stride ; interpolate, sigmoid,
+hardswish, maxpool, normalisation, concat — cosinus 1,000000 partout), mais
+dans le vrai graphe le signal dérive étage après étage (tronc : |max| 16
+contre 20, 4,7 contre 15, 5,4 contre 8,8, 2,0 contre 17) jusqu'à une tête à
+zéro. Ce n'est ni un seuil ni un cast ; c'est le chemin de convolution Flex32
+sur des cartes de vraie taille (184 × 616 et plus) qui perd par couche, là où
+les sondes de 96 × 96 ne le montrent pas. À creuser dans cubek-convolution ;
+les quatre tests `*_selon_la_precision` et `le_detecteur_etage_par_etage` de
+`e2e_burn_ocr` sont l'outil, `PRECISION_OCR` l'interrupteur.
+
 ## 8 bis. Trois points de comparaison : Vertex, llama.cpp, MiniLM
 
 Lucie, le soir : *« toujours affreux si on envisage d'indexer le kernel Linux

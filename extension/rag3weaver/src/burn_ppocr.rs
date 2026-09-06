@@ -53,6 +53,9 @@ const DET_STD: [f32; 3] = [0.229, 0.224, 0.225];
 
 /// Composante de moins de `MIN_SIZE` px de côté : rejetée avant le score
 /// (`DBPostProcess.min_size`) ; après unclip le seuil monte à `MIN_SIZE + 2`.
+
+/// La précision de l'OCR : f32, quoi que la carte ait pour défaut (voir `from_bytes`).
+const PRECISION_OCR: burn::tensor::FloatDType = burn::tensor::FloatDType::F32;
 const MIN_SIZE: f32 = 3.0;
 
 /// Réglages du pipeline. Défauts = `inference.yml` de PP-OCRv6_tiny_det /
@@ -165,8 +168,14 @@ impl BurnPpOcr {
             return Err(OcrError::Model("empty character dictionary".into()));
         }
         let device = device.or_role(crate::burn_device::BurnRole::Ocr).resolve();
-        let det = DetGraph::from_bytes(burn::tensor::Bytes::from_bytes_vec(det.to_vec()), &device);
-        let rec = RecGraph::from_bytes(burn::tensor::Bytes::from_bytes_vec(rec.to_vec()), &device);
+        // **L'OCR reste en f32.** En Flex32 le détecteur dérive étage après
+        // étage (tronc : |max| 16 contre 20, 4,7 contre 15, 2,0 contre 17) et
+        // rend une carte vide, alors que chaque convolution prise seule est
+        // exacte (tests `*_selon_la_precision`, 6 septembre 2026) : à creuser
+        // dans cubek-convolution sur des cartes de vraie taille. Tout le graphe
+        // calcule en f32 : les poids par `None`, l'image construite en f32.
+        let det = crate::burn_device::charger_burnpack(DetGraph::new(&device), det, "ppocr-det", None).map_err(OcrError::Model)?;
+        let rec = crate::burn_device::charger_burnpack(RecGraph::new(&device), rec, "ppocr-rec", None).map_err(OcrError::Model)?;
         Ok(Self { det, rec, dict, device, opts: PpOcrOptions::default() })
     }
 
@@ -262,18 +271,43 @@ impl BurnPpOcr {
         det_input(image, &self.opts)
     }
 
+    /// **Diagnostic** : `(nom, |max|, moyenne de |x|, nombre non fini)` pour les
+    /// quatre sorties du tronc et la sortie finale du détecteur — pour comparer
+    /// étage par étage entre précisions (6 septembre 2026).
+    pub fn det_stades(&self, input: &DetInput) -> Vec<(String, f32, f32, usize)> {
+        let x = Tensor::<4>::from_data(
+            TensorData::new(input.data.clone(), [1, 3, input.height, input.width]),
+            &self.device,
+        )
+        .cast(PRECISION_OCR);
+        self.det
+            .stades(x)
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let dims = t.dims();
+                let v: Vec<f32> = t.cast(burn::tensor::FloatDType::F32).to_data().convert::<f32>().try_to_vec().unwrap_or_default();
+                let max = v.iter().map(|a| a.abs()).fold(0.0f32, f32::max);
+                let moyenne = v.iter().map(|a| a.abs()).sum::<f32>() / v.len().max(1) as f32;
+                let nan = v.iter().filter(|a| !a.is_finite()).count();
+                (format!("étage {i} {dims:?}"), max, moyenne, nan)
+            })
+            .collect()
+    }
+
     /// Forward du détecteur : carte de probabilité `height × width`, ligne par ligne.
     pub fn det_forward(&self, input: &DetInput) -> Result<Vec<f32>, OcrError> {
         let x = Tensor::<4>::from_data(
             TensorData::new(input.data.clone(), [1, 3, input.height, input.width]),
             &self.device,
-        );
+        )
+        .cast(PRECISION_OCR);
         let y = self.det.forward(x);
         let dims = y.dims();
         if dims != [1, 1, input.height, input.width] {
             return Err(OcrError::Model(format!("det output {dims:?}, expected [1, 1, {}, {}]", input.height, input.width)));
         }
-        y.into_data().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("det map to_vec: {e:?}")))
+        y.into_data().convert::<f32>().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("det map to_vec: {e:?}")))
     }
 
     /// Carte de probabilité du détecteur pour une image : `(carte, width, height)`
@@ -333,7 +367,8 @@ impl BurnPpOcr {
         let x = Tensor::<4>::from_data(
             TensorData::new(input.data.clone(), [input.batch, 3, input.height, input.width]),
             &self.device,
-        );
+        )
+        .cast(PRECISION_OCR);
         let y = self.rec.forward(x);
         let [batch, steps, classes] = y.dims();
         if batch != input.batch {
@@ -345,7 +380,7 @@ impl BurnPpOcr {
                 self.dict.len()
             )));
         }
-        let all = y.into_data().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("rec probs to_vec: {e:?}")))?;
+        let all = y.into_data().convert::<f32>().try_to_vec::<f32>().map_err(|e| OcrError::Model(format!("rec probs to_vec: {e:?}")))?;
         Ok(all
             .chunks_exact(steps * classes)
             .map(|c| RecLogits { steps, classes, data: c.to_vec() })

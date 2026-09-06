@@ -148,3 +148,187 @@ fn blank_image_has_no_lines() {
     assert!(out.lines.is_empty(), "{:?}", out.lines);
     assert_eq!(out.text(), "");
 }
+
+/// **Diagnostic : la carte de détection selon la précision.** L'OCR calcule en
+/// f32 quoi que dise `RAG3WEAVER_BURN_FLOAT` (voir `burn_ppocr::from_bytes`) ;
+/// ce test et les trois suivants ont servi à l'établir et restent pour le jour
+/// où on rouvre le chantier : mettre `PRECISION_OCR` sur `float_dtype_voulu()`
+/// et relancer f32 puis flex32. Lancer avec
+/// `RAG3WEAVER_BURN_FLOAT=f32` puis sans variable (Flex32) : chaque passage
+/// dépose sa carte dans `$TMPDIR/rag3weaver-ocr-carte/<precision>.json`, le
+/// second compare (cosinus, max, moyenne, part au-dessus du seuil).
+#[test]
+#[ignore]
+fn carte_de_detection_selon_la_precision() {
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
+    let image = fixture();
+    let entree = PPOCR.det_input(&image).expect("det_input");
+    let carte = PPOCR.det_forward(&entree).expect("det_forward");
+    let max = carte.iter().cloned().fold(f32::MIN, f32::max);
+    let moyenne = carte.iter().sum::<f32>() / carte.len() as f32;
+    let dessus = carte.iter().filter(|&&p| p > 0.2).count();
+    let nan = carte.iter().filter(|p| !p.is_finite()).count();
+    eprintln!("[carte] {precision} : {}×{} = {} valeurs, max {max:.4}, moyenne {moyenne:.5}, {dessus} > 0,2, {nan} non finies", entree.width, entree.height, carte.len());
+    let dir = std::env::temp_dir().join("rag3weaver-ocr-carte");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{precision}.json")), serde_json::to_string(&carte).unwrap()).unwrap();
+    let autre = if precision == "f32" { "flex32" } else { "f32" };
+    if let Ok(t) = std::fs::read_to_string(dir.join(format!("{autre}.json"))) {
+        let ref_: Vec<f32> = serde_json::from_str(&t).unwrap();
+        if ref_.len() == carte.len() {
+            let dot: f32 = carte.iter().zip(&ref_).map(|(a, b)| a * b).sum();
+            let na = carte.iter().map(|a| a * a).sum::<f32>().sqrt();
+            let nb = ref_.iter().map(|b| b * b).sum::<f32>().sqrt();
+            let ecart = carte.iter().zip(&ref_).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+            eprintln!("[carte] {precision} contre {autre} : cosinus {:.5}, écart max {ecart:.4}", dot / (na * nb));
+        }
+    }
+}
+
+/// **Sonde : une convolution seule, f32 contre Flex32.** Si elle diverge, le
+/// bug est dans cubek-convolution (à remonter) ; sinon il est dans le graphe.
+#[test]
+#[ignore]
+fn une_convolution_seule_selon_la_precision() {
+    use burn::nn::conv::{Conv2d, Conv2dConfig};
+    use burn::prelude::*;
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
+    let device = rag3weaver::burn_device::BurnDevice::default().resolve();
+    let conv: Conv2d = Conv2dConfig::new([3, 8], [3, 3]).with_padding(burn::nn::PaddingConfig2d::Same).init(&device);
+    // Poids et entrée déterministes : sinus d'un index.
+    let w: Vec<f32> = (0..8 * 3 * 3 * 3).map(|i| ((i as f32) * 0.37).sin() * 0.1).collect();
+    let x: Vec<f32> = (0..3 * 64 * 64).map(|i| ((i as f32) * 0.11).cos()).collect();
+    let conv = conv.map(&mut PoseurDePoids(w.clone()));
+    let entree = Tensor::<4>::from_data(TensorData::new(x, [1, 3, 64, 64]), &device)
+        .cast(rag3weaver::burn_device::float_dtype_voulu().unwrap_or(burn::tensor::FloatDType::F32));
+    let y = conv.forward(entree).cast(burn::tensor::FloatDType::F32).to_data().convert::<f32>();
+    let v: Vec<f32> = y.try_to_vec().unwrap();
+    let max = v.iter().cloned().fold(f32::MIN, f32::max);
+    let moyenne = v.iter().map(|a| a.abs()).sum::<f32>() / v.len() as f32;
+    eprintln!("[conv] {precision} : {} valeurs, max {max:.4}, |moyenne| {moyenne:.5}", v.len());
+    let dir = std::env::temp_dir().join("rag3weaver-ocr-carte");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("conv-{precision}.json")), serde_json::to_string(&v).unwrap()).unwrap();
+    let autre = if precision == "f32" { "flex32" } else { "f32" };
+    if let Ok(t) = std::fs::read_to_string(dir.join(format!("conv-{autre}.json"))) {
+        let r: Vec<f32> = serde_json::from_str(&t).unwrap();
+        let dot: f32 = v.iter().zip(&r).map(|(a, b)| a * b).sum();
+        let (na, nb) = (v.iter().map(|a| a * a).sum::<f32>().sqrt(), r.iter().map(|b| b * b).sum::<f32>().sqrt());
+        eprintln!("[conv] {precision} contre {autre} : cosinus {:.6}", dot / (na * nb));
+    }
+}
+
+struct PoseurDePoids(Vec<f32>);
+impl burn::module::ModuleMapper for PoseurDePoids {
+    fn map_float<const D: usize>(&mut self, param: burn::module::Param<burn::tensor::Tensor<D>>) -> burn::module::Param<burn::tensor::Tensor<D>> {
+        let poids = self.0.clone();
+        param.map(|tensor| {
+            let dims = tensor.dims();
+            let n: usize = dims.iter().product();
+            if n == poids.len() {
+                burn::tensor::Tensor::<D>::from_data(burn::tensor::TensorData::new(poids.clone(), dims), &tensor.device())
+                    .cast(rag3weaver::burn_device::float_dtype_voulu().unwrap_or(burn::tensor::FloatDType::F32))
+            } else {
+                tensor.zeros_like()
+            }
+        })
+    }
+}
+
+/// **Sonde : les autres opérations du détecteur, une par une**, f32 contre Flex32.
+#[test]
+#[ignore]
+fn les_operations_du_detecteur_selon_la_precision() {
+    use burn::prelude::*;
+    use burn::tensor::module::interpolate;
+    use burn::tensor::ops::{InterpolateMode, InterpolateOptions};
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
+    let device = rag3weaver::burn_device::BurnDevice::default().resolve();
+    let p = rag3weaver::burn_device::float_dtype_voulu().unwrap_or(burn::tensor::FloatDType::F32);
+    let x: Vec<f32> = (0..2 * 8 * 32 * 32).map(|i| ((i as f32) * 0.11).cos() * 3.0).collect();
+    let t = Tensor::<4>::from_data(TensorData::new(x, [2, 8, 32, 32]), &device).cast(p);
+    let sorties: Vec<(&str, Tensor<4>)> = vec![
+        ("interpolate-nearest", interpolate(t.clone(), [64, 64], InterpolateOptions::new(InterpolateMode::Nearest))),
+        ("interpolate-bilinear", interpolate(t.clone(), [64, 64], InterpolateOptions::new(InterpolateMode::Bilinear))),
+        ("sigmoid", burn::tensor::activation::sigmoid(t.clone())),
+        ("hardswish", t.clone() * (t.clone() + 3.0).clamp(0.0, 6.0) / 6.0),
+        ("maxpool", burn::tensor::module::max_pool2d(t.clone(), [3, 3], [2, 2], [1, 1], [1, 1], false)),
+        ("batchnorm-like", (t.clone() - 0.5) / (t.clone().powf_scalar(2.0).mean_dim(1).add_scalar(1e-5).sqrt())),
+        ("add-mul", (t.clone() * 0.5 + 1.0) * t.clone()),
+        ("concat", Tensor::cat(vec![t.clone(), t.clone()], 1)),
+    ];
+    let dir = std::env::temp_dir().join("rag3weaver-ocr-carte");
+    std::fs::create_dir_all(&dir).unwrap();
+    let autre = if precision == "f32" { "flex32" } else { "f32" };
+    for (nom, y) in sorties {
+        let v: Vec<f32> = y.cast(burn::tensor::FloatDType::F32).to_data().convert::<f32>().try_to_vec().unwrap();
+        let max = v.iter().cloned().fold(f32::MIN, f32::max);
+        let nan = v.iter().filter(|a| !a.is_finite()).count();
+        let mut ligne = format!("[op] {precision} {nom} : {} valeurs, max {max:.4}, {nan} non finies", v.len());
+        std::fs::write(dir.join(format!("op-{nom}-{precision}.json")), serde_json::to_string(&v).unwrap()).unwrap();
+        if let Ok(txt) = std::fs::read_to_string(dir.join(format!("op-{nom}-{autre}.json"))) {
+            let r: Vec<f32> = serde_json::from_str(&txt).unwrap();
+            if r.len() == v.len() {
+                let dot: f32 = v.iter().zip(&r).map(|(a, b)| a * b).sum();
+                let (na, nb) = (v.iter().map(|a| a * a).sum::<f32>().sqrt(), r.iter().map(|b| b * b).sum::<f32>().sqrt());
+                ligne += &format!(" — cosinus contre {autre} {:.6}", dot / (na * nb));
+            }
+        }
+        eprintln!("{ligne}");
+    }
+}
+
+/// **Sonde : les formes de convolution du détecteur** — large 3×3, depthwise, 1×1.
+#[test]
+#[ignore]
+fn les_convolutions_du_detecteur_selon_la_precision() {
+    use burn::nn::conv::{Conv2d, Conv2dConfig};
+    use burn::prelude::*;
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
+    let device = rag3weaver::burn_device::BurnDevice::default().resolve();
+    let p = rag3weaver::burn_device::float_dtype_voulu().unwrap_or(burn::tensor::FloatDType::F32);
+    let x: Vec<f32> = (0..64 * 96 * 96).map(|i| ((i as f32) * 0.11).cos()).collect();
+    let entree = Tensor::<4>::from_data(TensorData::new(x, [1, 64, 96, 96]), &device).cast(p);
+    let formes: Vec<(&str, Conv2dConfig)> = vec![
+        ("3x3 64→64", Conv2dConfig::new([64, 64], [3, 3]).with_padding(burn::nn::PaddingConfig2d::Same)),
+        ("depthwise 3x3 64 groupes", Conv2dConfig::new([64, 64], [3, 3]).with_groups(64).with_padding(burn::nn::PaddingConfig2d::Same)),
+        ("1x1 64→128", Conv2dConfig::new([64, 128], [1, 1])),
+        ("3x3 64→128 stride 2", Conv2dConfig::new([64, 128], [3, 3]).with_stride([2, 2]).with_padding(burn::nn::PaddingConfig2d::Explicit(1, 1, 1, 1))),
+    ];
+    let dir = std::env::temp_dir().join("rag3weaver-ocr-carte");
+    std::fs::create_dir_all(&dir).unwrap();
+    let autre = if precision == "f32" { "flex32" } else { "f32" };
+    for (nom, cfg) in formes {
+        let conv: Conv2d = cfg.init(&device);
+        let n: usize = conv.weight.dims().iter().product();
+        let w: Vec<f32> = (0..n).map(|i| ((i as f32) * 0.37).sin() * 0.1).collect();
+        let conv = conv.map(&mut PoseurDePoids(w));
+        let y = conv.forward(entree.clone());
+        let v: Vec<f32> = y.cast(burn::tensor::FloatDType::F32).to_data().convert::<f32>().try_to_vec().unwrap();
+        let max = v.iter().map(|a| a.abs()).fold(0.0f32, f32::max);
+        let mut ligne = format!("[conv] {precision} {nom} : {} valeurs, |max| {max:.4}", v.len());
+        let cle = nom.replace(' ', "_").replace('→', "-");
+        std::fs::write(dir.join(format!("convf-{cle}-{precision}.json")), serde_json::to_string(&v).unwrap()).unwrap();
+        if let Ok(txt) = std::fs::read_to_string(dir.join(format!("convf-{cle}-{autre}.json"))) {
+            let r: Vec<f32> = serde_json::from_str(&txt).unwrap();
+            if r.len() == v.len() {
+                let dot: f32 = v.iter().zip(&r).map(|(a, b)| a * b).sum();
+                let (na, nb) = (v.iter().map(|a| a * a).sum::<f32>().sqrt(), r.iter().map(|b| b * b).sum::<f32>().sqrt());
+                ligne += &format!(" — cosinus contre {autre} {:.6}", dot / (na * nb));
+            }
+        }
+        eprintln!("{ligne}");
+    }
+}
+
+/// **Diagnostic : le détecteur étage par étage** selon la précision.
+#[test]
+#[ignore]
+fn le_detecteur_etage_par_etage() {
+    let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
+    let image = fixture();
+    let entree = PPOCR.det_input(&image).expect("det_input");
+    for (nom, max, moyenne, nan) in PPOCR.det_stades(&entree) {
+        eprintln!("[étage] {precision} {nom} : |max| {max:.4}, |moyenne| {moyenne:.5}, {nan} non finies");
+    }
+}

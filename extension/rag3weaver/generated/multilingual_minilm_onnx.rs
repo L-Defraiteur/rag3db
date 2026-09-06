@@ -1,3 +1,4 @@
+// rag3weaver : casts « float » neutres (patch_attention.py --casts-neutres, 6 septembre 2026).
 // Generated from ONNX "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 onnx/model.onnx" by burn-onnx
 use burn::prelude::*;
 use burn::nn::Linear;
@@ -272,7 +273,7 @@ impl Submodule1 {
             }
             unsqueeze3_out1.expand(shape)
         };
-        let cast1_out1 = expand1_out1.float().cast(burn::tensor::DType::F32);
+        let cast1_out1 = expand1_out1.float();
         let constant216_out1 = self.constant216.val();
         let sub2_out1 = (constant216_out1)
             .unsqueeze_dims(&[0isize, 1isize, 2isize])

@@ -94,10 +94,8 @@ impl BurnMiniLmReranker {
             }))
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer truncation: {e}")))?;
 
-        let graph = MsMarcoGraph::from_bytes(
-            burn::tensor::Bytes::from_bytes_vec(weights.to_vec()),
-            &device,
-        );
+        let graph = crate::burn_device::charger_burnpack(MsMarcoGraph::new(&device), weights, "msmarco-minilm", crate::burn_device::float_dtype_voulu())
+            .map_err(EmbedError::ProviderError)?;
 
         Ok(Self {
             graph,
@@ -166,7 +164,7 @@ impl BurnMiniLmReranker {
         // graph's.)
         let logits: Tensor<2> = self.graph.forward(input_ids, attention_mask, token_type_ids);
 
-        let data = logits.to_data();
+        let data = logits.to_data().convert::<f32>();
         // Rank is 2 by type; only the extents can surprise.
         let (rows, cols) = (data.shape[0], data.shape[1]);
         if (rows, cols) != (batch, 1) {
