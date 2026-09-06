@@ -88,3 +88,27 @@ l'autre session et les `rustc` en cours la bruitent (36 → 44 s vus).
 | « le modèle de la base » | `Catalog::check_embedding_model`, `scope::EMBEDDING_MODEL_KEY` |
 | « le montage d'un agent » | `agent::mount_agent_services_on` |
 | « les gabarits du projet » | `template.rs`, `Catalog::sync_templates` |
+
+## Addendum, 6 septembre 2026, 23h (après le legs)
+
+Le chantier « hors modèle, hors plein texte » est passé après ce legs ; sa
+référence est `docs/6-septembre-2026-22h21/01-la-premiere-ingestion-en-masse.md`.
+Ce qui change pour qui reprend :
+
+- **Chiffres** : le cœur C++ (1 642 fichiers, granite-107m) est à **36,4 s**,
+  dont ~19,5 s de modèle. Les 51 s de ce legs sont dépassés.
+- **Première ingestion** : sur une table vide, `COPY` des nœuds et vecteurs
+  posés avec la ligne de chunk (`InsertMode::Copy`, `EmbedMode::Enrich`).
+  `RAG3WEAVER_INGESTION_LIGNE_A_LIGNE=1` force le chemin de toujours, pour
+  comparer. Le profil dit `première ingestion, N lignes par le chemin de masse`.
+- **Checkpoints** : les lots partent en fichiers MessagePack par un fil de
+  fond (`checkpoint_store::Spiller`), dossier `CatalogConfig.checkpoint_dir`
+  (défaut : `<temp>/rag3weaver-checkpoints`). Modes `checkpoint_mode` :
+  `full` (défaut), `operations`, `off` ; `EntityConfig.checkpoint` par entité.
+- **Profils** : `[drain-profile] drain/…` (phases du drain) et
+  `[runtime-profile] checkpoint/<nœud> (sérialisation, écriture)` sous la
+  même variable `RAG3WEAVER_INGEST_PROFILE=1`.
+- **Piège** : un fichier CSV de `COPY` nommé par (pid, table, milliseconde)
+  se fait voler par un autre test du même processus — `fichier_csv` ajoute
+  un compteur. Et le lecteur CSV parallèle refuse un saut de ligne entre
+  guillemets : `parallel=false`, toujours, pour du texte.
