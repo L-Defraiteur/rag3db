@@ -42,6 +42,29 @@ pub use embeddings::{DaemonEmbedder, EmbedDaemon};
 /// Le chemin de la sonde, le même pour tous les démons.
 pub const SANTE: &str = "/sante";
 
+/// `POST /quitter` : le démon répond puis s'arrête. Refusé s'il est exposé.
+pub const QUITTER: &str = "/quitter";
+
+/// **L'empreinte d'un exécutable** : son chemin résolu et sa date de
+/// modification. Elle change à chaque reconstruction, et c'est tout ce qu'on
+/// lui demande — pas de hachage de cent mégaoctets au démarrage.
+pub fn empreinte_executable(p: &std::path::Path) -> String {
+    let chemin = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let modifie = std::fs::metadata(&chemin)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{}@{modifie}", chemin.display())
+}
+
+/// L'empreinte du processus courant, mesurée une fois.
+pub fn mon_empreinte() -> String {
+    static E: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    E.get_or_init(|| std::env::current_exe().map(|p| empreinte_executable(&p)).unwrap_or_default()).clone()
+}
+
 /// Ce qui peut mal se passer, des deux côtés du fil.
 #[derive(Debug)]
 pub enum DaemonError {
@@ -162,6 +185,12 @@ pub fn servir(
     let mut identite = service.identite();
     if let Some(o) = identite.as_object_mut() {
         o.insert("service".into(), serde_json::json!(service.nom()));
+        // **Quel binaire répond.** Un démon survit à celui qui l'a lancé —
+        // c'est son rôle — donc il survit aussi aux reconstructions : le
+        // 6 septembre 2026, un démon de la veille a servi une journée entière
+        // avec un code que plus personne n'avait, et les mesures avec. Le
+        // client compare cette empreinte à celle de son propre binaire.
+        o.insert("executable".into(), serde_json::json!(mon_empreinte()));
     }
     let identite = Arc::new(identite.to_string());
 
@@ -179,6 +208,20 @@ pub fn servir(
                         let route = chemin(req.url());
                         let (statut, corps) = if methode == "GET" && route == SANTE {
                             (200, identite.as_str().to_string())
+                        } else if methode == "POST" && route == QUITTER {
+                            // Un démon périmé se remplace : on répond, puis on
+                            // s'en va. Jamais quand il est exposé hors de la
+                            // boucle locale (issue 05) — là, `quitter` serait
+                            // une porte de plus.
+                            if expose {
+                                (403, erreur("un démon exposé ne se quitte pas à distance"))
+                            } else {
+                                std::thread::spawn(|| {
+                                    std::thread::sleep(std::time::Duration::from_millis(200));
+                                    std::process::exit(0);
+                                });
+                                (200, "{\"quitte\":true}".to_string())
+                            }
                         } else {
                             service.repondre(&methode, &route, &mut req)
                         };

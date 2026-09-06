@@ -885,6 +885,12 @@ impl Node for KBEmbedNode {
             // nœud (27 août 2026, en cherchant pourquoi l'embedding faisait
             // ramer la machine).
             let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(dense_works.len());
+            // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+            // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+            // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+            // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+            // les résultats se relisent par position.
+            dense_works.sort_by_key(|w| w.text.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
             for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                 let chunk = &dense_works[plage];
@@ -950,6 +956,12 @@ impl Node for KBEmbedNode {
             if let Some(ref sparse_emb) = sparse_embedder {
                 // Borné comme le dense : même tenseur, même risque.
                 let mut sparse_vecs: Vec<SparseVector> = Vec::with_capacity(sparse_works.len());
+                // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+                // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+                // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+                // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+                // les résultats se relisent par position.
+                sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &sparse_works[plage];
@@ -1082,6 +1094,18 @@ impl Node for KBEmbedNode {
             if let Some(ref dual_emb) = dual_embedder {
                 let mut dense_results: Vec<(&EmbedWork, Vec<f32>)> = Vec::with_capacity(dual_works.len());
                 let mut sparse_results: Vec<(&EmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
+
+                // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+
+                // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+
+                // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+
+                // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+
+                // les résultats se relisent par position.
+
+                dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
@@ -2041,6 +2065,12 @@ impl Node for EmbedNode {
 
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {
+            // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+            // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+            // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+            // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+            // les résultats se relisent par position.
+            dense_works.sort_by_key(|w| w.text.len());
             let lens: Vec<usize> = dense_works.iter().map(|w| w.text.len()).collect();
             for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                 let chunk = &dense_works[plage];
@@ -2097,6 +2127,12 @@ impl Node for EmbedNode {
         let sparse_handles = ctx.service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned();
         if !sparse_works.is_empty() {
             if let Some(ref sparse_emb) = sparse_embedder {
+                // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+                // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+                // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+                // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+                // les résultats se relisent par position.
+                sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {
                     let chunk = &sparse_works[plage];
@@ -2201,6 +2237,18 @@ impl Node for EmbedNode {
             if let Some(ref dual_emb) = dual_embedder {
                 let mut dense_results: Vec<(&SimpleEmbedWork, Vec<f32>)> = Vec::with_capacity(dual_works.len());
                 let mut sparse_results: Vec<(&SimpleEmbedWork, SparseVector)> = Vec::with_capacity(dual_works.len());
+
+                // **Par longueur, pour que le lot ne rembourre presque rien.** Le
+
+                // tokenizer rembourre au plus long du lot ; dans l'ordre d'arrivée un
+
+                // lot mêle des chunks de 50 et de 1000 caractères et la carte calcule
+
+                // les blancs — mesuré le 6 septembre 2026 sur `src/dataflow`. Stable :
+
+                // les résultats se relisent par position.
+
+                dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 for plage in budget_batches(&lens, self.gpu_batch_size.max(1), embed_char_budget()) {

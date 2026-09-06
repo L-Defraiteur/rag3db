@@ -61,6 +61,10 @@ pub struct Identite {
     pub sparse: bool,
     /// **Est-ce un embedder factice ?** Relayé tel quel jusqu'au catalogue.
     pub factice: bool,
+    /// Le binaire qui répond (`chemin@mtime`), posé par [`super::servir`].
+    /// Vide chez un démon d'avant le 6 septembre 2026 — donc périmé.
+    #[serde(default)]
+    pub executable: String,
 }
 
 // ─── Le serveur ──────────────────────────────────────────────────────────────
@@ -138,18 +142,34 @@ impl EmbedDaemon {
         textes: &[String],
         embarquer: impl Fn(&[String]) -> Result<Vec<T>, EmbedError>,
     ) -> Result<Vec<T>, EmbedError> {
-        let lens: Vec<usize> = textes.iter().map(|t| t.len()).collect();
-        let mut out = Vec::with_capacity(textes.len());
+        // **Par longueur**, comme le client : un lot homogène rembourre peu.
+        // Les résultats reviennent dans l'ordre reçu.
+        let mut ordre: Vec<usize> = (0..textes.len()).collect();
+        ordre.sort_by_key(|&i| textes[i].len());
+        let tries: Vec<String> = ordre.iter().map(|&i| textes[i].clone()).collect();
+        let lens: Vec<usize> = tries.iter().map(|t| t.len()).collect();
+        let mut sortie: Vec<Option<T>> = (0..textes.len()).map(|_| None).collect();
+        let mut pos = 0usize;
         for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
             let debut = std::time::Instant::now();
             let lot = {
                 let _passe = self.passe.lock();
-                embarquer(&textes[plage])
+                embarquer(&tries[plage.clone()])
             }?;
             souffler(debut.elapsed());
-            out.extend(lot);
+            if lot.len() != plage.len() {
+                return Err(EmbedError::ProviderError(format!(
+                    "{} vecteurs pour {} textes",
+                    lot.len(),
+                    plage.len()
+                )));
+            }
+            for v in lot {
+                sortie[ordre[pos]] = Some(v);
+                pos += 1;
+            }
         }
-        Ok(out)
+        Ok(sortie.into_iter().map(|v| v.expect("chaque texte a son vecteur")).collect())
     }
 
     /// **Servir hors de la boucle locale**, en sachant que ce démon exécute ce
@@ -168,6 +188,7 @@ impl EmbedDaemon {
             dual: self.dual.is_some(),
             sparse: self.sparse.is_some(),
             factice: self.embedder.is_mock(),
+            executable: String::new(),
         }
     }
 
@@ -308,6 +329,18 @@ impl DaemonEmbedder {
     /// Ce que le démon déclare être.
     pub fn identite(&self) -> &Identite {
         &self.identite
+    }
+
+    /// **Ce démon est-il celui de ce binaire-là ?** Faux s'il vient d'une
+    /// autre construction — ou d'avant l'empreinte.
+    pub fn est_a_jour_avec(&self, binaire: &std::path::Path) -> bool {
+        !self.identite.executable.is_empty()
+            && self.identite.executable == super::empreinte_executable(binaire)
+    }
+
+    /// Lui demander de s'arrêter. Le port se libère dans la demi-seconde.
+    pub fn quitter(&self) -> Result<(), DaemonError> {
+        poster(&self.agent, &self.base, super::QUITTER, "{}".into()).map(|_| ())
     }
 
     /// Sait-il rendre le creux en une passe ?
