@@ -130,6 +130,11 @@ pendant que l'avertissement d'à côté en annonçait deux.
 
 ## Les chantiers, dans l'ordre
 
+> **Remplacé l'après-midi même** par
+> [`04-reconciliation-fondations-d-abord.md`](04-reconciliation-fondations-d-abord.md).
+> L'ordre ci-dessous reportait sous « à décider » des choses déjà tranchées le
+> 5 ; il est gardé pour la trace, pas pour être suivi.
+
 ### A. Le tick — et ce qui n'est pas mécanique
 
 L'algorithme est celui de Nagle : **embarquer dès que la carte est libre,
