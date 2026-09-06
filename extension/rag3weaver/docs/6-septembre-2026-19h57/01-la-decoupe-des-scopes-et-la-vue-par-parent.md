@@ -105,3 +105,34 @@ Suites vertes : `e2e_code` 23, `e2e_symbol_search` 12,
 | D2 | fait |
 | D3 | fait — `EntityConfig.group_by`, `GroupFrameNode` dans `search`, regroupement par arête au rendu, cadre `┌ …` ; le parent d'une méthode par `HAS_PARENT` est le scope nommé comme son impl (l'enum ou la struct), résolu par nom dans codeparsers |
 | D4 | fait : `e2e_code` 24, `e2e_graph_tool` 4, `e2e_agent_loop` 8 (un nœud de plus dans la trace), bibliothèque 986 |
+
+## 7. La suite du cahier des charges, le même soir
+
+Après la découpe, les points 2 et 3 du cahier de la session moteur, et le
+premier chiffre avec granite. Toujours `src/dataflow`, 30 fichiers, seul sur
+la carte TV.
+
+| étape | temps | embarquement | ce qui a changé |
+|---|---|---|---|
+| découpe (D1 + D2) | 47 s | 42 s | 2 607 chunks au lieu de 5 405 |
+| **pipeline** (`embed_pipeline`, les six boucles) | 36 s | 31 s | la carte calcule le lot suivant pendant qu'on écrit le précédent ; 36 % → 94 % en pointe |
+| lots par modèle (`budget_conseille`, puissances de deux, surface d'attention) | — | — | BGE-M3 à remesurer ; granite ci-dessous |
+| **granite-107m** (384 dimensions, lots 256 × 512 bornés en surface) | **11,8 s** | 5,9 s | le modèle : 12 × 384 au lieu de 24 × 1 024 |
+
+À 11,8 s pour 30 fichiers, un dépôt de 5 000 fichiers prend **~33 minutes** —
+la cible de Lucie (30 min) est à portée, et la carte n'est plus qu'à 32 % :
+le temps restant est l'analyse (tree-sitter), les insertions, les symboles
+(2,7 s), pas le modèle.
+
+Trouvé en route : le conseil du modèle pris tel quel (256 séquences de 512
+jetons) a demandé un tampon de 2,6 Go à la carte — la matrice d'attention,
+256 × 12 têtes × 512² × 4 octets. D'où la troisième borne des lots, en
+surface d'attention (`LotBudget::max_area`).
+
+Ce que la qualité dira : granite-107m contre BGE-M3 sur des requêtes de code
+en français, c'est le banc de la session moteur. Lucie tranche sur les deux
+chiffres.
+
+**Reste, dans l'ordre** : la garde du modèle dans `_catalog_meta` (écrite,
+test en attente de compilation), l'incrémental par hash à trois niveaux
+(l'analyse re-parse tout aujourd'hui), la déduplication et les exclusions.
