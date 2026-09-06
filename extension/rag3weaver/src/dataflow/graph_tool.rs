@@ -1838,17 +1838,17 @@ mod tests {
                 NodeDef {
                     name: "source".into(),
                     node_type: "SearchSourceNode".into(),
-                    config: json!({"target_name": "$target", "query": "$query", "consistency": "$consistency"}),
+                    config: json!({"target_name": "$target", "query": "$query", "consistency": "$consistency", "limit": "$limit", "rerank": "$rerank"}),
                 },
                 NodeDef {
                     name: "bm25".into(),
                     node_type: "BM25SearchNode".into(),
-                    config: json!({"limit": "$limit"}),
+                    config: json!({}),
                 },
                 NodeDef {
                     name: "vector".into(),
                     node_type: "VectorSearchNode".into(),
-                    config: json!({"limit": "$limit"}),
+                    config: json!({}),
                 },
                 NodeDef {
                     name: "fuse".into(),
@@ -1858,7 +1858,12 @@ mod tests {
                 NodeDef {
                     name: "rerank".into(),
                     node_type: "RerankNode".into(),
-                    config: json!({"candidates": "$rerank", "keep_signal": true}),
+                    config: json!({"keep_signal": true}),
+                },
+                NodeDef {
+                    name: "paginate".into(),
+                    node_type: "PaginateNode".into(),
+                    config: json!({}),
                 },
                 NodeDef {
                     name: "resolve".into(),
@@ -1887,9 +1892,17 @@ mod tests {
                 // deux métas sur un même port se fusionnent.
                 EdgeDef { from_node: "vector".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
+                // D'où viennent les poids : l'appelant, la base de
+                // connaissances, ou le gabarit — la fusion doit voir la requête.
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "fuse".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "rerank".into(), to_port: "query".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "paginate".into(), to_port: "query".into() },
+                // Ce que le rerank a à dire — « aucun reranker configuré » —
+                // arrive enfin jusqu'à l'agent.
+                EdgeDef { from_node: "rerank".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
-                EdgeDef { from_node: "rerank".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
+                EdgeDef { from_node: "rerank".into(), from_port: "results".into(), to_node: "paginate".into(), to_port: "results".into() },
+                EdgeDef { from_node: "paginate".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
                 EdgeDef { from_node: "resolve".into(), from_port: "results".into(), to_node: "render".into(), to_port: "results".into() },
             ],
         };
@@ -1971,8 +1984,8 @@ mod tests {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 7);
-        assert_eq!(def.edges.len(), 13);
+        assert_eq!(def.nodes.len(), 8);
+        assert_eq!(def.edges.len(), 17);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -2433,14 +2446,15 @@ mod tests {
         let def = t
             .instantiate(&json!({"target": "Product", "query": "rust", "limit": 3}))
             .unwrap();
-        let bm25 = def.nodes.iter().find(|n| n.name == "bm25").unwrap();
-        assert_eq!(bm25.config["limit"], json!(3), "un entier reste un entier");
-        assert!(bm25.config["limit"].is_i64());
+        // La page voyage par la source depuis le 6 septembre : c'est là que
+        // `limit` atterrit, et il doit y rester un entier.
         let source = def.nodes.iter().find(|n| n.name == "source").unwrap();
+        assert_eq!(source.config["limit"], json!(3), "un entier reste un entier");
+        assert!(source.config["limit"].is_i64());
         assert_eq!(source.config["target_name"], "Product");
         assert_eq!(source.config["query"], "rust");
         // Le gabarit n'a pas bougé.
-        assert_eq!(t.template().nodes[1].config["limit"], "$limit");
+        assert_eq!(t.template().nodes[0].config["limit"], "$limit");
     }
 
     #[test]
@@ -2483,7 +2497,7 @@ mod tests {
         let g = base.build(&inner, &json!({"target": "Product", "query": "rust"})).unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["bm25", "fuse", "render", "rerank", "resolve", "source", "vector"]);
+        assert_eq!(names, vec!["bm25", "fuse", "paginate", "render", "rerank", "resolve", "source", "vector"]);
     }
 
     /// **`search_base` n'est offert à personne.** Un gabarit peut exister pour

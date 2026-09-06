@@ -104,6 +104,13 @@ impl Node for SearchSourceNode {
         // ait rien à déclarer. Un filtre déjà posé par l'appelant l'emporte —
         // il est plus précis que la vision générale.
         let mut options = self.options.clone();
+        // **Le filtre hérité descend aussi.** `filters` (le `HashMap`) était
+        // ignoré sur ce chemin : seul `filter_condition` était lu. Même
+        // précédence que le monolithe — le précis (`filter_condition`)
+        // l'emporte sur le grossier (`filters`) — B5 de la réconciliation.
+        if options.filter_condition.is_none() && !options.filters.is_empty() {
+            options.filter_condition = Some(options.filters.clone().into());
+        }
         if options.filter_condition.is_none() {
             if let Some(domain) = ctx.service::<Arc<crate::work_domain::WorkDomain>>(crate::work_domain::WORK_DOMAIN_SERVICE).cloned() {
                 let fields = {
@@ -198,13 +205,24 @@ impl Node for SearchSourceNode {
 /// retombe sur le chemin Cypher direct.
 pub struct VectorSearchNode {
     node_name: String,
-    limit: usize,
+    /// `None` : le budget vient de la requête (`budget_de_recherche`).
+    limit: Option<usize>,
     result_mode: ResultMode,
     signal: Option<String>,
 }
 
 impl VectorSearchNode {
     pub fn new(name: &str, limit: usize) -> Self {
+        Self::avec_limite(name, Some(limit))
+    }
+
+    /// Le nœud dont le budget vient de la requête — la forme du gabarit
+    /// (`budget_de_recherche`).
+    pub fn depuis_la_requete(name: &str) -> Self {
+        Self::avec_limite(name, None)
+    }
+
+    fn avec_limite(name: &str, limit: Option<usize>) -> Self {
         Self {
             node_name: name.to_string(),
             limit,
@@ -249,6 +267,7 @@ impl Node for VectorSearchNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "VectorSearchNode")?;
+        let limite = budget_de_recherche(self.limit, &options);
 
         // Une cible sans vecteurs n'est pas une panne, c'est une cible sans
         // vecteurs. On rend une liste vide en le disant, plutôt que d'échouer :
@@ -320,7 +339,7 @@ impl Node for VectorSearchNode {
                 backend.as_ref(),
                 &target.chunk_table,
                 &embedding,
-                self.limit,
+                limite,
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
@@ -331,7 +350,7 @@ impl Node for VectorSearchNode {
                 &target.chunk_table,
                 &target.name,
                 &embedding,
-                self.limit,
+                limite,
                 filter_where.as_deref(),
                 &filter_params,
                 filter_match.as_deref(),
@@ -414,7 +433,8 @@ impl Node for VectorSearchNode {
 /// pondération par champ dans le moteur.
 pub struct BM25SearchNode {
     node_name: String,
-    limit: usize,
+    /// `None` : le budget vient de la requête (`budget_de_recherche`).
+    limit: Option<usize>,
     fuzzy_distance: u8,
     result_mode: ResultMode,
     mode: BM25Mode,
@@ -424,6 +444,16 @@ pub struct BM25SearchNode {
 
 impl BM25SearchNode {
     pub fn new(name: &str, limit: usize) -> Self {
+        Self::avec_limite(name, Some(limit))
+    }
+
+    /// Le nœud dont le budget vient de la requête — la forme du gabarit
+    /// (`budget_de_recherche`).
+    pub fn depuis_la_requete(name: &str) -> Self {
+        Self::avec_limite(name, None)
+    }
+
+    fn avec_limite(name: &str, limit: Option<usize>) -> Self {
         Self {
             node_name: name.to_string(),
             limit,
@@ -490,6 +520,7 @@ impl Node for BM25SearchNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "BM25SearchNode")?;
+        let limite = budget_de_recherche(self.limit, &options);
 
         let conn = ctx
             .service::<ConnService>("conn")
@@ -552,7 +583,7 @@ impl Node for BM25SearchNode {
                 backend.as_ref(),
                 &target,
                 &query_str,
-                self.limit,
+                limite,
                 &target.enrich_fields,
                 self.result_mode,
                 // `options.scope` prime : c'est une recherche explicitement
@@ -611,7 +642,7 @@ impl Node for BM25SearchNode {
             fields,
             self.mode,
             self.fuzzy_distance,
-            self.limit,
+            limite,
             allowed.as_deref(),
             &target.enrich_fields,
             self.result_mode,
@@ -666,13 +697,24 @@ impl Node for BM25SearchNode {
 /// Sparse vector search (SPLADE / BGE-M3).
 pub struct SparseSearchNode {
     node_name: String,
-    limit: usize,
+    /// `None` : le budget vient de la requête (`budget_de_recherche`).
+    limit: Option<usize>,
     result_mode: ResultMode,
     signal: Option<String>,
 }
 
 impl SparseSearchNode {
     pub fn new(name: &str, limit: usize) -> Self {
+        Self::avec_limite(name, Some(limit))
+    }
+
+    /// Le nœud dont le budget vient de la requête — la forme du gabarit
+    /// (`budget_de_recherche`).
+    pub fn depuis_la_requete(name: &str) -> Self {
+        Self::avec_limite(name, None)
+    }
+
+    fn avec_limite(name: &str, limit: Option<usize>) -> Self {
         Self {
             node_name: name.to_string(),
             limit,
@@ -717,6 +759,7 @@ impl Node for SparseSearchNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
         let (query_str, target, options) = extract_query_and_target(ctx, "SparseSearchNode")?;
+        let limite = budget_de_recherche(self.limit, &options);
 
         // Ce que l'agent doit entendre — par la méta, pas par le journal du
         // nœud, que personne ne lit du côté de l'appelant. Même règle que
@@ -783,7 +826,7 @@ impl Node for SparseSearchNode {
                 backend.as_ref(),
                 &target.chunk_table,
                 &sparse_vec,
-                self.limit,
+                limite,
                 &[],
                 Some(ids),
             ),
@@ -795,14 +838,14 @@ impl Node for SparseSearchNode {
                      recherche — les résultats ne sont PAS restreints au domaine demandé"
                         .to_string(),
                 );
-                search_sparse(handle, &*conn, &target.chunk_table, &sparse_vec, self.limit, &[])
+                search_sparse(handle, &*conn, &target.chunk_table, &sparse_vec, limite, &[])
             }
             (None, _) => search_sparse(
                 handle,
                 &*conn,
                 &target.chunk_table,
                 &sparse_vec,
-                self.limit,
+                limite,
                 &[], // empty fields for chunked entities (fields are on parent table)
             ),
         }
@@ -946,18 +989,45 @@ impl FuseResultsNode {
         self
     }
 
-    fn signal_config(&self, label: &str) -> SignalConfig {
-        let mut cfg = FusionConfig::default().signal_config(label);
-        if let Some(w) = self.weights.get(label) {
-            cfg.weight = *w;
-        }
-        if self.boost.contains(label) {
-            cfg.role = SignalRole::Boost;
+    /// La configuration d'un signal, sur une base donnée.
+    ///
+    /// `gabarit_decide` : la base est le défaut du moteur, et ce que le
+    /// gabarit a posé (poids, rôle) s'applique par-dessus. Sinon la base est
+    /// une **déclaration** — celle de l'appelant ou d'une base de
+    /// connaissances — et le gabarit ne la retouche pas ; seule sa
+    /// troncature (`top_k`) reste, ce n'est pas un poids.
+    fn signal_config(&self, label: &str, base: &FusionConfig, gabarit_decide: bool) -> SignalConfig {
+        let mut cfg = base.signal_config(label);
+        if gabarit_decide {
+            if let Some(w) = self.weights.get(label) {
+                cfg.weight = *w;
+            }
+            if self.boost.contains(label) {
+                cfg.role = SignalRole::Boost;
+            }
         }
         if self.top_k.is_some() {
             cfg.top_k = self.top_k;
         }
         cfg
+    }
+
+    /// **D'où viennent les poids.** L'appelant d'abord (`options.fusion`), puis
+    /// la déclaration d'une base de connaissances (son `fusion` dans la
+    /// config), puis le gabarit, puis le défaut du moteur. Le monolithe
+    /// faisait `options.fusion.unwrap_or(target.default_fusion)` ; ce nœud
+    /// ignorait les deux — B4 de la réconciliation du 6 septembre 2026.
+    ///
+    /// Une entité simple n'a pas de fusion déclarée (`default_fusion` y est le
+    /// défaut du moteur) : c'est le gabarit qui décide pour elle.
+    fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, bool) {
+        match qp {
+            Some(qp) if qp.options.fusion.is_some() => (qp.options.fusion.clone().unwrap(), false),
+            Some(qp) if qp.target.as_ref().is_some_and(|t| t.has_source_refs) => {
+                (qp.target.as_ref().unwrap().default_fusion.clone(), false)
+            }
+            _ => (FusionConfig::default(), true),
+        }
     }
 }
 
@@ -1009,19 +1079,29 @@ impl Node for FuseResultsNode {
 
         let label_out = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
 
+        // La requête, si le gabarit l'a câblée : c'est elle qui dit d'où
+        // viennent les poids.
+        let qp = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv));
+        let (base, gabarit_decide) = Self::base_de_fusion(qp.as_ref());
+        let (strategy, rrf_k) = if gabarit_decide {
+            (self.strategy, self.rrf_k)
+        } else {
+            (base.strategy, base.rrf_k)
+        };
+
         // Convert UnifiedResult → SearchResult for fuse_signals()
         let lists: Vec<(Vec<SearchResult>, SignalConfig)> = groups
             .iter()
             .map(|(label, v)| {
                 (
                     v.iter().cloned().map(SearchResult::from).collect(),
-                    self.signal_config(label),
+                    self.signal_config(label, &base, gabarit_decide),
                 )
             })
             .collect();
         let borrowed: Vec<(&[SearchResult], SignalConfig)> =
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
-        let fused_sr = fuse_signals(&borrowed, self.strategy, self.rrf_k);
+        let fused_sr = fuse_signals(&borrowed, strategy, rrf_k);
 
         for (label, v) in &groups {
             ctx.metric(&format!("signal.{label}"), v.len() as f64);
@@ -1088,7 +1168,8 @@ impl Node for FuseResultsNode {
 /// laisse passer — comme `Catalog::search`.
 pub struct RerankNode {
     node_name: String,
-    candidates: usize,
+    /// `None` : le pool vient de la requête (`options.rerank`), `0` = passe.
+    candidates: Option<usize>,
     service: String,
     signal: Option<String>,
     keep_signal: bool,
@@ -1100,7 +1181,7 @@ impl RerankNode {
     pub fn new(name: &str) -> Self {
         Self {
             node_name: name.to_string(),
-            candidates: Self::DEFAULT_CANDIDATES,
+            candidates: None,
             service: "reranker".to_string(),
             signal: None,
             keep_signal: false,
@@ -1114,7 +1195,7 @@ impl RerankNode {
     /// cross-encoder que l'appelant allume ou non — un graphe-outil n'a pas de
     /// conditionnelle, mais un nœud peut avoir un zéro qui veut dire « passe ».
     pub fn with_candidates(mut self, n: usize) -> Self {
-        self.candidates = n;
+        self.candidates = Some(n);
         self
     }
 
@@ -1171,43 +1252,134 @@ impl Node for RerankNode {
             .and_then(|pv| take_or_clone::<QueryPayload>(pv))
             .ok_or("RerankNode: missing 'query' input")?;
 
+        // Le pool : celui du nœud si le gabarit l'a posé, sinon celui de la
+        // requête (`options.rerank`), sinon zéro.
+        let candidats = self
+            .candidates
+            .unwrap_or_else(|| qp.options.rerank.as_ref().map(|r| r.candidates).unwrap_or(0));
+
         // Zéro candidat : on ne fait rien, et on ne dit rien non plus. Pas de
         // service consulté, pas d'avertissement, pas d'étiquette changée —
         // sinon un outil qui porte un cross-encoder éteint remplirait ses
         // journaux d'une absence voulue.
-        if self.candidates == 0 {
+        if candidats == 0 {
             ctx.set_output("results", PortValue::new(results));
             return Ok(());
         }
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
 
+        // Ce que l'agent doit entendre passe par la méta, pas par le journal
+        // du nœud : « aucun reranker configuré » n'atteignait jamais
+        // l'appelant sur ce chemin — B7 de la réconciliation.
+        let mut node_warnings: Vec<String> = Vec::new();
+        let mut reranked_count = 0usize;
+        let emettre_meta = |ctx: &mut NodeContext, warnings: Vec<String>, reranked: usize| {
+            ctx.set_output(
+                "meta",
+                PortValue::new(crate::search::SearchMeta {
+                    query: qp.query.clone(),
+                    target: qp.target_name.clone(),
+                    signals: crate::search::SearchSignals::NONE,
+                    consistency: qp.options.consistency,
+                    partial: false,
+                    pending_count: 0,
+                    vector_count: 0,
+                    bm25_count: 0,
+                    sparse_count: 0,
+                    fused_count: 0,
+                    reranked_count: reranked,
+                    warnings,
+                    search_time_ms: 0,
+                    diagnostics: None,
+                }),
+            );
+        };
+
         let reranker = ctx.service::<Arc<dyn Reranker>>(&self.service).cloned();
         let Some(reranker) = reranker else {
-            ctx.warn(&format!(
-                "RerankNode: aucun service '{}' — ordre d'entrée conservé",
+            node_warnings.push(format!(
+                "rerank demandé, aucun reranker configuré (service '{}') — ordre de fusion conservé",
                 self.service
             ));
+            for w in &node_warnings {
+                ctx.warn(w);
+            }
             if !self.keep_signal {
                 retag(&mut results, &label);
             }
             ctx.set_output("results", PortValue::new(results));
+            emettre_meta(ctx, node_warnings, 0);
             return Ok(());
         };
 
-        let pool = self.candidates.min(results.len());
+        // **Le plancher du pool** : au moins `limit + offset`, sinon la
+        // pagination coupe dans des résultats que le cross-encoder n'a pas vus.
+        let pool = candidats
+            .max(qp.options.limit + qp.options.offset)
+            .min(results.len());
         let tail = results.split_off(pool);
+
+        // **Le pool a besoin de texte.** Un résultat sans chunk ni `_content`
+        // ne donne rien au cross-encoder ; le monolithe allait le chercher
+        // avant de constituer les passages, ce nœud avertissait et laissait
+        // passer.
+        if let Some(target) = qp.target.as_ref() {
+            if results.iter().any(|r| r.data.is_none()) && !target.enrich_fields.is_empty() {
+                let backend = ctx
+                    .service::<Arc<Mutex<Catalog>>>("catalog")
+                    .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()));
+                let conn = ctx.service::<ConnService>("conn").map(|c| c.0.clone());
+                let signaux: Vec<Option<String>> = results.iter().map(|r| r.signal.clone()).collect();
+                let mut plats: Vec<SearchResult> =
+                    results.iter().cloned().map(SearchResult::from).collect();
+                let issue = match (backend, conn) {
+                    (Some(b), _) => crate::search::enrich_results_with_data_via_backend(
+                        b.as_ref(), &target.parent_table, &target.enrich_fields, &mut plats,
+                    ),
+                    (None, Some(c)) => enrich_results_with_data(
+                        &*c, &target.parent_table, &target.enrich_fields, &mut plats,
+                    ),
+                    (None, None) => Ok(()),
+                };
+                match issue {
+                    Ok(()) => {
+                        results = plats
+                            .into_iter()
+                            .zip(signaux)
+                            .map(|(r, sig)| {
+                                let mut u = UnifiedResult::from(r);
+                                u.signal = sig;
+                                u
+                            })
+                            .collect();
+                    }
+                    Err(e) => node_warnings.push(format!(
+                        "RerankNode: enrichissement du pool impossible ({e}) — le cross-encoder \
+                         travaille sur ce qu'il a"
+                    )),
+                }
+            }
+        }
+
         let passages: Vec<String> = results
             .iter()
             .map(|u| passage_text(&SearchResult::from(u.clone())))
             .collect();
 
         if !passages.is_empty() && passages.iter().all(|p| p.is_empty()) {
-            ctx.warn("RerankNode: aucun texte de passage disponible (ni chunk, ni _content) — ordre d'entrée conservé");
+            node_warnings.push(
+                "RerankNode: aucun texte de passage disponible (ni chunk, ni _content) — ordre d'entrée conservé"
+                    .to_string(),
+            );
+            for w in &node_warnings {
+                ctx.warn(w);
+            }
             results.extend(tail);
             if !self.keep_signal {
                 retag(&mut results, &label);
             }
             ctx.set_output("results", PortValue::new(results));
+            emettre_meta(ctx, node_warnings, 0);
             return Ok(());
         }
 
@@ -1229,11 +1401,12 @@ impl Node for RerankNode {
                     })
                     .collect();
                 ctx.metric("reranked", reordered.len() as f64);
+                reranked_count = reordered.len();
                 reordered.extend(tail);
                 results = reordered;
             }
             Ok(scores) => {
-                ctx.warn(&format!(
+                node_warnings.push(format!(
                     "RerankNode ({}): {} scores pour {} passages — ordre d'entrée conservé",
                     reranker.name(),
                     scores.len(),
@@ -1242,16 +1415,73 @@ impl Node for RerankNode {
                 results.extend(tail);
             }
             Err(e) => {
-                ctx.warn(&format!(
+                node_warnings.push(format!(
                     "RerankNode ({}): {e} — ordre d'entrée conservé",
                     reranker.name()
                 ));
                 results.extend(tail);
             }
         }
+        for w in &node_warnings {
+            ctx.warn(w);
+        }
         if !self.keep_signal {
             retag(&mut results, &label);
         }
+        ctx.set_output("results", PortValue::new(results));
+        emettre_meta(ctx, node_warnings, reranked_count);
+        Ok(())
+    }
+}
+
+// ─── PaginateNode ────────────────────────────────────────────────────────────
+
+/// **La page demandée, et rien de plus.** `offset` puis `limit`, lus dans la
+/// requête — après le rerank, avant la résolution, comme le monolithe.
+///
+/// Sans lui, le chemin composable rendait l'union des branches (jusqu'à
+/// `2 × limit`) et `offset` était inerte — B3 de la réconciliation du
+/// 6 septembre 2026. Il n'a pas de configuration : ce que la page vaut est
+/// une décision de l'appelant, elle voyage avec la requête.
+pub struct PaginateNode {
+    node_name: String,
+}
+
+impl PaginateNode {
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string() }
+    }
+}
+
+impl Node for PaginateNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "PaginateNode"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::PaginateNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::PaginateNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let mut results = ctx.take_input("results")
+            .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
+            .ok_or("PaginateNode: missing 'results' input")?;
+        let qp = ctx.take_input("query")
+            .and_then(|pv| take_or_clone::<QueryPayload>(pv))
+            .ok_or("PaginateNode: missing 'query' input")?;
+        let (offset, limit) = (qp.options.offset, qp.options.limit);
+        ctx.metric("avant", results.len() as f64);
+        if offset >= results.len() {
+            results.clear();
+        } else if offset > 0 {
+            results = results.split_off(offset);
+        }
+        results.truncate(limit);
+        ctx.metric("apres", results.len() as f64);
         ctx.set_output("results", PortValue::new(results));
         Ok(())
     }
@@ -1465,6 +1695,22 @@ fn filtre_utilisateur_for(
     }
 }
 
+/// **Combien un signal va chercher.** La limite du nœud si le gabarit l'a
+/// posée ; sinon le **sur-fetch** du monolithe — `(limit + offset) × 2`,
+/// relevé au pool du rerank — pour que la fusion et le cross-encoder aient
+/// de quoi travailler avant la pagination. B3 de la réconciliation du
+/// 6 septembre 2026 : sans ça, `offset` était inerte et le pool appauvri.
+pub(crate) fn budget_de_recherche(limite_du_noeud: Option<usize>, options: &SearchOptions) -> usize {
+    if let Some(l) = limite_du_noeud {
+        return l;
+    }
+    let base = (options.limit + options.offset).saturating_mul(2).max(1);
+    match options.rerank {
+        Some(ref rk) => base.max(rk.candidates),
+        None => base,
+    }
+}
+
 /// Take optional Results from a port, defaulting to empty vec.
 fn take_results(ctx: &mut NodeContext, port: &str) -> Vec<UnifiedResult> {
     ctx.take_input(port)
@@ -1590,11 +1836,13 @@ mod tests {
     #[test]
     fn fuse_results_node_ports() {
         let node = FuseResultsNode::new("fuse");
-        assert_eq!(node.inputs().len(), 4);
+        assert_eq!(node.inputs().len(), 5);
         assert_eq!(node.inputs()[0].name, "vector");
         assert_eq!(node.inputs()[1].name, "bm25");
         assert_eq!(node.inputs()[2].name, "sparse");
         assert_eq!(node.inputs()[3].name, "signals");
+        // La requête, facultative : d'où viennent les poids (B4).
+        assert_eq!(node.inputs()[4].name, "query");
         assert!(node.inputs().iter().all(|p| !p.required));
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0].name, "results");
@@ -1820,6 +2068,35 @@ mod tests {
         assert_eq!(results_of(&mut ctx)[0].signal.as_deref(), Some("hybride"));
     }
 
+    /// **Les poids de l'appelant priment sur ceux du gabarit.** Le gabarit
+    /// pèse tout sur `bm25` ; la requête porte une fusion qui pèse tout sur
+    /// `vector` : c'est la requête qui décide. Sans requête câblée, le gabarit.
+    #[test]
+    fn la_fusion_prend_les_poids_de_l_appelant_avant_ceux_du_gabarit() {
+        use crate::search::{FusionConfig, SignalConfig};
+        let monter = |avec_requete: bool| -> Vec<String> {
+            let mut ctx = NodeContext::new();
+            ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
+            ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
+            if avec_requete {
+                let mut qp = query_payload("q");
+                qp.options.fusion = Some(FusionConfig {
+                    bm25: SignalConfig { weight: 0.0, ..SignalConfig::default() },
+                    vector: SignalConfig { weight: 1.0, ..SignalConfig::default() },
+                    ..FusionConfig::default()
+                });
+                ctx.set_input("query", PortValue::new(qp));
+            }
+            let mut node = FuseResultsNode::new("fuse")
+                .with_weight("bm25", 1.0)
+                .with_weight("vector", 0.0);
+            node.execute(&mut ctx).unwrap();
+            results_of(&mut ctx).into_iter().map(|r| r.uuid).collect()
+        };
+        assert_eq!(monter(false), vec!["b", "v"], "sans requête, le gabarit décide");
+        assert_eq!(monter(true), vec!["v", "b"], "avec, l'appelant décide");
+    }
+
     /// Une étiquette en `boost` ne participe pas à la fusion : elle module.
     /// Ici un « reranker » qui préfère `b` fait passer `b` devant `a`.
     #[test]
@@ -1865,6 +2142,84 @@ mod tests {
         QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None }
     }
 
+    /// **Le budget d'un signal** : la limite du nœud si le gabarit l'a
+    /// posée, sinon le sur-fetch du monolithe — `(limit + offset) × 2`,
+    /// relevé au pool du rerank.
+    #[test]
+    fn le_budget_de_recherche_suit_la_requete_sauf_si_le_gabarit_decide() {
+        let mut o = SearchOptions::default(); // limit 10, offset 0
+        assert_eq!(budget_de_recherche(Some(7), &o), 7, "le gabarit décide");
+        assert_eq!(budget_de_recherche(None, &o), 20, "(10 + 0) × 2");
+        o.offset = 5;
+        assert_eq!(budget_de_recherche(None, &o), 30, "(10 + 5) × 2");
+        o.rerank = Some(crate::search::RerankOptions { candidates: 50 });
+        assert_eq!(budget_de_recherche(None, &o), 50, "relevé au pool du rerank");
+    }
+
+    /// **La page, et rien de plus** : `offset` puis `limit`, lus dans la
+    /// requête. Un `offset` au-delà de la liste rend vide, pas une erreur.
+    #[test]
+    fn paginate_node_coupe_la_page_demandee() {
+        let liste = || vec![
+            with_text("a", 0.9, "a"), with_text("b", 0.8, "b"),
+            with_text("c", 0.7, "c"), with_text("d", 0.6, "d"),
+        ];
+        let page = |offset: usize, limit: usize| -> Vec<String> {
+            let mut ctx = NodeContext::with_services(Arc::new(super::super::services::ServiceRegistry::new()));
+            ctx.set_input("results", PortValue::new(liste()));
+            let mut qp = query_payload("q");
+            qp.options.offset = offset;
+            qp.options.limit = limit;
+            ctx.set_input("query", PortValue::new(qp));
+            PaginateNode::new("page").execute(&mut ctx).unwrap();
+            results_of(&mut ctx).into_iter().map(|r| r.uuid).collect()
+        };
+        assert_eq!(page(0, 2), vec!["a", "b"]);
+        assert_eq!(page(1, 2), vec!["b", "c"]);
+        assert_eq!(page(3, 10), vec!["d"]);
+        assert!(page(4, 10).is_empty(), "au-delà de la liste : vide, sans erreur");
+    }
+
+    /// **« Aucun reranker configuré » atteint l'agent** : par la méta, pas
+    /// par le journal du nœud. Et le pool vient de la requête quand le
+    /// gabarit ne le fixe pas.
+    #[test]
+    fn le_rerank_dit_dans_sa_meta_qu_il_n_a_pas_de_reranker() {
+        let mut ctx = NodeContext::with_services(Arc::new(super::super::services::ServiceRegistry::new()));
+        ctx.set_input("results", PortValue::new(vec![with_text("a", 0.9, "x"), with_text("b", 0.8, "y")]));
+        let mut qp = query_payload("q");
+        qp.options.rerank = Some(crate::search::RerankOptions { candidates: 5 });
+        ctx.set_input("query", PortValue::new(qp));
+        RerankNode::new("rerank").execute(&mut ctx).unwrap();
+        let sorties = ctx.drain_outputs();
+        let meta = sorties
+            .get("meta")
+            .and_then(|pv| pv.downcast::<crate::search::SearchMeta>())
+            .cloned()
+            .expect("une méta");
+        assert_eq!(meta.reranked_count, 0);
+        assert!(
+            meta.warnings.iter().any(|w| w.contains("aucun reranker")),
+            "{:?}", meta.warnings
+        );
+        let n = sorties.get("results").and_then(|pv| pv.downcast::<Vec<UnifiedResult>>()).map(|v| v.len());
+        assert_eq!(n, Some(2), "l'ordre d'entrée est conservé, rien n'est perdu");
+    }
+
+    /// Sans pool — ni dans le gabarit, ni dans la requête — le rerank est un
+    /// passe-plat exact : pas de méta, pas de mot.
+    #[test]
+    fn le_rerank_sans_pool_est_un_passe_plat() {
+        let mut ctx = NodeContext::with_services(Arc::new(super::super::services::ServiceRegistry::new()));
+        ctx.set_input("results", PortValue::new(vec![with_text("a", 0.9, "x")]));
+        ctx.set_input("query", PortValue::new(query_payload("q")));
+        RerankNode::new("rerank").execute(&mut ctx).unwrap();
+        let sorties = ctx.drain_outputs();
+        assert!(sorties.get("meta").is_none(), "un passe-plat ne dit rien");
+        let n = sorties.get("results").and_then(|pv| pv.downcast::<Vec<UnifiedResult>>()).map(|v| v.len());
+        assert_eq!(n, Some(1));
+    }
+
     /// Le reranker re-score la tête (`candidates`) et laisse la queue en place.
     #[test]
     fn rerank_node_rescores_head_keeps_tail() {
@@ -1877,7 +2232,13 @@ mod tests {
             with_text("c", 0.7, "rust"),
             with_text("d", 0.1, "rust memory safety too"), // hors pool
         ]));
-        ctx.set_input("query", PortValue::new(query_payload("rust memory safety")));
+        // **Le pool a un plancher** : au moins `limit + offset`, pour que la
+        // pagination ne coupe pas dans des résultats que le cross-encoder n'a
+        // pas vus. Avec le `limit` par défaut (10), les quatre seraient dans
+        // le pool ; ici la page fait deux, et `candidates` (3) l'emporte.
+        let mut qp = query_payload("rust memory safety");
+        qp.options.limit = 2;
+        ctx.set_input("query", PortValue::new(qp));
 
         let mut node = RerankNode::new("rerank").with_candidates(3);
         node.execute(&mut ctx).unwrap();
@@ -1905,7 +2266,7 @@ mod tests {
         let node = BM25SearchNode::new("bm25", 20)
             .with_fuzzy(2)
             .with_result_mode(ResultMode::Detailed);
-        assert_eq!(node.limit, 20);
+        assert_eq!(node.limit, Some(20));
         assert_eq!(node.fuzzy_distance, 2);
         assert!(matches!(node.result_mode, ResultMode::Detailed));
     }

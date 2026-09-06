@@ -72,28 +72,43 @@
 %% L'arête `source -->|meta| render` est ce qui rend la trouvaille dicible : le
 %% journal d'un nœud ne va nulle part pour un agent, la méta si.
 %%
+%% **Depuis le 6 septembre après-midi, la requête porte sa page et son pool.**
+%% `limit` et `rerank` entrent par la source et voyagent dans le `QueryPayload` :
+%% les signaux vont chercher `(limit + offset) × 2`, relevé au pool du rerank —
+%% le sur-fetch du monolithe, sans lequel la fusion et le cross-encoder
+%% travaillaient sur une liste déjà coupée ; `RerankNode` prend son pool dans la
+%% requête et rend une méta (« aucun reranker configuré » n'atteignait jamais
+%% l'agent) ; et `PaginateNode` applique `offset` puis `limit` **après** le
+%% rerank, **avant** la résolution — `offset` était inerte et la liste rendue
+%% pouvait faire `2 × limit`. B3 et B7 de la réconciliation.
+%%
 %% La fiche reste la même surface : `fuzzy_distance`, `result_mode`, les
 %% poids de fusion et les `return_fields` de la résolution restent en dedans.
 
 graph LR
-    source["SearchSourceNode(target_name=$target, query=$query, consistency=$consistency)"]
-    bm25["BM25SearchNode(limit=$limit)"]
-    vector["VectorSearchNode(limit=$limit)"]
+    source["SearchSourceNode(target_name=$target, query=$query, consistency=$consistency, limit=$limit, rerank=$rerank)"]
+    bm25["BM25SearchNode"]
+    vector["VectorSearchNode"]
     fuse["FuseResultsNode(weights='bm25:0.6,vector:0.4')"]
-    rerank["RerankNode(candidates=$rerank, keep_signal=true)"]
+    rerank["RerankNode(keep_signal=true)"]
+    paginate["PaginateNode"]
     resolve["ResolveParentNode"]
     render["RenderResultsNode"]
 
     source -->|query| bm25
     source -->|query| vector
+    source -->|query| fuse
     source -->|query| rerank
+    source -->|query| paginate
     source -->|query| resolve
     source -->|query| render
     source -->|meta| render
     bm25 -->|meta| render
     vector -->|meta| render
+    rerank -->|meta| render
     bm25 -->|results:bm25| fuse
     vector -->|results:vector| fuse
     fuse -->|results| rerank
-    rerank -->|results| resolve
+    rerank -->|results| paginate
+    paginate -->|results| resolve
     resolve -->|results| render

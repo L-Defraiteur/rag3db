@@ -350,8 +350,10 @@ Posées avec la réponse que je prends faute d'autre, pour que rien n'attende.
 | D (cartographie) | faite — `docs/6-septembre-2026-13h08/01` à la racine |
 | C3 | fait — test à deux processus dans `e2e_prise_atomique` |
 | E | fait — `fusion.rs` retiré |
-| C4 | écrit (schéma v4, `_embed_claim`), 943 tests de bibliothèque verts, passe e2e en cours |
-| C5, B | à faire |
+| C4 | fait — PostgreSQL à deux catalogues, dix suites vertes |
+| B1 B2 | faits — `cda21d1a3` |
+| B3 B7 | écrits (sur-fetch, `PaginateNode`, méta du rerank), 947 tests de bibliothèque verts, passe e2e en cours |
+| B4 B5 B6 B8 B9 B10 B11 B12 B13, C5 | à faire |
 
 
 ```

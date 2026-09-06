@@ -16,7 +16,7 @@ use super::search_nodes::{
 };
 use super::generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,
-    SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode,
+    SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode, PaginateNode,
 };
 use super::record_nodes::{
     ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
@@ -680,6 +680,21 @@ impl NodeFactory for SearchSourceNodeFactory {
         if let Some(t) = config.get("timeout_ms").and_then(|v| v.as_u64()) {
             options.timeout_ms = t;
         }
+        // La page et le pool du rerank voyagent avec la requête : c'est ce
+        // que `PaginateNode`, `RerankNode` et le budget des signaux lisent.
+        if let Some(l) = config.get("limit").and_then(|v| v.as_u64()) {
+            options.limit = l as usize;
+        }
+        if let Some(o) = config.get("offset").and_then(|v| v.as_u64()) {
+            options.offset = o as usize;
+        }
+        if let Some(n) = config.get("rerank").and_then(|v| v.as_u64()) {
+            options.rerank = if n == 0 {
+                None
+            } else {
+                Some(crate::search::RerankOptions { candidates: n as usize })
+            };
+        }
         Ok(Box::new(SearchSourceNode::new(name, target_name, query, options)))
     }
 
@@ -819,8 +834,8 @@ fn limit_param() -> ConfigParam {
         name: "limit",
         param_type: ConfigParamType::Int,
         required: false,
-        default: Some(serde_json::json!(10)),
-        description: "Max results to return",
+        default: None,
+        description: "Combien ce signal va chercher ; absent = (limit + offset) × 2 de la requête, relevé au pool du rerank",
         choices: None,
         json_schema: None,
     }
@@ -852,8 +867,12 @@ impl NodeFactory for VectorSearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
-        let mut node = VectorSearchNode::new(name, limit)
+        // Sans `limit`, le budget vient de la requête — le sur-fetch du
+        // monolithe. Avec, le gabarit décide.
+        let mut node = match config.get("limit").and_then(|v| v.as_u64()) {
+            Some(l) => VectorSearchNode::new(name, l as usize),
+            None => VectorSearchNode::depuis_la_requete(name),
+        }
             .with_result_mode(parse_result_mode(config, "VectorSearchNode")?);
         if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
             node = node.with_signal(sig);
@@ -885,9 +904,13 @@ impl NodeFactory for BM25SearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
         let fuzzy_distance = config.get("fuzzy_distance").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-        let mut node = BM25SearchNode::new(name, limit)
+        // Sans `limit`, le budget vient de la requête — le sur-fetch du
+        // monolithe. Avec, le gabarit décide.
+        let mut node = match config.get("limit").and_then(|v| v.as_u64()) {
+            Some(l) => BM25SearchNode::new(name, l as usize),
+            None => BM25SearchNode::depuis_la_requete(name),
+        }
             .with_fuzzy(fuzzy_distance)
             .with_result_mode(parse_result_mode(config, "BM25SearchNode")?);
         if let Some(mode) = config.get("mode") {
@@ -963,8 +986,12 @@ impl NodeFactory for SparseSearchNodeFactory {
         name: &str,
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
-        let limit = config.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
-        let mut node = SparseSearchNode::new(name, limit)
+        // Sans `limit`, le budget vient de la requête — le sur-fetch du
+        // monolithe. Avec, le gabarit décide.
+        let mut node = match config.get("limit").and_then(|v| v.as_u64()) {
+            Some(l) => SparseSearchNode::new(name, l as usize),
+            None => SparseSearchNode::depuis_la_requete(name),
+        }
             .with_result_mode(parse_result_mode(config, "SparseSearchNode")?);
         if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
             node = node.with_signal(sig);
@@ -1064,6 +1091,10 @@ impl NodeFactory for FuseResultsNodeFactory {
                 PortDef { name: "bm25", port_type: PortType::Results, required: false },
                 PortDef { name: "sparse", port_type: PortType::Results, required: false },
                 PortDef { name: "signals", port_type: PortType::Results, required: false },
+                // La requête, pour savoir d'où viennent les poids (appelant,
+                // base de connaissances, gabarit). Facultatif : sans elle, le
+                // gabarit décide.
+                PortDef { name: "query", port_type: PortType::Query, required: false },
             ],
             outputs: vec![results_out()],
             config_params: vec![
@@ -1156,18 +1187,18 @@ impl NodeFactory for RerankNodeFactory {
     fn schema(&self) -> NodeSchema {
         NodeSchema {
             node_type: "RerankNode",
-            description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée",
+            description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée. Sans `candidates`, le pool vient de la requête",
             inputs: vec![
                 PortDef { name: "results", port_type: PortType::Results, required: true },
                 query_in(),
             ],
-            outputs: vec![results_out()],
+            outputs: vec![results_out(), meta_out()],
             config_params: vec![
                 ConfigParam {
                     name: "candidates",
                     param_type: ConfigParamType::Int,
                     required: false,
-                    default: Some(serde_json::json!(RerankNode::DEFAULT_CANDIDATES)),
+                    default: None,
                     description: "Taille du pool re-scoré ; 0 = passe-plat exact (ni service consulté, ni étiquette touchée)",
                     choices: None,
                     json_schema: None,
@@ -1198,6 +1229,36 @@ impl NodeFactory for RerankNodeFactory {
 
 /// Factory for ResolveParentNode (config: return_fields).
 pub struct ResolveParentNodeFactory;
+
+/// Factory for PaginateNode (aucune config : la page voyage avec la requête).
+pub struct PaginateNodeFactory;
+
+impl NodeFactory for PaginateNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        _config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        Ok(Box::new(PaginateNode::new(name)))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "PaginateNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "PaginateNode",
+            description: "La page demandée (offset, limit de la requête), et rien de plus",
+            inputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: true },
+                PortDef { name: "query", port_type: PortType::Query, required: true },
+            ],
+            outputs: vec![results_out()],
+            config_params: vec![],
+        }
+    }
+}
 
 impl NodeFactory for ResolveParentNodeFactory {
     fn create(
@@ -1269,6 +1330,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(FuseResultsNodeFactory));
     registry.register(Box::new(RerankNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
+    registry.register(Box::new(PaginateNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
@@ -1309,7 +1371,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 34 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 35 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

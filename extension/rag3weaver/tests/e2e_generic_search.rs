@@ -1000,9 +1000,12 @@ fn run_bm25_then_rerank(reranker: Option<Arc<dyn Reranker>>, candidates: usize) 
     }
 
     let mut graph = DataflowGraph::new();
+    // **Le pool a un plancher** — au moins `limit + offset` — pour que la
+    // pagination ne coupe pas dans des résultats que le cross-encoder n'a pas
+    // vus. Ici on éprouve le pool lui-même : la page vaut le pool.
     graph.add_node(Box::new(SearchSourceNode::new(
         "source", "Product", "Rust Python French",
-        SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
+        SearchOptions { consistency: Consistency::Immediate, limit: candidates, ..Default::default() },
     ))).unwrap();
     graph.add_node(Box::new(BM25SearchNode::new("bm25", 10).with_mode(BM25Mode::ContainsSplit))).unwrap();
     graph.add_node(Box::new(RerankNode::new("rerank").with_candidates(candidates))).unwrap();
@@ -1108,4 +1111,49 @@ fn generic_rerank_as_boost_signal_inside_fusion() {
     // (score × (1 + 5 × 0)).
     assert_eq!(&names[1..], &ref_names[..2]);
     assert!(fused.iter().all(|r| r.signal.is_some()), "chaque résultat garde sa provenance");
+}
+
+
+/// **Le filtre hérité descend aussi.** `SearchOptions.filters` — le
+/// `HashMap` d'avant `filter_condition` — était ignoré sur le chemin
+/// composable : seule la condition structurée était lue. Même précédence que
+/// le monolithe depuis le 6 septembre 2026 (B5) : le précis l'emporte sur le
+/// grossier, et le grossier n'est plus jeté.
+#[test]
+#[ignore]
+fn le_filtre_herite_descend_sur_le_chemin_composable() {
+    use rag3weaver::filter::{FilterOp, FilterValue};
+    use rag3weaver::connection::CypherValue;
+
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (services, _cat) = build_services(catalog, embedder, None, None);
+
+    let mut filters = HashMap::new();
+    filters.insert(
+        "price".to_string(),
+        FilterValue::Ops(vec![FilterOp::Lt(CypherValue::Float(100.0))]),
+    );
+    let mut graph = DataflowGraph::new();
+    graph.add_node(Box::new(SearchSourceNode::new(
+        "source", "Product", "Rust Python French",
+        SearchOptions { consistency: Consistency::Immediate, filters, ..Default::default() },
+    ))).unwrap();
+    graph.add_node(Box::new(BM25SearchNode::new("bm25", 10).with_mode(BM25Mode::ContainsSplit))).unwrap();
+    graph.add_node(Box::new(ResolveParentNode::new("resolve"))).unwrap();
+    graph.connect("source", "query", "bm25", "query").unwrap();
+    graph.connect("source", "query", "resolve", "query").unwrap();
+    graph.connect("bm25", "results", "resolve", "results").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    let resultats = extract_results(&output, "resolve");
+    let noms: Vec<String> = resultats
+        .iter()
+        .map(|r| r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).unwrap_or("?").to_string())
+        .collect();
+    eprintln!("[filtre hérité] {noms:?}");
+    assert_eq!(resultats.len(), 2, "le couteau à 129,99 doit être filtré : {noms:?}");
+    assert!(noms.iter().all(|n| !n.contains("Knife")), "{noms:?}");
 }

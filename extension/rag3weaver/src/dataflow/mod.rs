@@ -56,7 +56,7 @@ pub use search_nodes::{
 };
 pub use generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,
-    SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode,
+    SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode, PaginateNode,
 };
 pub use services::{ConnService, ServiceRegistry};
 pub use node_registry::{Choices, NodeSchema, NodeFactory, NodeRegistry, ConfigParam, ConfigParamType};
