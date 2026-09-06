@@ -49,8 +49,16 @@ chose, la contrainte revient.
 
 ```sh
 RAG3WEAVER_REGIME=confort   # le DÉFAUT de run_e2e.sh depuis le 4 septembre
-RAG3WEAVER_REGIME=plein     # pour la vitesse, quand elle n'utilise pas la machine
+RAG3WEAVER_REGIME=plein     # ⚠ PAS pour la passe complète — voir ci-dessous
 ```
+
+**`plein` n'est pas seulement « plus rapide ».** Essayé sur la passe complète
+dans la nuit du 6 septembre : **tuée par manque de mémoire**, sur une machine de
+93 Gio. Le régime borne la **rafale par lot** — 2 048 caractères en `confort`,
+8 192 en `plein` — et c'est elle qui décide du pic quand BGE-M3, MiniLM, deux
+rerankers et l'OCR sont chargés ensemble. C'est un budget mémoire autant qu'un
+budget CPU, et la lenteur de `confort` est le prix de ce budget, pas un excès de
+politesse.
 
 `confort` pose les **trois** rôles burn sur la carte la moins chargée, le rapport
 cyclique à 60 % et la rafale à 2 048. Il envoie aussi l'agentique vers Vertex
