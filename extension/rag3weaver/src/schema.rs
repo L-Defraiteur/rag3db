@@ -328,10 +328,10 @@ pub fn generate_simple_chunk_table_ddl(
 
 pub fn generate_simple_chunk_table_ddl_with_dialect(
     entity_name: &str,
-    // Ni la config ni la dimension ne décident plus d'une colonne de vecteurs
-    // ici : elles arrivent avec les modèles (voir plus bas). Les deux
-    // paramètres restent pour ne pas faire bouger les appelants.
-    _entity_config: &crate::config::EntityConfig,
+    entity_config: &crate::config::EntityConfig,
+    // La dimension ne décide plus d'une colonne de vecteurs ici : elle arrive
+    // avec les modèles (voir plus bas). Le paramètre reste pour ne pas faire
+    // bouger les appelants.
     _embedding_dim: usize,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
