@@ -50,43 +50,53 @@ dépôts où 278m est *trop long à attendre au premier index*.
 Le critère est donc **un temps d'attente**, et la question devient : à partir
 de combien de chunks 20 s deviennent une gêne ?
 
-## 3. Le critère
+## 3. Le critère — tranché par Lucie
 
-### 3.1 Compter quoi
+> seuil de je sais pas 50k docs ou détection GPU pourri
 
-| mesure | disponible avant `Catalog::new` ? | ce qu'elle rate |
-|---|---|---|
-| nombre de fichiers | oui | un en-tête généré de 78 000 lignes compte pour un — mesuré sur ce dépôt, `utf8proc_data.h` |
-| **octets de source lisibles** | **oui** — `read_sources_report` les lit de toute façon | rien de grave : c'est ce que le modèle va lire |
-| chunks estimés | non — le découpage vient après | — |
+Pas une minute d'attente, donc, mais **deux déclencheurs**, l'un ou l'autre.
+Sous les deux : 278m.
 
-**Les octets de source**, retenus par les données. `read_sources_report` a déjà
-tout lu : le compte est gratuit. Et le rapport octets → chunks est stable sur
-ce qu'on a mesuré : le cœur C++ fait 20 136 chunks pour ~10 Mo de source,
-soit **~500 octets par chunk**.
+### 3.1 Plus d'environ 50 000 documents
 
-Le nombre de fichiers ne sert que de garde-fou contre un cas absurde (un seul
-fichier de 100 Mo n'est pas un gros dépôt, c'est un dump — et la politique
-d'ingestion l'écarte déjà au-delà de 128 Kio pour le texte).
+**Des fichiers lus, pas des octets** — Lucie raisonne en documents, et c'est
+ce qu'on affiche. Les octets restent dans la *raison* écrite en méta : ce sont
+eux qui expliquent le temps (~500 octets par chunk, ~1 ms par chunk en 278m
+sur le cœur), et un jour où quelqu'un se demandera pourquoi cet index est en
+107m, c'est le temps qu'il voudra lire.
 
-### 3.2 Le seuil
+| dépôt | fichiers | 278m au premier index |
+|---|---:|---:|
+| le cœur C++ | 1 642 | 20 s |
+| **50 000** | | ~10 min |
+| le noyau Linux | ~90 000 | ~17 min |
 
-Avec 1 ms par chunk en 278m et 500 octets par chunk :
+Le seuil de 50 000 est celui de Lucie ; il tombe là où 278m dépasse la dizaine
+de minutes, et le noyau — l'exemple qu'elle avait en tête le 6 septembre —
+bascule.
 
-| source | chunks | 278m | 107m |
-|---|---:|---:|---:|
-| 10 Mo (le cœur) | 20 000 | 20 s | 11 s |
-| **25 Mo** | **50 000** | **50 s** | 27 s |
-| 50 Mo | 100 000 | 100 s | 53 s |
-| le noyau Linux (~90 000 fichiers) | ~1 M | ~17 min | ~9 min |
+### 3.2 Une carte faible ou absente
 
-**Proposition : 25 Mo de source.** En dessous, 278m coûte moins d'une minute
-de modèle au premier index — on prend le meilleur. Au-dessus, on commence en
-107m, et 278m viendra en retard si on le demande.
+Ce que `regime.rs` sait déjà lire dans `/sys/class/drm` : quelles cartes ont
+un compteur d'occupation (`gpu_busy_percent`, « une vraie carte ; le reste est
+du décor »), leur VRAM prise (`mem_info_vram_used`), leur adresse PCI. Il
+manque une lecture, gratuite au même endroit : `mem_info_vram_total`.
 
-C'est un ordre de grandeur, pas une mesure : il pose « une minute » comme
-limite de l'attente acceptable, et c'est ça qui est à confirmer avec Lucie —
-pas le chiffre, la minute.
+**Le critère : aucune carte dédiée, ou une VRAM totale sous 4 Go.**
+
+Le plancher vient de la mesure de l'optimiseur (`docs/issues/6-septembre-2026/03`,
+§ flash attention) : le lot conseillé de Granite, 128 séquences de 512 jetons,
+prend **1,6 Go de scores d'attention** — 3,2 Go à 256, refusé — plus ~1,1 Go
+de poids f32 pour 278m. Sous 4 Go, le lot doit rétrécir, et 278m perd le débit
+qui justifie son coût ; 107m (0,4 Go de poids, dimension 384) y tient avec son
+lot entier. Ce n'est pas « 278m ne marche pas » — c'est « 278m n'est plus deux
+fois plus lent, il est cinq fois plus lent ».
+
+Sans carte du tout — un portable, une machine de CI — le calcul part sur le
+processeur, et là 107m est le seul qui reste tolérable au premier index.
+
+Sur cette machine : deux cartes à 31 Go. Aucun des deux déclencheurs ; le
+cœur reste en 278m.
 
 ### 3.3 La précédence, la même que partout
 
@@ -103,13 +113,17 @@ pas de modèle — la carte est la même, c'est le temps qui diffère.
 Un module pur, `embedding_choice.rs` :
 
 ```rust
-pub fn recommended_model(source_bytes: u64, files: usize) -> Choice
+pub fn recommended_model(files: usize, source_bytes: u64, card: CardClass) -> Choice
+// CardClass { Dedicated { vram_bytes }, Weak { vram_bytes }, None }
 // Choice { model: "granite-107m" | "granite-278m", reason: String }
 ```
 
-Testable sans base. La raison est une phrase — *« 31 Mo de source, au-delà de
-25 Mo : granite-107m pour le premier index »* — parce qu'un choix qui ne se
-dit pas se conteste.
+`CardClass` vient d'une lecture de `/sys/class/drm` à côté de
+`carte_la_plus_libre`, avec `mem_info_vram_total` en plus. Testable sans base
+ni carte : la classe est un paramètre. La raison est une phrase —
+*« 62 000 fichiers (31 Mo), au-delà de 50 000 : granite-107m pour le premier
+index »*, ou *« carte de 2 Go, sous 4 Go : granite-107m »* — parce qu'un
+choix qui ne se dit pas se conteste.
 
 ### 4.2 Le moment
 
@@ -155,20 +169,26 @@ sait laquelle a été cherchée.
 
 ## 6. Ce qui dirait que ça marche
 
-1. `recommended_model(10 Mo, 1 642)` rend 278m avec sa raison ;
-   `recommended_model(31 Mo, 5 000)` rend 107m avec la sienne.
-2. La variable posée gagne : `RAG3WEAVER_EMBED_MODEL=granite-278m` sur 31 Mo
-   donne 278m, et la ligne de montage le dit.
+1. `recommended_model(1 642, 10 Mo, Dedicated 31 Go)` rend 278m ;
+   `(62 000, …, Dedicated)` rend 107m « au-delà de 50 000 » ;
+   `(1 642, …, Weak 2 Go)` rend 107m « sous 4 Go » ; `(…, None)` rend 107m
+   « sans carte ». Chacun avec sa raison, sans base ni carte.
+2. La variable posée gagne : `RAG3WEAVER_EMBED_MODEL=granite-278m` sur
+   62 000 fichiers donne 278m, et la ligne de montage le dit.
 3. Un démon en place qui sert un autre modèle est **gardé** et nommé.
 4. Après un premier index en 107m, `RAG3WEAVER_EMBED_MODEL=granite-278m` +
    « dense » exigé : les deux colonnes existent, la recherche prend 278m,
    `embedding_choice` dit toujours 107m et pourquoi.
 
-## 7. À trancher
+## 7. Tranché
 
-- **La minute.** Le seuil de 25 Mo découle de « moins d'une minute de modèle
-  au premier index en 278m ». Si l'attente acceptable est de trois minutes, le
-  seuil est 75 Mo et le cœur n'y arrive jamais. C'est le seul vrai choix.
-- **Le démon en place.** Garder ce qui tourne (proposé) ou relancer avec le
-  modèle voulu. Garder est sûr et se dit ; relancer est rapide et casse
-  l'autre session.
+- ~~**La minute.**~~ Lucie n'a pas tranché sur une attente mais sur deux
+  déclencheurs : **50 000 documents**, ou **une carte faible ou absente**
+  (§3). Le seuil de 25 Mo de la première version est retiré ; les octets
+  restent dans la raison.
+- ~~**Le démon en place.**~~ **Il se garde et se dit.** On ne relance jamais
+  un démon qu'une autre session peut servir (session architecture, 7 septembre).
+
+Reste à confirmer à l'exécution, pas à trancher : le plancher de **4 Go** est
+déduit des mesures de lot, pas mesuré sur une petite carte. Le premier portable
+qui passe le dira.
