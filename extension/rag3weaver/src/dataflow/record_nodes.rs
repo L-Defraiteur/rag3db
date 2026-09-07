@@ -605,7 +605,13 @@ fn cellule_csv(v: &CypherValue) -> String {
         autre => format!("{autre:?}"),
     };
     if brut.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", brut.replace('"', "\"\""))
+        // Entre guillemets : la barre d'abord (sinon celles produites par
+        // les deux suivantes seraient redoublées), puis les sauts de ligne
+        // en deux caractères — c'est l'option `ESCAPED_NEWLINES` du moteur
+        // (7 septembre 2026), qui garde le lecteur CSV **parallèle** là où
+        // un saut de ligne physique entre guillemets le refusait.
+        let echappee = brut.replace('\\', "\\\\").replace('\n', "\\n").replace('\r', "\\r").replace('"', "\"\"");
+        format!("\"{echappee}\"")
     } else {
         brut
     }

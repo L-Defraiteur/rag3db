@@ -33,6 +33,9 @@ use super::checkpoint::{
 /// dans des lignes de base coûtaient 8,5 s sur 42.
 pub struct Spiller {
     dossier: PathBuf,
+    /// Propre à ce magasin dans ce processus : deux catalogues de la même
+    /// machine partagent le dossier temporaire par défaut, pas leurs fichiers.
+    jeton: String,
     fil: Mutex<Option<FilDEcriture>>,
 }
 
@@ -49,7 +52,13 @@ impl Spiller {
     }
 
     pub fn new(dossier: PathBuf) -> Self {
-        Self { dossier, fil: Mutex::new(None) }
+        static COMPTEUR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let jeton = format!("{}-{}", std::process::id(), COMPTEUR.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+        Self { dossier, jeton, fil: Mutex::new(None) }
+    }
+
+    fn dossier_de(&self, execution_id: &str) -> PathBuf {
+        self.dossier.join(format!("{}-{}", Self::nom_sur(execution_id), self.jeton))
     }
 
     fn nom_sur(execution_id: &str) -> String {
@@ -57,7 +66,7 @@ impl Spiller {
     }
 
     fn chemin(&self, execution_id: &str, nom: &str) -> PathBuf {
-        self.dossier.join(Self::nom_sur(execution_id)).join(format!("{}-{}", timestamp_ms(), Self::nom_sur(nom)))
+        self.dossier_de(execution_id).join(format!("{}-{}", timestamp_ms(), Self::nom_sur(nom)))
     }
 
     /// Tendre des octets au fil, qui démarre au premier envoi.
@@ -173,7 +182,7 @@ impl Spiller {
     /// fini ; la base a oublié ses `output_ports`, les fichiers suivent. Sans
     /// ça, une soirée de tests laissait 1,3 Go sous /tmp (6 septembre 2026).
     pub fn nettoyer_apres_fin(&self, execution_id: &str) {
-        let dossier = self.dossier.join(Self::nom_sur(execution_id));
+        let dossier = self.dossier_de(execution_id);
         let Ok(entrees) = std::fs::read_dir(&dossier) else { return };
         let mut reste = false;
         for entree in entrees.flatten() {

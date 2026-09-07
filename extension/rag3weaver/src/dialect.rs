@@ -836,13 +836,18 @@ impl SchemaDialect for Rag3dbDialect {
     fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {
         // Sans en-tête (le défaut du moteur), les listes entre crochets dans
         // une cellule entre guillemets, le guillemet doublé pour s'échapper.
-        // Lecteur **séquentiel** : le lecteur parallèle refuse un saut de
-        // ligne entre guillemets, et du texte en a toujours.
+        // `escaped_newlines` : les sauts de ligne entre guillemets sont écrits
+        // `\n` / `\r` (et la barre `\\`), ce qui garde le lecteur **parallèle**
+        // — le physique le refusait (« Quoted newlines are not supported »),
+        // et le séquentiel coûtait 1,4 s pour 20 132 chunks (7 septembre 2026,
+        // option ajoutée au moteur par la session du cœur C++, d2b48ea68).
+        // `auto_detect=false` : on écrit le CSV nous-mêmes, une barre invalide
+        // doit être une erreur, pas un contournement du renifleur.
         // Et le NULL est un mot convenu, pas la cellule vide : le moteur lit
         // `""` comme un NULL, or une chaîne vide en est une (`_embed_hash` à
         // la naissance d'un chunk) — la comparer à NULL la ferait réécrire.
         Some(format!(
-            "COPY {table} ({}) FROM '{path}' (parallel=false, null_strings=['{CSV_NULL}'])",
+            "COPY {table} ({}) FROM '{path}' (escaped_newlines=true, auto_detect=false, null_strings=['{CSV_NULL}'])",
             columns.join(", ")
         ))
     }

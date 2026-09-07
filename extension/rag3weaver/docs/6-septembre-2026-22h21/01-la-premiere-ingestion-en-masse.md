@@ -249,6 +249,42 @@ exécution finie ne garde que ses contextes d'undo (`nettoyer_apres_fin`), et
 le dossier a été purgé. Le reste des chiffres (liens, drains, relecture) est
 stable à quelques ms d'une mesure à l'autre.
 
+## 3 quinquies. Pas 6, 7 septembre : le lecteur parallèle du moteur — 24,8 s
+
+La session du cœur C++ a ajouté au `COPY` l'option `ESCAPED_NEWLINES=TRUE`
+(commit moteur `d2b48ea68`) : dans une cellule entre guillemets, `\n`, `\r`
+et `\\` en deux caractères, décodés par le lecteur. Plus aucun saut de ligne
+physique dans les cellules, donc le lecteur **parallèle** garde son découpage.
+Côté rag3weaver : `cellule_csv` échappe barre, LF, CR dans cet ordre ;
+`copy_nodes_from_csv` passe `escaped_newlines=true, auto_detect=false` (une
+barre invalide est une erreur, pas un contournement du renifleur) ; la
+bibliothèque par défaut de `run_e2e.sh` devient `build/lecteurs-csv`.
+
+| `[copy-profile]` | avant | après |
+|---|---|---|
+| Scope_Chunk (20 136 lignes avec vecteurs) | csv 925 + COPY 1 387 ms | csv 883 + **COPY 265 ms** |
+| Scope (18 141) | csv 225 + COPY 186 ms | csv 248 + COPY 84 ms |
+| File_Chunk (1 642) | csv 66 + COPY 366 ms | csv 69 + COPY 49 ms |
+| **total** | 26,1 s | **24,8 s** |
+
+Deux choses trouvées en route :
+
+- **une faute à moi** : deux graphes identiques lancés la même milliseconde
+  partageaient leur identifiant d'exécution (`ingest-{hash}-{ms}`), donc
+  leur checkpoint — le second se croyait déjà fait, ou relisait des fichiers
+  que le premier venait d'effacer. `checkpoint::execution_id` ajoute un
+  compteur de processus, et le dossier des fichiers est propre à chaque
+  magasin (`Spiller.jeton`) ;
+- **un défaut du moteur, préexistant** : le lecteur CSV rend les chaînes de
+  plus de 64 Ko deux octets trop longues au franchissement d'un tampon
+  (`copy_over_large_string`, deux tests sur les 148 remis en marche par la
+  session du cœur C++). Notre chemin — sauts de ligne échappés, lecture
+  parallèle — ne le déclenche pas : `une_cellule_de_deux_cents_ko_revient_a_l_octet_pres`
+  le tient à l'octet près. Le cœur C++ l'ouvre quand même.
+
+Le poste restant sur le `COPY` des chunks est l'écriture du CSV côté Rust
+(883 ms pour 20 136 lignes, 7,7 millions de flottants formatés).
+
 ## 4. Ce qui reste, et pourquoi
 
 | reste | la raison vraie |

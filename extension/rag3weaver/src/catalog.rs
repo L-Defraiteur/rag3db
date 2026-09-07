@@ -4145,11 +4145,7 @@ impl Catalog {
         let mut ecoute = runtime.subscribe();
 
         let graph_def = graph.to_definition();
-        let execution_id = format!(
-            "ingest-{}-{}",
-            &graph_def.hash()[..12],
-            crate::dataflow::checkpoint::timestamp_ms(),
-        );
+        let execution_id = crate::dataflow::checkpoint::execution_id("ingest", &graph_def.hash());
 
         let mode = entity_config.checkpoint.unwrap_or(self.config.checkpoint_mode);
         let result = match (&self.checkpoint_store, mode) {
@@ -5429,11 +5425,7 @@ impl Catalog {
 
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
-        let execution_id = format!(
-            "drain-{}-{}",
-            &graph_def.hash()[..12],
-            crate::dataflow::checkpoint::timestamp_ms(),
-        );
+        let execution_id = crate::dataflow::checkpoint::execution_id("drain", &graph_def.hash());
         phase("runtime et abonnements", &mut horloge);
 
         let mode = self.config.checkpoint_mode;

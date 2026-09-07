@@ -31,7 +31,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # `BUILD_SHARED_LIBS`, les mêmes extensions. `RAG3DB_BUILD` permet de revenir
 # sur l'ancienne en une variable — utile pour vérifier qu'un test dit vrai des
 # deux côtés, ce que plusieurs des nôtres font maintenant exprès.
-BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs}"
+BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"
 WEAVER="$ROOT/extension/rag3weaver"
 
 # ── Confiner la pression mémoire ────────────────────────────────────────────

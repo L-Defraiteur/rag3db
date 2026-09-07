@@ -85,8 +85,9 @@ fn le_csv_du_moteur_garde_les_chaines_les_vides_et_les_vecteurs() {
     conn.execute("CREATE NODE TABLE T(_uuid STRING, texte STRING, vide STRING, n INT64, f DOUBLE, b BOOLEAN, vec FLOAT[3], PRIMARY KEY(_uuid))").unwrap();
 
     let chemin = std::env::temp_dir().join(format!("rag3weaver-test-masse-{}.csv", std::process::id()));
-    let texte = "ligne 1, avec virgule\nligne 2 \"citée\" et \\ barre\r\nligne 3";
-    let cellule = format!("\"{}\"", texte.replace('"', "\"\""));
+    let texte = "ligne 1, avec virgule\nligne 2 \"citée\" et \\ barre\r\nligne 3, puis \\n littéral";
+    // La même écriture que `cellule_csv` : barre, sauts de ligne, guillemets.
+    let cellule = format!("\"{}\"", texte.replace('\\', "\\\\").replace('\n', "\\n").replace('\r', "\\r").replace('"', "\"\""));
     std::fs::write(
         &chemin,
         format!("a,{cellule},\"\",42,1.5,true,\"[0.25,-1,3.5]\"\nb,simple,{n},7,2.5,false,\"[1,2,3]\"\n", n = rag3weaver::dialect::CSV_NULL),
@@ -206,4 +207,36 @@ fn les_modes_de_checkpoint_gardent_ce_qu_ils_disent() {
     let mut deroge = catalogue_avec(4, CheckpointMode::Full, Some(CheckpointMode::Off));
     assert_eq!(deroge.ingest_entities("Product", lot()).unwrap().failed, 0);
     assert_eq!(executions(&deroge), 0, "l'entité qui déroge n'écrit pas de checkpoint");
+}
+
+/// **Une cellule de 200 Ko revient à l'octet près.** Le lecteur CSV du
+/// moteur rendait les chaînes de plus de 64 Ko deux octets trop longues au
+/// franchissement d'un tampon (défaut trouvé le 7 septembre 2026 par la
+/// session du cœur C++ sur `copy_over_large_string`). Nos entités `File`
+/// posent le texte entier d'un fichier en une cellule : ce test tient le
+/// contrat sur notre chemin, sauts de ligne échappés et lecture parallèle.
+#[test]
+#[ignore]
+fn une_cellule_de_deux_cents_ko_revient_a_l_octet_pres() {
+    let mut catalog = catalogue(4);
+    let mut texte = String::new();
+    let mut i = 0usize;
+    while texte.len() < 200_000 {
+        texte.push_str(&format!("ligne {i} : « guillemets », \"doubles\", barre \\ et tabulation\t— fin\n"));
+        if i % 7 == 0 {
+            texte.push_str("\r\n");
+        }
+        i += 1;
+    }
+    let attendu = texte.clone();
+    let r = catalog.ingest_entities("Product", vec![product("Gros", &texte, 1.0), product("Petit", "court", 2.0)]).unwrap();
+    assert_eq!(r.failed, 0, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("chargement en masse refusé")), "{:?}", r.warnings);
+    let lu = catalog.execute_raw("MATCH (p:Product {name: 'Gros'}) RETURN p.description").unwrap();
+    let relu = lu.rows[0][0].as_str().expect("description relue");
+    assert_eq!(relu.len(), attendu.len(), "longueur relue {} pour {} écrite", relu.len(), attendu.len());
+    assert!(relu == attendu, "le texte relu diffère du texte écrit");
+    // Et le plein texte le trouve.
+    let bm25 = catalog.search("Product", "tabulation", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
+    assert!(!bm25.results.is_empty());
 }

@@ -473,6 +473,18 @@ pub trait CheckpointStore: Send + Sync {
 // ─── Timestamp helper ────────────────────────────────────────────────────────
 
 /// Current timestamp in milliseconds since UNIX epoch.
+/// **Un identifiant d'exécution unique dans le processus** : préfixe, hash du
+/// graphe, instant, et un compteur. Deux graphes identiques lancés la même
+/// milliseconde (deux tests, deux fils) partageaient leur identifiant, donc
+/// leur checkpoint : le second se croyait « déjà fait », ou relisait des
+/// fichiers que le premier venait d'effacer (7 septembre 2026).
+pub fn execution_id(prefixe: &str, graph_hash: &str) -> String {
+    static COMPTEUR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COMPTEUR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let court = graph_hash.get(..12).unwrap_or(graph_hash);
+    format!("{prefixe}-{court}-{}-{n}", timestamp_ms())
+}
+
 pub fn timestamp_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
