@@ -187,6 +187,7 @@ fn checkpoint_encode_batch(payload: &BatchPayload) -> Result<Vec<u8>, String> {
             enc(&checkpoint)
         }
         PortType::Aggregates => enc(boxed.downcast_ref::<Vec<AggregateRecord>>().ok_or("type mismatch: expected Vec<AggregateRecord>")?),
+        PortType::Derivations => enc(boxed.downcast_ref::<Vec<crate::records::Derivation>>().ok_or("type mismatch: expected Vec<Derivation>")?),
         PortType::KBContent => enc(boxed.downcast_ref::<Vec<KBContentRecord>>().ok_or("type mismatch: expected Vec<KBContentRecord>")?),
         PortType::Updates => enc(boxed.downcast_ref::<Vec<UpdateRecord>>().ok_or("type mismatch: expected Vec<UpdateRecord>")?),
         PortType::Deletes => enc(boxed.downcast_ref::<Vec<DeleteRecord>>().ok_or("type mismatch: expected Vec<DeleteRecord>")?),
@@ -208,6 +209,7 @@ fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPay
             Ok(BatchPayload::new(PortType::Relations, checkpoint.into_iter().map(|c| c.into_relation_record()).collect::<Vec<RelationRecord>>()))
         }
         PortType::Aggregates => Ok(BatchPayload::new(PortType::Aggregates, dec::<Vec<AggregateRecord>>(bytes)?)),
+        PortType::Derivations => Ok(BatchPayload::new(PortType::Derivations, dec::<Vec<crate::records::Derivation>>(bytes)?)),
         PortType::KBContent => Ok(BatchPayload::new(PortType::KBContent, dec::<Vec<KBContentRecord>>(bytes)?)),
         PortType::Updates => Ok(BatchPayload::new(PortType::Updates, dec::<Vec<UpdateRecord>>(bytes)?)),
         PortType::Deletes => Ok(BatchPayload::new(PortType::Deletes, dec::<Vec<DeleteRecord>>(bytes)?)),
@@ -243,6 +245,10 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
             let records: Vec<AggregateRecord> =
                 serde_json::from_str(json).map_err(|e| e.to_string())?;
             Ok(BatchPayload::new(PortType::Aggregates, records))
+        }
+        PortType::Derivations => {
+            let records: Vec<crate::records::Derivation> = serde_json::from_str(json).map_err(|e| e.to_string())?;
+            Ok(BatchPayload::new(PortType::Derivations, records))
         }
         PortType::KBContent => {
             let records: Vec<KBContentRecord> =

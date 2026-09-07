@@ -134,6 +134,8 @@ pub enum PortType {
     Entities,
     Relations,
     Aggregates,
+    /// `Vec<Derivation>` — des lignes dérivées à rendre.
+    Derivations,
     KBContent,
     Updates,
     Deletes,

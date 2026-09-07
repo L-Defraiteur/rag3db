@@ -374,6 +374,14 @@ impl RelationRecord {
 ///
 /// Quasi-identical to AggregateOp — the "instruction" was already implicit
 /// in the old AggregateOp (rebuild = query graph + re-chunk + re-embed).
+/// **Une dérivation à rendre** : une entité dérivée et l'uuid de sa racine
+/// (doc du 7 septembre 2026). Ce qui remplace `AggregateRecord`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Derivation {
+    pub entity: String,
+    pub root_uuid: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateRecord {
     pub index_entry_uuid: String,

@@ -17,6 +17,7 @@ pub mod observe;
 pub mod port;
 pub mod record;
 pub mod record_nodes;
+pub mod derive_nodes;
 pub mod report;
 pub mod runtime;
 pub mod graph_node;

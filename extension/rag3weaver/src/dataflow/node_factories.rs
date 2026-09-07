@@ -82,6 +82,22 @@ named_factory!(
 );
 
 named_factory!(
+    DeriveNodeFactory,
+    super::derive_nodes::DeriveNode,
+    "DeriveNode",
+    "Rend les lignes d'une entité dérivée depuis sa racine et ses voisines, par gabarit",
+    &[
+        PortDef { name: "derivations", port_type: PortType::Derivations, required: true },
+        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+    ],
+    &[
+        PortDef { name: "done", port_type: PortType::Empty, required: false },
+        PortDef { name: "entities", port_type: PortType::Entities, required: false },
+        PortDef { name: "relations", port_type: PortType::Relations, required: false },
+    ],
+);
+
+named_factory!(
     LinkRecordNodeFactory,
     LinkRecordNode,
     "LinkRecordNode",
@@ -1364,6 +1380,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
+    registry.register(Box::new(DeriveNodeFactory));
     registry.register(Box::new(KBEmbedNodeFactory));
     registry.register(Box::new(EmbedNodeFactory));
     registry.register(Box::new(ChunkRecordNodeFactory));
@@ -1401,7 +1418,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 37 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 38 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
