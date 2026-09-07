@@ -326,8 +326,11 @@ fn le_vecteur_classe() {
     use rag3weaver::embedder::Embedder;
     let vecteur = requete.embed(&["Ownership, lifetimes and concurrency in Rust.".to_string()]).unwrap();
 
+    // La colonne est celle du modèle courant sur cette table, résolue par le
+    // catalogue — plus jamais `embedding` en dur (7 septembre 2026).
+    let stockage = catalog.vector_storage("product_chunk").expect("stockage du modèle courant");
     let hits = backend
-        .vector_search("product_chunk", "", &vecteur[0], 5)
+        .vector_search("product_chunk", &stockage.index, &stockage.column, &vecteur[0], 5)
         .expect("vector_search pgvector");
     eprintln!("hits : {}", hits.len());
     for h in &hits {

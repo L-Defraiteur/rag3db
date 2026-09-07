@@ -152,10 +152,12 @@ sinon `register_embedding_model`. Un catalogue en lecture seule n'enregistre
 rien, comme aujourd'hui. Les trois appelants (`:2471`, `:3962`, `:6544`) ne
 changent pas.
 
-**`ChunkRecordNode` (`record_nodes.rs:2027`) et `KBChunkNode` (`:3068`)** — un
-chunk naît avec **tous** les marqueurs des modèles enregistrés à `""`, pas
-seulement `_embed_hash`. Sinon un chunk neuf naîtrait « déjà fait » pour les
-modèles secondaires, et le rattrapage ne le verrait jamais.
+**`ChunkRecordNode` et `KBChunkNode`** — **rien**, et c'est la mesure qui l'a
+dit : un chunk n'a pas besoin de naître avec un marqueur par modèle. Une
+colonne ajoutée par `ALTER … DEFAULT ''` vaut `''` pour les lignes d'avant et
+`NULL` pour une insertion qui ne la nomme pas, et
+`reclamer_chunks_sans_marqueur` compte déjà les deux comme « à faire ».
+`compute_chunks` et ses douze tests restent intacts.
 
 **`EmbedNode` (`record_nodes.rs:2265`)** — `embedding_col` cesse d'être un
 défaut que personne ne surcharge : le nœud résout `(colonne, marqueur)` par
@@ -170,7 +172,12 @@ l'ingestion multiplierait le coût par N sans que personne l'ait demandé.
 passe par la même résolution.
 
 **`embarquer_le_retard` (`catalog.rs:2465`)** — le marqueur qu'il passe à
-`reclamer_chunks_sans_marqueur` est celui du modèle courant. Rien d'autre.
+`reclamer_chunks_sans_marqueur` est celui du modèle courant. Et, mesuré par
+l'optimiseur (c85748da4) : au-delà de ~1 500 chunks à embarquer en 384 ou
+~2 000 en 768, tomber l'index HNSW de **cette colonne** et le reconstruire
+coûte moins que d'y insérer ligne à ligne. La passe le fait d'elle-même, par
+colonne, avec le même drapeau de méta que le lot — un processus mort laisse
+l'ouverture suivante reconstruire.
 **C'est la migration** : ouvrir l'index avec le nouveau modèle, l'enregistrer,
 et le retard vaut 100 % — le rattrapage existant fait le reste, chunk par
 chunk, sans relire ni réécrire une ligne de chunk. `_embed_claim` reste
@@ -200,7 +207,8 @@ par table, N index sur la même table en écraseraient N−1 et un processus mor
 laisserait des index détruits sans trace.
 
 **L'undo (`record_nodes.rs:2999`)** — remet à NULL le marqueur du modèle
-courant, pas `_embed_hash` en dur.
+courant, pas `_embed_hash` en dur. Le marqueur voyage dans le contexte d'undo
+avec les uuids : l'undo n'a pas de catalogue sous la main pour le résoudre.
 
 **Le DDL neuf (`schema.rs:363`, `:243`, `:301`, `:645`)** — une base neuve n'a
 **aucune** colonne de vecteur à la création : elles arrivent avec le premier

@@ -1281,7 +1281,12 @@ impl Node for KBEmbedNode {
                         CypherValue::Map(m)
                     }).collect()
                 );
-                let cypher = dialect.embed_check_hashes(entity_name);
+                // **Stockage d'avant, en dur, et c'est voulu.** La chaîne des
+                // bases de connaissances est en cours de repli en entités
+                // dérivées (chantier du 7 septembre) ; elle meurt avec ses
+                // tables `_Index*`. On ne lui apprend pas les modèles multiples,
+                // on la laisse lire et écrire `_embed_hash` comme avant.
+                let cypher = dialect.embed_check_hashes(entity_name, "_embed_hash");
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -1388,7 +1393,7 @@ impl Node for KBEmbedNode {
                     }).collect(),
                 );
 
-                let cypher = dialect.embed_set(entity_name, &col);
+                let cypher = dialect.embed_set(entity_name, &col, "_embed_hash");
 
                 conn.execute_with_params(
                     &cypher,
@@ -1600,7 +1605,7 @@ impl Node for KBEmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = dialect.embed_set(entity_name, &col);
+                        let cypher = dialect.embed_set(entity_name, &col, "_embed_hash");
 
                         conn.execute_with_params(
                             &cypher,
@@ -2455,6 +2460,33 @@ impl Node for EmbedNode {
             .ok_or("EmbedNode: 'embedder' service not registered")?;
         let embedding_dim = ctx.service::<usize>("embedding_dim").copied()
             .ok_or("EmbedNode: 'embedding_dim' service not registered")?;
+
+        // **Le stockage du modèle courant, résolu depuis la méta** (7 septembre
+        // 2026). Un index porte plusieurs modèles ; celui-ci écrit dans sa
+        // colonne et juge la fraîcheur par son marqueur. Sans catalogue — le
+        // montage minimal d'un test — on garde `embedding_col` et `_embed_hash`.
+        let models = ctx
+            .service::<Vec<crate::embedding_storage::EmbeddingModelEntry>>("embedding_models")
+            .cloned();
+        let slug = ctx.service::<String>("embedding_slug").cloned();
+        let current_entry = match (&models, &slug) {
+            (Some(m), Some(s)) => Some(m.iter().find(|e| e.slug() == *s).cloned().ok_or_else(|| {
+                format!("EmbedNode: {}", crate::embedding_storage::unavailable_message(s, m))
+            })?),
+            _ => None,
+        };
+        // La dimension est celle du modèle, pas d'une config globale.
+        let embedding_dim = current_entry.as_ref().map(|e| e.dim).unwrap_or(embedding_dim);
+        let default_col = self.embedding_col.clone();
+        let storage_for = |chunk_table: &str| -> (String, String) {
+            match &current_entry {
+                Some(e) => {
+                    let s = crate::embedding_storage::VectorStorage::resolve(chunk_table, e);
+                    (s.column, s.marker)
+                }
+                None => (default_col.clone(), "_embed_hash".to_string()),
+            }
+        };
         let has_sparse_svc = ctx.service::<bool>("has_sparse").copied().unwrap_or(false);
         let has_dual_svc = ctx.service::<bool>("has_dual").copied().unwrap_or(false);
         let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
@@ -2551,7 +2583,8 @@ impl Node for EmbedNode {
                 );
                 let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
                     .ok_or("EmbedNode: 'dialect' service not registered")?;
-                let cypher = dialect.embed_check_hashes(entity_name);
+                let (_, marker) = storage_for(entity_name);
+                let cypher = dialect.embed_check_hashes(entity_name, &marker);
                 if let Ok(result) = conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -2559,7 +2592,9 @@ impl Node for EmbedNode {
                     for row in &result.rows {
                         let Some(uuid) = row.first().and_then(|v| v.as_str()) else { continue };
                         // Vide vaut absent : c'est la valeur qu'un chunk neuf
-                        // porte à sa naissance.
+                        // porte à sa naissance. Nul aussi : la colonne d'un
+                        // modèle ajouté après coup n'existe pas sur les lignes
+                        // d'avant, et un chunk inséré sans elle la laisse nulle.
                         if let Some(h) = row.get(1).and_then(|v| v.as_str()).filter(|h| !h.is_empty()) {
                             hash_dense.insert(uuid.to_string(), h.to_string());
                         }
@@ -2593,8 +2628,6 @@ impl Node for EmbedNode {
         ctx.metric("sparse", sparse_works.len() as f64);
         ctx.metric("dual", dual_works.len() as f64);
         ctx.metric("skipped_unchanged", skipped as f64);
-
-        let embedding_col = &self.embedding_col;
 
         // Les vecteurs gardés en mémoire (mode Enrich), par uuid.
         let mut dense_done: HashMap<String, Vec<f32>> = HashMap::new();
@@ -2657,7 +2690,8 @@ impl Node for EmbedNode {
                         }).collect(),
                     );
 
-                    let cypher = dialect.embed_set(entity_name, &embedding_col);
+                    let (col, marker) = storage_for(entity_name);
+                    let cypher = dialect.embed_set(entity_name, &col, &marker);
 
                     conn.execute_with_params(
                         &cypher,
@@ -2861,7 +2895,8 @@ impl Node for EmbedNode {
                             }).collect(),
                         );
 
-                        let cypher = dialect.embed_set(entity_name, &embedding_col);
+                        let (col, marker) = storage_for(entity_name);
+                        let cypher = dialect.embed_set(entity_name, &col, &marker);
 
                         conn.execute_with_params(
                             &cypher,
@@ -2941,8 +2976,9 @@ impl Node for EmbedNode {
                     .unwrap_or_default();
                 let vectors = rec.vectors.get_or_insert_with(Default::default);
                 if let Some(values) = dense {
-                    rec.data.insert("_embed_hash".into(), CypherValue::String(hash.clone()));
-                    vectors.dense = Some(crate::records::DenseVector { column: embedding_col.clone(), values });
+                    let (col, marker) = storage_for(&rec.entity_name);
+                    rec.data.insert(marker, CypherValue::String(hash.clone()));
+                    vectors.dense = Some(crate::records::DenseVector { column: col, values });
                 }
                 if let Some(sv) = sparse {
                     rec.data.insert("_sparse_hash".into(), CypherValue::String(hash));
@@ -2957,8 +2993,14 @@ impl Node for EmbedNode {
             for w in dense_works.iter().chain(sparse_works.iter()).chain(dual_works.iter()) {
                 undo_groups.entry(&w.entity_name).or_default().push(&w.uuid);
             }
-            let undo_map: HashMap<String, Vec<String>> = undo_groups.into_iter()
-                .map(|(k, v)| (k.to_string(), v.into_iter().map(|u| u.to_string()).collect()))
+            // Le marqueur voyage avec les uuids : l'undo n'a pas de contexte
+            // pour le résoudre, et remettre `_embed_hash` à nul sur un chunk
+            // marqué `_embed_hash__granite_278m` ne défairait rien.
+            let undo_map: HashMap<String, serde_json::Value> = undo_groups.into_iter()
+                .map(|(k, v)| {
+                    let (_, marker) = storage_for(k);
+                    (k.to_string(), serde_json::json!({ "marker": marker, "uuids": v }))
+                })
                 .collect();
             if !undo_map.is_empty() {
                 self.undo_data = Some(serde_json::json!(undo_map));
@@ -2992,8 +3034,9 @@ impl Node for EmbedNode {
         let groups = undo_ctx.as_object()
             .ok_or("EmbedNode undo: expected object")?;
 
-        for (entity_name, uuids) in groups {
-            let uuid_list: Vec<&str> = uuids.as_array()
+        for (entity_name, payload) in groups {
+            let marker = payload.get("marker").and_then(|m| m.as_str()).unwrap_or("_embed_hash").to_string();
+            let uuid_list: Vec<&str> = payload.get("uuids").and_then(|u| u.as_array())
                 .ok_or("EmbedNode undo: expected array of uuids")?
                 .iter()
                 .filter_map(|v| v.as_str())
@@ -3008,7 +3051,7 @@ impl Node for EmbedNode {
             // embarquement en ne remettant que `_embed_hash` laisserait
             // `_sparse_hash` posé : le chunk serait réembarqué en dense et
             // jamais en sparse, sans que rien ne le signale.
-            for colonne in ["_embed_hash", "_sparse_hash"] {
+            for colonne in [marker.as_str(), "_sparse_hash"] {
                 let cypher = dialect.batch_set_null(entity_name, colonne);
                 conn.execute_with_params(
                     &cypher,

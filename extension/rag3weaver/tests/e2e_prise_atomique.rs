@@ -757,50 +757,216 @@ fn catalogue_sur(dossier: &std::path::Path, embarqueur: EmbarqueurNomme) -> rag3
     catalog
 }
 
-/// **Un index se cherche avec le modèle qui l'a construit.** La base retient
-/// le premier modèle réel qui embarque (`nom:dim` dans `_catalog_meta`) ; le
-/// même modèle repasse ; un autre est refusé en nommant les deux — pas de
-/// scores plausibles et faux entre deux espaces vectoriels. Demandé par la
-/// session moteur le 6 septembre 2026, en posant granite à côté de BGE-M3.
+// ─── Un index à plusieurs embarquements (7 septembre 2026) ────────────────
+//
+// Le garde-fou « un index, un modèle » est devenu le cas dégénéré : un index
+// accueille les modèles qui se présentent, chacun dans sa colonne, et la
+// recherche prend celle du modèle courant. Les critères sont ceux du §5 de
+// `docs/7-septembre-2026-21h34/01-un-index-a-plusieurs-embarquements.md`.
+
+fn produit_entite() -> rag3weaver::config::EntityConfig {
+    use rag3weaver::config::{EntityConfig, FieldType, SimpleFieldDef};
+    let mut fields = HashMap::new();
+    fields.insert("texte".to_string(), SimpleFieldDef { field_type: FieldType::Text, is_title: true, is_content: true, ..Default::default() });
+    EntityConfig { fields, ..Default::default() }
+}
+
+fn produit_ligne(texte: &str) -> Vec<std::collections::BTreeMap<String, CypherValue>> {
+    let mut d = std::collections::BTreeMap::new();
+    d.insert("texte".to_string(), CypherValue::String(texte.into()));
+    vec![d]
+}
+
+fn dossier_temporaire(nom: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("rag3weaver-{nom}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    d
+}
+
+fn recherche_vectorielle(c: &mut rag3weaver::Catalog, requete: &str) -> Result<rag3weaver::search::SearchResponse, rag3weaver::CatalogError> {
+    use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
+    c.search(
+        "Produit",
+        requete,
+        SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::VECTOR), ..Default::default() },
+    )
+}
+
+fn compte(c: &rag3weaver::Catalog, cypher: &str) -> i64 {
+    c.execute_raw(cypher).unwrap().rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(-1)
+}
+
+fn slugs(c: &rag3weaver::Catalog) -> Vec<String> {
+    c.registered_embedding_models().unwrap().iter().map(|e| e.slug()).collect()
+}
+
+/// **Deux modèles, un index.** A ingère ; B arrive, s'enregistre, a un retard
+/// de 100 % que la recherche solde ; les deux répondent, chacun sur sa colonne.
 #[test]
 #[ignore]
-fn un_index_refuse_un_autre_modele_d_embarquement() {
-    use rag3weaver::config::{EntityConfig, FieldType, SimpleFieldDef};
-    let dossier = std::env::temp_dir().join(format!("rag3weaver-modele-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dossier);
-    let entite = || {
-        let mut fields = HashMap::new();
-        fields.insert("texte".to_string(), SimpleFieldDef { field_type: FieldType::Text, is_title: true, is_content: true, ..Default::default() });
-        EntityConfig { fields, ..Default::default() }
-    };
-    let ligne = || {
-        let mut d = std::collections::BTreeMap::new();
-        d.insert("texte".to_string(), CypherValue::String("un clavecin".into()));
-        vec![d]
-    };
-
-    // 1. Le premier modèle réel s'enregistre.
+fn deux_modeles_se_partagent_un_index() {
+    let dossier = dossier_temporaire("modeles-deux");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
-        assert_eq!(a.indexed_embedding_model().unwrap(), None, "rien avant le premier embarquement");
-        a.register_entity("Produit", entite()).unwrap();
-        a.ingest_entities("Produit", ligne()).unwrap();
-        assert_eq!(a.indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+        assert_eq!(slugs(&a), ["modele_a"], "le premier modèle s'enregistre en embarquant");
+        let s = a.vector_storage("Produit_Chunk").unwrap();
+        assert_eq!((s.column.as_str(), s.index.as_str(), s.dim), ("embedding__modele_a", "Produit_Chunk_vec__modele_a", 4));
+        assert!(!recherche_vectorielle(&mut a, "clavecin").unwrap().results.is_empty());
     }
-    // 2. Le même modèle repasse.
     {
+        // Un autre modèle, et une autre dimension : il ne partage rien avec A.
+        let mut b = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6));
+        b.ensure_embedding_model().unwrap();
+        assert_eq!(slugs(&b), ["modele_a", "modele_b"], "un index accueille, il ne choisit pas");
+        let s = b.vector_storage("Produit_Chunk").unwrap();
+        assert_eq!((s.column.as_str(), s.dim), ("embedding__modele_b", 6));
+        // **Migrer, c'est un retard de 100 %** : la colonne de B est vide.
+        let en_retard = "MATCH (n:Produit_Chunk) WHERE n._embed_hash__modele_b IS NULL OR n._embed_hash__modele_b = '' RETURN count(n)";
+        assert!(compte(&b, en_retard) >= 1, "B doit tout embarquer");
+        // Une recherche qui exige le dense solde le retard — par le rattrapage
+        // ordinaire, sans redécouper.
+        assert!(!recherche_vectorielle(&mut b, "clavecin").unwrap().results.is_empty());
+        assert_eq!(compte(&b, en_retard), 0, "le rattrapage a posé le marqueur de B");
+        // Les chunks n'ont pas bougé : même compte, même clé.
+        assert_eq!(compte(&b, "MATCH (n:Produit_Chunk) RETURN count(n)"), 1);
+    }
+    {
+        // A revient : sa colonne est intacte, sa recherche aussi.
         let mut a2 = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
-        a2.ingest_entities("Produit", ligne()).unwrap();
+        assert!(!recherche_vectorielle(&mut a2, "clavecin").unwrap().results.is_empty());
+        assert_eq!(slugs(&a2), ["modele_a", "modele_b"]);
     }
-    // 3. Un autre modèle est refusé, en nommant les deux.
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **Le cas dégénéré, sans rien déplacer.** Une base au schéma v5 — colonne
+/// `embedding`, index `{table}_vec`, clé `embedding_model` — ouverte par la v6 :
+/// une clé de méta écrite, **zéro DDL**, et la même recherche rend les mêmes
+/// résultats. C'est le test qui prouve que la migration ne coûte rien.
+#[test]
+#[ignore]
+fn une_base_v5_ouverte_par_la_v6_ne_bouge_pas() {
+    let dossier = dossier_temporaire("modeles-v5");
     {
-        let mut b = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 4));
-        match b.ingest_entities("Produit", ligne()) {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        // Reconstituer une base d'avant : la colonne et l'index aux noms
+        // historiques, et une entrée `legacy` pour que l'ingestion y écrive.
+        a.execute_raw("ALTER TABLE Produit_Chunk ADD embedding FLOAT[4] DEFAULT NULL").unwrap();
+        a.execute_raw("CALL CREATE_VECTOR_INDEX('Produit_Chunk', 'Produit_Chunk_vec', 'embedding', metric := 'cosine', skip_if_exists := true)").unwrap();
+        a.execute_raw(r#"MERGE (m:_catalog_meta {_key: 'embedding_model:modele_a'}) SET m._value = '{"name":"modele-a","dim":4,"storage":"legacy"}'"#).unwrap();
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+        assert_eq!(compte(&a, "MATCH (n:Produit_Chunk) WHERE n.embedding IS NOT NULL RETURN count(n)"), 1, "écrit dans la colonne d'avant");
+        assert_eq!(a.vector_storage("Produit_Chunk").unwrap().column, "embedding");
+        // Puis rendre la base telle qu'une v5 l'aurait laissée : la clé
+        // d'avant, la version d'avant, et pas d'entrée v6.
+        a.execute_raw("MATCH (m:_catalog_meta {_key: 'embedding_model:modele_a'}) DELETE m").unwrap();
+        a.execute_raw("MERGE (m:_catalog_meta {_key: 'embedding_model'}) SET m._value = 'modele-a:4'").unwrap();
+        a.execute_raw("MERGE (m:_catalog_meta {_key: 'schema_version'}) SET m._value = '5'").unwrap();
+    }
+    {
+        // La v6 ouvre : `migrate_scope_columns` requalifie, et c'est tout.
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        let modeles = a.registered_embedding_models().unwrap();
+        assert_eq!(modeles.len(), 1);
+        assert_eq!(modeles[0].storage, rag3weaver::embedding_storage::StorageKind::Legacy);
+        assert_eq!(a.vector_storage("Produit_Chunk").unwrap().column, "embedding");
+        // **Zéro DDL** : aucune colonne qualifiée n'est apparue.
+        let colonnes = a.execute_raw("CALL TABLE_INFO('Produit_Chunk') RETURN *").unwrap();
+        let qualifiees: Vec<String> = colonnes.rows.iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).filter(|n| n.contains("__")).collect();
+        assert!(qualifiees.is_empty(), "la migration ne pose aucune colonne : {qualifiees:?}");
+        assert_eq!(a.indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"), "la clé d'avant reste lisible");
+        assert!(!recherche_vectorielle(&mut a, "clavecin").unwrap().results.is_empty(), "la même recherche répond");
+    }
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **Le seul conflit qui reste** : même nom, autre dimension.
+#[test]
+#[ignore]
+fn le_meme_nom_avec_une_autre_dimension_est_refuse() {
+    let dossier = dossier_temporaire("modeles-dim");
+    {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+    }
+    {
+        let mut a8 = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 8));
+        match a8.ingest_entities("Produit", produit_ligne("un autre")) {
             Err(rag3weaver::CatalogError::EmbeddingModelMismatch { indexed, current }) => {
-                assert_eq!((indexed.as_str(), current.as_str()), ("modele-a:4", "modele-b:4"));
+                assert_eq!((indexed.as_str(), current.as_str()), ("modele-a:4", "modele-a:8"));
             }
-            autre => panic!("un autre modèle devait être refusé : {autre:?}"),
+            autre => panic!("même nom, autre dimension : devait être refusé — {autre:?}"),
         }
+    }
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **Un modèle absent refuse en le disant.** Un lecteur n'enregistre rien ; un
+/// modèle qu'il n'a pas rend une erreur qui nomme ceux que l'index a — jamais
+/// zéro résultat en silence.
+#[test]
+#[ignore]
+fn un_modele_absent_refuse_en_nommant_les_disponibles() {
+    let dossier = dossier_temporaire("modeles-absent");
+    {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+        let _ = a.execute_raw("CHECKPOINT");
+    }
+    let conn = Rag3dbConnection::read_only(&dossier).expect("ouvrir en lecture");
+    let mut config = rag3weaver::CatalogConfig::default();
+    config.embedding_dim = 4;
+    let mut lecteur = rag3weaver::Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(EmbarqueurNomme("modele-b", 4)), config);
+    lecteur.initialize().unwrap();
+    assert!(lecteur.en_lecture_seule());
+    assert_eq!(slugs(&lecteur), ["modele_a"], "le lecteur n'a rien enregistré");
+    match recherche_vectorielle(&mut lecteur, "clavecin") {
+        Err(rag3weaver::CatalogError::EmbeddingModelUnavailable(message)) => {
+            assert!(message.contains("modele_b"), "{message}");
+            assert!(message.contains("modele_a"), "{message}");
+        }
+        autre => panic!("un modèle absent devait être refusé en le disant — {autre:?}"),
+    }
+    drop(lecteur);
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **Le lot ne détruit que l'index du modèle courant**, et un arrêt brutal
+/// entre la destruction et la reconstruction se répare à l'ouverture suivante.
+#[test]
+#[ignore]
+fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
+    let dossier = dossier_temporaire("modeles-lot");
+    {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+    }
+    {
+        let mut b = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6));
+        b.ensure_embedding_model().unwrap();
+        let drapeaux = "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN count(m)";
+        let mut vus: Vec<String> = Vec::new();
+        b.bulk_vector_index(&["Produit"], |c| {
+            let r = c.execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN m._key").unwrap();
+            vus = r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+            c.ingest_entities("Produit", produit_ligne("un orgue"))
+        }).unwrap().unwrap();
+        assert_eq!(vus, ["vector_index_dropped:Produit_Chunk:Produit_Chunk_vec__modele_b"], "un seul index tombé, celui de B");
+        assert_eq!(compte(&b, drapeaux), 0, "reconstruit et drapeau levé");
+        // L'arrêt brutal : l'index de B détruit, le drapeau posé, personne pour reconstruire.
+        b.execute_raw("CALL DROP_VECTOR_INDEX('Produit_Chunk', 'Produit_Chunk_vec__modele_b', skip_if_not_exists := true)").unwrap();
+        b.execute_raw("MERGE (m:_catalog_meta {_key: 'vector_index_dropped:Produit_Chunk:Produit_Chunk_vec__modele_b'}) SET m._value = 'embedding__modele_b'").unwrap();
+    }
+    {
+        let mut b2 = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6));
+        assert_eq!(compte(&b2, "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN count(m)"), 0, "l'ouverture a reconstruit");
+        assert!(!recherche_vectorielle(&mut b2, "clavecin").unwrap().results.is_empty(), "et l'index répond");
     }
     let _ = std::fs::remove_dir_all(&dossier);
 }

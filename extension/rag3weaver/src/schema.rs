@@ -328,8 +328,11 @@ pub fn generate_simple_chunk_table_ddl(
 
 pub fn generate_simple_chunk_table_ddl_with_dialect(
     entity_name: &str,
-    entity_config: &crate::config::EntityConfig,
-    embedding_dim: usize,
+    // Ni la config ni la dimension ne décident plus d'une colonne de vecteurs
+    // ici : elles arrivent avec les modèles (voir plus bas). Les deux
+    // paramètres restent pour ne pas faire bouger les appelants.
+    _entity_config: &crate::config::EntityConfig,
+    _embedding_dim: usize,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
@@ -377,9 +380,12 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
     ]);
     columns.extend(crate::scope::scope_columns());
 
-    if entity_config.signals.vector() {
-        columns.push(ColumnDef { name: "embedding".into(), col_type: ColumnType::Vector(embedding_dim) });
-    }
+    // **Aucune colonne de vecteurs à la naissance.** Depuis le 7 septembre
+    // 2026 un index porte plusieurs modèles, et chacun apporte sa colonne, son
+    // marqueur et son index en s'enregistrant (`Catalog::ensure_embedding_model`)
+    // — sur les tables existantes comme sur celles qui naissent après lui.
+    // `embedding_dim` ne décide donc plus rien ici : la dimension est celle du
+    // modèle, gravée dans *sa* colonne.
 
     Ok(dialect.create_table(&table_name, &columns))
 }

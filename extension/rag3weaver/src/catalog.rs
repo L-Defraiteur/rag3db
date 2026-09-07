@@ -71,8 +71,19 @@ pub enum CatalogError {
     /// **Un index se cherche avec le modèle qui l'a construit.** Les vecteurs
     /// de granite-107m et ceux de BGE-M3 ne vivent pas dans le même espace ;
     /// les mélanger rend des scores plausibles et faux, sans rien dire.
-    #[error("cet index a été construit avec le modèle d'embarquement `{indexed}` ; celui-ci est `{current}` — ré-indexer, ou reprendre le même modèle")]
+    ///
+    /// Depuis le 7 septembre 2026 un index porte **plusieurs** modèles, et
+    /// cette erreur ne reste que pour le seul conflit qui subsiste : un modèle
+    /// déjà enregistré sous ce nom, avec une **autre dimension**.
+    #[error("le modèle d'embarquement `{indexed}` est déjà enregistré sur cet index ; celui-ci est `{current}` — même nom, autre dimension")]
     EmbeddingModelMismatch { indexed: String, current: String },
+    /// **Un modèle absent refuse en le disant.** Index ouvert en lecture, ou
+    /// modèle jamais enregistré : jamais zéro résultat en silence.
+    #[error("{0}")]
+    EmbeddingModelUnavailable(String),
+    /// Un nom d'embarqueur dont on ne peut pas faire un nom de colonne.
+    #[error("modèle d'embarquement refusé à l'enregistrement : {0}")]
+    EmbeddingModelRejected(String),
     #[error("unknown entity: {0}")]
     UnknownEntity(String),
     #[error("unknown relation: {0}")]
@@ -169,6 +180,11 @@ pub struct Catalog {
     kb_metadata: HashMap<String, KBMetadata>,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
     entity_configs: HashMap<String, crate::config::EntityConfig>,
+    /// **Les modèles que ce processus sait enregistrés**, en plus de ce que la
+    /// méta rend. Un modèle qu'on vient d'enregistrer *est* enregistré, quoi
+    /// que la base réponde ensuite — et une connexion factice ne répond rien.
+    /// C'est aussi ce qui évite une lecture de méta à chaque recherche.
+    embedding_models_cache: std::sync::Mutex<Vec<crate::embedding_storage::EmbeddingModelEntry>>,
     /// La cellule (org, project) courante : stampe l'ingestion, sélectionne
     /// les index, filtre la recherche par défaut (doc 37).
     scope: crate::scope::Scope,
@@ -240,6 +256,20 @@ pub struct Catalog {
 /// monopoliser la carte. Ce qui dépasse est repris à la passe suivante.
 pub const RATTRAPAGE_PAR_PASSE: usize = 512;
 
+/// **Au-delà, tomber l'index HNSW et le reconstruire coûte moins que d'y
+/// insérer ligne à ligne.**
+///
+/// Mesuré par l'optimiseur le 7 septembre 2026 (c85748da4,
+/// `docs/optimiseur/7-septembre-2026-21h56/01`) : insérer dans un HNSW plein
+/// coûte 3 à 5 ms par chunk de plus qu'index tombé ; reconstruire coûte 4,9 s
+/// en 384 et 9,4 s en 768 sur 21 778 chunks. Le point mort est vers 1 500
+/// chunks (384) et 2 000 (768). Par **colonne**, puisqu'il y en a une par
+/// modèle : un rattrapage qui doit plus que ça sur une table tombe l'index de
+/// sa colonne avant, et le reconstruit quand le retard est soldé.
+pub const fn rebuild_threshold(dim: usize) -> usize {
+    if dim <= 384 { 1_500 } else { 2_000 }
+}
+
 impl Catalog {
     // ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -271,6 +301,7 @@ impl Catalog {
             event_bus: EventBus::new(1024),
             kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
+            embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             scope: crate::scope::Scope::default(),
             parked_fts: HashMap::new(),
             parked_sparse: HashMap::new(),
@@ -1292,17 +1323,14 @@ impl Catalog {
         //    ~60 % du temps des suites E2E (32,1 s -> 12,3 s sur e2e_symbol_search,
         //    80,9 s -> 34,1 s sur e2e_idempotent_registration).
 
-        // 5. Vector index on chunk table
-        if config.signals.vector() {
+        // 5. Le stockage de chaque modèle déjà enregistré, sur la table de
+        //    chunks : colonne, marqueur, index HNSW. Une table naît sans aucune
+        //    colonne de vecteurs ; elles arrivent avec les modèles.
+        if config.signals.vector() && config.chunked != Some(false) {
             let chunk_table = format!("{entity_name}_Chunk");
-            let idx_name = format!("{entity_name}_Chunk_vec");
-            let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
-            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
-            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
-            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
-            // vectoriel absent — et une recherche sémantique qui rend zéro sans
-            // que rien ne le signale.
-            self.poser_index(vec![vec_ddl]);
+            for entry in self.registered_embedding_models()? {
+                self.add_model_storage_to_table(&chunk_table, &entry)?;
+            }
         }
 
         // 6. Sparse vector index — handled by ensure_sparse_handle() in register_entity()
@@ -1312,9 +1340,15 @@ impl Catalog {
 
     // ── Chargement en masse de l'index vectoriel (doc 18) ────────────────
 
-    /// Les index vectoriels des entités citées : `(table de chunks, index)`.
-    /// Seule une entité à pipeline simple et à signal vectoriel en a un.
-    fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String)> {
+    /// Les index vectoriels des entités citées, **pour le modèle courant** :
+    /// `(table de chunks, colonne, index)`. Seule une entité à pipeline simple
+    /// et à signal vectoriel en a un — et seul l'index du modèle courant reçoit
+    /// des vecteurs pendant un lot, donc c'est le seul qu'on détruit.
+    fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String, String)> {
+        let slug = self.current_embedding_slug();
+        let Some(entry) = self.registered_embedding_models().ok().and_then(|m| m.into_iter().find(|e| e.slug() == slug)) else {
+            return vec![];
+        };
         entities
             .iter()
             .filter(|e| {
@@ -1322,7 +1356,11 @@ impl Catalog {
                     .get(**e)
                     .map_or(false, |c| c.has_simple_pipeline() && c.signals.vector())
             })
-            .map(|e| (format!("{e}_Chunk"), format!("{e}_Chunk_vec")))
+            .map(|e| {
+                let table = format!("{e}_Chunk");
+                let s = crate::embedding_storage::VectorStorage::resolve(&table, &entry);
+                (table, s.column, s.index)
+            })
             .collect()
     }
 
@@ -1349,27 +1387,31 @@ impl Catalog {
         f: impl FnOnce(&mut Self) -> T,
     ) -> Result<T, CatalogError> {
         let indexes = self.vector_indexes_of(entities);
-        for (table, index) in &indexes {
-            self.persist_meta_key(&format!("vector_index_dropped:{table}"), index)?;
+        for (table, column, index) in &indexes {
+            // Le drapeau est **par index**, et porte la colonne : avec
+            // plusieurs modèles sur la même table, un drapeau par table en
+            // écraserait N−1, et un processus mort laisserait des index
+            // détruits sans trace.
+            self.persist_meta_key(&format!("vector_index_dropped:{table}:{index}"), column)?;
             let ddl = self.dialect.drop_vector_index(table, index);
             self.conn
                 .execute(&ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         let out = f(self);
-        for (table, index) in &indexes {
-            self.rebuild_vector_index(table, index)?;
+        for (table, column, index) in &indexes {
+            self.rebuild_vector_index(table, column, index)?;
         }
         Ok(out)
     }
 
     /// Reconstruit un index vectoriel sur une table pleine, et lève le drapeau.
-    fn rebuild_vector_index(&self, table: &str, index: &str) -> Result<(), CatalogError> {
-        let ddl = self.dialect.create_vector_index(table, "embedding", index);
+    fn rebuild_vector_index(&self, table: &str, column: &str, index: &str) -> Result<(), CatalogError> {
+        let ddl = self.dialect.create_vector_index(table, column, index);
         self.conn
             .execute(&ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        self.persist_meta_key(&format!("vector_index_dropped:{table}"), "")
+        self.persist_meta_key(&format!("vector_index_dropped:{table}:{index}"), "")
     }
 
     /// À l'ouverture : rebâtir ce qu'une ingestion en masse interrompue a
@@ -1388,7 +1430,7 @@ impl Catalog {
                 )],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let pending: Vec<(String, String)> = result
+        let pending: Vec<(String, String, String)> = result
             .rows
             .iter()
             .filter_map(|row| {
@@ -1397,15 +1439,23 @@ impl Catalog {
                 else {
                     return None;
                 };
-                let table = k.strip_prefix("vector_index_dropped:")?;
-                (!v.is_empty()).then(|| (table.to_string(), v.clone()))
+                if v.is_empty() {
+                    return None;
+                }
+                let reste = k.strip_prefix("vector_index_dropped:")?;
+                // Forme d'aujourd'hui : `{table}:{index}` → colonne. Forme
+                // d'avant : `{table}` → index, sur la colonne `embedding`.
+                Some(match reste.split_once(':') {
+                    Some((table, index)) => (table.to_string(), v.clone(), index.to_string()),
+                    None => (reste.to_string(), "embedding".to_string(), v.clone()),
+                })
             })
             .collect();
-        for (table, index) in pending {
+        for (table, column, index) in pending {
             eprintln!(
                 "[rag3weaver] index vectoriel '{index}' laissé détruit par un chargement en masse interrompu — reconstruction"
             );
-            self.rebuild_vector_index(&table, &index)?;
+            self.rebuild_vector_index(&table, &column, &index)?;
         }
         Ok(())
     }
@@ -1497,14 +1547,9 @@ impl Catalog {
         // Create missing indexes (new signals) — only if simple pipeline
         if new_config.has_simple_pipeline() && new_config.signals.vector() && !old_config.signals.vector() {
             let chunk_table = format!("{entity_name}_Chunk");
-            let idx_name = format!("{entity_name}_Chunk_vec");
-            let vec_ddl = self.dialect.create_vector_index(&chunk_table, "embedding", &idx_name);
-            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
-            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
-            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
-            // vectoriel absent — et une recherche sémantique qui rend zéro sans
-            // que rien ne le signale.
-            self.poser_index(vec![vec_ddl]);
+            for entry in self.registered_embedding_models()? {
+                self.add_model_storage_to_table(&chunk_table, &entry)?;
+            }
         }
         // Sparse handle creation is handled by register_entity() after migrate_entity().
 
@@ -2003,38 +2048,195 @@ impl Catalog {
 
     /// La signature du modèle qui embarque : `nom:dimension`. `None` pour un
     /// factice — un index de test ne s'engage sur rien.
-    fn embedding_model_signature(&self) -> Option<String> {
-        if self.embedder.is_mock() {
-            return None;
-        }
-        Some(format!("{}:{}", self.embedder.name(), self.embedder.dim()))
-    }
+    // ── Plusieurs modèles d'embarquement par index (7 septembre 2026) ─────
 
-    /// **Vérifier que le modèle est celui de l'index, ou l'enregistrer.**
+    /// Ce que le modèle courant déclarerait en s'enregistrant.
     ///
-    /// Appelé avant tout embarquement — ingestion, rattrapage, requête. Au
-    /// premier modèle réel, la base retient `nom:dimension` dans
-    /// `_catalog_meta` ; ensuite un autre modèle est refusé en le nommant.
-    /// Demandé par la session moteur le 6 septembre 2026, au moment de
-    /// mettre granite à côté de BGE-M3 : ragforge gardait `embedding_model`
-    /// sur chaque nœud et ré-embarquait quand il changeait.
-    pub fn check_embedding_model(&self) -> Result<(), CatalogError> {
-        let Some(current) = self.embedding_model_signature() else { return Ok(()) };
-        match self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)? {
-            None => {
-                if !self.lecture_seule {
-                    self.persist_meta_key(crate::scope::EMBEDDING_MODEL_KEY, &current)?;
-                }
-                Ok(())
-            }
-            Some(indexed) if indexed == current => Ok(()),
-            Some(indexed) => Err(CatalogError::EmbeddingModelMismatch { indexed, current }),
+    /// **Les factices s'enregistrent aussi.** Le `None` sur `is_mock()`
+    /// existait pour qu'un vrai modèle puisse arriver après un test sans
+    /// conflit — avec plusieurs modèles par index, ce conflit n'existe plus,
+    /// et la raison du cas spécial s'est évaporée avec lui.
+    fn current_embedding_entry(&self) -> crate::embedding_storage::EmbeddingModelEntry {
+        crate::embedding_storage::EmbeddingModelEntry {
+            name: self.embedder.name().to_string(),
+            dim: self.embedder.dim(),
+            storage: crate::embedding_storage::StorageKind::Suffixed,
         }
     }
 
-    /// Le modèle enregistré avec la base, s'il y en a un.
+    /// Le slug du modèle courant — celui qui nomme son stockage.
+    pub fn current_embedding_slug(&self) -> String {
+        self.current_embedding_entry().slug()
+    }
+
+    /// **Les modèles que cet index sait servir**, tels qu'ils se sont déclarés.
+    pub fn registered_embedding_models(&self) -> Result<Vec<crate::embedding_storage::EmbeddingModelEntry>, CatalogError> {
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self
+            .conn
+            .execute_with_params(
+                &stmt,
+                &[QueryParam::new("prefix", CypherValue::String(crate::embedding_storage::META_PREFIX.into()))],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut out = Vec::new();
+        for row in &result.rows {
+            let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) else { continue };
+            if !k.starts_with(crate::embedding_storage::META_PREFIX) {
+                continue;
+            }
+            match serde_json::from_str::<crate::embedding_storage::EmbeddingModelEntry>(v) {
+                Ok(e) => out.push(e),
+                // Une entrée illisible se dit ; elle ne fait pas disparaître les autres.
+                Err(e) => eprintln!("[rag3weaver] entrée de modèle illisible dans _catalog_meta ({k}) : {e}"),
+            }
+        }
+        // Ce que ce processus a enregistré lui-même compte, même si la base ne
+        // le rend pas (encore, ou jamais sur une connexion factice). La méta
+        // gagne sur un même slug : c'est elle qui fait foi entre processus.
+        if let Ok(cache) = self.embedding_models_cache.lock() {
+            for e in cache.iter() {
+                if !out.iter().any(|o| o.slug() == e.slug()) {
+                    out.push(e.clone());
+                }
+            }
+        }
+        out.sort_by(|a, b| a.slug().cmp(&b.slug()));
+        Ok(out)
+    }
+
+    /// **Où le modèle courant range ses vecteurs sur `chunk_table`** — colonne,
+    /// marqueur, index. Résolu depuis la méta, jamais dérivé : c'est ce que
+    /// tout consommateur prend en entrée au lieu d'un `format!`.
+    ///
+    /// Un modèle absent est refusé en nommant ceux qui sont là.
+    pub fn vector_storage(&self, chunk_table: &str) -> Result<crate::embedding_storage::VectorStorage, CatalogError> {
+        let slug = self.current_embedding_slug();
+        let registered = self.registered_embedding_models()?;
+        match registered.iter().find(|e| e.slug() == slug) {
+            Some(entry) => Ok(crate::embedding_storage::VectorStorage::resolve(chunk_table, entry)),
+            None => Err(CatalogError::EmbeddingModelUnavailable(
+                crate::embedding_storage::unavailable_message(&slug, &registered),
+            )),
+        }
+    }
+
+    /// **S'assurer que le modèle courant a sa place sur cet index** — ou la lui
+    /// faire.
+    ///
+    /// Appelé avant tout embarquement — ingestion, rattrapage, requête. Un
+    /// modèle connu passe ; un modèle inconnu s'enregistre, avec ses colonnes
+    /// et ses index, à la volée et **hors version de schéma**. Le seul refus
+    /// qui reste : le même nom avec une autre dimension.
+    ///
+    /// Un catalogue en lecture seule n'enregistre rien : un modèle absent y
+    /// est refusé en nommant ceux qui sont là, plutôt que de chercher dans
+    /// une colonne qui n'existe pas et de rendre zéro.
+    pub fn ensure_embedding_model(&self) -> Result<(), CatalogError> {
+        let current = self.current_embedding_entry();
+        let slug = current.slug();
+        crate::embedding_storage::validate_slug(&slug).map_err(CatalogError::EmbeddingModelRejected)?;
+        let registered = self.registered_embedding_models()?;
+        if let Some(known) = registered.iter().find(|e| e.slug() == slug) {
+            if known.dim != current.dim {
+                return Err(CatalogError::EmbeddingModelMismatch {
+                    indexed: known.signature(),
+                    current: current.signature(),
+                });
+            }
+            return Ok(());
+        }
+        if self.lecture_seule {
+            return Err(CatalogError::EmbeddingModelUnavailable(
+                crate::embedding_storage::unavailable_message(&slug, &registered),
+            ));
+        }
+        self.register_embedding_model(&current)
+    }
+
+    /// L'ancien nom. Il vérifiait qu'un index n'avait qu'un modèle ; il
+    /// s'assure maintenant que le modèle a sa place.
+    pub fn check_embedding_model(&self) -> Result<(), CatalogError> {
+        self.ensure_embedding_model()
+    }
+
+    /// La clé `embedding_model` d'avant (`nom:dim`), en lecture seule depuis
+    /// la v6. `None` sur un index qui n'en a jamais eu.
     pub fn indexed_embedding_model(&self) -> Result<Option<String>, CatalogError> {
         self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)
+    }
+
+    /// Les tables qui portent des vecteurs : les chunks des entités simples à
+    /// signal vectoriel. Les tables `_Index*` des bases de connaissances n'y
+    /// sont pas — elles gardent leur stockage d'avant et meurent avec le repli
+    /// des KB en entités dérivées (chantier voisin du 7 septembre).
+    fn vector_tables(&self) -> Vec<String> {
+        let mut t: Vec<String> = self
+            .entity_configs
+            .iter()
+            .filter(|(_, c)| c.has_simple_pipeline() && c.signals.vector() && c.chunked != Some(false))
+            .map(|(e, _)| format!("{e}_Chunk"))
+            .collect();
+        t.sort();
+        t
+    }
+
+    /// **Enregistrer un modèle** : ses colonnes et ses index sur chaque table
+    /// à vecteurs, puis son entrée en méta. Idempotent — deux écrivains qui
+    /// enregistrent le même modèle en même temps font deux fois la même chose
+    /// sans se gêner ; c'est le patron de `migrate_scope_columns`, rendu
+    /// paramétrique.
+    fn register_embedding_model(&self, entry: &crate::embedding_storage::EmbeddingModelEntry) -> Result<(), CatalogError> {
+        for table in self.vector_tables() {
+            self.add_model_storage_to_table(&table, entry)?;
+        }
+        let json = serde_json::to_string(entry).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(&entry.meta_key(), &json)?;
+        if let Ok(mut cache) = self.embedding_models_cache.lock() {
+            if !cache.iter().any(|e| e.slug() == entry.slug()) {
+                cache.push(entry.clone());
+            }
+        }
+        eprintln!(
+            "[rag3weaver] modèle d'embarquement `{}` ({}) enregistré sur cet index — colonne `{}`",
+            entry.name,
+            entry.dim,
+            crate::embedding_storage::VectorStorage::resolve("X_Chunk", entry).column.replace("X_Chunk", "…")
+        );
+        Ok(())
+    }
+
+    /// La colonne de vecteurs, son marqueur, son index HNSW — sur une table.
+    /// Les `ALTER` absorbent « existe déjà » : un stockage `legacy` y passe
+    /// sans rien changer, et c'est ce qui rend l'appel uniforme.
+    fn add_model_storage_to_table(&self, table: &str, entry: &crate::embedding_storage::EmbeddingModelEntry) -> Result<(), CatalogError> {
+        use crate::dialect::{ColumnDef, ColumnType};
+        let s = crate::embedding_storage::VectorStorage::resolve(table, entry);
+        // La colonne de vecteurs naît **nulle** : « pas encore embarqué par ce
+        // modèle ». Un vecteur de zéros serait un mensonge cherchable.
+        let column = ColumnDef { name: s.column.clone(), col_type: ColumnType::Vector(s.dim) };
+        self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &column, "NULL"))?;
+        let marker = ColumnDef { name: s.marker.clone(), col_type: ColumnType::Text };
+        self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &marker, "''"))?;
+        // Par `poser_index` : les deux dialectes rendent ce DDL idempotent, donc
+        // une erreur ici est un index vectoriel absent, pas un doublon.
+        self.poser_index(vec![self.dialect.create_vector_index(table, &s.column, &s.index)]);
+        Ok(())
+    }
+
+    /// Un `ALTER` dont « existe déjà » n'est pas une erreur.
+    fn alter_absorbing(&self, table: &str, ddl: &str) -> Result<(), CatalogError> {
+        match self.conn.execute(ddl) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let msg = e.to_string().to_lowercase();
+                if msg.contains("exist") || msg.contains("already has") || msg.contains("not found") || msg.contains("does not") {
+                    Ok(())
+                } else {
+                    Err(CatalogError::DbError(format!("{table}: {e}")))
+                }
+            }
+        }
     }
 
     // ── Persistence (_catalog_meta) ─────────────────────────────────────
@@ -2292,7 +2494,13 @@ impl Catalog {
             register_builtins(&mut tool_registry);
             services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
         }
-        services.register("embedding_dim", self.config.embedding_dim);
+        // La dimension est celle du **modèle**, pas d'une config globale qui
+        // valait 384 par défaut sans jamais être confrontée à `embedder.dim()`.
+        services.register("embedding_dim", self.embedder.dim());
+        // Le stockage de chaque modèle enregistré, et le slug du courant : ce
+        // que `EmbedNode` et la recherche résolvent au lieu de dériver.
+        services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
+        services.register("embedding_slug", self.current_embedding_slug());
         services.register("config", self.config.clone());
         services.register("kb_metadata", self.kb_metadata.clone());
         services.register("entity_configs", self.entity_configs.clone());
@@ -2556,6 +2764,43 @@ impl Catalog {
     /// **lecteur** rattrape sa fermeture et rien d'autre — payer le GPU des
     /// autres serait le couplage que l'invariant interdit. Le balayage global
     /// est pour qui paie déjà une passe GPU (voir `drainer`).
+    /// Combien de chunks de `table` doivent encore `marqueur`. Zéro si la
+    /// requête échoue : on ne bloque pas un rattrapage sur un compteur.
+    fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> usize {
+        let requete = self.dialect.count_marqueur_manquant(table, marqueur);
+        self.conn
+            .execute(&requete)
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+            .unwrap_or(0) as usize
+    }
+
+    /// **L'index d'une colonne, tombé le temps d'un gros rattrapage.**
+    ///
+    /// Appelé à chaque passe, par table, avant d'embarquer. Le drapeau vit en
+    /// méta (`vector_index_dropped:{table}:{index}` → colonne), donc il
+    /// traverse les passes de 512 et les processus : la passe qui trouve un
+    /// retard nul reconstruit, et un processus mort laisse
+    /// [`Self::restore_dropped_vector_indexes`] finir à l'ouverture suivante.
+    fn ajuster_l_index_pour_le_retard(&self, table: &str, storage: &crate::embedding_storage::VectorStorage, retard: usize) -> Result<(), CatalogError> {
+        let cle = format!("vector_index_dropped:{table}:{}", storage.index);
+        let tombe = self.read_meta_key(&cle)?.is_some_and(|v| !v.is_empty());
+        if tombe && retard == 0 {
+            eprintln!("[rag3weaver] retard soldé sur « {table} » — reconstruction de l'index `{}`", storage.index);
+            self.rebuild_vector_index(table, &storage.column, &storage.index)?;
+        } else if !tombe && retard > rebuild_threshold(storage.dim) {
+            eprintln!(
+                "[rag3weaver] {retard} chunks à embarquer sur « {table} » (seuil {}) — l'index `{}` tombe le temps du rattrapage",
+                rebuild_threshold(storage.dim),
+                storage.index
+            );
+            self.persist_meta_key(&cle, &storage.column)?;
+            let ddl = self.dialect.drop_vector_index(table, &storage.index);
+            self.conn.execute(&ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     pub fn embarquer_le_retard(
         &mut self,
         exige: crate::disponibilite::Disponibilites,
@@ -2587,9 +2832,25 @@ impl Catalog {
             // On ne rattrape que ce qui est **à la fois** exigé et déclaré :
             // inutile de chercher un retard dense sur une entité qui n'a pas de
             // signal vectoriel.
+            //
+            // Le marqueur dense est **celui du modèle courant** : c'est par lui
+            // que « migrer de modèle » est un rattrapage ordinaire — un modèle
+            // qui vient d'être enregistré a un retard de 100 %, et cette boucle
+            // le solde chunk par chunk sans redécouper. Les tables de KB gardent
+            // `_embed_hash` : leur chaîne meurt avec le repli en entités dérivées.
+            let dense_marker: String = if est_kb {
+                "_embed_hash".to_string()
+            } else {
+                let storage = self.vector_storage(&table)?;
+                if exige.dense() && signaux.vector() {
+                    let retard = self.count_marqueur_manquant(&table, &storage.marker);
+                    self.ajuster_l_index_pour_le_retard(&table, &storage, retard)?;
+                }
+                storage.marker
+            };
             let mut marqueurs: Vec<&str> = Vec::new();
             if exige.dense() && signaux.vector() {
-                marqueurs.push("_embed_hash");
+                marqueurs.push(dense_marker.as_str());
             }
             if exige.sparse() && signaux.sparse() {
                 marqueurs.push("_sparse_hash");
@@ -2846,8 +3107,11 @@ impl Catalog {
                 .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
                 .unwrap_or(0) as usize
         };
+        // Le marqueur dense est celui du modèle courant ; à défaut (modèle non
+        // enregistré, table de KB), celui d'avant.
+        let dense_marker = self.vector_storage(chunk_table).map(|s| s.marker).unwrap_or_else(|_| "_embed_hash".to_string());
         for (demande, marqueur, nom) in [
-            (signals.vector(), "_embed_hash", "dense"),
+            (signals.vector(), dense_marker.as_str(), "dense"),
             (signals.sparse(), "_sparse_hash", "sparse"),
         ] {
             if !demande {
@@ -3427,6 +3691,31 @@ impl Catalog {
                 "[rag3weaver] schéma v{SCHEMA_VERSION}: _chunked_hash ajouté sur \
                  {decoupes_ajoutes} table(s) d'entités, copié depuis _content_hash"
             );
+        }
+
+        // ── v6 : `embedding_model` devient `embedding_model:{slug}` ──────
+        //
+        // **Une seule chose, et pas celle qu'on croit.** Un index porte
+        // plusieurs modèles ; celui d'avant garde ses noms — `embedding`,
+        // `_embed_hash`, `{table}_vec` — sous un stockage `legacy` que la
+        // résolution sait lire. Aucun `ALTER`, aucun index reconstruit. Ajouter
+        // un modèle est une opération hors version (`ensure_embedding_model`).
+        if let Some(signature) = self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)? {
+            match crate::embedding_storage::EmbeddingModelEntry::from_legacy_signature(&signature) {
+                Some(entry) => {
+                    if self.read_meta_key(&entry.meta_key())?.is_none() {
+                        let json = serde_json::to_string(&entry).map_err(|e| CatalogError::DbError(e.to_string()))?;
+                        self.persist_meta_key(&entry.meta_key(), &json)?;
+                        eprintln!(
+                            "[rag3weaver] schéma v{SCHEMA_VERSION}: modèle `{}` requalifié en stockage legacy — aucun DDL",
+                            entry.name
+                        );
+                    }
+                }
+                None => eprintln!(
+                    "[rag3weaver] schéma v{SCHEMA_VERSION}: clé embedding_model illisible (`{signature}`) — ignorée, à enregistrer à la main"
+                ),
+            }
         }
 
         self.persist_meta_key(SCHEMA_VERSION_KEY, SCHEMA_VERSION)
@@ -6295,6 +6584,8 @@ impl Catalog {
         services.register("plein_texte_natif", self.plein_texte_natif());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register::<Arc<dyn Embedder>>("embedder", self.embedder.clone());
+        services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
+        services.register("embedding_slug", self.current_embedding_slug());
         if let Some(ref sparse) = self.sparse_embedder {
             services.register::<Arc<dyn crate::embedder::SparseEmbedder>>(
                 "sparse_embedder",
@@ -7001,9 +7292,14 @@ impl Catalog {
         // si ça rechange.
         let vector_limit = search_limit;
         let vector_results = if need_dense {
+            // Le stockage du modèle courant sur cette table — refusé en nommant
+            // les modèles disponibles si le courant n'y est pas.
+            let storage = self.vector_storage(vector_entity)?;
             let hits = search::search_vector_via_backend(
                 self.search_backend.as_ref().unwrap().as_ref(),
                 vector_entity,
+                &storage.index,
+                &storage.column,
                 &embedding,
                 vector_limit,
                 filter_where.as_deref(),

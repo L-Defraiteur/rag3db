@@ -371,6 +371,12 @@ impl Embedder for BgeM3Embedder {
     fn dim(&self) -> usize {
         self.dim
     }
+
+    /// Le même nom que la variante burn : c'est le même modèle, et un index
+    /// embarqué par l'un se cherche par l'autre.
+    fn name(&self) -> &str {
+        "bge-m3"
+    }
 }
 
 

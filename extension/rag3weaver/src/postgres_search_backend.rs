@@ -200,6 +200,7 @@ impl SearchBackend for PostgresSearchBackend {
         &self,
         table: &str,
         _index_name: &str,
+        column: &str,
         embedding: &[f32],
         limit: usize,
     ) -> Result<Vec<VectorHit>, String> {
@@ -209,11 +210,14 @@ impl SearchBackend for PostgresSearchBackend {
             .collect::<Vec<_>>()
             .join(",");
 
-        // pgvector cosine distance: 1 - cosine_similarity
+        // pgvector cosine distance: 1 - cosine_similarity.
+        // **La colonne est celle du modèle courant**, pas `embedding` en dur :
+        // une base de connaissances (`{kb}_embedding`) n'était jamais servie
+        // par ce chemin, et un second modèle ne l'aurait pas été non plus.
         let sql = format!(
-            "SELECT _uuid, (embedding <=> '[{embedding_str}]'::vector) AS distance \
+            "SELECT _uuid, ({column} <=> '[{embedding_str}]'::vector) AS distance \
              FROM {table} \
-             WHERE embedding IS NOT NULL \
+             WHERE {column} IS NOT NULL \
              ORDER BY distance \
              LIMIT {limit}"
         );
@@ -235,6 +239,7 @@ impl SearchBackend for PostgresSearchBackend {
         &self,
         table: &str,
         _index_name: &str,
+        column: &str,
         embedding: &[f32],
         limit: usize,
         filter_match: Option<&str>,
@@ -248,8 +253,8 @@ impl SearchBackend for PostgresSearchBackend {
             .join(",");
 
         let where_clause = match filter_where {
-            Some(w) => format!("WHERE n.embedding IS NOT NULL AND {w}"),
-            None => "WHERE n.embedding IS NOT NULL".to_string(),
+            Some(w) => format!("WHERE n.{column} IS NOT NULL AND {w}"),
+            None => format!("WHERE n.{column} IS NOT NULL"),
         };
 
         // **La jointure était jetée.** `filter_match` arrivait ici et n'était
@@ -266,7 +271,7 @@ impl SearchBackend for PostgresSearchBackend {
         // plus, la requête échouait sur le `$` avant même d'y arriver. Le
         // chemin vectoriel **filtré** n'avait donc jamais tourné.
         let sql = format!(
-            "SELECT n._uuid, (n.embedding <=> '[{embedding_str}]'::vector) AS distance \
+            "SELECT n._uuid, (n.{column} <=> '[{embedding_str}]'::vector) AS distance \
              FROM {table} AS n{jointure} \
              {where_clause} \
              ORDER BY distance \

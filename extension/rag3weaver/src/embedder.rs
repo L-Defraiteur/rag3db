@@ -60,10 +60,16 @@ pub trait Embedder: Send + Sync {
         false
     }
 
-    /// Comment il s'appelle, pour les journaux et les refus.
-    fn name(&self) -> &str {
-        "?"
-    }
+    /// **Comment il s'appelle** — pour les journaux, les refus, et depuis le
+    /// 7 septembre 2026 pour **nommer son stockage** : un index porte
+    /// plusieurs modèles, chacun dans sa colonne `embedding__{slug}`, et le
+    /// slug est dérivé de ce nom.
+    ///
+    /// Plus de défaut `"?"` : trois implémentations le rendaient tel quel, et
+    /// une colonne `embedding__?` n'est pas un nom. Un embarqueur qui ne sait
+    /// pas se nommer ne compile pas — c'est le moment le moins cher pour le
+    /// découvrir.
+    fn name(&self) -> &str;
 
     /// **Combien de textes ce modèle a tronqués**, et la limite qu'il applique.
     ///
@@ -129,6 +135,12 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn budget_conseille(&self) -> Option<(usize, usize)> {
         (**self).budget_conseille()
+    }
+    /// Relayé aussi : il ne l'était pas, et un embarqueur derrière un `Arc` —
+    /// c'est le cas dans `Catalog` — perdait son compte de troncatures, « la
+    /// forme la plus chère du défaut » selon la doc du trait lui-même.
+    fn troncatures(&self) -> Option<(usize, usize)> {
+        (**self).troncatures()
     }
     fn distant(&self) -> bool {
         (**self).distant()
@@ -287,6 +299,13 @@ impl Embedder for CallbackEmbedder {
 
     fn dim(&self) -> usize {
         self.dim
+    }
+
+    /// Un rappel n'a pas de modèle à nommer : il se dit tel quel. Un test qui
+    /// en pose deux sur le même index verra deux fois `callback` — et c'est
+    /// exact, ce sont bien deux montages du même genre.
+    fn name(&self) -> &str {
+        "callback"
     }
 }
 

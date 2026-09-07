@@ -369,6 +369,27 @@ impl Node for VectorSearchNode {
             }
         };
 
+        // **Le stockage du modèle courant sur cette table**, résolu depuis la
+        // méta : l'index pour rag3db, la colonne pour pgvector. Un modèle
+        // absent refuse en nommant ceux qui sont là — jamais zéro en silence.
+        // Sans catalogue (montage minimal), les noms d'avant.
+        let (index_name, column) = {
+            let models = ctx
+                .service::<Vec<crate::embedding_storage::EmbeddingModelEntry>>("embedding_models")
+                .cloned();
+            let slug = ctx.service::<String>("embedding_slug").cloned();
+            match (models, slug) {
+                (Some(m), Some(s)) => {
+                    let entry = m.iter().find(|e| e.slug() == s).ok_or_else(|| {
+                        format!("VectorSearchNode: {}", crate::embedding_storage::unavailable_message(&s, &m))
+                    })?;
+                    let st = crate::embedding_storage::VectorStorage::resolve(&target.chunk_table, entry);
+                    (st.index, st.column)
+                }
+                _ => (format!("{}_vec", target.chunk_table), "embedding".to_string()),
+            }
+        };
+
         let backend = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .and_then(|c| c.lock().unwrap().search_backend());
@@ -376,6 +397,8 @@ impl Node for VectorSearchNode {
             Some(backend) => search_vector_via_backend(
                 backend.as_ref(),
                 &target.chunk_table,
+                &index_name,
+                &column,
                 &embedding,
                 limite,
                 filter_where.as_deref(),
@@ -386,7 +409,7 @@ impl Node for VectorSearchNode {
             None => search_vector(
                 &*conn,
                 &target.chunk_table,
-                &target.name,
+                &index_name,
                 &embedding,
                 limite,
                 filter_where.as_deref(),

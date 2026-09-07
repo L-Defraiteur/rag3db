@@ -484,22 +484,30 @@ pub trait SchemaDialect: Send + Sync {
 
     // ── Embed operations ─────────────────────────────────────────────
 
-    /// Les deux marqueurs d'embarquement d'un chunk : `_uuid`, `_embed_hash`
-    /// (dense) et `_sparse_hash` (sparse).
+    /// Les deux marqueurs d'embarquement d'un chunk : `_uuid`, le marqueur
+    /// dense du modèle courant (`marker`) et `_sparse_hash`.
     ///
     /// **Trois colonnes et aucun filtre** depuis le schéma v3. Elle n'en
-    /// rendait que deux, et ne rendait la ligne que si `_embed_hash` n'était pas
-    /// nul — ce qui cachait exactement le cas qui compte maintenant : un chunk
-    /// embarqué en dense et pas en sparse. Le tri se fait chez l'appelant, qui
-    /// seul sait quel signal l'intéresse.
-    fn embed_check_hashes(&self, table: &str) -> String;
+    /// rendait que deux, et ne rendait la ligne que si le marqueur dense n'était
+    /// pas nul — ce qui cachait exactement le cas qui compte maintenant : un
+    /// chunk embarqué en dense et pas en sparse. Le tri se fait chez l'appelant,
+    /// qui seul sait quel signal l'intéresse.
+    ///
+    /// `marker` est celui du modèle courant — `_embed_hash` pour un stockage
+    /// d'avant, `_embed_hash__{slug}` sinon. Un index porte plusieurs modèles,
+    /// et chacun juge la fraîcheur par le sien (7 septembre 2026).
+    fn embed_check_hashes(&self, table: &str, marker: &str) -> String;
 
-    /// SET embedding column + _embed_hash on matched entities.
-    /// `embedding_col`: the column name for the embedding (e.g. "embedding", "{kb}_embedding")
-    fn embed_set(&self, table: &str, embedding_col: &str) -> String;
+    /// SET la colonne de vecteurs **et** son marqueur, sur les lignes citées.
+    /// Les deux viennent du même `VectorStorage` : ils vont ensemble ou pas du
+    /// tout — poser un vecteur sans son marqueur, c'est un chunk réputé en
+    /// retard qu'on réembarquerait ; poser le marqueur sans le vecteur, c'est
+    /// un chunk réputé fait qui ne répondra jamais.
+    fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String;
 
-    /// SET _embed_hash and return item.uuid + node offset (for sparse handle).
-    fn embed_set_hash_returning_offset(&self, table: &str) -> String;
+    /// SET le marqueur dense et rend item.uuid + décalage de ligne (pour le
+    /// handle sparse).
+    fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String;
 
     /// Get node offset for entities (no SET, just return item.uuid + offset).
     fn embed_get_offset(&self, table: &str) -> String;
@@ -1151,28 +1159,28 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn embed_check_hashes(&self, table: &str) -> String {
+    fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
         format!(
             "UNWIND $items AS item \
              MATCH (n:{table} {{_uuid: item.uuid}}) \
-             RETURN n._uuid, n._embed_hash, n._sparse_hash"
+             RETURN n._uuid, n.{marker}, n._sparse_hash"
         )
     }
 
-    fn embed_set(&self, table: &str, embedding_col: &str) -> String {
+    fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
         format!(
             "UNWIND $items AS item \
              MATCH (n:{table} {{_uuid: item.uuid}}) \
-             SET n.{embedding_col} = item.emb, n._embed_hash = item.hash"
+             SET n.{embedding_col} = item.emb, n.{marker} = item.hash"
         )
     }
 
-    fn embed_set_hash_returning_offset(&self, table: &str) -> String {
+    fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr("n");
         format!(
             "UNWIND $items AS item \
              MATCH (n:{table} {{_uuid: item.uuid}}) \
-             SET n._embed_hash = item.hash \
+             SET n.{marker} = item.hash \
              RETURN item.uuid, {offset} AS offset"
         )
     }
@@ -1850,25 +1858,25 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
-    fn embed_check_hashes(&self, table: &str) -> String {
+    fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
         format!(
-            "SELECT _uuid, _embed_hash, _sparse_hash FROM {table} \
+            "SELECT _uuid, {marker}, _sparse_hash FROM {table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
         )
     }
 
-    fn embed_set(&self, table: &str, embedding_col: &str) -> String {
+    fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
         format!(
-            "UPDATE {table} SET {embedding_col} = v.emb, _embed_hash = v.hash \
+            "UPDATE {table} SET {embedding_col} = v.emb, {marker} = v.hash \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, emb vector, hash TEXT) \
              WHERE {table}._uuid = v.uuid"
         )
     }
 
-    fn embed_set_hash_returning_offset(&self, table: &str) -> String {
+    fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr(table);
         format!(
-            "UPDATE {table} SET _embed_hash = v.hash \
+            "UPDATE {table} SET {marker} = v.hash \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, hash TEXT) \
              WHERE {table}._uuid = v.uuid \
              RETURNING v.uuid, {offset} AS offset"

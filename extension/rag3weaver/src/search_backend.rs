@@ -170,10 +170,17 @@ pub trait SearchBackend: Send + Sync {
     ///
     /// Returns UUIDs + similarity scores (higher = more similar).
     /// Implementation: HNSW index (rag3db) or pgvector `<=>` operator (PostgreSQL).
+    ///
+    /// `index_name` **et** `column` : un index porte plusieurs modèles, chacun
+    /// avec les siens (7 septembre 2026). rag3db cherche par l'index, qui
+    /// enferme sa colonne ; pgvector cherche par la colonne, et ignorait
+    /// l'index — il écrivait `embedding` en dur, donc une base de
+    /// connaissances (`{kb}_embedding`) n'y a jamais été servie.
     fn vector_search(
         &self,
         table: &str,
         index_name: &str,
+        column: &str,
         embedding: &[f32],
         limit: usize,
     ) -> Result<Vec<VectorHit>, String>;
@@ -181,11 +188,12 @@ pub trait SearchBackend: Send + Sync {
     /// Vector search with filter conditions.
     ///
     /// rag3db: creates a projected graph from the filter, then HNSW on that graph.
-    /// PostgreSQL: WHERE clause + ORDER BY embedding <=> $1.
+    /// PostgreSQL: WHERE clause + ORDER BY `column` <=> $1.
     fn vector_search_filtered(
         &self,
         table: &str,
         index_name: &str,
+        column: &str,
         embedding: &[f32],
         limit: usize,
         filter_match: Option<&str>,

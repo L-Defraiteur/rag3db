@@ -81,6 +81,10 @@ impl Embedder for OpenAIEmbedder {
     fn dim(&self) -> usize {
         self.dim
     }
+
+    fn name(&self) -> &str {
+        &self.model
+    }
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {

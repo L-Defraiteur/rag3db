@@ -165,6 +165,8 @@ pub use meter::{Consumption, Meter, Unit};
 pub mod session;
 pub use session::{Absorb, Compaction, Session, SessionTools};
 pub mod scope;
+/// Où vivent les vecteurs d'un modèle — un index en porte plusieurs (7 septembre 2026).
+pub mod embedding_storage;
 /// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
 /// entités, des graphes, des composants, et des motifs qui s'appliquent aux
 /// trois. Voir `docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md`.

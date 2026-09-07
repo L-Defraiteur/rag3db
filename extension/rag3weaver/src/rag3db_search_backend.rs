@@ -49,6 +49,8 @@ impl SearchBackend for Rag3dbSearchBackend {
         &self,
         table: &str,
         index_name: &str,
+        // L'index HNSW enferme sa colonne : rag3db n'a pas besoin de la nommer.
+        _column: &str,
         embedding: &[f32],
         limit: usize,
     ) -> Result<Vec<VectorHit>, String> {
@@ -83,6 +85,7 @@ impl SearchBackend for Rag3dbSearchBackend {
         &self,
         table: &str,
         index_name: &str,
+        _column: &str,
         embedding: &[f32],
         limit: usize,
         filter_match: Option<&str>,

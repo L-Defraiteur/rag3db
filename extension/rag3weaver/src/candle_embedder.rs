@@ -292,6 +292,13 @@ impl Embedder for CandleEmbedder {
     fn dim(&self) -> usize {
         self.dim
     }
+
+    /// Le chemin candle ne garde pas l'identifiant du modèle chargé : il se
+    /// nomme par sa famille. Deux BERT candle sur un même index partageraient
+    /// donc une colonne — à ne faire qu'en connaissance de cause.
+    fn name(&self) -> &str {
+        "candle-bert"
+    }
 }
 
 #[cfg(test)]

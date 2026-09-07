@@ -129,6 +129,7 @@ fn setup() -> Catalog {
     impl Embedder for Shared {
         fn embed(&self, t: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::embedder::EmbedError> { self.0.embed(t) }
         fn dim(&self) -> usize { self.0.dim() }
+        fn name(&self) -> &str { self.0.name() }
     }
 
     let mut catalog = Catalog::new(boxed, Box::new(Shared(MINILM.clone())), make_config());

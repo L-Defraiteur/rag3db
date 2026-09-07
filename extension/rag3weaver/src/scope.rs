@@ -34,6 +34,11 @@ pub const DEFAULT_ID: &str = "default";
 pub const SCHEMA_VERSION_KEY: &str = "schema_version";
 
 /// Clé de `_catalog_meta` : le modèle d'embarquement de la base (`nom:dim`).
+///
+/// **En lecture seule depuis la v6.** Un index porte plusieurs modèles, chacun
+/// sous `embedding_model:{slug}` (voir `embedding_storage`). Cette clé n'est
+/// plus jamais écrite ; elle reste lisible pour qu'une bibliothèque v5 qui
+/// tomberait sur la base sache au moins ce qu'elle a devant elle.
 pub const EMBEDDING_MODEL_KEY: &str = "embedding_model";
 /// **3** depuis le 6 septembre 2026 : les tables de chunks gagnent
 /// `_sparse_hash`, le marqueur d'embarquement sparse séparé du dense.
@@ -47,7 +52,15 @@ pub const EMBEDDING_MODEL_KEY: &str = "embedding_model";
 /// Quand il diffère de `_content_hash`, les chunks sont en retard : c'est la
 /// **dette de découpage**, en base et non en mémoire, qui permet à une mise à
 /// jour de se poser au niveau donnée sans redécouper (réconciliation, C5).
-pub const SCHEMA_VERSION: &str = "5";
+///
+/// **6** le 7 septembre 2026 : un index porte **plusieurs modèles**
+/// d'embarquement. La migration ne fait qu'une chose — requalifier la clé
+/// `embedding_model` (`nom:dim`) en `embedding_model:{slug}` avec un stockage
+/// `legacy`, **sans aucun DDL** : les colonnes d'avant gardent leurs noms, et
+/// c'est la résolution qui sait les retrouver. Ajouter un modèle ensuite est
+/// une opération **hors version**, idempotente, à la volée
+/// (`Catalog::register_embedding_model`).
+pub const SCHEMA_VERSION: &str = "6";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

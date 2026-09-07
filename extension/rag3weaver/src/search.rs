@@ -873,7 +873,9 @@ fn inline_params(query: &str, params: &[QueryParam]) -> String {
 pub fn search_vector(
     conn: &dyn DbConnection,
     entity: &str,
-    kb_name: &str,
+    // L'index HNSW du modèle courant sur cette table — résolu par le
+    // catalogue (`vector_storage`), plus jamais dérivé du nom de la table.
+    index_name: &str,
     embedding: &[f32],
     limit: usize,
     extra_where: Option<&str>,
@@ -891,11 +893,11 @@ pub fn search_vector(
 
     if has_filters {
         search_vector_hnsw_filtered(
-            conn, entity, kb_name, &embedding_value, limit,
+            conn, entity, index_name, &embedding_value, limit,
             extra_where, extra_params, extra_match,
         )
     } else {
-        search_vector_hnsw(conn, entity, kb_name, &embedding_value, limit)
+        search_vector_hnsw(conn, entity, index_name, &embedding_value, limit)
     }
 }
 
@@ -903,6 +905,11 @@ pub fn search_vector(
 pub fn search_vector_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
+    // Résolus par le catalogue pour le modèle courant : l'index (rag3db) et
+    // la colonne (pgvector). Un index porte plusieurs modèles ; chacun a les
+    // siens, et rien ici ne les devine.
+    index_name: &str,
+    column: &str,
     embedding: &[f32],
     limit: usize,
     extra_where: Option<&str>,
@@ -912,7 +919,6 @@ pub fn search_vector_via_backend(
     // lignes que l'appelant croyait exclues : c'est faux, pas seulement large.
     warnings: &mut Vec<String>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    let index_name = format!("{entity}_vec");
     let has_filters = extra_where.is_some() || extra_match.is_some();
 
     if has_filters && !backend.honore_le_filtre() {
@@ -925,11 +931,11 @@ pub fn search_vector_via_backend(
 
     let hits = if has_filters {
         backend.vector_search_filtered(
-            entity, &index_name, embedding, limit,
+            entity, index_name, column, embedding, limit,
             extra_match, extra_where, extra_params,
         )
     } else {
-        backend.vector_search(entity, &index_name, embedding, limit)
+        backend.vector_search(entity, index_name, column, embedding, limit)
     }.map_err(|e| CatalogError::DbError(e))?;
 
     Ok(hits.into_iter().map(|h| SearchResult {
@@ -944,17 +950,16 @@ pub fn search_vector_via_backend(
 
 /// HNSW index search via QUERY_VECTOR_INDEX. O(log N), no filters.
 ///
-/// Index name convention: `{entity}_vec` (matches schema.rs `{kb}_Index_Chunk_vec`).
+/// L'index est celui du modèle courant, résolu par le catalogue — la
+/// convention `{entity}_vec` n'est plus qu'un cas parmi d'autres (`legacy`).
 /// Cosine metric returns distance = 1 - similarity, so we convert back.
 fn search_vector_hnsw(
     conn: &dyn DbConnection,
     entity: &str,
-    _kb_name: &str,
+    index_name: &str,
     embedding_value: &CypherValue,
     limit: usize,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    let index_name = format!("{entity}_vec");
-
     let cypher = format!(
         "CALL QUERY_VECTOR_INDEX('{entity}', '{index_name}', $embedding, {limit}) \
          RETURN node._uuid, distance"
@@ -983,14 +988,13 @@ fn search_vector_hnsw(
 fn search_vector_hnsw_filtered(
     conn: &dyn DbConnection,
     entity: &str,
-    _kb_name: &str,
+    index_name: &str,
     embedding_value: &CypherValue,
     limit: usize,
     extra_where: Option<&str>,
     extra_params: &[QueryParam],
     extra_match: Option<&str>,
 ) -> Result<Vec<SearchResult>, CatalogError> {
-    let index_name = format!("{entity}_vec");
     let graph_name = format!("_vf_{entity}");
 
     // Build filter Cypher with inlined parameters (PROJECT_GRAPH_CYPHER doesn't support $params)
@@ -3307,6 +3311,10 @@ mod tests {
         fn dim(&self) -> usize {
             self.dim
         }
+
+    fn name(&self) -> &str {
+        "counting"
+    }
     }
 
     fn make_test_config() -> CatalogConfig {
@@ -3426,7 +3434,7 @@ mod tests {
         let conn = MockConnection::new();
         let embedding = vec![0.1_f32; 384];
 
-        let results = search_vector(&conn, "Document", "main", &embedding, 10, None, &[], None)
+        let results = search_vector(&conn, "Document", "Document_vec", &embedding, 10, None, &[], None)
             .unwrap();
         assert!(results.is_empty());
     }
