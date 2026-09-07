@@ -68,6 +68,22 @@ réellement tirés, ou à ne pas garder.
 
 **Défauts réels du moteur : zéro.** Sur 1 861 cas.
 
+> **Suite, le même soir.** `RandUpdateInt` est réécrit sur un invariant que les
+> collisions ne changent pas — la somme des incréments appliqués vaut mille,
+> aucun n'est déchiré — et passe. L'URL du dépôt d'extensions reste une décision
+> de Lucie ; la forme « variable d'environnement de surcharge » est préparée en
+> attendant, sans choisir le domaine.
+
+## Dette nommée : les 904 cas sous `-SKIP`
+
+Cent trente-huit fichiers portent un `-SKIP` de tête, 904 cas jamais
+enregistrés. Cent trente-deux directives sont conditionnelles et légitimes —
+`-SKIP_IN_MEM` 57, `-SKIP_WASM` 55, `-SKIP_NODE_GROUP_SIZE_TESTS` 20 — mais
+**255 sont des `-SKIP` secs hérités de l'amont**, dont personne ne sait
+aujourd'hui lesquels ont encore une raison. C'est de la couverture qu'on
+possède sans la lire. À relire un autre jour, fichier par fichier, avec pour
+chacun la question : le motif du `-SKIP` tient-il toujours ? Pas ce soir.
+
 ## Ce que le banc ne couvre pas
 
 - **904 cas dans 138 fichiers portent un `-SKIP` de tête**, et ne sont jamais
