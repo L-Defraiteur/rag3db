@@ -220,12 +220,12 @@ table reçoit les colonnes à l'enregistrement d'un modèle.
 - **Le démon** : un démon, un modèle, port 7878, `Identite.modele` — c'est
   suffisant pour dériver le slug. Migrer = relancer le démon avec le nouveau
   modèle, ouvrir, rattraper. Un démon multi-modèles est un autre chantier.
-- **Le défaut `granite-278m` et l'heuristique de taille** : le défaut est
-  encore `bge-m3` dans `rag3weaver-embeddings.rs:50` ; l'heuristique n'existe
-  qu'en prose (`docs/optimiseur/6-septembre-2026-16h30/04`). Sa place est là
-  où le dépôt est déjà compté — l'analyse de code, avant `Catalog::new` — pas
-  dans le démon qui ne voit pas le corpus. Après ce chantier, qui le rend
-  possible : deux modèles sur un index, c'est ce qu'il faut pour en changer.
+- **L'heuristique de taille** : le défaut `granite-278m` est posé depuis
+  `bb538cb0d` (`MODELE_PAR_DEFAUT`) ; l'heuristique, elle, n'existe qu'en prose
+  (`docs/optimiseur/6-septembre-2026-16h30/04`). Sa place est là où le dépôt
+  est déjà compté — l'analyse de code, avant `Catalog::new` — pas dans le
+  démon qui ne voit pas le corpus. Après ce chantier, qui le rend possible :
+  deux modèles sur un index, c'est ce qu'il faut pour en changer.
 
 ## 5. Ce qui dirait que ça marche
 
@@ -241,15 +241,21 @@ table reçoit les colonnes à l'enregistrement d'un modèle.
 5. **Un nom obligatoire** : un `Embedder` sans `name()` ne compile pas.
 6. **Le lot** : `bulk_vector_index` avec deux modèles enregistrés ne détruit
    qu'un index et le retrouve après un arrêt brutal.
+7. **Un modèle absent refuse en le disant.** Index ouvert en lecture, ou
+   modèle jamais enregistré : la recherche vectorielle rend une erreur —
+   *« modèle `granite_107m` non disponible sur cet index ; disponibles :
+   legacy=bge-m3, granite_278m »* — et jamais zéro résultat en silence. C'est
+   la règle du dépôt : distinguer « ça n'existe pas » de « je ne te le montre
+   pas ».
 
 ## 6. Ce qui reste à trancher
 
-- **`__` comme séparateur.** Lisible et sans ambiguïté ; à confirmer que Kuzu
-  et PostgreSQL l'acceptent partout où un nom passe entre quotes — vérifié en
-  lecture, pas encore à l'exécution.
-- **Retirer les colonnes d'un modèle** qu'on n'utilise plus : un
-  `unregister` est le symétrique naturel, mais il détruit des vecteurs ; il
-  n'est pas dans la demande, et je ne l'écris pas sans qu'on le dise.
+- ~~**`__` comme séparateur.**~~ Tranché : `__` sépare, et **un slug est
+  refusé à l'enregistrement** s'il contient `__` ou un caractère hors
+  `[a-z0-9_-]` — la coupe reste sans ambiguïté par construction, pas par
+  convention. Reste à l'éprouver à l'exécution sur les deux moteurs.
+- ~~**Retirer les colonnes d'un modèle.**~~ Tranché : pas d'`unregister`. Il
+  détruit des vecteurs et personne ne l'a demandé.
 - **Le relais `Arc<T>`** (`embedder.rs:117`) ne transmet pas `troncatures()` —
   un défaut à part, trouvé en chemin, à corriger dans le même passage sur le
   trait ou séparément.
