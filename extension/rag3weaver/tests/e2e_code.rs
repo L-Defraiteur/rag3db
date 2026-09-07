@@ -648,13 +648,19 @@ fn building_the_vector_index_in_bulk_beats_row_by_row() {
     let (bulk, build_ms, results_after) = {
         let catalog = setup();
         let mut cat = catalog.lock().unwrap();
-        cat.execute_raw("CALL DROP_VECTOR_INDEX('Scope_Chunk', 'Scope_Chunk_vec', skip_if_not_exists := true)")
+        // L'index et la colonne sont ceux du modèle courant, résolus — plus
+        // `Scope_Chunk_vec` / `embedding` en dur (7 septembre 2026). Sur un
+        // catalogue neuf, le modèle ne s'enregistre qu'au premier embarquement :
+        // on manipule son index, donc on l'enregistre d'abord.
+        cat.ensure_embedding_model().expect("enregistrer le modèle courant");
+        let st = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant");
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}', skip_if_not_exists := true)", st.index))
             .expect("l'index doit pouvoir être détruit");
         let t = Instant::now();
         cat.ingest_code(&analysis).unwrap();
         let load = t.elapsed().as_millis();
         let t = Instant::now();
-        cat.execute_raw("CALL CREATE_VECTOR_INDEX('Scope_Chunk', 'Scope_Chunk_vec', 'embedding', metric := 'cosine', skip_if_exists := true)")
+        cat.execute_raw(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{}', '{}', metric := 'cosine', skip_if_exists := true)", st.index, st.column))
             .expect("l'index doit pouvoir être construit sur une table pleine");
         let build = t.elapsed().as_millis();
         eprintln!("[hnsw] en masse : {load} ms de chargement + {build} ms de construction = {} ms", load + build);
@@ -1520,8 +1526,9 @@ fn does_the_projected_graph_actually_mask_the_vector_index() {
 
     let dim = 64;
     let zeros = (0..dim).map(|_| "0.0").collect::<Vec<_>>().join(",");
+    let idx = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant").index;
     let q = format!(
-        "CALL QUERY_VECTOR_INDEX('_probe', 'Scope_Chunk_vec', [{zeros}], 20) \
+        "CALL QUERY_VECTOR_INDEX('_probe', '{idx}', [{zeros}], 20) \
          WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
     );
     match cat.execute_raw(&q) {
@@ -1591,8 +1598,9 @@ fn where_the_vector_pre_filter_stands_today() {
         // aurait été une sonde qui teste sa propre erreur.
         let v = rag3weaver::embedder::Embedder::embed(&HashEmbedder::new(64), &["boot".to_string()]).unwrap();
         let coords = v[0].iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(",");
+        let idx = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant").index;
         let q = format!(
-            "CALL QUERY_VECTOR_INDEX('{name}', 'Scope_Chunk_vec', [{coords}], 20) \
+            "CALL QUERY_VECTOR_INDEX('{name}', '{idx}', [{coords}], 20) \
              WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
         );
         let r = cat.execute_raw(&q).expect("requête vectorielle");
@@ -1626,9 +1634,10 @@ fn where_the_vector_pre_filter_stands_today() {
         .map(|_| {
             let v = rag3weaver::embedder::Embedder::embed(&HashEmbedder::new(64), &["boot".to_string()]).unwrap();
             let coords = v[0].iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(",");
+            let idx = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant").index;
             let r = cat
                 .execute_raw(&format!(
-                    "CALL QUERY_VECTOR_INDEX('_probe_native', 'Scope_Chunk_vec', [{coords}], 20) \
+                    "CALL QUERY_VECTOR_INDEX('_probe_native', '{idx}', [{coords}], 20) \
                      WITH node AS c MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN DISTINCT p.name"
                 ))
                 .expect("requête vectorielle native");
