@@ -240,3 +240,29 @@ la première ingestion en masse d'une entité dérivée.
 3. **Le ré-embarquement des KB existantes à la migration**, plutôt qu'une
    conversion de tables qui garderait les vecteurs : la conversion coûterait
    plus de code que le chantier, pour des bases qui sont les nôtres.
+
+## État au 7 septembre, 22h30
+
+**Fait, commité, vert** (`dc76c6a6a`, `64924485b`, `8e6ab9630`, `e963224f9`) :
+les types (`derived`, `fusion`), le schéma (colonnes source, `_render_hash`,
+`_DERIVED_FROM`, les chunks d'une dérivée portent leur source),
+`DeriveNode`, la file `pending.derivations`, les déclencheurs (`create`,
+`link`, `update`, `delete`, `ingest_entities`), la fermeture qui suit les
+dérivées, la branche du drain, la cible de recherche qui rend la racine. Le
+cas neuf tient de bout en bout (`tests/e2e_entites_derivees.rs`) et les
+treize suites de régression, KB comprises, sont vertes : **les deux chemins
+coexistent** pour l'instant.
+
+**Reste du pas A** : la traduction de `knowledge_bases` (et de
+`title_for`/`content_for`) en entités dérivées — à `initialize`, à
+`register_kb`, et au retrigger de `register_entity` —, puis le retrait des
+quatre nœuds KB, de `KBMetadata`, de `AggregateRecord`, des DDL `_Index*`,
+`_IN_`, `_SOURCED_`, de `kb_pipeline.mmd`, et la migration v6 des bases qui
+ont des KB. Les tests à réécrire pour les noms de tables : `e2e_phase0b`
+(57 mentions de `_Index`), `e2e_idempotent_registration` (10),
+`e2e_result_mode` (10), `e2e_highlight_long_text` (5), `e2e_search` (4).
+
+**Vu en route** : `run_e2e.sh` ne tournait pas depuis un worktree
+(`RAG3DB_ROOT` sans surcharge) — corrigé ; et l'index plein texte d'une
+entité qui naît dans le graphe doit être ouvert avant le graphe, ce que la
+branche `derive` fait maintenant.

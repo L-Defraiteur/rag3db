@@ -288,7 +288,10 @@ echo "▸ régime = $RAG3WEAVER_REGIME (RAG3WEAVER_REGIME=plein pour la vitesse)
 export RAG3DB_SHARED=1
 export RAG3DB_LIBRARY_DIR="$BUILD/src"
 export RAG3DB_INCLUDE_DIR="$BUILD/src"
-export RAG3DB_ROOT="$ROOT"
+# Depuis un worktree, `RAG3DB_ROOT` peut viser le dépôt principal, où
+# l'extension vecteur est construite (extension/vector/build/) : posé, on le
+# garde ; sinon la racine du script.
+export RAG3DB_ROOT="${RAG3DB_ROOT:-$ROOT}"
 
 # **Toute passe laisse son journal**, résumé ou non.
 #
