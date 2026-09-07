@@ -156,6 +156,19 @@ Charlienew
 -STATEMENT MATCH (t:test) WHERE t.id=${val} SET t.prop = t.prop + 200001
 ---- ok
 -ENDLOOP
--STATEMENT MATCH (t:test) WHERE t.prop<200000 RETURN COUNT(*);
+# Mille tirages parmi deux cent mille ne sont pas tous distincts — le paradoxe
+# des anniversaires en donne 2,5 en double en moyenne, et aucune collision n'a
+# qu'environ 8 % de chances. Compter les nœuds intacts supposait le contraire,
+# et le test avait tort neuf fois sur dix. On vérifie donc ce que les collisions
+# ne changent pas : chaque mise à jour a ajouté exactement 200001 une fois,
+# donc la somme des incréments vaut mille, aucune n'est déchirée, et au plus
+# mille nœuds ont bougé.
+-STATEMENT MATCH (t:test) RETURN sum((t.prop - t.id) / 200001);
 ---- 1
-199000
+1000
+-STATEMENT MATCH (t:test) WHERE (t.prop - t.id) % 200001 <> 0 RETURN COUNT(*);
+---- 1
+0
+-STATEMENT MATCH (t:test) WHERE t.prop <> t.id RETURN COUNT(*) <= 1000 AND COUNT(*) >= 900;
+---- 1
+True
