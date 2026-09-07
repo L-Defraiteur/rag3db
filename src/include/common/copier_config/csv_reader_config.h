@@ -18,6 +18,7 @@ struct CSVOption {
     uint64_t sampleSize;
     bool allowUnbracedList;
     bool ignoreErrors;
+    bool escapedNewlines;
 
     bool autoDetection;
     // These fields aim to identify whether the options are set by user, or set by default.
@@ -36,6 +37,7 @@ struct CSVOption {
           sampleSize{CopyConstants::DEFAULT_CSV_TYPE_DEDUCTION_SAMPLE_SIZE},
           allowUnbracedList{CopyConstants::DEFAULT_CSV_ALLOW_UNBRACED_LIST},
           ignoreErrors(CopyConstants::DEFAULT_IGNORE_ERRORS),
+          escapedNewlines{CopyConstants::DEFAULT_CSV_ESCAPED_NEWLINES},
           autoDetection{CopyConstants::DEFAULT_CSV_AUTO_DETECT},
           setEscape{CopyConstants::DEFAULT_CSV_SET_DIALECT},
           setDelim{CopyConstants::DEFAULT_CSV_SET_DIALECT},
@@ -64,6 +66,9 @@ struct CSVOption {
         if (autoDetection != CopyConstants::DEFAULT_CSV_AUTO_DETECT) {
             result["auto_detect"] = autoDetection ? "true" : "false";
         }
+        if (escapedNewlines) {
+            result["escaped_newlines"] = "true";
+        }
         return result;
     }
 
@@ -90,8 +95,9 @@ struct CSVOption {
                          other.sampleSize}, // Set to DEFAULT_CSV_TYPE_DEDUCTION_SAMPLE_SIZE if
                                             // sampleSize is 0
           allowUnbracedList{other.allowUnbracedList}, ignoreErrors{other.ignoreErrors},
-          autoDetection{other.autoDetection}, setEscape{other.setEscape}, setDelim{other.setDelim},
-          setQuote{other.setQuote}, setHeader{other.setHeader}, nullStrings{other.nullStrings} {}
+          escapedNewlines{other.escapedNewlines}, autoDetection{other.autoDetection},
+          setEscape{other.setEscape}, setDelim{other.setDelim}, setQuote{other.setQuote},
+          setHeader{other.setHeader}, nullStrings{other.nullStrings} {}
 };
 
 struct CSVReaderConfig {

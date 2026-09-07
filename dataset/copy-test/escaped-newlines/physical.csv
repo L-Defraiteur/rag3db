@@ -1,0 +1,15 @@
+1,"abc
+def"
+2,"line1
+line2"
+3,"back\slash"
+4,"quote ""q"" then
+new"
+5,"plain"
+6,""
+7,"tab	here"
+8,"
+start"
+9,"end
+"
+10,"\n is not a newline when doubled: \\n"

@@ -34,6 +34,8 @@ static void bindBoolParsingOption(CSVReaderConfig& config, const std::string& op
         config.option.ignoreErrors = optionValue;
     } else if (optionName == "AUTODETECT" || optionName == "AUTO_DETECT") {
         config.option.autoDetection = optionValue;
+    } else if (optionName == "ESCAPED_NEWLINES") {
+        config.option.escapedNewlines = optionValue;
     } else {
         KU_UNREACHABLE;
     }
@@ -162,6 +164,13 @@ CSVReaderConfig CSVReaderConfig::construct(const case_insensitive_map_t<Value>& 
     if (config.option.skipNum > 0) {
         // If the user sets the number of rows to skip, we cannot read in parallel mode.
         config.parallel = false;
+    }
+    // Les deux mécanismes se disputeraient la barre oblique inverse : on refuse
+    // plutôt que de laisser l'un manger silencieusement les séquences de l'autre.
+    if (config.option.escapedNewlines &&
+        config.option.escapeChar == CopyConstants::CSV_NEWLINE_ESCAPE_CHAR) {
+        throw BinderException("ESCAPED_NEWLINES=TRUE cannot be combined with ESCAPE='\\': the "
+                              "backslash is reserved for the \\n, \\r and \\\\ sequences.");
     }
     return config;
 }

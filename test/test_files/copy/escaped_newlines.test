@@ -1,0 +1,62 @@
+-DATASET CSV copy-test/escaped-newlines
+
+--
+
+# Le même contenu, écrit de deux façons : `physical.csv` avec de vrais sauts de
+# ligne dans les cellules (lisible seulement en série), `escaped.csv` avec `\n`,
+# `\r` et `\\` en deux caractères (lisible en parallèle, ESCAPED_NEWLINES=TRUE).
+# Le contrat : le texte revient à l'octet près.
+-CASE EscapedNewlines
+
+-STATEMENT MATCH (p:physical) RETURN COUNT(*)
+---- 1
+10
+-STATEMENT MATCH (e:escaped) RETURN COUNT(*)
+---- 1
+10
+
+# Neuf cellules sont identiques entre les deux chemins de lecture ; la dixième,
+# la cellule vide `""`, devient NULL des deux côtés — c'est le comportement du
+# lecteur CSV, pas de l'option, et il est le même dans les deux modes.
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v = e.v RETURN COUNT(*)
+---- 1
+9
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v IS NULL AND e.v IS NULL RETURN COUNT(*)
+---- 1
+1
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v <> e.v RETURN COUNT(*)
+---- 1
+0
+
+# Décodage réel : "abc\ndef" fait 7 octets, pas 8.
+-STATEMENT MATCH (e:escaped) WHERE e.k = 1 RETURN size(e.v)
+---- 1
+7
+# CRLF dans une cellule : 12 octets.
+-STATEMENT MATCH (e:escaped) WHERE e.k = 2 RETURN size(e.v)
+---- 1
+12
+
+# Le décodage est bien l'œuvre de l'option : sans elle, la barre est du texte.
+-STATEMENT LOAD FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines/escaped.csv" (HEADER=FALSE) WITH column0 AS k, column1 AS v WHERE k = 1 RETURN size(v)
+---- 1
+8
+
+# LOAD FROM prend le même chemin, en parallèle par défaut.
+-STATEMENT LOAD FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines/escaped.csv" (HEADER=FALSE, ESCAPED_NEWLINES=TRUE) RETURN COUNT(*)
+---- 1
+10
+
+# Une barre suivie d'autre chose que n, r ou une barre est une erreur, pas du texte.
+# Le dialecte est fixé : laissée libre, la détection automatique contourne
+# l'erreur en essayant l'autre guillemet, la cellule devient non citée et passe
+# en texte brut — c'est le comportement du renifleur pour tout échappement
+# invalide, pas une particularité de cette option.
+-STATEMENT LOAD FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines/bad-sequence.csv" (HEADER=FALSE, ESCAPED_NEWLINES=TRUE, AUTO_DETECT=FALSE) RETURN COUNT(*)
+---- error
+Copy exception: Error in file ${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines/bad-sequence.csv on line 1: with ESCAPED_NEWLINES=TRUE a backslash inside quotes must be followed by n, r or another backslash. Line/record containing the error: '1,"a\x...'
+
+# Les deux mécanismes ne peuvent pas se partager la barre.
+-STATEMENT LOAD FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines/escaped.csv" (HEADER=FALSE, ESCAPED_NEWLINES=TRUE, ESCAPE='\\') RETURN COUNT(*)
+---- error
+Binder exception: ESCAPED_NEWLINES=TRUE cannot be combined with ESCAPE='\': the backslash is reserved for the \n, \r and \\ sequences.

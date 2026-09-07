@@ -106,9 +106,16 @@ struct CopyConstants {
     static constexpr const char* TO_OPTION_NAME = "TO";
 
     static constexpr const char* BOOL_CSV_PARSING_OPTIONS[] = {"HEADER", "PARALLEL",
-        "LIST_UNBRACED", "AUTODETECT", "AUTO_DETECT", CopyConstants::IGNORE_ERRORS_OPTION_NAME};
+        "LIST_UNBRACED", "AUTODETECT", "AUTO_DETECT", CopyConstants::IGNORE_ERRORS_OPTION_NAME,
+        "ESCAPED_NEWLINES"};
     static constexpr bool DEFAULT_CSV_HAS_HEADER = false;
     static constexpr bool DEFAULT_CSV_PARALLEL = true;
+    // Dans une cellule entre guillemets, un saut de ligne s'écrit `\n` en deux
+    // caractères (`\r` de même, `\\` pour la barre) et le lecteur les décode.
+    // Plus aucun saut de ligne physique dans les cellules : le lecteur parallèle
+    // découpe ses blocs comme d'habitude.
+    static constexpr bool DEFAULT_CSV_ESCAPED_NEWLINES = false;
+    static constexpr char CSV_NEWLINE_ESCAPE_CHAR = '\\';
 
     // Default configuration for csv file parsing
     static constexpr const char* STRING_CSV_PARSING_OPTIONS[] = {"ESCAPE", "DELIM", "DELIMITER",

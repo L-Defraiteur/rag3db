@@ -64,22 +64,47 @@ uint64_t BaseCSVReader::getFileSize() {
     return fileInfo->getFileSize();
 }
 
+// La lettre qui suit la barre a déjà été validée par l'état handle_newline_escape.
+static char decodeNewlineEscape(char letter) {
+    switch (letter) {
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    default:
+        return CopyConstants::CSV_NEWLINE_ESCAPE_CHAR;
+    }
+}
+
 template<typename Driver>
 bool BaseCSVReader::addValue(Driver& driver, uint64_t rowNum, column_id_t columnIdx,
-    std::string_view strVal, std::vector<uint64_t>& escapePositions) {
+    std::string_view strVal, std::vector<uint64_t>& escapePositions,
+    std::vector<uint64_t>& newlineEscapePositions) {
     std::string valueToAdd;
     // insert the line number into the chunk
-    if (!escapePositions.empty()) {
-        // remove escape characters (if any)
+    if (!escapePositions.empty() || !newlineEscapePositions.empty()) {
+        // Les deux listes sont croissantes et disjointes : une seule passe, en
+        // les fusionnant. Un caractère d'échappement CSV s'enlève ; une séquence
+        // `\n`, `\r` ou `\\` s'enlève et laisse l'octet qu'elle désigne.
         std::string newVal = "";
         uint64_t prevPos = 0;
-        for (auto i = 0u; i < escapePositions.size(); i++) {
-            auto nextPos = escapePositions[i];
+        auto i = 0u, j = 0u;
+        while (i < escapePositions.size() || j < newlineEscapePositions.size()) {
+            const bool takeEscape =
+                j >= newlineEscapePositions.size() ||
+                (i < escapePositions.size() && escapePositions[i] < newlineEscapePositions[j]);
+            const auto nextPos = takeEscape ? escapePositions[i++] : newlineEscapePositions[j++];
             newVal += strVal.substr(prevPos, nextPos - prevPos);
-            prevPos = nextPos + 1;
+            if (takeEscape) {
+                prevPos = nextPos + 1;
+            } else {
+                newVal += decodeNewlineEscape(strVal[nextPos + 1]);
+                prevPos = nextPos + 2;
+            }
         }
         newVal += strVal.substr(prevPos, strVal.size() - prevPos);
         escapePositions.clear();
+        newlineEscapePositions.clear();
         valueToAdd = newVal;
     } else {
         valueToAdd = strVal;
@@ -285,6 +310,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         auto start = position.load();
         bool hasQuotes = false;
         std::vector<uint64_t> escapePositions;
+        std::vector<uint64_t> newlineEscapePositions;
         lineContext.setNewLine(getFileOffset());
 
         // read values into the buffer (if any)
@@ -336,7 +362,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         // Trim one character if we have quotes.
         if (!addValue(driver, curRowIdx, column,
                 std::string_view(buffer.get() + start, position - start - hasQuotes),
-                escapePositions)) {
+                escapePositions, newlineEscapePositions)) {
             goto ignore_error;
         }
         column++;
@@ -358,7 +384,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         bool isCarriageReturn = buffer[position] == '\r';
         if (!addValue(driver, curRowIdx, column,
                 std::string_view(buffer.get() + start, position - start - hasQuotes),
-                escapePositions)) {
+                escapePositions, newlineEscapePositions)) {
             goto ignore_error;
         }
         column++;
@@ -397,6 +423,12 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
                 if (buffer[position] == option.quoteChar) {
                     // quote: move to unquoted state
                     goto unquote;
+                } else if (option.escapedNewlines &&
+                           buffer[position] == CopyConstants::CSV_NEWLINE_ESCAPE_CHAR) {
+                    // barre oblique inverse : début d'une séquence à décoder
+                    // (n, r, ou une seconde barre)
+                    newlineEscapePositions.push_back(position - start);
+                    goto handle_newline_escape;
                 } else if (buffer[position] == option.escapeChar) {
                     // escape: store the escaped position and move to handle_escape state
                     escapePositions.push_back(position - start);
@@ -487,6 +519,36 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         }
         // escape was followed by quote or escape, go back to quoted state
         goto in_quotes;
+    handle_newline_escape:
+        // état : handle_newline_escape — la barre doit être suivie de n, r ou
+        // d'une autre barre. Tout autre caractère est une erreur, pas un texte
+        // rendu tel quel : un fichier écrit pour ce mode ne contient jamais
+        // de barre isolée.
+        position++;
+        if (!maybeReadBuffer(&start)) {
+            [[unlikely]] lineContext.setEndOfLine(getFileOffset());
+            if (driver.driverType == DriverType::SNIFF_CSV_DIALECT) {
+                auto& sniffDriver = reinterpret_cast<SniffCSVDialectDriver&>(driver);
+                sniffDriver.setError();
+            } else {
+                handleCopyException("escaped newline sequence at end of file.");
+            }
+            goto ignore_error;
+        }
+        if (buffer[position] != 'n' && buffer[position] != 'r' &&
+            buffer[position] != CopyConstants::CSV_NEWLINE_ESCAPE_CHAR) {
+            ++position; // consume the invalid char
+            if (driver.driverType == DriverType::SNIFF_CSV_DIALECT) {
+                auto& sniffDriver = reinterpret_cast<SniffCSVDialectDriver&>(driver);
+                sniffDriver.setError();
+            } else {
+                [[unlikely]] handleCopyException("with ESCAPED_NEWLINES=TRUE a backslash inside "
+                                                 "quotes must be followed by n, r or another "
+                                                 "backslash.");
+            }
+            goto ignore_error;
+        }
+        goto in_quotes;
     carriage_return:
         // this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted
         // as a single line
@@ -514,7 +576,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
             // Add remaining value to chunk.
             if (!addValue(driver, curRowIdx, column,
                     std::string_view(buffer.get() + start, position - start - hasQuotes),
-                    escapePositions)) {
+                    escapePositions, newlineEscapePositions)) {
                 return {curRowIdx, numErrors};
             }
             column++;
