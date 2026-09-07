@@ -46,6 +46,11 @@ std::string getArch() {
     return arch;
 }
 
+std::string ExtensionUtils::getDefaultExtensionRepo() {
+    auto repo = main::ClientContext::getEnvVariable(EXTENSION_REPO_ENV_VAR);
+    return repo.empty() ? OFFICIAL_EXTENSION_REPO : repo;
+}
+
 std::string getPlatform() {
     return getOS() + "_" + getArch();
 }
@@ -98,8 +103,8 @@ ExtensionRepoInfo ExtensionUtils::getExtensionInstallerRepoInfo(const std::strin
 
 ExtensionRepoInfo ExtensionUtils::getSharedLibRepoInfo(const std::string& fileName,
     const std::string& extensionRepo) {
-    auto extensionURL = common::stringFormat(SHARED_LIB_REPO, extensionRepo, RAG3DB_EXTENSION_VERSION,
-        getPlatform(), fileName);
+    auto extensionURL = common::stringFormat(SHARED_LIB_REPO, extensionRepo,
+        RAG3DB_EXTENSION_VERSION, getPlatform(), fileName);
     return getExtensionRepoInfo(extensionURL);
 }
 
