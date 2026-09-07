@@ -185,6 +185,12 @@ pub struct Catalog {
     /// que la base réponde ensuite — et une connexion factice ne répond rien.
     /// C'est aussi ce qui évite une lecture de méta à chaque recherche.
     embedding_models_cache: std::sync::Mutex<Vec<crate::embedding_storage::EmbeddingModelEntry>>,
+    /// **Un modèle enregistré ici doit tout embarquer.** `peut_devoir_un_embarquement`
+    /// note une dette créée par *ce* processus en posant des chunks ; celle-ci
+    /// naît autrement — un modèle neuf a un retard de 100 % sans qu'une ligne
+    /// ait bougé — et la porte du rattrapage doit la voir. Atomique parce que
+    /// l'enregistrement se fait derrière `&self`.
+    embedding_model_registered_here: std::sync::atomic::AtomicBool,
     /// La cellule (org, project) courante : stampe l'ingestion, sélectionne
     /// les index, filtre la recherche par défaut (doc 37).
     scope: crate::scope::Scope,
@@ -302,6 +308,7 @@ impl Catalog {
             kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
+            embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
             parked_fts: HashMap::new(),
             parked_sparse: HashMap::new(),
@@ -1023,6 +1030,7 @@ impl Catalog {
             self.conn.execute(&ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         self.migrate_scope_columns()?;
+        self.noter_la_dette_du_modele_courant();
         self.ensure_scope_nodes()?;
         self.multi_cell = self.multi_cell || self.count_scope_nodes()? > 1;
 
@@ -2197,6 +2205,7 @@ impl Catalog {
                 cache.push(entry.clone());
             }
         }
+        self.embedding_model_registered_here.store(true, std::sync::atomic::Ordering::Relaxed);
         eprintln!(
             "[rag3weaver] modèle d'embarquement `{}` ({}) enregistré sur cet index — colonne `{}`",
             entry.name,
@@ -2764,6 +2773,29 @@ impl Catalog {
     /// **lecteur** rattrape sa fermeture et rien d'autre — payer le GPU des
     /// autres serait le couplage que l'invariant interdit. Le balayage global
     /// est pour qui paie déjà une passe GPU (voir `drainer`).
+    /// **À l'ouverture : le modèle courant doit-il déjà quelque chose ?**
+    ///
+    /// Un processus qui a enregistré un modèle puis est mort avant de l'avoir
+    /// embarqué laisse une dette en base et aucun indice en mémoire. Un `COUNT`
+    /// par table à vecteurs, une fois, pour que la porte du rattrapage la
+    /// voie — sans quoi une recherche exigeant « dense » rendrait zéro en
+    /// disant qu'il faut exiger « dense ».
+    fn noter_la_dette_du_modele_courant(&mut self) {
+        if self.lecture_seule {
+            return;
+        }
+        let slug = self.current_embedding_slug();
+        let Ok(models) = self.registered_embedding_models() else { return };
+        let Some(entry) = models.into_iter().find(|e| e.slug() == slug) else { return };
+        for table in self.vector_tables() {
+            let s = crate::embedding_storage::VectorStorage::resolve(&table, &entry);
+            if self.count_marqueur_manquant(&table, &s.marker) > 0 {
+                self.peut_devoir_un_embarquement = true;
+                return;
+            }
+        }
+    }
+
     /// Combien de chunks de `table` doivent encore `marqueur`. Zéro si la
     /// requête échoue : on ne bloque pas un rattrapage sur un compteur.
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> usize {
@@ -3234,7 +3266,10 @@ impl Catalog {
                      « sparse » le fera"
                         .to_string(),
                 );
-            } else if gpu && self.peut_devoir_un_embarquement {
+            } else if gpu
+                && (self.peut_devoir_un_embarquement
+                    || self.embedding_model_registered_here.load(std::sync::atomic::Ordering::Relaxed))
+            {
                 let tables = fermeture(self);
                 if let Err(e) = self.embarquer_le_retard(exige, RATTRAPAGE_PAR_PASSE, tables.as_ref()) {
                     warnings.push(format!(

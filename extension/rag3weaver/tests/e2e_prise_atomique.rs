@@ -788,7 +788,14 @@ fn recherche_vectorielle(c: &mut rag3weaver::Catalog, requete: &str) -> Result<r
     c.search(
         "Produit",
         requete,
-        SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::VECTOR), ..Default::default() },
+        // `Immediate` n'attend que la file ; c'est `exige: DENSE` qui solde la
+        // dette d'embarquement — celle qu'un modèle qui vient d'arriver a à 100 %.
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            exige: Some(rag3weaver::disponibilite::Disponibilites::DENSE),
+            signals: Some(SearchSignals::VECTOR),
+            ..Default::default()
+        },
     )
 }
 
@@ -827,7 +834,11 @@ fn deux_modeles_se_partagent_un_index() {
         assert!(compte(&b, en_retard) >= 1, "B doit tout embarquer");
         // Une recherche qui exige le dense solde le retard — par le rattrapage
         // ordinaire, sans redécouper.
-        assert!(!recherche_vectorielle(&mut b, "clavecin").unwrap().results.is_empty());
+        let reponse = recherche_vectorielle(&mut b, "clavecin").unwrap();
+        eprintln!("[test] avertissements : {:?}", reponse.meta.warnings);
+        eprintln!("[test] retard de B après la recherche : {}", compte(&b, en_retard));
+        eprintln!("[test] vecteurs B non nuls : {}", compte(&b, "MATCH (n:Produit_Chunk) WHERE n.embedding__modele_b IS NOT NULL RETURN count(n)"));
+        assert!(!reponse.results.is_empty(), "B doit répondre après le rattrapage");
         assert_eq!(compte(&b, en_retard), 0, "le rattrapage a posé le marqueur de B");
         // Les chunks n'ont pas bougé : même compte, même clé.
         assert_eq!(compte(&b, "MATCH (n:Produit_Chunk) RETURN count(n)"), 1);
