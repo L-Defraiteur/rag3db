@@ -77,6 +77,7 @@ fn make_config() -> CatalogConfig {
         EntityDef {
             fields: dir_fields,
             hashsafe: Some(vec!["absolute_path".into()]),
+            derived_from: None,
         },
     );
     entities.insert(
@@ -84,6 +85,7 @@ fn make_config() -> CatalogConfig {
         EntityDef {
             fields: file_fields,
             hashsafe: Some(vec!["absolute_path".into()]),
+            derived_from: None,
         },
     );
 

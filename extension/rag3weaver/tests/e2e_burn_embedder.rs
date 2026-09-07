@@ -105,7 +105,7 @@ fn make_config() -> CatalogConfig {
     fields.insert("body".into(), text_content_for("kb"));
 
     let mut entities = HashMap::new();
-    entities.insert("Document".into(), EntityDef { fields, hashsafe: None });
+    entities.insert("Document".into(), EntityDef { fields, hashsafe: None, derived_from: None });
 
     let mut kbs = HashMap::new();
     kbs.insert(

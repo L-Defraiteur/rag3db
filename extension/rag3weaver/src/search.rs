@@ -3340,6 +3340,7 @@ mod tests {
             EntityDef {
                 fields,
                 hashsafe: Some(vec!["title".to_string()]),
+                derived_from: None,
             },
         );
 

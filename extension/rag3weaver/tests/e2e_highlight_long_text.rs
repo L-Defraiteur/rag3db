@@ -528,6 +528,7 @@ fn make_kb_config_small_chunks() -> CatalogConfig {
     entities.insert("Document".into(), EntityDef {
         fields: doc_fields,
         hashsafe: Some(vec!["title".into()]),
+        derived_from: None,
     });
 
     let mut kbs = HashMap::new();
@@ -831,10 +832,12 @@ fn make_multi_entity_kb_config() -> CatalogConfig {
     entities.insert("Document".into(), EntityDef {
         fields: doc_fields,
         hashsafe: Some(vec!["title".into()]),
+        derived_from: None,
     });
     entities.insert("Author".into(), EntityDef {
         fields: author_fields,
         hashsafe: Some(vec!["name".into()]),
+        derived_from: None,
     });
 
     let mut relations = HashMap::new();

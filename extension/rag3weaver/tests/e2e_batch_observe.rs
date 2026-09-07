@@ -56,6 +56,7 @@ fn make_batch_config() -> CatalogConfig {
         EntityDef {
             fields: file_fields,
             hashsafe: Some(vec!["name".into()]),
+            derived_from: None,
         },
     );
     entities.insert(
@@ -63,6 +64,7 @@ fn make_batch_config() -> CatalogConfig {
         EntityDef {
             fields: doc_fields,
             hashsafe: None,
+            derived_from: None,
         },
     );
 

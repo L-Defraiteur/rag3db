@@ -375,7 +375,7 @@ fn make_kb_config() -> CatalogConfig {
     });
 
     let mut entities = HashMap::new();
-    entities.insert("Document".into(), EntityDef { fields, hashsafe: None });
+    entities.insert("Document".into(), EntityDef { fields, hashsafe: None, derived_from: None });
 
     let mut kbs = HashMap::new();
     kbs.insert("kb".into(), KBConfig {

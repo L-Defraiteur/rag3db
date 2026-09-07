@@ -104,6 +104,7 @@ fn make_kb_config() -> CatalogConfig {
         EntityDef {
             fields: doc_fields,
             hashsafe: Some(vec!["title".into()]),
+            derived_from: None,
         },
     );
     entities.insert(
@@ -111,6 +112,7 @@ fn make_kb_config() -> CatalogConfig {
         EntityDef {
             fields: author_fields,
             hashsafe: Some(vec!["name".into()]),
+            derived_from: None,
         },
     );
 
@@ -851,6 +853,7 @@ fn make_vector_config(dim: usize) -> CatalogConfig {
         EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         },
     );
 
@@ -1219,6 +1222,7 @@ fn make_sparse_config() -> CatalogConfig {
         EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         },
     );
 
@@ -1442,6 +1446,7 @@ fn make_phase4_config(signals: SearchSignals) -> CatalogConfig {
         EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         },
     );
 
@@ -2075,6 +2080,7 @@ fn make_sparse_only_config() -> CatalogConfig {
         EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         },
     );
 

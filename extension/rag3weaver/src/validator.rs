@@ -225,6 +225,7 @@ mod tests {
                 .map(|(k, v)| (k.to_string(), v))
                 .collect(),
             hashsafe: None,
+            derived_from: None,
         }
     }
 

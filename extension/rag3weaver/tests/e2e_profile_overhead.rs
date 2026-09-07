@@ -101,7 +101,7 @@ fn make_config() -> CatalogConfig {
     fields.insert("title".into(), text_title_for("kb"));
     fields.insert("body".into(), text_content_for("kb"));
     let mut entities = HashMap::new();
-    entities.insert("Snippet".into(), EntityDef { fields, hashsafe: None });
+    entities.insert("Snippet".into(), EntityDef { fields, hashsafe: None, derived_from: None });
     let mut kbs = HashMap::new();
     kbs.insert("kb".into(), KBConfig { signals: SearchSignals::BM25, ..Default::default() });
     CatalogConfig {

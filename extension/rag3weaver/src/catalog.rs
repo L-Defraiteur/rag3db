@@ -1184,6 +1184,7 @@ impl Catalog {
         crate::config::EntityDef {
             fields: entity_fields,
             hashsafe: config.hashsafe.clone(),
+            derived_from: config.derived.as_ref().map(|d| d.from.clone()),
         }
     }
 
@@ -1256,6 +1257,14 @@ impl Catalog {
         self.conn.execute(&entity_ddl)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.poser_index(self.dialect.secondary_indexes(entity_name));
+
+        // Une dérivée pointe sa racine : `{Entité}_DERIVED_FROM`.
+        if let Some(racine) = &entity_def.derived_from {
+            let rel_ddl = crate::schema::generate_derived_rel_ddl_with_dialect(entity_name, racine, self.dialect.as_ref())
+                .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+            self.conn.execute(&rel_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            self.poser_index(self.dialect.relation_indexes(&crate::schema::derived_rel_name(entity_name)));
+        }
 
         // Skip chunk/FTS/vector/sparse for KB-only entities (no simple pipeline)
         if !config.has_simple_pipeline() {
@@ -7824,6 +7833,7 @@ mod tests {
             EntityDef {
                 fields,
                 hashsafe: Some(vec!["title".to_string()]),
+                derived_from: None,
             },
         );
 
@@ -7928,6 +7938,7 @@ mod tests {
                 EntityDef {
                     fields,
                     hashsafe: None,
+                    derived_from: None,
                 },
             )]
             .into(),
@@ -8648,7 +8659,7 @@ mod tests {
         );
         config.entities.insert(
             "Note".to_string(),
-            EntityDef { fields, hashsafe: Some(vec!["title".to_string()]) },
+            EntityDef { fields, hashsafe: Some(vec!["title".to_string()]), derived_from: None },
         );
         config.relations.insert(
             "CITES".to_string(),

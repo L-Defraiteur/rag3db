@@ -53,6 +53,7 @@ fn make_basic_config() -> CatalogConfig {
         EntityDef {
             fields: doc_fields,
             hashsafe: Some(vec!["title".to_string()]),
+            derived_from: None,
         },
     );
     entities.insert(
@@ -60,6 +61,7 @@ fn make_basic_config() -> CatalogConfig {
         EntityDef {
             fields: author_fields,
             hashsafe: Some(vec!["name".to_string()]),
+            derived_from: None,
         },
     );
 

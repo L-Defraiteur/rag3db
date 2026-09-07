@@ -133,6 +133,12 @@ pub struct EntityDef {
 
     #[serde(default)]
     pub hashsafe: Option<Vec<String>>,
+
+    /// L'entité racine, si celle-ci est dérivée ([`DerivedConfig`]) : la
+    /// table reçoit alors `_source_entity`, `_source_uuid`, `_render_hash`,
+    /// et la relation `{Entité}_DERIVED_FROM` vers la racine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derived_from: Option<String>,
 }
 
 // ─── Relation Definition ────────────────────────────────────────────────────

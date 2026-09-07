@@ -193,6 +193,15 @@ pub fn generate_node_table_ddl_with_dialect(
         // jamais découpé.
         ColumnDef { name: "_chunked_hash".into(), col_type: ColumnType::Text },
     ];
+    if entity_def.derived_from.is_some() {
+        // **Une entité dérivée** (doc du 7 septembre 2026) : d'où vient la
+        // ligne, et le hash de ses entrées au dernier rendu — `''` veut dire
+        // « à re-rendre », c'est la dette d'agrégat, en base.
+        use crate::config::DerivedConfig;
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_ENTITY.into(), col_type: ColumnType::Text });
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_UUID.into(), col_type: ColumnType::Text });
+        columns.push(ColumnDef { name: DerivedConfig::RENDER_HASH.into(), col_type: ColumnType::Text });
+    }
     columns.extend(crate::scope::scope_columns());
 
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
@@ -382,6 +391,23 @@ pub fn generate_simple_chunk_rel_ddl_with_dialect(
 }
 
 /// Generate CREATE REL TABLE for KB Index → Chunk relationship.
+/// Le nom de la relation d'une entité dérivée vers sa racine.
+pub fn derived_rel_name(entity_name: &str) -> String {
+    format!("{entity_name}_DERIVED_FROM")
+}
+
+/// `{Entité}_DERIVED_FROM` : de la ligne dérivée vers la ligne racine dont
+/// elle est rendue — le pendant de `_CHUNKED_FROM` pour la dérivation.
+pub fn generate_derived_rel_ddl_with_dialect(
+    entity_name: &str,
+    from_entity: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    validate_identifier(entity_name, "entity")?;
+    validate_identifier(from_entity, "entity")?;
+    Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
+}
+
 pub fn generate_index_chunk_rel_ddl(kb_name: &str) -> Result<String, SchemaError> {
     generate_index_chunk_rel_ddl_with_dialect(kb_name, &crate::dialect::Rag3dbDialect)
 }
@@ -601,6 +627,12 @@ pub fn generate_full_schema_with_dialect(
         let rel_def = &config.relations[rel_name];
         ddl.push(generate_rel_table_ddl_with_dialect(rel_name, rel_def, config, dialect)?);
     }
+    // Les dérivées pointent leur racine, une fois toutes les tables posées.
+    for entity_name in &entity_names {
+        if let Some(racine) = &config.entities[*entity_name].derived_from {
+            ddl.push(generate_derived_rel_ddl_with_dialect(entity_name, racine, dialect)?);
+        }
+    }
 
     // 4. KB Index tables, chunks, rels, and search indexes (sorted by KB name)
     let kb_title_entities = resolve_kb_title_entities(config);
@@ -661,6 +693,28 @@ pub struct FullSchema {
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests_derived {
+    use super::*;
+    use crate::config::{EntityDef, FieldDef};
+
+    #[test]
+    fn une_derivee_a_ses_colonnes_et_sa_relation() {
+        let mut fields = HashMap::new();
+        let champ: FieldDef = serde_json::from_str(r#"{"type":"text","isContent":true}"#).unwrap();
+        fields.insert("content".to_string(), champ);
+        let def = EntityDef { fields, hashsafe: None, derived_from: Some("Ticket".into()) };
+        let ddl = generate_node_table_ddl("TicketView", &def).unwrap();
+        for col in ["_source_entity", "_source_uuid", "_render_hash", "_content_hash", "content"] {
+            assert!(ddl.contains(col), "{col} manque dans {ddl}");
+        }
+        let rel = generate_derived_rel_ddl_with_dialect("TicketView", "Ticket", &crate::dialect::Rag3dbDialect).unwrap();
+        assert!(rel.contains("TicketView_DERIVED_FROM") && rel.contains("FROM TicketView TO Ticket"), "{rel}");
+        let simple = EntityDef { fields: HashMap::new(), hashsafe: None, derived_from: None };
+        assert!(!generate_node_table_ddl("Plain", &simple).unwrap().contains("_render_hash"));
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -747,6 +801,7 @@ mod tests {
         let entity = EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         };
 
         let kbs = resolve_entity_kbs(&entity);
@@ -771,6 +826,7 @@ mod tests {
         let entity = EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         };
 
         let kbs = resolve_entity_kbs(&entity);
@@ -788,6 +844,7 @@ mod tests {
         let entity = EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         };
 
         let kbs = resolve_entity_kbs(&entity);
@@ -826,6 +883,7 @@ mod tests {
         let entity = EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         };
 
         let ddl = generate_node_table_ddl("Person", &entity).unwrap();
@@ -848,6 +906,7 @@ mod tests {
         let entity = EntityDef {
             fields,
             hashsafe: None,
+            derived_from: None,
         };
 
         let ddl = generate_node_table_ddl("Document", &entity).unwrap();
@@ -862,6 +921,7 @@ mod tests {
         let entity = EntityDef {
             fields: HashMap::new(),
             hashsafe: None,
+            derived_from: None,
         };
         assert!(generate_node_table_ddl("my-table", &entity).is_err());
     }
@@ -1165,6 +1225,7 @@ mod tests {
             EntityDef {
                 fields,
                 hashsafe: None,
+                derived_from: None,
             },
         );
 
@@ -1195,6 +1256,7 @@ mod tests {
             EntityDef {
                 fields: HashMap::new(),
                 hashsafe: None,
+                derived_from: None,
             },
         );
 
@@ -1267,7 +1329,7 @@ mod tests {
         let mut entities = HashMap::new();
         entities.insert(
             "Document".to_string(),
-            EntityDef { fields, hashsafe: None },
+            EntityDef { fields, hashsafe: None, derived_from: None },
         );
 
         let mut relations = HashMap::new();
@@ -1351,6 +1413,7 @@ mod tests {
                 EntityDef {
                     fields: HashMap::new(),
                     hashsafe: None,
+                    derived_from: None,
                 },
             );
         }
@@ -1374,6 +1437,7 @@ mod tests {
             EntityDef {
                 fields,
                 hashsafe: Some(vec!["title".to_string()]),
+                derived_from: None,
             },
         );
 
@@ -1427,6 +1491,7 @@ mod tests {
             EntityDef {
                 fields: dir_fields,
                 hashsafe: Some(vec!["absolute_path".to_string()]),
+                derived_from: None,
             },
         );
         entities.insert(
@@ -1434,6 +1499,7 @@ mod tests {
             EntityDef {
                 fields: file_fields,
                 hashsafe: Some(vec!["absolute_path".to_string()]),
+                derived_from: None,
             },
         );
 
