@@ -452,6 +452,19 @@ pub struct EntityConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointMode>,
 
+    /// **Cette entité est rendue, pas ingérée** : ses lignes viennent d'une
+    /// entité racine et de ses voisines, par gabarit (doc du 7 septembre 2026,
+    /// « replier les bases de connaissances en entités dérivées »). Tout ce qui
+    /// suit la ligne — découpe, embarquement, plein texte, recherche — est le
+    /// chemin de n'importe quelle entité.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derived: Option<DerivedConfig>,
+
+    /// **Les poids de fusion par défaut** d'une recherche sur cette entité
+    /// (ce que `KBConfig` portait). Précédence : appelant > entité > défaut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fusion: Option<crate::search::FusionConfig>,
+
     /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
     /// indexée en plein texte et cherchable, mais sans ligne dans
     /// `{Entity}_Chunk` ni lien `CHUNKED_FROM`.
@@ -491,6 +504,90 @@ pub struct GroupBy {
     pub frame_field: String,
 }
 
+/// **Une entité dérivée** : une ligne par ligne de l'entité racine `from`,
+/// rendue depuis les champs de la racine et les voisines rassemblées par
+/// relation. Le gabarit de chaque champ rendu voit `root` (la racine) et une
+/// liste par règle `gather`, sous son `name`. Rien ici ne sait ce qu'est un
+/// titre ou un commentaire : c'est le schéma qui le dit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DerivedConfig {
+    /// L'entité racine.
+    pub from: String,
+    /// Les voisines rassemblées, par relation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gather: Vec<GatherRule>,
+    /// Un gabarit Jinja par champ rendu (`title`, `content`, …) : un nom de
+    /// gabarit (`templates/render/<nom>.jinja`) ou la source en ligne.
+    pub render: std::collections::BTreeMap<String, String>,
+}
+
+/// Une règle de rassemblement : les voisines de la racine par une relation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GatherRule {
+    /// Le nom sous lequel les lignes arrivent au gabarit.
+    pub name: String,
+    /// La relation entre la racine et les voisines.
+    pub relation: String,
+    /// `out` : la racine est la source de la relation ; `in` : sa cible.
+    #[serde(default)]
+    pub direction: GatherDirection,
+    /// Les champs relus sur chaque voisine ; vides, tous les champs déclarés.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GatherDirection {
+    #[default]
+    Out,
+    In,
+}
+
+impl DerivedConfig {
+    /// Les colonnes posées d'office sur une entité dérivée, en plus de ses champs.
+    pub const SOURCE_ENTITY: &'static str = "_source_entity";
+    pub const SOURCE_UUID: &'static str = "_source_uuid";
+    /// Le hash des entrées au dernier rendu ; `''` veut dire « à re-rendre ».
+    pub const RENDER_HASH: &'static str = "_render_hash";
+
+    /// Ce que le gabarit ne peut pas nommer : la racine est `root`.
+    pub const ROOT: &'static str = "root";
+
+    /// La cohérence interne : ce qui se vérifie sans connaître les autres
+    /// entités. Le reste (la racine existe, les relations la touchent) est
+    /// vérifié à l'enregistrement, par le catalogue.
+    pub fn validate(&self, fields: &HashMap<String, SimpleFieldDef>) -> Result<(), String> {
+        if self.from.is_empty() {
+            return Err("derived : `from` est obligatoire — une dérivée a une racine".into());
+        }
+        if self.render.is_empty() {
+            return Err("derived : `render` est vide — une dérivée rend au moins un champ".into());
+        }
+        if let Some((champ, _)) = self.render.iter().find(|(c, _)| !fields.contains_key(*c)) {
+            return Err(format!("derived : `render.{champ}` n'est pas un champ de cette entité"));
+        }
+        if let Some((champ, _)) = self.render.iter().find(|(_, g)| g.trim().is_empty()) {
+            return Err(format!("derived : le gabarit de `{champ}` est vide"));
+        }
+        let mut noms: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for regle in &self.gather {
+            if regle.name.is_empty() || regle.relation.is_empty() {
+                return Err("derived : une règle `gather` veut un `name` et une `relation`".into());
+            }
+            if regle.name == Self::ROOT {
+                return Err(format!("derived : `{}` est le nom de la racine dans le gabarit, une règle ne peut pas le prendre", Self::ROOT));
+            }
+            if !noms.insert(regle.name.as_str()) {
+                return Err(format!("derived : deux règles `gather` nommées '{}'", regle.name));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Default for EntityConfig {
     fn default() -> Self {
         Self {
@@ -503,6 +600,8 @@ impl Default for EntityConfig {
             chunked: None,
             lifecycle: None,
             checkpoint: None,
+            derived: None,
+            fusion: None,
         }
     }
 }
@@ -756,6 +855,14 @@ impl EntityConfig {
 
     /// Validate field definitions (mutual exclusivity of is_title/title_for, is_content/content_for).
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(derivee) = &self.derived {
+            derivee.validate(&self.fields)?;
+            // L'identité d'une dérivée est sa racine : un uuid par ligne
+            // racine, pas un hash de champs.
+            if self.hashsafe.is_some() {
+                return Err("derived : pas de `hashsafe` sur une entité dérivée, son identité est sa racine".into());
+            }
+        }
         if let Some(hs) = &self.hashsafe {
             if hs.is_empty() {
                 return Err("hashsafe: empty list (omit it to hash all fields)".into());
@@ -942,6 +1049,60 @@ impl Default for CatalogConfig {
             checkpoint_dir: None,
             checkpoint_mode: CheckpointMode::Full,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_derived {
+    use super::*;
+
+    fn champs(noms: &[&str]) -> HashMap<String, SimpleFieldDef> {
+        noms.iter().map(|n| (n.to_string(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() })).collect()
+    }
+
+    fn derivee() -> DerivedConfig {
+        DerivedConfig {
+            from: "Ticket".into(),
+            gather: vec![GatherRule { name: "comments".into(), relation: "HAS_COMMENT".into(), direction: GatherDirection::Out, fields: vec!["body".into()] }],
+            render: [("content".to_string(), "{{ root.body }}{% for c in comments %}{{ c.body }}{% endfor %}".to_string())].into_iter().collect(),
+        }
+    }
+
+    #[test]
+    fn une_derivee_coherente_passe() {
+        assert!(derivee().validate(&champs(&["content"])).is_ok());
+    }
+
+    #[test]
+    fn un_champ_rendu_inconnu_est_refuse() {
+        let err = derivee().validate(&champs(&["title"])).unwrap_err();
+        assert!(err.contains("render.content"), "{err}");
+    }
+
+    #[test]
+    fn une_regle_ne_peut_pas_s_appeler_root_ni_se_repeter() {
+        let mut d = derivee();
+        d.gather[0].name = "root".into();
+        assert!(d.validate(&champs(&["content"])).unwrap_err().contains("root"));
+        let mut d = derivee();
+        d.gather.push(d.gather[0].clone());
+        assert!(d.validate(&champs(&["content"])).unwrap_err().contains("deux règles"));
+    }
+
+    #[test]
+    fn pas_de_hashsafe_sur_une_derivee() {
+        let config = EntityConfig { fields: champs(&["content"]), derived: Some(derivee()), hashsafe: Some(vec!["content".into()]), ..Default::default() };
+        assert!(config.validate().unwrap_err().contains("hashsafe"));
+    }
+
+    #[test]
+    fn la_config_derivee_se_relit_depuis_le_json() {
+        let json = r#"{"from":"Ticket","gather":[{"name":"comments","relation":"HAS_COMMENT","direction":"in","fields":["body"]}],"render":{"title":"{{ root.subject }}"}}"#;
+        let d: DerivedConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(d.gather[0].direction, GatherDirection::In);
+        assert_eq!(d.render["title"], "{{ root.subject }}");
+        let sans_direction: GatherRule = serde_json::from_str(r#"{"name":"c","relation":"R"}"#).unwrap();
+        assert_eq!(sans_direction.direction, GatherDirection::Out);
     }
 }
 

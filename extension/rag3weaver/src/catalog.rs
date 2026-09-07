@@ -1027,6 +1027,51 @@ impl Catalog {
     ///
     /// Order-independent: if a KB mentioned by this entity is already registered,
     /// it will be re-triggered to pick up the new fields.
+    /// **Ce qu'une dérivation exige des autres entités** : la racine est
+    /// enregistrée et n'est pas elle-même dérivée (pas de chaîne pour
+    /// l'instant : une dérivée de dérivée se re-rendrait en cascade, on le
+    /// décidera quand un cas le demandera) ; chaque règle `gather` nomme une
+    /// relation déclarée qui touche la racine dans le sens dit, et les champs
+    /// relus existent sur la voisine.
+    fn verifier_la_derivation(&self, entity_name: &str, derivee: &crate::config::DerivedConfig) -> Result<(), String> {
+        use crate::config::GatherDirection;
+        if derivee.from == entity_name {
+            return Err(format!("derived : « {entity_name} » ne peut pas dériver d'elle-même"));
+        }
+        let racine = self
+            .entity_configs
+            .get(&derivee.from)
+            .ok_or_else(|| format!("derived : la racine « {} » n'est pas une entité enregistrée", derivee.from))?;
+        if racine.derived.is_some() {
+            return Err(format!("derived : la racine « {} » est elle-même dérivée ; une dérivée de dérivée n'est pas prise en charge", derivee.from));
+        }
+        for regle in &derivee.gather {
+            let rel = self
+                .config
+                .relations
+                .get(&regle.relation)
+                .ok_or_else(|| format!("derived : la relation « {} » (règle « {} ») n'est pas déclarée", regle.relation, regle.name))?;
+            let (bout_racine, voisine) = match regle.direction {
+                GatherDirection::Out => (&rel.from, &rel.to),
+                GatherDirection::In => (&rel.to, &rel.from),
+            };
+            if bout_racine != &derivee.from {
+                return Err(format!(
+                    "derived : la relation « {} » va de « {} » vers « {} » ; en direction {:?} elle ne part pas de la racine « {} »",
+                    regle.relation, rel.from, rel.to, regle.direction, derivee.from
+                ));
+            }
+            let config_voisine = self
+                .entity_configs
+                .get(voisine)
+                .ok_or_else(|| format!("derived : la voisine « {voisine} » (règle « {} ») n'est pas une entité enregistrée", regle.name))?;
+            if let Some(inconnu) = regle.fields.iter().find(|f| !config_voisine.fields.contains_key(*f)) {
+                return Err(format!("derived : « {inconnu} » n'est pas un champ de « {voisine} » (règle « {} »)", regle.name));
+            }
+        }
+        Ok(())
+    }
+
     pub fn register_entity(
         &mut self,
         entity_name: &str,
@@ -1036,6 +1081,9 @@ impl Catalog {
 
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
+        if let Some(derivee) = &config.derived {
+            self.verifier_la_derivation(entity_name, derivee).map_err(CatalogError::SchemaError)?;
+        }
 
         // **Le même modèle des deux côtés, ou rien.**
         //
