@@ -139,8 +139,11 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
     let chunks = compte(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
     assert!(chunks >= 3, "chunks={chunks}");
     assert_eq!(compte(&catalog, "MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(:Product) RETURN count(c)"), chunks, "chaque chunk est lié à son parent");
-    assert_eq!(compte(&catalog, "MATCH (c:Product_Chunk) WHERE c._embed_hash <> '' AND c._embed_hash = c._text_hash RETURN count(c)"), chunks, "chaque chunk porte son marqueur dense");
-    assert_eq!(compte(&catalog, "MATCH (c:Product_Chunk) WHERE size(c.embedding) = 4 RETURN count(c)"), chunks, "chaque chunk porte son vecteur");
+    // La colonne et le marqueur sont ceux du modèle courant, résolus — un index
+    // neuf range son premier modèle en `suffixed` (7 septembre 2026).
+    let st = catalog.vector_storage("Product_Chunk").unwrap();
+    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE c.{m} <> '' AND c.{m} = c._text_hash RETURN count(c)", m = st.marker)), chunks, "chaque chunk porte son marqueur dense");
+    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE size(c.{}) = 4 RETURN count(c)", st.column)), chunks, "chaque chunk porte son vecteur");
     assert_eq!(compte(&catalog, "MATCH (p:Product) WHERE p._chunked_hash = p._content_hash RETURN count(p)"), 3, "chaque parent est marqué découpé");
     let lu = catalog.execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description").unwrap();
     assert_eq!(lu.rows[0][0].as_str(), Some(texte_difficile), "le texte à guillemets et sauts de ligne revient tel quel");
@@ -166,7 +169,7 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
     assert_eq!(r2.unchanged, 1, "le Rust Book identique est sauté");
     assert_eq!(compte(&catalog, "MATCH (p:Product) RETURN count(p)"), 4);
     let chunks2 = compte(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
-    assert_eq!(compte(&catalog, "MATCH (c:Product_Chunk) WHERE c._embed_hash = c._text_hash AND size(c.embedding) = 4 RETURN count(c)"), chunks2, "tous les chunks embarqués, après le MERGE aussi");
+    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE c.{} = c._text_hash AND size(c.{}) = 4 RETURN count(c)", st.marker, st.column)), chunks2, "tous les chunks embarqués, après le MERGE aussi");
     let lu = catalog.execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description, p.price").unwrap();
     assert_eq!(lu.rows[0][0].as_str(), Some("Un couteau de cuisine, tout simplement."));
     assert_eq!(lu.rows[0][1], CypherValue::Float(99.0));

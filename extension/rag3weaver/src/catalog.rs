@@ -2506,6 +2506,16 @@ impl Catalog {
         // La dimension est celle du **modèle**, pas d'une config globale qui
         // valait 384 par défaut sans jamais être confrontée à `embedder.dim()`.
         services.register("embedding_dim", self.embedder.dim());
+        // **Tout graphe qui embarque passe par ici** : le modèle courant y est
+        // enregistré avant que la liste ne soit prise, sinon un chemin qui ne
+        // passe pas par `ingest_entities_jusqu_a` — la branche des entités
+        // dérivées — donne à `EmbedNode` une liste sans lui, et le drain échoue
+        // « modèle non disponible » (e2e_entites_derivees, 8 septembre 2026).
+        if !self.lecture_seule {
+            if let Err(e) = self.ensure_embedding_model() {
+                eprintln!("[rag3weaver] le modèle courant n'a pas pu être enregistré : {e}");
+            }
+        }
         // Le stockage de chaque modèle enregistré, et le slug du courant : ce
         // que `EmbedNode` et la recherche résolvent au lieu de dériver.
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
@@ -4276,11 +4286,20 @@ impl Catalog {
         let mut complete: std::collections::HashSet<String> = std::collections::HashSet::new();
         if with_chunks {
             let chunk_table = format!("{entity_name}_Chunk");
+            // Le marqueur dense est celui du modèle courant : `_embed_hash` en
+            // dur rendait tout chunk « incomplet » dès que le premier modèle
+            // d'un index neuf était rangé en `suffixed`, et une seconde
+            // ingestion identique réingérait tout (trouvé par
+            // e2e_chemin_de_masse le 8 septembre 2026).
+            let dense_marker = self
+                .vector_storage(&chunk_table)
+                .map(|s| s.marker)
+                .unwrap_or_else(|_| "_embed_hash".to_string());
             let cypher = self.dialect.batch_select(
                 &chunk_table,
                 "uuid",
                 "_parent_uuid",
-                &["_parent_uuid", "_embed_hash", "_sparse_hash"],
+                &["_parent_uuid", dense_marker.as_str(), "_sparse_hash"],
             );
             let Ok(result) = self
                 .conn

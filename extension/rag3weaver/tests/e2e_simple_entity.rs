@@ -730,9 +730,13 @@ fn simple_vector_minilm_search() {
     eprintln!("[MiniLM] Products: {:?}", products_cnt.rows);
     let chunks = catalog.execute_raw("MATCH (c:Product_Chunk) RETURN count(c)").unwrap();
     eprintln!("[MiniLM] Chunks: {:?}", chunks.rows);
-    let embs = catalog.execute_raw(
-        "MATCH (c:Product_Chunk) RETURN c._uuid, c._text, size(c.embedding) AS dim, c._embed_hash LIMIT 5"
-    ).unwrap();
+    // La colonne et le marqueur sont ceux du modèle courant, résolus par le
+    // catalogue — plus `embedding` / `_embed_hash` en dur (7 septembre 2026).
+    let stockage = catalog.vector_storage("Product_Chunk").unwrap();
+    let embs = catalog.execute_raw(&format!(
+        "MATCH (c:Product_Chunk) RETURN c._uuid, c._text, size(c.{}) AS dim, c.{} LIMIT 5",
+        stockage.column, stockage.marker
+    )).unwrap();
     for row in &embs.rows {
         eprintln!("[MiniLM] Chunk: {:?}", row);
     }
