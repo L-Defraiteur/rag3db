@@ -1,0 +1,30 @@
+-DATASET CSV copy-test/escaped-newlines-large
+
+--
+
+# Une cellule de 200 Ko de pseudo-code — 13 308 LF, 2 247 CR, 6 656 barres — écrite
+# des deux façons, avec des séquences `\n` posées EXPRÈS à cheval sur les
+# frontières 8192 (bloc parallèle), 16384 (tampon), 32768, 49152, 65536 et
+# 131072 du fichier échappé. Une ligne courte, et une de 140 Ko avec un seul
+# saut. Le contrat : à l'octet près, y compris quand la séquence traverse un
+# rechargement de tampon.
+-CASE EscapedNewlinesLargeCells
+
+-STATEMENT MATCH (e:escaped) RETURN COUNT(*)
+---- 1
+3
+-STATEMENT MATCH (e:escaped) WHERE e.k = 1 RETURN size(e.v)
+---- 1
+200037
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v = e.v RETURN COUNT(*)
+---- 1
+3
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v <> e.v RETURN COUNT(*)
+---- 1
+0
+# Le même fichier par LOAD FROM, en parallèle, sans table : mêmes tailles.
+-STATEMENT LOAD FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/copy-test/escaped-newlines-large/escaped.csv" (HEADER=FALSE, ESCAPED_NEWLINES=TRUE, AUTO_DETECT=FALSE) WITH column0 AS k, column1 AS v RETURN k, size(v) ORDER BY k
+---- 3
+1|200037
+2|6
+3|140001
