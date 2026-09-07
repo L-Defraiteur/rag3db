@@ -672,6 +672,8 @@ pub struct PendingWork {
     pub aggregates: Vec<AggregateRecord>,
     pub updates: Vec<UpdateRecord>,
     pub deletes: Vec<DeleteRecord>,
+    /// Les lignes d'entités dérivées à rendre (racines touchées).
+    pub derivations: Vec<Derivation>,
 }
 
 impl PendingWork {
@@ -685,6 +687,7 @@ impl PendingWork {
             && self.aggregates.is_empty()
             && self.updates.is_empty()
             && self.deletes.is_empty()
+            && self.derivations.is_empty()
     }
 
     pub fn total_count(&self) -> usize {
@@ -693,6 +696,7 @@ impl PendingWork {
             + self.aggregates.len()
             + self.updates.len()
             + self.deletes.len()
+            + self.derivations.len()
     }
 
     /// **Extrait ce qui touche ces tables**, et laisse le reste en place.
@@ -730,6 +734,7 @@ impl PendingWork {
             aggregates: partager(&mut self.aggregates, |a| dans(&format!("{}_Index", a.kb_name))),
             updates: partager(&mut self.updates, |u| dans(&u.entity_name)),
             deletes: partager(&mut self.deletes, |d| dans(&d.entity_name)),
+            derivations: partager(&mut self.derivations, |d| dans(&d.entity)),
         }
     }
 
@@ -755,6 +760,7 @@ impl PendingWork {
             + self.aggregates.iter().filter(|a| dans(&format!("{}_Index", a.kb_name))).count()
             + self.updates.iter().filter(|u| dans(&u.entity_name)).count()
             + self.deletes.iter().filter(|d| dans(&d.entity_name)).count()
+            + self.derivations.iter().filter(|d| dans(&d.entity)).count()
     }
 
     /// Y a-t-il une mise à jour ou une suppression dans ces tables ? Poser la

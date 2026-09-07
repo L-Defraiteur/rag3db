@@ -2112,6 +2112,9 @@ impl Catalog {
         for a in &self.pending.aggregates {
             doit(&format!("{}_Index", a.kb_name), D::PLEIN_TEXTE | D::SPARSE | D::DENSE);
         }
+        for d in &self.pending.derivations {
+            doit(&d.entity, D::TOUT);
+        }
         dette
     }
 
@@ -2364,6 +2367,11 @@ impl Catalog {
             if let Some(d) = config.relations.get(nom) {
                 return Some((d.from.clone(), d.to.clone()));
             }
+            if let Some(derivee) = nom.strip_suffix("_DERIVED_FROM") {
+                if let Some(racine) = config.entities.get(derivee).and_then(|d| d.derived_from.clone()) {
+                    return Some((derivee.to_string(), racine));
+                }
+            }
             config.knowledge_bases.keys().find_map(|kb| {
                 nom.strip_suffix(&format!("_IN_{kb}"))
                     .map(|entite| (entite.to_string(), format!("{kb}_Index")))
@@ -2415,6 +2423,35 @@ impl Catalog {
                     if let Some(def) = self.config.entities.get(t) {
                         for kb in resolve_entity_kbs(def).keys() {
                             tables.insert(format!("{kb}_Index"));
+                        }
+                    }
+                }
+                // **Les entités dérivées** : lire une dérivée dépend de sa racine
+                // et de ses voisines ; écrire une racine ou une voisine emporte
+                // les dérivées qui en dépendent.
+                if let Some(derivee) = self.entity_configs.get(t).and_then(|c| c.derived.as_ref()) {
+                    tables.insert(derivee.from.clone());
+                    for regle in &derivee.gather {
+                        if let Some(rel) = self.config.relations.get(&regle.relation) {
+                            tables.insert(match regle.direction {
+                                crate::config::GatherDirection::Out => rel.to.clone(),
+                                crate::config::GatherDirection::In => rel.from.clone(),
+                            });
+                        }
+                    }
+                }
+                if pour_ecrire {
+                    for (nom, cfg) in &self.entity_configs {
+                        let Some(derivee) = cfg.derived.as_ref() else { continue };
+                        let touche = derivee.from == *t
+                            || derivee.gather.iter().any(|r| {
+                                self.config.relations.get(&r.relation).is_some_and(|rel| match r.direction {
+                                    crate::config::GatherDirection::Out => rel.to == *t,
+                                    crate::config::GatherDirection::In => rel.from == *t,
+                                })
+                            });
+                        if touche {
+                            tables.insert(nom.clone());
                         }
                     }
                 }
@@ -3636,6 +3673,16 @@ impl Catalog {
             }
             enrich_fields.push("_content_hash".to_string());
             let bm25_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
+            // Une entité dérivée rend sa racine (`_source_entity`, `_source_uuid`),
+            // se filtre par elle, et porte ses poids de fusion.
+            let derivee = ec.derived.as_ref();
+            if derivee.is_some() {
+                for f in [crate::config::DerivedConfig::SOURCE_ENTITY, crate::config::DerivedConfig::SOURCE_UUID] {
+                    if !enrich_fields.iter().any(|e| e == f) {
+                        enrich_fields.push(f.to_string());
+                    }
+                }
+            }
             return Ok(search::SearchTarget {
                 name: name.to_string(),
                 parent_table: name.to_string(),
@@ -3645,9 +3692,9 @@ impl Catalog {
                 bm25_fields,
                 enrich_fields,
                 default_signals: ec.signals,
-                default_fusion: search::FusionConfig::default(),
-                has_source_refs: false,
-                filter_indirection: None,
+                default_fusion: ec.fusion.clone().unwrap_or_default(),
+                has_source_refs: derivee.is_some(),
+                filter_indirection: derivee.map(|d| (d.from.clone(), crate::schema::derived_rel_name(name))),
             });
         }
 
@@ -4092,6 +4139,10 @@ impl Catalog {
         } else {
             self.split_unchanged(entity_name, &entity_config, entity_records)
         };
+        let uuids_ingeres: Vec<String> = entity_records
+            .iter()
+            .filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .collect();
         // **La marque de découpe voyage avec la ligne** sur une première
         // ingestion : `_chunked_hash = _content_hash` dans le CSV du parent,
         // au lieu d'un SET par parent après les chunks (825 ms sur 18 140
@@ -4267,6 +4318,16 @@ impl Catalog {
                     // cette ingestion a mis en file pour ses bases, et rien de
                     // ce qu'un autre a laissé.
                     kb_failed = self
+                        .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
+                        .failed;
+                }
+                // Les entités dérivées de celle-ci, ou qui la rassemblent : à
+                // rendre, dans un drain borné à sa fermeture.
+                let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
+                derivations.extend(self.derivations_pour_voisine(entity_name, &uuids_ingeres));
+                if !derivations.is_empty() {
+                    self.mettre_en_file_les_derivations(derivations);
+                    kb_failed += self
                         .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
                         .failed;
                 }
@@ -4543,6 +4604,95 @@ impl Catalog {
         Ok((r, res))
     }
 
+    // ─── Les dérivations ─────────────────────────────────────────────────
+
+    /// **Les dérivées dont cette entité est la racine** : une dérivation par
+    /// uuid et par entité dérivée.
+    fn derivations_pour_racine(&self, entity: &str, uuids: &[String]) -> Vec<crate::records::Derivation> {
+        let mut out = Vec::new();
+        for (nom, cfg) in &self.entity_configs {
+            if cfg.derived.as_ref().is_some_and(|d| d.from == entity) {
+                out.extend(uuids.iter().map(|u| crate::records::Derivation { entity: nom.clone(), root_uuid: u.clone() }));
+            }
+        }
+        out
+    }
+
+    /// **Les dérivées qui rassemblent cette entité comme voisine** : la
+    /// racine se retrouve par la relation de la règle, en base — donc après
+    /// que les liens sont posés. Une erreur de lecture vaut « rien » : la
+    /// dérivée sera en retard, pas fausse.
+    fn derivations_pour_voisine(&self, entity: &str, uuids: &[String]) -> Vec<crate::records::Derivation> {
+        use crate::config::GatherDirection;
+        use crate::search_strategy::ExpansionDirection;
+        let mut out = Vec::new();
+        if uuids.is_empty() {
+            return out;
+        }
+        for (nom, cfg) in &self.entity_configs {
+            let Some(derivee) = cfg.derived.as_ref() else { continue };
+            for regle in &derivee.gather {
+                let Some(rel) = self.config.relations.get(&regle.relation) else { continue };
+                // La racine est de l'autre côté de la relation que la voisine.
+                let (voisine, vers_la_racine) = match regle.direction {
+                    GatherDirection::Out => (&rel.to, ExpansionDirection::Incoming),
+                    GatherDirection::In => (&rel.from, ExpansionDirection::Outgoing),
+                };
+                if voisine != entity {
+                    continue;
+                }
+                let Ok(racines) = crate::dataflow::search_nodes::fetch_related(self.conn.as_ref(), uuids, &regle.relation, vers_la_racine, usize::MAX) else {
+                    continue;
+                };
+                for enfants in racines.values() {
+                    for r in enfants {
+                        out.push(crate::records::Derivation { entity: nom.clone(), root_uuid: r.uuid.clone() });
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// **Les dérivées qu'un lien touche** : si la relation est une règle
+    /// `gather` d'une dérivée, le bout racine du lien est à re-rendre. Rien à
+    /// lire en base : le lien dit lui-même où est la racine.
+    fn derivations_pour_lien(&self, rel_name: &str, from_uuid: Option<&str>, to_uuid: Option<&str>) -> Vec<crate::records::Derivation> {
+        use crate::config::GatherDirection;
+        let mut out = Vec::new();
+        for (nom, cfg) in &self.entity_configs {
+            let Some(derivee) = cfg.derived.as_ref() else { continue };
+            for regle in derivee.gather.iter().filter(|r| r.relation == rel_name) {
+                let racine = match regle.direction {
+                    GatherDirection::Out => from_uuid,
+                    GatherDirection::In => to_uuid,
+                };
+                if let Some(r) = racine {
+                    out.push(crate::records::Derivation { entity: nom.clone(), root_uuid: r.to_string() });
+                }
+            }
+        }
+        out
+    }
+
+    /// Mettre des dérivations en file, sans doublon, et déclarer la dette.
+    fn mettre_en_file_les_derivations(&mut self, derivations: Vec<crate::records::Derivation>) {
+        if derivations.is_empty() {
+            return;
+        }
+        let mut vues: HashSet<(String, String)> = self.pending.derivations.iter().map(|d| (d.entity.clone(), d.root_uuid.clone())).collect();
+        let mut entites: HashSet<String> = HashSet::new();
+        for d in derivations {
+            if vues.insert((d.entity.clone(), d.root_uuid.clone())) {
+                entites.insert(d.entity.clone());
+                self.pending.derivations.push(d);
+            }
+        }
+        for e in entites {
+            self.devoir(&e, crate::disponibilite::Disponibilites::TOUT);
+        }
+    }
+
     fn mettre_en_file_la_creation(
         &mut self,
         entity_name: &str,
@@ -4591,6 +4741,8 @@ impl Catalog {
         ));
         self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
+        let derivations = self.derivations_pour_racine(entity_name, std::slice::from_ref(&uuid));
+        self.mettre_en_file_les_derivations(derivations);
 
         // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
         let entity_kbs = resolve_entity_kbs(&entity_def);
@@ -4722,6 +4874,7 @@ impl Catalog {
     /// 380 000 liens à 3,5 µs, c'était 1,3 s sur le cœur C++ (6 septembre
     /// 2026). Les bases de connaissances écoutent chaque lien : quand il y en
     /// a, on repasse lien à lien. Rend le nombre mis en file.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) fn mettre_en_file_les_liens(
         &mut self,
         rel_name: &str,
@@ -4744,7 +4897,9 @@ impl Catalog {
             return Ok(n);
         }
         let mut n = 0usize;
+        let mut derivations = Vec::new();
         for (de, vers, props) in liens {
+            derivations.extend(self.derivations_pour_lien(rel_name, Some(&de), Some(&vers)));
             let (relation_ref, resolver) = RelationRef::new(rel_name);
             self.pending.relations.push(RelationRecord::new(
                 rel_name.to_string(),
@@ -4761,6 +4916,7 @@ impl Catalog {
             self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
             self.drain_counters.total_queued += n;
         }
+        self.mettre_en_file_les_derivations(derivations);
         Ok(n)
     }
 
@@ -4797,6 +4953,12 @@ impl Catalog {
         self.devoir(&from_entity, crate::disponibilite::Disponibilites::TOUT);
         self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
+        let derivations = self.derivations_pour_lien(
+            rel_name,
+            from_ref.try_resolve().ok().as_deref(),
+            to_ref.try_resolve().ok().as_deref(),
+        );
+        self.mettre_en_file_les_derivations(derivations);
 
         // Incremental: if this relation connects a content entity to a title entity
         // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
@@ -5006,6 +5168,10 @@ impl Catalog {
         self.check_entity(entity_name)?;
         let new_content = self.build_content_text(entity_name, &data);
         let new_content_hash = content_hash(&new_content);
+        let uuids = vec![uuid.to_string()];
+        let mut derivations = self.derivations_pour_racine(entity_name, &uuids);
+        derivations.extend(self.derivations_pour_voisine(entity_name, &uuids));
+        self.mettre_en_file_les_derivations(derivations);
         self.pending.updates.push(crate::records::UpdateRecord {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),
@@ -5049,6 +5215,21 @@ impl Catalog {
         self.check_initialized()?;
         self.check_ecriture("delete")?;
         self.check_entity(entity_name)?;
+        // Les dérivées : celles dont c'est la racine partent avec elle ; celles
+        // qui la rassemblent sont à re-rendre (lu maintenant, le lien existe
+        // encore).
+        let uuids = vec![uuid.to_string()];
+        let voisines = self.derivations_pour_voisine(entity_name, &uuids);
+        let racines: Vec<(String, String)> = self
+            .derivations_pour_racine(entity_name, &uuids)
+            .into_iter()
+            .map(|d| (d.entity.clone(), crate::dataflow::derive_nodes::derived_uuid(&d.entity, &d.root_uuid)))
+            .collect();
+        for (derivee, uuid_derive) in racines {
+            self.pending.deletes.push(crate::records::DeleteRecord { entity_name: derivee.clone(), uuid: uuid_derive });
+            self.devoir(&derivee, crate::disponibilite::Disponibilites::TOUT);
+        }
+        self.mettre_en_file_les_derivations(voisines);
         self.pending.deletes.push(crate::records::DeleteRecord {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),
@@ -5174,6 +5355,16 @@ impl Catalog {
         let has_entities = !pending.entities.is_empty();
         let has_relations = !pending.relations.is_empty();
         let has_aggregates = !pending.aggregates.is_empty();
+        let derivations = std::mem::take(&mut pending.derivations);
+        let has_derivations = !derivations.is_empty();
+        if has_derivations {
+            // Les lignes dérivées naissent dans le graphe : leur index plein
+            // texte doit être ouvert avant, comme pour les entités en file.
+            let mut noms: Vec<String> = derivations.iter().map(|d| d.entity.clone()).collect();
+            noms.sort();
+            noms.dedup();
+            self.open_fts_handles_for(&noms);
+        }
         let has_deletes = !pending.deletes.is_empty();
         let has_updates = !pending.updates.is_empty();
 
@@ -5214,7 +5405,7 @@ impl Catalog {
         };
 
         // Warm chunker cache if needed by KB pipeline or rechunk pipeline
-        if needs_kb || has_updates {
+        if needs_kb || has_updates || has_derivations {
             self.warm_chunker_cache();
         }
 
@@ -5353,6 +5544,54 @@ impl Catalog {
         }
 
         // ─── Services ──────────────────────────────────────────────
+        // **Les entités dérivées** (doc du 7 septembre 2026) : rendues après
+        // que tout ce dont elles dépendent est posé, puis la chaîne de
+        // n'importe quelle entité — insertion, lien vers la racine, découpe,
+        // embarquement, plein texte.
+        if has_derivations {
+            let tables_derivees: Vec<String> = {
+                let mut t: Vec<String> = derivations.iter().map(|d| d.entity.clone()).collect();
+                t.sort();
+                t.dedup();
+                t
+            };
+            graph.add_node(Box::new(crate::dataflow::derive_nodes::DeriveNode::new("derive"))).unwrap();
+            graph.set_initial_input("derive", "derivations",
+                PortValue::new(BatchPayload::new(PortType::Derivations, derivations)));
+            for (amont, present) in [("links", has_relations), ("inserts", has_entities), ("updates", has_updates), ("deletes", has_deletes)] {
+                if present {
+                    graph.connect(amont, "done", "derive", "trigger").unwrap();
+                    break;
+                }
+            }
+            graph.add_node(Box::new(InsertRecordNode::new("derive_insert"))).unwrap();
+            graph.connect("derive", "entities", "derive_insert", "entities").unwrap();
+            graph.add_node(Box::new(LinkRecordNode::new("derive_link"))).unwrap();
+            graph.connect("derive", "relations", "derive_link", "relations").unwrap();
+            graph.connect("derive_insert", "done", "derive_link", "trigger").unwrap();
+
+            graph.add_node(Box::new(ChunkRecordNode::new("derive_chunk"))).unwrap();
+            graph.connect("derive_insert", "inserted", "derive_chunk", "entities").unwrap();
+            graph.add_node(Box::new(InsertRecordNode::new("derive_chunk_insert"))).unwrap();
+            graph.connect("derive_chunk", "chunks", "derive_chunk_insert", "entities").unwrap();
+            graph.add_node(Box::new(LinkRecordNode::new("derive_chunk_link"))).unwrap();
+            graph.connect("derive_chunk", "chunk_links", "derive_chunk_link", "relations").unwrap();
+            graph.connect("derive_chunk_insert", "done", "derive_chunk_link", "trigger").unwrap();
+            graph.add_node(Box::new(MarquerDecoupeNode::new("derive_marquer"))).unwrap();
+            graph.connect("derive_chunk", "parents", "derive_marquer", "entities").unwrap();
+            graph.connect("derive_chunk_link", "done", "derive_marquer", "trigger").unwrap();
+            graph.add_node(Box::new(FlushNode::new("derive_flush", tables_derivees))).unwrap();
+            if avec_embarquement {
+                graph.add_node(Box::new(EmbedNode::new("derive_embed", search::SearchSignals::HYBRID, 32))).unwrap();
+                graph.connect("derive_chunk_insert", "inserted", "derive_embed", "entities").unwrap();
+                graph.connect("derive_chunk_link", "done", "derive_embed", "trigger").unwrap();
+                graph.connect("derive_embed", "done", "derive_flush", "trigger").unwrap();
+            } else {
+                self.peut_devoir_un_embarquement = true;
+                graph.connect("derive_chunk_link", "done", "derive_flush", "trigger").unwrap();
+            }
+        }
+
         let mut services = ServiceRegistry::new();
         let canal = self.enregistrer_les_services_d_ingestion(&mut services);
 
@@ -5364,7 +5603,7 @@ impl Catalog {
         services.register("delete_results", delete_results.clone());
 
         // chunker_cache needed by KBChunkNode and ChunkRecordNode (rechunk)
-        if needs_kb || has_updates {
+        if needs_kb || has_updates || has_derivations {
             services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
         }
         if let Some(ref fail_node) = self.fail_node {
@@ -5765,6 +6004,7 @@ impl Catalog {
             self.pending.extraire_les_tables(&tables, &bouts)
         };
         self.pending.aggregates.append(&mut lot.aggregates);
+        self.pending.derivations.append(&mut lot.derivations);
         self.pending.updates.append(&mut lot.updates);
         self.pending.deletes.append(&mut lot.deletes);
         self.poser_la_donnee(lot.entities, lot.relations)

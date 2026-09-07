@@ -2051,6 +2051,12 @@ impl ChunkRecordNode {
                 chunk_data.insert("_core_start_line".into(), CypherValue::Int(chunk.core_start_line as i64));
                 chunk_data.insert("_core_end_line".into(), CypherValue::Int(chunk.core_end_line as i64));
                 chunk_data.insert("_content_offset".into(), CypherValue::Int(content_offset));
+                // Une ligne dérivée passe sa source à ses chunks (doc du 7 septembre 2026).
+                for cle in [crate::config::DerivedConfig::SOURCE_ENTITY, crate::config::DerivedConfig::SOURCE_UUID] {
+                    if let Some(v) = data.get(cle) {
+                        chunk_data.insert(cle.into(), v.clone());
+                    }
+                }
 
                 let (chunk_ref, chunk_resolver) = EntityRef::new(&chunk_table);
                 chunk_resolver.resolve(c_uuid.clone());

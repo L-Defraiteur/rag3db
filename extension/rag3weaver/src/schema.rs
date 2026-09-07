@@ -340,6 +340,15 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_parent_uuid".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_parent_field".into(), col_type: ColumnType::Text },
+    ];
+    if entity_config.derived.is_some() {
+        // Les chunks d'une dérivée savent d'où vient leur ligne : c'est ce
+        // que la recherche rend quand on lui demande la source.
+        use crate::config::DerivedConfig;
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_ENTITY.into(), col_type: ColumnType::Text });
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_UUID.into(), col_type: ColumnType::Text });
+    }
+    columns.extend([
         ColumnDef { name: "_text".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
         ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
@@ -365,7 +374,7 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
         ColumnDef { name: "_core_start_line".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_core_end_line".into(), col_type: ColumnType::Int64 },
         ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
-    ];
+    ]);
     columns.extend(crate::scope::scope_columns());
 
     if entity_config.signals.vector() {
