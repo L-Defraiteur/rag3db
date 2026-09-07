@@ -79,6 +79,13 @@ modèle chaud ; la vitesse comparée est dans le 01.
 
 ## 4. Ce que je recommande
 
+**Tranché par Lucie le 7 septembre 2026** (relayé par la session
+architecture) : granite-278m par défaut, granite-107m en régime rapide ; le
+choix par heuristique de taille de dépôt viendra avec l'index à plusieurs
+embarquements (session rag3db-40). Le démon suit (`MODELE_PAR_DEFAUT`), le
+garde-fou `check_embedding_model` refuse un index existant construit en
+107m, c'est voulu, et son message nomme les deux modèles.
+
 **granite-278m par défaut** : meilleur que BGE-M3 sur notre code, 41 000 à
 49 000 jetons par seconde (BGE-M3 : 22 000), 61 Mo d'index pour 20 000
 chunks. Sur le cœur C++ de rag3db (20 132 chunks, 23 s de modèle avec 107m),

@@ -76,8 +76,9 @@ Poids sous `~/.cache/rag3weaver/<modèle>/{model.bpk,tokenizer.json}`
 `ppocrv6-tiny`). Graphes générés dans `generated/*_onnx.rs`, tous passés par
 `generated/patch_attention.py` (voir §5).
 
-Le démon (`src/bin/rag3weaver-embeddings.rs`) sert `bge-m3` (défaut),
-`granite-107m` ou `granite-278m` selon `RAG3WEAVER_EMBED_MODEL` ; son
+Le démon (`src/bin/rag3weaver-embeddings.rs`) sert **`granite-278m` (défaut
+depuis le 7 septembre, décision de Lucie sur le [04](04-le-banc-de-qualite.md))**,
+`granite-107m` (régime rapide) ou `bge-m3` selon `RAG3WEAVER_EMBED_MODEL` ; son
 `Identite` porte `modele`, `dim`, `precision`, `lot_conseille`, et le client
 `DaemonEmbedder` les relaie (`dim()`, `name()`, `budget_conseille()`). Il
 chauffe seize classes de forme avant d'annoncer son adresse

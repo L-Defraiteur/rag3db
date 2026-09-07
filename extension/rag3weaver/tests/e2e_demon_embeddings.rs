@@ -47,6 +47,9 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
     // chemin en dur : le test sert ce qu'il a compilé.
     let programme = env!("CARGO_BIN_EXE_rag3weaver-embeddings");
     let serveur = DaemonEmbedder::serveur(&adresse, programme)
+        // Le défaut du démon est granite-278m (7 septembre 2026) ; cette suite
+        // vérifie le dense + creux de BGE-M3, elle le demande.
+        .env("RAG3WEAVER_EMBED_MODEL", "bge-m3")
         .journal_dans(&journal)
         // Hermétique : ce démon-ci ne doit pas survivre au test. `Fin::Laisser`
         // reste le défaut, parce qu'en vrai c'est la survie qu'on veut.
@@ -124,4 +127,34 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
         "\n  Économie sur cette passe : {:.1?} — et c'est par processus de test qui aurait rechargé.",
         chargement.saturating_sub(attache)
     );
+}
+
+/// **Sans `RAG3WEAVER_EMBED_MODEL`, le démon sert granite-278m** (décision de
+/// Lucie du 7 septembre 2026, sur `docs/optimiseur/6-septembre-2026-16h30/04`) :
+/// 768 dimensions, pas de creux, un conseil de lot, et une précision nommée.
+#[test]
+#[ignore = "charge un modèle et lance un processus"]
+fn sans_variable_le_demon_sert_granite_278m() {
+    let adresse = port_libre();
+    let journal = std::env::temp_dir().join("rag3weaver-e2e-demon-defaut");
+    let programme = env!("CARGO_BIN_EXE_rag3weaver-embeddings");
+    // Rien n'est posé : c'est le défaut du binaire qu'on lit. Si le processus
+    // parent porte la variable, on la retire du démon pour lire le vrai défaut.
+    let serveur = DaemonEmbedder::serveur(&adresse, programme)
+        .env("RAG3WEAVER_EMBED_MODEL", "")
+        .journal_dans(&journal)
+        .fin(Fin::Arreter);
+    let client = DaemonEmbedder::assurer(&serveur)
+        .unwrap_or_else(|e| panic!("assurer : {e}\n  journal : {}", journal.join("rag3weaver-embeddings.log").display()));
+    let id = client.identite();
+    println!("▸ identité par défaut : {id:?}");
+    assert_eq!(id.modele, "granite-278m", "le défaut est granite-278m depuis le 7 septembre 2026");
+    assert_eq!(id.dim, 768);
+    assert!(!id.dual && !id.sparse, "granite n'a pas de tête creuse");
+    assert_eq!(id.lot_conseille, Some((128, 512)));
+    assert!(!id.precision.is_empty());
+    let v = client.embed(&["fn budget_batches(lens: &[usize]) -> Vec<Range<usize>>".to_string()]).expect("embed");
+    assert_eq!(v[0].len(), 768);
+    let n: f32 = v[0].iter().map(|a| a * a).sum::<f32>().sqrt();
+    assert!((n - 1.0).abs() < 1e-3, "granite rend des vecteurs unitaires : norme {n}");
 }

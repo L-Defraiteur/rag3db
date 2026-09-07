@@ -48,7 +48,7 @@ Les suites de sens par modèle : `e2e_burn_embedder`, `e2e_burn_minilm`,
 |---|---|
 | `RAG3WEAVER_BURN_FLOAT` | `f32`, `flex32` (défaut), `f16`, `bf16` — la précision de la carte et des poids chargés |
 | `RAG3WEAVER_BURN_DEVICE_EMBEDDER` / `_RERANKER` / `_OCR` | `gpu:N`, `igpu:N`, `rocm:N`, `cpu` ; sinon le régime choisit |
-| `RAG3WEAVER_EMBED_MODEL` | le modèle que sert le démon : `bge-m3`, `granite-107m`, `granite-278m` |
+| `RAG3WEAVER_EMBED_MODEL` | le modèle que sert le démon : `granite-278m` (défaut depuis le 7 septembre), `granite-107m` (régime rapide), `bge-m3` ; les suites qui veulent BGE-M3 par le démon le posent elles-mêmes (`Serveur::env`) |
 | `RAG3WEAVER_DEMON_CHAUFFE=0` | pas de chauffe des classes de forme au démarrage du démon |
 | `RAG3WEAVER_SANS_DEMON=1` | les tests chargent le modèle en local plutôt que par le démon |
 | `RUST_LOG=cubecl_wgpu=debug,cubecl_runtime=info` | ce que cubecl voit : tailles CMMA, « Tuning … », cache chargé (collecteur `env_logger` dans le démon et le banc) |

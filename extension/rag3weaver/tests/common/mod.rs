@@ -205,6 +205,10 @@ pub mod burn {
         let adresse = std::env::var("RAG3WEAVER_EMBEDDINGS_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:7878".to_string());
         let serveur = DaemonEmbedder::serveur(&adresse, env!("CARGO_BIN_EXE_rag3weaver-embeddings"))
+            // **Le démon sert granite-278m par défaut** depuis le 7 septembre
+            // 2026 ; ce static veut BGE-M3, il le dit. Un démon déjà en place
+            // qui sert autre chose est refusé plus bas, et on charge ici.
+            .env("RAG3WEAVER_EMBED_MODEL", "bge-m3")
             .journal_dans(std::env::temp_dir().join("rag3weaver-demons"));
 
         let t0 = std::time::Instant::now();

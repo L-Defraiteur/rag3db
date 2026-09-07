@@ -39,20 +39,30 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// Le modèle servi quand `RAG3WEAVER_EMBED_MODEL` ne dit rien (décision de
+/// Lucie, 7 septembre 2026, sur le banc de qualité).
+pub const MODELE_PAR_DEFAUT: &str = "granite-278m";
+
 fn servir() -> Result<(), String> {
     let (adresse, expose) = adresse()?;
     // **Le modèle servi se choisit par `RAG3WEAVER_EMBED_MODEL`** (6 septembre
-    // 2026) : `bge-m3` (défaut, dense + creux, 1 024 d), `granite-107m` (384 d),
-    // `granite-278m` (768 d). Le nom et la dimension partent dans l'Identite ;
-    // c'est au catalogue de refuser un index construit avec l'un et interrogé
-    // avec l'autre. Les poids : `RAG3WEAVER_<MODELE>_BPK` / `_TOKENIZER`, sinon
+    // 2026) : `granite-278m` (768 d, **le défaut** depuis le 7 septembre :
+    // devant BGE-M3 sur nos requêtes de code, MRR 0,844 contre 0,793, à 2,5
+    // fois sa vitesse — `docs/optimiseur/6-septembre-2026-16h30/04`),
+    // `granite-107m` (384 d, le régime rapide : à 6–9 points derrière, deux
+    // fois plus vite, un index deux fois plus petit), `bge-m3` (1 024 d, dense
+    // + creux, 8 192 jetons : le second étage et les documents). Le nom et la
+    // dimension partent dans l'Identite ; c'est au catalogue de refuser un
+    // index construit avec l'un et interrogé avec l'autre
+    // (`check_embedding_model`) — un index en 107m ne se lit pas en 278m, c'est
+    // voulu. Les poids : `RAG3WEAVER_<MODELE>_BPK` / `_TOKENIZER`, sinon
     // `~/.cache/rag3weaver/<modele>/`.
-    let nom = std::env::var("RAG3WEAVER_EMBED_MODEL").unwrap_or_else(|_| "bge-m3".into());
+    let nom = std::env::var("RAG3WEAVER_EMBED_MODEL").ok().filter(|v| !v.trim().is_empty()).unwrap_or_else(|| MODELE_PAR_DEFAUT.into());
     let (dossier, prefixe) = match nom.as_str() {
         "bge-m3" => ("bge-m3", "RAG3WEAVER_BGE_M3"),
         "granite-107m" => ("granite-107m", "RAG3WEAVER_GRANITE_107M"),
         "granite-278m" => ("granite-278m", "RAG3WEAVER_GRANITE_278M"),
-        autre => return Err(format!("RAG3WEAVER_EMBED_MODEL={autre} : bge-m3, granite-107m ou granite-278m")),
+        autre => return Err(format!("RAG3WEAVER_EMBED_MODEL={autre} : granite-278m (défaut), granite-107m ou bge-m3")),
     };
     let bpk = artefact(&format!("{prefixe}_BPK"), dossier, "model.bpk")?;
     let tokenizer = artefact(&format!("{prefixe}_TOKENIZER"), dossier, "tokenizer.json")?;

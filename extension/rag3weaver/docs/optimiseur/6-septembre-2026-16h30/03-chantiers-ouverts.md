@@ -23,7 +23,8 @@ lots, pipeline, base) est à la session architecture, pas ici.
 **Fait le 6 septembre au soir**, résultats et recommandation dans le
 [04](04-le-banc-de-qualite.md) : granite-278m devant BGE-M3 sur notre code
 (MRR 0,844 contre 0,793), granite-107m à 6–9 points derrière, les MiniLM
-hors jeu. Reste à Lucie de trancher ; le banc s'affine avec des requêtes
+hors jeu. **Tranché le 7 septembre : granite-278m par défaut, 107m en régime
+rapide**, en place dans le démon. Le banc s'affine avec des requêtes
 réelles de `e2e_search` et un corpus anglais (le noyau). Le texte d'origine :
 
 **Pourquoi.** Lucie tranche sur deux chiffres, vitesse et qualité. La vitesse
