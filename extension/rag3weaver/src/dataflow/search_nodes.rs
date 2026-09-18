@@ -1,16 +1,12 @@
 //! Built-in search nodes for the dataflow graph.
 //!
 //! - [`KBQuerySourceNode`] — emits query + options
-//! - [`KBSearchNode`] — runs Catalog::rechercher (catalog via service)
 //! - [`FetchRelatedNode`] — Cypher graph traversal (conn via service, results as input)
 //! - [`ComposeNode`] — attaches children to results
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Arc;
 
-use std::sync::Mutex;
 
-use crate::catalog::Catalog;
 use crate::connection::{CypherValue, QueryParam};
 use crate::search_strategy::{
     source_info, ChildSummary, ExpansionDirection, UnifiedResult,
@@ -76,64 +72,6 @@ impl Node for KBQuerySourceNode {
                 sparse: None,
             }),
         );
-        Ok(())
-    }
-}
-
-// ─── KBSearchNode ───────────────────────────────────────────────────────
-
-/// Runs `Catalog::rechercher` and outputs results + meta.
-///
-/// Retrieves `catalog` from the service registry (`Arc<Mutex<Catalog>>`).
-pub struct KBSearchNode {
-    node_name: String,
-}
-
-impl KBSearchNode {
-    pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string() }
-    }
-}
-
-
-impl Node for KBSearchNode {
-    fn name(&self) -> &str {
-        &self.node_name
-    }
-    fn node_type(&self) -> &'static str {
-        "KBSearchNode"
-    }
-    fn inputs(&self) -> Vec<PortDef> {
-        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBSearchNodeFactory).0
-    }
-    fn outputs(&self) -> Vec<PortDef> {
-        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::KBSearchNodeFactory).1
-    }
-    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let qp = ctx.take_input("query")
-            .and_then(|pv| take_or_clone::<QueryPayload>(pv))
-            .ok_or("KBSearchNode: missing 'query' input")?;
-        let (target_name, query, options) = (qp.target_name, qp.query, qp.options);
-
-        let catalog = ctx
-            .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
-            .ok_or("KBSearchNode: 'catalog' service not found")?;
-
-        // Par le lanceur composable, plus par le monolithe : ce nœud, dernier
-        // appelant de `Catalog::search` en production avant son retrait, passe
-        // par le même graphe que les agents (B13 de la réconciliation du
-        // 6 septembre 2026).
-        let response = Catalog::rechercher(&catalog, &target_name, &query, options)
-            .map_err(|e| e.to_string())?;
-
-        let results: Vec<UnifiedResult> = response
-            .results
-            .into_iter()
-            .map(UnifiedResult::from)
-            .collect();
-
-        ctx.set_output("results", PortValue::new(results));
-        ctx.set_output("meta", PortValue::new(response.meta));
         Ok(())
     }
 }
@@ -549,14 +487,6 @@ mod tests {
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0].name, "query");
         assert_eq!(node.outputs()[0].port_type, PortType::Query);
-    }
-
-    #[test]
-    fn primary_search_node_ports() {
-        let node = KBSearchNode::new("primary_search");
-        assert_eq!(node.inputs().len(), 1);
-        assert_eq!(node.inputs()[0].name, "query");
-        assert_eq!(node.outputs().len(), 2);
     }
 
     #[test]

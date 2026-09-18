@@ -372,7 +372,7 @@ mod tests {
         }
     }
 
-    /// Build a simple search subgraph: KBQuerySourceNode → KBSearchNode
+    /// Build a simple search subgraph: KBQuerySourceNode → SearchSourceNode
     fn search_subgraph_def() -> GraphDefinition {
         GraphDefinition {
             nodes: vec![
@@ -383,8 +383,8 @@ mod tests {
                 },
                 NodeDef {
                     name: "ps".into(),
-                    node_type: "KBSearchNode".into(),
-                    config: serde_json::json!({}),
+                    node_type: "SearchSourceNode".into(),
+                    config: serde_json::json!({"target": "TestKB", "query": "hello"}),
                 },
             ],
             edges: vec![EdgeDef {
@@ -431,18 +431,16 @@ mod tests {
         let def = search_subgraph_def();
         let gn = GraphNode::from_definition("search", def, registry).unwrap();
 
-        // KBQuerySourceNode has no inputs → no free inputs from it
-        // KBSearchNode has query (connected) → no free input from it
-        // So the only free inputs could be optional ones
+        // KBQuerySourceNode n'a pas d'entrée ; l'entrée `query` de
+        // `SearchSourceNode` (optionnelle depuis le pas B) est câblée par
+        // l'arête → pas libre, donc pas exposée.
         let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
-        // KBQuerySourceNode has no inputs at all
-        // KBSearchNode's query input is connected via edge
         assert!(!input_names.contains(&"ps.query"), "inputs: {:?}", input_names);
 
-        // Free outputs: KBQuerySourceNode's query output is connected → not free
-        // KBSearchNode's results and meta are free
+        // Sorties libres : la sortie `query` de l'amont est câblée → absorbée ;
+        // `query` et `meta` de la source restent libres.
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
-        assert!(output_names.contains(&"ps.results"), "outputs: {:?}", output_names);
+        assert!(output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"ps.meta"), "outputs: {:?}", output_names);
     }
 
@@ -504,11 +502,11 @@ mod tests {
         let def = search_subgraph_def();
         let mut gn = GraphNode::from_definition("test", def, registry).unwrap();
 
-        gn.alias_output("results", "ps.results").unwrap();
+        gn.alias_output("payload", "ps.query").unwrap();
 
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
-        assert!(output_names.contains(&"results"), "outputs: {:?}", output_names);
-        assert!(!output_names.contains(&"ps.results"), "outputs: {:?}", output_names);
+        assert!(output_names.contains(&"payload"), "outputs: {:?}", output_names);
+        assert!(!output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
     }
 
     // ── Test 7: alias nonexistent port errors ────────────────────────
@@ -592,7 +590,7 @@ mod tests {
 
         let mermaid = r#"graph LR
     qs["KBQuerySourceNode(kb_name='TestKB', query='hello')"]
-    ps["KBSearchNode"]
+    ps["SearchSourceNode(target='TestKB', query='hello')"]
     qs -->|query| ps
 "#;
         let def = parse_mermaid(mermaid).unwrap();
@@ -600,7 +598,7 @@ mod tests {
         let gn = GraphNode::from_definition("mermaid_search", def, registry).unwrap();
 
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
-        assert!(output_names.contains(&"ps.results"));
+        assert!(output_names.contains(&"ps.query"));
         assert!(output_names.contains(&"ps.meta"));
     }
 }

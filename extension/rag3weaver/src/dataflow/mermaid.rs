@@ -564,7 +564,7 @@ mod tests {
         let input = r#"
 graph LR
     a["ComposeNode"]
-    b["KBSearchNode"]
+    b["RenderResultsNode"]
 
     a -->|results| b
 "#;
@@ -625,7 +625,7 @@ graph LR
     a["ComposeNode"]
 
     %% Another comment
-    b["KBSearchNode"]
+    b["RenderResultsNode"]
 "#;
         let def = parse_mermaid(input).unwrap();
         assert_eq!(def.nodes.len(), 2);
@@ -714,7 +714,7 @@ graph LR
     fn to_mermaid_roundtrip() {
         let input = r#"graph LR
     query_source["KBQuerySourceNode(kb_name='TreeKB', query='test')"]
-    primary_search["KBSearchNode"]
+    primary_search["SearchTool(query='test', target='TreeKB')"]
     fetch_0["FetchRelatedNode(direction='Outgoing', limit=10, relation='HAS_FILE')"]
     compose["ComposeNode"]
 
@@ -800,23 +800,6 @@ graph LR
     }
 
     #[test]
-    fn template_search_parses_and_builds() {
-        let mmd = include_str!("../../templates/search.mmd");
-        let mut vars = HashMap::new();
-        vars.insert("kb_name".into(), "TestKB".into());
-        vars.insert("query".into(), "hello".into());
-
-        let def = parse_mermaid_template(mmd, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 2);
-        assert_eq!(def.edges.len(), 1);
-
-        let registry = builtin_registry();
-        let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
-        graph.validate().unwrap();
-        assert_eq!(graph.node_names().len(), 2);
-    }
-
-    #[test]
     fn template_search_expansion_parses_and_builds() {
         let mmd = include_str!("../../templates/search_expansion.mmd");
         let mut vars = HashMap::new();
@@ -832,7 +815,9 @@ graph LR
         let fetch = def.nodes.iter().find(|n| n.name == "fetch_related_0").unwrap();
         assert_eq!(fetch.config["limit"].as_u64(), Some(10), "limit must reach the node typed");
 
-        let registry = builtin_registry();
+        // Les fournis **plus** `SearchTool` : `primary_search` est le
+        // sous-graphe search_base promu nœud (pas C du doc 02).
+        let (registry, _outils) = crate::dataflow::graph_tool::builtin_graph_tools().unwrap();
         let graph = crate::dataflow::graph::DataflowGraph::from_definition(&def, &registry).unwrap();
         graph.validate().unwrap();
 

@@ -2,19 +2,23 @@
 %% Variables: $kb_name, $query, $relation, $direction, $limit
 %%
 %% **Une seule écriture.** `Catalog::build_dataflow_graph` instancie ce
-%% gabarit (placeholders, puis les vraies valeurs posées en config JSON) au
-%% lieu de redire ces nœuds en Rust — c'étaient trois écritures du même
-%% graphe jusqu'au 18 septembre 2026 au soir. Sans expansion, le tronçon
-%% `fetch_related_0`/`compose` est retiré à l'instanciation ; une règle de
-%% plus est un clone de `fetch_related_0`.
+%% gabarit (placeholders, puis les vraies valeurs posées en config JSON).
+%% `primary_search` est le sous-graphe `search_base` entier, promu type de
+%% nœud (`SearchTool`) — plus un nœud opaque qui rappelait `rechercher` :
+%% depuis le 18 septembre 2026 au soir, `KBSearchNode` n'existe plus. Le
+%% payload de `query_source` entre par le port `source.query` du composite
+%% (pas B du doc 02) et porte les `SearchOptions` **entières** ; la config
+%% `target`/`query` du composite n'est que le défaut qu'exige sa fiche.
+%% Sans expansion, le tronçon `fetch_related_0`/`compose` est retiré à
+%% l'instanciation ; une règle de plus est un clone de `fetch_related_0`.
 
 graph LR
     query_source["KBQuerySourceNode(kb_name='$kb_name', query='$query')"]
-    primary_search["KBSearchNode"]
+    primary_search["SearchTool(target='$kb_name', query='$query')"]
     fetch_related_0["FetchRelatedNode(relation='$relation', direction='$direction', limit=$limit)"]
     compose["ComposeNode"]
 
-    query_source -->|query| primary_search
-    primary_search -->|results| fetch_related_0
-    primary_search -->|results| compose
+    query_source -->|query:source.query| primary_search
+    primary_search -->|render.results:results| fetch_related_0
+    primary_search -->|render.results:results| compose
     fetch_related_0 -->|children| compose

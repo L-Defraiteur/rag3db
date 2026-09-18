@@ -53,7 +53,7 @@ pub use record::{DataflowRecorder, RecordRetention, RecordSink};
 pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeStatus};
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};
 pub use search_nodes::{
-    ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
+    ComposeNode, FetchRelatedNode, KBQuerySourceNode,
 };
 pub use generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,

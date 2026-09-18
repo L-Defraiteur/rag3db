@@ -7408,6 +7408,16 @@ impl Catalog {
             }
         }
 
+        if let Some(ps) = def.nodes.iter_mut().find(|n| n.name == "primary_search") {
+            if let serde_json::Value::Object(ref mut cfg) = ps.config {
+                // La fiche du composite exige `target` et `query` ; le payload
+                // du port `source.query` les écrase à l'exécution — cette
+                // config n'est que le défaut mort du graphe nu.
+                cfg.insert("target".into(), serde_json::Value::String(kb_name.to_string()));
+                cfg.insert("query".into(), serde_json::Value::String(query.to_string()));
+            }
+        }
+
         match strategy.expansions.split_first() {
             None => {
                 // Pas d'expansion : le tronçon fetch/compose du gabarit tombe,
@@ -7453,8 +7463,9 @@ impl Catalog {
             }
         }
 
-        let mut registry = NodeRegistry::new();
-        node_factories::register_builtins(&mut registry);
+        // Le registre des fournis **plus** le type `SearchTool` : le
+        // sous-graphe search_base promu nœud, que `primary_search` incarne.
+        let (registry, _outils) = builtin_graph_tools().expect("registres fournis");
         let graph = DataflowGraph::from_definition(&def, &registry)
             .expect("search_expansion : graphe");
         (graph, services)
@@ -7499,19 +7510,21 @@ impl Catalog {
             .map_err(CatalogError::DbError)?;
 
         // Results from terminal node
-        let results_node = if has_expansions {
-            "compose"
+        let (results_node, results_port) = if has_expansions {
+            ("compose", "results")
         } else {
-            "primary_search"
+            // Sans expansion, le composite est terminal : ses résultats
+            // sortent par le port que son rendu interne réémet.
+            ("primary_search", "render.results")
         };
         let results = output
-            .get(results_node, "results")
+            .get(results_node, results_port)
             .and_then(|v| v.downcast::<Vec<crate::search_strategy::UnifiedResult>>())
             .cloned()
             .unwrap_or_default();
 
         let meta = output
-            .get("primary_search", "meta")
+            .get("primary_search", "render.meta")
             .and_then(|v| v.downcast::<crate::search::SearchMeta>())
             .cloned()
             .ok_or_else(|| {
