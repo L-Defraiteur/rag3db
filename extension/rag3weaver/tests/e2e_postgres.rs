@@ -33,7 +33,7 @@
 #![cfg(feature = "postgres")]
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::{CypherValue, DbConnection};
@@ -375,17 +375,18 @@ fn le_plein_texte_trouve() {
         )
         .unwrap();
 
-    let reponse = catalog
-        .search(
-            "Product",
-            "programming language",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("recherche BM25 sur postgres");
+    let catalog = Arc::new(Mutex::new(catalog));
+    let reponse = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming language",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("recherche BM25 sur postgres");
 
     eprintln!(
         "BM25 : {} résultats, bm25_count={}",
@@ -442,18 +443,19 @@ fn l_hybride_fusionne() {
         )
         .unwrap();
 
-    let reponse = catalog
-        .search(
-            "Product",
-            "Ownership, lifetimes and concurrency in Rust.",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::HYBRID),
-                result_mode: ResultMode::SourceResolved,
-                ..Default::default()
-            },
-        )
-        .expect("recherche hybride sur postgres");
+    let catalog = Arc::new(Mutex::new(catalog));
+    let reponse = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "Ownership, lifetimes and concurrency in Rust.",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::HYBRID),
+            result_mode: ResultMode::SourceResolved,
+            ..Default::default()
+        },
+    )
+    .expect("recherche hybride sur postgres");
 
     eprintln!(
         "hybride : {} résultats, bm25={} vecteur={}",
@@ -594,17 +596,18 @@ fn les_cellules_se_separent() {
     // Les deux descriptions sont **identiques** : si le cloisonnement fuit, la
     // recherche dans une cellule remonte le produit de l'autre avec le même
     // score, et rien ne le signalera.
-    let reponse = catalog
-        .search(
-            "Product",
-            "Ownership, lifetimes and concurrency.",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("recherche dans la cellule B");
+    let catalog = Arc::new(Mutex::new(catalog));
+    let reponse = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "Ownership, lifetimes and concurrency.",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("recherche dans la cellule B");
 
     let noms: Vec<String> = reponse
         .results
@@ -627,17 +630,17 @@ fn les_cellules_se_separent() {
     // catalogue avec l'alias `n.`, alors que la requête postgres n'aliase pas
     // sa table. Si c'est faux, ça se verra ici — soit par une erreur SQL, soit
     // par une fuite.
-    let hybride = catalog
-        .search(
-            "Product",
-            "Ownership, lifetimes and concurrency.",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::HYBRID),
-                ..Default::default()
-            },
-        )
-        .expect("recherche hybride cloisonnée sur postgres");
+    let hybride = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "Ownership, lifetimes and concurrency.",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::HYBRID),
+            ..Default::default()
+        },
+    )
+    .expect("recherche hybride cloisonnée sur postgres");
 
     let noms_h: Vec<String> = hybride
         .results
@@ -674,18 +677,19 @@ fn les_accents_ne_coupent_pas() {
     // Sans normalisation, « cafe torrefie » ne partage aucun trigramme utile
     // avec « café torréfié » — un utilisateur francophone qui tape sans
     // accents ne trouve rien, ce qui est la moitié des requêtes réelles.
+    let catalog = Arc::new(Mutex::new(catalog));
     for requete in ["cafe torrefie", "café torréfié", "CAFE"] {
-        let reponse = catalog
-            .search(
-                "Product",
-                requete,
-                SearchOptions {
-                    consistency: Consistency::Immediate,
-                    signals: Some(SearchSignals::BM25),
-                    ..Default::default()
-                },
-            )
-            .unwrap_or_else(|e| panic!("recherche « {requete} » : {e}"));
+        let reponse = Catalog::rechercher(
+            &catalog,
+            "Product",
+            requete,
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("recherche « {requete} » : {e}"));
         let noms: Vec<String> = reponse
             .results
             .iter()
@@ -745,9 +749,11 @@ fn le_filtre_utilisateur_tient() {
     // Les deux chemins sont éprouvés **dans la même passe** : s'arrêter au
     // premier échec cacherait l'état du second, et c'est précisément ce qu'on
     // veut savoir ici.
+    let catalog = Arc::new(Mutex::new(catalog));
     let mut manques: Vec<String> = Vec::new();
     for signal in [SearchSignals::BM25, SearchSignals::VECTOR] {
-        let reponse = match catalog.search(
+        let reponse = match Catalog::rechercher(
+            &catalog,
             "Product",
             commun,
             SearchOptions {
@@ -848,19 +854,21 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         )
         .unwrap();
 
-    let cherche = |c: &mut Catalog, q: &str| -> (f64, Option<String>) {
-        let r = c
-            .search(
-                "Product",
-                q,
-                SearchOptions {
-                    consistency: Consistency::Immediate,
-                    signals: Some(SearchSignals::BM25),
-                    limit: 5,
-                    ..Default::default()
-                },
-            )
-            .unwrap_or_else(|e| panic!("recherche « {q} » : {e}"));
+    let catalog = Arc::new(Mutex::new(catalog));
+
+    let cherche = |c: &Arc<Mutex<Catalog>>, q: &str| -> (f64, Option<String>) {
+        let r = Catalog::rechercher(
+            c,
+            "Product",
+            q,
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("recherche « {q} » : {e}"));
         let p = r.results.first();
         (
             p.map(|x| x.score).unwrap_or(0.0),
@@ -868,7 +876,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         )
     };
 
-    let mesure = |c: &mut Catalog, titre: &str, qs: &[(&str, Option<&str>)]| -> (f64, f64) {
+    let mesure = |c: &Arc<Mutex<Catalog>>, titre: &str, qs: &[(&str, Option<&str>)]| -> (f64, f64) {
         eprintln!("\n── {titre} ──");
         let (mut mini, mut maxi) = (f64::MAX, 0.0f64);
         for (q, attendu) in qs {
@@ -900,11 +908,11 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     // Le backend pose lui-même 0,3 au premier appel : pour montrer la falaise,
     // il faut donc **remettre** le défaut de PostgreSQL explicitement, après
     // qu'il ait parlé une fois. C'est ce que fait la recherche à blanc.
-    let _ = cherche(&mut catalog, "amorce");
+    let _ = cherche(&catalog, "amorce");
     eprintln!("\n═══ plancher au défaut de PostgreSQL (0,6) ══════════════════");
-    plancher(&catalog, 0.6);
+    plancher(&catalog.lock().unwrap(), 0.6);
 
-    let (exact_min, _) = mesure(&mut catalog, "exactes", &[
+    let (exact_min, _) = mesure(&catalog, "exactes", &[
         ("sautereau baroque", Some("Clavecin")),
         ("lames palissandre", Some("Xylophone")),
         ("navigation astronomique", Some("Sextant")),
@@ -914,7 +922,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
 
     // Ce qu'un humain tape vraiment : une lettre en trop, une qui manque, un
     // mot au singulier, un mot seul.
-    let (degrade_min, _) = mesure(&mut catalog, "dégradées (fautes, troncatures)", &[
+    let (degrade_min, _) = mesure(&catalog, "dégradées (fautes, troncatures)", &[
         ("sauterau baroqe", Some("Clavecin")),
         ("palissandre", Some("Xylophone")),
         ("navigaton astronomiqe", Some("Sextant")),
@@ -925,7 +933,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
 
     // **La famille qui décide.** Des mots du corpus, mais une combinaison qui
     // ne désigne aucun produit. C'est la confusion réelle — pas « zzzz ».
-    let (_, proche_max) = mesure(&mut catalog, "bruit PROCHE (mots du corpus, sens absent)", &[
+    let (_, proche_max) = mesure(&catalog, "bruit PROCHE (mots du corpus, sens absent)", &[
         ("palissade baroque", None),
         ("horizon volcanique", None),
         ("couronne metamorphique", None),
@@ -933,7 +941,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         ("balancier salinite", None),
     ]);
 
-    let (_, loin_max) = mesure(&mut catalog, "bruit lointain", &[
+    let (_, loin_max) = mesure(&catalog, "bruit lointain", &[
         ("hydravion supersonique", None),
         ("blockchain consensus byzantin", None),
         ("zzzz qqqq wwww", None),
@@ -959,16 +967,16 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     // rapporte **large** et que Jaro tranche. Avec le plancher par défaut, la
     // base ne rapporte pas large — elle ferme la porte avant.
     eprintln!("\n═══ plancher de rappel abaissé à 0,3 ═══════════════════════");
-    plancher(&catalog, 0.3);
+    plancher(&catalog.lock().unwrap(), 0.3);
 
-    let (exact_min_b, _) = mesure(&mut catalog, "exactes", &[
+    let (exact_min_b, _) = mesure(&catalog, "exactes", &[
         ("sautereau baroque", Some("Clavecin")),
         ("lames palissandre", Some("Xylophone")),
         ("navigation astronomique", Some("Sextant")),
         ("verre volcanique", Some("Obsidienne")),
         ("ancre balancier", Some("Echappement")),
     ]);
-    let (degrade_min_b, _) = mesure(&mut catalog, "dégradées (fautes, troncatures)", &[
+    let (degrade_min_b, _) = mesure(&catalog, "dégradées (fautes, troncatures)", &[
         ("sauterau baroqe", Some("Clavecin")),
         ("palissandre", Some("Xylophone")),
         ("navigaton astronomiqe", Some("Sextant")),
@@ -976,14 +984,14 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
         ("balancier ancres", Some("Echappement")),
         ("metamorphique", Some("Gneiss")),
     ]);
-    let (_, proche_max_b) = mesure(&mut catalog, "bruit PROCHE", &[
+    let (_, proche_max_b) = mesure(&catalog, "bruit PROCHE", &[
         ("palissade baroque", None),
         ("horizon volcanique", None),
         ("couronne metamorphique", None),
         ("feuille prismatique", None),
         ("balancier salinite", None),
     ]);
-    let (_, loin_max_b) = mesure(&mut catalog, "bruit lointain", &[
+    let (_, loin_max_b) = mesure(&catalog, "bruit lointain", &[
         ("hydravion supersonique", None),
         ("blockchain consensus byzantin", None),
         ("zzzz qqqq wwww", None),
@@ -1028,17 +1036,17 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
 
     // **Et le marquage se dit.** Une coïncidence lexicale doit s'annoncer comme
     // telle, sinon elle se présente exactement comme une réponse.
-    let douteux = catalog
-        .search(
-            "Product",
-            "couronne metamorphique",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("recherche douteuse");
+    let douteux = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "couronne metamorphique",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("recherche douteuse");
     eprintln!("  avertissements : {:?}", douteux.meta.warnings);
     assert!(
         douteux
@@ -1051,17 +1059,17 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     );
 
     // Et une vraie réponse ne se fait pas marquer pour rien.
-    let net = catalog
-        .search(
-            "Product",
-            "sautereau baroque",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("recherche nette");
+    let net = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "sautereau baroque",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("recherche nette");
     assert!(
         !net.meta
             .warnings
@@ -1245,17 +1253,18 @@ fn les_trois_moteurs_de_texte_marchent() {
         assert!(catalog.plein_texte_natif(), "Natif doit forcer le backend");
         catalog.register_entity("Product", config_produit()).unwrap();
         catalog.ingest_entities("Product", produits()).unwrap();
-        let r = catalog
-            .search(
-                "Product",
-                "navigation astronomique",
-                SearchOptions {
-                    consistency: Consistency::Immediate,
-                    signals: Some(SearchSignals::BM25),
-                    ..Default::default()
-                },
-            )
-            .expect("recherche par le trigramme");
+        let catalog = Arc::new(Mutex::new(catalog));
+        let r = Catalog::rechercher(
+            &catalog,
+            "Product",
+            "navigation astronomique",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche par le trigramme");
         r.results
             .iter()
             .filter_map(|x| x.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
@@ -1280,17 +1289,18 @@ fn les_trois_moteurs_de_texte_marchent() {
         );
         catalog.register_entity("Product", config_produit()).unwrap();
         catalog.ingest_entities("Product", produits()).unwrap();
-        let r = catalog
-            .search(
-                "Product",
-                "navigation astronomique",
-                SearchOptions {
-                    consistency: Consistency::Immediate,
-                    signals: Some(SearchSignals::BM25),
-                    ..Default::default()
-                },
-            )
-            .expect("recherche par lucivy sur postgres");
+        let catalog = Arc::new(Mutex::new(catalog));
+        let r = Catalog::rechercher(
+            &catalog,
+            "Product",
+            "navigation astronomique",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .expect("recherche par lucivy sur postgres");
         eprintln!("[lucivy] avertissements : {:?}", r.meta.warnings);
         r.results
             .iter()
@@ -1493,18 +1503,19 @@ fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
         .create("Product", produit("Clavecin", "clavecin baroque", 20.0))
         .expect("mise en file");
 
-    let reponse = lecteur
-        .search(
-            "Product",
-            "navigation",
-            SearchOptions {
-                consistency: Consistency::Strict,
-                signals: Some(SearchSignals::BM25),
-                timeout_ms: 200,
-                ..Default::default()
-            },
-        )
-        .expect("recherche stricte");
+    let lecteur = Arc::new(Mutex::new(lecteur));
+    let reponse = Catalog::rechercher(
+        &lecteur,
+        "Product",
+        "navigation",
+        SearchOptions {
+            consistency: Consistency::Strict,
+            signals: Some(SearchSignals::BM25),
+            timeout_ms: 200,
+            ..Default::default()
+        },
+    )
+    .expect("recherche stricte");
     eprintln!("[marque] avertissements de la recherche : {:?}", reponse.meta.warnings);
     assert!(
         reponse
@@ -1545,17 +1556,18 @@ fn la_marque_de_confiance_nomme_son_signal() {
         .unwrap();
 
     // Une requête qui ne fait que partager des mots, sans rien désigner.
-    let r = catalog
-        .search(
-            "Product",
-            "couronne metamorphique",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("recherche douteuse");
+    let catalog = Arc::new(Mutex::new(catalog));
+    let r = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "couronne metamorphique",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("recherche douteuse");
 
     let marque = r
         .meta
@@ -1643,8 +1655,8 @@ fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
     assert_eq!(na, 1, "A n'embarque que le sien");
     assert_eq!(nb, pris_b.len(), "B n'embarque que les siens");
 
-    let apres = a
-        .search("Product", "programming language", SearchOptions {
+    let a = Arc::new(Mutex::new(a));
+    let apres = Catalog::rechercher(&a, "Product", "programming language", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()

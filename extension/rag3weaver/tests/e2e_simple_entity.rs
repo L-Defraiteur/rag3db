@@ -8,8 +8,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-#[cfg(feature = "burn-embedder")]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
@@ -294,18 +293,18 @@ fn simple_bm25_search_finds_results() {
 
     catalog.ingest_entities("Product", products).unwrap();
 
-    let response = catalog
-        .search(
-            "Product",
-            "programming language",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming language",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "BM25 search: {} results, bm25_count={}",
@@ -361,17 +360,18 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
     }
 
     // `Eventual` est le défaut, et c'est lui qui appelle `flush_insertions`.
-    let reponse = catalog
-        .search(
-            "Product",
-            "programming language",
-            SearchOptions {
-                consistency: Consistency::Eventual,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("la recherche ne doit pas échouer");
+    let catalog = Arc::new(Mutex::new(catalog));
+    let reponse = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming language",
+        SearchOptions {
+            consistency: Consistency::Eventual,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("la recherche ne doit pas échouer");
 
     eprintln!(
         "[eventual] {} résultats, bm25={}, partiel={}, en file={}",
@@ -398,7 +398,7 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
     assert!(reponse.meta.bm25_count > 0, "le signal plein texte doit avoir répondu");
 
     // Et la ligne est bien en base : les deux bouts, pas seulement l'index.
-    let compte = catalog.count("Product").expect("compte");
+    let compte = catalog.lock().unwrap().count("Product").expect("compte");
     assert_eq!(compte, 2, "les deux produits sont posés");
 
     // L'invariant de la méta, quel que soit ce qui reste. Ici `Product` ne
@@ -414,18 +414,18 @@ fn une_recherche_eventual_indexe_ce_qu_elle_pose() {
     );
 
     // Le drain d'après ne doit rien changer à ce qu'on trouve.
-    catalog.drain();
-    let apres = catalog
-        .search(
-            "Product",
-            "programming language",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        .expect("la recherche ne doit pas échouer");
+    catalog.lock().unwrap().drain();
+    let apres = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming language",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .expect("la recherche ne doit pas échouer");
     assert_eq!(
         apres.results.len(),
         reponse.results.len(),
@@ -470,8 +470,8 @@ fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
     );
 
     // Le plein texte trouve, sans qu'aucun GPU ait tourné.
-    let bm25 = catalog
-        .search("Product", "programming language", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let bm25 = Catalog::rechercher(&catalog, "Product", "programming language", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -480,8 +480,7 @@ fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
     assert!(!bm25.results.is_empty(), "le plein texte est prêt");
 
     // Le dense est dû, et le zéro vectoriel le dit.
-    let dense = catalog
-        .search("Product", "programming language", SearchOptions {
+    let dense = Catalog::rechercher(&catalog, "Product", "programming language", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()
@@ -494,11 +493,10 @@ fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
     );
 
     // Et le rattrapage la solde — c'est le tick, appelé à la demande.
-    let repris = catalog.embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage");
+    let repris = catalog.lock().unwrap().embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage");
     assert!(repris > 0, "le rattrapage doit retrouver la dette dans la base");
 
-    let dense = catalog
-        .search("Product", "programming language", SearchOptions {
+    let dense = Catalog::rechercher(&catalog, "Product", "programming language", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()
@@ -511,6 +509,8 @@ fn le_lot_peut_rendre_moins_a_condition_de_le_dire() {
 
     // Et le verbe complet, lui, n'a rien changé : il rend toujours tout.
     let res = catalog
+        .lock()
+        .unwrap()
         .ingest_entities("Product", vec![make_product(
             "Python Cookbook", "Recipes for data science.", "pandas, numpy.", 39.99,
         )])
@@ -553,8 +553,8 @@ fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
         .expect("ingestion complète");
 
     // Tout est embarqué : `ingest_entities` ne coupe rien.
-    let apres_ingestion = catalog
-        .search("Product", "programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let apres_ingestion = Catalog::rechercher(&catalog, "Product", "programming", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()
@@ -567,8 +567,7 @@ fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
 
     // ── La mise à jour, puis la coupe ──────────────────────────────────
     let uuid = {
-        let res = catalog
-            .search("Product", "Rust", SearchOptions {
+        let res = Catalog::rechercher(&catalog, "Product", "Rust", SearchOptions {
                 consistency: Consistency::Immediate,
                 signals: Some(SearchSignals::BM25),
                 ..Default::default()
@@ -585,15 +584,14 @@ fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
                 .to_string(),
         ),
     );
-    catalog.update("Product", &uuid, maj).expect("mise en file");
+    catalog.lock().unwrap().update("Product", &uuid, maj).expect("mise en file");
 
     let mut w = Vec::new();
-    let (reste, _) = catalog.appliquer_la_consigne(D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+    let (reste, _) = catalog.lock().unwrap().appliquer_la_consigne(D::RECHERCHE_TEXTE, false, 5_000, &mut w);
     assert_eq!(reste, 0, "la file est vidée jusqu'au plein texte : {w:?}");
 
     // Le plein texte trouve le nouveau texte, sans qu'aucun GPU ait tourné.
-    let bm25 = catalog
-        .search("Product", "clavecin", SearchOptions {
+    let bm25 = Catalog::rechercher(&catalog, "Product", "clavecin", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -605,8 +603,7 @@ fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
     );
 
     // Et la dette dense est là, **et elle se dit**.
-    let dense = catalog
-        .search("Product", "clavecin", SearchOptions {
+    let dense = Catalog::rechercher(&catalog, "Product", "clavecin", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()
@@ -623,10 +620,9 @@ fn la_coupe_reecrit_sans_le_gpu_puis_rattrape() {
     // Par la consigne, pas par un appel direct : c'est le contrat qu'on
     // éprouve — « exiger dense » doit rattraper tout seul.
     let mut w = Vec::new();
-    catalog.appliquer_la_consigne(D::TOUT, false, 5_000, &mut w);
+    catalog.lock().unwrap().appliquer_la_consigne(D::TOUT, false, 5_000, &mut w);
 
-    let dense = catalog
-        .search("Product", "clavecin", SearchOptions {
+    let dense = Catalog::rechercher(&catalog, "Product", "clavecin", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::VECTOR),
             ..Default::default()
@@ -653,18 +649,18 @@ fn simple_bm25_no_results_for_nonsense() {
         
         .unwrap();
 
-    let response = catalog
-        .search(
-            "Product",
-            "xyzzy zyxwv qwerty",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "xyzzy zyxwv qwerty",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     assert_eq!(response.results.len(), 0, "nonsense query should return 0 results");
 }
@@ -747,19 +743,19 @@ fn simple_vector_minilm_search() {
     eprintln!("[MiniLM] CHUNKED_FROM fwd={:?} rev={:?}", fwd.rows, rev.rows);
 
     // Search for programming → should find Rust Book
-    let response = catalog
-        .search(
-            "Product",
-            "systems programming and memory safety",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::SEMANTIC),
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "systems programming and memory safety",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::SEMANTIC),
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[MiniLM] vector search: {} results, vector_count={}",
@@ -837,17 +833,17 @@ fn simple_hybrid_bgem3_search() {
     catalog.ingest_entities("Product", products).unwrap();
 
     // Hybrid search → should use both BM25 and vector
-    let response = catalog
-        .search(
-            "Product",
-            "programming language",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming language",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[BGE-M3 hybrid] {} results, bm25={}, vector={}, fused={}",
@@ -903,17 +899,17 @@ fn simple_sparse_bgem3_search() {
 
     catalog.ingest_entities("Product", products).unwrap();
 
-    let response = catalog
-        .search(
-            "Product",
-            "programming",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "programming",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[BGE-M3 sparse] {} results, bm25={}, vector={}, sparse={}",
@@ -991,19 +987,19 @@ fn simple_bm25_highlights_resolve_to_correct_chunks() {
     }
 
     // 1. Search "borrow checker" — only in description field
-    let response = catalog
-        .search(
-            "Product",
-            "borrow checker",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "borrow checker",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Search 'borrow checker' ---");
     eprintln!("results={}, bm25_count={}", response.results.len(), response.meta.bm25_count);
@@ -1034,19 +1030,18 @@ fn simple_bm25_highlights_resolve_to_correct_chunks() {
     }
 
     // 2. Search "kubernetes" — only in details field
-    let response2 = catalog
-        .search(
-            "Product",
-            "kubernetes",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response2 = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "kubernetes",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Search 'kubernetes' ---");
     eprintln!("results={}, bm25_count={}", response2.results.len(), response2.meta.bm25_count);
@@ -1074,20 +1069,19 @@ fn simple_bm25_highlights_resolve_to_correct_chunks() {
     }
 
     // 3. Search "performance" — in both fields, check Detailed mode returns multiple chunks
-    let response3 = catalog
-        .search(
-            "Product",
-            "performance",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response3 = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "performance",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Search 'performance' (Detailed) ---");
     eprintln!("results={}, bm25_count={}", response3.results.len(), response3.meta.bm25_count);
@@ -1142,18 +1136,18 @@ fn simple_multiple_ingestions() {
     assert_eq!(cnt, 3, "should have 3 products after 2 batches");
 
     // BM25 search should find across both batches
-    let response = catalog
-        .search(
-            "Product",
-            "batch item",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "batch item",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("multi-ingest search: {} results", response.results.len());
     assert!(
@@ -1248,24 +1242,21 @@ fn simple_delete_removes_chunks() {
     eprintln!("After delete: {product_count_after} products, {remaining_chunks} chunks");
 
     // BM25: deleted product not findable
-    let response = catalog
-        .search("Product", "alpha technology", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "alpha technology", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert_eq!(response.results.len(), 0, "deleted product should not be searchable");
 
     // BM25: remaining products still findable
-    let response2 = catalog
-        .search("Product", "beta engineering", SearchOptions {
+    let response2 = Catalog::rechercher(&catalog, "Product", "beta engineering", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(!response2.results.is_empty(), "remaining product should still be searchable");
 }
@@ -1287,13 +1278,12 @@ fn simple_update_refreshes_chunks() {
     let uuid = &uuids[0];
 
     // Verify initial search
-    let response = catalog
-        .search("Product", "programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "programming", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(!response.results.is_empty(), "should find 'programming' before update");
 
@@ -1304,8 +1294,8 @@ fn simple_update_refreshes_chunks() {
         "Includes pandas, numpy, flask and asyncio examples",
         39.99,
     );
-    catalog.update("Product", uuid, new_data).unwrap();
-    let flush = catalog.drain();
+    catalog.lock().unwrap().update("Product", uuid, new_data).unwrap();
+    let flush = catalog.lock().unwrap().drain();
     assert_eq!(flush.update_results.len(), 1, "drain should have one update result");
     let result = &flush.update_results[0];
     eprintln!(
@@ -1316,13 +1306,11 @@ fn simple_update_refreshes_chunks() {
     assert!(result.reembedded, "should have re-embedded");
 
     // Old content should not be findable
-    let response_old = catalog
-        .search("Product", "programming", SearchOptions {
+    let response_old = Catalog::rechercher(&catalog, "Product", "programming", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert_eq!(
         response_old.results.len(),
@@ -1331,13 +1319,11 @@ fn simple_update_refreshes_chunks() {
     );
 
     // New content should be findable
-    let response_new = catalog
-        .search("Product", "data science", SearchOptions {
+    let response_new = Catalog::rechercher(&catalog, "Product", "data science", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(
         !response_new.results.is_empty(),
@@ -1364,10 +1350,10 @@ fn simple_partial_update_keeps_other_fields_indexed() {
         )
         .unwrap();
     let uuid = get_product_uuids(&catalog).remove(0);
+    let catalog = Arc::new(Mutex::new(catalog));
 
-    fn bm25(catalog: &mut Catalog, q: &str) -> usize {
-        catalog
-            .search("Product", q, SearchOptions {
+    fn bm25(catalog: &Arc<Mutex<Catalog>>, q: &str) -> usize {
+        Catalog::rechercher(catalog, "Product", q, SearchOptions {
                 consistency: Consistency::Immediate,
                 signals: Some(SearchSignals::BM25),
                 ..Default::default()
@@ -1376,7 +1362,7 @@ fn simple_partial_update_keeps_other_fields_indexed() {
             .results
             .len()
     }
-    assert!(bm25(&mut catalog, "lifetimes") > 0, "`details` indexé avant la mise à jour");
+    assert!(bm25(&catalog, "lifetimes") > 0, "`details` indexé avant la mise à jour");
 
     // Ne touche que `description`.
     let mut partial = BTreeMap::new();
@@ -1384,14 +1370,14 @@ fn simple_partial_update_keeps_other_fields_indexed() {
         "description".to_string(),
         CypherValue::String("Recipes for mastering Python data science".into()),
     );
-    catalog.update("Product", &uuid, partial).unwrap();
-    let flush = catalog.drain();
+    catalog.lock().unwrap().update("Product", &uuid, partial).unwrap();
+    let flush = catalog.lock().unwrap().drain();
     assert_eq!(flush.failed, 0, "drain: {} échec(s)", flush.failed);
 
-    assert!(bm25(&mut catalog, "Python") > 0, "la nouvelle description est indexée");
-    assert_eq!(bm25(&mut catalog, "comprehensive"), 0, "l'ancienne description ne l'est plus");
+    assert!(bm25(&catalog, "Python") > 0, "la nouvelle description est indexée");
+    assert_eq!(bm25(&catalog, "comprehensive"), 0, "l'ancienne description ne l'est plus");
     assert!(
-        bm25(&mut catalog, "lifetimes") > 0,
+        bm25(&catalog, "lifetimes") > 0,
         "`details`, non modifié, doit rester dans l'index après une mise à jour partielle"
     );
 }
@@ -1497,24 +1483,21 @@ fn simple_batch_delete_multiple() {
     assert_eq!(remaining_chunks, beta_chunks, "all remaining chunks should belong to Beta");
 
     // BM25: Beta still searchable
-    let response = catalog
-        .search("Product", "tourbillon", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "tourbillon", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(!response.results.is_empty(), "Beta should still be searchable");
 
     // BM25: Alpha not searchable
-    let response2 = catalog
-        .search("Product", "xylophone", SearchOptions {
+    let response2 = Catalog::rechercher(&catalog, "Product", "xylophone", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     let noms: Vec<String> = response2
         .results
@@ -1617,13 +1600,12 @@ fn simple_batch_update_multiple() {
     );
 
     // BM25: old Alpha content not findable
-    let response = catalog
-        .search("Product", "xylophone", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "xylophone", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     let noms: Vec<String> = response
         .results
@@ -1636,24 +1618,20 @@ fn simple_batch_update_multiple() {
     );
 
     // BM25: new Alpha content findable
-    let response2 = catalog
-        .search("Product", "clavecin", SearchOptions {
+    let response2 = Catalog::rechercher(&catalog, "Product", "clavecin", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(!response2.results.is_empty(), "new Alpha content should be findable");
 
     // BM25: Beta still findable with original content
-    let response3 = catalog
-        .search("Product", "tourbillon", SearchOptions {
+    let response3 = Catalog::rechercher(&catalog, "Product", "tourbillon", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
         })
-        
         .unwrap();
     assert!(!response3.results.is_empty(), "Beta original content should still be findable");
 }
@@ -1784,8 +1762,8 @@ fn une_mise_a_jour_au_niveau_donnee_laisse_une_dette_de_decoupage_qui_se_solde()
             "Rust Book", "Un guide court.", "Bref.", 49.99,
         )])
         .expect("ingestion");
-    let uuid = catalog
-        .search("Product", "guide", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let uuid = Catalog::rechercher(&catalog, "Product", "guide", SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -1804,25 +1782,25 @@ fn une_mise_a_jour_au_niveau_donnee_laisse_une_dette_de_decoupage_qui_se_solde()
             .and_then(|v| v.as_i64())
             .unwrap_or(0) as usize
     };
-    let chunks_avant = compter_les_chunks(&catalog);
+    let chunks_avant = compter_les_chunks(&catalog.lock().unwrap());
     assert!(chunks_avant >= 1);
 
     // Une description longue : plusieurs chunks, une fois découpée.
     let long = "clavecin ".repeat(600);
     let mut maj = BTreeMap::new();
     maj.insert("description".to_string(), CypherValue::String(long));
-    let res = catalog.update_jusqu_a("Product", &uuid, maj, D::DONNEE).expect("mise à jour");
+    let res = catalog.lock().unwrap().update_jusqu_a("Product", &uuid, maj, D::DONNEE).expect("mise à jour");
     assert_eq!(res.rendu_pret, Some(D::DONNEE), "la donnée, exactement : {res:?}");
     assert_eq!(
-        compter_les_chunks(&catalog),
+        compter_les_chunks(&catalog.lock().unwrap()),
         chunks_avant,
         "au niveau donnée, les chunks ne bougent pas : ils sont en dette"
     );
 
     // Le plein texte exigé solde la dette de découpage.
     let mut w = Vec::new();
-    catalog.appliquer_la_consigne_pour("Product", D::RECHERCHE_TEXTE, false, 5_000, &mut w);
-    let chunks_apres = compter_les_chunks(&catalog);
+    catalog.lock().unwrap().appliquer_la_consigne_pour("Product", D::RECHERCHE_TEXTE, false, 5_000, &mut w);
+    let chunks_apres = compter_les_chunks(&catalog.lock().unwrap());
     eprintln!("[découpage] avant={chunks_avant} après={chunks_apres} avertissements={w:?}");
     assert!(
         chunks_apres > chunks_avant,
@@ -1830,6 +1808,6 @@ fn une_mise_a_jour_au_niveau_donnee_laisse_une_dette_de_decoupage_qui_se_solde()
     );
 
     // Et une seconde passe n'a plus rien à redécouper.
-    let encore = catalog.rattraper_le_decoupage(None, 512, false).expect("rattrapage");
+    let encore = catalog.lock().unwrap().rattraper_le_decoupage(None, 512, false).expect("rattrapage");
     assert_eq!(encore, 0, "plus rien en retard");
 }

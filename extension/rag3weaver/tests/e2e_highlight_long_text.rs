@@ -12,6 +12,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use rag3weaver::config::{
     CatalogConfig, ChunkingConfig, ChunkStrategy, EntityDef, FieldDef, FieldType,
     KBConfig, RelationDef,
@@ -309,6 +310,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
         .unwrap();
 
     debug_chunks(&mut catalog, "Article");
+    let catalog = Arc::new(Mutex::new(catalog));
 
     let search_opts = |_query: &str| SearchOptions {
         consistency: Consistency::Immediate,
@@ -318,7 +320,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     };
 
     // 1. "XYLOPHONE" — only in description zone 1 (start)
-    let r1 = catalog.search("Article", "XYLOPHONE", search_opts("")).unwrap();
+    let r1 = Catalog::rechercher(&catalog, "Article", "XYLOPHONE", search_opts("")).unwrap();
     eprintln!("\n--- Search 'XYLOPHONE' (desc zone 1) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -335,7 +337,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 2. "ZEPPELIN" — only in description zone 2 (middle)
-    let r2 = catalog.search("Article", "ZEPPELIN", search_opts("")).unwrap();
+    let r2 = Catalog::rechercher(&catalog, "Article", "ZEPPELIN", search_opts("")).unwrap();
     eprintln!("\n--- Search 'ZEPPELIN' (desc zone 2) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -351,7 +353,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 3. "QUASAR" — only in description zone 3 (end)
-    let r3 = catalog.search("Article", "QUASAR", search_opts("")).unwrap();
+    let r3 = Catalog::rechercher(&catalog, "Article", "QUASAR", search_opts("")).unwrap();
     eprintln!("\n--- Search 'QUASAR' (desc zone 3) ---");
     eprintln!("results={}, bm25_count={}", r3.results.len(), r3.meta.bm25_count);
     debug_bm25_diagnostics(&r3);
@@ -367,7 +369,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 4. "FIBONACCI" — only in details zone 1 (different field)
-    let r4 = catalog.search("Article", "FIBONACCI", search_opts("")).unwrap();
+    let r4 = Catalog::rechercher(&catalog, "Article", "FIBONACCI", search_opts("")).unwrap();
     eprintln!("\n--- Search 'FIBONACCI' (details zone 1) ---");
     eprintln!("results={}, bm25_count={}", r4.results.len(), r4.meta.bm25_count);
     debug_bm25_diagnostics(&r4);
@@ -383,7 +385,7 @@ fn simple_highlight_resolves_to_correct_chunk_per_zone() {
     }
 
     // 5. "NEBULA" — only in details zone 3 (end of second field)
-    let r5 = catalog.search("Article", "NEBULA", search_opts("")).unwrap();
+    let r5 = Catalog::rechercher(&catalog, "Article", "NEBULA", search_opts("")).unwrap();
     eprintln!("\n--- Search 'NEBULA' (details zone 3) ---");
     eprintln!("results={}, bm25_count={}", r5.results.len(), r5.meta.bm25_count);
     debug_bm25_diagnostics(&r5);
@@ -412,22 +414,23 @@ fn simple_highlight_detailed_multi_field_multi_chunk() {
         
         .unwrap();
 
+    let catalog = Arc::new(Mutex::new(catalog));
+
     // "software" appears multiple times in LONG_DESCRIPTION (zones 1, 2, 3)
     // Should resolve to multiple chunks in Detailed mode
-    let response = catalog
-        .search(
-            "Article",
-            "software",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "Article",
+        "software",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Search 'software' (Detailed) ---");
     eprintln!("results={}, bm25_count={}", response.results.len(), response.meta.bm25_count);
@@ -449,20 +452,19 @@ fn simple_highlight_detailed_multi_field_multi_chunk() {
     );
 
     // "deployment" appears in LONG_DETAILS across zones → should also match
-    let response2 = catalog
-        .search(
-            "Article",
-            "deployment",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response2 = Catalog::rechercher(
+        &catalog,
+        "Article",
+        "deployment",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Search 'deployment' (Detailed) ---");
     eprintln!("results={}, bm25_count={}", response2.results.len(), response2.meta.bm25_count);
@@ -673,6 +675,7 @@ fn kb_highlight_resolves_to_correct_chunk_body() {
     catalog.drain();
 
     debug_kb_chunks(&mut catalog, "main");
+    let catalog = Arc::new(Mutex::new(catalog));
 
     let search_opts = SearchOptions {
         consistency: Consistency::Immediate,
@@ -682,7 +685,7 @@ fn kb_highlight_resolves_to_correct_chunk_body() {
     };
 
     // 1. "METAMORPHOSIS" — body zone 1
-    let r1 = catalog.search("main", "METAMORPHOSIS", search_opts.clone()).unwrap();
+    let r1 = Catalog::rechercher(&catalog, "main", "METAMORPHOSIS", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'METAMORPHOSIS' (body zone 1) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -698,7 +701,7 @@ fn kb_highlight_resolves_to_correct_chunk_body() {
     }
 
     // 2. "PARADOXICAL" — body zone 2
-    let r2 = catalog.search("main", "PARADOXICAL", search_opts.clone()).unwrap();
+    let r2 = Catalog::rechercher(&catalog, "main", "PARADOXICAL", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'PARADOXICAL' (body zone 2) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -714,7 +717,7 @@ fn kb_highlight_resolves_to_correct_chunk_body() {
     }
 
     // 3. "HOLOGRAPHIC" — body zone 3
-    let r3 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
+    let r3 = Catalog::rechercher(&catalog, "main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
     eprintln!("\n--- KB Search 'HOLOGRAPHIC' (body zone 3) ---");
     eprintln!("results={}, bm25_count={}", r3.results.len(), r3.meta.bm25_count);
     debug_bm25_diagnostics(&r3);
@@ -739,21 +742,21 @@ fn kb_highlight_resolves_to_correct_chunk_summary() {
     catalog.drain();
 
     debug_kb_chunks(&mut catalog, "main");
+    let catalog = Arc::new(Mutex::new(catalog));
 
     // "CRYSTALLINE" — only in summary (different _content_offset from body)
-    let response = catalog
-        .search(
-            "main",
-            "CRYSTALLINE",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "CRYSTALLINE",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- KB Search 'CRYSTALLINE' (summary) ---");
     eprintln!("results={}, bm25_count={}", response.results.len(), response.meta.bm25_count);
@@ -778,21 +781,22 @@ fn kb_detailed_multi_chunk_attribution() {
     catalog.create("Document", make_doc("Test Doc", KB_LONG_BODY, KB_LONG_SUMMARY)).unwrap();
     catalog.drain();
 
+    let catalog = Arc::new(Mutex::new(catalog));
+
     // "database" appears in body zones 1, 2, 3 AND summary → many chunks
-    let response = catalog
-        .search(
-            "main",
-            "database",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "database",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- KB Search 'database' (Detailed) ---");
     eprintln!("results={}, bm25_count={}", response.results.len(), response.meta.bm25_count);
@@ -908,6 +912,7 @@ fn kb_multi_entity_highlight_in_linked_content() {
     assert_eq!(result.failed, 0);
 
     debug_kb_chunks(&mut catalog, "main");
+    let catalog = Arc::new(Mutex::new(catalog));
 
     let search_opts = SearchOptions {
         consistency: Consistency::Immediate,
@@ -917,7 +922,7 @@ fn kb_multi_entity_highlight_in_linked_content() {
     };
 
     // 1. "HOLOGRAPHIC" — in body (Document's own content)
-    let r1 = catalog.search("main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
+    let r1 = Catalog::rechercher(&catalog, "main", "HOLOGRAPHIC", search_opts.clone()).unwrap();
     eprintln!("\n--- Multi-entity KB Search 'HOLOGRAPHIC' (body) ---");
     eprintln!("results={}, bm25_count={}", r1.results.len(), r1.meta.bm25_count);
     debug_bm25_diagnostics(&r1);
@@ -930,7 +935,7 @@ fn kb_multi_entity_highlight_in_linked_content() {
     }
 
     // 2. "SYNCHRONICITY" — in Author bio (linked content)
-    let r2 = catalog.search("main", "SYNCHRONICITY", search_opts.clone()).unwrap();
+    let r2 = Catalog::rechercher(&catalog, "main", "SYNCHRONICITY", search_opts.clone()).unwrap();
     eprintln!("\n--- Multi-entity KB Search 'SYNCHRONICITY' (author bio) ---");
     eprintln!("results={}, bm25_count={}", r2.results.len(), r2.meta.bm25_count);
     debug_bm25_diagnostics(&r2);
@@ -944,20 +949,19 @@ fn kb_multi_entity_highlight_in_linked_content() {
     }
 
     // 3. Detailed: "database" appears in both body and author bio
-    let r3 = catalog
-        .search(
-            "main",
-            "database",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let r3 = Catalog::rechercher(
+        &catalog,
+        "main",
+        "database",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("\n--- Multi-entity KB 'database' (Detailed) ---");
     eprintln!("results={}, bm25_count={}", r3.results.len(), r3.meta.bm25_count);

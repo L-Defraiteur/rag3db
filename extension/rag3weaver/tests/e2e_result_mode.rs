@@ -7,6 +7,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{
     CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
@@ -240,21 +241,20 @@ fn query_rows(catalog: &Catalog, cypher: &str) -> Vec<Vec<CypherValue>> {
 #[test]
 #[ignore]
 fn result_mode_aggregated_default() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
     // Search TreeKB with default options (Aggregated) + diagnostics
-    let response = catalog
-        .search(
-            "TreeKB",
-            "auth",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "auth",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "Aggregated 'auth': {} results, bm25={}, time={}ms",
@@ -337,21 +337,20 @@ fn result_mode_aggregated_default() {
 #[test]
 #[ignore]
 fn result_mode_aggregated_explicit() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
-    let response = catalog
-        .search(
-            "TreeKB",
-            "auth",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::Aggregated,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "auth",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::Aggregated,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Aggregated explicit 'auth': {} results, bm25={}", response.results.len(), response.meta.bm25_count);
     if let Some(ref diag) = response.meta.diagnostics {
@@ -378,21 +377,20 @@ fn result_mode_aggregated_explicit() {
 #[test]
 #[ignore]
 fn result_mode_source_resolved() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
     // Search TreeKB for "auth" in SourceResolved mode
-    let response = catalog
-        .search(
-            "TreeKB",
-            "auth",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::SourceResolved,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "auth",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::SourceResolved,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "SourceResolved 'auth': {} results",
@@ -448,30 +446,28 @@ fn result_mode_source_resolved() {
 #[test]
 #[ignore]
 fn result_mode_source_resolved_uuid_matches() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
     // Get the Directory UUID for reference
     let dir_rows = query_rows(
-        &catalog,
+        &catalog.lock().unwrap(),
         "MATCH (d:Directory {name: 'src'}) RETURN d._uuid",
-    )
-    ;
+    );
     assert_eq!(dir_rows.len(), 1);
     let dir_uuid = dir_rows[0][0].as_str().unwrap().to_string();
 
     // Search TreeKB — the "src" directory is the title entity
-    let response = catalog
-        .search(
-            "TreeKB",
-            "src",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::SourceResolved,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "src",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::SourceResolved,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("SourceResolved 'src': {} results", response.results.len());
     assert!(!response.results.is_empty());
@@ -494,21 +490,20 @@ fn result_mode_source_resolved_uuid_matches() {
 #[test]
 #[ignore]
 fn result_mode_detailed_chunks() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
-    let response = catalog
-        .search(
-            "TreeKB",
-            "auth",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::Detailed,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "auth",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::Detailed,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Detailed 'auth': {} results", response.results.len());
     // Print diagnostics first
@@ -597,27 +592,25 @@ fn result_mode_detailed_chunks() {
 #[test]
 #[ignore]
 fn result_mode_detailed_chunk_source_uuid_valid() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
     // Get the root UUIDs (Directory : la racine de TreeKB)
-    let dir_uuids: Vec<String> = query_rows(&catalog, "MATCH (d:Directory) RETURN d._uuid")
-        
+    let dir_uuids: Vec<String> = query_rows(&catalog.lock().unwrap(), "MATCH (d:Directory) RETURN d._uuid")
         .iter()
         .filter_map(|r| r[0].as_str().map(|s| s.to_string()))
         .collect();
 
-    let response = catalog
-        .search(
-            "TreeKB",
-            "src",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::Detailed,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "src",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::Detailed,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     assert!(!response.results.is_empty());
 
@@ -646,20 +639,19 @@ fn result_mode_detailed_chunk_source_uuid_valid() {
 #[test]
 #[ignore]
 fn result_mode_detailed_filekb() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
-    let response = catalog
-        .search(
-            "FileKB",
-            "authenticate",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::Detailed,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "FileKB",
+        "authenticate",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::Detailed,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Detailed FileKB 'authenticate': {} results", response.results.len());
     assert!(!response.results.is_empty());
@@ -686,20 +678,19 @@ fn result_mode_detailed_filekb() {
 #[test]
 #[ignore]
 fn result_mode_source_resolved_filekb() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
-    let response = catalog
-        .search(
-            "FileKB",
-            "authenticate",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::SourceResolved,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "FileKB",
+        "authenticate",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::SourceResolved,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "SourceResolved FileKB 'authenticate': {} results",
@@ -793,22 +784,21 @@ fn result_mode_chunk_columns_persisted() {
 #[test]
 #[ignore]
 fn result_mode_aggregated_data_enrichment() {
-    let mut catalog = setup_catalog();
+    let catalog = Arc::new(Mutex::new(setup_catalog()));
 
     // Aggregated mode: data should contain the derived row's fields (title, _source_entity, _source_uuid, etc.)
-    let response = catalog
-        .search(
-            "TreeKB",
-            "src",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                result_mode: ResultMode::Aggregated,
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "TreeKB",
+        "src",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            result_mode: ResultMode::Aggregated,
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Aggregated enrichment 'src': {} results, bm25={}", response.results.len(), response.meta.bm25_count);
     if let Some(ref diag) = response.meta.diagnostics {

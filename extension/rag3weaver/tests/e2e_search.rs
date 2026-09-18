@@ -9,8 +9,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-#[cfg(feature = "burn-embedder")]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{
     CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
@@ -575,29 +574,29 @@ fn phase0_error_cases() {
 
     // Unknown KB search
     catalog.drain();
-    let err = catalog
-        .search(
-            "nonexistent_kb",
-            "test",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        ;
+    let catalog = Arc::new(Mutex::new(catalog));
+    let err = Catalog::rechercher(
+        &catalog,
+        "nonexistent_kb",
+        "test",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    );
     assert!(err.is_err(), "search unknown KB should fail");
 
     // Update of nonexistent uuid — enqueue succeeds, drain succeeds (no-op MATCH)
     let mut data = BTreeMap::new();
     data.insert("title".into(), CypherValue::String("x".into()));
-    catalog.update("Document", "fake-uuid", data).unwrap();
-    let flush = catalog.drain();
+    catalog.lock().unwrap().update("Document", "fake-uuid", data).unwrap();
+    let flush = catalog.lock().unwrap().drain();
     // The MATCH finds 0 rows, so UpdateRecordNode reports Unchanged (no old hash found)
     assert_eq!(flush.failed, 0);
     assert_eq!(flush.update_results.len(), 1);
     assert_eq!(flush.update_results[0].status, UpdateStatus::Updated);
     // The entity still doesn't exist — update was a no-op
-    let check = catalog.conn().execute_with_params(
+    let check = catalog.lock().unwrap().conn().execute_with_params(
         "MATCH (n:Document {_uuid: $uuid}) RETURN n._uuid",
         &[rag3weaver::connection::QueryParam::new("uuid", CypherValue::String("fake-uuid".into()))],
     ).unwrap();
@@ -700,21 +699,20 @@ fn setup_bm25_catalog() -> Catalog {
 #[test]
 #[ignore]
 fn phase1_bm25_contains_exact() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
     // "neural networks" exists as contiguous substring → Contains should find it
-    let response = catalog
-        .search(
-            "main",
-            "neural networks",
-            SearchOptions {
-                bm25_mode: BM25Mode::Contains,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "neural networks",
+        SearchOptions {
+            bm25_mode: BM25Mode::Contains,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Contains 'neural networks': {} results", response.results.len());
     assert!(response.results.len() > 0, "Contains should find contiguous 'neural networks'");
@@ -723,21 +721,20 @@ fn phase1_bm25_contains_exact() {
 #[test]
 #[ignore]
 fn phase1_bm25_contains_no_distant() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
     // "Rust safety" does NOT exist as contiguous substring → Contains returns 0
-    let response = catalog
-        .search(
-            "main",
-            "Rust safety",
-            SearchOptions {
-                bm25_mode: BM25Mode::Contains,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "Rust safety",
+        SearchOptions {
+            bm25_mode: BM25Mode::Contains,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Contains 'Rust safety': {} results", response.results.len());
     assert_eq!(response.results.len(), 0, "Contains should NOT find distant words");
@@ -748,22 +745,21 @@ fn phase1_bm25_contains_no_distant() {
 #[test]
 #[ignore]
 fn phase1_bm25_split_distant_words() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
     // "Rust safety" — both words exist in Rust doc but far apart.
     // ContainsSplit should find it.
-    let response = catalog
-        .search(
-            "main",
-            "Rust safety",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "Rust safety",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("ContainsSplit 'Rust safety': {} results, meta={:?}", response.results.len(), response.meta);
     assert!(response.results.len() > 0, "ContainsSplit should find distant 'Rust' + 'safety'");
@@ -773,20 +769,19 @@ fn phase1_bm25_split_distant_words() {
 #[test]
 #[ignore]
 fn phase1_bm25_split_french() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
-    let response = catalog
-        .search(
-            "main",
-            "cuisine française",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "cuisine française",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("ContainsSplit 'cuisine française': {} results", response.results.len());
     assert!(response.results.len() > 0, "ContainsSplit should find French cuisine doc");
@@ -797,20 +792,19 @@ fn phase1_bm25_split_french() {
 #[test]
 #[ignore]
 fn phase1_bm25_parse_multi_term() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
-    let response = catalog
-        .search(
-            "main",
-            "Rust safety",
-            SearchOptions {
-                bm25_mode: BM25Mode::Parse,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "Rust safety",
+        SearchOptions {
+            bm25_mode: BM25Mode::Parse,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!("Parse 'Rust safety': {} results", response.results.len());
     assert!(response.results.len() > 0, "Parse should find docs matching 'Rust' or 'safety'");
@@ -821,19 +815,18 @@ fn phase1_bm25_parse_multi_term() {
 #[test]
 #[ignore]
 fn phase1_bm25_no_results() {
-    let mut catalog = setup_bm25_catalog();
+    let catalog = Arc::new(Mutex::new(setup_bm25_catalog()));
 
-    let response = catalog
-        .search(
-            "main",
-            "xyznonexistentterm",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        &catalog,
+        "main",
+        "xyznonexistentterm",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     assert_eq!(response.results.len(), 0, "nonsense query should return 0 results");
 }
@@ -930,22 +923,21 @@ fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
 /// Generic vector search test: query should return the expected doc as top result.
 #[cfg(feature = "burn-embedder")]
 fn assert_vector_top_result(
-    catalog: &mut Catalog,
+    catalog: &Arc<Mutex<Catalog>>,
     query: &str,
     expected_title_contains: &str,
     model_name: &str,
 ) {
-    let response = catalog
-        .search(
-            "kb",
-            query,
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let response = Catalog::rechercher(
+        catalog,
+        "kb",
+        query,
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[{}] '{}': {} results, vector_count={}",
@@ -1078,42 +1070,39 @@ fn phase2_raw_vector_pipeline() {
 #[test]
 #[ignore]
 fn phase2_vector_minilm_programming() {
-    let mut catalog = setup_vector_catalog(MINILM.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MINILM.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "memory safety in systems programming",
         "Rust",
         "MiniLM",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_minilm_cooking() {
-    let mut catalog = setup_vector_catalog(MINILM.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MINILM.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "pastry and cooking techniques",
         "Cuisine",
         "MiniLM",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_minilm_ml() {
-    let mut catalog = setup_vector_catalog(MINILM.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MINILM.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "artificial intelligence and deep learning",
         "Machine Learning",
         "MiniLM",
-    )
-    ;
+    );
 }
 
 // ── MultilingualMiniLM (384d) ───────────────────────────────────────────
@@ -1122,42 +1111,39 @@ fn phase2_vector_minilm_ml() {
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_french() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MULTILINGUAL.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "gastronomie et pâtisserie française",
         "Cuisine",
         "Multilingual",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_programming() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MULTILINGUAL.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "langage de programmation et gestion mémoire",
         "Rust",
         "Multilingual",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn phase2_vector_multilingual_ml() {
-    let mut catalog = setup_vector_catalog(MULTILINGUAL.clone());
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(MULTILINGUAL.clone())));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "réseaux de neurones et intelligence artificielle",
         "Machine Learning",
         "Multilingual",
-    )
-    ;
+    );
 }
 
 // ── BGE-M3 (1024d) ─────────────────────────────────────────────────────
@@ -1167,14 +1153,13 @@ fn phase2_vector_multilingual_ml() {
 #[ignore]
 fn phase2_vector_bgem3_programming() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder);
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "memory safety in systems programming",
         "Rust",
         "BGE-M3",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
@@ -1182,14 +1167,13 @@ fn phase2_vector_bgem3_programming() {
 #[ignore]
 fn phase2_vector_bgem3_french() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder);
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "gastronomie et pâtisserie française",
         "Cuisine",
         "BGE-M3",
-    )
-    ;
+    );
 }
 
 #[cfg(feature = "burn-embedder")]
@@ -1197,14 +1181,13 @@ fn phase2_vector_bgem3_french() {
 #[ignore]
 fn phase2_vector_bgem3_ml() {
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
-    let mut catalog = setup_vector_catalog(embedder);
+    let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
-        &mut catalog,
+        &catalog,
         "artificial intelligence and deep learning",
         "Machine Learning",
         "BGE-M3",
-    )
-    ;
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1301,19 +1284,18 @@ fn setup_sparse_catalog() -> Catalog {
 #[test]
 #[ignore]
 fn phase3_sparse_search_finds_results() {
-    let mut catalog = setup_sparse_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "programming",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_sparse_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "programming",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[sparse] results={}, vector={}, bm25={}, sparse={}",
@@ -1334,19 +1316,18 @@ fn phase3_sparse_search_finds_results() {
 #[test]
 #[ignore]
 fn phase3_hybrid_3way() {
-    let mut catalog = setup_sparse_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "neural networks",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_sparse_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "neural networks",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[3-way] results={}, vector={}, bm25={}, sparse={}",
@@ -1368,19 +1349,18 @@ fn phase3_hybrid_3way() {
 #[test]
 #[ignore]
 fn phase3_sparse_top_result_programming() {
-    let mut catalog = setup_sparse_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "memory safety systems programming",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_sparse_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "memory safety systems programming",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     assert!(!response.results.is_empty());
     let top = &response.results[0];
@@ -1402,19 +1382,18 @@ fn phase3_sparse_top_result_programming() {
 #[test]
 #[ignore]
 fn phase3_sparse_data_enriched() {
-    let mut catalog = setup_sparse_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "cuisine française",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_sparse_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "cuisine française",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     assert!(!response.results.is_empty());
     for (i, r) in response.results.iter().enumerate() {
@@ -1526,19 +1505,19 @@ fn setup_phase4_catalog(signals: SearchSignals) -> (Catalog, u128) {
 #[test]
 #[ignore]
 fn phase4_bm25_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::BM25);
-    let response = catalog
-        .search(
-            "kb",
-            "systems programming safety",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::BM25);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "systems programming safety",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[bm25-only] results={}, bm25={}, vector={}, sparse={}",
@@ -1557,18 +1536,18 @@ fn phase4_bm25_only() {
 #[test]
 #[ignore]
 fn phase4_dense_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::VECTOR);
-    let response = catalog
-        .search(
-            "kb",
-            "systems programming safety",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::VECTOR);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "systems programming safety",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[dense-only] results={}, vector={}, bm25={}, sparse={}",
@@ -1587,18 +1566,18 @@ fn phase4_dense_only() {
 #[test]
 #[ignore]
 fn phase4_sparse_only() {
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::SPARSE);
-    let response = catalog
-        .search(
-            "kb",
-            "systems programming safety",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(SearchSignals::SPARSE);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "systems programming safety",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[sparse-only] results={}, sparse={}, vector={}, bm25={}",
@@ -1620,19 +1599,19 @@ fn phase4_sparse_only() {
 #[ignore]
 fn phase4_bm25_vector() {
     let signals = SearchSignals::BM25 | SearchSignals::VECTOR;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
-    let response = catalog
-        .search(
-            "kb",
-            "neural networks deep learning",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(signals);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "neural networks deep learning",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[bm25+vector] results={}, bm25={}, vector={}, sparse={}",
@@ -1651,19 +1630,19 @@ fn phase4_bm25_vector() {
 #[ignore]
 fn phase4_bm25_sparse() {
     let signals = SearchSignals::BM25 | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
-    let response = catalog
-        .search(
-            "kb",
-            "neural networks deep learning",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(signals);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "neural networks deep learning",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[bm25+sparse] results={}, bm25={}, sparse={}, vector={}",
@@ -1682,18 +1661,18 @@ fn phase4_bm25_sparse() {
 #[ignore]
 fn phase4_vector_sparse() {
     let signals = SearchSignals::VECTOR | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
-    let response = catalog
-        .search(
-            "kb",
-            "neural networks deep learning",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(signals);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "neural networks deep learning",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[vector+sparse] results={}, vector={}, sparse={}, bm25={}",
@@ -1714,19 +1693,19 @@ fn phase4_vector_sparse() {
 #[ignore]
 fn phase4_all_three() {
     let signals = SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE;
-    let (mut catalog, _drain_ms) = setup_phase4_catalog(signals);
-    let response = catalog
-        .search(
-            "kb",
-            "memory safety systems programming",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let (catalog, _drain_ms) = setup_phase4_catalog(signals);
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "memory safety systems programming",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[all-three] results={}, bm25={}, vector={}, sparse={}",
@@ -1812,19 +1791,18 @@ fn setup_dual_catalog() -> Catalog {
 #[test]
 #[ignore]
 fn phase5_dual_sparse_search() {
-    let mut catalog = setup_dual_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "programming",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_dual_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "programming",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[dual-sparse] results={}, vector={}, bm25={}, sparse={}",
@@ -1843,19 +1821,18 @@ fn phase5_dual_sparse_search() {
 #[test]
 #[ignore]
 fn phase5_dual_top_result() {
-    let mut catalog = setup_dual_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "systems programming safety ownership",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_dual_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "systems programming safety ownership",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let top = &response.results[0];
     let title = top
@@ -1876,19 +1853,18 @@ fn phase5_dual_top_result() {
 #[test]
 #[ignore]
 fn phase5_dual_3way_hybrid() {
-    let mut catalog = setup_dual_catalog();
-    let response = catalog
-        .search(
-            "kb",
-            "memory safety systems programming",
-            SearchOptions {
-                bm25_mode: BM25Mode::ContainsSplit,
-                consistency: Consistency::Immediate,
-                ..Default::default()
-            },
-        )
-        
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup_dual_catalog()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "memory safety systems programming",
+        SearchOptions {
+            bm25_mode: BM25Mode::ContainsSplit,
+            consistency: Consistency::Immediate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     eprintln!(
         "[dual-3way] results={}, bm25={}, vector={}, sparse={}",
@@ -2177,18 +2153,19 @@ fn phase6_sparse_mmap_persistence() {
         catalog.initialize().unwrap();
         eprintln!("  [mmap-persist] session 2: reopen {:?}", t0.elapsed());
 
+        let catalog = Arc::new(Mutex::new(catalog));
+
         // Sparse search should find results from persisted mmap index
-        let response = catalog
-            .search(
-                "kb",
-                "programming",
-                SearchOptions {
-                    consistency: Consistency::Immediate,
-                    ..Default::default()
-                },
-            )
-            
-            .unwrap();
+        let response = Catalog::rechercher(
+            &catalog,
+            "kb",
+            "programming",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         eprintln!(
             "[mmap-persist] results={}, vector={}, bm25={}, sparse={}",

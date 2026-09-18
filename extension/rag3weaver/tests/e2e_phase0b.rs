@@ -14,6 +14,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{
     CatalogConfig, ChunkingConfig, EntityDef, FieldDef, FieldType, KBConfig, RelationDef,
@@ -359,8 +360,11 @@ fn phase0b_bm25_search_multi_entity() {
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
+    let catalog = Arc::new(Mutex::new(catalog));
+
     // Search for "auth" — should find in TreeKB (File.name = "auth.ts")
-    let response = catalog.search(
+    let response = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "auth",
         SearchOptions {
@@ -373,7 +377,8 @@ fn phase0b_bm25_search_multi_entity() {
     assert!(response.results.len() > 0, "TreeKB should find 'auth' in File content");
 
     // Search for "lib" — should find the lib Directory's content
-    let response2 = catalog.search(
+    let response2 = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "lib",
         SearchOptions {
@@ -385,7 +390,8 @@ fn phase0b_bm25_search_multi_entity() {
     assert!(response2.results.len() > 0, "TreeKB should find 'lib' in Directory content");
 
     // Search for nonsense — 0 results
-    let response3 = catalog.search(
+    let response3 = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "xyznonexistent",
         SearchOptions {
@@ -423,8 +429,11 @@ fn phase0b_bm25_highlight_chunk_single_entity() {
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
+    let catalog = Arc::new(Mutex::new(catalog));
+
     // Search FileKB for "authentication"
-    let response = catalog.search(
+    let response = Catalog::rechercher(
+        &catalog,
         "FileKB",
         "authentication",
         SearchOptions {
@@ -661,7 +670,9 @@ fn phase0b_delete_content_for_only() {
     assert_eq!(stale_chunks, 0, "no TreeKB chunk should still carry the deleted File's text");
 
     // BM25 search for "auth" should return 0 results
-    let response = catalog.search(
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "auth",
         SearchOptions {
@@ -720,7 +731,9 @@ fn phase0b_update_content_for_only() {
     );
 
     // Search should find "login" but not "auth"
-    let response_login = catalog.search(
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response_login = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "login",
         SearchOptions {
@@ -730,7 +743,8 @@ fn phase0b_update_content_for_only() {
     ).unwrap();
     assert!(response_login.results.len() > 0, "TreeKB should find 'login' after update");
 
-    let response_auth = catalog.search(
+    let response_auth = Catalog::rechercher(
+        &catalog,
         "TreeKB",
         "auth",
         SearchOptions {
@@ -1015,13 +1029,14 @@ fn phase0b_delete_one_of_multiple_files() {
     );
 
     // Search should find beta but not alpha
-    let r_beta = catalog.search("TreeKB", "beta", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let r_beta = Catalog::rechercher(&catalog, "TreeKB", "beta", SearchOptions {
         consistency: Consistency::Immediate,
         ..Default::default()
     }).unwrap();
     assert!(r_beta.results.len() > 0, "Should find 'beta' after deleting alpha");
 
-    let r_alpha = catalog.search("TreeKB", "alpha", SearchOptions {
+    let r_alpha = Catalog::rechercher(&catalog, "TreeKB", "alpha", SearchOptions {
         consistency: Consistency::Immediate,
         ..Default::default()
     }).unwrap();
@@ -1129,7 +1144,9 @@ fn phase0b_debug_trace_pipeline() {
 
     // Try search through Catalog API
     eprintln!("\n══ CATALOG SEARCH ══");
-    let search_result = catalog.search(
+    let catalog = Arc::new(Mutex::new(catalog));
+    let search_result = Catalog::rechercher(
+        &catalog,
         "TreeKB", "auth",
         SearchOptions { consistency: Consistency::Immediate, ..Default::default() },
     );

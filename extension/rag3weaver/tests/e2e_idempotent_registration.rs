@@ -17,6 +17,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
@@ -216,7 +217,8 @@ fn register_entity_add_content_field_and_reindex() {
     ]).unwrap();
 
     // Verify BM25 search works before migration
-    let response = catalog.search("Product", "Rust programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -226,16 +228,16 @@ fn register_entity_add_content_field_and_reindex() {
     eprintln!("  pre-migration search: {} results", response.results.len());
 
     // Add "summary" content field (V2)
-    catalog.register_entity("Product", product_config_v2()).unwrap();
+    catalog.lock().unwrap().register_entity("Product", product_config_v2()).unwrap();
 
     // FTS was rebuilt (empty) — search might return nothing until reindex
     // But reindex should fix it
-    let stats = catalog.reindex("Product").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Product").unwrap();
     eprintln!("  reindex: {} records processed", stats.records_processed);
     assert_eq!(stats.records_processed, 2);
 
     // Search should work again after reindex
-    let response = catalog.search("Product", "Rust programming", SearchOptions {
+    let response = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -245,7 +247,7 @@ fn register_entity_add_content_field_and_reindex() {
     eprintln!("  post-reindex search: {} results", response.results.len());
 
     // Verify needs_reindex flag was cleared
-    let meta = catalog.execute_raw(
+    let meta = catalog.lock().unwrap().execute_raw(
         "MATCH (m:_catalog_meta {_key: 'needs_reindex:Product'}) RETURN m._value"
     ).unwrap();
     if !meta.rows.is_empty() {
@@ -468,7 +470,8 @@ fn progressive_schema_evolution() {
     assert_eq!(stats.records_processed, 2, "should reindex both products");
 
     // All products should be searchable
-    let response = catalog.search("Product", "product description", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(&catalog, "Product", "product description", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -477,7 +480,7 @@ fn progressive_schema_evolution() {
     assert!(!response.results.is_empty(), "search should return results after progressive evolution");
 
     // Verify all fields exist on all records
-    let rows = catalog.execute_raw(
+    let rows = catalog.lock().unwrap().execute_raw(
         "MATCH (p:Product) RETURN p.name, p.category, p.summary ORDER BY p.name"
     ).unwrap();
     assert_eq!(rows.rows.len(), 2);
@@ -603,13 +606,14 @@ fn hybrid_search_survives_migration_and_reindex() {
     ]).unwrap();
 
     // Pre-migration: BM25 search works
-    let bm25_pre = catalog.search("Product", "Rust programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let bm25_pre = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!bm25_pre.results.is_empty(), "BM25 should find 'Rust programming' pre-migration");
 
     // Pre-migration: vector search works
-    let vec_pre = catalog.search("Product", "systems programming memory safety", SearchOptions {
+    let vec_pre = Catalog::rechercher(&catalog, "Product", "systems programming memory safety", SearchOptions {
         consistency: Consistency::Immediate, signals: Some(SearchSignals::SEMANTIC), ..Default::default()
     }).unwrap();
     assert!(!vec_pre.results.is_empty(), "vector should find results pre-migration");
@@ -629,31 +633,31 @@ fn hybrid_search_survives_migration_and_reindex() {
     fields_v2.insert("technical_notes".into(), SimpleFieldDef {
         field_type: FieldType::Text, is_content: true, ..Default::default()
     });
-    catalog.register_entity("Product", EntityConfig {
+    catalog.lock().unwrap().register_entity("Product", EntityConfig {
         fields: fields_v2,
         signals: SearchSignals::HYBRID,
         ..Default::default()
     }).unwrap();
 
     // Reindex (rebuilds chunks + re-embeds with real MiniLM)
-    let stats = catalog.reindex("Product").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Product").unwrap();
     assert_eq!(stats.records_processed, 3);
     eprintln!("  reindex: {} records", stats.records_processed);
 
     // Post-migration: BM25 search still works
-    let bm25_post = catalog.search("Product", "Rust programming", SearchOptions {
+    let bm25_post = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!bm25_post.results.is_empty(), "BM25 should still find 'Rust programming' post-reindex");
 
     // Post-migration: vector search still works
-    let vec_post = catalog.search("Product", "systems programming memory safety", SearchOptions {
+    let vec_post = Catalog::rechercher(&catalog, "Product", "systems programming memory safety", SearchOptions {
         consistency: Consistency::Immediate, signals: Some(SearchSignals::SEMANTIC), ..Default::default()
     }).unwrap();
     assert!(!vec_post.results.is_empty(), "vector should still find results post-reindex");
 
     // Post-migration: hybrid search works
-    let hybrid = catalog.search("Product", "Italian pasta recipes", SearchOptions {
+    let hybrid = Catalog::rechercher(&catalog, "Product", "Italian pasta recipes", SearchOptions {
         consistency: Consistency::Immediate, signals: Some(SearchSignals::HYBRID), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!hybrid.results.is_empty(), "hybrid should find 'Italian pasta recipes'");
@@ -662,10 +666,10 @@ fn hybrid_search_survives_migration_and_reindex() {
     // Ingest new product WITH the new field
     let mut new_product = make_product("Advanced Rust Patterns", "Design patterns and advanced techniques for Rust developers.", 54.99);
     new_product.insert("technical_notes".into(), CypherValue::String("Covers async/await, pin, and unsafe code idioms.".into()));
-    catalog.ingest_entities("Product", vec![new_product]).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![new_product]).unwrap();
 
     // Search should find the new product too
-    let final_search = catalog.search("Product", "Rust async patterns", SearchOptions {
+    let final_search = Catalog::rechercher(&catalog, "Product", "Rust async patterns", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::HYBRID), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!final_search.results.is_empty(), "should find new product with technical_notes");
@@ -724,7 +728,8 @@ fn kb_migration_and_reindex() {
     catalog.ingest_entities("Article", vec![a1, a2]).unwrap();
 
     // Search KB "docs" — should find results
-    let pre = catalog.search("docs", "Rust programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let pre = Catalog::rechercher(&catalog, "docs", "Rust programming", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -754,19 +759,19 @@ fn kb_migration_and_reindex() {
         content_for: Some(vec!["docs".to_string()]),
         ..Default::default()
     });
-    catalog.register_entity("Article", EntityConfig {
+    catalog.lock().unwrap().register_entity("Article", EntityConfig {
         fields: article_fields_v2,
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
 
     // Reindex Article
-    let stats = catalog.reindex("Article").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Article").unwrap();
     assert_eq!(stats.records_processed, 2);
     eprintln!("  reindex: {} records", stats.records_processed);
 
     // Post-migration: KB search still works
-    let post = catalog.search("docs", "Rust programming", SearchOptions {
+    let post = Catalog::rechercher(&catalog, "docs", "Rust programming", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -780,10 +785,10 @@ fn kb_migration_and_reindex() {
     a3.insert("body".into(), CypherValue::String("Explore async/await, channels, and lock-free data structures in Rust.".into()));
     a3.insert("abstract".into(), CypherValue::String("A deep dive into concurrent programming patterns.".into()));
     a3.insert("category".into(), CypherValue::String("programming".into()));
-    catalog.ingest_entities("Article", vec![a3]).unwrap();
+    catalog.lock().unwrap().ingest_entities("Article", vec![a3]).unwrap();
 
     // Search should find the new article
-    let final_search = catalog.search("docs", "concurrency async", SearchOptions {
+    let final_search = Catalog::rechercher(&catalog, "docs", "concurrency async", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -861,7 +866,8 @@ fn kb_vector_search_survives_migration() {
     catalog.ingest_entities("Note", notes).unwrap();
 
     // Pre-migration: vector search on KB
-    let pre_vec = catalog.search("knowledge", "neural networks deep learning", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let pre_vec = Catalog::rechercher(&catalog, "knowledge", "neural networks deep learning", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::SEMANTIC),
         ..Default::default()
@@ -869,7 +875,7 @@ fn kb_vector_search_survives_migration() {
     assert!(!pre_vec.results.is_empty(), "KB vector search should find ML content pre-migration");
 
     // Pre-migration: BM25 on KB
-    let pre_bm25 = catalog.search("knowledge", "tomatoes gardening", SearchOptions {
+    let pre_bm25 = Catalog::rechercher(&catalog, "knowledge", "tomatoes gardening", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -899,19 +905,19 @@ fn kb_vector_search_survives_migration() {
         content_for: Some(vec!["knowledge".to_string()]),
         ..Default::default()
     });
-    catalog.register_entity("Note", EntityConfig {
+    catalog.lock().unwrap().register_entity("Note", EntityConfig {
         fields: note_fields_v2,
         signals: SearchSignals::HYBRID,
         ..Default::default()
     }).unwrap();
 
     // Reindex
-    let stats = catalog.reindex("Note").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Note").unwrap();
     assert_eq!(stats.records_processed, 3);
     eprintln!("  reindex: {} records", stats.records_processed);
 
     // Post-migration: vector search still works
-    let post_vec = catalog.search("knowledge", "neural networks deep learning", SearchOptions {
+    let post_vec = Catalog::rechercher(&catalog, "knowledge", "neural networks deep learning", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::SEMANTIC),
         ..Default::default()
@@ -919,7 +925,7 @@ fn kb_vector_search_survives_migration() {
     assert!(!post_vec.results.is_empty(), "KB vector search should still work after migration + reindex");
 
     // Post-migration: BM25 still works
-    let post_bm25 = catalog.search("knowledge", "tomatoes gardening", SearchOptions {
+    let post_bm25 = Catalog::rechercher(&catalog, "knowledge", "tomatoes gardening", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -928,7 +934,7 @@ fn kb_vector_search_survives_migration() {
     assert!(!post_bm25.results.is_empty(), "KB BM25 should still work after migration + reindex");
 
     // Post-migration: hybrid on KB
-    let hybrid = catalog.search("knowledge", "database query optimization", SearchOptions {
+    let hybrid = Catalog::rechercher(&catalog, "knowledge", "database query optimization", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::HYBRID),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1037,7 +1043,8 @@ fn kb_and_relation_persist_and_reopen() {
         assert_eq!(docs.rows.len(), 1, "la ligne dérivée « docs » doit être là");
 
         // Search KB should work
-        let search = catalog.search("docs", "persistent", SearchOptions {
+        let catalog = Arc::new(Mutex::new(catalog));
+        let search = Catalog::rechercher(&catalog, "docs", "persistent", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -1061,18 +1068,18 @@ fn kb_and_relation_persist_and_reopen() {
             content_for: Some(vec!["docs".to_string()]),
             ..Default::default()
         });
-        catalog.register_entity("Article", EntityConfig {
+        catalog.lock().unwrap().register_entity("Article", EntityConfig {
             fields: article_fields_v2,
             signals: SearchSignals::BM25,
             ..Default::default()
         }).unwrap();
 
         // Reindex after migration
-        let stats = catalog.reindex("Article").unwrap();
+        let stats = catalog.lock().unwrap().reindex("Article").unwrap();
         assert_eq!(stats.records_processed, 1);
 
         // Search KB still works
-        let post = catalog.search("docs", "persistent", SearchOptions {
+        let post = Catalog::rechercher(&catalog, "docs", "persistent", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             ..Default::default()
@@ -1150,13 +1157,14 @@ fn wild_mix_progressive_kb_and_simple() {
     }]).unwrap();
 
     // Search KB works
-    let s1 = catalog.search("wiki", "Rust programming", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let s1 = Catalog::rechercher(&catalog, "wiki", "Rust programming", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s1.results.is_empty(), "wiki KB should find Rust content");
 
     // Search simple entity works
-    let s1_tag = catalog.search("Tag", "programming", SearchOptions {
+    let s1_tag = Catalog::rechercher(&catalog, "Tag", "programming", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s1_tag.results.is_empty(), "simple Tag search should work");
@@ -1186,7 +1194,7 @@ fn wild_mix_progressive_kb_and_simple() {
         field_type: FieldType::String,
         ..Default::default()
     });
-    catalog.register_entity("Doc", EntityConfig {
+    catalog.lock().unwrap().register_entity("Doc", EntityConfig {
         fields: doc_fields_v2,
         signals: SearchSignals::BM25,
         ..Default::default()
@@ -1199,34 +1207,34 @@ fn wild_mix_progressive_kb_and_simple() {
     d2.insert("abstract".into(), CypherValue::String("An overview of Python's data science ecosystem.".into()));
     d2.insert("author_name".into(), CypherValue::String("Alice".into()));
     d2.insert("year".into(), CypherValue::Int(2025));
-    catalog.ingest_entities("Doc", vec![d2]).unwrap();
+    catalog.lock().unwrap().ingest_entities("Doc", vec![d2]).unwrap();
 
     // Search KB — new article should be findable even before reindex of old ones
-    let s2 = catalog.search("wiki", "Python data science", SearchOptions {
+    let s2 = Catalog::rechercher(&catalog, "wiki", "Python data science", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s2.results.is_empty(), "new Doc should be searchable in KB before reindex");
 
     // Reindex old records
-    let stats = catalog.reindex("Doc").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Doc").unwrap();
     assert_eq!(stats.records_processed, 2, "should reindex both docs");
 
     // After reindex, search KB for old content
-    let s3 = catalog.search("wiki", "Rust memory safety", SearchOptions {
+    let s3 = Catalog::rechercher(&catalog, "wiki", "Rust memory safety", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s3.results.is_empty(), "old Doc should be searchable in KB after reindex");
 
     // Tag simple entity should be completely unaffected
-    let s3_tag = catalog.search("Tag", "programming", SearchOptions {
+    let s3_tag = Catalog::rechercher(&catalog, "Tag", "programming", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s3_tag.results.is_empty(), "Tag search unaffected by Doc migration");
 
     // Verify data integrity: all entities have correct counts
-    let doc_count = catalog.execute_raw("MATCH (d:Doc) RETURN count(d)").unwrap();
+    let doc_count = catalog.lock().unwrap().execute_raw("MATCH (d:Doc) RETURN count(d)").unwrap();
     assert_eq!(doc_count.rows[0][0].as_i64().unwrap(), 2);
-    let tag_count = catalog.execute_raw("MATCH (t:Tag) RETURN count(t)").unwrap();
+    let tag_count = catalog.lock().unwrap().execute_raw("MATCH (t:Tag) RETURN count(t)").unwrap();
     assert_eq!(tag_count.rows[0][0].as_i64().unwrap(), 1);
 
     eprintln!("✓ wild mix: KB + simple entity coexist, progressive migration, interleaved ingest");
@@ -1256,26 +1264,27 @@ fn double_reindex_no_corruption() {
     assert_eq!(stats1.records_processed, 2);
 
     // Verify search works
-    let s1 = catalog.search("Product", "alpha content", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let s1 = Catalog::rechercher(&catalog, "Product", "alpha content", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s1.results.is_empty());
 
     // Reindex AGAIN — should be idempotent, no data loss
-    let stats2 = catalog.reindex("Product").unwrap();
+    let stats2 = catalog.lock().unwrap().reindex("Product").unwrap();
     assert_eq!(stats2.records_processed, 2);
 
     // Search still works
-    let s2 = catalog.search("Product", "alpha content", SearchOptions {
+    let s2 = Catalog::rechercher(&catalog, "Product", "alpha content", SearchOptions {
         consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), bm25_mode: BM25Mode::ContainsSplit, ..Default::default()
     }).unwrap();
     assert!(!s2.results.is_empty(), "search should still work after double reindex");
 
     // Same number of entities and chunks
-    let products = catalog.execute_raw("MATCH (p:Product) RETURN count(p)").unwrap();
+    let products = catalog.lock().unwrap().execute_raw("MATCH (p:Product) RETURN count(p)").unwrap();
     assert_eq!(products.rows[0][0].as_i64().unwrap(), 2, "should still have exactly 2 products");
 
-    let chunks = catalog.execute_raw("MATCH (c:Product_Chunk) RETURN count(c)").unwrap();
+    let chunks = catalog.lock().unwrap().execute_raw("MATCH (c:Product_Chunk) RETURN count(c)").unwrap();
     let chunk_count = chunks.rows[0][0].as_i64().unwrap();
     assert!(chunk_count >= 2, "should have at least 2 chunks, got {chunk_count}");
 
@@ -1371,7 +1380,8 @@ fn composite_entity_simple_and_kb_coexist() {
     ]).unwrap();
 
     // Simple pipeline search: uses "summary" (is_content)
-    let simple_bm25 = catalog.search("Recipe", "Italian pasta eggs", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let simple_bm25 = Catalog::rechercher(&catalog, "Recipe", "Italian pasta eggs", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1379,7 +1389,7 @@ fn composite_entity_simple_and_kb_coexist() {
     }).unwrap();
     assert!(!simple_bm25.results.is_empty(), "simple BM25 should find carbonara via summary");
 
-    let simple_vec = catalog.search("Recipe", "traditional Italian cooking with eggs", SearchOptions {
+    let simple_vec = Catalog::rechercher(&catalog, "Recipe", "traditional Italian cooking with eggs", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::SEMANTIC),
         ..Default::default()
@@ -1388,7 +1398,7 @@ fn composite_entity_simple_and_kb_coexist() {
     eprintln!("  simple pipeline: BM25={}, vector={}", simple_bm25.results.len(), simple_vec.results.len());
 
     // KB search: uses "instructions" (content_for)
-    let kb_bm25 = catalog.search("cookbook", "dutch oven bake", SearchOptions {
+    let kb_bm25 = Catalog::rechercher(&catalog, "cookbook", "dutch oven bake", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1396,7 +1406,7 @@ fn composite_entity_simple_and_kb_coexist() {
     }).unwrap();
     assert!(!kb_bm25.results.is_empty(), "KB BM25 should find sourdough via instructions");
 
-    let kb_vec = catalog.search("cookbook", "Japanese noodle soup with miso", SearchOptions {
+    let kb_vec = Catalog::rechercher(&catalog, "cookbook", "Japanese noodle soup with miso", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::SEMANTIC),
         ..Default::default()
@@ -1435,17 +1445,17 @@ fn composite_entity_simple_and_kb_coexist() {
         content_for: Some(vec!["cookbook".to_string()]),
         ..Default::default()
     });
-    catalog.register_entity("Recipe", EntityConfig {
+    catalog.lock().unwrap().register_entity("Recipe", EntityConfig {
         fields: fields_v2,
         signals: SearchSignals::HYBRID,
         ..Default::default()
     }).unwrap();
 
-    let stats = catalog.reindex("Recipe").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Recipe").unwrap();
     assert_eq!(stats.records_processed, 3);
 
     // Post-migration: both pipelines still work
-    let post_simple = catalog.search("Recipe", "artisan bread wild yeast", SearchOptions {
+    let post_simple = Catalog::rechercher(&catalog, "Recipe", "artisan bread wild yeast", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::HYBRID),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1453,7 +1463,7 @@ fn composite_entity_simple_and_kb_coexist() {
     }).unwrap();
     assert!(!post_simple.results.is_empty(), "simple HYBRID should find sourdough after migration");
 
-    let post_kb = catalog.search("cookbook", "miso broth chashu pork", SearchOptions {
+    let post_kb = Catalog::rechercher(&catalog, "cookbook", "miso broth chashu pork", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::HYBRID),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1462,7 +1472,7 @@ fn composite_entity_simple_and_kb_coexist() {
     assert!(!post_kb.results.is_empty(), "KB HYBRID should find ramen after migration");
 
     // Ingest with new field
-    catalog.ingest_entities("Recipe", vec![{
+    catalog.lock().unwrap().ingest_entities("Recipe", vec![{
         let mut r = BTreeMap::new();
         r.insert("name".into(), CypherValue::String("Crème Brûlée".into()));
         r.insert("recipe_title".into(), CypherValue::String("Crème Brûlée".into()));
@@ -1474,7 +1484,7 @@ fn composite_entity_simple_and_kb_coexist() {
     }]).unwrap();
 
     // New recipe findable via both pipelines
-    let final_simple = catalog.search("Recipe", "French custard caramelized sugar", SearchOptions {
+    let final_simple = Catalog::rechercher(&catalog, "Recipe", "French custard caramelized sugar", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1482,7 +1492,7 @@ fn composite_entity_simple_and_kb_coexist() {
     }).unwrap();
     assert!(!final_simple.results.is_empty(), "simple pipeline should find crème brûlée");
 
-    let final_kb = catalog.search("cookbook", "kitchen torch ramekins", SearchOptions {
+    let final_kb = Catalog::rechercher(&catalog, "cookbook", "kitchen torch ramekins", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1491,9 +1501,9 @@ fn composite_entity_simple_and_kb_coexist() {
     assert!(!final_kb.results.is_empty(), "KB should find crème brûlée via tips field");
 
     // Verify data integrity
-    let recipe_count = catalog.execute_raw("MATCH (r:Recipe) RETURN count(r)").unwrap();
+    let recipe_count = catalog.lock().unwrap().execute_raw("MATCH (r:Recipe) RETURN count(r)").unwrap();
     assert_eq!(recipe_count.rows[0][0].as_i64().unwrap(), 4);
-    let idx_count = catalog.execute_raw("MATCH (i:cookbook) RETURN count(i)").unwrap();
+    let idx_count = catalog.lock().unwrap().execute_raw("MATCH (i:cookbook) RETURN count(i)").unwrap();
     assert_eq!(idx_count.rows[0][0].as_i64().unwrap(), 4);
 
     eprintln!("  post-migration: simple + KB both work, new field visible in KB");
@@ -1556,7 +1566,8 @@ fn register_kb_before_entity_order_independent() {
     ]).unwrap();
 
     // Search KB — should work even though KB was registered first
-    let results = catalog.search("library", "software craftsmanship", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let results = Catalog::rechercher(&catalog, "library", "software craftsmanship", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1567,9 +1578,9 @@ fn register_kb_before_entity_order_independent() {
 
     // Verify structure : la base est une dérivée de Book — une ligne par
     // livre, reliée à sa racine par `library_DERIVED_FROM` (dérivée → racine).
-    let idx_count = catalog.execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
+    let idx_count = catalog.lock().unwrap().execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
     assert_eq!(idx_count.rows[0][0].as_i64().unwrap(), 2, "should have 2 derived rows");
-    let in_rels = catalog.execute_raw("MATCH (:library)-[r:library_DERIVED_FROM]->(:Book) RETURN count(r)").unwrap();
+    let in_rels = catalog.lock().unwrap().execute_raw("MATCH (:library)-[r:library_DERIVED_FROM]->(:Book) RETURN count(r)").unwrap();
     assert_eq!(in_rels.rows[0][0].as_i64().unwrap(), 2, "should have 2 DERIVED_FROM rels");
 
     // Now register ANOTHER entity for the same KB. Une base n'a qu'une racine
@@ -1586,34 +1597,34 @@ fn register_kb_before_entity_order_independent() {
         content_for: Some(vec!["library".to_string()]),
         ..Default::default()
     });
-    catalog.register_entity("Chapter", EntityConfig {
+    catalog.lock().unwrap().register_entity("Chapter", EntityConfig {
         fields: chapter_fields,
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
-    catalog.register_relation("HAS_CHAPTER", "Book", "Chapter").unwrap();
+    catalog.lock().unwrap().register_relation("HAS_CHAPTER", "Book", "Chapter").unwrap();
     // `register_relation` ne retraduit pas la base : on la réenregistre
     // (idempotent) pour que la règle `gather` de Chapter soit posée.
-    catalog.register_kb("library", KBConfig {
+    catalog.lock().unwrap().register_kb("library", KBConfig {
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
 
     // Ingest a chapter, linked to one of the books
-    let book_rows = catalog.execute_raw("MATCH (b:Book {title: 'Clean Code'}) RETURN b._uuid").unwrap();
+    let book_rows = catalog.lock().unwrap().execute_raw("MATCH (b:Book {title: 'Clean Code'}) RETURN b._uuid").unwrap();
     let book_uuid = book_rows.rows[0][0].as_str().unwrap().to_string();
-    let chapter_ref = catalog.create("Chapter", {
+    let chapter_ref = catalog.lock().unwrap().create("Chapter", {
         let mut c = BTreeMap::new();
         c.insert("heading".into(), CypherValue::String("Error Handling Patterns".into()));
         c.insert("text".into(), CypherValue::String("Comprehensive guide to exception handling, Result types, and error propagation in modern languages.".into()));
         c
     }).unwrap();
-    catalog.link("HAS_CHAPTER", book_uuid.as_str(), chapter_ref, BTreeMap::new()).unwrap();
-    let flush = catalog.drain();
+    catalog.lock().unwrap().link("HAS_CHAPTER", book_uuid.as_str(), chapter_ref, BTreeMap::new()).unwrap();
+    let flush = catalog.lock().unwrap().drain();
     assert_eq!(flush.failed, 0, "drain must not fail after adding a contributing entity");
 
     // Both entities visible in KB search
-    let search_all = catalog.search("library", "error handling", SearchOptions {
+    let search_all = Catalog::rechercher(&catalog, "library", "error handling", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1622,9 +1633,9 @@ fn register_kb_before_entity_order_independent() {
     assert!(!search_all.results.is_empty(), "KB should find chapter content through its book");
 
     // Toujours une ligne par livre : le chapitre est rendu dans celle de son livre.
-    let total_idx = catalog.execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
+    let total_idx = catalog.lock().unwrap().execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
     assert_eq!(total_idx.rows[0][0].as_i64().unwrap(), 2, "should still have 2 derived rows (one per book)");
-    let rendered = catalog.execute_raw("MATCH (i:library {title: 'Clean Code'}) RETURN i.content").unwrap();
+    let rendered = catalog.lock().unwrap().execute_raw("MATCH (i:library {title: 'Clean Code'}) RETURN i.content").unwrap();
     let content = rendered.rows[0][0].as_str().unwrap_or("");
     assert!(
         content.contains("exception handling"),
@@ -1715,7 +1726,8 @@ fn multi_entity_kb_partial_migration() {
     let idx_pre = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(idx_pre.rows[0][0].as_i64().unwrap(), 2, "should have 2 KB entries from lessons");
 
-    let search_pre = catalog.search("knowledge", "chlorophyll photosynthesis sunlight", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let search_pre = Catalog::rechercher(&catalog, "knowledge", "chlorophyll photosynthesis sunlight", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::HYBRID),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1741,22 +1753,22 @@ fn multi_entity_kb_partial_migration() {
         content_for: Some(vec!["knowledge".to_string()]),
         ..Default::default()
     });
-    catalog.register_entity("Lesson", EntityConfig {
+    catalog.lock().unwrap().register_entity("Lesson", EntityConfig {
         fields: lesson_fields_v2,
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
 
     // Reindex ONLY Lesson — Exercise entity should be unaffected
-    let stats = catalog.reindex("Lesson").unwrap();
+    let stats = catalog.lock().unwrap().reindex("Lesson").unwrap();
     assert_eq!(stats.records_processed, 2, "should reindex 2 lessons");
 
     // Post-migration: KB entries still there
-    let idx_post = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
+    let idx_post = catalog.lock().unwrap().execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(idx_post.rows[0][0].as_i64().unwrap(), 2, "should still have 2 KB entries");
 
     // Lesson content still works via KB search
-    let lesson_search = catalog.search("knowledge", "cellular respiration glucose ATP", SearchOptions {
+    let lesson_search = Catalog::rechercher(&catalog, "knowledge", "cellular respiration glucose ATP", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::HYBRID),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1765,7 +1777,7 @@ fn multi_entity_kb_partial_migration() {
     assert!(!lesson_search.results.is_empty(), "Lesson content should be searchable after reindex");
 
     // Ingest new lesson with prerequisite
-    catalog.ingest_entities("Lesson", vec![{
+    catalog.lock().unwrap().ingest_entities("Lesson", vec![{
         let mut l = BTreeMap::new();
         l.insert("topic".into(), CypherValue::String("Krebs Cycle".into()));
         l.insert("explanation".into(), CypherValue::String("The citric acid cycle is a series of chemical reactions to release stored energy through oxidation of acetyl-CoA.".into()));
@@ -1773,10 +1785,10 @@ fn multi_entity_kb_partial_migration() {
         l
     }]).unwrap();
 
-    let final_count = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
+    let final_count = catalog.lock().unwrap().execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(final_count.rows[0][0].as_i64().unwrap(), 3, "should have 3 KB entries total");
 
-    let final_search = catalog.search("knowledge", "citric acid cycle acetyl", SearchOptions {
+    let final_search = Catalog::rechercher(&catalog, "knowledge", "citric acid cycle acetyl", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1868,7 +1880,8 @@ fn delete_entity_cleans_kb_index() {
     eprintln!("  post-delete: {} notes, {} KB entries", 2, idx_count);
 
     // The deleted note should NOT appear in search results
-    let search_deleted = catalog.search("notes", "PostgreSQL graph database migration", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let search_deleted = Catalog::rechercher(&catalog, "notes", "PostgreSQL graph database migration", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1876,7 +1889,7 @@ fn delete_entity_cleans_kb_index() {
     }).unwrap();
 
     // Remaining notes should still be findable
-    let search_remaining = catalog.search("notes", "quarterly roadmap budget", SearchOptions {
+    let search_remaining = Catalog::rechercher(&catalog, "notes", "quarterly roadmap budget", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1884,7 +1897,7 @@ fn delete_entity_cleans_kb_index() {
     }).unwrap();
     assert!(!search_remaining.results.is_empty(), "remaining notes should be searchable");
 
-    let search_retro = catalog.search("notes", "sprint velocity deployment", SearchOptions {
+    let search_retro = Catalog::rechercher(&catalog, "notes", "sprint velocity deployment", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -1972,7 +1985,8 @@ fn kb_incremental_ingest_across_sessions() {
         ]).unwrap();
 
         // Verify
-        let search = catalog.search("inventory", "titanium bolt tensile", SearchOptions {
+        let catalog = Arc::new(Mutex::new(catalog));
+        let search = Catalog::rechercher(&catalog, "inventory", "titanium bolt tensile", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             bm25_mode: BM25Mode::ContainsSplit,
@@ -1997,7 +2011,8 @@ fn kb_incremental_ingest_across_sessions() {
         assert!(catalog.entity_configs().get("inventory").is_some_and(|c| c.derived.is_some()), "KB 'inventory' should be restored");
 
         // Old data searchable
-        let old_search = catalog.search("inventory", "carbon fiber aerospace", SearchOptions {
+        let catalog = Arc::new(Mutex::new(catalog));
+        let old_search = Catalog::rechercher(&catalog, "inventory", "carbon fiber aerospace", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             bm25_mode: BM25Mode::ContainsSplit,
@@ -2006,7 +2021,7 @@ fn kb_incremental_ingest_across_sessions() {
         assert!(!old_search.results.is_empty(), "session 2: old data should be searchable");
 
         // Ingest new parts
-        catalog.ingest_entities("Part", vec![
+        catalog.lock().unwrap().ingest_entities("Part", vec![
             {
                 let mut p = BTreeMap::new();
                 p.insert("name".into(), CypherValue::String("Stainless Steel Bearing 6205".into()));
@@ -2017,11 +2032,11 @@ fn kb_incremental_ingest_across_sessions() {
         ]).unwrap();
 
         // All 3 parts in KB
-        let total = catalog.execute_raw("MATCH (i:inventory) RETURN count(i)").unwrap();
+        let total = catalog.lock().unwrap().execute_raw("MATCH (i:inventory) RETURN count(i)").unwrap();
         assert_eq!(total.rows[0][0].as_i64().unwrap(), 3, "should have 3 KB entries across sessions");
 
         // Search finds data from both sessions
-        let search1 = catalog.search("inventory", "titanium hex head", SearchOptions {
+        let search1 = Catalog::rechercher(&catalog, "inventory", "titanium hex head", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             bm25_mode: BM25Mode::ContainsSplit,
@@ -2029,7 +2044,7 @@ fn kb_incremental_ingest_across_sessions() {
         }).unwrap();
         assert!(!search1.results.is_empty(), "session 1 data still findable");
 
-        let search2 = catalog.search("inventory", "ball bearing stainless RPM", SearchOptions {
+        let search2 = Catalog::rechercher(&catalog, "inventory", "ball bearing stainless RPM", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             bm25_mode: BM25Mode::ContainsSplit,
@@ -2080,7 +2095,8 @@ fn kb_incremental_ingest_across_sessions() {
         assert_eq!(stats.records_processed, 3, "should reindex all 3 parts");
 
         // All 3 still searchable after migration across 3 sessions
-        let final_search = catalog.search("inventory", "titanium carbon bearing", SearchOptions {
+        let catalog = Arc::new(Mutex::new(catalog));
+        let final_search = Catalog::rechercher(&catalog, "inventory", "titanium carbon bearing", SearchOptions {
             consistency: Consistency::Strict,
             signals: Some(SearchSignals::BM25),
             bm25_mode: BM25Mode::ContainsSplit,
@@ -2198,7 +2214,8 @@ fn kb_title_entity_independent_of_alphabetical_order() {
         "Appendix sorts before Zbook, so its text should come first: {content}"
     );
 
-    let found = catalog.search("shelf", "error handling", SearchOptions {
+    let catalog = Arc::new(Mutex::new(catalog));
+    let found = Catalog::rechercher(&catalog, "shelf", "error handling", SearchOptions {
         consistency: Consistency::Strict,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
