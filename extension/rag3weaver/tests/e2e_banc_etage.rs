@@ -10,6 +10,7 @@
 //! | M2 | **l'index** : cosinus exact contre tous les chunks au lieu du HNSW, même résolution |
 //! | M3 | **la résolution** : les 20 chunks bruts du HNSW avant résolution au parent |
 //! | M1b | **le texte seul** : les 4 819 scopes de `src/`, chacun un texte `nom + doc + signature + corps` — même corpus que tel quel, même texte que M1 |
+//! | G | **le genre** : tel quel, `scope_type` filtré sur `function | method` — ce que pèsent les scopes de fichier entier et les espaces de noms |
 //!
 //! Un banc mesure, il n'échoue pas. Les aiguilles, l'extraction et les
 //! questions sont copiées de `e2e_banc_qualite.rs` — deux binaires de test ne
@@ -28,6 +29,7 @@ use std::sync::{Arc, Mutex};
 use rag3weaver::code::{default_scope_chunking, read_sources, register_code_schema, SCOPE};
 use rag3weaver::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType, SimpleFieldDef};
 use rag3weaver::connection::{CypherValue, QueryParam};
+use rag3weaver::filter::{FilterCondition, FilterValue};
 use rag3weaver::embedder::{Embedder, HashEmbedder};
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -328,6 +330,23 @@ fn banc_etage_qui_perd() {
         tel_quel.noter(&noms(&r), attendus);
     }
 
+    // ── G : le genre — tel quel, `scope_type` dans function | method ─────
+    // M1b a renvoyé l'écart au corpus : 4 820 scopes dont les `tests
+    // (namespace)` et les `file_scope_NN (module)` de fichier entier, qui
+    // occupent le haut des listes sans jamais être une réponse. Ici on ne
+    // change rien au texte ni à l'index : on ne garde que les genres qui
+    // peuvent répondre. Ce que la ligne gagne, c'est ce que pèse la pollution.
+    let mut par_genre = Mesure::default();
+    for (q, attendus) in QUESTIONS {
+        let mut o = options_vecteur();
+        o.filter_condition = Some(FilterCondition::Should(vec![
+            FilterCondition::Field { key: "scope_type".into(), value: FilterValue::Direct(CypherValue::String("function".into())) },
+            FilterCondition::Field { key: "scope_type".into(), value: FilterValue::Direct(CypherValue::String("method".into())) },
+        ]));
+        let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche par genre");
+        par_genre.noter(&noms(&r), attendus);
+    }
+
     // ── M2 : cosinus exact contre tous les chunks, même résolution ──────
     // Le vecteur de la requête est celui du catalogue ; la comparaison est
     // exhaustive au lieu du HNSW ; les 20 meilleurs chunks remontent à leur
@@ -455,6 +474,7 @@ fn banc_etage_qui_perd() {
     eprintln!("{}", m2.ligne("M2 — cosinus exact au lieu du HNSW, même résolution"));
     eprintln!("{}", m3.ligne("M3 — les 20 chunks bruts du HNSW, avant résolution"));
     eprintln!("{}", m1b.ligne("M1b — le texte de M1 sur les 4 819 scopes de src/"));
+    eprintln!("{}", par_genre.ligne("G — tel quel, scope_type dans function | method"));
     eprintln!("\nM3 : le bon parent est dans les 20 chunks bruts pour {bon_parent_dans_les_20}/{} questions.", QUESTIONS.len());
 
     assert!(rapport.scopes > 0, "rien n'a été indexé");

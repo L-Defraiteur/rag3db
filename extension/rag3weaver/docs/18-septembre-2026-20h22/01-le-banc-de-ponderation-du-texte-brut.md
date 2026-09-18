@@ -340,9 +340,9 @@ faire.** Le même texte que le cosinus nu, sur le vrai corpus, rend 0,385, pas
 qualité. **L'écart 0,84 → 0,33 est la taille du corpus** : 45 questions
 contre 67 candidats triés sur le volet, ou contre 4 820 scopes dont les
 `tests (namespace)`, les `file_scope_NN (module)` de fichier entier, les `new`
-et `execute` par dizaines. Le banc de qualité mesure l'embarqueur sans
-distracteurs ; il ne mesure pas la recherche, et ses 0,84 ne sont pas un
-objectif atteignable par le catalogue sur un dépôt réel.
+et `execute` par dizaines. **Le banc de qualité mesure l'embarqueur sans
+distracteurs ; il n'est pas un objectif pour la recherche** — ses 0,84 sont
+ceux d'un choix entre 67 candidats, pas d'un dépôt.
 
 Le §9 d'hier disait « l'étage qui perd est le texte ». C'était la lecture d'un
 tableau sans son facteur confondu ; il reste écrit au-dessus, avec sa date,
