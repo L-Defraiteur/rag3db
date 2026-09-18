@@ -21,6 +21,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <chrono>
 #include <map>
 
 #include "api_test/api_test.h"
@@ -33,15 +35,15 @@ namespace {
 
 // Partagé entre le père et le fils par mmap anonyme.
 struct Rapport {
-    volatile int ecrivain_pret;    // le fils a ouvert en écriture et créé le schéma
-    volatile int ecrivain_echoue;  // le fils n'a pas pu ouvrir
-    volatile int lignes_ecrites;   // combien le fils a validé
-    volatile int arret_demande;    // le père dit au fils de s'arrêter
+    volatile int ecrivain_pret;   // le fils a ouvert en écriture et créé le schéma
+    volatile int ecrivain_echoue; // le fils n'a pas pu ouvrir
+    volatile int lignes_ecrites;  // combien le fils a validé
+    volatile int arret_demande;   // le père dit au fils de s'arrêter
 };
 
 Rapport* partager() {
-    auto* r = static_cast<Rapport*>(mmap(nullptr, sizeof(Rapport), PROT_READ | PROT_WRITE,
-        MAP_ANONYMOUS | MAP_SHARED, -1, 0));
+    auto* r = static_cast<Rapport*>(
+        mmap(nullptr, sizeof(Rapport), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0));
     *r = Rapport{0, 0, 0, 0};
     return r;
 }
@@ -271,7 +273,6 @@ TEST_F(LecteursConcurrents, CeQueLeLecteurVoitEstCoherent) {
     }
 }
 
-
 // 3. Le refus est-il transitoire ? C'est lui qui décide si rag3daemon peut
 //    cesser de relayer : un refus qu'une nouvelle tentative résout est une
 //    gêne, un refus durable est un mur.
@@ -322,6 +323,11 @@ TEST_F(LecteursConcurrents, LeRefusSeResoutParUneNouvelleTentative) {
 
     int cycles = 0, du_premier_coup = 0, refuses = 0, sauves_par_reprise = 0, perdus = 0;
     int reprises_totales = 0, incoherences = 0;
+    // La durée de chaque épisode de refus — du premier refus au premier succès —
+    // est la fenêtre que le lecteur voit. C'est elle qui décide du budget de
+    // reprise de l'appelant : si elle dépasse son budget, le refus le traverse.
+    double fenetre_max_ms = 0, fenetre_total_ms = 0;
+    int reprises_max = 0;
     while (cycles < 80 && rap->lignes_ecrites < A_ECRIRE) {
         cycles++;
         auto l = lire(chemin, cfg_base);
@@ -331,10 +337,15 @@ TEST_F(LecteursConcurrents, LeRefusSeResoutParUneNouvelleTentative) {
             continue;
         }
         refuses++;
-        // Jusqu'à cinq nouvelles tentatives, avec une attente courte.
+        const auto debut = std::chrono::steady_clock::now();
+        // Reprise à la façon de l'appelant Rust : 5, 10, 20, 40, 40… ms, mais sans
+        // plafond de budget — on veut mesurer la fenêtre, pas la subir.
         bool sauve = false;
-        for (int essai = 1; essai <= 5; essai++) {
-            usleep(2000 * essai);
+        int attente_ms = 5, essais = 0;
+        while (essais < 60) {
+            usleep(attente_ms * 1000);
+            attente_ms = std::min(attente_ms * 2, 40);
+            essais++;
             reprises_totales++;
             l = lire(chemin, cfg_base);
             if (l.ouverture_ok) {
@@ -343,6 +354,12 @@ TEST_F(LecteursConcurrents, LeRefusSeResoutParUneNouvelleTentative) {
                 break;
             }
         }
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - debut)
+                .count();
+        fenetre_max_ms = std::max(fenetre_max_ms, ms);
+        fenetre_total_ms += ms;
+        reprises_max = std::max(reprises_max, essais);
         if (sauve) {
             sauves_par_reprise++;
         } else {
@@ -360,6 +377,10 @@ TEST_F(LecteursConcurrents, LeRefusSeResoutParUneNouvelleTentative) {
               << "    sauvés par reprise   : " << sauves_par_reprise << "\n"
               << "    JAMAIS obtenus       : " << perdus << "\n"
               << "  reprises consommées    : " << reprises_totales << "\n"
+              << "  reprises max / épisode : " << reprises_max << "\n"
+              << "  FENÊTRE max            : " << fenetre_max_ms << " ms\n"
+              << "  fenêtre moyenne        : " << (refuses ? fenetre_total_ms / refuses : 0.0)
+              << " ms\n"
               << "  incohérences           : " << incoherences << "\n\n";
 
     EXPECT_GT(cycles, 0);
