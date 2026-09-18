@@ -112,3 +112,54 @@ migration :
 - `e2e_search`, `e2e_highlight_long_text`, `e2e_phase0b`, `e2e_result_mode`
   sont réécrits pour ce monde sur master : il n'y reste que search →
   rechercher à faire, après rebase de la branche.
+
+## 7. Phases 2 et 3 — livrées, et ce que la migration a débusqué
+
+Les 229 appels passent par `Catalog::rechercher` ; `search` (381 lignes) et
+`search_fan_out` sont supprimés, `search_with_explore` prend l'`Arc`, la
+fabrique dit « Runs Catalog::rechercher via service registry », les
+commentaires sont balayés. Les tests migrent avec la recette d'`e2e_rerank` ;
+`e2e_entites_derivees` et `e2e_generic_search` prennent un helper `cherche`
+(envelopper → lancer → `Arc::try_unwrap` → rendre le catalogue) parce que
+leurs receveurs restent nus. `le_lanceur_rend_ce_que_le_monolithe_rend`
+devient `le_lanceur_tient_la_page_et_les_comptes` : la moitié référence est
+morte avec le monolithe, restent les invariants qu'elle prouvait.
+
+La migration a débusqué **trois bugs de production** du chemin composable :
+
+1. **La fuite de cellule vectorielle** — le filtre de cellule n'était compilé
+   qu'en présence d'une condition utilisateur ; `compile_filter_for_vector`
+   est maintenant systématique.
+2. **L'instantané de modèles périmé** — quand `Immediate` draine pendant le
+   graphe, les services montés avant ne connaissent pas la colonne née du
+   drain ; repli sur le service `catalog` verrouillé brièvement (porté du
+   nœud BM25 au stockage vecteur), et requalification
+   `EmbeddingModelUnavailable` à la frontière de `rechercher`.
+3. **La fusion aplatie** — le retrait de la garde `has_source_refs` (écart g)
+   faisait passer `default_fusion` — aplatie par `unwrap_or_default()` dans
+   `TargetInfo` — pour une fusion *déclarée*, ce qui éteint les `weights` du
+   gabarit. L'outil des agents fusionnait 0,3/0,7 au lieu du 0,6/0,4 de
+   `search_base.mmd`, et la correspondance exacte (`merge_port_values`,
+   rang 1 bm25 sur master) coulait sous le vecteur, hors du top 5. C'est le
+   seuil « markdown ×3 < JSON » d'`e2e_code` qui l'a attrapé — la
+   comparaison champ à champ contre master n'a montré aucune clé perdue,
+   mais des résultats différents. Correctif : `TargetInfo.default_fusion`
+   redevient `Option` (l'`ec.fusion` de la config, sans aplatir) — déclarée
+   elle prime, rien de déclaré et le gabarit décide. L'assertion du test est
+   durcie (`### 1. merge_port_values` : en tête, pas seulement citée dans le
+   titre du rendu).
+
+**Changement de comportement assumé** : le monolithe fusionnait les entités
+simples aux défauts moteur (bm25 0,3 / vector 0,7) ; par `rechercher`, c'est
+le gabarit `search_base` qui fait foi (0,6/0,4, penché plein texte à dessein).
+Porté à Lucie par l'orchestrateur ; l'embarquement est prévenu — son banc
+mesurait l'hybride avec bm25 à 0,3.
+
+Hérité, pas à nous : `e2e_symbol_search` est à 2/12 **sur master aussi**
+(vérifié le 18 au soir depuis l'arbre master).
+
+Revalidation après le correctif de fusion, en série : lib 979, `e2e_code`
+24/24 (seuil ×3 restauré, assertion de rang durcie), `e2e_generic_search` 17,
+`e2e_entites_derivees` 3, `e2e_scope` 9, `e2e_rerank` 3, `e2e_result_mode` 10,
+`e2e_search` 39, `e2e_catalogue_gabarits` 12, `e2e_agent_loop` 8 — tout vert.
+`e2e_postgres` est migrée à l'aveugle et s'exécutera quand un serveur sera là.
