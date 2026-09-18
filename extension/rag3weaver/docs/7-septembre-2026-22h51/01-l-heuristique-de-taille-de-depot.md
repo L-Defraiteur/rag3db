@@ -149,6 +149,28 @@ un geste explicite (`RAG3WEAVER_EMBED_MODEL` posée, ou `quitter`).
   pas, c'est *pourquoi* ce modèle est là le premier ; c'est ce qu'on lira
   dans six mois en se demandant pourquoi cet index est en 107m.
 
+### 4.4 Où ça se branche — pas encore
+
+**Personne, dans ce crate, ne construit le `Serveur` du démon en production.**
+`tests/common/mod.rs` pose `bge-m3` en dur et y reste. L'appelant est
+**l'entrée produit « indexer ce dépôt »**, qui n'existe pas encore — le point
+suivant de l'ordre de Lucie, après le repli des bases de connaissances. C'est
+là que s'enchaîneront, dans cet ordre :
+
+1. le **consentement au téléchargement du modèle** — un modèle ne se prend
+   pas en silence ;
+2. `read_sources_report` — le compte des fichiers et des octets, déjà lu ;
+3. `DaemonEmbedder::serveur_for_repository(adresse, programme, fichiers, octets)`
+   — le choix posé dans l'environnement du démon à lancer, sauf variable déjà
+   posée ; un démon en place se garde, et son `identite().modele` se compare
+   au choix pour le dire ;
+4. `Catalog::note_embedding_choice`, après `initialize` — la raison écrite
+   une fois — et la ligne de montage.
+
+Le code de ce chantier s'arrête à 3 et 4 fournis. Il ne branche rien : brancher
+un appelant qui n'existe pas serait le mécanisme construit-et-jamais-appelé
+que ce dépôt passe ses journées à débusquer.
+
 ## 5. Quand le dépôt grossit après coup
 
 **Rien.** Le seuil ne se réévalue pas : il décide du *premier* index, et le
