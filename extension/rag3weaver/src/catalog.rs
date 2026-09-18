@@ -4130,16 +4130,28 @@ impl Catalog {
     /// En cas de doute — requête qui échoue, entité participant à une base de
     /// connaissance — tout le lot repart au chemin complet : refaire coûte du
     /// temps, sauter à tort donne un index faux.
+    /// Rend aussi **l'état d'avant** de chaque ligne relue, quand l'entité
+    /// déclare une machine à états.
+    ///
+    /// C'est gratuit : la requête lit déjà tous les champs déclarés pour
+    /// comparer. Payer une seconde lecture pour vérifier une transition
+    /// serait payer deux fois la même chose — et la seconde mentirait, parce
+    /// qu'elle verrait un état que les écritures en attente du même lot ont
+    /// peut-être déjà changé.
     fn split_unchanged(
         &self,
         entity_name: &str,
         config: &crate::config::EntityConfig,
         records: Vec<EntityRecord>,
-    ) -> (Vec<EntityRecord>, usize) {
+    ) -> (Vec<EntityRecord>, usize, HashMap<String, String>) {
         const NULL: CypherValue = CypherValue::Null;
 
         let Some(entity_def) = self.config.entities.get(entity_name) else {
-            return (records, 0);
+            self.emit_event(CatalogEvent::Warning {
+                context: "split_unchanged".into(),
+                message: format!("{entity_name} : entité absente de la configuration, court-circuit de l'inchangé sauté"),
+            });
+            return (records, 0, HashMap::new());
         };
 
         // Les colonnes comparées : les champs déclarés, le hash de contenu, et
@@ -4167,15 +4179,34 @@ impl Catalog {
             )
         };
 
+        // Compté ici : la boucle du partage consomme `records` plus bas, et
+        // ce chiffre est le premier que la trace demande.
+        let uuids_non_vides = records.iter().filter(|r| !uuid_of(r).is_empty()).count();
+        let lignes_demandees = records.len();
+
         // ── 1. La ligne stockée, champ pour champ ───────────────────────
         let mut select: Vec<&str> = vec!["_uuid"];
         select.extend(columns.iter().map(|c| c.as_str()));
         let cypher = self.dialect.batch_select(entity_name, "uuid", "_uuid", &select);
-        let Ok(result) = self
+        // **Ce silence coûtait plus qu'une économie.** Ces trois sorties
+        // rendaient « rien n'a changé, rien n'est relu » sans le dire : le
+        // court-circuit de l'inchangé ne faisait plus rien, ce qui ne se voit
+        // pas — son seul effet visible est du temps gagné. Depuis que l'état
+        // d'avant sort d'ici, un silence fait passer une transition interdite.
+        let result = match self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("items", items())])
-        else {
-            return (records, 0);
+        {
+            Ok(r) => r,
+            Err(e) => {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "split_unchanged".into(),
+                    message: format!(
+                        "{entity_name} : relecture impossible ({e}), court-circuit de l'inchangé sauté et état d'avant inconnu"
+                    ),
+                });
+                return (records, 0, HashMap::new());
+            }
         };
         let stored: HashMap<String, Vec<CypherValue>> = result
             .rows
@@ -4188,6 +4219,20 @@ impl Catalog {
             })
             .collect();
 
+        // Une relecture qui ne rend **aucune** ligne alors qu'on en demandait
+        // n'est pas une erreur de requête : c'est soit des uuids vides, soit
+        // une table qui ne contient pas ce qu'on croit. Les deux méritent
+        // d'être dits, parce qu'aucun des deux ne lève.
+        if stored.is_empty() && !records.is_empty() {
+            self.emit_event(CatalogEvent::Warning {
+                context: "split_unchanged".into(),
+                message: format!(
+                    "{entity_name} : {lignes_demandees} ligne(s) demandée(s) dont {uuids_non_vides} avec un uuid, \
+                     0 relue — ni court-circuit de l'inchangé, ni état d'avant"
+                ),
+            });
+        }
+
         // ── 2. Les artefacts dérivés ────────────────────────────────────
         let with_chunks = config.chunked != Some(false);
         let mut complete: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -4198,21 +4243,65 @@ impl Catalog {
             // d'un index neuf était rangé en `suffixed`, et une seconde
             // ingestion identique réingérait tout (trouvé par
             // e2e_chemin_de_masse le 8 septembre 2026).
-            let dense_marker = self
-                .vector_storage(&chunk_table)
-                .map(|s| s.marker)
-                .unwrap_or_else(|_| "_embed_hash".to_string());
-            let cypher = self.dialect.batch_select(
-                &chunk_table,
-                "uuid",
-                "_parent_uuid",
-                &["_parent_uuid", dense_marker.as_str(), "_sparse_hash"],
-            );
-            let Ok(result) = self
+            //
+            // **On ne demande que les marqueurs des signaux déclarés.** Les
+            // réclamer tous rendait la requête *impossible* pour une entité
+            // qui n'en veut aucun : la colonne dense n'existe pas sur sa table
+            // de chunks, le moteur refuse (« Cannot find property
+            // `_embed_hash__…` »), et cette fonction sortait par l'échec. Donc
+            // **aucune entité en BM25 seul n'a jamais bénéficié du
+            // court-circuit de l'inchangé** — elle réingérait tout, à chaque
+            // fois, en silence, puisque le seul symptôme est du temps perdu
+            // (trouvé le 18 septembre 2026 en cherchant pourquoi l'état
+            // d'avant n'arrivait pas).
+            let veut_dense = config.signals.vector();
+            let veut_sparse = config.signals.sparse();
+            let dense_marker = veut_dense
+                .then(|| {
+                    self.vector_storage(&chunk_table)
+                        .map(|s| s.marker)
+                        .unwrap_or_else(|_| "_embed_hash".to_string())
+                })
+                .unwrap_or_default();
+            let mut colonnes: Vec<&str> = vec!["_parent_uuid"];
+            if veut_dense {
+                colonnes.push(dense_marker.as_str());
+            }
+            if veut_sparse {
+                colonnes.push("_sparse_hash");
+            }
+            // Les positions suivent la liste, qui n'est plus fixe.
+            let i_dense = veut_dense.then_some(1);
+            let i_sparse = veut_sparse.then_some(if veut_dense { 2 } else { 1 });
+            let cypher = self.dialect.batch_select(&chunk_table, "uuid", "_parent_uuid", &colonnes);
+            // **Des chunks illisibles ne valent pas qu'on jette la ligne
+            // parente.** Cette lecture ne sert qu'à une question : les
+            // artefacts dérivés sont-ils complets ? Si elle échoue, la réponse
+            // prudente est « non », et c'est exactement ce que donne un
+            // `complete` vide : plus rien n'est court-circuité, tout est
+            // réécrit. Rendre `(records, 0)` faisait la même chose côté
+            // court-circuit **et** perdait au passage l'état d'avant, déjà lu
+            // et parfaitement valide — ce qui laissait passer une transition
+            // interdite. Le 18 septembre 2026 : c'est ce qui a fait échouer la
+            // garde d'ingestion, et le défaut dormait avant elle.
+            let result = match self
                 .conn
                 .execute_with_params(&cypher, &[QueryParam::new("items", items())])
-            else {
-                return (records, 0);
+            {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    self.emit_event(CatalogEvent::Warning {
+                        context: "split_unchanged".into(),
+                        message: format!(
+                            "{entity_name} : chunks illisibles ({e}), rien n'est court-circuité"
+                        ),
+                    });
+                    None
+                }
+            };
+            let Some(result) = result else {
+                // `complete` reste vide : aucune ligne ne sera sautée.
+                return (records, 0, Self::previous_states_de(config, &columns, &stored));
             };
             // Par parent : combien de chunks, combien embarqués **en dense**,
             // combien **en sparse**.
@@ -4230,11 +4319,9 @@ impl Catalog {
                 };
                 let e = tally.entry(parent.to_string()).or_insert((0, 0, 0));
                 e.0 += 1;
-                e.1 += usize::from(pose(1));
-                e.2 += usize::from(pose(2));
+                e.1 += i_dense.map_or(0, |i| usize::from(pose(i)));
+                e.2 += i_sparse.map_or(0, |i| usize::from(pose(i)));
             }
-            let veut_dense = config.signals.vector();
-            let veut_sparse = config.signals.sparse();
             complete = tally
                 .into_iter()
                 .filter(|(_, (chunks, dense, sparse))| {
@@ -4266,7 +4353,122 @@ impl Catalog {
                 todo.push(rec);
             }
         }
-        (todo, skipped)
+        // ── 4. L'état d'avant, pour la machine à états ──────────────────
+        //
+        // `stored` porte les valeurs dans l'ordre de `columns` ; le champ
+        // d'état en est un. On ne le sort que si une machine est déclarée —
+        // sinon c'est une table vide qu'on promènerait pour rien.
+        (todo, skipped, Self::previous_states_de(config, &columns, &stored))
+    }
+
+    /// **L'état d'avant, pour la machine à états.**
+    ///
+    /// `stored` porte les valeurs dans l'ordre de `columns` ; le champ d'état
+    /// en est un. Sorti seulement si une machine est déclarée — sinon c'est une
+    /// table vide qu'on promènerait pour rien.
+    ///
+    /// Fonction libre parce qu'elle sert à **deux** sorties de
+    /// `split_unchanged` : la normale, et celle où les chunks sont illisibles.
+    /// La seconde a coûté une soirée le 18 septembre 2026 — elle jetait un
+    /// état d'avant parfaitement lu.
+    fn previous_states_de(
+        config: &crate::config::EntityConfig,
+        columns: &[String],
+        stored: &HashMap<String, Vec<CypherValue>>,
+    ) -> HashMap<String, String> {
+        config
+            .lifecycle
+            .as_ref()
+            .and_then(|lc| columns.iter().position(|c| *c == lc.field))
+            .map(|at| {
+                stored
+                    .iter()
+                    .filter_map(|(uuid, values)| {
+                        values.get(at).and_then(|v| v.as_str()).map(|s| (uuid.clone(), s.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// **La machine à états, appliquée avant l'écriture.**
+    ///
+    /// `previous_states` donne l'état d'avant des lignes qui existent déjà ;
+    /// une ligne absente de cette table est une **naissance**.
+    ///
+    /// Trois issues par ligne, et une seule refuse :
+    ///
+    /// - le champ d'état est absent → on pose `initial`. C'est ce qui rend ce
+    ///   mot effectif : jusqu'ici il ne décrivait rien que le code applique.
+    /// - il n'y a pas d'état d'avant → l'état écrit doit être **déclaré**,
+    ///   rien de plus. Une naissance n'est pas un passage, et exiger `initial`
+    ///   interdirait d'importer un lot de tickets déjà fermés sans les rouvrir
+    ///   un par un. La faute de frappe reste attrapée.
+    /// - il y a un état d'avant et il diffère → ce doit être une transition
+    ///   **déclarée**, sinon la ligne est écartée.
+    ///
+    /// Une ligne refusée ne fait pas tomber le lot : elle sort, elle compte, et
+    /// sa cause est nommée — comme les refus des nœuds de record. Et la cause
+    /// **dit ce qui aurait été permis**, sinon l'appelant doit aller relire la
+    /// déclaration pour comprendre un mur.
+    fn apply_lifecycle(
+        entity_name: &str,
+        config: &crate::config::EntityConfig,
+        records: Vec<EntityRecord>,
+        previous_states: &HashMap<String, String>,
+    ) -> (Vec<EntityRecord>, Vec<String>) {
+        let Some(lc) = config.lifecycle.as_ref() else {
+            return (records, Vec::new());
+        };
+        let declared: std::collections::HashSet<&str> = lc.states().into_iter().collect();
+        let mut kept = Vec::with_capacity(records.len());
+        let mut refused = Vec::new();
+
+        for mut rec in records {
+            let uuid = rec.data.get("_uuid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let written = rec.data.get(&lc.field).and_then(|v| v.as_str()).map(str::to_string);
+
+            let Some(to) = written else {
+                // Rien de dit : l'état initial s'applique.
+                rec.data.insert(lc.field.clone(), CypherValue::String(lc.initial.clone()));
+                kept.push(rec);
+                continue;
+            };
+
+            match previous_states.get(&uuid) {
+                None => {
+                    if declared.contains(to.as_str()) {
+                        kept.push(rec);
+                    } else {
+                        refused.push(format!(
+                            "{entity_name} '{uuid}' : état '{to}' non déclaré (déclarés : {})",
+                            lc.states().join(", ")
+                        ));
+                    }
+                }
+                Some(from) if *from == to => kept.push(rec),
+                Some(from) => {
+                    if lc.allows(from, &to).is_some() {
+                        kept.push(rec);
+                    } else {
+                        let allowed: Vec<String> = lc
+                            .next_from(from)
+                            .iter()
+                            .map(|t| format!("{} → {}", t.name, t.to))
+                            .collect();
+                        let allowed = if allowed.is_empty() {
+                            format!("'{from}' est un état terminal")
+                        } else {
+                            format!("depuis '{from}' : {}", allowed.join(", "))
+                        };
+                        refused.push(format!(
+                            "{entity_name} '{uuid}' : transition '{from}' → '{to}' non déclarée ({allowed})"
+                        ));
+                    }
+                }
+            }
+        }
+        (kept, refused)
     }
 
     /// Le verbe de lot, **complet** : quand il rend, tout est prêt, étage GPU
@@ -4384,11 +4586,25 @@ impl Catalog {
         // et complet, ne redescend pas dans le graphe (doc 17 §6). Le compte
         // rendu ne bouge pas — ces enregistrements *sont* ingérés, ils
         // l'étaient déjà. Sur une table vide, il n'y a rien à relire.
-        let (mut entity_records, unchanged) = if premiere_ingestion {
-            (entity_records, 0)
+        let (entity_records, unchanged, previous_states) = if premiere_ingestion {
+            // Table vide : rien à relire, donc aucun état d'avant. Toutes les
+            // lignes sont des naissances, et c'est la règle des naissances qui
+            // s'applique — pas l'absence de règle. Il n'y a pas de transition à
+            // vérifier, mais il y a toujours un état à **écrire**.
+            (entity_records, 0, HashMap::new())
         } else {
             self.split_unchanged(entity_name, &entity_config, entity_records)
         };
+
+        // **La machine à états, avant toute écriture.** Ici plutôt que dans un
+        // nœud : sur le chemin de masse les lignes partent en CSV, et une
+        // valeur écrite par COPY n'est plus rattrapable. Une ligne refusée sort
+        // du lot, les autres passent.
+        let (mut entity_records, refus) =
+            Self::apply_lifecycle(entity_name, &entity_config, entity_records, &previous_states);
+        if !refus.is_empty() && profil {
+            eprintln!("[ingest-profile] {entity_name} : {} ligne(s) refusée(s) par la machine à états", refus.len());
+        }
         let uuids_ingeres: Vec<String> = entity_records
             .iter()
             .filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(|s| s.to_string()))
@@ -4409,9 +4625,14 @@ impl Catalog {
         }
         if entity_records.is_empty() {
             self.flush_blob_store("ingest");
+            // Un lot entièrement refusé ne doit pas se lire comme un lot
+            // entièrement inchangé : c'est la différence entre « rien à
+            // faire » et « rien n'a été fait ».
             return Ok(FlushResult {
-                processed: record_count,
-                unchanged: record_count,
+                processed: record_count - refus.len(),
+                unchanged: record_count - refus.len(),
+                failed: refus.len(),
+                warnings: refus,
                 ..Default::default()
             });
         }
@@ -4546,11 +4767,16 @@ impl Catalog {
                 // prochain drain — ou au Drop.
                 self.flush_blob_store("ingest");
                 self.signaler_les_troncatures("ingest_entities");
+                // Les lignes refusées par la machine à états ne sont jamais
+                // descendues dans le graphe : elles sortent du compte des
+                // traitées et entrent dans celui des échecs, avec leur cause.
+                let mut warnings = ramasser_les_avertissements(&mut ecoute);
+                warnings.extend(refus.iter().cloned());
                 let mut res = FlushResult {
-                    processed: record_count,
-                    failed: kb_failed,
+                    processed: record_count - refus.len(),
+                    failed: kb_failed + refus.len(),
                     unchanged,
-                    warnings: ramasser_les_avertissements(&mut ecoute),
+                    warnings,
                     rendu_pret: Some(if avec_embarquement {
                         crate::disponibilite::Disponibilites::TOUT
                     } else {
@@ -9360,6 +9586,102 @@ mod tests {
         assert!(t.default_signals.bm25());
         assert!(t.default_signals.vector());
     }
+
+    // ── La machine à états au chemin d'ingestion ────────────────────────
+
+    fn config_ticket() -> EntityConfig {
+        let mut fields = HashMap::new();
+        fields.insert("title".to_string(), SimpleFieldDef {
+            field_type: FieldType::String, is_title: true, ..Default::default()
+        });
+        fields.insert("status".to_string(), SimpleFieldDef {
+            field_type: FieldType::String, ..Default::default()
+        });
+        let t = |name: &str, from: &str, to: &str| crate::config::Transition {
+            name: name.into(), from: from.into(), to: to.into(),
+        };
+        EntityConfig {
+            fields,
+            signals: crate::search::SearchSignals::BM25,
+            hashsafe: Some(vec!["title".into()]),
+            lifecycle: Some(crate::config::Lifecycle {
+                field: "status".into(),
+                initial: "open".into(),
+                transitions: vec![t("start", "open", "in_progress"), t("close", "in_progress", "closed")],
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn ligne(uuid: &str, etat: Option<&str>) -> EntityRecord {
+        let mut data = BTreeMap::new();
+        data.insert("_uuid".to_string(), CypherValue::String(uuid.into()));
+        data.insert("title".to_string(), CypherValue::String("un sujet".into()));
+        if let Some(e) = etat {
+            data.insert("status".to_string(), CypherValue::String(e.into()));
+        }
+        let (entity_ref, resolver) = EntityRef::new("Ticket");
+        EntityRecord {
+            entity_name: "Ticket".to_string(),
+            data,
+            entity_ref,
+            resolver: Some(resolver),
+            vectors: None,
+        }
+    }
+
+    fn etat(rec: &EntityRecord) -> Option<&str> {
+        rec.data.get("status").and_then(|v| v.as_str())
+    }
+
+    /// La fonction seule, sans base : c'est elle qui décide, et une erreur
+    /// ici se lit en millisecondes au lieu d'une suite e2e.
+    #[test]
+    fn la_machine_a_etats_tranche_les_trois_cas() {
+        let config = config_ticket();
+        let mut avant = HashMap::new();
+        avant.insert("u-connu".to_string(), "in_progress".to_string());
+
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![
+                ligne("u-neuf", None),              // naissance sans état → initial
+                ligne("u-neuf2", Some("closed")),   // naissance avec état déclaré → admise
+                ligne("u-neuf3", Some("closd")),    // naissance avec état inconnu → refusée
+                ligne("u-connu", Some("closed")),   // in_progress → closed, déclarée
+                ligne("u-connu", Some("open")),     // in_progress → open, non déclarée
+            ],
+            &avant,
+        );
+
+        assert_eq!(gardes.len(), 3, "trois passent : {refus:?}");
+        assert_eq!(etat(&gardes[0]), Some("open"), "le champ absent prend l'état initial");
+        assert_eq!(etat(&gardes[1]), Some("closed"), "un état déclaré est admis à la naissance");
+        assert_eq!(etat(&gardes[2]), Some("closed"), "la transition déclarée passe");
+
+        assert_eq!(refus.len(), 2, "{refus:?}");
+        assert!(refus[0].contains("closd") && refus[0].contains("non déclaré"), "{}", refus[0]);
+        // Un refus qui n'indique pas la sortie oblige à relire la déclaration.
+        assert!(refus[1].contains("in_progress") && refus[1].contains("close"), "{}", refus[1]);
+    }
+
+    /// Sans machine déclarée, la fonction ne touche à rien — la promesse qui
+    /// vient avant les autres.
+    #[test]
+    fn sans_machine_declaree_rien_ne_change() {
+        let config = EntityConfig { lifecycle: None, ..config_ticket() };
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![ligne("u", Some("n_importe_quoi")), ligne("v", None)],
+            &HashMap::new(),
+        );
+        assert!(refus.is_empty());
+        assert_eq!(gardes.len(), 2);
+        assert_eq!(etat(&gardes[1]), None, "aucun état n'est posé d'office");
+    }
+
 }
 
 

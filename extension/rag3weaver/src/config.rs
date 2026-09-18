@@ -644,10 +644,26 @@ pub struct Transition {
 ///    Un état qu'aucune transition ne mentionne n'existe pas, ce qui est la
 ///    bonne réponse : personne ne pourrait l'atteindre.
 ///
-/// **Ce que ce type ne fait pas encore** : l'empêcher au moment d'écrire. Le
-/// bon endroit est le drain, où l'**ancien** état est lu — `UpdateRecordNode`
-/// lit déjà la ligne existante. Vérifier plus tôt demanderait une lecture de
-/// plus et mentirait sur les mises à jour déjà en attente.
+/// **Où elle s'applique**, et c'est partout où l'on écrit :
+///
+/// - `Catalog::update` → `UpdateRecordNode`, qui lit l'état d'avant dans la
+///   même requête que l'empreinte de contenu (27 août 2026) ;
+/// - `Catalog::ingest_entities` → contre `split_unchanged`, qui relit déjà la
+///   ligne champ par champ pour son court-circuit (18 septembre 2026).
+///
+/// Dans les deux cas la vérification est posée **là où la ligne est déjà
+/// lue** : vérifier ailleurs coûterait une lecture de plus et mentirait sur
+/// les écritures déjà en attente dans le même lot.
+///
+/// **Une naissance n'est pas une transition.** Quand il n'y a pas d'état
+/// d'avant — table vide, ligne neuve, ou `Lifecycle` déclaré après coup —
+/// `initial` s'applique si la donnée ne dit rien, et un état donné doit
+/// seulement être **déclaré**. Sinon on ne pourrait pas importer un lot de
+/// tickets déjà fermés sans les rouvrir un par un.
+///
+/// Ce commentaire disait le contraire jusqu'au 18 septembre 2026 — il
+/// annonçait une garde « pas encore » posée depuis trois semaines. Un
+/// commentaire périmé coûte plus cher qu'un commentaire absent : on le croit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lifecycle {
     /// Le champ qui porte l'état. Doit exister, et être une chaîne.

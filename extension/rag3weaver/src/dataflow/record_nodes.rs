@@ -2942,13 +2942,14 @@ impl Node for UpdateRecordNode {
                 // `drainer` le comptait quand même dans `processed`.
                 let cause = format!("entité « {entity_name} » absente de la configuration");
                 consigner_l_echec(
-                    ctx, "UpdateRecordNode", entity_name, entity_indices.len(), Disponibilites::TOUT, cause,
+                    ctx, "UpdateRecordNode", entity_name, entity_indices.len(), Disponibilites::TOUT,
+                    cause.clone(),
                 );
                 for &i in entity_indices.iter() {
                     all_results.push(UpdateResult {
                         uuid: items[i].uuid.clone(),
                         entity: entity_name.clone(),
-                        status: UpdateStatus::Failed,
+                        status: UpdateStatus::Failed(cause.clone()),
                         reembedded: false,
                         chunks_created: 0,
                         chunks_deleted: 0,
@@ -2958,7 +2959,10 @@ impl Node for UpdateRecordNode {
             }
             // Les lignes refusées une à une (transition non déclarée) : elles
             // sortent du groupe, se comptent, et les autres passent.
-            let mut rejetes: HashSet<usize> = HashSet::new();
+            // La cause voyage avec l'indice refusé : la publier dans le canal
+            // d'échecs et la jeter ici obligeait l'appelant à réapparier des
+            // chaînes libres avec des lignes, ce qui est faux dès deux entités.
+            let mut rejetes: HashMap<usize, String> = HashMap::new();
             // **Le groupe en fermeture** : un `?` dedans n'abandonne que ce
             // groupe, qui se consigne ; les autres entités du lot passent.
             let issue: Result<(), String> = (|| {
@@ -3068,22 +3072,26 @@ impl Node for UpdateRecordNode {
                             format!("depuis '{depuis}' : {}", permis.join(", "))
                         };
                         // Une ligne refusée ne fait plus tomber l'ingestion :
-                        // elle se compte, se dit, et les autres passent.
+                        // elle se compte, se dit, et les autres passent. La
+                        // cause est dite **une fois** et sert aux deux publics :
+                        // le canal d'échecs pour le compte rendu, le résultat
+                        // de la ligne pour qui décide quoi reprendre.
+                        let cause = format!(
+                            "{entity_name} '{}' : transition '{depuis}' → '{vers}' non déclarée ({permis})",
+                            rec.uuid
+                        );
                         consigner_l_echec(
                             ctx, "UpdateRecordNode", entity_name, 1, Disponibilites::TOUT,
-                            format!(
-                                "{entity_name} '{}' : transition '{depuis}' → '{vers}' non déclarée ({permis})",
-                                rec.uuid
-                            ),
+                            cause.clone(),
                         );
-                        rejetes.insert(i);
+                        rejetes.insert(i, cause);
                     }
                 }
             }
 
             // Ce qui reste du groupe une fois les refus retirés.
             let retenus: Vec<usize> =
-                entity_indices.iter().copied().filter(|i| !rejetes.contains(i)).collect();
+                entity_indices.iter().copied().filter(|i| !rejetes.contains_key(i)).collect();
             let entity_indices = &retenus;
 
             // 2. Detect content changes
@@ -3245,30 +3253,31 @@ impl Node for UpdateRecordNode {
             Ok(())
             })();
 
-            let en_echec = |all_results: &mut Vec<UpdateResult>, i: usize| {
+            let en_echec = |all_results: &mut Vec<UpdateResult>, i: usize, cause: String| {
                 all_results.push(UpdateResult {
                     uuid: items[i].uuid.clone(),
                     entity: entity_name.clone(),
-                    status: UpdateStatus::Failed,
+                    status: UpdateStatus::Failed(cause),
                     reembedded: false,
                     chunks_created: 0,
                     chunks_deleted: 0,
                 });
             };
-            for &i in entity_indices.iter().filter(|i| rejetes.contains(i)) {
-                en_echec(&mut all_results, i);
+            for (&i, cause) in rejetes.iter() {
+                en_echec(&mut all_results, i, cause.clone());
             }
             if let Err(cause) = issue {
                 // Le groupe s'est arrêté en route. Ce qui a pu être posé avant
                 // l'arrêt l'est ; on le compte quand même comme échoué — dire
                 // moins que fait est le sens sûr, l'inverse est le mensonge.
                 let restants: Vec<usize> =
-                    entity_indices.iter().copied().filter(|i| !rejetes.contains(i)).collect();
+                    entity_indices.iter().copied().filter(|i| !rejetes.contains_key(i)).collect();
                 consigner_l_echec(
-                    ctx, "UpdateRecordNode", entity_name, restants.len(), Disponibilites::TOUT, cause,
+                    ctx, "UpdateRecordNode", entity_name, restants.len(), Disponibilites::TOUT,
+                    cause.clone(),
                 );
                 for i in restants {
-                    en_echec(&mut all_results, i);
+                    en_echec(&mut all_results, i, cause.clone());
                 }
             }
         }

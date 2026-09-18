@@ -66,11 +66,20 @@ impl From<&str> for RefOrUuid {
 pub enum UpdateStatus {
     Updated,
     Unchanged,
-    /// La mise à jour n'a pas abouti — la cause est dans
-    /// [`FlushResult::warnings`] et dans le canal d'échecs. Avant le
-    /// 6 septembre 2026, ce cas n'existait pas : une ligne refusée faisait
-    /// tomber tout le graphe, ou passait pour `Updated`.
-    Failed,
+    /// La mise à jour n'a pas abouti, **et pourquoi**.
+    ///
+    /// Avant le 6 septembre 2026, ce cas n'existait pas : une ligne refusée
+    /// faisait tomber tout le graphe, ou passait pour `Updated`. Il portait
+    /// ensuite un refus sans cause, et l'appelant devait aller la pêcher dans
+    /// [`FlushResult::warnings`] — une liste de chaînes libres où rien ne dit
+    /// quelle ligne va avec quel message. Sur un lot de dix refus, l'appariement
+    /// se faisait à la lecture, à l'œil, et il était faux dès deux entités.
+    ///
+    /// La cause voyage donc avec la ligne. Elle reste **aussi** dans
+    /// `warnings` et dans le canal d'échecs : ce sont deux publics différents —
+    /// un humain qui lit un compte rendu, un programme qui décide quoi
+    /// reprendre.
+    Failed(String),
 }
 
 #[derive(Debug)]

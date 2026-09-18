@@ -1741,6 +1741,107 @@ fn une_transition_non_declaree_ne_passe_pas() {
     assert_eq!(ticket_status(&catalog), "in_progress");
 }
 
+/// **Une garde qu'un chemin d'écriture sur deux ignore est pire que pas de
+/// garde** : elle inspire une confiance qu'elle ne mérite pas.
+///
+/// `update` était gardé depuis le 27 août ; `ingest_entities` ne l'était pas.
+/// Or l'uuid est dérivé des champs d'identité, donc **ré-ingérer la même ligne
+/// avec un autre état** la faisait passer d'un état à l'autre sans rien
+/// vérifier — par le chemin le plus emprunté.
+#[test]
+#[ignore]
+fn une_reingestion_ne_contourne_pas_la_machine_a_etats() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.register_entity("Ticket", ticket_config()).unwrap();
+
+    let ticket = |etat: Option<&str>| {
+        let mut d = BTreeMap::new();
+        d.insert("title".to_string(), CypherValue::String("Le masque HNSW".into()));
+        d.insert("body".to_string(), CypherValue::String("Le balayage ignorait le masque".into()));
+        if let Some(e) = etat {
+            d.insert("status".to_string(), CypherValue::String(e.into()));
+        }
+        d
+    };
+
+    catalog.ingest_entities("Ticket", vec![ticket(Some("open"))]).unwrap();
+    assert_eq!(ticket_status(&catalog), "open");
+
+    // Déclarée : elle passe par l'ingestion comme par `update`.
+    let flush = catalog.ingest_entities("Ticket", vec![ticket(Some("in_progress"))]).unwrap();
+    assert_eq!(flush.failed, 0, "transition déclarée : {flush:?}");
+    assert_eq!(ticket_status(&catalog), "in_progress");
+
+    // Non déclarée : `in_progress -> open` n'existe pas. L'état d'abord.
+    let flush = catalog.ingest_entities("Ticket", vec![ticket(Some("open"))]).unwrap();
+    assert_eq!(ticket_status(&catalog), "in_progress", "la transition interdite ne doit rien écrire");
+    assert_eq!(flush.failed, 1, "le refus doit se voir : {flush:?}");
+    // Et un lot entièrement refusé ne doit pas se lire comme un lot
+    // entièrement inchangé : « rien à faire » et « rien n'a été fait » sont
+    // deux réponses différentes.
+    assert_eq!(flush.processed, 0, "rien n'a été fait : {flush:?}");
+    assert_eq!(flush.unchanged, 0, "et ce n'est pas « rien à faire » : {flush:?}");
+    // La cause nomme la ligne, et dit ce qui aurait été permis.
+    let cause = flush.warnings.join(" | ");
+    assert!(cause.contains("in_progress") && cause.contains("close"), "{cause}");
+}
+
+/// **Une naissance n'est pas une transition.**
+///
+/// Sans état d'avant — table vide, ligne neuve, ou machine déclarée après coup
+/// — il n'y a pas de passage à vérifier, mais il y a toujours un état à
+/// **écrire**. Deux règles, et pas une de plus : le champ absent reçoit
+/// `initial`, et un état donné doit seulement être déclaré.
+#[test]
+#[ignore]
+fn une_naissance_prend_l_etat_initial_ou_un_etat_declare() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.register_entity("Ticket", ticket_config()).unwrap();
+
+    let ticket = |titre: &str, etat: Option<&str>| {
+        let mut d = BTreeMap::new();
+        d.insert("title".to_string(), CypherValue::String(titre.into()));
+        d.insert("body".to_string(), CypherValue::String("corps".into()));
+        if let Some(e) = etat {
+            d.insert("status".to_string(), CypherValue::String(e.into()));
+        }
+        d
+    };
+    let statut = |catalog: &Catalog, titre: &str| -> String {
+        catalog
+            .execute_raw(&format!("MATCH (t:Ticket) WHERE t.title = '{titre}' RETURN t.status"))
+            .unwrap()
+            .rows
+            .first()
+            .and_then(|r| r.first().and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .unwrap_or_default()
+    };
+
+    // Table vide, chemin de masse : le champ absent reçoit `initial`, et un
+    // état déclaré qui n'est pas l'initial est admis — sinon on ne pourrait pas
+    // importer un lot de tickets déjà fermés sans les rouvrir un par un.
+    let flush = catalog
+        .ingest_entities("Ticket", vec![ticket("sans état", None), ticket("déjà clos", Some("closed"))])
+        .unwrap();
+    assert_eq!(flush.failed, 0, "deux naissances licites : {flush:?}");
+    assert_eq!(statut(&catalog, "sans état"), "open", "le champ absent prend l'état initial");
+    assert_eq!(statut(&catalog, "déjà clos"), "closed", "un état déclaré est admis à la naissance");
+
+    // Table non vide : une ligne neuve reste une naissance, et la même règle
+    // s'applique — c'est le second domicile de la règle.
+    let flush = catalog.ingest_entities("Ticket", vec![ticket("plus tard", None)]).unwrap();
+    assert_eq!(flush.failed, 0, "{flush:?}");
+    assert_eq!(statut(&catalog, "plus tard"), "open");
+
+    // Un état qui n'est pas déclaré est refusé, naissance ou pas : c'est la
+    // faute de frappe qu'on attrape encore.
+    let flush = catalog.ingest_entities("Ticket", vec![ticket("faute", Some("closd"))]).unwrap();
+    assert_eq!(flush.failed, 1, "état non déclaré : {flush:?}");
+    assert_eq!(statut(&catalog, "faute"), "", "la ligne refusée n'est pas écrite");
+    let cause = flush.warnings.join(" | ");
+    assert!(cause.contains("closd") && cause.contains("non déclaré"), "{cause}");
+}
+
 
 /// **La dette de découpage vit dans la base** (C5). Une mise à jour posée au
 /// niveau donnée pose ses champs et laisse ses chunks tels quels ;
