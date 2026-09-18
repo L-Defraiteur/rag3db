@@ -6481,12 +6481,12 @@ impl Catalog {
         // un échec de nœud habillé en `DbError`. Et ses signaux déclarés
         // servent plus bas à rapporter `meta.signals` comme le monolithe :
         // les signaux **demandés**, pas ceux qui ont parlé.
-        let declared_signals = {
+        let (declared_signals, chunk_table) = {
             let cat = catalogue.lock().unwrap();
             cat.check_initialized()?;
             let resolved = cat.resolve_search_target(cible)?;
             cat.register_search_services(&mut services);
-            resolved.default_signals
+            (resolved.default_signals, resolved.chunk_table.clone())
         };
         services.register("catalog", catalogue.clone());
 
@@ -6534,9 +6534,20 @@ impl Catalog {
         // ── L'exécution, en écoutant ce que chaque nœud a coûté ────────────
         let runtime = DataflowRuntime::with_services(graph.nodes.len() + 8, services);
         let mut ecoute = runtime.subscribe();
-        let sortie = runtime
-            .execute(&mut graph)
-            .map_err(|e| CatalogError::DbError(format!("recherche « {cible} » : {e}")))?;
+        let sortie = runtime.execute(&mut graph).map_err(|e| {
+            // Un échec de nœud est une chaîne ; le refus le plus courant — le
+            // modèle courant absent de cet index — redevient son erreur typée,
+            // comme par le monolithe. La vérification est sans effet quand le
+            // stockage se résout : on retombe alors sur l'habillage générique.
+            if let Ok(cat) = catalogue.lock() {
+                if let Err(typed @ CatalogError::EmbeddingModelUnavailable(_)) =
+                    cat.vector_storage(&chunk_table)
+                {
+                    return typed;
+                }
+            }
+            CatalogError::DbError(format!("recherche « {cible} » : {e}"))
+        })?;
         let mut durees: HashMap<String, u64> = HashMap::new();
         let mut avant_la_page: usize = 0;
         while let Ok(ev) = ecoute.try_recv() {

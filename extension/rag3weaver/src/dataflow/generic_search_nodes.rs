@@ -337,12 +337,17 @@ impl Node for VectorSearchNode {
 
         // Le vecteur ne se pré-filtre pas par offsets — le HNSW ne connaît
         // pas nos identités — mais par du Cypher sur l'entité parente. Le
-        // catalogue sait le compiler, cellule comprise.
-        let (filter_where, filter_params, filter_match) = match &options.filter_condition {
-            None => (None, vec![], None),
-            Some(cond) => match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+        // catalogue sait le compiler, **cellule comprise** : il se consulte
+        // donc même sans condition utilisateur — sinon une base à plusieurs
+        // cellules fuyait entre elles par le chemin composable (trouvé le
+        // 18 septembre en migrant e2e_scope sur le lanceur).
+        let (filter_where, filter_params, filter_match) =
+            match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
                 Some(catalog) => {
-                    let compiled = catalog.lock().unwrap().compile_filter_for_vector(&target.parent_table, Some(cond));
+                    let compiled = catalog
+                        .lock()
+                        .unwrap()
+                        .compile_filter_for_vector(&target.parent_table, options.filter_condition.as_ref());
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {
@@ -355,16 +360,17 @@ impl Node for VectorSearchNode {
                     }
                 }
                 None => {
-                    node_warnings.push(
-                        "VectorSearchNode: un filtre est demandé mais le service \
-                         'catalog' manque — les résultats ne sont PAS restreints au \
-                         domaine demandé"
-                            .to_string(),
-                    );
+                    if options.filter_condition.is_some() {
+                        node_warnings.push(
+                            "VectorSearchNode: un filtre est demandé mais le service \
+                             'catalog' manque — les résultats ne sont PAS restreints au \
+                             domaine demandé"
+                                .to_string(),
+                        );
+                    }
                     (None, vec![], None)
                 }
-            },
-        };
+            };
 
         // Le vecteur de la requête, embarqué une fois par la source ; sinon
         // on l'embarque ici — le montage minimal des tests.
@@ -388,11 +394,36 @@ impl Node for VectorSearchNode {
             let slug = ctx.service::<String>("embedding_slug").cloned();
             match (models, slug) {
                 (Some(m), Some(s)) => {
-                    let entry = m.iter().find(|e| e.slug() == s).ok_or_else(|| {
-                        format!("VectorSearchNode: {}", crate::embedding_storage::unavailable_message(&s, &m))
-                    })?;
-                    let st = crate::embedding_storage::VectorStorage::resolve(&target.chunk_table, entry);
-                    (st.index, st.column)
+                    match m.iter().find(|e| e.slug() == s) {
+                        Some(entry) => {
+                            let st = crate::embedding_storage::VectorStorage::resolve(&target.chunk_table, entry);
+                            (st.index, st.column)
+                        }
+                        // L'instantané des services date du montage du graphe ;
+                        // une consigne `Immediate` draine PENDANT l'exécution et
+                        // peut enregistrer le modèle sur un index tout neuf. On
+                        // redemande au catalogue **vivant** — même motif que le
+                        // handle FTS du nœud BM25 — et on ne refuse qu'après lui.
+                        None => {
+                            let vivant = ctx
+                                .service::<Arc<Mutex<Catalog>>>("catalog")
+                                .cloned()
+                                .map(|c| {
+                                    let cat = c.lock().unwrap();
+                                    cat.vector_storage(&target.chunk_table)
+                                });
+                            match vivant {
+                                Some(Ok(st)) => (st.index, st.column),
+                                Some(Err(e)) => return Err(format!("VectorSearchNode: {e}")),
+                                None => {
+                                    return Err(format!(
+                                        "VectorSearchNode: {}",
+                                        crate::embedding_storage::unavailable_message(&s, &m)
+                                    ))
+                                }
+                            }
+                        }
+                    }
                 }
                 _ => (format!("{}_vec", target.chunk_table), "embedding".to_string()),
             }
