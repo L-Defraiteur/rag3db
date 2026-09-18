@@ -291,7 +291,7 @@ fn generic_bm25_pipeline_matches_catalog() {
 /// **Le chemin que les agents empruntent applique-t-il la consigne ?**
 ///
 /// Jusqu'au 6 septembre 2026, non. `Consistency` vivait dans le corps de
-/// `Catalog::search`, que ce graphe **n'emprunte pas** : l'outil `search` offert
+/// `Catalog::search`, que ce graphe **n'empruntait pas** : l'outil `search` offert
 /// aux agents passe par `SearchSourceNode`, qui ne traversait aucune des trois
 /// branches. `Consistency::Strict` n'était d'ailleurs construit nulle part dans
 /// `src/`, et la marque d'eau d'ingestion — bâtie et éprouvée sur deux processus
@@ -367,8 +367,8 @@ fn le_graphe_applique_la_consigne_de_coherence() {
 /// d'embarquement ; sur ce chemin, seul `VectorSearchNode` le faisait. Un
 /// agent qui cherchait en sparse sur des chunks posés sans passe GPU concluait
 /// « ça n'existe pas ». C'est le demi-portage relevé par la réconciliation du
-/// 6 septembre 2026, et la raison pour laquelle `Catalog::search` doit devenir
-/// ce gabarit.
+/// 6 septembre 2026, et la raison pour laquelle `Catalog::search` devait
+/// devenir ce gabarit — fait le 18 septembre : le monolithe est parti.
 ///
 /// La coupe est faite par le verbe de lot qui dit sa portée ; le rattrapage
 /// solde la dette ; entre les deux, le nœud sparse rend zéro **en le disant**.
