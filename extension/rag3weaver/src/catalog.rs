@@ -520,11 +520,6 @@ impl Catalog {
         self.blob_store.clone()
     }
 
-    /// Get a sparse vector index handle by table name.
-    pub fn sparse_handle(&self, table: &str) -> Option<Arc<sparse_vector::handle::SparseHandle>> {
-        self.sparse_handles.get(table).cloned()
-    }
-
     /// Create or open a sparse handle for a table, storing it in sparse_handles.
     /// No-op if blob_store is not configured or handle already exists.
     fn ensure_sparse_handle(&mut self, table: &str) {
@@ -3128,7 +3123,7 @@ impl Catalog {
     /// dire honnêtement.
     ///
     /// **Unique écrivain des trois branches.** Elles vivaient dans le corps de
-    /// `Catalog::search`, c'est-à-dire nulle part pour le chemin composable :
+    /// `Catalog::search` (parti le 18 septembre 2026), c'est-à-dire nulle part pour le chemin composable :
     /// l'outil `search` offert aux agents passe par `search_base.mmd`, donc par
     /// `SearchSourceNode`, qui ne les traversait pas. `Consistency::Strict`
     /// n'était d'ailleurs construit nulle part dans `src/` — la marque d'eau
@@ -4048,7 +4043,7 @@ impl Catalog {
     }
 
     /// **Le pré-filtre** : résoudre une condition de filtre en offsets
-    /// lucivy, ce que `search_bm25` et le sparse appellent `allowed_ids`.
+    /// lucivy, ce que `search_bm25_chunked` et le sparse appellent `allowed_ids`.
     ///
     /// Ce n'est pas un filtrage après coup : le jeu d'ids descend jusqu'aux
     /// résolveurs, la `doc_freq` est comptée sur le sous-ensemble et le `N`

@@ -163,3 +163,11 @@ Revalidation après le correctif de fusion, en série : lib 979, `e2e_code`
 `e2e_entites_derivees` 3, `e2e_scope` 9, `e2e_rerank` 3, `e2e_result_mode` 10,
 `e2e_search` 39, `e2e_catalogue_gabarits` 12, `e2e_agent_loop` 8 — tout vert.
 `e2e_postgres` est migrée à l'aveugle et s'exécutera quand un serveur sera là.
+
+Le banc vecteur seul (18 au soir) : l'écart monolithe→lanceur (MRR 0,346→0,328,
+R@1 10→9) n'est pas le chemin — les deux exécutent les mêmes fonctions dans le
+même ordre, et un run sondé rend exactement 0,328/9 sur un index reconstruit.
+La question flippée se joue à +0,002 de cosinus (`lot_budget` rang 2 derrière
+`budget_conseille`, 0,73693 contre 0,73892) : quasi-ex-æquo que le recall d'un
+HNSW reconstruit réordonne, comme la variance M3 de l'embarquement (0,206→0,241
+entre deux passes identiques).

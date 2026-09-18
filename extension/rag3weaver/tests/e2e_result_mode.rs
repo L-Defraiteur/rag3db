@@ -264,9 +264,9 @@ fn result_mode_aggregated_default() {
     );
     // Print diagnostics
     if let Some(ref diag) = response.meta.diagnostics {
-        eprintln!("  diagnostics: embed={}ms bm25={}ms vector={}ms sparse={}ms resolve={}ms fuse={}ms enrich={}ms",
+        eprintln!("  diagnostics: embed={}ms bm25={}ms vector={}ms sparse={}ms resolve={}ms fuse={}ms",
             diag.embed_ms, diag.bm25_ms, diag.vector_ms, diag.sparse_ms,
-            diag.resolve_ms, diag.fuse_ms, diag.enrich_ms);
+            diag.resolve_ms, diag.fuse_ms);
         for (i, hit) in diag.bm25_hits.iter().enumerate() {
             eprintln!("  bm25_hit[{i}]: parent={}, score={}, hl_raw={}", &hit.parent_uuid[..8.min(hit.parent_uuid.len())], hit.score, hit.highlights_raw);
             eprintln!("    highlights_parsed: {:?}", hit.highlights_parsed);

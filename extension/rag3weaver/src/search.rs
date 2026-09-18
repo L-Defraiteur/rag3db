@@ -183,7 +183,7 @@ impl FusionConfig {
 /// Binary flags selecting which search signals to activate.
 ///
 /// Combine with `|`: `SearchSignals::BM25 | SearchSignals::SPARSE`.
-/// Named aliases mirror `SearchMode` for convenience.
+/// Named aliases (`FULLTEXT`/`SEMANTIC`/`HYBRID`) for convenience.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SearchSignals(u8);
 
@@ -193,7 +193,7 @@ impl SearchSignals {
     pub const VECTOR:   Self = Self(0b010);
     pub const SPARSE:   Self = Self(0b100);
 
-    // Convenience aliases matching SearchMode
+    // Convenience aliases (l'ancien `SearchMode`, parti avec le monolithe)
     pub const FULLTEXT: Self = Self(0b001);          // BM25 only
     pub const SEMANTIC: Self = Self(0b010);          // Vector only
     pub const HYBRID:   Self = Self(0b011);          // BM25 + Vector
@@ -589,7 +589,6 @@ pub struct SearchDiagnostics {
     pub resolve_ms: u64,
     pub fuse_ms: u64,
     pub rerank_ms: u64,
-    pub enrich_ms: u64,
     pub total_ms: u64,
 }
 
@@ -1078,171 +1077,6 @@ fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> 
         .collect()
 }
 
-/// Resolve chunk-level search results to parent-level results with ChunkInfo.
-///
-/// Used by both vector and sparse search when the entity has chunks.
-/// Groups results by parent, keeps the best-scoring chunk per parent.
-pub fn resolve_chunk_results(
-    conn: &dyn DbConnection,
-    chunk_entity: &str,
-    parent_entity: &str,
-    results: Vec<SearchResult>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if results.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 1. Collect distinct chunk UUIDs
-    let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-    let uuid_list = chunk_uuids
-        .iter()
-        .map(|u| format!("'{}'", u.replace('\'', "''")))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    // 2. Batch fetch chunk metadata
-    let cypher = format!(
-        "MATCH (c:{chunk_entity}) WHERE c._uuid IN [{uuid_list}] \
-         RETURN c._uuid, c._parent_uuid, c._text, c._index, \
-         c._start_line, c._end_line, c._start_char, c._end_char"
-    );
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    // 3. Build chunk metadata map
-    struct ChunkMeta {
-        parent_uuid: String,
-        text: String,
-        index: usize,
-        start_line: usize,
-        end_line: usize,
-        start_char: usize,
-        end_char: usize,
-    }
-
-    let mut chunk_map: HashMap<String, ChunkMeta> = HashMap::new();
-    for row in &result.rows {
-        let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let parent_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let start_line = row.get(4).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let end_line = row.get(5).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let start_char = row.get(6).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-        chunk_map.insert(uuid, ChunkMeta {
-            parent_uuid, text, index, start_line, end_line, start_char, end_char,
-        });
-    }
-
-    // 4. Group by parent, keep best-scoring chunk per parent
-    let mut parent_best: HashMap<String, (f64, String, ChunkInfo)> = HashMap::new();
-    for r in &results {
-        if let Some(meta) = chunk_map.get(&r.uuid) {
-            let chunk_info = ChunkInfo {
-                uuid: r.uuid.clone(),
-                text: meta.text.clone(),
-                index: meta.index,
-                score: r.score,
-                start_line: meta.start_line,
-                end_line: meta.end_line,
-                start_char: meta.start_char,
-                end_char: meta.end_char,
-            };
-            let entry = parent_best.entry(meta.parent_uuid.clone());
-            match entry {
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
-                }
-                std::collections::hash_map::Entry::Occupied(mut e) => {
-                    if r.score > e.get().0 {
-                        e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
-                    }
-                }
-            }
-        }
-    }
-
-    // 5. Build parent-level results, preserving score order
-    let mut resolved: Vec<SearchResult> = parent_best
-        .into_values()
-        .map(|(score, parent_uuid, chunk_info)| SearchResult {
-            uuid: parent_uuid,
-            score,
-            entity: Some(parent_entity.to_string()),
-            data: None,
-            chunk: Some(chunk_info),
-            chunks: None,
-        })
-        .collect();
-    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    Ok(resolved)
-}
-
-/// Resolve chunk results via SearchBackend (multi-backend).
-pub fn resolve_chunk_results_via_backend(
-    backend: &dyn crate::search_backend::SearchBackend,
-    chunk_entity: &str,
-    parent_entity: &str,
-    results: Vec<SearchResult>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if results.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-    let chunks = backend.fetch_chunks(chunk_entity, &chunk_uuids)
-        .map_err(|e| CatalogError::DbError(e))?;
-
-    let mut chunk_map: HashMap<String, &crate::search_backend::ChunkMeta> = HashMap::new();
-    for c in &chunks {
-        chunk_map.insert(c.uuid.clone(), c);
-    }
-
-    // Group by parent, keep best-scoring chunk per parent
-    let mut parent_best: HashMap<String, (f64, String, ChunkInfo)> = HashMap::new();
-    for r in &results {
-        if let Some(meta) = chunk_map.get(&r.uuid) {
-            let chunk_info = ChunkInfo {
-                uuid: r.uuid.clone(),
-                text: meta.text.clone(),
-                index: meta.index,
-                score: r.score,
-                start_line: meta.start_line,
-                end_line: meta.end_line,
-                start_char: meta.start_char,
-                end_char: meta.end_char,
-            };
-            let entry = parent_best.entry(meta.parent_uuid.clone());
-            match entry {
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
-                }
-                std::collections::hash_map::Entry::Occupied(mut e) => {
-                    if r.score > e.get().0 {
-                        e.insert((r.score, meta.parent_uuid.clone(), chunk_info));
-                    }
-                }
-            }
-        }
-    }
-
-    let mut resolved: Vec<SearchResult> = parent_best
-        .into_values()
-        .map(|(score, parent_uuid, chunk_info)| SearchResult {
-            uuid: parent_uuid,
-            score,
-            entity: Some(parent_entity.to_string()),
-            data: None,
-            chunk: Some(chunk_info),
-            chunks: None,
-        })
-        .collect();
-    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    Ok(resolved)
-}
-
 /// Enrich search results with parent entity data (title, body, etc.).
 ///
 /// Batch-fetches entity data for all result UUIDs and populates `result.data`.
@@ -1553,25 +1387,6 @@ pub fn resolve_and_enrich_chunked(
     }
 
     Ok(map)
-}
-
-/// Resolve chunk-level results (vector/sparse) to parent level with enrichment in one query.
-///
-/// Merges `resolve_chunk_results()` + `enrich_results_with_data()` into a single
-/// Cypher query that fetches chunk metadata, parent UUID, and parent fields.
-///
-/// Uses `SearchTarget` to determine relationship pattern and whether source refs exist.
-pub fn resolve_vector_chunks(
-    conn: &dyn DbConnection,
-    target: &SearchTarget,
-    results: Vec<SearchResult>,
-    return_fields: &[String],
-    result_mode: ResultMode,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    resolve_vector_chunks_with_dialect(
-        conn, target, results, return_fields, result_mode,
-        &crate::dialect::Rag3dbDialect,
-    )
 }
 
 /// Resolve vector chunk results to parent-level with dialect support.
@@ -1934,57 +1749,6 @@ fn build_contains_clauses(
             "should": clauses,
         })
     }
-}
-
-/// BM25 keyword search on a non-chunked target, straight through the Rust index.
-///
-/// Same engine and same query JSON as [`search_bm25_chunked`], minus the chunk
-/// attribution: offsets resolve directly to entities.
-///
-/// Pre-filtering: `allowed_ids` are pre-resolved node offsets.
-#[allow(clippy::too_many_arguments)]
-pub fn search_bm25(
-    conn: &dyn DbConnection,
-    entity: &str,
-    query: &str,
-    fields: &[String],
-    mode: BM25Mode,
-    fuzzy_distance: u8,
-    limit: usize,
-    allowed_ids: Option<&[u64]>,
-    return_fields: &[String],
-    fts: Option<&lucivy_core::sharded_handle::ShardedHandle>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if fields.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
-
-    let handle = fts.ok_or_else(|| {
-        CatalogError::DbError(format!(
-            "aucun index FTS ouvert pour '{entity}' — le repli C++ est débranché. \
-             Le handle s'ouvre au démarrage du Catalog (`open_fts_handles_for`)."
-        ))
-    })?;
-
-    let query_config: lucivy_core::query::QueryConfig =
-        serde_json::from_str(&json_query)
-            .map_err(|e| CatalogError::DbError(format!("QueryConfig invalide: {e}")))?;
-
-    let offsets_scores: Vec<(u64, f64)> =
-        crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
-            .map_err(CatalogError::DbError)?
-            .into_iter()
-            .map(|(offset, score, _highlights)| (offset, score))
-            .collect();
-
-    if offsets_scores.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Resolve offsets → UUIDs + fetch entity data in one query
-    resolve_and_enrich(conn, entity, &offsets_scores, return_fields)
 }
 
 /// Parse highlights JSON: `{"body":[[100,200]],"title":[[5,15]]}` → HashMap
@@ -3438,46 +3202,6 @@ mod tests {
 
         let results = search_vector(&conn, "Document", "Document_vec", &embedding, 10, None, &[], None)
             .unwrap();
-        assert!(results.is_empty());
-    }
-
-    /// Without an open FTS handle the search now errors instead of quietly
-    /// falling back to the C++ index — a missing handle used to look exactly
-    /// like "no results".
-    #[test]
-    fn search_bm25_without_handle_is_an_error() {
-        let conn = MockConnection::new();
-        let fields = vec!["title".to_string(), "body".to_string()];
-
-        let err = search_bm25(
-            &conn,
-            "Document",
-            "test query",
-            &fields,
-            BM25Mode::Contains,
-            1,
-            10,
-            None,
-            &[],
-            None,
-        )
-        .expect_err("a missing handle must surface");
-        assert!(
-            err.to_string().contains("aucun index FTS ouvert"),
-            "error should name the cause, got: {err}"
-        );
-    }
-
-    /// No fields to search is not an error — it short-circuits before the index
-    /// is ever needed.
-    #[test]
-    fn search_bm25_empty_fields() {
-        let conn = MockConnection::new();
-
-        let results = search_bm25(
-            &conn, "Document", "test", &[], BM25Mode::Contains, 1, 10, None, &[], None,
-        )
-        .unwrap();
         assert!(results.is_empty());
     }
 

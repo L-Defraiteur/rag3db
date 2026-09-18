@@ -1291,7 +1291,7 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
             ..Default::default()
         };
         graph.add_node(Box::new(rag3weaver::dataflow::SearchSourceNode::new("src", SCOPE, "boot", opts))).unwrap();
-        // `KBSearchNode` passe par `Catalog::search`, donc il honore les
+        // `KBSearchNode` passe par `Catalog::rechercher`, donc il honore les
         // options que `SearchSourceNode` a posées — dont le domaine. Le
         // chemin par signal (`BM25SearchNode`) les **jette**, voir
         // `the_per_signal_path_drops_the_search_options_today`.
@@ -1336,7 +1336,7 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
 /// Il le jetait : `extract_query_and_target` ne rendait que la chaîne et la
 /// cible, si bien qu'un graphe composé à la main filtrait ou ne filtrait pas
 /// selon le nœud branché, sans rien dire. La condition devient des offsets
-/// lucivy (`Catalog::resolve_filter_to_ids`), que `search_bm25` prend comme
+/// lucivy (`Catalog::resolve_filter_to_ids`), que `search_bm25_chunked` prend comme
 /// pré-filtre : le jeu d'ids descend jusqu'aux résolveurs et la `doc_freq`
 /// est comptée sur le sous-ensemble.
 ///

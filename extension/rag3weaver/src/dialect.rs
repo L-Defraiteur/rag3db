@@ -496,7 +496,7 @@ pub trait SchemaDialect: Send + Sync {
     // ── Search resolution ────────────────────────────────────────────
 
     /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
-    /// Used by resolve_vector_chunks for chunk→parent join with optional source_refs.
+    /// Used by resolve_vector_chunks_with_dialect for chunk→parent join with optional source_refs.
     ///
     /// Returns columns: chunk_uuid, parent_uuid, c_text, c_idx, c_sline, c_eline, c_start, c_end,
     /// [c_source_entity, c_source_uuid, c_source_field (= _parent_field) if has_source_refs],

@@ -380,7 +380,8 @@ fn scope_user_filter_condition_applies_inside_cell() {
 /// des nœuds **hors** projection, et c'est pour ça que `Catalog::search`
 /// post-filtrait les hits vectoriels avec un sur-fetch ×4. Son message
 /// disait quoi faire le jour où il tomberait — « retirer scope_post_filter
-/// et ce canari ».
+/// et ce canari ». `scope_post_filter` est parti avec le monolithe le
+/// 18 septembre 2026 ; le canari reste, en sentinelle du cœur.
 ///
 /// La cause, trouvée par une trace dans l'extension : le masque était
 /// parfaitement construit, mais `searchFromUnCheckpointed` — le balayage des

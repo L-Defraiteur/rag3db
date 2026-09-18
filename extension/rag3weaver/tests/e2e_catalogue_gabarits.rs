@@ -49,8 +49,8 @@ fn setup() -> Catalog {
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
 
-    // **Le même embedder des deux côtés.** `Catalog::search` embarque la
-    // requête avec l'embedder **du catalogue** (`catalog.rs:3812`), tandis que
+    // **Le même embedder des deux côtés.** `Catalog::rechercher` embarque la
+    // requête avec l'embedder **du catalogue** (`embarquer_la_requete`), tandis que
     // `set_dual_embedder` ne change que ce qui indexe les documents. Passer un
     // `HashEmbedder` ici et BGE-M3 en dual compare deux espaces vectoriels sans
     // rapport : l'ordre devient quasi constant, les scores tournent autour de
@@ -166,7 +166,7 @@ fn brique_3_quel_texte_est_embarque() {
 /// **Brique 2 : le vecteur seul, à travers le moteur.**
 ///
 /// Le cosinus nu est juste (brique 1). On refait les mêmes questions par
-/// `Catalog::search`, en ne laissant qu'un signal à la fois — vecteur, puis
+/// `Catalog::rechercher`, en ne laissant qu'un signal à la fois — vecteur, puis
 /// plein texte, puis les deux. Celui qui ment se nomme.
 #[test]
 #[ignore]
