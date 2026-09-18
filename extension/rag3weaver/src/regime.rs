@@ -301,6 +301,45 @@ fn carte_libre_du_poste() -> Option<usize> {
 /// - La mesure est prise **une fois, au démarrage**.
 ///   `RAG3WEAVER_BURN_DEVICE_EMBEDDER` reprend la main.
 /// - Une seule carte : rien à choisir, on ne dit rien.
+/// **La carte, résumée pour l'heuristique du premier index** : dédiée,
+/// faible, ou absente (`embedding_choice::CardClass`).
+///
+/// Même lecture que [`least_watched_card`] — une vraie carte a un compteur
+/// d'occupation, le reste est du décor — plus une valeur qu'on ne lisait pas
+/// encore et qui est gratuite au même endroit : `mem_info_vram_total`. On
+/// prend la plus grosse carte : c'est celle que l'embarqueur prendra.
+///
+/// Une carte dont le total est illisible compte comme dédiée sans chiffre —
+/// on ne déclare pas « faible » ce qu'on n'a pas pu mesurer.
+pub fn card_class(racine: &Path) -> crate::embedding_choice::CardClass {
+    let Ok(entrees) = std::fs::read_dir(racine) else { return crate::embedding_choice::CardClass::None };
+    let mut vue = false;
+    let mut max_total: Option<u64> = None;
+    for e in entrees.flatten() {
+        let nom = e.file_name();
+        let nom = nom.to_string_lossy();
+        if !nom.starts_with("card") || nom.contains('-') {
+            continue;
+        }
+        let device = e.path().join("device");
+        if !device.join("gpu_busy_percent").exists() {
+            continue;
+        }
+        vue = true;
+        if let Some(total) = std::fs::read_to_string(device.join("mem_info_vram_total"))
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+        {
+            max_total = Some(max_total.map_or(total, |m| m.max(total)));
+        }
+    }
+    match (vue, max_total) {
+        (false, _) => crate::embedding_choice::CardClass::None,
+        (true, None) => crate::embedding_choice::CardClass::Dedicated { vram_bytes: 0 },
+        (true, Some(t)) => crate::embedding_choice::CardClass::from_vram(Some(t)),
+    }
+}
+
 pub fn least_watched_card(racine: &Path) -> Option<usize> {
     // (adresse PCI, écrans actifs, VRAM prise)
     let mut cartes: Vec<(String, usize, u64)> = Vec::new();
@@ -460,6 +499,59 @@ mod tests {
     #[test]
     fn un_dossier_qui_n_existe_pas_ne_panique_pas() {
         assert_eq!(least_watched_card(Path::new("/n/existe/pas")), None);
+    }
+
+    // ── La classe de carte, pour l'heuristique du premier index ─────────
+
+    /// Un faux `/sys/class/drm` : des cartes et leur VRAM totale en octets.
+    fn faux_sysfs_total(cartes: &[(&str, u64)]) -> tempfile::TempDir {
+        let d = tempfile::tempdir().expect("tempdir");
+        for (i, (carte, total)) in cartes.iter().enumerate() {
+            let cible = d.path().join(format!("0000:0{i}:00.0"));
+            std::fs::create_dir_all(&cible).unwrap();
+            std::fs::write(cible.join("gpu_busy_percent"), "0\n").unwrap();
+            std::fs::write(cible.join("mem_info_vram_used"), "0\n").unwrap();
+            std::fs::write(cible.join("mem_info_vram_total"), format!("{total}\n")).unwrap();
+            std::fs::create_dir_all(d.path().join(carte)).unwrap();
+            std::os::unix::fs::symlink(&cible, d.path().join(carte).join("device")).unwrap();
+        }
+        d
+    }
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    #[test]
+    fn deux_cartes_de_31_go_donnent_une_carte_dediee() {
+        use crate::embedding_choice::CardClass;
+        let d = faux_sysfs_total(&[("card0", 31 * GIB), ("card2", 31 * GIB)]);
+        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 31 * GIB });
+    }
+
+    /// La plus grosse carte décide : c'est celle que l'embarqueur prendra.
+    #[test]
+    fn la_plus_grosse_carte_decide() {
+        use crate::embedding_choice::CardClass;
+        let d = faux_sysfs_total(&[("card0", 2 * GIB), ("card1", 8 * GIB)]);
+        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 8 * GIB });
+    }
+
+    #[test]
+    fn une_petite_carte_est_faible_et_aucune_carte_est_absente() {
+        use crate::embedding_choice::CardClass;
+        let d = faux_sysfs_total(&[("card0", 2 * GIB)]);
+        assert_eq!(card_class(d.path()), CardClass::Weak { vram_bytes: 2 * GIB });
+        let vide = tempfile::tempdir().unwrap();
+        assert_eq!(card_class(vide.path()), CardClass::None);
+        assert_eq!(card_class(Path::new("/n/existe/pas")), CardClass::None);
+    }
+
+    /// Un total illisible ne rend pas la carte « faible » : on ne déclare pas
+    /// ce qu'on n'a pas mesuré.
+    #[test]
+    fn un_total_illisible_reste_une_carte_dediee_sans_chiffre() {
+        use crate::embedding_choice::CardClass;
+        let d = faux_sysfs(&[("card0", "0000:04:00.0", 90_000_000)]);
+        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 0 });
     }
 
     // ── Les quatre promesses ────────────────────────────────────────────

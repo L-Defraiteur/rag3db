@@ -325,6 +325,34 @@ impl DaemonEmbedder {
             .attente(std::time::Duration::from_secs(300))
     }
 
+    /// **La description du démon pour ce dépôt** : le même [`Self::serveur`],
+    /// avec le modèle choisi par l'heuristique du premier index posé dans son
+    /// environnement — sauf si `RAG3WEAVER_EMBED_MODEL` est déjà posée, qui
+    /// gagne (voir `embedding_choice`).
+    ///
+    /// Rend aussi le choix et sa raison : l'appelant les écrit en méta
+    /// (`Catalog::note_embedding_choice`) et les dit au montage. Ici on ne dit
+    /// rien : c'est l'appelant qui sait s'il y a quelqu'un pour lire.
+    ///
+    /// **Un démon déjà là sert ce qu'il sert.** Si celui qui répond à cette
+    /// adresse porte un autre modèle, `assurer` s'y attache quand même — on ne
+    /// relance jamais un démon qu'une autre session peut servir (tranché le 7
+    /// septembre 2026). C'est à l'appelant de comparer `identite().modele` au
+    /// choix rendu, et de le dire.
+    pub fn serveur_for_repository(
+        adresse: impl Into<String>,
+        programme: impl Into<String>,
+        files: usize,
+        source_bytes: u64,
+    ) -> (Serveur, crate::embedding_choice::Choice) {
+        use crate::embedding_choice::{choose, MODEL_VARIABLE};
+        let explicit = std::env::var(MODEL_VARIABLE).ok();
+        let card = crate::regime::card_class(std::path::Path::new("/sys/class/drm"));
+        let choice = choose(files, source_bytes, card, explicit.as_deref());
+        let serveur = Self::serveur(adresse, programme).env(MODEL_VARIABLE, choice.model.clone());
+        (serveur, choice)
+    }
+
     /// S'attacher à un démon qui **répond déjà**.
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
         Self::depuis(adresse, None)

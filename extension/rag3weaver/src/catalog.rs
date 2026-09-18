@@ -259,6 +259,19 @@ pub const fn rebuild_threshold(dim: usize) -> usize {
     if dim <= 384 { 1_500 } else { 2_000 }
 }
 
+/// Clé de `_catalog_meta` : le choix du premier index et sa raison.
+pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
+
+/// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
+/// quand. Pour qui se demandera dans six mois pourquoi cet index est en 107m.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingChoiceRecord {
+    pub model: String,
+    pub reason: String,
+    /// Millisecondes depuis l'époque.
+    pub at: u64,
+}
+
 impl Catalog {
     // ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -2123,6 +2136,31 @@ impl Catalog {
     /// la v6. `None` sur un index qui n'en a jamais eu.
     pub fn indexed_embedding_model(&self) -> Result<Option<String>, CatalogError> {
         self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)
+    }
+
+    /// **Pourquoi ce modèle est là le premier.** `embedding_model:{slug}` dit
+    /// ce que l'index porte ; ceci dit ce qui a décidé du premier — la
+    /// variable posée, 50 000 documents, une carte faible. Écrit **une fois**,
+    /// au premier index : le seuil décide du premier index, et le premier
+    /// index a eu lieu. Un lecteur n'écrit rien.
+    pub fn note_embedding_choice(&self, choice: &crate::embedding_choice::Choice) -> Result<(), CatalogError> {
+        if self.lecture_seule || self.read_meta_key(EMBEDDING_CHOICE_KEY)?.is_some() {
+            return Ok(());
+        }
+        let noted = EmbeddingChoiceRecord {
+            model: choice.model.clone(),
+            reason: choice.reason.clone(),
+            at: crate::dataflow::checkpoint::timestamp_ms(),
+        };
+        let json = serde_json::to_string(&noted).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(EMBEDDING_CHOICE_KEY, &json)
+    }
+
+    /// Le choix du premier index, tel qu'il a été noté — `None` sur un index
+    /// dont personne n'a dit pourquoi il a commencé ainsi.
+    pub fn embedding_choice(&self) -> Result<Option<EmbeddingChoiceRecord>, CatalogError> {
+        let Some(json) = self.read_meta_key(EMBEDDING_CHOICE_KEY)? else { return Ok(None) };
+        serde_json::from_str(&json).map(Some).map_err(|e| CatalogError::DbError(format!("embedding_choice illisible : {e}")))
     }
 
     /// Les tables qui portent des vecteurs : les chunks des entités à signal
