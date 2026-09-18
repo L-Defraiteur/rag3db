@@ -1,17 +1,24 @@
-%% Template: Search with graph expansion
+%% Template: la forme du graphe stratégie — recherche + expansion de graphe
 %% Variables: $kb_name, $query, $relation, $direction, $limit
 %%
-%% Extends the basic search with a FetchRelatedNode that traverses
-%% graph relationships, then ComposeNode attaches children to results.
-%% Add more fetch_N nodes for multiple expansion rules.
+%% **Une seule écriture.** `Catalog::build_dataflow_graph` instancie ce
+%% gabarit (placeholders, puis les vraies valeurs posées en config JSON).
+%% `primary_search` est le sous-graphe `search_base` entier, promu type de
+%% nœud (`SearchTool`) — plus un nœud opaque qui rappelait `rechercher` :
+%% depuis le 18 septembre 2026 au soir, `KBSearchNode` n'existe plus. Le
+%% payload de `query_source` entre par le port `source.query` du composite
+%% (pas B du doc 02) et porte les `SearchOptions` **entières** ; la config
+%% `target`/`query` du composite n'est que le défaut qu'exige sa fiche.
+%% Sans expansion, le tronçon `fetch_related_0`/`compose` est retiré à
+%% l'instanciation ; une règle de plus est un clone de `fetch_related_0`.
 
 graph LR
-    qs["KBQuerySourceNode(kb_name='$kb_name', query='$query')"]
-    ps["KBSearchNode"]
-    fetch_0["FetchRelatedNode(relation='$relation', direction='$direction', limit=$limit)"]
+    query_source["KBQuerySourceNode(kb_name='$kb_name', query='$query')"]
+    primary_search["SearchTool(target='$kb_name', query='$query')"]
+    fetch_related_0["FetchRelatedNode(relation='$relation', direction='$direction', limit=$limit)"]
     compose["ComposeNode"]
 
-    qs -->|query| ps
-    ps -->|results| fetch_0
-    ps -->|results| compose
-    fetch_0 -->|children| compose
+    query_source -->|query:source.query| primary_search
+    primary_search -->|render.results:results| fetch_related_0
+    primary_search -->|render.results:results| compose
+    fetch_related_0 -->|children| compose

@@ -15,6 +15,7 @@ pub mod graph;
 pub mod node;
 pub mod observe;
 pub mod port;
+pub mod resultat;
 pub mod record;
 pub mod record_nodes;
 pub mod derive_nodes;
@@ -49,11 +50,12 @@ pub use graph::{DataflowGraph, Edge};
 pub use node::{Node, NodeContext, NodeLogLevel, NodeLogEntry};
 pub use observe::{TapEvent, TapSpec};
 pub use port::{merge_port_values, BatchPayload, PortDef, PortType, PortValue, QueryPayload};
+pub use resultat::{source_info, ChildSummary, UnifiedResult};
 pub use record::{DataflowRecorder, RecordRetention, RecordSink};
 pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeStatus};
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};
 pub use search_nodes::{
-    ComposeNode, FetchRelatedNode, KBSearchNode, KBQuerySourceNode,
+    ComposeNode, FetchRelatedNode, KBQuerySourceNode,
 };
 pub use generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,

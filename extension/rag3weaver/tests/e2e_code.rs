@@ -1291,14 +1291,19 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
             ..Default::default()
         };
         graph.add_node(Box::new(rag3weaver::dataflow::SearchSourceNode::new("src", SCOPE, "boot", opts))).unwrap();
-        // `KBSearchNode` passe par `Catalog::rechercher`, donc il honore les
-        // options que `SearchSourceNode` a posées — dont le domaine. Le
-        // chemin par signal (`BM25SearchNode`) les **jette**, voir
+        // Le composite `SearchTool` (search_base en un nœud, depuis la chute
+        // de `KBSearchNode` le 18 septembre 2026) reçoit le payload par son
+        // port `source.query`, donc il honore les options que
+        // `SearchSourceNode` a posées — dont le domaine. Le chemin par
+        // signal (`BM25SearchNode`) les **jette**, voir
         // `the_per_signal_path_drops_the_search_options_today`.
-        graph.add_node(Box::new(rag3weaver::dataflow::KBSearchNode::new("search"))).unwrap();
+        let (composites, _outils) = rag3weaver::dataflow::builtin_graph_tools().unwrap();
+        graph
+            .add_from_registry(&composites, "SearchTool", "search", &serde_json::json!({"target": SCOPE, "query": "boot"}))
+            .unwrap();
         graph.add_node(Box::new(rag3weaver::dataflow::RenderResultsNode::new("render"))).unwrap();
-        graph.connect("src", "query", "search", "query").unwrap();
-        graph.connect("search", "results", "render", "results").unwrap();
+        graph.connect("src", "query", "search", "source.query").unwrap();
+        graph.connect("search", "render.results", "render", "results").unwrap();
 
         let mut services = ServiceRegistry::new();
         {

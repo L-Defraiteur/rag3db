@@ -12,7 +12,7 @@ use super::node_registry::{
 };
 use super::port::{PortDef, PortType};
 use super::search_nodes::{
-    ComposeNode, FetchRelatedNode, GroupFrameNode, KBSearchNode, KBQuerySourceNode,
+    ComposeNode, FetchRelatedNode, GroupFrameNode, KBQuerySourceNode,
 };
 use super::generic_search_nodes::{
     SearchSourceNode, VectorSearchNode, BM25SearchNode,
@@ -49,18 +49,6 @@ named_factory!(
     "Le parent de chaque résultat, selon le group_by déclaré par son entité — pour l'encadrer au rendu",
     &[PortDef { name: "results", port_type: PortType::Results, required: true }],
     &[PortDef { name: "frames", port_type: PortType::Children, required: false }],
-);
-
-named_factory!(
-    KBSearchNodeFactory,
-    KBSearchNode,
-    "KBSearchNode",
-    "Runs Catalog::rechercher via service registry",
-    &[PortDef { name: "query", port_type: PortType::Query, required: true }],
-    &[
-        PortDef { name: "results", port_type: PortType::Results, required: false },
-        PortDef { name: "meta", port_type: PortType::Meta, required: false },
-    ],
 );
 
 // ─── Macro-generated factories (named_factory!) ─────────────────────────────
@@ -629,8 +617,13 @@ impl NodeFactory for SearchSourceNodeFactory {
     fn schema(&self) -> NodeSchema {
         NodeSchema {
             node_type: "SearchSourceNode",
-            description: "Resolves SearchTarget and emits query",
-            inputs: vec![],
+            description: "Resolves SearchTarget and emits query; an optional \
+                          'query' input (QueryPayload) overrides the config",
+            inputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: false,
+            }],
             outputs: vec![
                 PortDef {
                     name: "query",
@@ -1243,7 +1236,6 @@ impl NodeFactory for ResolveParentNodeFactory {
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
-    registry.register(Box::new(KBSearchNodeFactory));
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
     registry.register(Box::new(GroupFrameNodeFactory));
@@ -1299,7 +1291,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 32 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

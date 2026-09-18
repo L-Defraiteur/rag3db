@@ -269,7 +269,7 @@ fn observe_execute_with_report_simple() {
     assert_eq!(report.edges[0].to_node, "primary_search");
 
     // Output should have results
-    let results = output.get("primary_search", "results");
+    let results = output.get("primary_search", "render.results");
     assert!(results.is_some(), "primary_search should have results output");
 }
 
@@ -399,7 +399,7 @@ fn observe_tap_all() {
     // Check results edge
     let results_tap = tap_events
         .iter()
-        .find(|e| e.from_port == "results" && e.to_node != "compose");
+        .find(|e| e.from_port == "render.results" && e.to_node != "compose");
     assert!(
         results_tap.is_some(),
         "Should capture a results edge"
@@ -426,7 +426,7 @@ fn observe_tap_specific_edge() {
 
     let mut runtime = DataflowRuntime::with_services(10, services);
     // Only tap the query edge
-    let mut tap_rx = runtime.tap("query_source", "query", "primary_search", "query");
+    let mut tap_rx = runtime.tap("query_source", "query", "primary_search", "source.query");
     runtime.execute(&mut graph).unwrap();
 
     let mut tap_events: Vec<TapEvent> = Vec::new();
