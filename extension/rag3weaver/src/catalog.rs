@@ -456,7 +456,7 @@ impl Catalog {
 
     /// **Le même modèle des deux côtés, quand la requête passe par le factice.**
     ///
-    /// `Catalog::search` n'embarque la requête avec le **dual** que si les deux
+    /// `Catalog::rechercher` n'embarque la requête avec le **dual** que si les deux
     /// signaux denses sont demandés (`vector` *et* `sparse`) — c'est le seul
     /// cas où un passage suffit pour les deux. Partout ailleurs, `bm25+vector`
     /// compris, elle passe par l'embedder du catalogue.
@@ -1106,7 +1106,7 @@ impl Catalog {
 
         // **Le même modèle des deux côtés, ou rien.**
         //
-        // `Catalog::search` n'embarque la requête avec le dual que si `vector`
+        // `Catalog::rechercher` n'embarque la requête avec le dual que si `vector`
         // **et** `sparse` sont demandés — un seul passage sert alors les deux.
         // Partout ailleurs, `bm25+vector` compris, la requête passe par
         // l'embedder du catalogue. Un factice là, un vrai modèle pour indexer :
@@ -3128,7 +3128,7 @@ impl Catalog {
     /// dire honnêtement.
     ///
     /// **Unique écrivain des trois branches.** Elles vivaient dans le corps de
-    /// [`Catalog::search`], c'est-à-dire nulle part pour le chemin composable :
+    /// `Catalog::search`, c'est-à-dire nulle part pour le chemin composable :
     /// l'outil `search` offert aux agents passe par `search_base.mmd`, donc par
     /// `SearchSourceNode`, qui ne les traversait pas. `Consistency::Strict`
     /// n'était d'ailleurs construit nulle part dans `src/` — la marque d'eau
@@ -3943,7 +3943,7 @@ impl Catalog {
                 bm25_fields,
                 enrich_fields,
                 default_signals: ec.signals,
-                default_fusion: ec.fusion.clone().unwrap_or_default(),
+                default_fusion: ec.fusion.clone(),
                 has_source_refs: derivee.is_some(),
                 filter_indirection: derivee.map(|d| (d.from.clone(), crate::schema::derived_rel_name(name))),
             });
@@ -6399,8 +6399,8 @@ impl Catalog {
 
     /// **La recherche du produit : le graphe `search_base`, lancé sur le
     /// catalogue.** C'est B13 de la réconciliation du 6 septembre 2026 — la
-    /// fin des deux chemins. Ce que `Catalog::search` fait en 416 lignes,
-    /// cette fonction le fait en montant les services, en instanciant le
+    /// fin des deux chemins. Ce que `Catalog::search` faisait en 416 lignes,
+    /// cette fonction le fait désormais seule, en montant les services, en instanciant le
     /// gabarit que les agents empruntent déjà, en l'exécutant, et en relisant
     /// ses ports : mêmes nœuds, mêmes corrections, un seul endroit.
     ///
@@ -6743,69 +6743,17 @@ impl Catalog {
 
     // ── Search ─────────────────────────────────────────────────────────
 
-    /// Ne garde que les hits vectoriels (chunks) de la cellule courante, dans
-    /// l'ordre reçu. Vérification par colonnes, parce que le graphe projeté
-    /// n'est pas respecté par QUERY_VECTOR_INDEX (voir le canari de e2e_scope).
-
-    /// **Le post-filtre du chemin vectoriel.**
-    ///
-    /// `QUERY_VECTOR_INDEX` sur un graphe projeté rend des nœuds **hors** de
-    /// la projection — bug du fork, canari dans `e2e_scope`. Le `WHERE`
-    /// compilé pour le vecteur n'est donc pas une garantie, c'est une
-    /// indication : il faut repasser derrière. C'est exactement le remède de
-    /// [`Self::scope_post_filter`], généralisé à n'importe quelle condition.
-    ///
-    /// Réservé aux entités simples : une base de connaissances filtre par une
-    /// entité de titre (`filter_indirection`) et suit un autre chemin.
-
-    /// Fan-out sur plusieurs cellules : une recherche par cellule, fusion par
-    /// rang (RRF, k = 60) — les scores BM25 de deux index ne sont pas
-    /// comparables (IDF distincts), les rangs le sont. Sur-fetch de
-    /// `limit + offset` par cellule, puis pagination sur la liste fusionnée.
-    fn search_fan_out(
-        &mut self,
-        name: &str,
-        query: &str,
-        options: search::SearchOptions,
-    ) -> Result<search::SearchResponse, CatalogError> {
-        let mut cells: Vec<crate::scope::Scope> = Vec::new();
-        for c in &options.scopes {
-            if !cells.contains(c) {
-                cells.push(c.clone());
-            }
-        }
-        let saved = self.scope.clone();
-        let mut per_cell: Vec<search::SearchResponse> = Vec::new();
-        let mut first_err: Option<CatalogError> = None;
-        let mut base = options.clone();
-        base.scopes.clear();
-        base.scope = None;
-        base.limit = options.limit + options.offset;
-        base.offset = 0;
-        for cell in &cells {
-            if let Err(e) = self.set_scope(cell.clone()) {
-                first_err = Some(e);
-                break;
-            }
-            match self.search(name, query, base.clone()) {
-                Ok(r) => per_cell.push(r),
-                Err(e) => {
-                    first_err = Some(e);
-                    break;
-                }
-            }
-        }
-        self.set_scope(saved)?;
-        if let Some(e) = first_err {
-            return Err(e);
-        }
-        fusionner_par_cellule(per_cell, cells.len(), options.offset, options.limit)
-    }
+    // Parti le 18 septembre 2026 : `Catalog::search` (le monolithe de 400
+    // lignes), `search_fan_out` et leur post-filtre vectoriel vivaient ici.
+    // `Catalog::rechercher` fait le même travail par le graphe `search_base`,
+    // seul chemin restant ; le fan-out de cellules vit dans
+    // `fusionner_par_cellule`, le post-filtre dans `compile_filter_for_vector`.
 }
 
 /// **Fond les réponses de plusieurs cellules par rang (RRF)**, et pagine.
 /// Les scores ne sont pas comparables entre cellules, et la réponse le dit.
-/// Partagé par le monolithe et par le lanceur composable.
+/// Hier partagé avec le monolithe ; seul `Catalog::rechercher` l'appelle
+/// depuis son retrait.
 fn fusionner_par_cellule(
     per_cell: Vec<search::SearchResponse>,
     nombre_de_cellules: usize,
@@ -6949,388 +6897,6 @@ impl Catalog {
         Ok(vecteurs)
     }
 
-    pub fn search(
-        &mut self,
-        name: &str,
-        query: &str,
-        options: search::SearchOptions,
-    ) -> Result<search::SearchResponse, CatalogError> {
-        self.check_initialized()?;
-        // Multi-tenant (doc 37) : fan-out sur plusieurs cellules, ou une autre
-        // cellule que la courante — on bascule les handles le temps de l'appel.
-        if !options.scopes.is_empty() {
-            return self.search_fan_out(name, query, options);
-        }
-        if let Some(wanted) = options.scope.clone() {
-            if wanted != self.scope {
-                let saved = self.scope.clone();
-                self.set_scope(wanted)?;
-                let mut inner = options.clone();
-                inner.scope = None;
-                let out = self.search(name, query, inner);
-                self.set_scope(saved)?;
-                return out;
-            }
-        }
-
-        let target = self.resolve_search_target(name)?;
-
-        // Ouverture paresseuse de l'index FTS : c'est ici qu'on connaît à la fois
-        // la table et ses champs BM25. Volontairement pas à `register_entity`,
-        // qui paierait la rematérialisation complète de l'index au démarrage.
-        // Rien à ouvrir quand la base sert le plein texte : son index se tient
-        // à jour tout seul, et ouvrir un handle lucivy ici rematérialiserait un
-        // index vide — puis chercherait dedans, et rendrait zéro sans rien dire.
-        if target.default_signals.bm25() && !self.plein_texte_natif() {
-            let table = target.parent_table.clone();
-            let fields = target.bm25_fields.clone();
-            self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
-        }
-
-        // Consistency — voir `appliquer_la_consigne`, l'unique écrivain.
-        let mut strict_warnings: Vec<String> = Vec::new();
-        let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
-        let (pending_count, partiel) = self.appliquer_la_consigne_pour(
-            name,
-            exige,
-            attendre_ailleurs,
-            options.timeout_ms,
-            &mut strict_warnings,
-        );
-
-        // Resolve signals: per-query override > target default
-        let signals = options.signals.unwrap_or(target.default_signals);
-
-        let search_limit = (options.limit + options.offset) * 2;
-        // Reranking : le pool rescoré doit exister avant la pagination.
-        let search_limit = match options.rerank {
-            Some(ref rk) => search_limit.max(rk.candidates),
-            None => search_limit,
-        };
-        let entity = &target.parent_table;
-        let vector_entity = &target.chunk_table;
-        let bm25_fields = &target.bm25_fields;
-        let enrich_fields = &target.enrich_fields;
-
-        // Parse filters: filter_condition takes priority over legacy filters HashMap
-        let condition: Option<FilterCondition> = if options.filter_condition.is_some() {
-            options.filter_condition.clone()
-        } else if !options.filters.is_empty() {
-            Some(options.filters.clone().into())
-        } else {
-            None
-        };
-
-        // Le filtre du chemin vectoriel : du Cypher, pas des offsets.
-        let (filter_where, filter_params, filter_match) = self.compile_filter_for_vector(&entity, condition.as_ref())?;
-
-        // Le pré-filtre : les filtres deviennent des offsets lucivy.
-        let allowed_ids = match condition {
-            Some(ref cond) => self.resolve_filter_to_ids(entity, cond, &target)?,
-            None => None,
-        };
-
-        // Et le même filtre pour le chemin texte **natif**, sans la cellule :
-        // là-bas c'est la base qui cherche, donc le domaine de travail descend
-        // en SQL et non en offsets. Il n'y descendait pas du tout — la
-        // recherche rendait les lignes filtrées comme les autres, sans le dire.
-        let (fu_where, fu_params, fu_join) =
-            self.compile_filter_utilisateur(entity, condition.as_ref())?;
-
-        // Both KB and simple entities always have chunks
-        let is_chunked = true;
-
-        // ── Timing + diagnostics ───────────────────────────────────────
-        let search_start = Instant::now();
-        let mut diag = if options.diagnostics {
-            Some(search::SearchDiagnostics::default())
-        } else {
-            None
-        };
-
-        // ── Embed query: use dual embedder when both dense+sparse are needed ──
-        let need_dense = signals.vector();
-        let need_sparse = signals.sparse();
-
-        let t_embed = Instant::now();
-        let (embedding, query_sparse) = self.embarquer_la_requete(query, need_dense, need_sparse)?;
-        if let Some(ref mut d) = diag { d.embed_ms = t_embed.elapsed().as_millis() as u64; }
-
-        // ── Run searches based on signals ─────────────────────────────────
-        let t_vector = Instant::now();
-        // Multi-tenant : QUERY_VECTOR_INDEX sur graphe projeté rend des nœuds
-        // hors projection (bug kuzu/vector, canari dans e2e_scope) — le WHERE
-        // de scope ne suffit donc pas. Sur-fetch, puis post-filtre par colonnes.
-        // Toujours collectés (`meta.warnings`) : moteur, attribution de chunks, scope.
-        let mut search_warnings: Vec<String> = std::mem::take(&mut strict_warnings);
-        // Plus de sur-fetch : depuis le 27 août, la projection est respectée
-        // par la recherche vectorielle (`searchFromUnCheckpointed` consulte
-        // enfin le masque). Le filtre est redevenu un **vrai pré-filtre**, et
-        // les deux post-filtres qui compensaient ici ont disparu avec leurs
-        // canaris — `e2e_scope::the_projected_graph_honours_the_vector_filter`
-        // et `e2e_code::where_the_vector_pre_filter_stands_today` préviendront
-        // si ça rechange.
-        let vector_limit = search_limit;
-        let vector_results = if need_dense {
-            // Le stockage du modèle courant sur cette table — refusé en nommant
-            // les modèles disponibles si le courant n'y est pas.
-            let storage = self.vector_storage(vector_entity)?;
-            let hits = search::search_vector_via_backend(
-                self.search_backend.as_ref().unwrap().as_ref(),
-                vector_entity,
-                &storage.index,
-                &storage.column,
-                &embedding,
-                vector_limit,
-                filter_where.as_deref(),
-                &filter_params,
-                filter_match.as_deref(),
-                &mut search_warnings,
-            )?;
-            hits
-        } else {
-            vec![]
-        };
-
-        if let Some(ref mut d) = diag { d.vector_ms = t_vector.elapsed().as_millis() as u64; }
-
-        let t_bm25 = Instant::now();
-        // Always collected, unlike `diag`: the engine's own warnings plus our
-        // chunk-attribution anomalies ride back in `meta.warnings`.
-        let bm25_results = if signals.bm25() {
-            if self.plein_texte_natif() {
-                // Le chemin natif ne distingue pas « chunké » ou non : il
-                // interroge la table parente comme lucivy le fait, et rend la
-                // main à la même mise en forme.
-                search::search_texte_natif(
-                    self.search_backend.as_ref().unwrap().as_ref(),
-                    &target, query, search_limit,
-                    enrich_fields, options.result_mode,
-                    self.multi_cell
-                        .then(|| (self.scope.org.as_str(), self.scope.project.as_str())),
-                    match (fu_join.as_deref(), fu_where.as_deref()) {
-                        (Some(j), Some(w)) => Some((j, w)),
-                        _ => None,
-                    },
-                    &fu_params,
-                    diag.as_mut(), &mut search_warnings,
-                )?
-            } else if is_chunked {
-                search::search_bm25_chunked(
-                    self.conn.as_ref(), self.dialect.as_ref(), &target, query, bm25_fields,
-                    options.bm25_mode, options.fuzzy_distance, search_limit,
-                    allowed_ids.as_deref(), enrich_fields, options.result_mode,
-                    diag.as_mut(), &mut search_warnings,
-                    self.fts_handles.get(&target.parent_table).map(|h| h.as_ref()),
-                )?
-            } else {
-                search::search_bm25(
-                    self.conn.as_ref(), entity, query, bm25_fields,
-                    options.bm25_mode, options.fuzzy_distance, search_limit,
-                    allowed_ids.as_deref(), enrich_fields,
-                    self.fts_handles.get(entity).map(|h| h.as_ref()),
-                )?
-            }
-        } else {
-            vec![]
-        };
-
-        if let Some(ref mut d) = diag { d.bm25_ms = t_bm25.elapsed().as_millis() as u64; }
-
-        let vector_count = vector_results.len();
-        let bm25_count = bm25_results.len();
-
-        let t_sparse = Instant::now();
-        let sparse_results = if let Some(qv) = query_sparse {
-            if let Some(handle) = self.sparse_handle(vector_entity) {
-                let sparse_fields = if is_chunked { &[][..] } else { enrich_fields.as_slice() };
-                search::search_sparse_via_backend(
-                    &handle,
-                    self.search_backend.as_ref().unwrap().as_ref(),
-                    vector_entity,
-                    &qv,
-                    search_limit,
-                    sparse_fields, allowed_ids.as_deref())?
-            } else {
-                vec![]
-            }
-        } else {
-            vec![]
-        };
-        if let Some(ref mut d) = diag { d.sparse_ms = t_sparse.elapsed().as_millis() as u64; }
-        let sparse_count = sparse_results.len();
-
-        // **Un signal muet doit dire pourquoi il l'est.** Zéro résultat sur le
-        // dense ou le sparse peut vouloir dire « ça n'existe pas » ou « ce
-        // n'est pas encore embarqué », et l'appelant ne peut pas distinguer.
-        // Le compte n'est fait que dans ce cas-là, pas à chaque recherche.
-        {
-            let mut muets = search::SearchSignals::NONE;
-            if signals.vector() && vector_count == 0 {
-                muets |= search::SearchSignals::VECTOR;
-            }
-            if signals.sparse() && sparse_count == 0 {
-                muets |= search::SearchSignals::SPARSE;
-            }
-            if !muets.is_empty() {
-                self.expliquer_le_silence_d_un_signal(
-                    &target.chunk_table,
-                    muets,
-                    &mut search_warnings,
-                );
-            }
-        }
-
-        // Resolve chunk-level results to parent-level with ChunkInfo + enrichment
-        let t_resolve = Instant::now();
-        let vector_results = if is_chunked && !vector_results.is_empty() {
-            search::resolve_vector_chunks_with_dialect(
-                self.conn.as_ref(), &target, vector_results, enrich_fields,
-                options.result_mode, self.dialect.as_ref(),
-            )?
-        } else { vector_results };
-        let sparse_results = if is_chunked && !sparse_results.is_empty() {
-            search::resolve_vector_chunks_with_dialect(
-                self.conn.as_ref(), &target, sparse_results, enrich_fields,
-                options.result_mode, self.dialect.as_ref(),
-            )?
-        } else { sparse_results };
-
-        if let Some(ref mut d) = diag { d.resolve_ms = t_resolve.elapsed().as_millis() as u64; }
-
-        let t_fuse = Instant::now();
-        let fusion_config = options.fusion.as_ref()
-            .cloned()
-            .unwrap_or(target.default_fusion.clone());
-        let mut fused = search::fuse_results(
-            &vector_results,
-            &bm25_results,
-            &sparse_results,
-            &fusion_config,
-        );
-        let fused_count = fused.len();
-
-        // Reranking (cross-encoder) du pool fusionné, avant la pagination —
-        // sinon on rescorerait une page, pas un pool.
-        let t_rerank = Instant::now();
-        let mut reranked_count = 0usize;
-        if let Some(ref rk) = options.rerank {
-            match self.reranker.clone() {
-                None => search_warnings.push(
-                    "rerank demandé, aucun reranker configuré (Catalog::set_reranker) — ordre de fusion conservé".into(),
-                ),
-                Some(reranker) => {
-                    let pool = rk.candidates.max(options.limit + options.offset).min(fused.len());
-                    let tail = fused.split_off(pool);
-                    // Le pool doit porter son texte : les résultats non chunkés
-                    // n'ont leurs champs qu'après enrichissement, qui vient
-                    // normalement après la pagination — on l'avance pour le pool.
-                    if fused.iter().any(|r| r.data.is_none()) && !enrich_fields.is_empty() {
-                        search::enrich_results_with_data_via_backend(
-                            self.search_backend.as_ref().unwrap().as_ref(), entity, enrich_fields, &mut fused,
-                        )?;
-                    }
-                    let passages: Vec<String> = fused.iter().map(crate::reranker::passage_text).collect();
-                    if passages.iter().all(|p| p.is_empty()) && !passages.is_empty() {
-                        search_warnings.push("rerank: aucun texte de passage disponible (ni chunk, ni _content) — ordre de fusion conservé".into());
-                        fused.extend(tail);
-                    } else {
-                        match reranker.rerank(query, &passages) {
-                            Ok(scores) if scores.len() == fused.len() => {
-                                let mut idx: Vec<usize> = (0..fused.len()).collect();
-                                idx.sort_by(|&a, &b| {
-                                    scores[b].partial_cmp(&scores[a])
-                                        .unwrap_or(std::cmp::Ordering::Equal)
-                                        .then(a.cmp(&b))
-                                });
-                                let mut reordered: Vec<search::SearchResult> = idx
-                                    .into_iter()
-                                    .map(|i| {
-                                        let mut r = fused[i].clone();
-                                        r.score = scores[i] as f64;
-                                        r
-                                    })
-                                    .collect();
-                                reranked_count = reordered.len();
-                                reordered.extend(tail);
-                                fused = reordered;
-                            }
-                            Ok(scores) => {
-                                search_warnings.push(format!(
-                                    "rerank ({}): {} scores pour {} passages — ordre de fusion conservé",
-                                    reranker.name(), scores.len(), fused.len()
-                                ));
-                                fused.extend(tail);
-                            }
-                            Err(e) => {
-                                search_warnings.push(format!("rerank ({}): {e} — ordre de fusion conservé", reranker.name()));
-                                fused.extend(tail);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(ref mut d) = diag { d.rerank_ms = t_rerank.elapsed().as_millis() as u64; }
-
-        // Pagination
-        if options.offset > 0 {
-            if options.offset >= fused.len() {
-                fused.clear();
-            } else {
-                fused = fused.split_off(options.offset);
-            }
-        }
-        fused.truncate(options.limit);
-
-        if let Some(ref mut d) = diag { d.fuse_ms = t_fuse.elapsed().as_millis() as u64; }
-
-        // Enrich results that don't already have data (e.g. vector non-chunked)
-        let t_enrich = Instant::now();
-        let needs_enrich: bool = fused.iter().any(|r| r.data.is_none());
-        if needs_enrich && !enrich_fields.is_empty() {
-            search::enrich_results_with_data_via_backend(
-                self.search_backend.as_ref().unwrap().as_ref(), entity, enrich_fields, &mut fused,
-            )?;
-        }
-
-        // SourceResolved: resolve index entries → source entities (KB only)
-        if target.has_source_refs && options.result_mode == search::ResultMode::SourceResolved {
-            self.resolve_to_source_entities(&mut fused)?;
-        }
-
-        if let Some(ref mut d) = diag { d.enrich_ms = t_enrich.elapsed().as_millis() as u64; }
-
-        let total_ms = search_start.elapsed().as_millis() as u64;
-        if let Some(ref mut d) = diag { d.total_ms = total_ms; }
-
-        self.emit_event(CatalogEvent::SearchCompleted {
-            kb: name.to_string(),
-            results: fused.len(),
-            duration_ms: total_ms,
-        });
-
-        Ok(search::SearchResponse {
-            results: fused,
-            meta: search::SearchMeta {
-                query: query.to_string(),
-                target: name.to_string(),
-                signals,
-                consistency: options.consistency,
-                partial: partiel,
-                pending_count,
-                warnings: std::mem::take(&mut search_warnings),
-                vector_count,
-                bm25_count,
-                sparse_count,
-                fused_count,
-                reranked_count,
-                search_time_ms: total_ms,
-                diagnostics: diag,
-            },
-        })
-    }
-
     /// Resolve index entry results to their source entities.
     ///
     /// Reads `_source_entity` and `_source_uuid` from each result's data,
@@ -7421,13 +6987,16 @@ impl Catalog {
         Ok(())
     }
 
+    /// Sur l'`Arc<Mutex<Catalog>>`, comme [`Self::rechercher`] qu'elle
+    /// emprunte — la recherche d'abord, l'exploration du graphe ensuite, le
+    /// verrou seulement pour la seconde.
     pub fn search_with_explore(
-        &mut self,
+        catalogue: &Arc<Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         options: search::ExploreOptions,
     ) -> Result<search::ExploreResult, CatalogError> {
-        let response = self.search(kb_name, query, options.search)?;
+        let response = Self::rechercher(catalogue, kb_name, query, options.search)?;
 
         let seed_nodes: Vec<search::GraphNode> = response
             .results
@@ -7442,8 +7011,9 @@ impl Catalog {
             })
             .collect();
 
+        let cat = catalogue.lock().unwrap();
         let graph = search::explore_bfs(
-            self.conn.as_ref(),
+            cat.conn.as_ref(),
             seed_nodes,
             &options.outgoing_relations,
             &options.incoming_relations,
@@ -7637,7 +7207,7 @@ impl Catalog {
     /// Run a search with reactive expansion (graph traversal after search).
     ///
     /// This is an associated function taking `Arc<Mutex<Catalog>>` so that
-    /// nodes can call `catalog.search()`.
+    /// nodes can call `Catalog::rechercher`.
     ///
     /// For event observation, use [`Self::build_dataflow_graph()`] +
     /// [`DataflowRuntime::subscribe()`] + [`DataflowRuntime::execute()`].
@@ -8771,8 +8341,9 @@ mod tests {
             .create("Document", make_doc_data("Reste", "corps"))
             .unwrap();
 
-        // Par le raccourci nommé, comme le fait `Catalog::search` : c'est lui
-        // qu'on veut éprouver, la traduction comprise.
+        // Par le raccourci nommé, comme le fait le chemin de `rechercher`
+        // (`SearchSourceNode`) : c'est lui qu'on veut éprouver, la traduction
+        // comprise.
         let (exige, attendre_ailleurs) = Consistency::Eventual.en_disponibilites();
         assert_eq!(exige, crate::disponibilite::Disponibilites::DONNEE);
         assert!(!attendre_ailleurs, "Eventual n'attend pas les autres processus");

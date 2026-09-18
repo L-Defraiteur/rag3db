@@ -55,7 +55,7 @@ named_factory!(
     KBSearchNodeFactory,
     KBSearchNode,
     "KBSearchNode",
-    "Runs Catalog::search() via service registry",
+    "Runs Catalog::rechercher via service registry",
     &[PortDef { name: "query", port_type: PortType::Query, required: true }],
     &[
         PortDef { name: "results", port_type: PortType::Results, required: false },

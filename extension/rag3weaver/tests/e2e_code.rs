@@ -320,7 +320,7 @@ fn read_and_grep_as_graph_tools() {
     // **Une correspondance exacte reste en tête.** Depuis que `search` est
     // hybride, le vecteur peut noyer un identifiant sous ce qui lui ressemble ;
     // les poids de la fusion penchent vers le plein texte pour cette raison.
-    assert!(markdown.contains("merge_port_values"), "{markdown}");
+    assert!(markdown.contains("### 1. merge_port_values"), "la correspondance exacte en tête, pas seulement citée dans le titre : {markdown}");
     // Le lien fichier, actionnable tel quel : `read(path, offset)`.
     assert!(markdown.contains("port.rs:"), "{markdown}");
     assert!(!markdown.contains("file_path=") && !markdown.contains("start_line="), "{markdown}");

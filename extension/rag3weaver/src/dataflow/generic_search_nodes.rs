@@ -137,8 +137,8 @@ impl Node for SearchSourceNode {
         }
 
         // **La consigne de cohérence, enfin appliquée sur ce chemin.** Elle
-        // vivait dans le corps de `Catalog::search`, que ce graphe n'emprunte
-        // pas : l'outil `search` des agents traversait donc zéro des trois
+        // vivait dans le corps de `Catalog::search`, que ce graphe
+        // n'empruntait pas : l'outil `search` des agents traversait zéro des trois
         // branches, et `Consistency::Strict` n'était construit nulle part.
         // C'est ici le seul endroit qui convienne — après la résolution de la
         // cible, avant que les signaux ne lisent quoi que ce soit.
@@ -232,7 +232,7 @@ impl Node for SearchSourceNode {
 ///
 /// Embeds the query string, then searches the chunk table. Passe par le
 /// `SearchBackend` du catalogue quand le service `catalog` en expose un
-/// (même chemin que `Catalog::search`, agnostique du moteur) ; sans catalogue,
+/// (le même chemin agnostique du moteur qu'empruntait le monolithe) ; sans catalogue,
 /// retombe sur le chemin Cypher direct.
 pub struct VectorSearchNode {
     node_name: String,
@@ -1157,15 +1157,19 @@ impl FuseResultsNode {
     /// faisait `options.fusion.unwrap_or(target.default_fusion)` ; ce nœud
     /// ignorait les deux — B4 de la réconciliation du 6 septembre 2026.
     ///
-    /// La fusion déclarée par la cible vaut pour toutes — le monolithe faisait
-    /// `options.fusion ?? target.default_fusion` sans regarder si la cible
-    /// était une KB ; la garde `has_source_refs` était un raccourci, retirée
-    /// le 18 septembre. Le gabarit ne décide que sans cible (graphe nu).
+    /// La fusion **déclarée** par la cible vaut pour toutes — la garde
+    /// `has_source_refs` était un raccourci (retirée le 18 septembre), mais
+    /// « déclarée » reste la condition : `default_fusion` est l'`Option` de la
+    /// config d'entité, pas un défaut aplati. Une cible qui ne déclare rien
+    /// laisse le gabarit décider — l'aplatir en `FusionConfig::default()`
+    /// éteignait les `weights` du gabarit (retrouvé le 18 septembre au soir :
+    /// l'outil des agents fusionnait 0,3/0,7 au lieu du 0,6/0,4 de sa fiche,
+    /// et la correspondance exacte coulait sous le vecteur).
     fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, bool) {
         match qp {
             Some(qp) if qp.options.fusion.is_some() => (qp.options.fusion.clone().unwrap(), false),
-            Some(qp) if qp.target.is_some() => {
-                (qp.target.as_ref().unwrap().default_fusion.clone(), false)
+            Some(qp) if qp.target.as_ref().is_some_and(|t| t.default_fusion.is_some()) => {
+                (qp.target.as_ref().unwrap().default_fusion.clone().unwrap(), false)
             }
             _ => (FusionConfig::default(), true),
         }
@@ -1306,7 +1310,7 @@ impl Node for FuseResultsNode {
 ///
 /// Il a besoin du texte des passages (chunk retrouvé, ou `_content` enrichi) :
 /// s'il n'y en a aucun, ou si aucun reranker n'est configuré, il avertit et
-/// laisse passer — comme `Catalog::search`.
+/// laisse passer — comme le faisait le monolithe.
 pub struct RerankNode {
     node_name: String,
     /// `None` : le pool vient de la requête (`options.rerank`), `0` = passe.

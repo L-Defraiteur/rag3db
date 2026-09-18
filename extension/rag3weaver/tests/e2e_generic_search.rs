@@ -2,7 +2,7 @@
 //!
 //! Builds search pipelines from generic nodes (SearchSourceNode, VectorSearchNode,
 //! BM25SearchNode, SparseSearchNode, FuseResultsNode, ResolveParentNode) and compares
-//! results with catalog.search() to validate equivalence.
+//! results with `Catalog::rechercher` to validate equivalence.
 //!
 //! Run with: ./run_e2e.sh generic_search
 
@@ -164,6 +164,24 @@ fn extract_results(
 }
 
 /// Build services for generic search pipeline.
+
+/// Enveloppe le catalogue le temps d'un appel au lanceur, puis le rend.
+fn cherche(
+    catalog: Catalog,
+    cible: &str,
+    requete: &str,
+    options: SearchOptions,
+) -> (Catalog, rag3weaver::search::SearchResponse) {
+    let partage = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let reponse = Catalog::rechercher(&partage, cible, requete, options).unwrap();
+    let catalog = std::sync::Arc::try_unwrap(partage)
+        .ok()
+        .expect("le graphe ne retient pas le catalogue")
+        .into_inner()
+        .unwrap();
+    (catalog, reponse)
+}
+
 fn build_services(
     catalog: Catalog,
     embedder: Arc<dyn Embedder>,
@@ -214,9 +232,9 @@ fn generic_bm25_pipeline_matches_catalog() {
     let mut catalog = setup_simple_catalog(4);
     catalog.ingest_entities("Product", test_products()).unwrap();
 
-    // 1. catalog.search() reference
-    let cat_response = catalog
-        .search(
+    // 1. le lanceur en référence
+    let (catalog, cat_response) = cherche(
+            catalog,
             "Product",
             "programming language",
             SearchOptions {
@@ -224,9 +242,7 @@ fn generic_bm25_pipeline_matches_catalog() {
                 signals: Some(SearchSignals::BM25),
                 ..Default::default()
             },
-        )
-        
-        .unwrap();
+        );
     eprintln!(
         "[BM25 catalog] {} results, bm25_count={}",
         cat_response.results.len(),
@@ -452,9 +468,9 @@ fn generic_vector_pipeline_matches_catalog() {
     catalog.register_entity("Product", product_config).unwrap();
     catalog.ingest_entities("Product", test_products()).unwrap();
 
-    // 1. catalog.search() reference
-    let cat_response = catalog
-        .search(
+    // 1. le lanceur en référence
+    let (catalog, cat_response) = cherche(
+            catalog,
             "Product",
             "systems programming and memory safety",
             SearchOptions {
@@ -462,9 +478,7 @@ fn generic_vector_pipeline_matches_catalog() {
                 signals: Some(SearchSignals::SEMANTIC),
                 ..Default::default()
             },
-        )
-        
-        .unwrap();
+        );
     eprintln!(
         "[Vector catalog] {} results, vector_count={}",
         cat_response.results.len(),
@@ -521,9 +535,9 @@ fn generic_hybrid_pipeline_matches_catalog() {
     catalog.register_entity("Product", make_product_config()).unwrap();
     catalog.ingest_entities("Product", test_products()).unwrap();
 
-    // 1. catalog.search() reference (HYBRID = BM25 + SEMANTIC)
-    let cat_response = catalog
-        .search(
+    // 1. le lanceur en référence (HYBRID = BM25 + SEMANTIC)
+    let (catalog, cat_response) = cherche(
+            catalog,
             "Product",
             "programming language",
             SearchOptions {
@@ -531,9 +545,7 @@ fn generic_hybrid_pipeline_matches_catalog() {
                 signals: Some(SearchSignals::HYBRID),
                 ..Default::default()
             },
-        )
-        
-        .unwrap();
+        );
     eprintln!(
         "[Hybrid catalog] {} results, bm25={}, vector={}, fused={}",
         cat_response.results.len(),
@@ -605,9 +617,9 @@ fn generic_sparse_pipeline_matches_catalog() {
     catalog.register_entity("Product", product_config).unwrap();
     catalog.ingest_entities("Product", test_products()).unwrap();
 
-    // 1. catalog.search() reference
-    let cat_response = catalog
-        .search(
+    // 1. le lanceur en référence
+    let (catalog, cat_response) = cherche(
+            catalog,
             "Product",
             "programming",
             SearchOptions {
@@ -615,9 +627,7 @@ fn generic_sparse_pipeline_matches_catalog() {
                 signals: Some(SearchSignals::SPARSE),
                 ..Default::default()
             },
-        )
-        
-        .unwrap();
+        );
     eprintln!(
         "[Sparse catalog] {} results, sparse_count={}",
         cat_response.results.len(),
@@ -686,18 +696,16 @@ fn generic_full_hybrid_pipeline_matches_catalog() {
     catalog.register_entity("Product", product_config).unwrap();
     catalog.ingest_entities("Product", test_products()).unwrap();
 
-    // 1. catalog.search() reference (HYBRID + SPARSE = all 3 signals)
-    let cat_response = catalog
-        .search(
+    // 1. le lanceur en référence (HYBRID + SPARSE = all 3 signals)
+    let (catalog, cat_response) = cherche(
+            catalog,
             "Product",
             "programming",
             SearchOptions {
                 consistency: Consistency::Immediate,
                 ..Default::default()
             },
-        )
-        
-        .unwrap();
+        );
     eprintln!(
         "[Full hybrid catalog] {} results, bm25={}, vector={}, sparse={}, fused={}",
         cat_response.results.len(),
@@ -1161,14 +1169,15 @@ fn le_filtre_herite_descend_sur_le_chemin_composable() {
 
 // ═══ Le lanceur : un seul chemin de recherche ═══════════════════════════════
 
-/// **`Catalog::rechercher` rend ce que `Catalog::search` rend.** C'est B13 de
-/// la réconciliation : le graphe `search_base`, lancé sur le catalogue, avec
-/// toutes les options de la requête — pas seulement les cinq de la fiche. Sur
-/// BM25 seul, sur le vecteur seul, sur l'hybride ; mêmes identifiants, même
-/// pagination, et une méta qui porte les comptes des signaux.
+/// **Le lanceur tient la page et les comptes.** Héritier de B13 : depuis le
+/// 18 septembre 2026 le monolithe `Catalog::search` n'existe plus, et la
+/// moitié « référence » de l'équivalence est partie avec lui. Restent les
+/// invariants qu'elle prouvait : sur BM25 seul, sur le vecteur seul, sur
+/// l'hybride, la page respecte la limite, les résultats sont enrichis, la
+/// méta porte les comptes des signaux — et `offset` n'est pas inerte.
 #[test]
 #[ignore]
-fn le_lanceur_rend_ce_que_le_monolithe_rend() {
+fn le_lanceur_tient_la_page_et_les_comptes() {
     use std::sync::Mutex;
     // `HashEmbedder`, pas `MockEmbedder` : le second rend des vecteurs nuls,
     // et l'ordre vectoriel de deux appels n'aurait rien de comparable.
@@ -1191,24 +1200,23 @@ fn le_lanceur_rend_ce_que_le_monolithe_rend() {
             limit: 2,
             ..Default::default()
         };
-        let reference = catalog.search("Product", "programming language", options.clone()).unwrap();
         let cat = Arc::new(Mutex::new(catalog));
         let reponse = Catalog::rechercher(&cat, "Product", "programming language", options).unwrap();
         eprintln!(
-            "[lanceur {signals:?}] monolithe={} lanceur={} bm25={}/{} vecteur={}/{} avertissements={:?}",
-            reference.results.len(), reponse.results.len(),
-            reference.meta.bm25_count, reponse.meta.bm25_count,
-            reference.meta.vector_count, reponse.meta.vector_count,
-            reponse.meta.warnings,
+            "[lanceur {signals:?}] {} résultats, bm25={} vecteur={} avertissements={:?}",
+            reponse.results.len(), reponse.meta.bm25_count,
+            reponse.meta.vector_count, reponse.meta.warnings,
         );
-        assert_eq!(reponse.results.len(), reference.results.len(), "{signals:?} : la page a la même taille");
-        let mut a: Vec<&str> = reference.results.iter().map(|r| r.uuid.as_str()).collect();
-        let mut b: Vec<&str> = reponse.results.iter().map(|r| r.uuid.as_str()).collect();
-        a.sort();
-        b.sort();
-        assert_eq!(a, b, "{signals:?} : mêmes identifiants");
-        assert_eq!(reponse.meta.bm25_count > 0, reference.meta.bm25_count > 0, "{signals:?}");
-        assert_eq!(reponse.meta.vector_count > 0, reference.meta.vector_count > 0, "{signals:?}");
+        assert!(
+            !reponse.results.is_empty() && reponse.results.len() <= 2,
+            "{signals:?} : la page respecte la limite : {} résultats", reponse.results.len()
+        );
+        if signals.bm25() {
+            assert!(reponse.meta.bm25_count > 0, "{signals:?} : le plein texte a compté");
+        }
+        if signals.vector() {
+            assert!(reponse.meta.vector_count > 0, "{signals:?} : le vecteur a compté");
+        }
         assert!(reponse.results.iter().all(|r| r.data.is_some()), "{signals:?} : enrichis");
         catalog = Arc::try_unwrap(cat).ok().expect("le graphe ne retient pas le catalogue").into_inner().unwrap();
     }

@@ -46,6 +46,24 @@ fn compte(catalog: &Catalog, cypher: &str) -> i64 {
 }
 
 /// Ticket, Comment, HAS_COMMENT, et la vue dérivée TicketView.
+
+/// Enveloppe le catalogue le temps d'un appel au lanceur, puis le rend.
+fn cherche(
+    catalog: Catalog,
+    cible: &str,
+    requete: &str,
+    options: SearchOptions,
+) -> (Catalog, rag3weaver::search::SearchResponse) {
+    let partage = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let reponse = Catalog::rechercher(&partage, cible, requete, options).unwrap();
+    let catalog = std::sync::Arc::try_unwrap(partage)
+        .ok()
+        .expect("le graphe ne retient pas le catalogue")
+        .into_inner()
+        .unwrap();
+    (catalog, reponse)
+}
+
 fn catalogue() -> Catalog {
     catalogue_sur(Rag3dbConnection::in_memory().expect("in-memory DB"))
 }
@@ -135,9 +153,7 @@ fn une_derivee_se_rend_depuis_sa_racine_et_ses_voisines() {
     assert!(lu.rows[0][2].as_str().is_some_and(|h| !h.is_empty()), "le hash des entrées est posé");
 
     // Le plein texte sur la vue trouve le mot d'un commentaire, et rend le ticket.
-    let res = catalog
-        .search("TicketView", "thermostat", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), result_mode: ResultMode::SourceResolved, ..Default::default() })
-        .unwrap();
+    let (mut catalog, res) = cherche(catalog, "TicketView", "thermostat", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), result_mode: ResultMode::SourceResolved, ..Default::default() });
     assert_eq!(res.results.len(), 1, "un seul ticket parle de thermostat");
     assert_eq!(res.results[0].entity.as_deref(), Some("Ticket"));
     assert_eq!(res.results[0].uuid, t1.uuid().unwrap());
@@ -165,9 +181,7 @@ fn une_derivee_se_rend_depuis_sa_racine_et_ses_voisines() {
     assert_eq!(avant[1], apres[1], "la vue de la porte ne bouge pas");
     let lu = catalog.execute_raw("MATCH (v:TicketView {title: 'Panne du four'}) RETURN v.content").unwrap();
     assert!(lu.rows[0][0].as_str().unwrap().contains("fusible"));
-    let res = catalog
-        .search("TicketView", "fusible", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() })
-        .unwrap();
+    let (mut catalog, res) = cherche(catalog, "TicketView", "fusible", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() });
     assert_eq!(res.results.len(), 1, "le nouveau texte est indexé");
 
     // Un ticket supprimé emporte sa vue et ses chunks.
@@ -257,9 +271,7 @@ fn la_dette_de_rendu_se_voit_en_base_et_se_rattrape() {
     let lu = catalog.execute_raw("MATCH (v:TicketView {title: 'Panne du four'}) RETURN v.content, v._render_hash").unwrap();
     assert!(lu.rows[0][0].as_str().unwrap().contains("grillé"), "{:?}", lu.rows[0]);
     assert!(!lu.rows[0][1].as_str().unwrap().is_empty());
-    let res = catalog
-        .search("TicketView", "grillé", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), result_mode: ResultMode::SourceResolved, ..Default::default() })
-        .unwrap();
+    let (mut catalog, res) = cherche(catalog, "TicketView", "grillé", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), result_mode: ResultMode::SourceResolved, ..Default::default() });
     assert_eq!(res.results.len(), 1, "le texte re-rendu est indexé");
     assert_eq!(res.results[0].uuid, t1.uuid().unwrap());
     let _ = t2;
@@ -276,11 +288,9 @@ fn la_dette_de_rendu_se_voit_en_base_et_se_rattrape() {
     catalog.execute_raw("MATCH (v:TicketView {title: 'Porte qui grince'}) DETACH DELETE v").unwrap();
     catalog.shutdown().unwrap();
     drop(catalog);
-    let mut catalog = catalogue_sur(Rag3dbConnection::new(&db_str).expect("reopen DB"));
+    let catalog = catalogue_sur(Rag3dbConnection::new(&db_str).expect("reopen DB"));
     assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 1);
-    let res = catalog
-        .search("TicketView", "grince", SearchOptions { consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), ..Default::default() })
-        .unwrap();
+    let (catalog, res) = cherche(catalog, "TicketView", "grince", SearchOptions { consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), ..Default::default() });
     assert_eq!(res.results.len(), 1, "la vue de la porte est re-rendue par la consigne : {:?}", res.meta);
     assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 2);
 }

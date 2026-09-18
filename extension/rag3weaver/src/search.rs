@@ -1,9 +1,9 @@
 //! Hybrid search: vector similarity + BM25 keyword search + sparse vector
 //! search with fusion.
 //!
-//! Contains free functions called by `Catalog::search()` and
-//! `Catalog::search_with_explore()`, plus types for search options,
-//! results, and graph exploration.
+//! Contains free functions called by the `search_base` graph nodes (the
+//! `Catalog::rechercher` path) and by `Catalog::search_with_explore()`,
+//! plus types for search options, results, and graph exploration.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -620,8 +620,10 @@ pub struct SearchTarget {
     pub enrich_fields: Vec<String>,
     /// Default search signals (can be overridden by `SearchOptions.signals`).
     pub default_signals: SearchSignals,
-    /// Default fusion config (can be overridden by `SearchOptions.fusion`).
-    pub default_fusion: FusionConfig,
+    /// Fusion declared by the target's config (overridden by
+    /// `SearchOptions.fusion`). `None` = nothing declared : le gabarit du
+    /// graphe décide (ses `weights` s'appliquent).
+    pub default_fusion: Option<FusionConfig>,
     /// Whether chunks have `_source_entity` / `_source_uuid` (KB only).
     pub has_source_refs: bool,
     /// For BM25 filter resolution via a title entity (KB only).
@@ -2750,8 +2752,8 @@ pub fn search_sparse_via_backend(
 /// Fuse signals are combined first (via RRF or Weighted), then Boost signals
 /// re-rank the fused results.
 ///
-/// Forme à trois listes conservée pour `Catalog::search` ; le cœur est
-/// [`fuse_signals`], N-aire.
+/// Forme à trois listes héritée du monolithe (parti le 18 septembre 2026) ;
+/// le cœur est [`fuse_signals`], N-aire.
 pub fn fuse_results(
     vector_results: &[SearchResult],
     bm25_results: &[SearchResult],
@@ -3758,7 +3760,7 @@ mod tests {
         }
     }
 
-    // ── Catalog::search ──────────────────────────────────────────────────
+    // ── Catalog::rechercher ──────────────────────────────────────────────
 
     #[test]
     fn catalog_search_not_initialized() {
@@ -3802,8 +3804,7 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
 
-        let result = catalog
-            .search_with_explore("main", "hello", ExploreOptions::default())
+        let result = Catalog::search_with_explore(&Arc::new(Mutex::new(catalog)), "main", "hello", ExploreOptions::default())
             .unwrap();
 
         assert!(result.results.is_empty());

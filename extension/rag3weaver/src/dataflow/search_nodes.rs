@@ -1,7 +1,7 @@
 //! Built-in search nodes for the dataflow graph.
 //!
 //! - [`KBQuerySourceNode`] — emits query + options
-//! - [`KBSearchNode`] — runs Catalog::search() (catalog via service)
+//! - [`KBSearchNode`] — runs Catalog::rechercher (catalog via service)
 //! - [`FetchRelatedNode`] — Cypher graph traversal (conn via service, results as input)
 //! - [`ComposeNode`] — attaches children to results
 
@@ -82,7 +82,7 @@ impl Node for KBQuerySourceNode {
 
 // ─── KBSearchNode ───────────────────────────────────────────────────────
 
-/// Runs `Catalog::search()` and outputs results + meta.
+/// Runs `Catalog::rechercher` and outputs results + meta.
 ///
 /// Retrieves `catalog` from the service registry (`Arc<Mutex<Catalog>>`).
 pub struct KBSearchNode {
@@ -119,9 +119,10 @@ impl Node for KBSearchNode {
             .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("KBSearchNode: 'catalog' service not found")?;
 
-        // Par le lanceur composable, plus par le monolithe : le dernier
-        // appelant de `Catalog::search` en production passe par le même
-        // graphe que les agents (B13 de la réconciliation du 6 septembre 2026).
+        // Par le lanceur composable, plus par le monolithe : ce nœud, dernier
+        // appelant de `Catalog::search` en production avant son retrait, passe
+        // par le même graphe que les agents (B13 de la réconciliation du
+        // 6 septembre 2026).
         let response = Catalog::rechercher(&catalog, &target_name, &query, options)
             .map_err(|e| e.to_string())?;
 
