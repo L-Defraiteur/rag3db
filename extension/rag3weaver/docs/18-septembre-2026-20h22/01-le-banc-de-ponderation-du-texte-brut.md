@@ -321,10 +321,49 @@ Si M1b tient près de 0,83, le texte explique tout ; s'il retombe vers 0,35,
 c'est la taille du corpus. À faire sur go — c'est une mesure de plus que les
 trois accordées.
 
-**Et rien n'est corrigé dans `EntityConfig`.** Embarquer le nom avec le texte,
-ou découper les champs ensemble, change les offsets, les surlignages et le
-contrat chunk → parent : c'est une décision de Lucie, avec ce tableau sous les
-yeux — et M1b d'abord, pour que le chiffre soit propre.
+### 19 septembre 2026 — M1b, et la conclusion renversée
+
+Même montage, tronc à `63d4b86b5` (branche recherche fusionnée, les bancs
+passent par `Catalog::rechercher`), `granite-278m`, 69 s.
+
+| ligne | MRR | R@1 | R@5 |
+|---|---:|---:|---:|
+| tel quel — `src/`, 4 820 scopes | 0,328 | 9 | 24 |
+| M1 — même texte que le cosinus nu, **67 scopes** | 0,833 | 31 | 45 |
+| M2 — cosinus exact au lieu du HNSW | 0,338 | 9 | 25 |
+| M3 — chunks bruts avant résolution | 0,206 | 3 | 15 |
+| **M1b — le texte de M1 sur les 4 820 scopes** | **0,385** | **9** | **28** |
+
+**M1b renverse la conclusion de la veille — et c'est pour ça qu'il fallait le
+faire.** Le même texte que le cosinus nu, sur le vrai corpus, rend 0,385, pas
+0,83. Le texte embarqué vaut **+0,06 de MRR et +4 à 5**, pas la moitié de la
+qualité. **L'écart 0,84 → 0,33 est la taille du corpus** : 45 questions
+contre 67 candidats triés sur le volet, ou contre 4 820 scopes dont les
+`tests (namespace)`, les `file_scope_NN (module)` de fichier entier, les `new`
+et `execute` par dizaines. Le banc de qualité mesure l'embarqueur sans
+distracteurs ; il ne mesure pas la recherche, et ses 0,84 ne sont pas un
+objectif atteignable par le catalogue sur un dépôt réel.
+
+Le §9 d'hier disait « l'étage qui perd est le texte ». C'était la lecture d'un
+tableau sans son facteur confondu ; il reste écrit au-dessus, avec sa date,
+parce qu'un doc qui efface ses erreurs n'apprend rien à celui qui le relit.
+
+**Ce que ça change pour la décision.** Embarquer le nom avec le texte, ou
+découper les champs ensemble, rapporterait ~0,06 — un gain réel, qui ne
+justifie pas à lui seul de toucher aux offsets, aux surlignages et au contrat
+chunk → parent. **Rien n'est corrigé dans `EntityConfig`** ; c'est à Lucie,
+avec ce tableau-ci sous les yeux.
+
+Le levier qui compte est **la pollution par genre dans `Scope`** — noté au §8,
+remis en tête par M1b : les scopes de fichier entier et les espaces de noms
+occupent le haut des listes sans jamais être une réponse. C'est un facteur par
+genre, la lignée du pas C. La mesure qui le chiffre : tel quel avec
+`scope_type` filtré sur `function | method` — sur go, en édition.
+
+Et un point mesuré, pas expliqué : tel quel est passé de 0,346 à 0,328 (R@1
+10 → 9) entre les deux passes, vecteur seul, même corpus à un scope près. Le
+seul changement entre les deux : la fusion de la branche recherche et le chemin
+`rechercher` au lieu de `search`. Donné tel quel à la session architecture.
 
 ## 10. Ce que ça coûte
 
