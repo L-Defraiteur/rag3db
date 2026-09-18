@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use super::resultat::{ChildSummary, UnifiedResult};
+
 /// La valeur qui circule sur un port : n'importe quoi de `Send + Sync`,
 /// effacé derrière un `Arc` pour que l'éventail (fan-out) soit un clone
 /// bon marché, ou un simple signal.
@@ -113,7 +115,6 @@ pub fn take_or_clone<T: Clone + Send + Sync + 'static>(pv: PortValue) -> Option<
 }
 
 use crate::search::{SearchOptions, SearchTarget};
-use crate::search_strategy::{ChildSummary, UnifiedResult};
 
 // ─── PortType ────────────────────────────────────────────────────────────────
 
