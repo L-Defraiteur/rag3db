@@ -102,28 +102,24 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
     assert!(m("relations") > 1000.0, "and thousands of relations, got {}", m("relations"));
     assert_eq!(m("failed"), 0.0);
 
-    {
-        let mut cat = catalog.lock().unwrap();
+    // ── Un fichier par son nom ──────────────────────────────────────────
+    let files = Catalog::rechercher(&catalog, FILE, "generic_search_nodes", bm25("generic_search_nodes")).unwrap();
+    let names: Vec<String> = files.results.iter().map(name_of).collect();
+    eprintln!("[File] {names:?}");
+    // Le fichier se nomme **dans son dépôt**, pas dans la racine
+    // d'analyse qu'on a passée — c'est tout l'objet du doc 04.
+    // Le fichier se nomme par son chemin **absolu dans sa source** — la
+    // racine d'analyse n'est qu'un point de vue (doc 04 v3).
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some(format!("{}/generic_search_nodes.rs", dataflow_dir()).as_str())
+    );
 
-        // ── Un fichier par son nom ──────────────────────────────────────
-        let files = cat.search(FILE, "generic_search_nodes", bm25("generic_search_nodes")).unwrap();
-        let names: Vec<String> = files.results.iter().map(name_of).collect();
-        eprintln!("[File] {names:?}");
-        // Le fichier se nomme **dans son dépôt**, pas dans la racine
-        // d'analyse qu'on a passée — c'est tout l'objet du doc 04.
-        // Le fichier se nomme par son chemin **absolu dans sa source** — la
-        // racine d'analyse n'est qu'un point de vue (doc 04 v3).
-        assert_eq!(
-            names.first().map(String::as_str),
-            Some(format!("{}/generic_search_nodes.rs", dataflow_dir()).as_str())
-        );
-
-        // ── Un scope par sa signature ───────────────────────────────────
-        let scopes = cat.search(SCOPE, "fn take_results", bm25("fn take_results")).unwrap();
-        let names: Vec<String> = scopes.results.iter().map(name_of).collect();
-        eprintln!("[Scope] {names:?}");
-        assert!(names.iter().any(|n| n == "take_results"), "{names:?}");
-    }
+    // ── Un scope par sa signature ───────────────────────────────────────
+    let scopes = Catalog::rechercher(&catalog, SCOPE, "fn take_results", bm25("fn take_results")).unwrap();
+    let names: Vec<String> = scopes.results.iter().map(name_of).collect();
+    eprintln!("[Scope] {names:?}");
+    assert!(names.iter().any(|n| n == "take_results"), "{names:?}");
 
     // ── Une relation : qui consomme take_results ? ──────────────────────
     let strategy = SearchStrategy {
@@ -154,11 +150,10 @@ fn reingest_is_idempotent() {
     let catalog = setup();
     let root = dataflow_dir();
     let analysis = rag3weaver::code::analyze(&root, subset_sources(&root));
-    let mut cat = catalog.lock().unwrap();
-    let first = cat.ingest_code(&analysis).unwrap();
-    let before = cat.search(SCOPE, "fn take_results", bm25("fn take_results")).unwrap().results.len();
-    let second = cat.ingest_code(&analysis).unwrap();
-    let after = cat.search(SCOPE, "fn take_results", bm25("fn take_results")).unwrap().results.len();
+    let first = catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+    let before = Catalog::rechercher(&catalog, SCOPE, "fn take_results", bm25("fn take_results")).unwrap().results.len();
+    let second = catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+    let after = Catalog::rechercher(&catalog, SCOPE, "fn take_results", bm25("fn take_results")).unwrap().results.len();
     eprintln!("[first] {first:?}\n[second] {second:?}\n[hits] {before} → {after}");
     assert_eq!(first.files, second.files);
     assert_eq!(first.scopes, second.scopes);
@@ -571,17 +566,15 @@ fn ingestion_order_does_not_change_the_graph() {
     // l'intérêt de garder BM25 dessus : retrouver un symbole par son nom.
     {
         let catalog = setup();
-        let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze("/projet", vec![lib(), app()])).unwrap();
-        let found = cat
-            .search("Symbol", "compute_total", bm25("compute_total"))
+        catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![lib(), app()])).unwrap();
+        let found = Catalog::rechercher(&catalog, "Symbol", "compute_total", bm25("compute_total"))
             .unwrap();
         let names: Vec<String> = found.results.iter().map(name_of).collect();
         eprintln!("[symboles trouvés] {names:?}");
         assert!(names.iter().any(|n| n == "compute_total"), "{names:?}");
         // Sans chunk : pas d'extrait, et c'est attendu.
         assert!(found.results.iter().all(|r| r.chunk.is_none()), "un Symbol n'a pas de chunk");
-        let chunks = cat.execute_raw("MATCH (c:Symbol_Chunk) RETURN count(c)").unwrap();
+        let chunks = catalog.lock().unwrap().execute_raw("MATCH (c:Symbol_Chunk) RETURN count(c)").unwrap();
         eprintln!("[chunks de Symbol] {:?}", chunks.rows.first());
     }
 
@@ -647,22 +640,24 @@ fn building_the_vector_index_in_bulk_beats_row_by_row() {
     // ── Chemin en masse : détruire, charger, construire ─────────────────
     let (bulk, build_ms, results_after) = {
         let catalog = setup();
-        let mut cat = catalog.lock().unwrap();
-        // L'index et la colonne sont ceux du modèle courant, résolus — plus
-        // `Scope_Chunk_vec` / `embedding` en dur (7 septembre 2026). Sur un
-        // catalogue neuf, le modèle ne s'enregistre qu'au premier embarquement :
-        // on manipule son index, donc on l'enregistre d'abord.
-        cat.ensure_embedding_model().expect("enregistrer le modèle courant");
-        let st = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant");
-        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}', skip_if_not_exists := true)", st.index))
-            .expect("l'index doit pouvoir être détruit");
-        let t = Instant::now();
-        cat.ingest_code(&analysis).unwrap();
-        let load = t.elapsed().as_millis();
-        let t = Instant::now();
-        cat.execute_raw(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{}', '{}', metric := 'cosine', skip_if_exists := true)", st.index, st.column))
-            .expect("l'index doit pouvoir être construit sur une table pleine");
-        let build = t.elapsed().as_millis();
+        let (load, build) = {
+            let mut cat = catalog.lock().unwrap();
+            // L'index et la colonne sont ceux du modèle courant, résolus — plus
+            // `Scope_Chunk_vec` / `embedding` en dur (7 septembre 2026). Sur un
+            // catalogue neuf, le modèle ne s'enregistre qu'au premier embarquement :
+            // on manipule son index, donc on l'enregistre d'abord.
+            cat.ensure_embedding_model().expect("enregistrer le modèle courant");
+            let st = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant");
+            cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}', skip_if_not_exists := true)", st.index))
+                .expect("l'index doit pouvoir être détruit");
+            let t = Instant::now();
+            cat.ingest_code(&analysis).unwrap();
+            let load = t.elapsed().as_millis();
+            let t = Instant::now();
+            cat.execute_raw(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{}', '{}', metric := 'cosine', skip_if_exists := true)", st.index, st.column))
+                .expect("l'index doit pouvoir être construit sur une table pleine");
+            (load, t.elapsed().as_millis())
+        };
         eprintln!("[hnsw] en masse : {load} ms de chargement + {build} ms de construction = {} ms", load + build);
 
         // Et il faut que la recherche vectorielle marche après.
@@ -672,7 +667,7 @@ fn building_the_vector_index_in_bulk_beats_row_by_row() {
             limit: 5,
             ..Default::default()
         };
-        let found = cat.search(rag3weaver::code::SCOPE, "merge port values", opts).unwrap();
+        let found = Catalog::rechercher(&catalog, rag3weaver::code::SCOPE, "merge port values", opts).unwrap();
         (load + build, build, found.results.len())
     };
 
@@ -705,20 +700,20 @@ fn the_bulk_switch_yields_the_same_graph_and_a_working_vector_index() {
 
     let normal = {
         let catalog = setup();
-        let mut cat = catalog.lock().unwrap();
-        let r = cat.ingest_code(&analysis).unwrap();
-        let found = cat.search(SCOPE, "merge port values", semantic()).unwrap();
+        let r = catalog.lock().unwrap().ingest_code(&analysis).unwrap();
+        let found = Catalog::rechercher(&catalog, SCOPE, "merge port values", semantic()).unwrap();
         (r.files, r.scopes, r.relations, r.symbols, found.results.len())
     };
 
     let bulk = {
         let catalog = setup();
-        let mut cat = catalog.lock().unwrap();
-        let r = cat
+        let r = catalog
+            .lock()
+            .unwrap()
             .bulk_vector_index(&[FILE, SCOPE, "Library"], |c| c.ingest_code(&analysis))
             .unwrap()
             .unwrap();
-        let found = cat.search(SCOPE, "merge port values", semantic()).unwrap();
+        let found = Catalog::rechercher(&catalog, SCOPE, "merge port values", semantic()).unwrap();
         (r.files, r.scopes, r.relations, r.symbols, found.results.len())
     };
 
@@ -775,19 +770,19 @@ fn an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens() {
 
     // Réouverture **sans** redéclarer le schéma : rien d'autre que la
     // réparation ne peut recréer l'index.
-    let mut cat = open(false);
-    let found = cat
-        .search(
-            SCOPE,
-            "merge port values",
-            SearchOptions {
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::SEMANTIC),
-                limit: 5,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    let cat = Arc::new(Mutex::new(open(false)));
+    let found = Catalog::rechercher(
+        &cat,
+        SCOPE,
+        "merge port values",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::SEMANTIC),
+            limit: 5,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     eprintln!("[réparation] {} résultats après réouverture", found.results.len());
     assert!(found.results.len() > 0, "l'index vectoriel doit être rebâti à l'ouverture");
 
@@ -1216,14 +1211,16 @@ fn a_work_domain_narrows_what_a_search_can_see() {
 
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
     let catalog = setup();
-    let mut cat = catalog.lock().unwrap();
-    // Trois endroits, aucun n'étant un dépôt : le domaine travaillera sur des
-    // préfixes de chemin, ce qui est le cas le plus général.
-    cat.ingest_code(&analyze("/projets/alpha", vec![("src/a.rs".to_string(), boot("alpha"))])).unwrap();
-    cat.ingest_code(&analyze("/projets/beta", vec![("src/b.rs".to_string(), boot("beta"))])).unwrap();
-    cat.ingest_code(&analyze("/ailleurs", vec![("notes.rs".to_string(), boot("ailleurs"))])).unwrap();
+    {
+        let mut cat = catalog.lock().unwrap();
+        // Trois endroits, aucun n'étant un dépôt : le domaine travaillera sur des
+        // préfixes de chemin, ce qui est le cas le plus général.
+        cat.ingest_code(&analyze("/projets/alpha", vec![("src/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets/beta", vec![("src/b.rs".to_string(), boot("beta"))])).unwrap();
+        cat.ingest_code(&analyze("/ailleurs", vec![("notes.rs".to_string(), boot("ailleurs"))])).unwrap();
+    }
 
-    let found = |cat: &mut rag3weaver::Catalog, domain: &WorkDomain| -> Vec<String> {
+    let found = |catalog: &Arc<Mutex<Catalog>>, domain: &WorkDomain| -> Vec<String> {
         let opts = SearchOptions {
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
@@ -1232,19 +1229,19 @@ fn a_work_domain_narrows_what_a_search_can_see() {
             filter_condition: domain.to_filter("file_path"),
             ..Default::default()
         };
-        let mut names: Vec<String> = cat.search(SCOPE, "boot", opts).unwrap().results.iter().map(name_of).collect();
+        let mut names: Vec<String> = Catalog::rechercher(catalog, SCOPE, "boot", opts).unwrap().results.iter().map(name_of).collect();
         names.sort();
         names.dedup();
         names
     };
 
-    let tout = found(&mut cat, &WorkDomain::everything());
+    let tout = found(&catalog, &WorkDomain::everything());
     eprintln!("[tout] {tout:?}");
     assert!(tout.iter().any(|n| n == "boot_alpha") && tout.iter().any(|n| n == "boot_ailleurs"), "{tout:?}");
 
     // « Je travaille dans alpha » — beta et le reste sortent du champ.
     let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
-    let vus = found(&mut cat, &alpha);
+    let vus = found(&catalog, &alpha);
     eprintln!("[alpha] {} → {vus:?}", alpha.describe());
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
 
@@ -1253,7 +1250,7 @@ fn a_work_domain_narrows_what_a_search_can_see() {
     let deux = WorkDomain::new("les deux")
         .including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })
         .including(Selector { under: vec!["/ailleurs".into()], ..Default::default() });
-    let vus = found(&mut cat, &deux);
+    let vus = found(&catalog, &deux);
     eprintln!("[dispersé] {} → {vus:?}", deux.describe());
     assert_eq!(vus, vec!["boot_ailleurs".to_string(), "boot_alpha".to_string()], "{vus:?}");
 
@@ -1261,7 +1258,7 @@ fn a_work_domain_narrows_what_a_search_can_see() {
     let sauf = WorkDomain::new("les projets sauf beta")
         .including(Selector { under: vec!["/projets".into()], ..Default::default() })
         .excluding(Selector { under: vec!["/projets/beta".into()], ..Default::default() });
-    let vus = found(&mut cat, &sauf);
+    let vus = found(&catalog, &sauf);
     eprintln!("[exclusion] {} → {vus:?}", sauf.describe());
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
 }
@@ -1476,9 +1473,11 @@ fn catalog_search_with_a_vector_filter_on_a_parent_field() {
 
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
     let catalog = setup();
-    let mut cat = catalog.lock().unwrap();
-    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    }
 
     let domain = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
     let opts = SearchOptions {
@@ -1488,7 +1487,7 @@ fn catalog_search_with_a_vector_filter_on_a_parent_field() {
         filter_condition: domain.to_filter("file_path"),
         ..Default::default()
     };
-    let got = cat.search(SCOPE, "boot", opts);
+    let got = Catalog::rechercher(&catalog, SCOPE, "boot", opts);
     match &got {
         Ok(r) => {
             let names: Vec<String> = r.results.iter().map(name_of).collect();

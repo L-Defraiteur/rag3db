@@ -28,7 +28,7 @@
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
@@ -124,15 +124,14 @@ fn setup() -> Catalog {
     catalog
 }
 
-fn top_title(catalog: &mut Catalog, query: &str, signals: SearchSignals) -> String {
-    let response = catalog
-        .search("kb", query, SearchOptions {
-            bm25_mode: BM25Mode::ContainsSplit,
-            consistency: Consistency::Immediate,
-            signals: Some(signals),
-            ..Default::default()
-        })
-        .unwrap();
+fn top_title(catalog: &Arc<Mutex<Catalog>>, query: &str, signals: SearchSignals) -> String {
+    let response = Catalog::rechercher(catalog, "kb", query, SearchOptions {
+        bm25_mode: BM25Mode::ContainsSplit,
+        consistency: Consistency::Immediate,
+        signals: Some(signals),
+        ..Default::default()
+    })
+    .unwrap();
     assert!(!response.results.is_empty(), "no results for {query:?}");
     let top = &response.results[0];
     let title = top.data.as_ref().and_then(|d| d.get("_title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -150,17 +149,17 @@ fn cosine(a: &[f32], b: &[f32]) -> f32 {
 #[test]
 #[ignore]
 fn multilingual_minilm_french_query_finds_english_document() {
-    let mut catalog = setup();
-    assert_eq!(top_title(&mut catalog, "un félin fait la sieste sur le sofa", SearchSignals::VECTOR), "Pets");
-    assert_eq!(top_title(&mut catalog, "langage compilé sûr pour la mémoire", SearchSignals::VECTOR), "Rust");
+    let catalog = Arc::new(Mutex::new(setup()));
+    assert_eq!(top_title(&catalog, "un félin fait la sieste sur le sofa", SearchSignals::VECTOR), "Pets");
+    assert_eq!(top_title(&catalog, "langage compilé sûr pour la mémoire", SearchSignals::VECTOR), "Rust");
 }
 
 /// The reverse: an English query on the French document, no word in common.
 #[test]
 #[ignore]
 fn multilingual_minilm_english_query_finds_french_document() {
-    let mut catalog = setup();
-    assert_eq!(top_title(&mut catalog, "how to bake a cake", SearchSignals::VECTOR), "Pâtisserie");
+    let catalog = Arc::new(Mutex::new(setup()));
+    assert_eq!(top_title(&catalog, "how to bake a cake", SearchSignals::VECTOR), "Pâtisserie");
 }
 
 /// Hybrid: BM25 and the 384-dim vector both contribute and agree (same language
@@ -168,14 +167,13 @@ fn multilingual_minilm_english_query_finds_french_document() {
 #[test]
 #[ignore]
 fn multilingual_minilm_hybrid_both_signals() {
-    let mut catalog = setup();
-    let response = catalog
-        .search("kb", "programming language safety", SearchOptions {
-            bm25_mode: BM25Mode::ContainsSplit,
-            consistency: Consistency::Immediate,
-            ..Default::default()
-        })
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(&catalog, "kb", "programming language safety", SearchOptions {
+        bm25_mode: BM25Mode::ContainsSplit,
+        consistency: Consistency::Immediate,
+        ..Default::default()
+    })
+    .unwrap();
     assert!(response.meta.vector_count > 0, "vector should contribute");
     assert!(response.meta.bm25_count > 0, "bm25 should contribute");
     let top = response.results[0].data.as_ref().and_then(|d| d.get("_title")).and_then(|v| v.as_str()).unwrap_or("");

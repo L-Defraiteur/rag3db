@@ -36,6 +36,7 @@
 mod common;
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use common::burn::{BGE_RERANKER, MMARCO_RERANKER};
 use rag3weaver::config::FieldType;
@@ -222,8 +223,8 @@ fn note(name: &str, body: &str) -> BTreeMap<String, CypherValue> {
     d
 }
 
-fn names(catalog: &mut Catalog, q: &str, opts: SearchOptions) -> (Vec<String>, rag3weaver::search::SearchMeta) {
-    let resp = catalog.search("Note", q, opts).unwrap();
+fn names(catalog: &Arc<Mutex<Catalog>>, q: &str, opts: SearchOptions) -> (Vec<String>, rag3weaver::search::SearchMeta) {
+    let resp = Catalog::rechercher(catalog, "Note", q, opts).unwrap();
     let names = resp
         .results
         .iter()
@@ -251,22 +252,22 @@ fn opts(rerank: Option<RerankOptions>) -> SearchOptions {
 #[test]
 #[ignore]
 fn mmarco_beats_keyword_stuffing_in_french_catalog() {
-    let mut catalog = catalog();
-    catalog.ingest_entities("Note", vec![
+    let catalog = Arc::new(Mutex::new(catalog()));
+    catalog.lock().unwrap().ingest_entities("Note", vec![
         note("BOURRÉE", "berlin habitants berlin habitants berlin habitants personnes vivent berlin personnes"),
         note("RÉPONSE", "Berlin compte 3,5 millions d'habitants enregistrés"),
         note("MUR", "Le mur de Berlin est tombé en 1989 et les habitants ont fêté ça"),
     ]).unwrap();
 
     let q = "combien de personnes vivent à berlin habitants";
-    let (baseline, meta) = names(&mut catalog, q, opts(None));
+    let (baseline, meta) = names(&catalog, q, opts(None));
     eprintln!("  [bm25 only]      {baseline:?}");
     assert_eq!(baseline.len(), 3);
     assert_eq!(meta.reranked_count, 0);
     assert_eq!(baseline[0], "BOURRÉE", "BM25 alone should reward the stuffed note: {baseline:?}");
 
-    catalog.set_reranker(MMARCO_RERANKER.clone());
-    let (reranked, meta) = names(&mut catalog, q, opts(Some(RerankOptions::default())));
+    catalog.lock().unwrap().set_reranker(MMARCO_RERANKER.clone());
+    let (reranked, meta) = names(&catalog, q, opts(Some(RerankOptions::default())));
     eprintln!("  [cross-encoder]  {reranked:?}");
     assert_eq!(reranked.len(), 3);
     assert_eq!(reranked[0], "RÉPONSE", "the cross-encoder puts the real answer first: {reranked:?}");

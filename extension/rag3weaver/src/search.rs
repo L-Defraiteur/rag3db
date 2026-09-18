@@ -3267,6 +3267,7 @@ mod tests {
     use crate::connection::MockConnection;
     use crate::embedder::{EmbedError, MockEmbedder};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     // ── test helpers ──────────────────────────────────────────────────────
 
@@ -3761,9 +3762,8 @@ mod tests {
 
     #[test]
     fn catalog_search_not_initialized() {
-        let mut catalog = make_catalog();
-        let err = catalog
-            .search("main", "test", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(make_catalog()));
+        let err = Catalog::rechercher(&catalog, "main", "test", SearchOptions::default())
             .unwrap_err();
         assert!(matches!(err, CatalogError::NotInitialized));
     }
@@ -3773,8 +3773,8 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
 
-        let err = catalog
-            .search("nonexistent", "test", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(catalog));
+        let err = Catalog::rechercher(&catalog, "nonexistent", "test", SearchOptions::default())
             .unwrap_err();
         assert!(matches!(err, CatalogError::UnknownKB(_)));
     }
@@ -3784,8 +3784,8 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
 
-        let response = catalog
-            .search("main", "hello world", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(catalog));
+        let response = Catalog::rechercher(&catalog, "main", "hello world", SearchOptions::default())
             .unwrap();
 
         assert!(response.results.is_empty()); // MockConnection → empty
@@ -3953,8 +3953,8 @@ mod tests {
         catalog.register_entity("Product", ec).unwrap();
 
         // Search should succeed (MockConnection → empty results, no errors)
-        let response = catalog
-            .search("Product", "shoes", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(catalog));
+        let response = Catalog::rechercher(&catalog, "Product", "shoes", SearchOptions::default())
             .unwrap();
 
         assert!(response.results.is_empty()); // MockConnection → empty
@@ -3997,8 +3997,8 @@ mod tests {
         catalog.ingest_entities("Product", vec![data]).unwrap();
 
         // Search after ingest — should not error
-        let response = catalog
-            .search("Product", "shoes", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(catalog));
+        let response = Catalog::rechercher(&catalog, "Product", "shoes", SearchOptions::default())
             .unwrap();
         assert_eq!(response.meta.target, "Product");
     }

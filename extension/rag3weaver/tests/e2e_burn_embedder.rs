@@ -31,7 +31,7 @@
 mod common;
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
@@ -210,8 +210,8 @@ fn title_of(result: &rag3weaver::search::SearchResult) -> String {
 #[test]
 #[ignore]
 fn burn_dual_three_signals_contribute() {
-    let mut catalog = setup();
-    let response = catalog.search("kb", "programming", options(None)).unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(&catalog, "kb", "programming", options(None)).unwrap();
 
     eprintln!(
         "[burn-dual] results={}, vector={}, bm25={}, sparse={}",
@@ -231,10 +231,8 @@ fn burn_dual_three_signals_contribute() {
 #[test]
 #[ignore]
 fn burn_dual_top_result_english() {
-    let mut catalog = setup();
-    let response = catalog
-        .search("kb", "systems programming safety ownership", options(None))
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(&catalog, "kb", "systems programming safety ownership", options(None)).unwrap();
 
     assert!(!response.results.is_empty(), "should find results");
     let top = title_of(&response.results[0]);
@@ -248,14 +246,14 @@ fn burn_dual_top_result_english() {
 #[test]
 #[ignore]
 fn burn_vector_only_multilingual_semantic() {
-    let mut catalog = setup();
-    let response = catalog
-        .search(
-            "kb",
-            "recettes de desserts sucrés",
-            options(Some(SearchSignals::VECTOR)),
-        )
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "recettes de desserts sucrés",
+        options(Some(SearchSignals::VECTOR)),
+    )
+    .unwrap();
 
     assert!(!response.results.is_empty(), "vector-only should find results");
     let top = title_of(&response.results[0]);
@@ -273,14 +271,14 @@ fn burn_vector_only_multilingual_semantic() {
 #[test]
 #[ignore]
 fn burn_sparse_only_retrieves() {
-    let mut catalog = setup();
-    let response = catalog
-        .search(
-            "kb",
-            "neural networks attention",
-            options(Some(SearchSignals::SPARSE)),
-        )
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "neural networks attention",
+        options(Some(SearchSignals::SPARSE)),
+    )
+    .unwrap();
 
     eprintln!(
         "[burn-sparse] results={}, sparse={}",

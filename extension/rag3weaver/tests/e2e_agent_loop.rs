@@ -423,8 +423,7 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     // Le run de l'agent (début, fin), 3 appels au modèle, 2 appels d'outil
     // (début + fin), et sous le premier : le run du graphe `search` (début,
     // fin) et ses nœuds — le second appel est refusé avant le graphe.
-    let mut cat = catalog.lock().unwrap();
-    assert_eq!(cat.count(TRACE_ENTITY).unwrap(), n);
+    assert_eq!(catalog.lock().unwrap().count(TRACE_ENTITY).unwrap(), n);
     // `search` **contient** le graphe de base depuis le 28 août 2026 : quatre
     // nœuds extérieurs (inner, fetch, compose, render), et le `SearchTool`
     // qu'il contient est un run à lui seul — son début, sa fin, et ses neuf
@@ -440,8 +439,8 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
         limit: 20,
         ..Default::default()
     };
-    let kinds = |cat: &mut Catalog, query: &str| -> Vec<String> {
-        cat.search(TRACE_ENTITY, query, opts.clone())
+    let kinds = |catalog: &Arc<Mutex<Catalog>>, query: &str| -> Vec<String> {
+        Catalog::rechercher(catalog, TRACE_ENTITY, query, opts.clone())
             .unwrap()
             .results
             .iter()
@@ -451,20 +450,20 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
             })
             .collect()
     };
-    let started = kinds(&mut cat, "ToolCallStarted search");
+    let started = kinds(&catalog, "ToolCallStarted search");
     assert_eq!(started.iter().filter(|k| *k == "ToolCallStarted").count(), 2, "{started:?}");
-    let llm_calls = kinds(&mut cat, "LlmCall demo");
+    let llm_calls = kinds(&catalog, "LlmCall demo");
     assert_eq!(llm_calls.iter().filter(|k| *k == "LlmCall").count(), 3, "{llm_calls:?}");
-    let failed = cat.search(TRACE_ENTITY, "ToolCallFinished search error", opts.clone()).unwrap();
+    let failed = Catalog::rechercher(&catalog, TRACE_ENTITY, "ToolCallFinished search error", opts.clone()).unwrap();
     assert!(
         failed.results.iter().any(|r| matches!(r.data.as_ref().and_then(|d| d.get("ok")), Some(CypherValue::Bool(false)))),
         "l'appel refusé (bad_choice) est tracé en erreur"
     );
-    let nodes_run = kinds(&mut cat, "NodeRun");
+    let nodes_run = kinds(&catalog, "NodeRun");
     assert!(nodes_run.iter().filter(|k| *k == "NodeRun").count() >= 3, "{nodes_run:?}");
     // L'arbre : le graphe de l'outil est né sous le run de l'agent, et ses
     // nœuds portent le run du graphe.
-    let graph_runs = cat.search(TRACE_ENTITY, "RunStarted graph", opts.clone()).unwrap();
+    let graph_runs = Catalog::rechercher(&catalog, TRACE_ENTITY, "RunStarted graph", opts.clone()).unwrap();
     let field = |r: &rag3weaver::search::SearchResult, k: &str| match r.data.as_ref().and_then(|d| d.get(k)) {
         Some(CypherValue::String(s)) => s.clone(),
         _ => String::new(),
@@ -491,7 +490,7 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     assert!(contenu.starts_with("graph-") && contenu != graph_run, "{contenu}");
 
     // Chaque nœud porte le run de **son** graphe, pas celui du plus haut.
-    let node_rows = cat.search(TRACE_ENTITY, "NodeRun", opts.clone()).unwrap();
+    let node_rows = Catalog::rechercher(&catalog, TRACE_ENTITY, "NodeRun", opts.clone()).unwrap();
     let porteurs: Vec<String> = node_rows
         .results
         .iter()
@@ -504,7 +503,6 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     );
     assert!(porteurs.iter().any(|r| *r == graph_run), "l'étage extérieur a des nœuds");
     assert!(porteurs.iter().any(|r| *r == contenu), "l'étage contenu aussi");
-    drop(cat);
 
     // Pas d'écho : l'écriture de la trace a publié sur `catalog`, que ce
     // graphe n'écoute pas, et son runtime n'a rien publié sur `dataflow`.

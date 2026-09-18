@@ -8606,13 +8606,13 @@ mod tests {
             .create("Document", make_doc_data("Partiel", "corps"))
             .unwrap();
 
-        let reponse = catalog
-            .search("main", "test", SearchOptions::default())
+        let catalog = Arc::new(Mutex::new(catalog));
+        let reponse = Catalog::rechercher(&catalog, "main", "test", SearchOptions::default())
             .unwrap();
 
         assert_eq!(reponse.meta.consistency, Consistency::Eventual, "le défaut");
         assert!(
-            catalog.has_pending(),
+            catalog.lock().unwrap().has_pending(),
             "le lien et l'agrégat restent en file après flush_insertions"
         );
         assert!(
@@ -9371,7 +9371,8 @@ mod tests {
             consistency: Consistency::Immediate,
             ..Default::default()
         };
-        let reponse = catalog.search("main", "test", opts).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let reponse = Catalog::rechercher(&catalog, "main", "test", opts).unwrap();
 
         assert_eq!(
             reponse.meta.pending_count, avant,
@@ -9402,7 +9403,8 @@ mod tests {
         });
 
         // With MockConnection, search returns empty but should not error
-        let response = catalog.search("main", "test", opts).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let response = Catalog::rechercher(&catalog, "main", "test", opts).unwrap();
         assert!(response.results.is_empty());
     }
 
