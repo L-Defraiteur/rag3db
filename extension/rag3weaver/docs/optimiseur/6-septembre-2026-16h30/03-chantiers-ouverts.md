@@ -50,7 +50,7 @@ lui ; sinon 278m ; BGE-M3 reste le second étage. Le démon change de modèle
 par `RAG3WEAVER_EMBED_MODEL`, le catalogue garde le nom et la dimension dans
 `_catalog_meta` (session architecture) et refuse un mélange.
 
-## B. Les six PR amont, depuis les forks
+## B. Les sept PR amont, depuis les forks
 
 **Pourquoi.** Trois entrées `[patch]` et un adaptateur disparaissent le jour
 où c'est fusionné ; et ce sont des corrections d'une ligne, faciles à
@@ -63,6 +63,7 @@ accepter.
 | tracel-ai/cubek | idem | `crates/cubek-matmul/src/definition/elems.rs` : Flex32 accumule en f32 | « matmul: Flex32 output accumulates in f32 » |
 | tracel-ai/burn | à écrire | burn-std `convert_dtype(Flex32)` doit étiqueter Flex32 (`convert_inplace_with` pose `Target::dtype()` = f32) | « TensorData::convert_dtype keeps Flex32 » |
 | tracel-ai/burn | `rag3weaver/pre.3`, commit `ee16daac` | `kernel/attention/base.rs` : cast f16 de q, k, v pour la voie accélérée en Flex32 ; `tune.rs` : la voie naïve en lice sous 256 Mio | « burn-cubecl: launch accelerated flash attention on Flex32; keep the fallback competing on short sequences » |
+| tracel-ai/burn | `rag3weaver/pre.3`, commit `630c546c` | `burn-cubecl-fusion/src/engine/trace/block.rs` : les locaux F32 et Flex32 partagent une numérotation | « fusion: F32 and Flex32 locals share one register pool, number them together » (un bug amont franc : toute chaîne Flex32 avec une promotion F32 était fausse) |
 | tracel-ai/cubek | `rag3weaver/pre.3`, commit `e9821ceb` | `cubek-attention` : le masque matérialisé se lit avec `stride(2)` | « attention: read the materialized mask with its own row stride » (un bug amont franc : tout masque broadcast sur seq_q est faux) |
 
 Les commits existent sur les branches `rag3weaver/pre.3` (et `pre.2`) des
@@ -72,6 +73,25 @@ vecteurs identiques au bit près à f32). Vérifier avant que `main` n'a pas
 déjà bougé (burn main avait encore les trous 2, 3 et 4 le 6 septembre).
 
 ## C. L'OCR en Flex32 : la dérive des convolutions
+
+**Fait le 18 septembre 2026** (fork burn `630c546c`, révision bumpée) : ce
+n'était pas les convolutions. Bissection par traceur (un point de
+synchronisation après chaque instruction du graphe généré, puis « partout
+sauf une famille ») : chaque opération seule est exacte au bit près, chaque
+chaîne synthétique aussi, et le premier écart est `mul1 = conv2d6 ×
+hard_sigmoid(conv2d8)` dès que hard_sigmoid reste fusionnée avec le produit.
+La configuration du noyau fusionné (`CUBECL_DEBUG_LOG` + `CUBECL_DEBUG_OPTION=debug`,
+comparée f32 / Flex32) l'a montré : **burn-cubecl-fusion numérote ses locaux
+par précision, mais range F32 et Flex32 dans le même registre `l_f32`** ;
+`hard_sigmoid` se calcule en F32 sur du Flex32, son addition (local F32 n° 2)
+écrasait l'entrée du produit (local Flex32 n° 2). Corrigé dans
+`engine/trace/block.rs` (`LocalVariablePool` indexe par précision de
+stockage). Carte de détection Flex32 contre f32 : cosinus 0,04 → 1,00000 ;
+suite OCR verte en Flex32 ; parité BGE-M3 inchangée. L'OCR suit désormais la
+précision de la carte (`precision_ocr()` dans `burn_ppocr.rs`). Sondes :
+`tests/e2e_burn_fusion.rs`. Une PR amont de plus (la septième), franche :
+tout modèle Flex32 qui fusionne une opération promue en F32 était faux. Le
+texte d'origine :
 
 **Ce qu'on sait.** En Flex32 le détecteur PP-OCRv6 rend une carte vide
 (max 0,0000), alors que chaque opération prise seule est exacte (convolutions

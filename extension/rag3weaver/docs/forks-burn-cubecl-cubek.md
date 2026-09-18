@@ -11,6 +11,7 @@ bout en bout sur Vulkan. Elles vivent dans des forks, pas ici :
 | burn-cubecl | https://github.com/L-Defraiteur/burn | `crates/burn-cubecl/src/ops/tensor.rs` | `float_from_data` accepte un `TensorData` en Flex32 |
 | cubek-matmul | https://github.com/L-Defraiteur/cubek | `crates/cubek-matmul/src/definition/spec.rs` | une sortie Flex32 accumule en f32, comme f16 et bf16 |
 | burn-cubecl | idem burn, commit `ee16daac` | `crates/burn-cubecl/src/kernel/attention/{base,tune}.rs` | la flash accélérée se lance en Flex32 (q, k, v castés en f16 : elle exige type global = type de tuile), et la voie naïve reste en lice sous 256 Mio de scores |
+| burn-cubecl-fusion | idem burn, commit `630c546c` | `crates/burn-cubecl-fusion/src/engine/trace/block.rs` | les locaux F32 et Flex32 partagent une numérotation comme ils partagent un registre : sans ça un noyau fusionné qui promeut du Flex32 en F32 (`hard_sigmoid`) écrasait une entrée, et l'OCR rendait une carte vide en Flex32 |
 | cubek-attention | idem cubek, commit `e9821ceb` | `crates/cubek-attention/src/components/global/simple/{attention.rs,reader/mask.rs}` | le masque matérialisé se lit avec `stride(2)`, pas `seq_kv` (un masque `[b,1,1,sk]` étendu était lu de travers) |
 
 Branches : `rag3weaver/pre.3` (du tag `v0.11.0-pre.3` / `v0.22.0-pre.3` /
@@ -27,7 +28,7 @@ f32, sans un message. Avec, BGE-M3 passe de 3 800 à 11 500 jetons/s sur un lot
 de 64 × 100 mots, cosinus 0,999999 contre f32. Le récit :
 `docs/issues/6-septembre-2026/03-le-chemin-vulkan-ce-qu-il-valait-et-les-lignes-qui-manquaient.md`.
 
-Ce sont cinq PR amont (trois d'une ligne, deux de vingt). Le jour où elles sont fusionnées, les
+Ce sont six PR amont (trois d'une ligne, trois de vingt). Le jour où elles sont fusionnées, les
 trois entrées `[patch]` disparaissent. Le quatrième trou,
 `TensorData::convert_dtype(Flex32)` de burn-std qui ré-étiquette f32, est
 contourné chez nous (`Flex32Adapter`, `src/burn_device.rs`) plutôt que patché.

@@ -54,8 +54,17 @@ const DET_STD: [f32; 3] = [0.229, 0.224, 0.225];
 /// Composante de moins de `MIN_SIZE` px de côté : rejetée avant le score
 /// (`DBPostProcess.min_size`) ; après unclip le seuil monte à `MIN_SIZE + 2`.
 
-/// La précision de l'OCR : f32, quoi que la carte ait pour défaut (voir `from_bytes`).
-const PRECISION_OCR: burn::tensor::FloatDType = burn::tensor::FloatDType::F32;
+/// **La précision de l'OCR suit celle de la carte** (`float_dtype_voulu()`,
+/// Flex32 par défaut), depuis le 18 septembre 2026. Elle était forcée en f32
+/// depuis le 6 septembre : en Flex32 le détecteur rendait une carte vide, et
+/// ce n'était ni un cast ni une convolution, mais un défaut de burn-fusion —
+/// les locaux F32 et Flex32 d'un noyau fusionné partageaient un registre sous
+/// deux numérotations, et `hard_sigmoid` (calculée en F32 sur du Flex32)
+/// écrasait l'entrée du produit qui suivait. Corrigé dans le fork burn
+/// (`docs/optimiseur/6-septembre-2026-16h30/03-chantiers-ouverts.md`, C).
+fn precision_ocr() -> burn::tensor::FloatDType {
+    crate::burn_device::float_dtype_voulu().unwrap_or(burn::tensor::FloatDType::F32)
+}
 const MIN_SIZE: f32 = 3.0;
 
 /// Réglages du pipeline. Défauts = `inference.yml` de PP-OCRv6_tiny_det /
@@ -174,8 +183,8 @@ impl BurnPpOcr {
         // exacte (tests `*_selon_la_precision`, 6 septembre 2026) : à creuser
         // dans cubek-convolution sur des cartes de vraie taille. Tout le graphe
         // calcule en f32 : les poids par `None`, l'image construite en f32.
-        let det = crate::burn_device::charger_burnpack(DetGraph::new(&device), det, "ppocr-det", None).map_err(OcrError::Model)?;
-        let rec = crate::burn_device::charger_burnpack(RecGraph::new(&device), rec, "ppocr-rec", None).map_err(OcrError::Model)?;
+        let det = crate::burn_device::charger_burnpack(DetGraph::new(&device), det, "ppocr-det", crate::burn_device::float_dtype_voulu()).map_err(OcrError::Model)?;
+        let rec = crate::burn_device::charger_burnpack(RecGraph::new(&device), rec, "ppocr-rec", crate::burn_device::float_dtype_voulu()).map_err(OcrError::Model)?;
         Ok(Self { det, rec, dict, device, opts: PpOcrOptions::default() })
     }
 
@@ -279,7 +288,7 @@ impl BurnPpOcr {
             TensorData::new(input.data.clone(), [1, 3, input.height, input.width]),
             &self.device,
         )
-        .cast(PRECISION_OCR);
+        .cast(precision_ocr());
         self.det
             .stades(x)
             .into_iter()
@@ -301,7 +310,7 @@ impl BurnPpOcr {
             TensorData::new(input.data.clone(), [1, 3, input.height, input.width]),
             &self.device,
         )
-        .cast(PRECISION_OCR);
+        .cast(precision_ocr());
         let y = self.det.forward(x);
         let dims = y.dims();
         if dims != [1, 1, input.height, input.width] {
@@ -368,7 +377,7 @@ impl BurnPpOcr {
             TensorData::new(input.data.clone(), [input.batch, 3, input.height, input.width]),
             &self.device,
         )
-        .cast(PRECISION_OCR);
+        .cast(precision_ocr());
         let y = self.rec.forward(x);
         let [batch, steps, classes] = y.dims();
         if batch != input.batch {

@@ -27,7 +27,7 @@ Si cette ligne dit autre chose, rien de ce qui suit ne s'applique.
 
 | couche | version | d'où |
 |---|---|---|
-| burn | 0.22.0-pre.3 | fork `L-Defraiteur/burn`, branche `rag3weaver/pre.3`, rev `ee16daac` |
+| burn | 0.22.0-pre.3 | fork `L-Defraiteur/burn`, branche `rag3weaver/pre.3`, rev `630c546c` |
 | cubecl | 0.11.0-pre.3 | fork `L-Defraiteur/cubecl`, `rag3weaver/pre.3`, rev `0565518f` |
 | cubek | 0.3.0-pre.3 | fork `L-Defraiteur/cubek`, `rag3weaver/pre.3`, rev `e9821ceb` |
 | backend | Vulkan (wgpu + SPIR-V épinglé), radv, RDNA4 gfx1201 | `Device::vulkan(kind)` |
@@ -49,6 +49,7 @@ Ce que les forks corrigent (six PR amont à ouvrir, voir 03 B) :
 | cubek-matmul | `definition/elems.rs`, `from_globals` | une sortie Flex32 accumule en f32 |
 | burn-cubecl | `kernel/attention/base.rs`, `flash_attention` | en Flex32, q, k, v passent en f16 pour la voie accélérée (qui exige type global = type de tuile) ; sans ça la flash ne se lançait **jamais** et la voie naïve tournait sous son nom |
 | burn-cubecl | `kernel/attention/tune.rs` | la voie naïve reste en lice tant que ses scores tiennent en 256 Mio (plus rapide sur les séquences courtes) |
+| burn-cubecl-fusion | `engine/trace/block.rs`, `LocalVariablePool` | les locaux F32 et Flex32 partagent une numérotation (ils partagent le registre `l_f32`) : sans ça, toute chaîne fusionnée qui promeut du Flex32 en F32 (`hard_sigmoid`) écrasait une entrée — l'OCR rendait une carte vide |
 | cubek-attention | `global/simple/reader/mask.rs`, `attention.rs` | le masque matérialisé se lit avec `stride(2)`, pas `seq_kv` : un masque `[b,1,1,sk]` étendu était lu de travers (cosinus 0,04) |
 
 Le quatrième trou (`TensorData::convert_dtype(Flex32)` de burn-std, qui
@@ -69,7 +70,7 @@ généré, qui laisserait les poids f32 et ferait calculer tout le graphe en f32
 | MiniLM anglais | `burn_minilm_embedder.rs` | BERT 6 × 384 | 384 | Flex32 | — | mean sous masque |
 | MiniLM multilingue | `burn_multilingual_minilm_embedder.rs` | 12 × 384, fenêtre 128 | 384 | Flex32 | — | mean sous masque |
 | rerankers ×3 | `burn_reranker.rs`, `burn_xlmr_reranker.rs` | MiniLM / XLM-R | logit | Flex32 | — | — |
-| PP-OCRv6 tiny | `burn_ppocr.rs` | conv | — | **f32** (`PRECISION_OCR`) | — | — |
+| PP-OCRv6 tiny | `burn_ppocr.rs` | conv | — | Flex32 (suit la carte depuis le 18 sept.) | — | — |
 
 Poids sous `~/.cache/rag3weaver/<modèle>/{model.bpk,tokenizer.json}`
 (`granite-107m`, `granite-278m`, `bge-m3`, `minilm`, `multilingual-minilm`,
@@ -151,8 +152,8 @@ Régénérer un graphe (recette dans `generated/README.md`) puis rejouer le scri
 - **Vulkan d'abord** (Lucie) : ça tourne sur toute carte. ROCm est une option
   détectée, pas un défaut ; sur pre.3 le f16 y compile (RDNA4 corrigé) mais
   rend des NaN, Flex32 y vaut Vulkan Flex32. Il faut le paquet `rocwmma`.
-- **Flex32 par défaut**, sept suites de modèles vertes ; l'OCR reste en f32
-  (voir 03, chantier C).
+- **Flex32 par défaut**, huit suites de modèles vertes, l'OCR compris depuis
+  le 18 septembre (03, chantier C : c'était un défaut de burn-fusion).
 - **Les bancs mesurent en -O3** : `[profile.dev.package."*"] opt-level = 3`.
   Notre crate reste en debug (Lucie a refusé le -O3 sur le crate, à rediscuter).
 - **Une optimisation se vérifie au bit près** (écart absolu max contre la

@@ -133,6 +133,17 @@ clones de ce soir : `<scratchpad>/burn` et `<scratchpad>/cubek`, remote
 lancé quatre bancs sans `RAG3WEAVER_SANS_DEMON`, sur la mauvaise carte, et
 remplacé le démon de la session architecture.
 
+**Trouver *quel* noyau dévie** (18 septembre, chantier C) : un traceur
+inséré après chaque instruction du graphe généré (script Python, `trace_det`
+qui force `into_data()` : chaque appel casse la fusion à cet endroit) ;
+comparer f32 / Flex32 instruction par instruction ; puis synchroniser
+« partout sauf une famille » (`except:hardsigmoid`) pour laisser fusionner
+une seule famille à la fois. Quand la famille est trouvée, `CUBECL_DEBUG_LOG=<fichier>`
+`CUBECL_DEBUG_OPTION=debug` dépose la **configuration de chaque noyau
+fusionné** (`FuseBlockConfig` : la liste des ops avec leurs locaux, types et
+positions) avant sa source SPIR-V : la comparer entre f32 et Flex32 montre la
+différence en clair. Sans ça, trois jours de soupçons sur les convolutions.
+
 Monter de version (pre.3 → suivante) : `docs/issues/6-septembre-2026/vers-pre3.py`
 montre le geste (versions, branches, adaptateur), et
 `flex32-adapter-pre3.rs` l'API burn-store à suivre.
