@@ -525,6 +525,38 @@ impl DualEmbedder for CallbackDualEmbedder {
 mod tests {
     use super::*;
 
+    /// **Un `Arc<dyn Embedder>` relaie tout ce que le trait dit**, y compris
+    /// les méthodes à défaut. `troncatures()` et `distant()` ne l'étaient pas
+    /// (noté par rag3db-40 le 7 septembre 2026) : un embarqueur partagé par
+    /// `Arc` — c'est le cas dans `Catalog` — perdait son compte de troncatures
+    /// et soufflait pour un démon qui soufflait déjà. Un embarqueur qui rend
+    /// des valeurs *différentes des défauts* à chaque méthode, et l'`Arc` doit
+    /// rendre les mêmes.
+    #[test]
+    fn un_arc_relaie_tout_le_trait() {
+        struct Bavard;
+        impl Embedder for Bavard {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                Ok(texts.iter().map(|_| vec![1.0, 2.0]).collect())
+            }
+            fn dim(&self) -> usize { 2 }
+            fn is_mock(&self) -> bool { true }
+            fn name(&self) -> &str { "bavard" }
+            fn budget_conseille(&self) -> Option<(usize, usize)> { Some((64, 512)) }
+            fn troncatures(&self) -> Option<(usize, usize)> { Some((3, 512)) }
+            fn distant(&self) -> bool { true }
+        }
+        let partage: std::sync::Arc<dyn Embedder> = std::sync::Arc::new(Bavard);
+        let direct = Bavard;
+        assert_eq!(partage.dim(), direct.dim());
+        assert_eq!(partage.is_mock(), direct.is_mock());
+        assert_eq!(partage.name(), direct.name());
+        assert_eq!(partage.budget_conseille(), direct.budget_conseille());
+        assert_eq!(partage.troncatures(), direct.troncatures(), "le compte de troncatures traverse l'Arc");
+        assert_eq!(partage.distant(), direct.distant(), "« distant » traverse l'Arc");
+        assert_eq!(partage.embed(&["a".into()]).unwrap(), direct.embed(&["a".into()]).unwrap());
+    }
+
     #[test]
     fn mock_embedder_dimensions() {
         let embedder = MockEmbedder::new(384);
