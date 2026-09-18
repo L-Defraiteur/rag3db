@@ -691,7 +691,7 @@ checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
 [[package]]
 name = "burn"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-core",
  "burn-nn",
@@ -704,7 +704,7 @@ dependencies = [
 [[package]]
 name = "burn-autodiff"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-std",
@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "burn-backend"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-std",
  "bytemuck",
@@ -741,7 +741,7 @@ dependencies = [
 [[package]]
 name = "burn-backend-extension"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -751,7 +751,7 @@ dependencies = [
 [[package]]
 name = "burn-core"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "ahash",
  "burn-backend",
@@ -779,7 +779,7 @@ dependencies = [
 [[package]]
 name = "burn-cpu"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-cubecl",
@@ -790,7 +790,7 @@ dependencies = [
 [[package]]
 name = "burn-cubecl"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-cubecl-fusion",
@@ -809,7 +809,7 @@ dependencies = [
 [[package]]
 name = "burn-cubecl-fusion"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-fusion",
@@ -827,7 +827,7 @@ dependencies = [
 [[package]]
 name = "burn-cuda"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-cubecl",
@@ -838,7 +838,7 @@ dependencies = [
 [[package]]
 name = "burn-derive"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "derive-new",
  "proc-macro2",
@@ -849,7 +849,7 @@ dependencies = [
 [[package]]
 name = "burn-dispatch"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-autodiff",
  "burn-backend",
@@ -867,7 +867,7 @@ dependencies = [
 [[package]]
 name = "burn-flex"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-ir",
@@ -885,7 +885,7 @@ dependencies = [
 [[package]]
 name = "burn-fusion"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-ir",
@@ -902,7 +902,7 @@ dependencies = [
 [[package]]
 name = "burn-ir"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "hashbrown 0.16.1",
@@ -912,7 +912,7 @@ dependencies = [
 [[package]]
 name = "burn-ndarray"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "atomic_float",
  "burn-backend",
@@ -933,7 +933,7 @@ dependencies = [
 [[package]]
 name = "burn-nn"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-core",
  "num-traits",
@@ -942,7 +942,7 @@ dependencies = [
 [[package]]
 name = "burn-optim"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-core",
  "burn-derive",
@@ -957,7 +957,7 @@ dependencies = [
 [[package]]
 name = "burn-pack"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-std",
  "byteorder",
@@ -968,7 +968,7 @@ dependencies = [
 [[package]]
 name = "burn-remote"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-fusion",
@@ -990,7 +990,7 @@ dependencies = [
 [[package]]
 name = "burn-rocm"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-cubecl",
@@ -1001,7 +1001,7 @@ dependencies = [
 [[package]]
 name = "burn-router"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-fusion",
@@ -1017,7 +1017,7 @@ dependencies = [
 [[package]]
 name = "burn-std"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1044,7 +1044,7 @@ dependencies = [
 [[package]]
 name = "burn-store"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-core",
  "burn-pack",
@@ -1067,7 +1067,7 @@ dependencies = [
 [[package]]
 name = "burn-tch"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "cc",
@@ -1080,7 +1080,7 @@ dependencies = [
 [[package]]
 name = "burn-tensor"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-dispatch",
@@ -1094,7 +1094,7 @@ dependencies = [
 [[package]]
 name = "burn-vision"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "aligned-vec",
  "bon",
@@ -1118,7 +1118,7 @@ dependencies = [
 [[package]]
 name = "burn-wgpu"
 version = "0.22.0-pre.3"
-source = "git+https://github.com/L-Defraiteur/burn?rev=ee16daac#ee16daac35a928567fe06d971517c675ac133b79"
+source = "git+https://github.com/L-Defraiteur/burn?rev=630c546c#630c546cbc50710b65fef8b986795ef90216de2b"
 dependencies = [
  "burn-backend",
  "burn-cubecl",
