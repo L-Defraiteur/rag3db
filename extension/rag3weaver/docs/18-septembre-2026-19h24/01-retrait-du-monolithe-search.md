@@ -98,3 +98,17 @@ Preuve : `e2e_generic_search` 17/17, dont le nouveau
 bout, `bm25_hits` peuplés, `UnknownKB`/`UnknownEntity` préservées,
 `meta.signals` demandés même quand un signal se tait) — et les seize
 d'avant inchangés, équivalence comprise. Unitaires 1045/1045.
+
+## 6. Le repli des KB atterrit pendant la migration (notes de l'orchestrateur)
+
+Master `3586166c1` (+ `acda811ad`, burn `630c546c`) : une KB est une entité
+dérivée — tables `{kb}`, `{kb}_Chunk`, `{kb}_DERIVED_FROM`, `{kb}_CHUNKED_FROM`,
+champs `title`/`content`, `entity == "TreeKB"` dans les résultats. Pour cette
+migration :
+
+- le plein texte d'une dérivée porte sur **`content` et `title`** ;
+- **`_source_field` n'existe plus** — le champ d'origine d'un chunk est
+  `_parent_field` (dialecte déjà changé) ;
+- `e2e_search`, `e2e_highlight_long_text`, `e2e_phase0b`, `e2e_result_mode`
+  sont réécrits pour ce monde sur master : il n'y reste que search →
+  rechercher à faire, après rebase de la branche.
