@@ -363,7 +363,37 @@ genre, la lignée du pas C. La mesure qui le chiffre : tel quel avec
 Et un point mesuré, pas expliqué : tel quel est passé de 0,346 à 0,328 (R@1
 10 → 9) entre les deux passes, vecteur seul, même corpus à un scope près. Le
 seul changement entre les deux : la fusion de la branche recherche et le chemin
-`rechercher` au lieu de `search`. Donné tel quel à la session architecture.
+`rechercher` au lieu de `search`. Donné tel quel à la session architecture,
+qui l'a passé à la recherche — c'est sa surface.
+
+### 19 septembre 2026 — G, le genre
+
+Même passe, une ligne de plus : tel quel avec `scope_type` filtré sur
+`function | method` (`FilterCondition::Should`), rien d'autre ne change.
+
+| ligne | MRR | R@1 | R@5 |
+|---|---:|---:|---:|
+| tel quel | 0,328 | 9 | 24 |
+| M1b — le texte | 0,385 | 9 | 28 |
+| **G — le genre** | **0,385** | **12** | **27** |
+
+**Le filtre par genre vaut exactement le changement de texte — +0,06 de MRR —
+et fait mieux à 1, sans toucher à l'embarquement, aux offsets ni au contrat
+chunk → parent.** C'est du côté recherche, un filtre sur un champ déjà indexé
+et déjà déclaré. Les deux leviers ne corrigent pas la même chose et sont
+probablement cumulables ; ni l'un ni l'autre ne rejoint 0,84, et il ne faut
+plus le chercher — le reste est le corpus.
+
+Ce que ça suggère pour le pas C, sans le trancher : **un poids par genre dans
+`Scope`** qui écrase `module` / `namespace`, plutôt qu'un filtre dur. Un
+filtre perd les cas où un scope de fichier entier *est* la réponse — un `mod`
+de constantes, un fichier de config ; un poids les laisse remonter quand rien
+d'autre ne répond. La ligne G est là pour mesurer l'un contre l'autre le jour
+où le poids existe.
+
+Une variance à connaître : M3 est passé de 0,206 à 0,241 entre deux passes
+identiques — l'ordre brut du HNSW n'est pas déterministe à cette granularité.
+Les lignes résolues (tel quel, M2, G) sont stables d'une passe à l'autre.
 
 ## 10. Ce que ça coûte
 
