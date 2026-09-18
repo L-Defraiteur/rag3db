@@ -148,6 +148,12 @@ pub struct Catalog {
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
     peut_devoir_un_redecoupage: bool,
+    /// **L'indice d'une dette de rendu** : des dérivations ont été mises en
+    /// file (et marquées en base) sans qu'un drain les ait rendues, ou ce
+    /// processus vient d'ouvrir une base qui a des dérivées et ne sait pas
+    /// ce qu'un autre a laissé. `rendre_le_retard` l'efface quand une passe
+    /// ne trouve plus rien.
+    peut_devoir_un_rendu: bool,
     /// Ce qu'un verbe unitaire rend prêt quand on ne lui dit rien. Voir
     /// [`RegimeEcriture`] : au tick par défaut, par lot quand on le déclare.
     regime_d_ecriture: crate::disponibilite::RegimeEcriture,
@@ -292,6 +298,7 @@ impl Catalog {
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
             peut_devoir_un_redecoupage: false,
+            peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
             lecture_seule: false,
             troncatures_signalees: 0,
@@ -1005,6 +1012,9 @@ impl Catalog {
         // quelqu'un s'étonnera d'un classement inchangé.
         self.signaler_les_options_inertes();
 
+        // Un processus neuf ne sait pas ce que le précédent a laissé en
+        // dette de rendu : la première passe de rattrapage regardera.
+        self.peut_devoir_un_rendu = self.entity_configs.values().any(|c| c.derived.is_some());
         self.initialized = true;
         Ok(())
     }
@@ -1146,6 +1156,10 @@ impl Catalog {
         self.persist_entity_config(entity_name, &config)?;
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
+        if config.derived.is_some() {
+            // Une dérivée neuve sur des racines déjà posées : à rendre.
+            self.peut_devoir_un_rendu = true;
+        }
 
         // Les bases que cette entité alimente (`title_for` / `content_for`) :
         // leur dérivée est (re)traduite — c'est l'entité qui porte `title_for`
@@ -3187,6 +3201,26 @@ impl Catalog {
             // précédentes ont laissé dû — dans la base, pas en mémoire. Un
             // lecteur ne rattrape que sa fermeture. Le découpage d'abord : les
             // chunks qu'il crée sont eux-mêmes une dette d'embarquement.
+            // Le rendu des dérivées d'abord : une ligne rendue est découpée
+            // et embarquée par le même graphe, les deux dettes suivantes n'ont
+            // plus qu'à la voir.
+            if self.lecture_seule {
+                if self.peut_devoir_un_rendu {
+                    warnings.push(
+                        "catalogue en lecture seule : une dette de rendu éventuelle ne peut \
+                         pas être soldée d'ici"
+                            .to_string(),
+                    );
+                }
+            } else if self.peut_devoir_un_rendu {
+                let tables = fermeture(self);
+                if let Err(e) = self.rendre_le_retard(tables.as_ref(), RATTRAPAGE_PAR_PASSE, gpu) {
+                    warnings.push(format!(
+                        "le rattrapage de rendu a échoué ({e}) : des dérivées restent en \
+                         retard sur leurs sources"
+                    ));
+                }
+            }
             if self.lecture_seule {
                 if self.peut_devoir_un_redecoupage {
                     warnings.push(
@@ -4501,7 +4535,7 @@ impl Catalog {
                 let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
                 derivations.extend(self.derivations_pour_voisine(entity_name, &uuids_ingeres));
                 if !derivations.is_empty() {
-                    self.mettre_en_file_les_derivations(derivations);
+                    self.mettre_en_file_les_derivations_avec_dette(derivations);
                     kb_failed += self
                         .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
                         .failed;
@@ -4838,6 +4872,97 @@ impl Catalog {
         }
     }
 
+    /// **Mettre en file des dérivations et poser leur dette en base** :
+    /// `_render_hash = ''` sur les lignes dérivées qui existent déjà pour ces
+    /// racines. Si le processus meurt avant le drain, `rendre_le_retard`
+    /// retrouve la dette dans la base ; sinon le rendu la solde. Pour une
+    /// racine qui naît (`create`), il n'y a rien à marquer : sa ligne
+    /// dérivée n'existe pas encore, et `rendre_le_retard` sait retrouver
+    /// une racine posée sans dérivée.
+    fn mettre_en_file_les_derivations_avec_dette(&mut self, derivations: Vec<crate::records::Derivation>) {
+        if derivations.is_empty() {
+            return;
+        }
+        let mut par_entite: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
+        for d in &derivations {
+            par_entite.entry(d.entity.clone()).or_default().push(CypherValue::String(d.root_uuid.clone()));
+        }
+        for (entite, uuids) in par_entite {
+            let requete = self.dialect.marquer_derivees_a_rendre(&entite);
+            if let Err(e) = self.conn.execute_with_params(&requete, &[QueryParam::new("uuids", CypherValue::List(uuids))]) {
+                // La dette reste en mémoire ; seule sa trace en base manque.
+                self.emit_event(CatalogEvent::Warning {
+                    context: "derivations".to_string(),
+                    message: format!("la dette de rendu de « {entite} » n'a pas pu être posée en base : {e}"),
+                });
+            }
+        }
+        self.peut_devoir_un_rendu = true;
+        self.mettre_en_file_les_derivations(derivations);
+    }
+
+    /// **La passe de rattrapage du rendu** (pas B du repli des KB) : les
+    /// lignes dérivées en dette (`_render_hash` vide) et les racines posées
+    /// sans ligne dérivée sont re-rendues, par le graphe de toujours, bornées
+    /// par entité dérivée, sur `tables` ou toutes. Rien n'est gardé en
+    /// mémoire : deux requêtes retrouvent la dette.
+    ///
+    /// C'est le pendant de [`Catalog::rattraper_le_decoupage`] pour les
+    /// dérivées. Avec `embarquer`, l'étage GPU suit ; sans, les chunks neufs
+    /// partent en dette d'embarquement. Rend le nombre de racines re-rendues.
+    pub fn rendre_le_retard(
+        &mut self,
+        tables: Option<&HashSet<String>>,
+        limite: usize,
+        embarquer: bool,
+    ) -> Result<usize, CatalogError> {
+        let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
+        let mut derivees: Vec<(String, String)> = self
+            .entity_configs
+            .iter()
+            .filter_map(|(nom, cfg)| cfg.derived.as_ref().map(|d| (nom.clone(), d.from.clone())))
+            .filter(|(nom, _)| retenue(nom))
+            .collect();
+        derivees.sort();
+
+        let mut total = 0usize;
+        for (entite, racine) in derivees {
+            let mut uuids: Vec<String> = Vec::new();
+            let lire = |moi: &Self, requete: String| -> Result<Vec<String>, CatalogError> {
+                let res = moi.conn.execute(&requete).map_err(|e| CatalogError::DbError(format!(
+                    "lecture de la dette de rendu sur « {entite} » : {e}"
+                )))?;
+                Ok(res.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
+            };
+            uuids.extend(lire(self, self.dialect.select_derivees_a_rendre(&entite, limite))?);
+            let rel = crate::schema::derived_rel_name(&entite);
+            uuids.extend(lire(self, self.dialect.select_racines_sans_derivee(&racine, &entite, &rel, limite))?);
+            uuids.sort();
+            uuids.dedup();
+            if uuids.is_empty() {
+                continue;
+            }
+            let nombre = uuids.len();
+            let derivations: Vec<crate::records::Derivation> = uuids
+                .into_iter()
+                .map(|u| crate::records::Derivation { entity: entite.clone(), root_uuid: u })
+                .collect();
+            self.mettre_en_file_les_derivations(derivations);
+            let res = self.drainer(embarquer, true, Some((&entite, false)));
+            if res.failed > 0 {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "rattrapage_rendu".to_string(),
+                    message: format!("re-rendu de « {entite} » : {} racine(s) en échec — {:?}", res.failed, res.warnings),
+                });
+            }
+            total += nombre;
+        }
+        if total < limite {
+            self.peut_devoir_un_rendu = false;
+        }
+        Ok(total)
+    }
+
     fn mettre_en_file_la_creation(
         &mut self,
         entity_name: &str,
@@ -4969,7 +5094,7 @@ impl Catalog {
             self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
             self.drain_counters.total_queued += n;
         }
-        self.mettre_en_file_les_derivations(derivations);
+        self.mettre_en_file_les_derivations_avec_dette(derivations);
         Ok(n)
     }
 
@@ -5011,7 +5136,7 @@ impl Catalog {
             from_ref.try_resolve().ok().as_deref(),
             to_ref.try_resolve().ok().as_deref(),
         );
-        self.mettre_en_file_les_derivations(derivations);
+        self.mettre_en_file_les_derivations_avec_dette(derivations);
 
         Ok(relation_ref)
     }
@@ -5185,7 +5310,7 @@ impl Catalog {
         let uuids = vec![uuid.to_string()];
         let mut derivations = self.derivations_pour_racine(entity_name, &uuids);
         derivations.extend(self.derivations_pour_voisine(entity_name, &uuids));
-        self.mettre_en_file_les_derivations(derivations);
+        self.mettre_en_file_les_derivations_avec_dette(derivations);
         self.pending.updates.push(crate::records::UpdateRecord {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),
@@ -5243,7 +5368,7 @@ impl Catalog {
             self.pending.deletes.push(crate::records::DeleteRecord { entity_name: derivee.clone(), uuid: uuid_derive });
             self.devoir(&derivee, crate::disponibilite::Disponibilites::TOUT);
         }
-        self.mettre_en_file_les_derivations(voisines);
+        self.mettre_en_file_les_derivations_avec_dette(voisines);
         self.pending.deletes.push(crate::records::DeleteRecord {
             entity_name: entity_name.to_string(),
             uuid: uuid.to_string(),

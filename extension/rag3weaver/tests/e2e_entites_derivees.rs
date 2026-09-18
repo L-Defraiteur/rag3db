@@ -47,7 +47,12 @@ fn compte(catalog: &Catalog, cypher: &str) -> i64 {
 
 /// Ticket, Comment, HAS_COMMENT, et la vue dérivée TicketView.
 fn catalogue() -> Catalog {
-    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    catalogue_sur(Rag3dbConnection::in_memory().expect("in-memory DB"))
+}
+
+/// Le même montage sur une connexion donnée — une base sur fichier pour
+/// rouvrir. Les enregistrements sont idempotents : rouvrir rejoue le montage.
+fn catalogue_sur(conn: Rag3dbConnection) -> Catalog {
     let boxed: Box<dyn DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
     let config = CatalogConfig { name: Some("derivees".into()), embedding_dim: 4, ..Default::default() };
@@ -197,4 +202,85 @@ fn l_ingestion_en_lot_rend_les_derivees_et_ne_les_re_rend_pas_pour_rien() {
     assert_eq!(r.failed, 0);
     assert_eq!(hashes(&catalog), avant, "rien n'a changé, rien n'est re-rendu");
     assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 2, "pas de doublon de vue");
+}
+
+/// **La dette de rendu se voit en base et se rattrape** (pas B du repli des
+/// KB) : une source qui change pose `_render_hash = ''` sur la vue au moment
+/// de la mise en file, avant tout drain ; et `rendre_le_retard` retrouve
+/// dans la base, sans rien garder en mémoire, les vues en dette comme les
+/// racines posées sans vue — ce qu'un processus mort entre l'écriture et le
+/// drain aurait laissé.
+#[test]
+#[ignore]
+fn la_dette_de_rendu_se_voit_en_base_et_se_rattrape() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let db_str = tmpdir.path().join("dette_de_rendu.db").to_string_lossy().to_string();
+    let mut catalog = catalogue_sur(Rag3dbConnection::new(&db_str).expect("create DB"));
+    let t1 = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("Panne du four")), ("body".into(), s("Le four ne chauffe plus."))])).unwrap();
+    let t2 = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("Porte qui grince")), ("body".into(), s("La porte grince."))])).unwrap();
+    let c1 = catalog.create("Comment", BTreeMap::from([("author".into(), s("Ana")), ("body".into(), s("Vérifie le thermostat."))])).unwrap();
+    catalog.link("HAS_COMMENT", t1.clone(), c1, BTreeMap::new()).unwrap();
+    let r = catalog.drain();
+    assert_eq!(r.failed, 0, "{:?}", r.warnings);
+    let hash_de = |c: &Catalog, titre: &str| -> String {
+        c.execute_raw(&format!("MATCH (v:TicketView {{title: '{titre}'}}) RETURN v._render_hash")).unwrap().rows[0][0].as_str().unwrap().to_string()
+    };
+    let h_four = hash_de(&catalog, "Panne du four");
+    let h_porte = hash_de(&catalog, "Porte qui grince");
+    assert!(!h_four.is_empty() && !h_porte.is_empty());
+
+    // 1. La mise en file d'une mise à jour pose la dette en base, avant le drain.
+    let c1_uuid = catalog.execute_raw("MATCH (c:Comment {author: 'Ana'}) RETURN c._uuid").unwrap().rows[0][0].as_str().unwrap().to_string();
+    catalog.update("Comment", &c1_uuid, BTreeMap::from([("body".into(), s("Vérifie le thermostat ET le fusible."))])).unwrap();
+    assert!(catalog.has_pending());
+    assert_eq!(hash_de(&catalog, "Panne du four"), "", "la vue du four est en dette, dans la base");
+    assert_eq!(hash_de(&catalog, "Porte qui grince"), h_porte, "la vue de la porte n'est pas touchée");
+    let r = catalog.drain();
+    assert_eq!(r.failed, 0, "{:?}", r.warnings);
+    let h_four_2 = hash_de(&catalog, "Panne du four");
+    assert!(!h_four_2.is_empty() && h_four_2 != h_four, "re-rendue, dette soldée");
+
+    // 2. Ce qu'un processus mort laisse : une vue en dette dont la source a
+    //    bougé sans passer par nous, et une racine posée sans vue. Rien en
+    //    file : seule la base le sait.
+    catalog.execute_raw("MATCH (c:Comment {author: 'Ana'}) SET c.body = 'Le fusible était grillé.'").unwrap();
+    catalog.execute_raw("MATCH (v:TicketView {title: 'Panne du four'}) SET v._render_hash = ''").unwrap();
+    catalog.execute_raw("MATCH (v:TicketView {title: 'Porte qui grince'}) DETACH DELETE v").unwrap();
+    assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 1);
+    assert!(!catalog.has_pending());
+
+    let rendues = catalog.rendre_le_retard(None, 100, true).unwrap();
+    assert_eq!(rendues, 2, "la vue en dette et la racine sans vue");
+    assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 2);
+    assert_eq!(compte(&catalog, "MATCH (v:TicketView)-[:TicketView_DERIVED_FROM]->(t:Ticket) RETURN count(v)"), 2);
+    assert!(!hash_de(&catalog, "Porte qui grince").is_empty(), "la vue de la porte est revenue");
+    let lu = catalog.execute_raw("MATCH (v:TicketView {title: 'Panne du four'}) RETURN v.content, v._render_hash").unwrap();
+    assert!(lu.rows[0][0].as_str().unwrap().contains("grillé"), "{:?}", lu.rows[0]);
+    assert!(!lu.rows[0][1].as_str().unwrap().is_empty());
+    let res = catalog
+        .search("TicketView", "grillé", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), result_mode: ResultMode::SourceResolved, ..Default::default() })
+        .unwrap();
+    assert_eq!(res.results.len(), 1, "le texte re-rendu est indexé");
+    assert_eq!(res.results[0].uuid, t1.uuid().unwrap());
+    let _ = t2;
+
+    // 3. Une passe qui ne trouve rien ne re-rend rien.
+    let avant = hash_de(&catalog, "Panne du four");
+    assert_eq!(catalog.rendre_le_retard(None, 100, true).unwrap(), 0);
+    assert_eq!(hash_de(&catalog, "Panne du four"), avant);
+
+    // 4. Un processus neuf ne sait pas ce que le précédent a laissé : à la
+    //    réouverture, une recherche stricte solde la dette sans qu'on l'ait
+    //    demandé. (Sans réouverture, l'indice est éteint par la passe vide
+    //    du 3 : une dette posée hors de nous ne se devine pas.)
+    catalog.execute_raw("MATCH (v:TicketView {title: 'Porte qui grince'}) DETACH DELETE v").unwrap();
+    catalog.shutdown().unwrap();
+    drop(catalog);
+    let mut catalog = catalogue_sur(Rag3dbConnection::new(&db_str).expect("reopen DB"));
+    assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 1);
+    let res = catalog
+        .search("TicketView", "grince", SearchOptions { consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), ..Default::default() })
+        .unwrap();
+    assert_eq!(res.results.len(), 1, "la vue de la porte est re-rendue par la consigne : {:?}", res.meta);
+    assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 2);
 }

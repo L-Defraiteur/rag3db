@@ -321,3 +321,35 @@ entites_derivees 2, chemin_de_masse 4, simple_entity 20.
 **Reste** : le pas B (`rendre_le_retard` par `_render_hash`), le pas C
 (`FuseResultsNode` pesé par entité, catalogue de gabarits), et
 `e2e_postgres` non rejoué ici (pas de serveur).
+
+## État au 18 septembre, plus tard : le pas B est fini
+
+**La dette de rendu vit dans la base.** Quand une source change — `link`,
+`update`, `delete` d'une voisine, `ingest_entities` — la mise en file de la
+dérivation pose d'abord `_render_hash = ''` sur les lignes dérivées qui
+existent pour ces racines (`mettre_en_file_les_derivations_avec_dette`, une
+requête par entité dérivée, par `_source_uuid`). Une racine qui naît n'a
+rien à marquer : sa ligne n'existe pas encore. `rederiver_tout` (une
+dérivée qui change de forme) et le rattrapage lui-même mettent en file sans
+marquer, pour garder le court-circuit du hash.
+
+**Le rattrapage** `Catalog::rendre_le_retard(tables, limite, embarquer)`
+retrouve la dette par deux requêtes par entité dérivée — les lignes dont
+`_render_hash` est vide (`select_derivees_a_rendre`, rend la racine), et
+les racines posées sans ligne dérivée (`select_racines_sans_derivee`, par
+`OPTIONAL MATCH` sur `_DERIVED_FROM`) — met les dérivations en file et
+draine la fermeture de lecture de la dérivée, par le graphe de toujours.
+Il court dans `appliquer_la_consigne_pour` avant le rattrapage du
+découpage, sur l'indice `peut_devoir_un_rendu` : posé à chaque mise en
+file avec dette, à l'enregistrement d'une dérivée, et à l'ouverture d'une
+base qui a des dérivées (un processus neuf ne sait pas ce que le précédent
+a laissé) ; éteint par une passe qui trouve moins que sa borne. Pas de
+réclamation multi-processus, comme pour le découpage.
+
+**Vert** : 1055 unitaires ; `e2e_entites_derivees` 3 (le nouveau test
+pose la dette à la mise en file, simule un processus mort — source changée
+hors de nous, vue en dette, racine sans vue — et la rouvre), et search 39,
+phase0b 14, undo 4, chemin_de_masse 4, simple_entity 20,
+idempotent_registration 22, code 24, prise_atomique 12, result_mode 10.
+
+**Reste** : le pas C.

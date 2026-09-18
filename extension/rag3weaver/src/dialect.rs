@@ -375,6 +375,40 @@ pub trait SchemaDialect: Send + Sync {
         format!("MATCH (n:{table}) RETURN n._uuid")
     }
 
+    /// **Poser la dette de rendu** sur les lignes d'une entité dérivée dont la
+    /// racine est dans `$uuids` : `_render_hash = ''`. C'est la dette au
+    /// niveau donnée du pas B (doc du 7 septembre 2026) : si le processus
+    /// meurt avant le drain, [`Self::select_derivees_a_rendre`] la retrouve.
+    fn marquer_derivees_a_rendre(&self, derived_table: &str) -> String {
+        format!(
+            "UNWIND $uuids AS u \
+             MATCH (d:{derived_table} {{_source_uuid: u}}) \
+             SET d._render_hash = ''"
+        )
+    }
+
+    /// **Les dérivées en dette de rendu** : `_render_hash` nul ou vide. Rend
+    /// `_source_uuid` (la racine à re-rendre), borné.
+    fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
+        format!(
+            "MATCH (d:{derived_table}) \
+             WHERE d._render_hash IS NULL OR d._render_hash = '' \
+             RETURN d._source_uuid LIMIT {limite}"
+        )
+    }
+
+    /// **Les racines sans ligne dérivée** : posées sans que leur dérivée ait
+    /// été rendue (un processus mort entre les deux, une base migrée). Rend
+    /// `_uuid` de la racine, borné.
+    fn select_racines_sans_derivee(&self, root_table: &str, derived_table: &str, rel_table: &str, limite: usize) -> String {
+        format!(
+            "MATCH (r:{root_table}) \
+             OPTIONAL MATCH (d:{derived_table})-[:{rel_table}]->(r) \
+             WITH r, d WHERE d._uuid IS NULL \
+             RETURN r._uuid LIMIT {limite}"
+        )
+    }
+
     /// Supprime une table (nœud ou relation) — pour une migration qui retire
     /// ce qu'un schéma d'avant avait posé. Une table absente fait échouer
     /// l'instruction sur le moteur Cypher : l'appelant ignore cette erreur.
@@ -1626,6 +1660,25 @@ impl SchemaDialect for PostgresDialect {
         format!("DROP TABLE IF EXISTS {table} CASCADE")
     }
 
+    fn marquer_derivees_a_rendre(&self, derived_table: &str) -> String {
+        format!("UPDATE {derived_table} SET _render_hash = '' WHERE _source_uuid = ANY($uuids)")
+    }
+
+    fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
+        format!(
+            "SELECT _source_uuid FROM {derived_table} \
+             WHERE _render_hash IS NULL OR _render_hash = '' LIMIT {limite}"
+        )
+    }
+
+    fn select_racines_sans_derivee(&self, root_table: &str, derived_table: &str, _rel_table: &str, limite: usize) -> String {
+        format!(
+            "SELECT r._uuid FROM {root_table} r \
+             LEFT JOIN {derived_table} d ON d._source_uuid = r._uuid \
+             WHERE d._uuid IS NULL LIMIT {limite}"
+        )
+    }
+
     fn batch_update_returning(
         &self,
         table: &str,
@@ -2089,6 +2142,32 @@ mod tests {
             ColumnDef { name: "body".into(), col_type: ColumnType::Text },
             ColumnDef { name: "year".into(), col_type: ColumnType::Int64 },
         ]
+    }
+
+    /// La dette de rendu des dérivées (pas B) : la marque, sa lecture, et les
+    /// racines orphelines — dans les deux dialectes.
+    #[test]
+    fn la_dette_de_rendu_se_pose_et_se_lit() {
+        let d = Rag3dbDialect;
+        assert_eq!(
+            d.marquer_derivees_a_rendre("TicketView"),
+            "UNWIND $uuids AS u MATCH (d:TicketView {_source_uuid: u}) SET d._render_hash = ''"
+        );
+        assert_eq!(
+            d.select_derivees_a_rendre("TicketView", 5),
+            "MATCH (d:TicketView) WHERE d._render_hash IS NULL OR d._render_hash = '' RETURN d._source_uuid LIMIT 5"
+        );
+        assert_eq!(
+            d.select_racines_sans_derivee("Ticket", "TicketView", "TicketView_DERIVED_FROM", 5),
+            "MATCH (r:Ticket) OPTIONAL MATCH (d:TicketView)-[:TicketView_DERIVED_FROM]->(r) WITH r, d WHERE d._uuid IS NULL RETURN r._uuid LIMIT 5"
+        );
+        let p = PostgresDialect;
+        assert_eq!(
+            p.marquer_derivees_a_rendre("TicketView"),
+            "UPDATE TicketView SET _render_hash = '' WHERE _source_uuid = ANY($uuids)"
+        );
+        assert!(p.select_derivees_a_rendre("TicketView", 5).starts_with("SELECT _source_uuid FROM TicketView"));
+        assert!(p.select_racines_sans_derivee("Ticket", "TicketView", "x", 5).contains("LEFT JOIN TicketView d ON d._source_uuid = r._uuid"));
     }
 
     #[test]
