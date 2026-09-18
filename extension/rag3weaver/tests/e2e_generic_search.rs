@@ -16,9 +16,10 @@ use std::sync::Mutex;
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::dataflow::{
-    BM25SearchNode, DataflowGraph, DataflowRuntime, ResolveParentNode,
-    SearchSourceNode, ServiceRegistry, SparseSearchNode,
+    BM25SearchNode, DataflowGraph, DataflowRuntime, KBQuerySourceNode,
+    ResolveParentNode, SearchSourceNode, ServiceRegistry, SparseSearchNode,
 };
+use rag3weaver::dataflow::QueryPayload;
 #[cfg(feature = "burn-embedder")]
 use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, VectorSearchNode};
 use rag3weaver::reranker::Reranker;
@@ -1166,6 +1167,46 @@ fn le_filtre_herite_descend_sur_le_chemin_composable() {
     assert!(noms.iter().all(|n| !n.contains("Knife")), "{noms:?}");
 }
 
+
+
+/// **Le port d'entrée de la source (pas B du doc 02).** Câblé, un
+/// `QueryPayload` d'amont remplace la fiche — c'est ce qui rendra le
+/// sous-graphe de recherche branchable derrière un nœud qui calcule sa
+/// requête. La fiche reste le défaut du graphe nu.
+#[test]
+#[ignore]
+fn la_source_prend_sa_requete_au_port_quand_il_est_cable() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let embedder: Arc<dyn Embedder> = Arc::new(MockEmbedder::new(4));
+    let (services, _cat_arc) = build_services(catalog, embedder, None, None);
+
+    let mut graph = DataflowGraph::new();
+    graph
+        .add_node(Box::new(KBQuerySourceNode::new(
+            "Product",
+            "programming language",
+            &SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() },
+        )))
+        .unwrap();
+    graph
+        .add_node(Box::new(SearchSourceNode::new(
+            "source", "Product", "requete-de-la-fiche", SearchOptions::default(),
+        )))
+        .unwrap();
+    graph.connect("query_source", "query", "source", "query").unwrap();
+
+    let runtime = DataflowRuntime::with_services(100, services);
+    let output = runtime.execute(&mut graph).unwrap();
+    let qp = output
+        .get("source", "query")
+        .and_then(|v| v.downcast::<QueryPayload>())
+        .cloned()
+        .expect("le payload sortant de la source");
+    assert_eq!(qp.query, "programming language", "la requête vient du port, pas de la fiche");
+    assert_eq!(qp.options.signals, Some(SearchSignals::BM25), "les options aussi");
+    assert!(qp.target.is_some(), "la cible est résolue par la source");
+}
 
 // ═══ Le lanceur : un seul chemin de recherche ═══════════════════════════════
 

@@ -88,6 +88,19 @@ impl Node for SearchSourceNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::SearchSourceNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        // **L'entrée optionnelle** (pas B du doc 02) : un `QueryPayload`
+        // posé par l'amont — un nœud qui calcule la requête — remplace la
+        // fiche. Non câblée, la fiche décide, comme toujours ; le runtime
+        // sait qu'un port optionnel sans arête n'est pas une attente
+        // (runtime.rs, « !input.required && !has_incoming_edge »). C'est ce
+        // qui rend le sous-graphe de recherche branchable en aval d'un
+        // autre nœud.
+        if let Some(qp) = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv)) {
+            self.target_name = qp.target_name;
+            self.query = qp.query;
+            self.options = qp.options;
+        }
+
         let catalog = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("SearchSourceNode: 'catalog' service not found")?;
@@ -1954,7 +1967,12 @@ mod tests {
     #[test]
     fn search_source_node_ports() {
         let node = SearchSourceNode::new("src", "Product", "test", SearchOptions::default());
-        assert_eq!(node.inputs().len(), 0);
+        // Une entrée depuis le 18 septembre 2026 (pas B du doc 02) :
+        // optionnelle — non câblée, la fiche décide et la source reste une
+        // source.
+        assert_eq!(node.inputs().len(), 1);
+        assert_eq!(node.inputs()[0].name, "query");
+        assert!(!node.inputs()[0].required);
         assert_eq!(node.outputs().len(), 2);
         assert_eq!(node.outputs()[0].name, "query");
         assert_eq!(node.outputs()[0].port_type, PortType::Query);

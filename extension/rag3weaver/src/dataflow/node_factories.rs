@@ -629,8 +629,13 @@ impl NodeFactory for SearchSourceNodeFactory {
     fn schema(&self) -> NodeSchema {
         NodeSchema {
             node_type: "SearchSourceNode",
-            description: "Resolves SearchTarget and emits query",
-            inputs: vec![],
+            description: "Resolves SearchTarget and emits query; an optional \
+                          'query' input (QueryPayload) overrides the config",
+            inputs: vec![PortDef {
+                name: "query",
+                port_type: PortType::Query,
+                required: false,
+            }],
             outputs: vec![
                 PortDef {
                     name: "query",
