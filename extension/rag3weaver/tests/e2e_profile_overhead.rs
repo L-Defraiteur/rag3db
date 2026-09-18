@@ -12,6 +12,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rag3weaver::config::{CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig};
@@ -147,18 +148,19 @@ fn profile_full_catalog_path() {
         .avec_regime(RegimeEcriture::ParLot);
     catalog.initialize().unwrap();
     let init_ms = ms(t);
+    let catalog = Arc::new(Mutex::new(catalog));
 
     let t = Instant::now();
     for (title, body) in CORPUS {
         let mut data = BTreeMap::new();
         data.insert("title".into(), CypherValue::String(title.to_string()));
         data.insert("body".into(), CypherValue::String(body.to_string()));
-        catalog.create("Snippet", data).unwrap();
+        catalog.lock().unwrap().create("Snippet", data).unwrap();
     }
     let create_ms = ms(t);
 
     let t = Instant::now();
-    let drain = catalog.drain();
+    let drain = catalog.lock().unwrap().drain();
     let drain_ms = ms(t);
     assert_eq!(drain.failed, 0);
 
@@ -169,11 +171,11 @@ fn profile_full_catalog_path() {
         ..Default::default()
     };
     let t = Instant::now();
-    let response = catalog.search("kb", "foo->bar", opts.clone()).unwrap();
+    let response = Catalog::rechercher(&catalog, "kb", "foo->bar", opts.clone()).unwrap();
     let search1_ms = ms(t);
 
     let t = Instant::now();
-    let _ = catalog.search("kb", "c++", opts).unwrap();
+    let _ = Catalog::rechercher(&catalog, "kb", "c++", opts).unwrap();
     let search2_ms = ms(t);
 
     let total = db_ms + ext_ms + init_ms + create_ms + drain_ms + search1_ms + search2_ms;
@@ -258,6 +260,7 @@ fn profile_drain_scaling() {
         let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(384)), make_config())
         .avec_regime(RegimeEcriture::ParLot);
         catalog.initialize().unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
 
         let t = Instant::now();
         for i in 0..n {
@@ -274,28 +277,28 @@ fn profile_drain_scaling() {
                     i % 97
                 )),
             );
-            catalog.create("Snippet", data).unwrap();
+            catalog.lock().unwrap().create("Snippet", data).unwrap();
         }
         let create_ms = ms(t);
 
         let t = Instant::now();
-        let drain = catalog.drain();
+        let drain = catalog.lock().unwrap().drain();
         let drain_ms = ms(t);
         assert_eq!(drain.failed, 0, "drain must not fail at N={n}");
 
         let t = Instant::now();
-        let hits = catalog
-            .search(
-                "kb",
-                "Error::TooLarge",
-                SearchOptions {
-                    bm25_mode: BM25Mode::Symbol,
-                    consistency: Consistency::Immediate,
-                    signals: Some(SearchSignals::BM25),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
+        let hits = Catalog::rechercher(
+            &catalog,
+            "kb",
+            "Error::TooLarge",
+            SearchOptions {
+                bm25_mode: BM25Mode::Symbol,
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let search_ms = ms(t);
         assert!(!hits.results.is_empty(), "search must find results at N={n}");
 

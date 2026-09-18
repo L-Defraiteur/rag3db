@@ -612,17 +612,18 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
         let Ok(conn) = Rag3dbConnection::read_only(&dossier) else { std::process::exit(3) };
         let mut config = rag3weaver::CatalogConfig::default();
         config.embedding_dim = 4;
-        let mut lecteur = rag3weaver::Catalog::ouvrir_en_lecture(
+        let lecteur = Arc::new(Mutex::new(rag3weaver::Catalog::ouvrir_en_lecture(
             Box::new(conn),
             Box::new(rag3weaver::embedder::MockEmbedder::new(4)),
             config,
-        );
-        if let Err(e) = lecteur.initialize() {
+        )));
+        if let Err(e) = lecteur.lock().unwrap().initialize() {
             eprintln!("initialize en lecture : {e}");
             std::process::exit(4);
         }
-        assert!(lecteur.en_lecture_seule());
-        let reponse = match lecteur.search(
+        assert!(lecteur.lock().unwrap().en_lecture_seule());
+        let reponse = match rag3weaver::Catalog::rechercher(
+            &lecteur,
             "Produit",
             "clavecin",
             SearchOptions {
@@ -643,7 +644,10 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
         }
         let mut d = std::collections::BTreeMap::new();
         d.insert("texte".to_string(), CypherValue::String("intrus".into()));
-        match lecteur.create("Produit", d) {
+        // Lier le résultat d'abord : le guard temporaire d'un scrutinee de
+        // `match` vit jusqu'à la fin du match et déborde la vie du lecteur.
+        let creation = lecteur.lock().unwrap().create("Produit", d);
+        match creation {
             Err(rag3weaver::CatalogError::LectureSeule(verbe)) if verbe == "create" => {
                 std::process::exit(7)
             }
@@ -783,9 +787,10 @@ fn dossier_temporaire(nom: &str) -> std::path::PathBuf {
     d
 }
 
-fn recherche_vectorielle(c: &mut rag3weaver::Catalog, requete: &str) -> Result<rag3weaver::search::SearchResponse, rag3weaver::CatalogError> {
+fn recherche_vectorielle(c: &Arc<Mutex<rag3weaver::Catalog>>, requete: &str) -> Result<rag3weaver::search::SearchResponse, rag3weaver::CatalogError> {
     use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
-    c.search(
+    rag3weaver::Catalog::rechercher(
+        c,
         "Produit",
         requete,
         // `Immediate` n'attend que la file ; c'est `exige: DENSE` qui solde la
@@ -814,40 +819,40 @@ fn slugs(c: &rag3weaver::Catalog) -> Vec<String> {
 fn deux_modeles_se_partagent_un_index() {
     let dossier = dossier_temporaire("modeles-deux");
     {
-        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
-        a.register_entity("Produit", produit_entite()).unwrap();
-        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
-        assert_eq!(slugs(&a), ["modele_a"], "le premier modèle s'enregistre en embarquant");
-        let s = a.vector_storage("Produit_Chunk").unwrap();
+        let a = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4))));
+        a.lock().unwrap().register_entity("Produit", produit_entite()).unwrap();
+        a.lock().unwrap().ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+        assert_eq!(slugs(&a.lock().unwrap()), ["modele_a"], "le premier modèle s'enregistre en embarquant");
+        let s = a.lock().unwrap().vector_storage("Produit_Chunk").unwrap();
         assert_eq!((s.column.as_str(), s.index.as_str(), s.dim), ("embedding__modele_a", "Produit_Chunk_vec__modele_a", 4));
-        assert!(!recherche_vectorielle(&mut a, "clavecin").unwrap().results.is_empty());
+        assert!(!recherche_vectorielle(&a, "clavecin").unwrap().results.is_empty());
     }
     {
         // Un autre modèle, et une autre dimension : il ne partage rien avec A.
-        let mut b = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6));
-        b.ensure_embedding_model().unwrap();
-        assert_eq!(slugs(&b), ["modele_a", "modele_b"], "un index accueille, il ne choisit pas");
-        let s = b.vector_storage("Produit_Chunk").unwrap();
+        let b = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6))));
+        b.lock().unwrap().ensure_embedding_model().unwrap();
+        assert_eq!(slugs(&b.lock().unwrap()), ["modele_a", "modele_b"], "un index accueille, il ne choisit pas");
+        let s = b.lock().unwrap().vector_storage("Produit_Chunk").unwrap();
         assert_eq!((s.column.as_str(), s.dim), ("embedding__modele_b", 6));
         // **Migrer, c'est un retard de 100 %** : la colonne de B est vide.
         let en_retard = "MATCH (n:Produit_Chunk) WHERE n._embed_hash__modele_b IS NULL OR n._embed_hash__modele_b = '' RETURN count(n)";
-        assert!(compte(&b, en_retard) >= 1, "B doit tout embarquer");
+        assert!(compte(&b.lock().unwrap(), en_retard) >= 1, "B doit tout embarquer");
         // Une recherche qui exige le dense solde le retard — par le rattrapage
         // ordinaire, sans redécouper.
-        let reponse = recherche_vectorielle(&mut b, "clavecin").unwrap();
+        let reponse = recherche_vectorielle(&b, "clavecin").unwrap();
         eprintln!("[test] avertissements : {:?}", reponse.meta.warnings);
-        eprintln!("[test] retard de B après la recherche : {}", compte(&b, en_retard));
-        eprintln!("[test] vecteurs B non nuls : {}", compte(&b, "MATCH (n:Produit_Chunk) WHERE n.embedding__modele_b IS NOT NULL RETURN count(n)"));
+        eprintln!("[test] retard de B après la recherche : {}", compte(&b.lock().unwrap(), en_retard));
+        eprintln!("[test] vecteurs B non nuls : {}", compte(&b.lock().unwrap(), "MATCH (n:Produit_Chunk) WHERE n.embedding__modele_b IS NOT NULL RETURN count(n)"));
         assert!(!reponse.results.is_empty(), "B doit répondre après le rattrapage");
-        assert_eq!(compte(&b, en_retard), 0, "le rattrapage a posé le marqueur de B");
+        assert_eq!(compte(&b.lock().unwrap(), en_retard), 0, "le rattrapage a posé le marqueur de B");
         // Les chunks n'ont pas bougé : même compte, même clé.
-        assert_eq!(compte(&b, "MATCH (n:Produit_Chunk) RETURN count(n)"), 1);
+        assert_eq!(compte(&b.lock().unwrap(), "MATCH (n:Produit_Chunk) RETURN count(n)"), 1);
     }
     {
         // A revient : sa colonne est intacte, sa recherche aussi.
-        let mut a2 = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
-        assert!(!recherche_vectorielle(&mut a2, "clavecin").unwrap().results.is_empty());
-        assert_eq!(slugs(&a2), ["modele_a", "modele_b"]);
+        let a2 = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4))));
+        assert!(!recherche_vectorielle(&a2, "clavecin").unwrap().results.is_empty());
+        assert_eq!(slugs(&a2.lock().unwrap()), ["modele_a", "modele_b"]);
     }
     let _ = std::fs::remove_dir_all(&dossier);
 }
@@ -879,17 +884,17 @@ fn une_base_v5_ouverte_par_la_v6_ne_bouge_pas() {
     }
     {
         // La v6 ouvre : `migrate_scope_columns` requalifie, et c'est tout.
-        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
-        let modeles = a.registered_embedding_models().unwrap();
+        let a = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4))));
+        let modeles = a.lock().unwrap().registered_embedding_models().unwrap();
         assert_eq!(modeles.len(), 1);
         assert_eq!(modeles[0].storage, rag3weaver::embedding_storage::StorageKind::Legacy);
-        assert_eq!(a.vector_storage("Produit_Chunk").unwrap().column, "embedding");
+        assert_eq!(a.lock().unwrap().vector_storage("Produit_Chunk").unwrap().column, "embedding");
         // **Zéro DDL** : aucune colonne qualifiée n'est apparue.
-        let colonnes = a.execute_raw("CALL TABLE_INFO('Produit_Chunk') RETURN *").unwrap();
+        let colonnes = a.lock().unwrap().execute_raw("CALL TABLE_INFO('Produit_Chunk') RETURN *").unwrap();
         let qualifiees: Vec<String> = colonnes.rows.iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).filter(|n| n.contains("__")).collect();
         assert!(qualifiees.is_empty(), "la migration ne pose aucune colonne : {qualifiees:?}");
-        assert_eq!(a.indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"), "la clé d'avant reste lisible");
-        assert!(!recherche_vectorielle(&mut a, "clavecin").unwrap().results.is_empty(), "la même recherche répond");
+        assert_eq!(a.lock().unwrap().indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"), "la clé d'avant reste lisible");
+        assert!(!recherche_vectorielle(&a, "clavecin").unwrap().results.is_empty(), "la même recherche répond");
     }
     let _ = std::fs::remove_dir_all(&dossier);
 }
@@ -932,11 +937,11 @@ fn un_modele_absent_refuse_en_nommant_les_disponibles() {
     let conn = Rag3dbConnection::read_only(&dossier).expect("ouvrir en lecture");
     let mut config = rag3weaver::CatalogConfig::default();
     config.embedding_dim = 4;
-    let mut lecteur = rag3weaver::Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(EmbarqueurNomme("modele-b", 4)), config);
-    lecteur.initialize().unwrap();
-    assert!(lecteur.en_lecture_seule());
-    assert_eq!(slugs(&lecteur), ["modele_a"], "le lecteur n'a rien enregistré");
-    match recherche_vectorielle(&mut lecteur, "clavecin") {
+    let lecteur = Arc::new(Mutex::new(rag3weaver::Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(EmbarqueurNomme("modele-b", 4)), config)));
+    lecteur.lock().unwrap().initialize().unwrap();
+    assert!(lecteur.lock().unwrap().en_lecture_seule());
+    assert_eq!(slugs(&lecteur.lock().unwrap()), ["modele_a"], "le lecteur n'a rien enregistré");
+    match recherche_vectorielle(&lecteur, "clavecin") {
         Err(rag3weaver::CatalogError::EmbeddingModelUnavailable(message)) => {
             assert!(message.contains("modele_b"), "{message}");
             assert!(message.contains("modele_a"), "{message}");
@@ -1016,9 +1021,9 @@ fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
         b.execute_raw("MERGE (m:_catalog_meta {_key: 'vector_index_dropped:Produit_Chunk:Produit_Chunk_vec__modele_b'}) SET m._value = 'embedding__modele_b'").unwrap();
     }
     {
-        let mut b2 = catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6));
-        assert_eq!(compte(&b2, "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN count(m)"), 0, "l'ouverture a reconstruit");
-        assert!(!recherche_vectorielle(&mut b2, "clavecin").unwrap().results.is_empty(), "et l'index répond");
+        let b2 = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-b", 6))));
+        assert_eq!(compte(&b2.lock().unwrap(), "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN count(m)"), 0, "l'ouverture a reconstruit");
+        assert!(!recherche_vectorielle(&b2, "clavecin").unwrap().results.is_empty(), "et l'index répond");
     }
     let _ = std::fs::remove_dir_all(&dossier);
 }

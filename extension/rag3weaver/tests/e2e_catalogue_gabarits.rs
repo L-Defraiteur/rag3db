@@ -178,6 +178,8 @@ fn brique_2_quel_signal_ment() {
         .ingest_entities(TEMPLATE_ENTITY, fiches.iter().map(|f| f.data()).collect())
         .unwrap();
     assert_eq!(r.failed, 0);
+    // La forme composable : les recherches passent par le lanceur.
+    let cat = Arc::new(std::sync::Mutex::new(catalog));
 
     let noms = |r: &rag3weaver::search::SearchResponse| -> Vec<String> {
         r.results
@@ -206,7 +208,7 @@ fn brique_2_quel_signal_ment() {
                 "family".to_string(),
                 rag3weaver::filter::FilterValue::Direct(rag3weaver::connection::CypherValue::String("entity".into())),
             );
-            let out = catalog.search(TEMPLATE_ENTITY, q, o).unwrap();
+            let out = Catalog::rechercher(&cat, TEMPLATE_ENTITY, q, o).unwrap();
             let l = noms(&out);
             let ok = l.first().map(|s| s.starts_with(attendu)).unwrap_or(false);
             justes += usize::from(ok);
@@ -284,12 +286,16 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
         );
         o
     };
-    let auth = catalog.search(TEMPLATE_ENTITY, "", filtre("category", "auth")).unwrap();
+    // La bascule vers la forme composable : les recherches passent par le
+    // lanceur, et les mutations reprennent le catalogue après (motif du
+    // fichier, voir la_synchronisation_alimente_la_couche_du_projet).
+    let cat = Arc::new(std::sync::Mutex::new(catalog));
+    let auth = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "", filtre("category", "auth")).unwrap();
     eprintln!("[catalogue] catégorie auth : {}", detail(&auth));
     assert_eq!(noms(&auth), vec!["user".to_string()], "{}", detail(&auth));
 
     // Et la famille filtre aussi — l'autre axe, structurel celui-là.
-    let entites = catalog.search(TEMPLATE_ENTITY, "", filtre("family", "entity")).unwrap();
+    let entites = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "", filtre("family", "entity")).unwrap();
     let mut e = noms(&entites);
     e.sort();
     assert_eq!(e, vec!["conversation", "product", "user"], "{}", detail(&entites));
@@ -305,8 +311,7 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
     // seule ne discriminait pas — dix descriptions courtes et hétérogènes,
     // scores tous à ~0,03. Le filtre n'est pas un raccourci, c'est la moitié de
     // la question.
-    let qui = catalog
-        .search(TEMPLATE_ENTITY, "de quoi savoir qui est connecté sur mon site", filtre("family", "entity"))
+    let qui = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "de quoi savoir qui est connecté sur mon site", filtre("family", "entity"))
         .unwrap();
     eprintln!("[catalogue] qui est connecté : {}", detail(&qui));
     eprintln!("[catalogue] signaux : {:?}", qui.meta.signals);
@@ -314,17 +319,15 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
 
     // Diagnostic : la même question, avec et sans le filtre. Si l'ordre
     // s'inverse, ce n'est pas le sens qui décide, c'est le chemin filtré.
-    let vente_nue = catalog.search(TEMPLATE_ENTITY, "vendre des articles avec un prix", opts.clone()).unwrap();
+    let vente_nue = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "vendre des articles avec un prix", opts.clone()).unwrap();
     eprintln!("[diag] vendre SANS filtre : {}", detail(&vente_nue));
-    let vente = catalog
-        .search(TEMPLATE_ENTITY, "vendre des articles avec un prix", filtre("family", "entity"))
+    let vente = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "vendre des articles avec un prix", filtre("family", "entity"))
         .unwrap();
     eprintln!("[diag] vendre AVEC filtre : {}", detail(&vente));
     eprintln!("[diag] meta filtré : vector={} bm25={} fused={}", vente.meta.vector_count, vente.meta.bm25_count, vente.meta.fused_count);
     assert_eq!(noms(&vente).first().map(String::as_str), Some("product"), "{}", detail(&vente));
 
-    let fil = catalog
-        .search(TEMPLATE_ENTITY, "suivre un échange entre plusieurs personnes", filtre("family", "entity"))
+    let fil = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "suivre un échange entre plusieurs personnes", filtre("family", "entity"))
         .unwrap();
     eprintln!("[catalogue] un échange : {}", detail(&fil));
     assert_eq!(noms(&fil).first().map(String::as_str), Some("conversation"), "{}", detail(&fil));
@@ -333,6 +336,7 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
     //
     // Sous le nom qu'on veut : le nom appartient à qui adopte, comme pour les
     // outils.
+    let mut catalog = Arc::try_unwrap(cat).ok().unwrap().into_inner().unwrap();
     let produit = std::fs::read_to_string(builtin_root().join("entities/product.json")).unwrap();
     rag3weaver::template::place_entity_with(&mut catalog, &produit, &[], "Article")
         .expect("poser le gabarit");

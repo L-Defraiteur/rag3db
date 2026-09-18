@@ -15,6 +15,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{CatalogConfig, EntityDef, FieldDef, FieldType, KBConfig};
 use rag3weaver::connection::CypherValue;
@@ -147,8 +148,8 @@ fn options(mode: BM25Mode) -> SearchOptions {
 }
 
 /// Titles of every hit, sorted — order is irrelevant here, membership is the point.
-fn titles(catalog: &mut Catalog, query: &str, mode: BM25Mode) -> Vec<String> {
-    let response = catalog.search("kb", query, options(mode)).unwrap();
+fn titles(catalog: &Arc<Mutex<Catalog>>, query: &str, mode: BM25Mode) -> Vec<String> {
+    let response = Catalog::rechercher(catalog, "kb", query, options(mode)).unwrap();
     let mut out: Vec<String> = response
         .results
         .iter()
@@ -171,8 +172,8 @@ fn titles(catalog: &mut Catalog, query: &str, mode: BM25Mode) -> Vec<String> {
 #[test]
 #[ignore]
 fn symbol_matches_separators_byte_for_byte() {
-    let mut catalog = setup();
-    let hits = titles(&mut catalog, "foo->bar", BM25Mode::Symbol);
+    let catalog = Arc::new(Mutex::new(setup()));
+    let hits = titles(&catalog,"foo->bar", BM25Mode::Symbol);
     assert_eq!(
         hits,
         vec!["arrow"],
@@ -186,9 +187,9 @@ fn symbol_matches_separators_byte_for_byte() {
 #[test]
 #[ignore]
 fn contains_conflates_where_symbol_discriminates() {
-    let mut catalog = setup();
-    let relaxed = titles(&mut catalog, "foo->bar", BM25Mode::Contains);
-    let strict = titles(&mut catalog, "foo->bar", BM25Mode::Symbol);
+    let catalog = Arc::new(Mutex::new(setup()));
+    let relaxed = titles(&catalog,"foo->bar", BM25Mode::Contains);
+    let strict = titles(&catalog,"foo->bar", BM25Mode::Symbol);
 
     assert!(
         relaxed.len() > strict.len(),
@@ -202,8 +203,8 @@ fn contains_conflates_where_symbol_discriminates() {
 #[test]
 #[ignore]
 fn symbol_matches_pure_punctuation() {
-    let mut catalog = setup();
-    let hits = titles(&mut catalog, "};", BM25Mode::Symbol);
+    let catalog = Arc::new(Mutex::new(setup()));
+    let hits = titles(&catalog,"};", BM25Mode::Symbol);
     assert!(
         hits.contains(&"brace".to_string()),
         "a query made only of punctuation should find the brace snippet"
@@ -215,8 +216,8 @@ fn symbol_matches_pure_punctuation() {
 #[test]
 #[ignore]
 fn symbol_matches_cpp() {
-    let mut catalog = setup();
-    let hits = titles(&mut catalog, "c++", BM25Mode::Symbol);
+    let catalog = Arc::new(Mutex::new(setup()));
+    let hits = titles(&catalog,"c++", BM25Mode::Symbol);
     assert_eq!(hits, vec!["cpp"], "`c++` must be a literal, never a regex");
 }
 
@@ -224,8 +225,8 @@ fn symbol_matches_cpp() {
 #[test]
 #[ignore]
 fn symbol_matches_nested_generic() {
-    let mut catalog = setup();
-    let hits = titles(&mut catalog, "std::sync::Arc<Mutex<T>>", BM25Mode::Symbol);
+    let catalog = Arc::new(Mutex::new(setup()));
+    let hits = titles(&catalog,"std::sync::Arc<Mutex<T>>", BM25Mode::Symbol);
     assert_eq!(hits, vec!["generic"]);
 }
 
@@ -233,10 +234,10 @@ fn symbol_matches_nested_generic() {
 #[test]
 #[ignore]
 fn symbol_matches_emoji_and_zwj_sequences() {
-    let mut catalog = setup();
-    assert_eq!(titles(&mut catalog, "🚀", BM25Mode::Symbol), vec!["emoji"]);
+    let catalog = Arc::new(Mutex::new(setup()));
+    assert_eq!(titles(&catalog,"🚀", BM25Mode::Symbol), vec!["emoji"]);
     assert_eq!(
-        titles(&mut catalog, "👩‍💻", BM25Mode::Symbol),
+        titles(&catalog,"👩‍💻", BM25Mode::Symbol),
         vec!["emoji"],
         "ZWJ sequence must survive the whole chain unsplit"
     );
@@ -247,8 +248,8 @@ fn symbol_matches_emoji_and_zwj_sequences() {
 #[test]
 #[ignore]
 fn symbol_matches_accented_text() {
-    let mut catalog = setup();
-    assert_eq!(titles(&mut catalog, "crème brûlée", BM25Mode::Symbol), vec!["accents"]);
+    let catalog = Arc::new(Mutex::new(setup()));
+    assert_eq!(titles(&catalog,"crème brûlée", BM25Mode::Symbol), vec!["accents"]);
 }
 
 // ─── parse × highlights (contrat lucivy, docs 16 → 24) ───────────────────────
@@ -263,20 +264,20 @@ fn symbol_matches_accented_text() {
 fn parse_boolean_syntax_keeps_highlights_and_attributes_chunks() {
     use rag3weaver::search::ChunkAttributionMiss;
 
-    let mut catalog = setup();
-    let response = catalog
-        .search(
-            "kb",
-            "value AND foo",
-            SearchOptions {
-                bm25_mode: BM25Mode::Parse,
-                consistency: Consistency::Immediate,
-                signals: Some(SearchSignals::BM25),
-                diagnostics: true,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    let catalog = Arc::new(Mutex::new(setup()));
+    let response = Catalog::rechercher(
+        &catalog,
+        "kb",
+        "value AND foo",
+        SearchOptions {
+            bm25_mode: BM25Mode::Parse,
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            diagnostics: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let mut hits: Vec<String> = response
         .results
@@ -315,14 +316,13 @@ fn parse_boolean_syntax_keeps_highlights_and_attributes_chunks() {
 #[test]
 #[ignore]
 fn parse_malformed_boolean_is_refused_explicitly() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
     for (query, expected) in [
         ("NOT value", "only a negation"),
         ("value AND", "expected a term"),
         ("(value AND foo", "unbalanced"),
     ] {
-        let err = catalog
-            .search("kb", query, options(BM25Mode::Parse))
+        let err = Catalog::rechercher(&catalog, "kb", query, options(BM25Mode::Parse))
             .expect_err(&format!("{query:?} must be refused"));
         let msg = err.to_string();
         eprintln!("[parse-refuse] {query:?} -> {msg}");
@@ -335,11 +335,9 @@ fn parse_malformed_boolean_is_refused_explicitly() {
 #[test]
 #[ignore]
 fn parse_simple_value_keeps_highlights() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
 
-    let response = catalog
-        .search("kb", "compiled", options(BM25Mode::Parse))
-        .unwrap();
+    let response = Catalog::rechercher(&catalog, "kb", "compiled", options(BM25Mode::Parse)).unwrap();
 
     eprintln!(
         "[parse-simple] hits={} warnings={:?}",
@@ -366,7 +364,7 @@ fn parse_simple_value_keeps_highlights() {
 #[test]
 #[ignore]
 fn relaxed_finds_last_word_without_trailing_separator() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
     // Snippet "emoji" ends with "the platform team" (short). Add one that ends
     // with a long word to force internal chunking.
     let mut data = BTreeMap::new();
@@ -375,14 +373,14 @@ fn relaxed_finds_last_word_without_trailing_separator() {
         "body".into(),
         CypherValue::String("rollout finished, deployed by kubernetes".to_string()),
     );
-    catalog.create("Snippet", data).unwrap();
-    assert_eq!(catalog.drain().failed, 0);
+    catalog.lock().unwrap().create("Snippet", data).unwrap();
+    assert_eq!(catalog.lock().unwrap().drain().failed, 0);
 
     // Whole word, then a suffix that starts inside the word — both relaxed.
-    assert_eq!(titles(&mut catalog, "kubernetes", BM25Mode::Contains), vec!["trailing"]);
-    assert_eq!(titles(&mut catalog, "bernetes", BM25Mode::Contains), vec!["trailing"]);
+    assert_eq!(titles(&catalog,"kubernetes", BM25Mode::Contains), vec!["trailing"]);
+    assert_eq!(titles(&catalog,"bernetes", BM25Mode::Contains), vec!["trailing"]);
     // And the short last word of the emoji snippet.
-    assert!(titles(&mut catalog, "team", BM25Mode::Contains).contains(&"emoji".to_string()));
+    assert!(titles(&catalog,"team", BM25Mode::Contains).contains(&"emoji".to_string()));
 }
 
 // ─── tiret ASCII vs tiret cadratin en relaxed (contrat lucivy, doc 22/23) ──
@@ -396,7 +394,7 @@ fn relaxed_finds_last_word_without_trailing_separator() {
 #[test]
 #[ignore]
 fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
     for (title, body) in [
         ("dash-ascii", "wrap-up: the foo-bar step is done"),
         ("dash-em", "wrap-up: the foo—bar step is done"),
@@ -404,9 +402,9 @@ fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
         let mut data = BTreeMap::new();
         data.insert("title".into(), CypherValue::String(title.to_string()));
         data.insert("body".into(), CypherValue::String(body.to_string()));
-        catalog.create("Snippet", data).unwrap();
+        catalog.lock().unwrap().create("Snippet", data).unwrap();
     }
-    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(catalog.lock().unwrap().drain().failed, 0);
 
     // Relaxed, and fuzzy off so distance can't blur the separator question.
     let relaxed_exact = SearchOptions {
@@ -416,7 +414,7 @@ fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
         signals: Some(SearchSignals::BM25),
         ..Default::default()
     };
-    let response = catalog.search("kb", "foo bar", relaxed_exact).unwrap();
+    let response = Catalog::rechercher(&catalog, "kb", "foo bar", relaxed_exact).unwrap();
     let mut hits: Vec<String> = response
         .results
         .iter()
@@ -437,6 +435,6 @@ fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
     );
 
     // Strict never conflates either.
-    assert_eq!(titles(&mut catalog, "foo—bar", BM25Mode::Symbol), vec!["dash-em"]);
-    assert_eq!(titles(&mut catalog, "foo-bar", BM25Mode::Symbol), vec!["dash-ascii"]);
+    assert_eq!(titles(&catalog,"foo—bar", BM25Mode::Symbol), vec!["dash-em"]);
+    assert_eq!(titles(&catalog,"foo-bar", BM25Mode::Symbol), vec!["dash-ascii"]);
 }

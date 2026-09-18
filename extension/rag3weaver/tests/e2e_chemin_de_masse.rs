@@ -13,6 +13,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::{CheckpointMode, FieldType};
 use rag3weaver::connection::{CypherValue, DbConnection};
@@ -118,7 +119,7 @@ fn le_csv_du_moteur_garde_les_chaines_les_vides_et_les_vecteurs() {
 #[test]
 #[ignore]
 fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
-    let mut catalog = catalogue(4);
+    let catalog = Arc::new(Mutex::new(catalogue(4)));
     let texte_difficile = "Un couteau \"forgé\", à lame haute teneur en carbone,\navec une virgule, un retour à la ligne\r\net une barre \\ oblique.";
     let lot = vec![
         product("Rust Book", "A comprehensive guide to Rust programming: ownership, lifetimes, concurrency.", 49.99),
@@ -127,7 +128,7 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
         // Un doublon dans le lot : la dernière occurrence gagne, COPY ne heurte pas.
         product("Rust Book", "A comprehensive guide to Rust programming: ownership, lifetimes, concurrency.", 49.99),
     ];
-    let r = catalog.ingest_entities("Product", lot).unwrap();
+    let r = catalog.lock().unwrap().ingest_entities("Product", lot).unwrap();
     assert_eq!(r.failed, 0, "{:?}", r.warnings);
     assert!(
         !r.warnings.iter().any(|w| w.contains("chargement en masse refusé")),
@@ -135,27 +136,29 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
         r.warnings
     );
 
-    assert_eq!(compte(&catalog, "MATCH (p:Product) RETURN count(p)"), 3);
-    let chunks = compte(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
+    assert_eq!(compte(&catalog.lock().unwrap(), "MATCH (p:Product) RETURN count(p)"), 3);
+    let chunks = compte(&catalog.lock().unwrap(), "MATCH (c:Product_Chunk) RETURN count(c)");
     assert!(chunks >= 3, "chunks={chunks}");
-    assert_eq!(compte(&catalog, "MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(:Product) RETURN count(c)"), chunks, "chaque chunk est lié à son parent");
+    assert_eq!(compte(&catalog.lock().unwrap(), "MATCH (c:Product_Chunk)-[:Product_CHUNKED_FROM]->(:Product) RETURN count(c)"), chunks, "chaque chunk est lié à son parent");
     // La colonne et le marqueur sont ceux du modèle courant, résolus — un index
     // neuf range son premier modèle en `suffixed` (7 septembre 2026).
-    let st = catalog.vector_storage("Product_Chunk").unwrap();
-    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE c.{m} <> '' AND c.{m} = c._text_hash RETURN count(c)", m = st.marker)), chunks, "chaque chunk porte son marqueur dense");
-    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE size(c.{}) = 4 RETURN count(c)", st.column)), chunks, "chaque chunk porte son vecteur");
-    assert_eq!(compte(&catalog, "MATCH (p:Product) WHERE p._chunked_hash = p._content_hash RETURN count(p)"), 3, "chaque parent est marqué découpé");
-    let lu = catalog.execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description").unwrap();
+    let st = catalog.lock().unwrap().vector_storage("Product_Chunk").unwrap();
+    assert_eq!(compte(&catalog.lock().unwrap(), &format!("MATCH (c:Product_Chunk) WHERE c.{m} <> '' AND c.{m} = c._text_hash RETURN count(c)", m = st.marker)), chunks, "chaque chunk porte son marqueur dense");
+    assert_eq!(compte(&catalog.lock().unwrap(), &format!("MATCH (c:Product_Chunk) WHERE size(c.{}) = 4 RETURN count(c)", st.column)), chunks, "chaque chunk porte son vecteur");
+    assert_eq!(compte(&catalog.lock().unwrap(), "MATCH (p:Product) WHERE p._chunked_hash = p._content_hash RETURN count(p)"), 3, "chaque parent est marqué découpé");
+    let lu = catalog.lock().unwrap().execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description").unwrap();
     assert_eq!(lu.rows[0][0].as_str(), Some(texte_difficile), "le texte à guillemets et sauts de ligne revient tel quel");
 
     // Le plein texte (lucivy, par décalage relu après le COPY) et le vecteur.
-    let bm25 = catalog.search("Product", "Rust programming", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
+    let bm25 = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
     assert!(!bm25.results.is_empty(), "BM25 trouve après une première ingestion");
-    let vecteur = catalog.search("Product", "Rust programming", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::SEMANTIC), ..Default::default() }).unwrap();
+    let vecteur = Catalog::rechercher(&catalog, "Product", "Rust programming", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::SEMANTIC), ..Default::default() }).unwrap();
     assert!(!vecteur.results.is_empty(), "le vecteur trouve après une première ingestion");
 
     // Seconde ingestion, table non vide : le MERGE, avec un modifié et un nouveau.
     let r2 = catalog
+        .lock()
+        .unwrap()
         .ingest_entities(
             "Product",
             vec![
@@ -167,13 +170,13 @@ fn une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge() {
         .unwrap();
     assert_eq!(r2.failed, 0, "{:?}", r2.warnings);
     assert_eq!(r2.unchanged, 1, "le Rust Book identique est sauté");
-    assert_eq!(compte(&catalog, "MATCH (p:Product) RETURN count(p)"), 4);
-    let chunks2 = compte(&catalog, "MATCH (c:Product_Chunk) RETURN count(c)");
-    assert_eq!(compte(&catalog, &format!("MATCH (c:Product_Chunk) WHERE c.{} = c._text_hash AND size(c.{}) = 4 RETURN count(c)", st.marker, st.column)), chunks2, "tous les chunks embarqués, après le MERGE aussi");
-    let lu = catalog.execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description, p.price").unwrap();
+    assert_eq!(compte(&catalog.lock().unwrap(), "MATCH (p:Product) RETURN count(p)"), 4);
+    let chunks2 = compte(&catalog.lock().unwrap(), "MATCH (c:Product_Chunk) RETURN count(c)");
+    assert_eq!(compte(&catalog.lock().unwrap(), &format!("MATCH (c:Product_Chunk) WHERE c.{} = c._text_hash AND size(c.{}) = 4 RETURN count(c)", st.marker, st.column)), chunks2, "tous les chunks embarqués, après le MERGE aussi");
+    let lu = catalog.lock().unwrap().execute_raw("MATCH (p:Product {name: 'Couteau'}) RETURN p.description, p.price").unwrap();
     assert_eq!(lu.rows[0][0].as_str(), Some("Un couteau de cuisine, tout simplement."));
     assert_eq!(lu.rows[0][1], CypherValue::Float(99.0));
-    let wok = catalog.search("Product", "wok", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
+    let wok = Catalog::rechercher(&catalog, "Product", "wok", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
     assert!(!wok.results.is_empty(), "le nouveau venu se trouve");
 }
 
@@ -221,7 +224,7 @@ fn les_modes_de_checkpoint_gardent_ce_qu_ils_disent() {
 #[test]
 #[ignore]
 fn une_cellule_de_deux_cents_ko_revient_a_l_octet_pres() {
-    let mut catalog = catalogue(4);
+    let catalog = Arc::new(Mutex::new(catalogue(4)));
     let mut texte = String::new();
     let mut i = 0usize;
     while texte.len() < 200_000 {
@@ -232,14 +235,14 @@ fn une_cellule_de_deux_cents_ko_revient_a_l_octet_pres() {
         i += 1;
     }
     let attendu = texte.clone();
-    let r = catalog.ingest_entities("Product", vec![product("Gros", &texte, 1.0), product("Petit", "court", 2.0)]).unwrap();
+    let r = catalog.lock().unwrap().ingest_entities("Product", vec![product("Gros", &texte, 1.0), product("Petit", "court", 2.0)]).unwrap();
     assert_eq!(r.failed, 0, "{:?}", r.warnings);
     assert!(!r.warnings.iter().any(|w| w.contains("chargement en masse refusé")), "{:?}", r.warnings);
-    let lu = catalog.execute_raw("MATCH (p:Product {name: 'Gros'}) RETURN p.description").unwrap();
+    let lu = catalog.lock().unwrap().execute_raw("MATCH (p:Product {name: 'Gros'}) RETURN p.description").unwrap();
     let relu = lu.rows[0][0].as_str().expect("description relue");
     assert_eq!(relu.len(), attendu.len(), "longueur relue {} pour {} écrite", relu.len(), attendu.len());
     assert!(relu == attendu, "le texte relu diffère du texte écrit");
     // Et le plein texte le trouve.
-    let bm25 = catalog.search("Product", "tabulation", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
+    let bm25 = Catalog::rechercher(&catalog, "Product", "tabulation", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() }).unwrap();
     assert!(!bm25.results.is_empty());
 }

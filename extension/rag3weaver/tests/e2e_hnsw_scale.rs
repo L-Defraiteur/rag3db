@@ -24,6 +24,7 @@ fn probing() -> bool {
 }
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::CypherValue;
@@ -50,6 +51,7 @@ fn ingest_n(n: usize, dim: usize) {
     fields.insert("title".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
     fields.insert("body".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
     catalog.register_entity("Doc", EntityConfig { fields, signals: SearchSignals::HYBRID, ..Default::default() }).unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
 
     let records: Vec<BTreeMap<String, CypherValue>> = (0..n)
         .map(|i| {
@@ -60,10 +62,10 @@ fn ingest_n(n: usize, dim: usize) {
         })
         .collect();
     let started = std::time::Instant::now();
-    let r = catalog.ingest_entities("Doc", records).unwrap();
+    let r = catalog.lock().unwrap().ingest_entities("Doc", records).unwrap();
     eprintln!("[n={n} dim={dim}] processed={} failed={} in {} ms", r.processed, r.failed, started.elapsed().as_millis());
     assert_eq!(r.failed, 0);
-    let hits = catalog.search("Doc", "document number 7", SearchOptions {
+    let hits = Catalog::rechercher(&catalog, "Doc", "document number 7", SearchOptions {
         consistency: Consistency::Immediate, signals: Some(SearchSignals::HYBRID), limit: 5, ..Default::default()
     }).unwrap();
     eprintln!("[n={n}] {} hits", hits.results.len());

@@ -9,6 +9,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::{CypherValue, DbConnection};
@@ -206,15 +207,14 @@ fn scope_migration_adds_columns_to_a_pre_scope_database() {
 
 // ─── C/D : isolation de la recherche ────────────────────────────────────────
 
-fn search_names(catalog: &mut Catalog, q: &str, signals: SearchSignals) -> Vec<String> {
-    let resp = catalog
-        .search("Product", q, SearchOptions {
-            consistency: Consistency::Immediate,
-            signals: Some(signals),
-            limit: 50,
-            ..Default::default()
-        })
-        .unwrap();
+fn search_names(catalog: &Arc<Mutex<Catalog>>, q: &str, signals: SearchSignals) -> Vec<String> {
+    let resp = Catalog::rechercher(catalog, "Product", q, SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(signals),
+        limit: 50,
+        ..Default::default()
+    })
+    .unwrap();
     let mut names: Vec<String> = resp
         .results
         .iter()
@@ -235,8 +235,8 @@ fn blob_keys(catalog: &Catalog) -> Vec<String> {
 #[test]
 #[ignore]
 fn scope_bm25_index_per_cell_never_sees_the_other_cell() {
-    let mut catalog = catalog_in_memory();
-    catalog.register_entity("Product", make_product_config()).unwrap();
+    let catalog = Arc::new(Mutex::new(catalog_in_memory()));
+    catalog.lock().unwrap().register_entity("Product", make_product_config()).unwrap();
 
     // Les textes exclusifs à une cellule ne partagent **aucun mot** avec ceux
     // de l'autre. Ce n'était pas le cas avant : « alpha private text » et
@@ -248,28 +248,28 @@ fn scope_bm25_index_per_cell_never_sees_the_other_cell() {
     //
     // Le test échouait donc en criant à la fuite là où le cloisonnement était
     // intact. Des mots disjoints le rendent indifférent au mode.
-    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes"), make_product("A-only", "xylophone")]).unwrap();
-    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "clavecin")]).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes"), make_product("A-only", "xylophone")]).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "beta")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "clavecin")]).unwrap();
 
-    let keys = blob_keys(&catalog);
+    let keys = blob_keys(&catalog.lock().unwrap());
     assert!(keys.iter().any(|k| k.starts_with("Lucivy_Product__acme__alpha")), "blobs alpha: {keys:?}");
     assert!(keys.iter().any(|k| k.starts_with("Lucivy_Product__acme__beta")), "blobs beta: {keys:?}");
     assert!(!keys.iter().any(|k| k.starts_with("Lucivy_Product/") || k == "Lucivy_Product"), "pas d'index partagé: {keys:?}");
 
     // Cellule courante = beta.
-    assert_eq!(search_names(&mut catalog, "kernel scheduler", SearchSignals::BM25), vec!["B-shared"]);
-    assert_eq!(search_names(&mut catalog, "clavecin", SearchSignals::BM25), vec!["B-only"],
+    assert_eq!(search_names(&catalog, "kernel scheduler", SearchSignals::BM25), vec!["B-shared"]);
+    assert_eq!(search_names(&catalog, "clavecin", SearchSignals::BM25), vec!["B-only"],
         "beta doit voir son propre mot exclusif");
-    let fuite_beta = search_names(&mut catalog, "xylophone", SearchSignals::BM25);
+    let fuite_beta = search_names(&catalog, "xylophone", SearchSignals::BM25);
     assert!(fuite_beta.is_empty(), "depuis beta, « xylophone » (alpha seul) rend {fuite_beta:?}");
 
-    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    assert_eq!(search_names(&mut catalog, "kernel scheduler", SearchSignals::BM25), vec!["A-shared"]);
-    assert_eq!(search_names(&mut catalog, "xylophone", SearchSignals::BM25), vec!["A-only"],
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "alpha")).unwrap();
+    assert_eq!(search_names(&catalog, "kernel scheduler", SearchSignals::BM25), vec!["A-shared"]);
+    assert_eq!(search_names(&catalog, "xylophone", SearchSignals::BM25), vec!["A-only"],
         "alpha doit voir son propre mot exclusif");
-    let fuite_alpha = search_names(&mut catalog, "clavecin", SearchSignals::BM25);
+    let fuite_alpha = search_names(&catalog, "clavecin", SearchSignals::BM25);
     assert!(fuite_alpha.is_empty(), "depuis alpha, « clavecin » (beta seul) rend {fuite_alpha:?}");
 }
 
@@ -278,24 +278,24 @@ fn scope_bm25_index_per_cell_never_sees_the_other_cell() {
 #[test]
 #[ignore]
 fn scope_vector_search_never_sees_the_other_cell() {
-    let mut catalog = catalog_in_memory();
-    catalog.register_entity("Product", make_product_config_with(SearchSignals::HYBRID)).unwrap();
+    let catalog = Arc::new(Mutex::new(catalog_in_memory()));
+    catalog.lock().unwrap().register_entity("Product", make_product_config_with(SearchSignals::HYBRID)).unwrap();
 
-    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("A1", "kernel scheduler notes"), make_product("A2", "alpha private text")]).unwrap();
-    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("B1", "kernel scheduler notes"), make_product("B2", "beta private text")]).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("A1", "kernel scheduler notes"), make_product("A2", "alpha private text")]).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "beta")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("B1", "kernel scheduler notes"), make_product("B2", "beta private text")]).unwrap();
 
-    let names = search_names(&mut catalog, "kernel scheduler notes", SearchSignals::VECTOR);
+    let names = search_names(&catalog, "kernel scheduler notes", SearchSignals::VECTOR);
     assert!(!names.is_empty(), "le vecteur doit trouver quelque chose dans beta");
     assert!(names.iter().all(|n| n.starts_with('B')), "fuite vectorielle entre cellules : {names:?}");
 
-    let names = search_names(&mut catalog, "kernel scheduler notes", SearchSignals::HYBRID);
+    let names = search_names(&catalog, "kernel scheduler notes", SearchSignals::HYBRID);
     assert!(names.iter().all(|n| n.starts_with('B')), "fuite hybride entre cellules : {names:?}");
 }
 
-fn search_with(catalog: &mut Catalog, q: &str, opts: SearchOptions) -> (Vec<String>, Vec<String>) {
-    let resp = catalog.search("Product", q, opts).unwrap();
+fn search_with(catalog: &Arc<Mutex<Catalog>>, q: &str, opts: SearchOptions) -> (Vec<String>, Vec<String>) {
+    let resp = Catalog::rechercher(catalog, "Product", q, opts).unwrap();
     let mut names: Vec<String> = resp
         .results
         .iter()
@@ -311,12 +311,12 @@ fn search_with(catalog: &mut Catalog, q: &str, opts: SearchOptions) -> (Vec<Stri
 #[test]
 #[ignore]
 fn scope_option_and_fan_out_across_cells() {
-    let mut catalog = catalog_in_memory();
-    catalog.register_entity("Product", make_product_config()).unwrap();
-    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes")]).unwrap();
-    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
-    catalog.ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "beta private text")]).unwrap();
+    let catalog = Arc::new(Mutex::new(catalog_in_memory()));
+    catalog.lock().unwrap().register_entity("Product", make_product_config()).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("A-shared", "kernel scheduler notes")]).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "beta")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![make_product("B-shared", "kernel scheduler notes"), make_product("B-only", "beta private text")]).unwrap();
 
     let bm25 = |scope: Option<Scope>, scopes: Vec<Scope>| SearchOptions {
         consistency: Consistency::Immediate,
@@ -328,22 +328,22 @@ fn scope_option_and_fan_out_across_cells() {
     };
 
     // Cellule explicite (alpha) alors que la courante est beta.
-    let (names, _) = search_with(&mut catalog, "kernel scheduler", bm25(Some(Scope::new("acme", "alpha")), vec![]));
+    let (names, _) = search_with(&catalog, "kernel scheduler", bm25(Some(Scope::new("acme", "alpha")), vec![]));
     assert_eq!(names, vec!["A-shared"]);
-    assert_eq!(catalog.scope(), &Scope::new("acme", "beta"), "la cellule courante est restaurée");
+    assert_eq!(catalog.lock().unwrap().scope(), &Scope::new("acme", "beta"), "la cellule courante est restaurée");
 
     // Fan-out sur les deux cellules.
-    let (names, warnings) = search_with(&mut catalog, "kernel scheduler", bm25(None, vec![Scope::new("acme", "alpha"), Scope::new("acme", "beta")]));
+    let (names, warnings) = search_with(&catalog, "kernel scheduler", bm25(None, vec![Scope::new("acme", "alpha"), Scope::new("acme", "beta")]));
     assert_eq!(names, vec!["A-shared", "B-shared"]);
     assert!(warnings.iter().any(|w| w.contains("fan-out")), "warnings: {warnings:?}");
-    assert_eq!(catalog.scope(), &Scope::new("acme", "beta"));
+    assert_eq!(catalog.lock().unwrap().scope(), &Scope::new("acme", "beta"));
 
     // Fan-out avec pagination : limit 1 → un seul résultat, offset 1 → l'autre.
     let mut o = bm25(None, vec![Scope::new("acme", "alpha"), Scope::new("acme", "beta")]);
     o.limit = 1;
-    let (first, _) = search_with(&mut catalog, "kernel scheduler", o.clone());
+    let (first, _) = search_with(&catalog, "kernel scheduler", o.clone());
     o.offset = 1;
-    let (second, _) = search_with(&mut catalog, "kernel scheduler", o);
+    let (second, _) = search_with(&catalog, "kernel scheduler", o);
     assert_eq!(first.len(), 1);
     assert_eq!(second.len(), 1);
     assert_ne!(first, second);
@@ -354,10 +354,10 @@ fn scope_option_and_fan_out_across_cells() {
 #[test]
 #[ignore]
 fn scope_user_filter_condition_applies_inside_cell() {
-    let mut catalog = catalog_in_memory();
-    catalog.register_entity("Product", make_product_config()).unwrap();
-    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
-    catalog.ingest_entities("Product", vec![
+    let catalog = Arc::new(Mutex::new(catalog_in_memory()));
+    catalog.lock().unwrap().register_entity("Product", make_product_config()).unwrap();
+    catalog.lock().unwrap().set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![
         make_product("Cheap", "kernel scheduler notes"),
         make_product("Pricey", "kernel scheduler notes"),
     ]).unwrap();
@@ -365,7 +365,7 @@ fn scope_user_filter_condition_applies_inside_cell() {
         key: "name".into(),
         value: FilterValue::Direct(CypherValue::String("Pricey".into())),
     };
-    let (names, _) = search_with(&mut catalog, "kernel scheduler", SearchOptions {
+    let (names, _) = search_with(&catalog, "kernel scheduler", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
         filter_condition: Some(cond),
@@ -403,11 +403,14 @@ fn the_projected_graph_honours_the_vector_filter() {
     let rows = conn.execute("MATCH (c:Product_Chunk) RETURN c._project, c._uuid").unwrap();
     eprintln!("chunks: {:?}", rows.rows.iter().map(|r| format!("{:?}", r.get(0))).collect::<Vec<_>>());
     conn.execute(r#"CALL PROJECT_GRAPH_CYPHER('g_probe', 'MATCH (n:Product_Chunk) WHERE n._project = \'beta\' RETURN n')"#).unwrap();
+    // Le nom d'index d'avant les embarquements était `Product_Chunk_vec` ;
+    // depuis, chaque modèle a le sien — on le demande au catalogue.
+    let index_vec = catalog.vector_storage("Product_Chunk").expect("stockage du modèle courant").index;
     let emb = "[0.1, 0.2, 0.3, 0.4]";
-    let r = conn.execute(&format!("CALL QUERY_VECTOR_INDEX('g_probe', 'Product_Chunk_vec', {emb}, 10) RETURN node._project, node._uuid, distance")).unwrap();
+    let r = conn.execute(&format!("CALL QUERY_VECTOR_INDEX('g_probe', '{index_vec}', {emb}, 10) RETURN node._project, node._uuid, distance")).unwrap();
     let projs: Vec<String> = r.rows.iter().map(|row| format!("{:?}", row.get(0))).collect();
     eprintln!("projected query → {projs:?}");
-    let r2 = conn.execute(&format!("CALL QUERY_VECTOR_INDEX('Product_Chunk', 'Product_Chunk_vec', {emb}, 10) RETURN node._project")).unwrap();
+    let r2 = conn.execute(&format!("CALL QUERY_VECTOR_INDEX('Product_Chunk', '{index_vec}', {emb}, 10) RETURN node._project")).unwrap();
     eprintln!("plain query → {:?}", r2.rows.iter().map(|row| format!("{:?}", row.get(0))).collect::<Vec<_>>());
     assert!(
         !projs.is_empty() && projs.iter().all(|p| p.contains("beta")),

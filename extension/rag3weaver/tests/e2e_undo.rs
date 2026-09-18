@@ -8,8 +8,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-#[cfg(feature = "burn-embedder")]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 #[cfg(feature = "burn-embedder")]
@@ -96,11 +95,11 @@ fn setup() -> Catalog {
     catalog
 }
 
-fn ingest_products(catalog: &mut Catalog, products: Vec<BTreeMap<String, CypherValue>>) -> Vec<String> {
+fn ingest_products(catalog: &Arc<Mutex<Catalog>>, products: Vec<BTreeMap<String, CypherValue>>) -> Vec<String> {
     let count = products.len();
-    let result = catalog.ingest_entities("Product", products).unwrap();
+    let result = catalog.lock().unwrap().ingest_entities("Product", products).unwrap();
     assert_eq!(result.processed, count);
-    let qr = catalog.conn().execute("MATCH (n:Product) RETURN n._uuid ORDER BY n.name").unwrap();
+    let qr = catalog.lock().unwrap().conn().execute("MATCH (n:Product) RETURN n._uuid ORDER BY n.name").unwrap();
     qr.rows.iter().map(|row| match &row[0] {
         CypherValue::String(s) => s.clone(),
         other => panic!("expected String uuid, got {other:?}"),
@@ -144,16 +143,14 @@ fn read_field(catalog: &Catalog, entity: &str, uuid: &str, field: &str) -> Cyphe
     result.rows[0][0].clone()
 }
 
-fn search_bm25(catalog: &mut Catalog, query: &str) -> Vec<String> {
-    let response = catalog
-        .search("Product", query, SearchOptions {
-            consistency: Consistency::Immediate,
-            signals: Some(SearchSignals::BM25),
-            bm25_mode: BM25Mode::ContainsSplit,
-            ..Default::default()
-        })
-        
-        .unwrap();
+fn search_bm25(catalog: &Arc<Mutex<Catalog>>, query: &str) -> Vec<String> {
+    let response = Catalog::rechercher(catalog, "Product", query, SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        bm25_mode: BM25Mode::ContainsSplit,
+        ..Default::default()
+    })
+    .unwrap();
     response.results.iter()
         .map(|r| r.uuid.clone())
         .collect()
@@ -194,84 +191,88 @@ fn run_undo(node: &mut dyn Node, undo_ctx: serde_json::Value) {
 #[test]
 #[ignore]
 fn undo_delete_simple_entity() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
 
     // 1. Ingest 3 products
-    let uuids = ingest_products(&mut catalog, vec![
+    let uuids = ingest_products(&catalog, vec![
         make_product("Alpha", "Alpha is a technology product about programming and algorithms", 10.0),
         make_product("Beta", "Beta is a product about data science and machine learning", 20.0),
         make_product("Gamma", "Gamma is a product about cloud computing and infrastructure", 30.0),
     ]);
     assert_eq!(uuids.len(), 3);
-    assert_eq!(count_entities(&catalog, "Product"), 3);
-    let chunks_baseline = count_chunks(&catalog, "Product");
+    assert_eq!(count_entities(&catalog.lock().unwrap(), "Product"), 3);
+    let chunks_baseline = count_chunks(&catalog.lock().unwrap(), "Product");
     assert!(chunks_baseline > 0, "should have chunks after ingest");
     eprintln!("baseline: 3 entities, {chunks_baseline} chunks");
 
     // 2. Search baseline — "programming" should find Alpha
-    let results = search_bm25(&mut catalog, "programming algorithms");
+    let results = search_bm25(&catalog, "programming algorithms");
     assert!(!results.is_empty(), "should find 'programming' in baseline");
     eprintln!("baseline search 'programming': {} results", results.len());
 
     // 3. Delete Alpha and Beta
-    catalog.delete("Product", &uuids[0]).unwrap();
-    catalog.delete("Product", &uuids[1]).unwrap();
-    let drain_result = catalog.drain();
+    catalog.lock().unwrap().delete("Product", &uuids[0]).unwrap();
+    catalog.lock().unwrap().delete("Product", &uuids[1]).unwrap();
+    let drain_result = catalog.lock().unwrap().drain();
     assert_eq!(drain_result.failed, 0);
     eprintln!("after delete: {} deletes processed", drain_result.delete_results.len());
 
     // 4. Verify deletion
-    assert_eq!(count_entities(&catalog, "Product"), 1);
-    assert!(!entity_exists(&catalog, "Product", &uuids[0]), "Alpha should be deleted");
-    assert!(!entity_exists(&catalog, "Product", &uuids[1]), "Beta should be deleted");
-    assert!(entity_exists(&catalog, "Product", &uuids[2]), "Gamma should still exist");
+    assert_eq!(count_entities(&catalog.lock().unwrap(), "Product"), 1);
+    assert!(!entity_exists(&catalog.lock().unwrap(), "Product", &uuids[0]), "Alpha should be deleted");
+    assert!(!entity_exists(&catalog.lock().unwrap(), "Product", &uuids[1]), "Beta should be deleted");
+    assert!(entity_exists(&catalog.lock().unwrap(), "Product", &uuids[2]), "Gamma should still exist");
 
     // Search: "programming" should find nothing now
-    let results = search_bm25(&mut catalog, "programming algorithms");
+    let results = search_bm25(&catalog, "programming algorithms");
     assert!(results.is_empty(), "should NOT find 'programming' after delete");
 
     // 5. Load checkpoint and call undo on DeleteRecordNode
-    let exec_id = last_execution_id(&catalog);
-    let undo_ctx = load_undo_context(&catalog, &exec_id, "deletes");
+    let exec_id = last_execution_id(&catalog.lock().unwrap());
+    let undo_ctx = load_undo_context(&catalog.lock().unwrap(), &exec_id, "deletes");
     eprintln!("undo context loaded for 'deletes' node");
 
     let mut delete_node = DeleteRecordNode::new("deletes");
-    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    {
+        // Un seul verrou pour lier les services, relâché avant toute recherche.
+        let cat = catalog.lock().unwrap();
+        delete_node.bind_services(cat.conn_arc(), cat.dialect_arc());
+    }
     run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — entities should be restored");
 
     // 6. Verify entities are restored with correct data
-    assert_eq!(count_entities(&catalog, "Product"), 3, "all 3 entities should be restored");
-    assert!(entity_exists(&catalog, "Product", &uuids[0]), "Alpha should exist again");
-    assert!(entity_exists(&catalog, "Product", &uuids[1]), "Beta should exist again");
+    assert_eq!(count_entities(&catalog.lock().unwrap(), "Product"), 3, "all 3 entities should be restored");
+    assert!(entity_exists(&catalog.lock().unwrap(), "Product", &uuids[0]), "Alpha should exist again");
+    assert!(entity_exists(&catalog.lock().unwrap(), "Product", &uuids[1]), "Beta should exist again");
 
     // Check fields are intact
-    let name = read_field(&catalog, "Product", &uuids[0], "name");
+    let name = read_field(&catalog.lock().unwrap(), "Product", &uuids[0], "name");
     assert_eq!(name, CypherValue::String("Alpha".into()), "Alpha name should be restored");
-    let price = read_field(&catalog, "Product", &uuids[0], "price");
+    let price = read_field(&catalog.lock().unwrap(), "Product", &uuids[0], "price");
     assert_eq!(price, CypherValue::Float(10.0), "Alpha price should be restored");
 
     // 7. Re-ingest to recreate chunks + embeddings (undo doesn't restore chunks)
-    let chunks_after_undo = count_chunks(&catalog, "Product");
+    let chunks_after_undo = count_chunks(&catalog.lock().unwrap(), "Product");
     eprintln!("chunks after undo (before re-ingest): {chunks_after_undo}");
 
     // Re-ingest the same products (MERGE is idempotent on _uuid)
-    catalog.ingest_entities("Product", vec![
+    catalog.lock().unwrap().ingest_entities("Product", vec![
         make_product("Alpha", "Alpha is a technology product about programming and algorithms", 10.0),
         make_product("Beta", "Beta is a product about data science and machine learning", 20.0),
     ]).unwrap();
 
-    let chunks_after_reingest = count_chunks(&catalog, "Product");
+    let chunks_after_reingest = count_chunks(&catalog.lock().unwrap(), "Product");
     assert!(chunks_after_reingest > chunks_after_undo, "re-ingest should create chunks");
     eprintln!("chunks after re-ingest: {chunks_after_reingest}");
 
     // 8. Search should work again
-    let results = search_bm25(&mut catalog, "programming algorithms");
+    let results = search_bm25(&catalog, "programming algorithms");
     assert!(!results.is_empty(), "should find 'programming' after undo + re-ingest");
     eprintln!("search after restore: {} results for 'programming'", results.len());
 
     // Beta should also be searchable
-    let results = search_bm25(&mut catalog, "data science machine learning");
+    let results = search_bm25(&catalog, "data science machine learning");
     assert!(!results.is_empty(), "should find 'data science' after undo + re-ingest");
     eprintln!("search after restore: {} results for 'data science'", results.len());
 }
@@ -280,73 +281,77 @@ fn undo_delete_simple_entity() {
 #[test]
 #[ignore]
 fn undo_update_simple_entity() {
-    let mut catalog = setup();
+    let catalog = Arc::new(Mutex::new(setup()));
 
     // 1. Ingest product with original content
-    let uuids = ingest_products(&mut catalog, vec![
+    let uuids = ingest_products(&catalog, vec![
         make_product("Alpha", "Original text about functional programming and lambda calculus", 10.0),
     ]);
     let uuid = &uuids[0];
     eprintln!("ingested Alpha: {uuid}");
 
     // 2. Search baseline — "functional programming" should match
-    let results = search_bm25(&mut catalog, "functional programming lambda");
+    let results = search_bm25(&catalog, "functional programming lambda");
     assert!(!results.is_empty(), "should find 'functional programming' in baseline");
 
     // 3. Update description to completely different content
     let new_data = make_product("Alpha", "New text about cooking recipes and kitchen equipment", 15.0);
-    catalog.update("Product", uuid, new_data).unwrap();
-    let drain_result = catalog.drain();
+    catalog.lock().unwrap().update("Product", uuid, new_data).unwrap();
+    let drain_result = catalog.lock().unwrap().drain();
     assert_eq!(drain_result.failed, 0);
     eprintln!("update drained: {} update results", drain_result.update_results.len());
 
     // 4. Verify update applied
-    let desc = read_field(&catalog, "Product", uuid, "description");
+    let desc = read_field(&catalog.lock().unwrap(), "Product", uuid, "description");
     assert_eq!(desc, CypherValue::String("New text about cooking recipes and kitchen equipment".into()));
-    let price = read_field(&catalog, "Product", uuid, "price");
+    let price = read_field(&catalog.lock().unwrap(), "Product", uuid, "price");
     assert_eq!(price, CypherValue::Float(15.0), "price should be updated");
 
     // Search: old content should NOT be found, new content should be found
-    let results_old = search_bm25(&mut catalog, "functional programming lambda");
+    let results_old = search_bm25(&catalog, "functional programming lambda");
     assert!(results_old.is_empty(), "old content should NOT be searchable after update");
-    let results_new = search_bm25(&mut catalog, "cooking recipes kitchen");
+    let results_new = search_bm25(&catalog, "cooking recipes kitchen");
     assert!(!results_new.is_empty(), "new content should be searchable after update");
 
     // 5. Load checkpoint and call undo on UpdateRecordNode
-    let exec_id = last_execution_id(&catalog);
-    let undo_ctx = load_undo_context(&catalog, &exec_id, "updates");
+    let exec_id = last_execution_id(&catalog.lock().unwrap());
+    let undo_ctx = load_undo_context(&catalog.lock().unwrap(), &exec_id, "updates");
     eprintln!("undo context loaded for 'updates' node");
 
     let mut update_node = UpdateRecordNode::new("updates");
-    update_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
-    update_node.bind_fts(
-        catalog.fts_handles().clone(),
-        catalog.node_id_cache().clone(),
-        catalog.entity_configs().clone(),
-    );
+    {
+        // Un seul verrou pour lier les services, relâché avant toute recherche.
+        let cat = catalog.lock().unwrap();
+        update_node.bind_services(cat.conn_arc(), cat.dialect_arc());
+        update_node.bind_fts(
+            cat.fts_handles().clone(),
+            cat.node_id_cache().clone(),
+            cat.entity_configs().clone(),
+        );
+    }
     run_undo(&mut update_node, undo_ctx);
     eprintln!("undo() called — old values should be restored");
 
     // 6. Verify old values restored
-    let desc = read_field(&catalog, "Product", uuid, "description");
+    let desc = read_field(&catalog.lock().unwrap(), "Product", uuid, "description");
     assert_eq!(
         desc,
         CypherValue::String("Original text about functional programming and lambda calculus".into()),
         "description should be restored to original"
     );
-    let price = read_field(&catalog, "Product", uuid, "price");
+    let price = read_field(&catalog.lock().unwrap(), "Product", uuid, "price");
     assert_eq!(price, CypherValue::Float(10.0), "price should be restored to original");
 
     // 7. Re-ingest to rebuild chunks with restored content
-    catalog.ingest_entities("Product", vec![
+    catalog.lock().unwrap().ingest_entities("Product", vec![
         make_product("Alpha", "Original text about functional programming and lambda calculus", 10.0),
     ]).unwrap();
 
     // 8. Search should find old content again
-    let results = search_bm25(&mut catalog, "functional programming lambda");
+    let results = search_bm25(&catalog, "functional programming lambda");
     assert!(!results.is_empty(), "should find 'functional programming' after undo + re-ingest");
 
-    let results = search_bm25(&mut catalog, "cooking recipes kitchen");
+    let results = search_bm25(&catalog, "cooking recipes kitchen");
     assert!(results.is_empty(), "should NOT find 'cooking recipes' after undo + re-ingest");
 
     eprintln!("undo_update_simple_entity: all assertions passed");
@@ -454,19 +459,17 @@ fn setup_bgem3_simple() -> Catalog {
 /// Search helper: runs search with all 3 signals + diagnostics, returns (results, meta).
 #[cfg(feature = "burn-embedder")]
 fn search_all_signals(
-    catalog: &mut Catalog,
+    catalog: &Arc<Mutex<Catalog>>,
     target: &str,
     query: &str,
 ) -> rag3weaver::search::SearchResponse {
-    catalog
-        .search(target, query, SearchOptions {
-            consistency: Consistency::Immediate,
-            bm25_mode: BM25Mode::ContainsSplit,
-            diagnostics: true,
-            ..Default::default()
-        })
-        
-        .unwrap()
+    Catalog::rechercher(catalog, target, query, SearchOptions {
+        consistency: Consistency::Immediate,
+        bm25_mode: BM25Mode::ContainsSplit,
+        diagnostics: true,
+        ..Default::default()
+    })
+    .unwrap()
 }
 
 /// Assert all 3 signal counts are > 0 + BM25 highlights resolved to chunks.
@@ -498,7 +501,7 @@ fn assert_all_signals(resp: &rag3weaver::search::SearchResponse, context: &str) 
 #[test]
 #[ignore]
 fn undo_delete_kb_bgem3() {
-    let mut catalog = setup_bgem3_kb();
+    let catalog = Arc::new(Mutex::new(setup_bgem3_kb()));
 
     // 1. Create 3 documents for the KB
     let docs = [
@@ -510,14 +513,14 @@ fn undo_delete_kb_bgem3() {
         let mut data = BTreeMap::new();
         data.insert("title".into(), CypherValue::String(title.to_string()));
         data.insert("body".into(), CypherValue::String(body.to_string()));
-        catalog.create("Document", data).unwrap();
+        catalog.lock().unwrap().create("Document", data).unwrap();
     }
-    let drain = catalog.drain();
+    let drain = catalog.lock().unwrap().drain();
     assert_eq!(drain.failed, 0);
     eprintln!("KB ingested: {} processed", drain.processed);
 
     // Get UUIDs
-    let qr = catalog.conn().execute(
+    let qr = catalog.lock().unwrap().conn().execute(
         "MATCH (d:Document) RETURN d._uuid, d.title ORDER BY d.title"
     ).unwrap();
     let uuids: Vec<String> = qr.rows.iter()
@@ -526,17 +529,17 @@ fn undo_delete_kb_bgem3() {
     eprintln!("  French={}, Machine={}, Rust={}", &uuids[0][..8], &uuids[1][..8], &uuids[2][..8]);
 
     // 2. Baseline search — all 3 signals should contribute
-    let resp = search_all_signals(&mut catalog, "kb", "systems programming safety performance");
+    let resp = search_all_signals(&catalog, "kb", "systems programming safety performance");
     assert!(!resp.results.is_empty(), "baseline: should find programming docs");
     assert_all_signals(&resp, "baseline");
 
     // 3. Delete "Rust Programming" (uuids[2] since sorted by title)
     let rust_uuid = &uuids[2];
-    catalog.delete("Document", rust_uuid).unwrap();
+    catalog.lock().unwrap().delete("Document", rust_uuid).unwrap();
 
     // Subscribe to events to see errors
-    let mut rx = catalog.subscribe();
-    let drain = catalog.drain();
+    let mut rx = catalog.lock().unwrap().subscribe();
+    let drain = catalog.lock().unwrap().drain();
     // Dump any error events
     while let Ok(event) = rx.try_recv() {
         if let rag3weaver::CatalogEvent::Error { context, message } = &event {
@@ -547,26 +550,30 @@ fn undo_delete_kb_bgem3() {
     assert_eq!(drain.failed, 0, "delete drain should not fail");
 
     // Verify: Rust doc gone, its UUID should NOT appear in results
-    assert!(!entity_exists(&catalog, "Document", rust_uuid));
-    let resp = search_all_signals(&mut catalog, "kb", "Rust ownership memory safety");
+    assert!(!entity_exists(&catalog.lock().unwrap(), "Document", rust_uuid));
+    let resp = search_all_signals(&catalog, "kb", "Rust ownership memory safety");
     let found_uuids: Vec<&str> = resp.results.iter().map(|r| r.uuid.as_str()).collect();
     assert!(!found_uuids.contains(&rust_uuid.as_str()), "Rust doc UUID should NOT appear after delete");
     eprintln!("post-delete search: {} results, deleted UUID absent ✓", resp.results.len());
 
     // ML doc should still be searchable via all signals
-    let resp = search_all_signals(&mut catalog, "kb", "neural networks transformers deep learning");
+    let resp = search_all_signals(&catalog, "kb", "neural networks transformers deep learning");
     assert!(!resp.results.is_empty(), "ML doc should still be found");
     assert_all_signals(&resp, "post-delete ML");
 
     // 4. Undo the delete
-    let exec_id = last_execution_id(&catalog);
-    let undo_ctx = load_undo_context(&catalog, &exec_id, "deletes");
+    let exec_id = last_execution_id(&catalog.lock().unwrap());
+    let undo_ctx = load_undo_context(&catalog.lock().unwrap(), &exec_id, "deletes");
     let mut delete_node = DeleteRecordNode::new("deletes");
-    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    {
+        // Un seul verrou pour lier les services, relâché avant toute recherche.
+        let cat = catalog.lock().unwrap();
+        delete_node.bind_services(cat.conn_arc(), cat.dialect_arc());
+    }
     run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — Rust doc restored");
 
-    assert!(entity_exists(&catalog, "Document", rust_uuid), "Rust doc should exist again");
+    assert!(entity_exists(&catalog.lock().unwrap(), "Document", rust_uuid), "Rust doc should exist again");
 
     // 5. Re-create the document to trigger re-ingestion (chunks/embeddings)
     let mut data = BTreeMap::new();
@@ -575,23 +582,23 @@ fn undo_delete_kb_bgem3() {
         "Rust is a systems programming language focused on safety, concurrency, and performance. \
          Its ownership model prevents memory bugs at compile time without garbage collection.".into()
     ));
-    catalog.create("Document", data).unwrap();
-    let drain = catalog.drain();
+    catalog.lock().unwrap().create("Document", data).unwrap();
+    let drain = catalog.lock().unwrap().drain();
     assert_eq!(drain.failed, 0);
     eprintln!("re-ingest drained: {} processed", drain.processed);
 
     // 6. Search: Rust doc should be found again via all 3 signals
-    let resp = search_all_signals(&mut catalog, "kb", "systems programming safety performance");
+    let resp = search_all_signals(&catalog, "kb", "systems programming safety performance");
     assert!(!resp.results.is_empty(), "Rust doc should be found after undo + re-ingest");
     assert_all_signals(&resp, "post-undo Rust");
 
     // ML doc still fine
-    let resp = search_all_signals(&mut catalog, "kb", "neural networks transformers");
+    let resp = search_all_signals(&catalog, "kb", "neural networks transformers");
     assert!(!resp.results.is_empty(), "ML doc should still be found");
     assert_all_signals(&resp, "post-undo ML");
 
     // 7. BM25-only sanity check — verify FTS index is healthy after full pipeline
-    let bm25_resp = catalog.search("kb", "ownership memory safety", SearchOptions {
+    let bm25_resp = Catalog::rechercher(&catalog, "kb", "ownership memory safety", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
@@ -624,7 +631,7 @@ fn undo_delete_kb_bgem3() {
 #[test]
 #[ignore]
 fn undo_delete_simple_entity_bgem3() {
-    let mut catalog = setup_bgem3_simple();
+    let catalog = Arc::new(Mutex::new(setup_bgem3_simple()));
 
     // 1. Ingest 3 products
     let products = vec![
@@ -653,11 +660,11 @@ fn undo_delete_simple_entity_bgem3() {
             d
         },
     ];
-    let result = catalog.ingest_entities("Product", products).unwrap();
+    let result = catalog.lock().unwrap().ingest_entities("Product", products).unwrap();
     assert_eq!(result.processed, 3);
     eprintln!("ingested 3 products");
 
-    let qr = catalog.conn().execute(
+    let qr = catalog.lock().unwrap().conn().execute(
         "MATCH (n:Product) RETURN n._uuid, n.name ORDER BY n.name"
     ).unwrap();
     let uuids: Vec<String> = qr.rows.iter()
@@ -666,37 +673,41 @@ fn undo_delete_simple_entity_bgem3() {
     assert_eq!(uuids.len(), 3);
 
     // 2. Baseline: search "Rust programming" — all 3 signals
-    let resp = search_all_signals(&mut catalog, "Product", "Rust programming ownership");
+    let resp = search_all_signals(&catalog, "Product", "Rust programming ownership");
     assert!(!resp.results.is_empty(), "baseline: should find Rust Book");
     assert_all_signals(&resp, "baseline");
 
     // 3. Delete Rust Book (uuids[2])
     let rust_uuid = &uuids[2];
-    catalog.delete("Product", rust_uuid).unwrap();
-    let drain = catalog.drain();
+    catalog.lock().unwrap().delete("Product", rust_uuid).unwrap();
+    let drain = catalog.lock().unwrap().drain();
     assert_eq!(drain.failed, 0);
     eprintln!("deleted Rust Book");
 
     // Verify: deleted UUID should NOT be in results
-    let resp = search_all_signals(&mut catalog, "Product", "Rust programming ownership");
+    let resp = search_all_signals(&catalog, "Product", "Rust programming ownership");
     let found_uuids: Vec<&str> = resp.results.iter().map(|r| r.uuid.as_str()).collect();
     assert!(!found_uuids.contains(&rust_uuid.as_str()), "Rust Book UUID should NOT appear in results after delete");
     eprintln!("post-delete search: {} results, deleted UUID absent ✓", resp.results.len());
 
     // Python still there
-    let resp = search_all_signals(&mut catalog, "Product", "Python data science pandas");
+    let resp = search_all_signals(&catalog, "Product", "Python data science pandas");
     assert!(!resp.results.is_empty(), "Python should still be found");
     assert_all_signals(&resp, "post-delete Python");
 
     // 4. Undo
-    let exec_id = last_execution_id(&catalog);
-    let undo_ctx = load_undo_context(&catalog, &exec_id, "deletes");
+    let exec_id = last_execution_id(&catalog.lock().unwrap());
+    let undo_ctx = load_undo_context(&catalog.lock().unwrap(), &exec_id, "deletes");
     let mut delete_node = DeleteRecordNode::new("deletes");
-    delete_node.bind_services(catalog.conn_arc(), catalog.dialect_arc());
+    {
+        // Un seul verrou pour lier les services, relâché avant toute recherche.
+        let cat = catalog.lock().unwrap();
+        delete_node.bind_services(cat.conn_arc(), cat.dialect_arc());
+    }
     run_undo(&mut delete_node, undo_ctx);
     eprintln!("undo() called — Rust Book restored");
 
-    assert!(entity_exists(&catalog, "Product", rust_uuid));
+    assert!(entity_exists(&catalog.lock().unwrap(), "Product", rust_uuid));
 
     // 5. Re-ingest to rebuild chunks + embeddings
     let products = vec![{
@@ -707,20 +718,20 @@ fn undo_delete_simple_entity_bgem3() {
              and concurrency. Learn systems programming with zero-cost abstractions.".into()));
         d
     }];
-    catalog.ingest_entities("Product", products).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", products).unwrap();
     eprintln!("re-ingested Rust Book");
 
     // 6. All 3 signals should work again
-    let resp = search_all_signals(&mut catalog, "Product", "Rust programming ownership");
+    let resp = search_all_signals(&catalog, "Product", "Rust programming ownership");
     assert!(!resp.results.is_empty(), "Rust Book should be found after undo + re-ingest");
     assert_all_signals(&resp, "post-undo Rust");
 
-    let resp = search_all_signals(&mut catalog, "Product", "Python data science");
+    let resp = search_all_signals(&catalog, "Product", "Python data science");
     assert!(!resp.results.is_empty(), "Python still found");
     assert_all_signals(&resp, "post-undo Python");
 
     // 7. BM25-only sanity check — verify FTS index is healthy after full pipeline
-    let bm25_resp = catalog.search("Product", "Rust ownership lifetimes concurrency", SearchOptions {
+    let bm25_resp = Catalog::rechercher(&catalog, "Product", "Rust ownership lifetimes concurrency", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
         bm25_mode: BM25Mode::ContainsSplit,
