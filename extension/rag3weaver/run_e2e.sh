@@ -85,7 +85,7 @@ BUILD_ONLY=false
 FORCE_BUILD=false
 NO_CUDA=false
 SUMMARY=false
-TEST_FILE=""
+TEST_FILES=()
 EXTRA_FEATURES=""
 TEST_FILTER=""
 EXTRA_ARGS=()
@@ -97,7 +97,11 @@ while [[ $# -gt 0 ]]; do
     --no-build)   shift ;;  # kept for compat, now the default
     --no-cuda)    NO_CUDA=true; shift ;;
     --summary)    SUMMARY=true; shift ;;
-    --test)       shift; TEST_FILE="$1"; shift ;;
+    # **`--test` s'accumule.** Il écrasait : quatre `--test` n'en lançaient
+    # qu'un, et le résumé affichait un TOTAL vert pour un quart du travail
+    # demandé — la même famille que le `--no-fail-fast` ci-dessous, un total
+    # partiel qui ressemble à un total complet (18 septembre 2026).
+    --test)       shift; TEST_FILES+=("$1"); shift ;;
     --features)   shift; EXTRA_FEATURES="$1"; shift ;;
     -*)           EXTRA_ARGS+=("$1"); shift ;;
     *)            TEST_FILTER="$1"; shift ;;
@@ -229,9 +233,10 @@ CARGO_ARGS=(
   --features "$FEATURES"
 )
 
-if [ -n "$TEST_FILE" ]; then
-  # Single test file specified via --test
-  CARGO_ARGS+=(--test "$TEST_FILE")
+if [ ${#TEST_FILES[@]} -gt 0 ]; then
+  for nom in "${TEST_FILES[@]}"; do
+    CARGO_ARGS+=(--test "$nom")
+  done
 else
   # Run ALL e2e test files
   for f in "$WEAVER"/tests/e2e_*.rs; do
