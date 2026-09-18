@@ -23,7 +23,7 @@
 mod common;
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{default_scope_chunking, read_sources, register_code_schema, SCOPE};
 use rag3weaver::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType, SimpleFieldDef};
@@ -310,8 +310,8 @@ fn banc_etage_qui_perd() {
     let (embedder, modele) = embarqueur();
 
     // ── Tel quel : src/ par le chemin réel ──────────────────────────────
-    let mut reel = base(embedder.clone(), "etage-reel");
-    register_code_schema(&mut reel, default_scope_chunking()).unwrap();
+    let reel = Arc::new(Mutex::new(base(embedder.clone(), "etage-reel")));
+    register_code_schema(&mut reel.lock().unwrap(), default_scope_chunking()).unwrap();
     let racine = manifest();
     let sources: Vec<(String, String)> = read_sources(&format!("{racine}/src"))
         .expect("lire src/")
@@ -319,12 +319,12 @@ fn banc_etage_qui_perd() {
         .map(|(rel, c)| (format!("src/{rel}"), c))
         .collect();
     let analysis = rag3weaver::code::analyze(&racine, sources);
-    let rapport = reel.ingest_code(&analysis).expect("ingérer src/");
+    let rapport = reel.lock().unwrap().ingest_code(&analysis).expect("ingérer src/");
     eprintln!("[étage] modèle {modele} · tel quel : {} scopes, {} en échec", rapport.scopes, rapport.failed);
 
     let mut tel_quel = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let r = reel.search(SCOPE, q, options_vecteur()).expect("recherche");
+        let r = Catalog::rechercher(&reel, SCOPE, q, options_vecteur()).expect("recherche");
         tel_quel.noter(&noms(&r), attendus);
     }
 
@@ -332,10 +332,10 @@ fn banc_etage_qui_perd() {
     // Le vecteur de la requête est celui du catalogue ; la comparaison est
     // exhaustive au lieu du HNSW ; les 20 meilleurs chunks remontent à leur
     // parent, dédoublonnés au meilleur rang — la résolution d'aujourd'hui.
-    let stockage = reel.vector_storage("Scope_Chunk").expect("stockage du modèle courant");
+    let stockage = reel.lock().unwrap().vector_storage("Scope_Chunk").expect("stockage du modèle courant");
     let mut m2 = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let (qvec, _) = reel.embarquer_la_requete(q, true, false).expect("embarquer la requête");
+        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false).expect("embarquer la requête");
         let cypher = format!(
             "MATCH (c:Scope_Chunk) WHERE c.{col} IS NOT NULL \
              WITH c, array_cosine_similarity(c.{col}, $q) AS sim ORDER BY sim DESC LIMIT 20 \
@@ -343,23 +343,25 @@ fn banc_etage_qui_perd() {
             col = stockage.column
         );
         let q_val = CypherValue::List(qvec.iter().map(|&f| CypherValue::Float(f as f64)).collect());
-        let r = reel.execute_raw_with_params(&cypher, &[QueryParam::new("q", q_val)]).expect("cosinus exact");
+        let r = reel.lock().unwrap().execute_raw_with_params(&cypher, &[QueryParam::new("q", q_val)]).expect("cosinus exact");
         let classes = parents_uniques(r.rows.iter().filter_map(|l| l.first()?.as_str().map(str::to_string)));
         m2.noter(&classes, attendus);
     }
 
     // ── M3 : les 20 chunks bruts du HNSW, avant résolution ──────────────
     // Ce que l'index rend vraiment, et si le bon parent y est — à quel rang.
-    let backend = reel.search_backend().expect("backend de recherche");
+    let backend = reel.lock().unwrap().search_backend().expect("backend de recherche");
     let mut m3 = Mesure::default();
     let mut bon_parent_dans_les_20 = 0usize;
     for (q, attendus) in QUESTIONS {
-        let (qvec, _) = reel.embarquer_la_requete(q, true, false).expect("embarquer la requête");
+        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false).expect("embarquer la requête");
         let hits = backend
             .vector_search("Scope_Chunk", &stockage.index, &stockage.column, &qvec, 20)
             .expect("HNSW brut");
         let uuids = CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect());
         let r = reel
+            .lock()
+            .unwrap()
             .execute_raw_with_params(
                 "UNWIND $uuids AS u MATCH (c:Scope_Chunk {_uuid: u})-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN u, p.name",
                 &[QueryParam::new("uuids", uuids)],
@@ -382,8 +384,8 @@ fn banc_etage_qui_perd() {
     // Les 66 scopes à l'aiguille, entité d'un seul champ de contenu, un chunk
     // par texte (Fixed, 4 000 > 1 500), vecteur seul.
     let embedder_m1b = embedder.clone();
-    let mut nu = base(embedder, "etage-m1");
-    nu.register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
+    let nu = Arc::new(Mutex::new(base(embedder, "etage-m1")));
+    nu.lock().unwrap().register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
     let src_dir = std::path::Path::new(&racine).join("src");
     let lignes: Vec<std::collections::BTreeMap<String, CypherValue>> = CORPUS
         .iter()
@@ -395,11 +397,11 @@ fn banc_etage_qui_perd() {
             d
         })
         .collect();
-    let r = nu.ingest_entities("Fonction", lignes).expect("ingérer les 66 scopes");
+    let r = nu.lock().unwrap().ingest_entities("Fonction", lignes).expect("ingérer les 66 scopes");
     eprintln!("[étage] M1 : {} scopes à l'aiguille, {} en échec", r.processed, r.failed);
     let mut m1 = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let r = nu.search("Fonction", q, options_vecteur()).expect("recherche M1");
+        let r = Catalog::rechercher(&nu, "Fonction", q, options_vecteur()).expect("recherche M1");
         m1.noter(&noms(&r), attendus);
     }
 
@@ -410,8 +412,8 @@ fn banc_etage_qui_perd() {
     // comme le cosinus nu — sans rien changer à `EntityConfig`. Si M1b tient
     // près de M1, le texte explique tout ; s'il retombe vers tel quel, c'est
     // la taille du corpus.
-    let mut plein = base(embedder_m1b, "etage-m1b");
-    plein.register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
+    let plein = Arc::new(Mutex::new(base(embedder_m1b, "etage-m1b")));
+    plein.lock().unwrap().register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
     let lignes: Vec<std::collections::BTreeMap<String, CypherValue>> = analysis
         .scopes
         .iter()
@@ -436,11 +438,11 @@ fn banc_etage_qui_perd() {
             d
         })
         .collect();
-    let r = plein.ingest_entities("Fonction", lignes).expect("ingérer les scopes assemblés");
+    let r = plein.lock().unwrap().ingest_entities("Fonction", lignes).expect("ingérer les scopes assemblés");
     eprintln!("[étage] M1b : {} scopes assemblés, {} en échec", r.processed, r.failed);
     let mut m1b = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let r = plein.search("Fonction", q, options_vecteur()).expect("recherche M1b");
+        let r = Catalog::rechercher(&plein, "Fonction", q, options_vecteur()).expect("recherche M1b");
         m1b.noter(&noms(&r), attendus);
     }
 

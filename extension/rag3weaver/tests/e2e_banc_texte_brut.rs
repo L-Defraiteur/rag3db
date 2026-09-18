@@ -22,7 +22,7 @@
 
 mod common;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{default_scope_chunking, read_sources, register_code_schema, SCOPE};
 use rag3weaver::connection::CypherValue;
@@ -201,10 +201,10 @@ struct Mesure {
     ratees: Vec<String>,
 }
 
-fn mesurer(catalog: &mut Catalog, signaux: SearchSignals, sans: bool) -> Mesure {
+fn mesurer(catalog: &Arc<Mutex<Catalog>>, signaux: SearchSignals, sans: bool) -> Mesure {
     let mut m = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let r = catalog.search(SCOPE, q, options(signaux, sans)).expect("recherche");
+        let r = Catalog::rechercher(catalog, SCOPE, q, options(signaux, sans)).expect("recherche");
         let l = lignes(&r);
         let rang = l.iter().position(|(nom, _, _)| attendus.contains(&nom.as_str()));
         let premier_texte = l.iter().position(|(_, genre, _)| genre == "texte_brut");
@@ -237,16 +237,18 @@ fn mesurer(catalog: &mut Catalog, signaux: SearchSignals, sans: bool) -> Mesure 
 #[ignore]
 fn banc_texte_brut() {
     let (embedder, modele) = embarqueur();
-    let mut catalog = setup(embedder);
+    let catalog = Arc::new(Mutex::new(setup(embedder)));
     let (racine, sources, code, texte) = corpus();
     let analysis = rag3weaver::code::analyze(&racine, sources);
     let t = std::time::Instant::now();
-    let rapport = catalog.ingest_code(&analysis).expect("ingérer");
+    let rapport = catalog.lock().unwrap().ingest_code(&analysis).expect("ingérer");
     eprintln!(
         "[banc texte brut] modèle {modele} · {code} fichiers de code + {texte} de texte · {} scopes, {} en échec · ingestion {:.1} s",
         rapport.scopes, rapport.failed, t.elapsed().as_secs_f64()
     );
     let bruts = catalog
+        .lock()
+        .unwrap()
         .execute_raw("MATCH (s:Scope) WHERE s.scope_type = 'texte_brut' RETURN count(s)")
         .ok()
         .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
@@ -260,7 +262,7 @@ fn banc_texte_brut() {
     let mut ratees: Vec<String> = Vec::new();
     for (etiquette, signaux) in [("vecteur", SearchSignals::VECTOR), ("plein texte", SearchSignals::BM25), ("hybride", SearchSignals::HYBRID)] {
         for (lecture, sans) in [("sans", true), ("avec", false)] {
-            let m = mesurer(&mut catalog, signaux, sans);
+            let m = mesurer(&catalog, signaux, sans);
             eprintln!("| {etiquette} | {lecture} | {:.3} | {} | {} | {} |", m.mrr, m.r1, m.r5, m.texte_devant);
             if !m.ratees.is_empty() {
                 ratees.push(format!("{etiquette}, {lecture}, ratées à 10 :\n{}", m.ratees.join("\n")));
@@ -280,7 +282,7 @@ fn banc_texte_brut() {
             let (mut r1, mut r5) = (0, 0);
             let mut detail: Vec<String> = Vec::new();
             for (q, chemin) in QUESTIONS_TEXTE {
-                let r = catalog.search(SCOPE, q, options(signaux, sans)).expect("recherche");
+                let r = Catalog::rechercher(&catalog, SCOPE, q, options(signaux, sans)).expect("recherche");
                 let l = lignes(&r);
                 let rang = l.iter().position(|(_, _, f)| f.contains(chemin));
                 r1 += usize::from(rang == Some(0));
