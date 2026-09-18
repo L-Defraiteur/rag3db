@@ -139,7 +139,44 @@ fusion — c'est la condition pour qu'ils disent, après, si le facteur a servi.
 - Le découpage du texte brut en `Markdown` — mesuré en passant (§5), pas
   décidé.
 
-## 8. Ce que ça coûte
+## 8. Les chiffres
+
+### 18 septembre 2026 — montage à vide, `HashEmbedder`
+
+`tests/e2e_banc_texte_brut.rs` sur `lecteurs-csv`, rag3db natif, sans carte.
+4 825 scopes, 0 en échec, ingestion 17,5 s.
+
+**`src/` seul fait entrer zéro scope `texte_brut`** : 100 fichiers, tous `.rs`.
+Les 6 texte_brut de l'index sont ceux que le banc ajoute (le dossier de prose
+du 30 août, `codeparsers/Cargo.toml`, `run_e2e.sh`). Sur ce crate, la crainte
+du §1 n'a donc pas de corpus pour se réaliser — elle en aura un sur un dépôt
+qui a des docs à côté de son code, ce qui est le cas de rag3db entier.
+
+| signal | lecture | MRR | R@1 | R@5 | texte brut devant |
+|---|---|---:|---:|---:|---:|
+| plein texte | sans | 0,209 | 4 | 17 | 0 |
+| plein texte | avec | 0,220 | 5 | 17 | 0 |
+| vecteur, hybride | — | 0 | 0 | 0 | 0 |
+
+Banc B, plein texte : `sans` 0/5 (par construction), `avec` 2/5 à 5.
+
+**Ce que ça dit** : rien encore sur la pondération — six textes ne font pas un
+bruit, et le HashEmbedder rend des vecteurs sans sens, donc vecteur et hybride
+sont à zéro par construction. Ce que ça prouve : le montage tient, le filtre
+`sans` marche, et les deux bancs rendent leurs tableaux.
+
+**Une observation à confirmer avec un vrai modèle** : en hybride, le top-3 est
+*exactement* celui du vecteur seul sur toutes les questions ratées. Le vecteur
+du mock écrase le BM25 dans la fusion — des cosinus aléatoires proches de 1
+contre des scores BM25 d'une autre échelle. Si la fusion pèse par score et non
+par rang, un signal à l'échelle plus haute domine quel que soit son poids ;
+c'est au pas C de le savoir, et à la passe 278m de le confirmer ou non.
+
+### À venir — `granite-278m`
+
+Même montage, `RAG3WEAVER_BANC_MODELE=granite-278m`, avec la carte.
+
+## 9. Ce que ça coûte
 
 Un fichier de test, `tests/e2e_banc_texte_brut.rs`, sur rag3db natif sans
 GPU (`HashEmbedder` pour le montage, ou le démon 278m pour des chiffres qui
