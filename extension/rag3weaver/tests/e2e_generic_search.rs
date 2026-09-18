@@ -1235,3 +1235,66 @@ fn le_lanceur_rend_ce_que_le_monolithe_rend() {
     assert_eq!(page2.results[0].uuid, tout.results[1].uuid, "la seconde page est le deuxième de la liste");
     assert_eq!(page2.meta.fused_count, 3, "la méta dit combien il y avait avant la page");
 }
+
+/// **Les contrats du 18 septembre** : ce que le monolithe donnait et que le
+/// lanceur taisait — `Detailed` de bout en bout (le `result_mode` de la
+/// requête atteint les nœuds), les diagnostics BM25 par hit, l'erreur typée
+/// d'une cible inconnue (résolue avant de monter le graphe), et
+/// `meta.signals` = les signaux **demandés**, même quand l'un d'eux se tait.
+#[test]
+#[ignore]
+fn le_lanceur_honore_detailed_diagnostics_et_contrats() {
+    use std::sync::Mutex;
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let mut catalog = Catalog::new(
+        boxed,
+        Box::new(rag3weaver::embedder::HashEmbedder::new(4)),
+        make_empty_config(4),
+    );
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities("Product", test_products()).unwrap();
+    let cat = Arc::new(Mutex::new(catalog));
+
+    // 1. `Detailed` atteint les nœuds : les chunks attribués sont portés.
+    let detailed = Catalog::rechercher(&cat, "Product", "programming language", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        result_mode: rag3weaver::search::ResultMode::Detailed,
+        limit: 3,
+        ..Default::default()
+    }).unwrap();
+    assert!(!detailed.results.is_empty());
+    assert!(
+        detailed.results.iter().any(|r| r.chunks.as_ref().is_some_and(|c| !c.is_empty())),
+        "Detailed doit porter les chunks attribués ; reçus : {:?}",
+        detailed.results.iter().map(|r| r.chunks.as_ref().map(|c| c.len())).collect::<Vec<_>>()
+    );
+
+    // 2. Les diagnostics BM25 remontent par la méta du nœud.
+    let diag = Catalog::rechercher(&cat, "Product", "programming language", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        diagnostics: true,
+        ..Default::default()
+    }).unwrap();
+    let d = diag.meta.diagnostics.as_ref().expect("diagnostics demandés");
+    assert!(!d.bm25_hits.is_empty(), "bm25_hits peuplés par le nœud, plus passés sous silence");
+
+    // 3. Cible inconnue : l'erreur typée du monolithe, pas un DbError habillé.
+    let err = Catalog::rechercher(&cat, "Nowhere", "x", SearchOptions::default()).unwrap_err();
+    assert!(
+        matches!(err, rag3weaver::CatalogError::UnknownKB(_) | rag3weaver::CatalogError::UnknownEntity(_)),
+        "erreur typée attendue, reçu : {err:?}"
+    );
+
+    // 4. `meta.signals` = demandés — même quand un signal rend zéro.
+    let hybride = Catalog::rechercher(&cat, "Product", "zzzz-introuvable", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::HYBRID),
+        ..Default::default()
+    }).unwrap();
+    assert_eq!(hybride.meta.signals, SearchSignals::HYBRID, "les signaux demandés, pas ceux qui ont parlé");
+}

@@ -6476,11 +6476,18 @@ impl Catalog {
 
         // ── Les services : ce que le catalogue sait offrir, et lui-même ────
         let mut services = ServiceRegistry::new();
-        {
+        // La cible se résout AVANT de monter le graphe : une cible inconnue
+        // rend l'erreur typée du monolithe (`UnknownKB`/`UnknownEntity`), pas
+        // un échec de nœud habillé en `DbError`. Et ses signaux déclarés
+        // servent plus bas à rapporter `meta.signals` comme le monolithe :
+        // les signaux **demandés**, pas ceux qui ont parlé.
+        let declared_signals = {
             let cat = catalogue.lock().unwrap();
             cat.check_initialized()?;
+            let resolved = cat.resolve_search_target(cible)?;
             cat.register_search_services(&mut services);
-        }
+            resolved.default_signals
+        };
         services.register("catalog", catalogue.clone());
 
         // ── Le gabarit, avec toutes les options — pas seulement sa fiche ───
@@ -6580,6 +6587,7 @@ impl Catalog {
         });
         meta.query = requete.to_string();
         meta.target = cible.to_string();
+        meta.signals = options.signals.unwrap_or(declared_signals);
         meta.fused_count = avant_la_page;
         let total_ms = debut.elapsed().as_millis() as u64;
         meta.search_time_ms = total_ms;

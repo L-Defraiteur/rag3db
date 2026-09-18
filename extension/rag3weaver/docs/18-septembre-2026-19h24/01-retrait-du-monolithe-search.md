@@ -76,3 +76,25 @@ cellules, SourceResolved, warnings, événement). Les écarts :
 
 Hors périmètre : des cellules par requête sans bascule d'état global (limite
 nommée dans la doc de `rechercher`), et `search_with_strategy` (autre graphe).
+
+## 5. Phase 1 — livrée (même soir)
+
+(a) `result_mode` hérite de la requête sur les trois nœuds de signaux (motif
+B10, `Option<ResultMode>` en config, absent = hériter) ; (b) `BM25SearchNode`
+remplit `bm25_hits`/`engine_warnings` sur ses deux chemins et les remonte par
+sa méta, `rechercher` superpose les durées ; (d) la cible est résolue avant de
+monter le graphe — erreur typée ; (e) `meta.signals` = signaux demandés ;
+(g) la garde `has_source_refs` de `base_de_fusion` est retirée (go de
+l'orchestrateur : c'était un raccourci).
+
+Documentés sans alignement : (c) `enrich_ms` reste à zéro — l'enrichissement
+vit dans le nœud `resolve`, sa durée est `resolve_ms`, la dupliquer mentirait ;
+(f) les comptes de signaux sont mesurés après résolution parent (le monolithe
+comptait les chunks avant) — personne ne dépend des comptes chunks ; si un
+test les asserte, l'assertion s'adapte en le disant dans le commit.
+
+Preuve : `e2e_generic_search` 17/17, dont le nouveau
+`le_lanceur_honore_detailed_diagnostics_et_contrats` (Detailed de bout en
+bout, `bm25_hits` peuplés, `UnknownKB`/`UnknownEntity` préservées,
+`meta.signals` demandés même quand un signal se tait) — et les seize
+d'avant inchangés, équivalence comprise. Unitaires 1045/1045.

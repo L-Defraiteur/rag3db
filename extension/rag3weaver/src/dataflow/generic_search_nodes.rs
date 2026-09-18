@@ -238,7 +238,9 @@ pub struct VectorSearchNode {
     node_name: String,
     /// `None` : le budget vient de la requête (`budget_de_recherche`).
     limit: Option<usize>,
-    result_mode: ResultMode,
+    /// `None` : celui de la requête (`options.result_mode`) — même motif que
+    /// `bm25_mode` (B10). `Detailed` par `rechercher` rendait de l'agrégé.
+    result_mode: Option<ResultMode>,
     signal: Option<String>,
 }
 
@@ -257,12 +259,18 @@ impl VectorSearchNode {
         Self {
             node_name: name.to_string(),
             limit,
-            result_mode: ResultMode::Aggregated,
+            result_mode: None,
             signal: None,
         }
     }
 
     pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
+        self.result_mode = Some(mode);
+        self
+    }
+
+    /// Forme des fabriques : `None` = hériter de la requête.
+    pub fn with_result_mode_opt(mut self, mode: Option<ResultMode>) -> Self {
         self.result_mode = mode;
         self
     }
@@ -432,13 +440,13 @@ impl Node for VectorSearchNode {
             &target,
             chunk_results,
             &target.enrich_fields,
-            self.result_mode,
+            self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
         )
         .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
-        let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode, &label)?;
+        let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
         }
@@ -498,7 +506,9 @@ pub struct BM25SearchNode {
     limit: Option<usize>,
     /// `None` : celui de la requête (`options.fuzzy_distance`).
     fuzzy_distance: Option<u8>,
-    result_mode: ResultMode,
+    /// `None` : celui de la requête (`options.result_mode`) — même motif que
+    /// `bm25_mode` (B10). `Detailed` par `rechercher` rendait de l'agrégé.
+    result_mode: Option<ResultMode>,
     /// `None` : celui de la requête (`options.bm25_mode`, `Auto` par défaut).
     mode: Option<BM25Mode>,
     fields: Option<Vec<String>>,
@@ -521,7 +531,7 @@ impl BM25SearchNode {
             node_name: name.to_string(),
             limit,
             fuzzy_distance: None,
-            result_mode: ResultMode::Aggregated,
+            result_mode: None,
             mode: None,
             fields: None,
             signal: None,
@@ -534,6 +544,12 @@ impl BM25SearchNode {
     }
 
     pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
+        self.result_mode = Some(mode);
+        self
+    }
+
+    /// Forme des fabriques : `None` = hériter de la requête.
+    pub fn with_result_mode_opt(mut self, mode: Option<ResultMode>) -> Self {
         self.result_mode = mode;
         self
     }
@@ -594,6 +610,10 @@ impl Node for BM25SearchNode {
             return Ok(());
         }
         let limite = budget_de_recherche(self.limit, &options);
+        // Diagnostics par hit (recouvrement highlight/chunk) et avertissements
+        // du moteur : le monolithe les remontait, le nœud passait `None`.
+        // Ils rentrent par la méta ; `rechercher` y superpose les durées.
+        let mut diag_bm25 = options.diagnostics.then(crate::search::SearchDiagnostics::default);
 
         let conn = ctx
             .service::<ConnService>("conn")
@@ -658,13 +678,13 @@ impl Node for BM25SearchNode {
                 &query_str,
                 limite,
                 &target.enrich_fields,
-                self.result_mode,
+                self.result_mode.unwrap_or(options.result_mode),
                 // `options.scope` prime : c'est une recherche explicitement
                 // dirigée vers une autre cellule. Sinon, celle du catalogue.
                 cellule.as_ref().map(|s| (s.org.as_str(), s.project.as_str())),
                 filtre.as_ref().map(|(j, w, _)| (j.as_str(), w.as_str())),
                 filtre.as_ref().map(|(_, _, p)| p.as_slice()).unwrap_or(&[]),
-                None,
+                diag_bm25.as_mut(),
                 &mut node_warnings,
             )
             .map_err(|e| format!("BM25SearchNode: recherche native: {e}"))?;
@@ -673,7 +693,7 @@ impl Node for BM25SearchNode {
             }
             let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
             let unified =
-                finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode, &label)?;
+                finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
             let nombre = unified.len();
             ctx.set_output("results", PortValue::new(unified));
             ctx.set_output(
@@ -692,7 +712,7 @@ impl Node for BM25SearchNode {
                     reranked_count: 0,
                     warnings: node_warnings.clone(),
                     search_time_ms: debut.elapsed().as_millis() as u64,
-                    diagnostics: None,
+                    diagnostics: diag_bm25.clone(),
                 }),
             );
             return Ok(());
@@ -722,10 +742,9 @@ impl Node for BM25SearchNode {
             limite,
             allowed.as_deref(),
             &target.enrich_fields,
-            self.result_mode,
-            None,
-            // Ce nœud n'a pas encore de canal de sortie pour les avertissements ;
-            // ils sont collectés puis journalisés plutôt que perdus en silence.
+            self.result_mode.unwrap_or(options.result_mode),
+            diag_bm25.as_mut(),
+            // Les avertissements sont collectés puis remontés par la méta.
             &mut node_warnings,
             // Handle FTS de la table parente si le service l'expose ; sinon on
             // reste sur le chemin C++.
@@ -738,7 +757,7 @@ impl Node for BM25SearchNode {
         }
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
-        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode, &label)?;
+        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
 
@@ -762,7 +781,7 @@ impl Node for BM25SearchNode {
                 reranked_count: 0,
                 search_time_ms: debut.elapsed().as_millis() as u64,
                 warnings: node_warnings.clone(),
-                diagnostics: None,
+                diagnostics: diag_bm25,
             }),
         );
         Ok(())
@@ -776,7 +795,9 @@ pub struct SparseSearchNode {
     node_name: String,
     /// `None` : le budget vient de la requête (`budget_de_recherche`).
     limit: Option<usize>,
-    result_mode: ResultMode,
+    /// `None` : celui de la requête (`options.result_mode`) — même motif que
+    /// `bm25_mode` (B10). `Detailed` par `rechercher` rendait de l'agrégé.
+    result_mode: Option<ResultMode>,
     signal: Option<String>,
 }
 
@@ -795,12 +816,18 @@ impl SparseSearchNode {
         Self {
             node_name: name.to_string(),
             limit,
-            result_mode: ResultMode::Aggregated,
+            result_mode: None,
             signal: None,
         }
     }
 
     pub fn with_result_mode(mut self, mode: ResultMode) -> Self {
+        self.result_mode = Some(mode);
+        self
+    }
+
+    /// Forme des fabriques : `None` = hériter de la requête.
+    pub fn with_result_mode_opt(mut self, mode: Option<ResultMode>) -> Self {
         self.result_mode = mode;
         self
     }
@@ -945,13 +972,13 @@ impl Node for SparseSearchNode {
             &target,
             chunk_results,
             &target.enrich_fields,
-            self.result_mode,
+            self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
         )
         .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
 
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
-        let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode, &label)?;
+        let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
         }
@@ -1099,12 +1126,14 @@ impl FuseResultsNode {
     /// faisait `options.fusion.unwrap_or(target.default_fusion)` ; ce nœud
     /// ignorait les deux — B4 de la réconciliation du 6 septembre 2026.
     ///
-    /// Une entité simple n'a pas de fusion déclarée (`default_fusion` y est le
-    /// défaut du moteur) : c'est le gabarit qui décide pour elle.
+    /// La fusion déclarée par la cible vaut pour toutes — le monolithe faisait
+    /// `options.fusion ?? target.default_fusion` sans regarder si la cible
+    /// était une KB ; la garde `has_source_refs` était un raccourci, retirée
+    /// le 18 septembre. Le gabarit ne décide que sans cible (graphe nu).
     fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, bool) {
         match qp {
             Some(qp) if qp.options.fusion.is_some() => (qp.options.fusion.clone().unwrap(), false),
-            Some(qp) if qp.target.as_ref().is_some_and(|t| t.has_source_refs) => {
+            Some(qp) if qp.target.is_some() => {
                 (qp.target.as_ref().unwrap().default_fusion.clone(), false)
             }
             _ => (FusionConfig::default(), true),
@@ -2382,7 +2411,7 @@ mod tests {
             .with_result_mode(ResultMode::Detailed);
         assert_eq!(node.limit, Some(20));
         assert_eq!(node.fuzzy_distance, Some(2));
-        assert!(matches!(node.result_mode, ResultMode::Detailed));
+        assert!(matches!(node.result_mode, Some(ResultMode::Detailed)));
     }
 
     #[test]

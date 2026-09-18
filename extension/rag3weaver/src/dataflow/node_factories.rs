@@ -704,15 +704,19 @@ impl NodeFactory for SearchSourceNodeFactory {
 
 // ─── Paramètres communs aux nœuds de signal ─────────────────────────────────
 
-fn parse_result_mode(config: &serde_json::Value, node: &str) -> Result<crate::search::ResultMode, String> {
+fn parse_result_mode(config: &serde_json::Value, node: &str) -> Result<Option<crate::search::ResultMode>, String> {
     use crate::search::ResultMode;
     Ok(match config.get("result_mode").and_then(|v| v.as_str()) {
         // La forme serde, et elle seule : c'est celle que les nœuds réémettent
         // et celle que l'`enum` de la fiche annonce. Les alias PascalCase
         // d'autrefois n'avaient plus aucun appelant.
-        None | Some("aggregated") => ResultMode::Aggregated,
-        Some("detailed") => ResultMode::Detailed,
-        Some("source_resolved") => ResultMode::SourceResolved,
+        //
+        // Absent = hériter du `result_mode` de la requête (B10) — c'est ce qui
+        // fait vivre `SearchOptions { result_mode: Detailed }` par `rechercher`.
+        None => None,
+        Some("aggregated") => Some(ResultMode::Aggregated),
+        Some("detailed") => Some(ResultMode::Detailed),
+        Some("source_resolved") => Some(ResultMode::SourceResolved),
         Some(other) => return Err(format!("{node}: unknown result_mode '{other}' (aggregated | detailed | source_resolved)")),
     })
 }
@@ -797,7 +801,7 @@ impl NodeFactory for VectorSearchNodeFactory {
             Some(l) => VectorSearchNode::new(name, l as usize),
             None => VectorSearchNode::depuis_la_requete(name),
         }
-            .with_result_mode(parse_result_mode(config, "VectorSearchNode")?);
+            .with_result_mode_opt(parse_result_mode(config, "VectorSearchNode")?);
         if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
             node = node.with_signal(sig);
         }
@@ -835,7 +839,7 @@ impl NodeFactory for BM25SearchNodeFactory {
             Some(l) => BM25SearchNode::new(name, l as usize),
             None => BM25SearchNode::depuis_la_requete(name),
         }
-            .with_result_mode(parse_result_mode(config, "BM25SearchNode")?);
+            .with_result_mode_opt(parse_result_mode(config, "BM25SearchNode")?);
         if let Some(f) = config.get("fuzzy_distance").and_then(|v| v.as_u64()) {
             node = node.with_fuzzy(f as u8);
         }
@@ -918,7 +922,7 @@ impl NodeFactory for SparseSearchNodeFactory {
             Some(l) => SparseSearchNode::new(name, l as usize),
             None => SparseSearchNode::depuis_la_requete(name),
         }
-            .with_result_mode(parse_result_mode(config, "SparseSearchNode")?);
+            .with_result_mode_opt(parse_result_mode(config, "SparseSearchNode")?);
         if let Some(sig) = config.get("signal").and_then(|v| v.as_str()) {
             node = node.with_signal(sig);
         }
