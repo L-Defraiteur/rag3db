@@ -165,12 +165,18 @@ bruit, et le HashEmbedder rend des vecteurs sans sens, donc vecteur et hybride
 sont à zéro par construction. Ce que ça prouve : le montage tient, le filtre
 `sans` marche, et les deux bancs rendent leurs tableaux.
 
-**Une observation à confirmer avec un vrai modèle** : en hybride, le top-3 est
-*exactement* celui du vecteur seul sur toutes les questions ratées. Le vecteur
-du mock écrase le BM25 dans la fusion — des cosinus aléatoires proches de 1
-contre des scores BM25 d'une autre échelle. Si la fusion pèse par score et non
-par rang, un signal à l'échelle plus haute domine quel que soit son poids ;
-c'est au pas C de le savoir, et à la passe 278m de le confirmer ou non.
+**Une observation, et sa cause corrigée** : en hybride, le top-3 est
+*exactement* celui du vecteur seul sur toutes les questions ratées. J'ai
+d'abord écrit que l'échelle des scores l'expliquait — c'était faux : la fusion
+par défaut est **RRF, par rang, k = 60** (session architecture, 18 septembre).
+Ce qui fait dominer le vecteur, ce sont **les poids par signal** — BM25 à 0,3
+contre le vecteur — et c'est précisément ce que le pas C rend réglable par
+entité. La passe 278m dira si ce réglage par défaut est mauvais pour le code.
+
+**Le banc B tient sur ce que le banc ajoute**, pas sur `src/` : sans le
+dossier de prose, `Cargo.toml` et `run_e2e.sh` ajoutés à la main, il n'aurait
+aucune réponse à trouver. C'est voulu — sur rag3db entier, les docs sont à
+côté du code et ce banc les représente.
 
 ### À venir — `granite-278m`
 
