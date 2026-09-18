@@ -9,6 +9,7 @@
 //! | M1 | **le texte** : les 66 scopes à l'aiguille du banc de qualité, un texte par fonction, un chunk par texte |
 //! | M2 | **l'index** : cosinus exact contre tous les chunks au lieu du HNSW, même résolution |
 //! | M3 | **la résolution** : les 20 chunks bruts du HNSW avant résolution au parent |
+//! | M1b | **le texte seul** : les 4 819 scopes de `src/`, chacun un texte `nom + doc + signature + corps` — même corpus que tel quel, même texte que M1 |
 //!
 //! Un banc mesure, il n'échoue pas. Les aiguilles, l'extraction et les
 //! questions sont copiées de `e2e_banc_qualite.rs` — deux binaires de test ne
@@ -253,6 +254,21 @@ fn options_vecteur() -> SearchOptions {
     }
 }
 
+/// L'entité de M1 et M1b : un nom, un champ de contenu, un chunk par texte
+/// (`Fixed` à 4 000 > 1 500 — `chunked = false` refuse le vecteur, c'est le
+/// même effet), vecteur seul.
+fn fonction_config() -> EntityConfig {
+    let mut fields = HashMap::new();
+    fields.insert("name".to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
+    fields.insert("texte".to_string(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
+    EntityConfig {
+        fields,
+        signals: SearchSignals::VECTOR,
+        chunking: ChunkingConfig { max_size: 4_000, overlap: 0, strategy: ChunkStrategy::Fixed, ..Default::default() },
+        ..Default::default()
+    }
+}
+
 /// Une liste de noms classés → MRR, R@1, R@5 sur les 45 questions.
 #[derive(Default)]
 struct Mesure {
@@ -365,20 +381,9 @@ fn banc_etage_qui_perd() {
     // ── M1 : le même texte que le cosinus nu — un texte par fonction ────
     // Les 66 scopes à l'aiguille, entité d'un seul champ de contenu, un chunk
     // par texte (Fixed, 4 000 > 1 500), vecteur seul.
+    let embedder_m1b = embedder.clone();
     let mut nu = base(embedder, "etage-m1");
-    let mut fields = HashMap::new();
-    fields.insert("name".to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
-    fields.insert("texte".to_string(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
-    nu.register_entity(
-        "Fonction",
-        EntityConfig {
-            fields,
-            signals: SearchSignals::VECTOR,
-            chunking: ChunkingConfig { max_size: 4_000, overlap: 0, strategy: ChunkStrategy::Fixed, ..Default::default() },
-            ..Default::default()
-        },
-    )
-    .expect("enregistrer Fonction");
+    nu.register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
     let src_dir = std::path::Path::new(&racine).join("src");
     let lignes: Vec<std::collections::BTreeMap<String, CypherValue>> = CORPUS
         .iter()
@@ -398,6 +403,47 @@ fn banc_etage_qui_perd() {
         m1.noter(&noms(&r), attendus);
     }
 
+    // ── M1b : le texte de M1, sur le corpus de tel quel ─────────────────
+    // M1 change le texte *et* la taille du corpus (67 contre 4 819). Ici les
+    // mêmes 4 819 scopes que tel quel, chacun embarqué comme un texte assemblé
+    // côté test depuis `analysis.scopes` — nom, doc, signature, corps, coupé
+    // comme le cosinus nu — sans rien changer à `EntityConfig`. Si M1b tient
+    // près de M1, le texte explique tout ; s'il retombe vers tel quel, c'est
+    // la taille du corpus.
+    let mut plein = base(embedder_m1b, "etage-m1b");
+    plein.register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
+    let lignes: Vec<std::collections::BTreeMap<String, CypherValue>> = analysis
+        .scopes
+        .iter()
+        .map(|sc| {
+            let mut texte = String::new();
+            for morceau in [sc.name.as_str(), sc.docstring.as_str(), sc.signature.as_str(), sc.content.as_str()] {
+                if !morceau.is_empty() {
+                    texte.push_str(morceau);
+                    texte.push('\n');
+                }
+            }
+            if texte.len() > CHUNK_CHARS {
+                let mut coupe = CHUNK_CHARS;
+                while !texte.is_char_boundary(coupe) {
+                    coupe -= 1;
+                }
+                texte.truncate(coupe);
+            }
+            let mut d = std::collections::BTreeMap::new();
+            d.insert("name".to_string(), CypherValue::String(sc.name.clone()));
+            d.insert("texte".to_string(), CypherValue::String(texte));
+            d
+        })
+        .collect();
+    let r = plein.ingest_entities("Fonction", lignes).expect("ingérer les scopes assemblés");
+    eprintln!("[étage] M1b : {} scopes assemblés, {} en échec", r.processed, r.failed);
+    let mut m1b = Mesure::default();
+    for (q, attendus) in QUESTIONS {
+        let r = plein.search("Fonction", q, options_vecteur()).expect("recherche M1b");
+        m1b.noter(&noms(&r), attendus);
+    }
+
     // ── Le tableau ──────────────────────────────────────────────────────
     eprintln!("\n## L'étage qui perd — {modele}, vecteur seul, {} questions\n", QUESTIONS.len());
     eprintln!("| ligne | MRR | R@1 | R@5 |");
@@ -406,6 +452,7 @@ fn banc_etage_qui_perd() {
     eprintln!("{}", m1.ligne("M1 — même texte que le cosinus nu, un chunk par fonction"));
     eprintln!("{}", m2.ligne("M2 — cosinus exact au lieu du HNSW, même résolution"));
     eprintln!("{}", m3.ligne("M3 — les 20 chunks bruts du HNSW, avant résolution"));
+    eprintln!("{}", m1b.ligne("M1b — le texte de M1 sur les 4 819 scopes de src/"));
     eprintln!("\nM3 : le bon parent est dans les 20 chunks bruts pour {bon_parent_dans_les_20}/{} questions.", QUESTIONS.len());
 
     assert!(rapport.scopes > 0, "rien n'a été indexé");
