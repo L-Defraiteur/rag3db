@@ -225,7 +225,72 @@ ajoute `codeparsers/docs/30-aout-2026-06h00/`) ; à rejouer.
 Après la correction du corpus, et sur rag3db entier — c'est là que le texte
 brut existe en nombre.
 
-## 9. Ce que ça coûte
+## 9. L'étage qui perd la moitié — trois mesures pour l'isoler
+
+Le chiffre qui compte le plus dans la passe 278m n'est pas celui du texte
+brut : **0,35 de MRR par la recherche, contre 0,84 au cosinus nu** sur les
+mêmes 45 questions et le même modèle (`e2e_banc_qualite`). Ce n'est pas la
+fusion — le vecteur seul fait 0,346. Quelque chose entre l'embarqueur et le
+résultat perd la moitié de la qualité, et **c'est ça qu'il faut mesurer avant
+toute pondération** : pondérer un signal qui perd la moitié en route, c'est
+régler le volume d'un haut-parleur débranché.
+
+### Ce que les deux montages embarquent — ce n'est pas le même texte
+
+| | banc de qualité (cosinus nu) | la recherche du catalogue |
+|---|---|---|
+| unité | **un scope à l'aiguille** : la doc au-dessus, la signature, le corps, coupé à 1 500 caractères | **un chunk** par champ de contenu |
+| champs | tout ensemble, dans un texte | `content`, `docstring`, `signature` découpés **séparément** (`compute_chunks`, un flux de chunks par champ) — la doc d'une fonction et son corps ne sont jamais dans le même vecteur |
+| le nom | dans la signature | dans `_title`, **pas dans `_text`** — `EmbedNode` embarque `_text` seul |
+| découpage | un texte par fonction | `Semantic` 1000 / 100 : un corps long fait plusieurs chunks, chacun sans son nom ni sa doc |
+
+Une question « laisser souffler la carte graphique » cherche `souffler` : au
+cosinus nu, le vecteur porte le nom, la doc qui dit « souffler », et le corps.
+Dans le catalogue, le chunk de corps ne porte ni l'un ni l'autre ; le chunk de
+doc porte la phrase mais pas le nom ; et la signature — la seule qui porte
+`fn souffler` — est un chunk minuscule à côté.
+
+### Les trois étages, et une mesure par étage
+
+Chaque mesure change **une** chose et garde les autres ; l'ordre va du plus
+probable au moins probable, et on s'arrête quand l'écart est expliqué.
+
+**M1 — le texte embarqué.** Même texte des deux côtés : indexer les 45 scopes
+*à l'aiguille* du banc de qualité (son `corpus()`, un scope = un texte) comme
+des entités simples d'un seul champ de contenu, chunking désactivé
+(`chunked = Some(false)`), et chercher par `Catalog::search`, vecteur seul.
+Si le MRR remonte vers 0,84, **l'étage qui perd est le texte** — le découpage
+par champ et le nom absent du vecteur. C'est le plus probable, et c'est le
+seul des trois qui se corrige dans `EntityConfig` : embarquer `_title` avec
+`_text`, ou découper les champs de contenu ensemble plutôt que séparément.
+
+**M2 — la recherche exacte au lieu du HNSW.** Même index que la recherche
+réelle, mais le vecteur de la requête comparé à **tous** les chunks par
+cosinus (`array_cosine_similarity` en Cypher, ou en mémoire depuis
+`embed_check_hashes` + les colonnes), top 20, puis la même résolution au
+parent. Si le MRR remonte, **l'étage qui perd est l'index** — le rappel du
+HNSW (`efs`, `M`) ou le `search_limit = (limit + offset) × 2`, soit 20 chunks
+pour 10 résultats. Peu probable à 4 825 scopes, mais bon marché à écarter.
+
+**M3 — le classement des chunks avant résolution.** Même recherche, mais on
+lit les 20 chunks bruts du HNSW *avant* `resolve_vector_chunks` : le bon
+parent est-il là, à quel rang, combien de ses chunks ? Si le bon chunk est
+dans les 20 mais son parent n'est pas dans les 10, **l'étage qui perd est la
+résolution** — plusieurs chunks d'un même parent qui se marchent dessus, un
+parent gardé au score de son premier chunk plutôt que de son meilleur.
+
+### Ce qu'on lit
+
+Un tableau, quatre lignes — la recherche telle quelle, M1, M2, M3 — avec MRR,
+R@1, R@5 sur les 45 questions, vecteur seul, granite-278m. L'étage qui fait
+bondir le MRR est celui à corriger ; s'ils bougent tous un peu, la perte est
+répartie et il faudra les trois.
+
+Sans code ici : ce plan attend un go, comme le banc l'a attendu. M1 est le
+premier à faire — c'est celui qui, s'il explique l'écart, change la façon
+d'embarquer le code pour tout le monde.
+
+## 10. Ce que ça coûte
 
 Un fichier de test, `tests/e2e_banc_texte_brut.rs`, sur rag3db natif sans
 GPU (`HashEmbedder` pour le montage, ou le démon 278m pour des chiffres qui
