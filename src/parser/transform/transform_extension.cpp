@@ -10,10 +10,11 @@ namespace parser {
 
 std::unique_ptr<Statement> Transformer::transformExtension(CypherParser::KU_ExtensionContext& ctx) {
     if (ctx.kU_InstallExtension()) {
+        // Sans FROM, le dépôt reste vide ici : c'est le lieur qui le résout, ou refuse.
         auto extensionRepo =
             ctx.kU_InstallExtension()->StringLiteral() ?
                 transformStringLiteral(*ctx.kU_InstallExtension()->StringLiteral()) :
-                ExtensionUtils::getDefaultExtensionRepo();
+                std::string{};
 
         auto installExtensionAuxInfo = std::make_unique<InstallExtensionAuxInfo>(
             std::move(extensionRepo), transformVariable(*ctx.kU_InstallExtension()->oC_Variable()),
@@ -22,7 +23,7 @@ std::unique_ptr<Statement> Transformer::transformExtension(CypherParser::KU_Exte
     } else if (ctx.kU_UpdateExtension()) {
         // Update extension is a syntax sugar for force install extension.
         auto installExtensionAuxInfo = std::make_unique<InstallExtensionAuxInfo>(
-            ExtensionUtils::getDefaultExtensionRepo(),
+            std::string{} /* dépôt : résolu par le lieur */,
             transformVariable(*ctx.kU_UpdateExtension()->oC_Variable()), true /* forceInstall */);
         return std::make_unique<ExtensionStatement>(std::move(installExtensionAuxInfo));
     } else if (ctx.kU_UninstallExtension()) {

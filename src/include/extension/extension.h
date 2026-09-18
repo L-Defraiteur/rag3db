@@ -58,9 +58,10 @@ void addFunc(main::Database& database, std::string name, catalog::CatalogEntryTy
 }
 
 struct RAG3DB_API ExtensionUtils {
-    static constexpr const char* OFFICIAL_EXTENSION_REPO = "http://extension.rag3db.com/";
-    // Variable d'environnement qui, si elle est posée, remplace le dépôt officiel.
-    // Même forme que chez Vela-Engineering/kuzu (KUZU_EXTENSION_REPO).
+    // Il n'y a pas de dépôt d'extensions par défaut : les extensions sont
+    // destinées à être liées statiquement dans le binaire. Installer depuis un
+    // dépôt reste possible en le nommant dans l'énoncé (INSTALL x FROM 'url')
+    // ou par cette variable d'environnement.
     static constexpr const char* EXTENSION_REPO_ENV_VAR = "RAG3DB_EXTENSION_REPO";
     static constexpr const char* EXTENSION_FILE_SUFFIX = "rag3db_extension";
 
@@ -76,9 +77,8 @@ struct RAG3DB_API ExtensionUtils {
 
     static constexpr const char* EXTENSION_LOADER_SUFFIX = "_loader";
 
-    // Le dépôt d'où l'on installe quand l'énoncé n'en nomme pas : la variable
-    // d'environnement si elle est posée et non vide, la constante sinon.
-    static std::string getDefaultExtensionRepo();
+    // Le dépôt posé dans RAG3DB_EXTENSION_REPO, ou une chaîne vide s'il n'y en a pas.
+    static std::string getExtensionRepoFromEnv();
 
     static constexpr const char* EXTENSION_INSTALLER_SUFFIX = "_installer";
 

@@ -46,9 +46,8 @@ std::string getArch() {
     return arch;
 }
 
-std::string ExtensionUtils::getDefaultExtensionRepo() {
-    auto repo = main::ClientContext::getEnvVariable(EXTENSION_REPO_ENV_VAR);
-    return repo.empty() ? OFFICIAL_EXTENSION_REPO : repo;
+std::string ExtensionUtils::getExtensionRepoFromEnv() {
+    return main::ClientContext::getEnvVariable(EXTENSION_REPO_ENV_VAR);
 }
 
 std::string getPlatform() {
