@@ -829,7 +829,7 @@ graph LR
         let def = parse_mermaid_template(mmd, &vars).unwrap();
         assert_eq!(def.nodes.len(), 4);
         assert_eq!(def.edges.len(), 4);
-        let fetch = def.nodes.iter().find(|n| n.name == "fetch_0").unwrap();
+        let fetch = def.nodes.iter().find(|n| n.name == "fetch_related_0").unwrap();
         assert_eq!(fetch.config["limit"].as_u64(), Some(10), "limit must reach the node typed");
 
         let registry = builtin_registry();
@@ -837,8 +837,8 @@ graph LR
         graph.validate().unwrap();
 
         let order = graph.topological_sort().unwrap();
-        assert_eq!(order[0], "qs");
-        assert_eq!(order[1], "ps");
+        assert_eq!(order[0], "query_source");
+        assert_eq!(order[1], "primary_search");
     }
 
     /// Le gabarit pondéré : trois branches en fan-in sur `fuse.signals`,

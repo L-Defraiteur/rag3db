@@ -7345,15 +7345,15 @@ impl Catalog {
 
     // ── Strategy Search ──────────────────────────────────────────────
 
-    /// Build a configured [`DataflowGraph`] + [`ServiceRegistry`] for search with strategy.
-    ///
-    /// Use with [`DataflowRuntime`] for event observation:
-    /// ```ignore
-    /// let (mut graph, services) = Catalog::build_dataflow_graph(catalog, kb, q, strategy);
-    /// let runtime = DataflowRuntime::with_services(10, services);
-    /// let mut rx = runtime.subscribe();
-    /// let output = runtime.execute(&mut graph)?;
-    /// ```
+    /// Monte le graphe stratégie **depuis le gabarit**
+    /// `templates/search_expansion.mmd` — la forme n'est écrite qu'une fois.
+    /// Jusqu'au 18 septembre 2026 au soir, ce corps redisait les quatre nœuds
+    /// à la main (70 lignes), enregistrait ses services un à un et portait un
+    /// service `reranker` qu'aucun nœud de ce graphe ne lit. Les valeurs
+    /// vivantes (`kb_name`, `query`, `options`, les règles d'expansion)
+    /// entrent par la config JSON des nœuds après le parse, pas par la
+    /// substitution textuelle : une requête a le droit de contenir une
+    /// apostrophe.
     pub fn build_dataflow_graph(
         catalog: Arc<Mutex<Catalog>>,
         kb_name: &str,
@@ -7361,67 +7361,102 @@ impl Catalog {
         strategy: crate::search_strategy::SearchStrategy,
     ) -> (crate::dataflow::DataflowGraph, crate::dataflow::ServiceRegistry) {
         use crate::dataflow::*;
-        use crate::dataflow::services::ConnService;
 
-        let mut graph = DataflowGraph::new();
-
-        // Services
+        // Les services : le même montage que `rechercher`, une seule source.
         let mut services = ServiceRegistry::new();
-        let conn = catalog.lock().unwrap().conn_arc();
+        catalog.lock().unwrap().register_search_services(&mut services);
         services.register("catalog", catalog.clone());
-        services.register("conn", ConnService(conn));
-        // Un graphe composé peut contenir un RerankNode : il trouve le
-        // cross-encoder du catalogue sous la clé par défaut.
-        if let Some(reranker) = catalog.lock().unwrap().reranker.clone() {
-            services.register::<Arc<dyn crate::reranker::Reranker>>("reranker", reranker);
-        }
 
-        // Source node
-        graph
-            .add_node(Box::new(KBQuerySourceNode::new(
-                kb_name,
-                query,
-                &strategy.search,
-            )))
-            .unwrap();
+        // La forme, depuis le gabarit — placeholders neutres, les vraies
+        // valeurs suivent en config.
+        let vars: std::collections::HashMap<String, String> = [
+            ("kb_name", "__kb__"),
+            ("query", "__q__"),
+            ("relation", "__rel__"),
+            ("direction", "Outgoing"),
+            ("limit", "10"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        let mut def = parse_mermaid_template(
+            include_str!("../templates/search_expansion.mmd"),
+            &vars,
+        )
+        .expect("gabarit search_expansion");
 
-        // Primary search (catalog resolved via service)
-        graph
-            .add_node(Box::new(KBSearchNode::new("primary_search")))
-            .unwrap();
-        graph
-            .connect("query_source", "query", "primary_search", "query")
-            .unwrap();
-
-        // Expansion: one FetchRelatedNode per rule + ComposeNode
-        if !strategy.expansions.is_empty() {
-            for (i, rule) in strategy.expansions.iter().enumerate() {
-                let fetch_name = format!("fetch_related_{i}");
-                graph
-                    .add_node(Box::new(FetchRelatedNode::new(
-                        &fetch_name,
-                        rule.relation.clone(),
-                        rule.direction.clone(),
-                        rule.limit,
-                        rule.source_entity.clone(),
-                    )))
-                    .unwrap();
-                graph
-                    .connect("primary_search", "results", &fetch_name, "results")
-                    .unwrap();
+        let config_de_regle = |rule: &crate::search_strategy::ExpansionRule| {
+            let mut cfg = serde_json::json!({
+                "relation": rule.relation,
+                "direction": format!("{:?}", rule.direction),
+                "limit": rule.limit,
+            });
+            if let Some(ref se) = rule.source_entity {
+                cfg["source_entity"] = serde_json::Value::String(se.clone());
             }
+            cfg
+        };
 
-            graph.add_node(Box::new(ComposeNode::new("compose"))).unwrap();
-            graph
-                .connect("primary_search", "results", "compose", "results")
-                .unwrap();
-            for i in 0..strategy.expansions.len() {
-                graph
-                    .connect(&format!("fetch_related_{i}"), "children", "compose", "children")
-                    .unwrap();
+        if let Some(qs) = def.nodes.iter_mut().find(|n| n.name == "query_source") {
+            if let serde_json::Value::Object(ref mut cfg) = qs.config {
+                cfg.insert("kb_name".into(), serde_json::Value::String(kb_name.to_string()));
+                cfg.insert("query".into(), serde_json::Value::String(query.to_string()));
+                cfg.insert(
+                    "options".into(),
+                    serde_json::to_value(&strategy.search).expect("options sérialisables"),
+                );
             }
         }
 
+        match strategy.expansions.split_first() {
+            None => {
+                // Pas d'expansion : le tronçon fetch/compose du gabarit tombe,
+                // comme `rechercher` retire `render`.
+                def.nodes.retain(|n| n.name != "fetch_related_0" && n.name != "compose");
+                def.edges.retain(|e| {
+                    e.to_node != "fetch_related_0"
+                        && e.to_node != "compose"
+                        && e.from_node != "fetch_related_0"
+                });
+            }
+            Some((premiere, reste)) => {
+                if let Some(f0) = def.nodes.iter_mut().find(|n| n.name == "fetch_related_0") {
+                    f0.config = config_de_regle(premiere);
+                }
+                // Les règles suivantes : le nœud du gabarit, cloné par règle.
+                let arrivee_modele = def
+                    .edges
+                    .iter()
+                    .find(|e| e.to_node == "fetch_related_0")
+                    .expect("arête vers fetch_related_0")
+                    .clone();
+                let depart_modele = def
+                    .edges
+                    .iter()
+                    .find(|e| e.from_node == "fetch_related_0")
+                    .expect("arête depuis fetch_related_0")
+                    .clone();
+                for (i, rule) in reste.iter().enumerate() {
+                    let nom = format!("fetch_related_{}", i + 1);
+                    def.nodes.push(crate::dataflow::checkpoint::NodeDef {
+                        name: nom.clone(),
+                        node_type: "FetchRelatedNode".to_string(),
+                        config: config_de_regle(rule),
+                    });
+                    let mut arrivee = arrivee_modele.clone();
+                    arrivee.to_node = nom.clone();
+                    def.edges.push(arrivee);
+                    let mut depart = depart_modele.clone();
+                    depart.from_node = nom;
+                    def.edges.push(depart);
+                }
+            }
+        }
+
+        let mut registry = NodeRegistry::new();
+        node_factories::register_builtins(&mut registry);
+        let graph = DataflowGraph::from_definition(&def, &registry)
+            .expect("search_expansion : graphe");
         (graph, services)
     }
 
