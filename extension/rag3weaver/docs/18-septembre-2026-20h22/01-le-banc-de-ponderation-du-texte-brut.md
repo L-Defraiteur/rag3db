@@ -360,11 +360,11 @@ occupent le haut des listes sans jamais être une réponse. C'est un facteur par
 genre, la lignée du pas C. La mesure qui le chiffre : tel quel avec
 `scope_type` filtré sur `function | method` — sur go, en édition.
 
-Et un point mesuré, pas expliqué : tel quel est passé de 0,346 à 0,328 (R@1
-10 → 9) entre les deux passes, vecteur seul, même corpus à un scope près. Le
-seul changement entre les deux : la fusion de la branche recherche et le chemin
-`rechercher` au lieu de `search`. Donné tel quel à la session architecture,
-qui l'a passé à la recherche — c'est sa surface.
+Et un point mesuré, d'abord donné sans explication : tel quel est passé de
+0,346 à 0,328 (R@1 10 → 9) entre les deux passes, vecteur seul, même corpus à
+un scope près. **Clos par la session recherche** (`85962b263`,
+`nettoyage-apres-monolithe`) : une seule question a basculé, à +0,002 de
+cosinus — la variance d'un HNSW reconstruit, pas le chemin `rechercher`.
 
 ### 19 septembre 2026 — G, le genre
 
