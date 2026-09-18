@@ -178,9 +178,52 @@ dossier de prose, `Cargo.toml` et `run_e2e.sh` ajoutés à la main, il n'aurait
 aucune réponse à trouver. C'est voulu — sur rag3db entier, les docs sont à
 côté du code et ce banc les représente.
 
-### À venir — `granite-278m`
+### 18 septembre 2026 — `granite-278m`
 
-Même montage, `RAG3WEAVER_BANC_MODELE=granite-278m`, avec la carte.
+Même montage, `RAG3WEAVER_BANC_MODELE=granite-278m`, carte TV. 57 s, 4 825
+scopes, 0 en échec, ingestion 41,8 s.
+
+| signal | lecture | MRR | R@1 | R@5 | texte brut devant |
+|---|---|---:|---:|---:|---:|
+| vecteur | sans | 0,346 | 10 | 24 | 0 |
+| vecteur | avec | 0,346 | 10 | 24 | 0 |
+| plein texte | sans | 0,209 | 4 | 17 | 0 |
+| plein texte | avec | 0,220 | 5 | 17 | 0 |
+| hybride | sans | 0,356 | 11 | 22 | 0 |
+| hybride | avec | 0,356 | 11 | 22 | 0 |
+
+Banc B (`avec`) : vecteur 3/5, hybride 3/5, plein texte 2/5 ; `sans` 0/5.
+
+**Banc A : zéro recul, zéro texte brut devant une fonction attendue** — sur six
+textes. Le montage tient ; la mesure sur ce crate seul ne prouve pas grand-chose
+(§8, montage à vide : `src/` n'apporte aucun texte brut). Elle prouvera sur un
+dépôt qui a ses docs à côté de son code — rag3db entier.
+
+**Banc B : une erreur du banc, pas de la recherche.** Deux des cinq questions
+visent les docs 01 et 03 du 30 août, qui ont déménagé dans
+`codeparsers/docs/` le jour même : elles ne sont pas dans le corpus, donc
+introuvables par construction. Sur les trois qui ont une réponse : **3/3 en
+vecteur et en hybride**, 2/3 en plein texte. Corrigé dans le banc (le corpus
+ajoute `codeparsers/docs/30-aout-2026-06h00/`) ; à rejouer.
+
+**Deux données pour le pas C — des données, pas des conclusions :**
+
+1. **Hybride ≤ vecteur à 5** : 22 contre 24. RRF avec BM25 à 0,3 tire deux
+   bonnes réponses du vecteur hors du top 5. Sur du code, avec 278m, le plein
+   texte coûte plus qu'il n'apporte à ce poids-là.
+2. **Ce qui pollue le haut des listes n'est pas le texte brut, c'est le code
+   lui-même** : `tests (namespace)`, `file_scope_NN (module)` — les scopes de
+   fichier entier — et `validate_identifier` devant `validate_id`. C'est un
+   facteur par genre *dans* `Scope` (`module` / `namespace` contre `function`
+   / `method`) que le banc met sur la table. Le MRR de 0,35 en vecteur, face
+   aux 0,84 du cosinus nu sur les mêmes questions (`e2e_banc_qualite`), mesure
+   l'écart entre ce que l'embarqueur sait et ce que la recherche en rend — et
+   cet écart n'est pas dû au texte brut.
+
+### À rejouer
+
+Après la correction du corpus, et sur rag3db entier — c'est là que le texte
+brut existe en nombre.
 
 ## 9. Ce que ça coûte
 

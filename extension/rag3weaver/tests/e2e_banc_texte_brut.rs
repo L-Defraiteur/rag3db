@@ -93,7 +93,11 @@ const QUESTIONS_TEXTE: &[(&str, &str)] = &[
     ("comment on saura que la couverture des fichiers marche", "03-comment-on-saura"),
 ];
 
-const PROSE_DIR: &str = "docs/30-aout-2026-06h00";
+/// Les dossiers de prose du 30 août : ce qui est resté ici, et ce qui est
+/// parti avec codeparsers le jour même — les docs 01 et 03 y vivent, et deux
+/// questions du banc B les visent (trouvé à la première passe 278m : elles
+/// étaient introuvables par construction).
+const PROSE_DIRS: &[&str] = &["docs/30-aout-2026-06h00", "codeparsers/docs/30-aout-2026-06h00"];
 
 fn rag3db_root() -> String {
     std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
@@ -127,9 +131,9 @@ fn embarqueur() -> (Arc<dyn Embedder>, String) {
 fn corpus() -> (String, Vec<(String, String)>, usize, usize) {
     let racine = manifest();
     let mut sources = Vec::new();
-    for (sous, rel_prefix) in [("src", "src/"), (PROSE_DIR, &format!("{PROSE_DIR}/")[..])] {
+    for sous in std::iter::once("src").chain(PROSE_DIRS.iter().copied()) {
         for (rel, contenu) in read_sources(&format!("{racine}/{sous}")).expect("lire les sources") {
-            sources.push((format!("{rel_prefix}{rel}"), contenu));
+            sources.push((format!("{sous}/{rel}"), contenu));
         }
     }
     // Le `Cargo.toml` de codeparsers et `run_e2e.sh` : deux textes bruts que le
