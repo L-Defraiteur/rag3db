@@ -165,13 +165,13 @@ fn query_count(catalog: &Catalog, cypher: &str) -> i64 {
 /// Ingests 5 File entities + 5 Document entities linked via HAS_DOCUMENT.
 /// The batch logs (eprintln!) show actual UNWIND group sizes.
 ///
-/// Expected batch groups:
-/// - InsertBatchNode(inserts): 3 groups — File×5, Document×5, FileKB_Index×5
-/// - LinkBatchNode(links): 2 groups — File_IN_FileKB×5, HAS_DOCUMENT×5
-/// - AggregateBatchNode: 5 unique ops → downstream chunk inserts/links/embeds
-/// - InsertBatchNode(agg_inserts): 1 group — FileKB_Index_Chunk×N
-/// - LinkBatchNode(agg_links): 1 group — SOURCED×N
-/// - EmbedBatchNode(agg_embeds): 1 group — FileKB_Index_Chunk.FileKB_embedding×N
+/// Groupes attendus (FileKB est une entité dérivée de File, rendue au drain) :
+/// - insertion des entités : 2 groupes — File×5, Document×5
+/// - liens : 1 groupe — HAS_DOCUMENT×5
+/// - branche des dérivées `derive → derive_insert → derive_link → derive_chunk
+///   → derive_chunk_insert → derive_chunk_link → derive_marquer → derive_embed
+///   → derive_flush` : FileKB×5, FileKB_DERIVED_FROM×5, FileKB_Chunk×N,
+///   FileKB_CHUNKED_FROM×N, puis N chunks embarqués dans la colonne du modèle courant
 #[test]
 #[ignore]
 fn batch_observe_multi_entity() {
@@ -289,61 +289,63 @@ fn batch_observe_multi_entity() {
     // Verify entity counts
     let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)");
     let doc_count = query_count(&catalog, "MATCH (d:Document) RETURN COUNT(d)");
-    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)");
-    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN COUNT(c)");
+    let derived_count = query_count(&catalog, "MATCH (k:FileKB) RETURN COUNT(k)");
+    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Chunk) RETURN COUNT(c)");
 
     eprintln!("\n--- DB STATE ---");
-    eprintln!("  File:               {file_count}");
-    eprintln!("  Document:           {doc_count}");
-    eprintln!("  FileKB_Index:       {index_count}");
-    eprintln!("  FileKB_Index_Chunk: {chunk_count}");
+    eprintln!("  File:         {file_count}");
+    eprintln!("  Document:     {doc_count}");
+    eprintln!("  FileKB:       {derived_count}");
+    eprintln!("  FileKB_Chunk: {chunk_count}");
 
     assert_eq!(file_count, 5, "should have 5 File entities");
     assert_eq!(doc_count, 5, "should have 5 Document entities");
-    assert_eq!(index_count, 5, "should have 5 FileKB_Index entries");
-    assert!(chunk_count > 0, "should have chunks from aggregation");
+    assert_eq!(derived_count, 5, "should have 5 FileKB derived rows (one per File root)");
+    assert!(chunk_count > 0, "should have chunks from derivation");
 
     // Verify relations
     let has_doc_count = query_count(
         &catalog,
         "MATCH (:File)-[r:HAS_DOCUMENT]->(:Document) RETURN COUNT(r)",
     );
-    let in_kb_count = query_count(
+    // Dérivée → racine (sens inversé par rapport à l'ancien `File_IN_FileKB`)
+    let derived_from_count = query_count(
         &catalog,
-        "MATCH (:File)-[r:File_IN_FileKB]->(:FileKB_Index) RETURN COUNT(r)",
+        "MATCH (:FileKB)-[r:FileKB_DERIVED_FROM]->(:File) RETURN COUNT(r)",
     );
-    // Chunk rels: the actual names come from compute_chunk_ops —
-    // use a generic match to count all rels to chunks regardless of name.
+    // Chunk → dérivée, comme pour toute entité
     let chunk_rel_count = query_count(
         &catalog,
-        "MATCH ()-[r]->(:FileKB_Index_Chunk) RETURN COUNT(r)",
+        "MATCH (:FileKB_Chunk)-[r:FileKB_CHUNKED_FROM]->(:FileKB) RETURN COUNT(r)",
     );
 
-    eprintln!("  HAS_DOCUMENT:       {has_doc_count}");
-    eprintln!("  File_IN_FileKB:     {in_kb_count}");
-    eprintln!("  chunk rels:         {chunk_rel_count}");
+    eprintln!("  HAS_DOCUMENT:        {has_doc_count}");
+    eprintln!("  FileKB_DERIVED_FROM: {derived_from_count}");
+    eprintln!("  FileKB_CHUNKED_FROM: {chunk_rel_count}");
 
     assert_eq!(has_doc_count, 5, "should have 5 HAS_DOCUMENT rels");
-    assert_eq!(in_kb_count, 5, "should have 5 File_IN_FileKB rels");
-    assert!(
-        chunk_rel_count >= chunk_count,
-        "each chunk should have at least 1 incoming rel: chunk_rels={chunk_rel_count}, chunks={chunk_count}"
+    assert_eq!(derived_from_count, 5, "should have 5 FileKB_DERIVED_FROM rels");
+    assert_eq!(
+        chunk_rel_count, chunk_count,
+        "each chunk should be linked to its derived row: chunk_rels={chunk_rel_count}, chunks={chunk_count}"
     );
 
-    // Verify embeddings exist on chunks
+    // Verify embeddings exist on chunks — la colonne est celle du modèle
+    // courant, résolue par le catalogue plutôt que codée en dur.
+    let storage = catalog.vector_storage("FileKB_Chunk").expect("modèle courant enregistré");
     let embedded_count = query_count(
         &catalog,
-        "MATCH (c:FileKB_Index_Chunk) WHERE c.FileKB_embedding IS NOT NULL RETURN COUNT(c)",
+        &format!("MATCH (c:FileKB_Chunk) WHERE c.{} IS NOT NULL RETURN COUNT(c)", storage.column),
     );
-    eprintln!("  chunks with embedding: {embedded_count}");
+    eprintln!("  chunks with embedding ({}): {embedded_count}", storage.column);
     assert_eq!(
         embedded_count, chunk_count,
         "every chunk should have an embedding"
     );
 
     // Summary
-    let total_entities = file_count + doc_count + index_count + chunk_count;
-    let total_rels = has_doc_count + in_kb_count + chunk_rel_count;
+    let total_entities = file_count + doc_count + derived_count + chunk_count;
+    let total_rels = has_doc_count + derived_from_count + chunk_rel_count;
     eprintln!("\n--- BATCHING SUMMARY ---");
     eprintln!("  Total entities created:  {total_entities}");
     eprintln!("  Total relations created: {total_rels}");
@@ -380,14 +382,20 @@ fn batch_observe_single_entity_type() {
     assert_eq!(result.failed, 0);
 
     let file_count = query_count(&catalog, "MATCH (f:File) RETURN COUNT(f)");
-    let index_count = query_count(&catalog, "MATCH (i:FileKB_Index) RETURN COUNT(i)");
+    let derived_count = query_count(&catalog, "MATCH (k:FileKB) RETURN COUNT(k)");
+    let derived_from_count = query_count(
+        &catalog,
+        "MATCH (:FileKB)-[r:FileKB_DERIVED_FROM]->(:File) RETURN COUNT(r)",
+    );
 
-    eprintln!("  File:          {file_count}");
-    eprintln!("  FileKB_Index:  {index_count}");
+    eprintln!("  File:                {file_count}");
+    eprintln!("  FileKB:              {derived_count}");
+    eprintln!("  FileKB_DERIVED_FROM: {derived_from_count}");
 
     assert_eq!(file_count, 10);
-    assert_eq!(index_count, 10);
+    assert_eq!(derived_count, 10, "one FileKB derived row per File root");
+    assert_eq!(derived_from_count, 10, "each derived row points to its File root");
 
-    // InsertBatchNode should show: File×10 + FileKB_Index×10 = 2 groups of 10
-    // LinkBatchNode should show: File_IN_FileKB×10 = 1 group of 10
+    // Insertion des entités : File×10 = 1 groupe de 10 ; puis la branche des
+    // dérivées : FileKB×10 (derive_insert) + FileKB_DERIVED_FROM×10 (derive_link)
 }

@@ -1025,11 +1025,16 @@ fn kb_and_relation_persist_and_reopen() {
             "Author should be restored from _catalog_meta");
 
         // KB should be restored
-        assert!(catalog.get_kb_metadata("docs").is_some(), "KB 'docs' should be restored");
+        assert!(catalog.entity_configs().get("docs").is_some_and(|c| c.derived.is_some()), "KB 'docs' should be restored");
 
         // Data should be there
         let count = catalog.execute_raw("MATCH (a:Article) RETURN count(a)").unwrap();
         assert_eq!(count.rows[0][0].as_i64().unwrap(), 1);
+
+        // La ligne dérivée a survécu à la réouverture, et son index aussi.
+        let docs = catalog.execute_raw("MATCH (d:docs) RETURN d.title, d.content, d._render_hash").unwrap();
+        eprintln!("  session 2: docs rows = {:?}", docs.rows);
+        assert_eq!(docs.rows.len(), 1, "la ligne dérivée « docs » doit être là");
 
         // Search KB should work
         let search = catalog.search("docs", "persistent", SearchOptions {
@@ -1488,7 +1493,7 @@ fn composite_entity_simple_and_kb_coexist() {
     // Verify data integrity
     let recipe_count = catalog.execute_raw("MATCH (r:Recipe) RETURN count(r)").unwrap();
     assert_eq!(recipe_count.rows[0][0].as_i64().unwrap(), 4);
-    let idx_count = catalog.execute_raw("MATCH (i:cookbook_Index) RETURN count(i)").unwrap();
+    let idx_count = catalog.execute_raw("MATCH (i:cookbook) RETURN count(i)").unwrap();
     assert_eq!(idx_count.rows[0][0].as_i64().unwrap(), 4);
 
     eprintln!("  post-migration: simple + KB both work, new field visible in KB");
@@ -1560,17 +1565,20 @@ fn register_kb_before_entity_order_independent() {
     assert!(!results.results.is_empty(), "KB search should work when KB registered before entity");
     assert!(results.results.len() >= 2, "both books mention software craftsmanship");
 
-    // Verify structure
-    let idx_count = catalog.execute_raw("MATCH (i:library_Index) RETURN count(i)").unwrap();
-    assert_eq!(idx_count.rows[0][0].as_i64().unwrap(), 2, "should have 2 index entries");
-    let in_rels = catalog.execute_raw("MATCH ()-[r:Book_IN_library]->() RETURN count(r)").unwrap();
-    assert_eq!(in_rels.rows[0][0].as_i64().unwrap(), 2, "should have 2 IN rels");
+    // Verify structure : la base est une dérivée de Book — une ligne par
+    // livre, reliée à sa racine par `library_DERIVED_FROM` (dérivée → racine).
+    let idx_count = catalog.execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
+    assert_eq!(idx_count.rows[0][0].as_i64().unwrap(), 2, "should have 2 derived rows");
+    let in_rels = catalog.execute_raw("MATCH (:library)-[r:library_DERIVED_FROM]->(:Book) RETURN count(r)").unwrap();
+    assert_eq!(in_rels.rows[0][0].as_i64().unwrap(), 2, "should have 2 DERIVED_FROM rels");
 
-    // Now register ANOTHER entity for the same KB
+    // Now register ANOTHER entity for the same KB. Une base n'a qu'une racine
+    // (l'entité qui porte `title_for`) : la seconde entité contribue par
+    // `content_for` et par une relation vers la racine, son texte est rendu
+    // dans la ligne du livre qu'elle complète.
     let mut chapter_fields = HashMap::new();
     chapter_fields.insert("heading".into(), SimpleFieldDef {
         field_type: FieldType::String,
-        title_for: Some("library".to_string()),
         ..Default::default()
     });
     chapter_fields.insert("text".into(), SimpleFieldDef {
@@ -1583,14 +1591,26 @@ fn register_kb_before_entity_order_independent() {
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
+    catalog.register_relation("HAS_CHAPTER", "Book", "Chapter").unwrap();
+    // `register_relation` ne retraduit pas la base : on la réenregistre
+    // (idempotent) pour que la règle `gather` de Chapter soit posée.
+    catalog.register_kb("library", KBConfig {
+        signals: SearchSignals::BM25,
+        ..Default::default()
+    }).unwrap();
 
-    // Ingest chapters
-    catalog.ingest_entities("Chapter", vec![{
+    // Ingest a chapter, linked to one of the books
+    let book_rows = catalog.execute_raw("MATCH (b:Book {title: 'Clean Code'}) RETURN b._uuid").unwrap();
+    let book_uuid = book_rows.rows[0][0].as_str().unwrap().to_string();
+    let chapter_ref = catalog.create("Chapter", {
         let mut c = BTreeMap::new();
         c.insert("heading".into(), CypherValue::String("Error Handling Patterns".into()));
         c.insert("text".into(), CypherValue::String("Comprehensive guide to exception handling, Result types, and error propagation in modern languages.".into()));
         c
-    }]).unwrap();
+    }).unwrap();
+    catalog.link("HAS_CHAPTER", book_uuid.as_str(), chapter_ref, BTreeMap::new()).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "drain must not fail after adding a contributing entity");
 
     // Both entities visible in KB search
     let search_all = catalog.search("library", "error handling", SearchOptions {
@@ -1599,10 +1619,17 @@ fn register_kb_before_entity_order_independent() {
         bm25_mode: BM25Mode::ContainsSplit,
         ..Default::default()
     }).unwrap();
-    assert!(!search_all.results.is_empty(), "KB should find chapter content");
+    assert!(!search_all.results.is_empty(), "KB should find chapter content through its book");
 
-    let total_idx = catalog.execute_raw("MATCH (i:library_Index) RETURN count(i)").unwrap();
-    assert_eq!(total_idx.rows[0][0].as_i64().unwrap(), 3, "should have 3 index entries (2 books + 1 chapter)");
+    // Toujours une ligne par livre : le chapitre est rendu dans celle de son livre.
+    let total_idx = catalog.execute_raw("MATCH (i:library) RETURN count(i)").unwrap();
+    assert_eq!(total_idx.rows[0][0].as_i64().unwrap(), 2, "should still have 2 derived rows (one per book)");
+    let rendered = catalog.execute_raw("MATCH (i:library {title: 'Clean Code'}) RETURN i.content").unwrap();
+    let content = rendered.rows[0][0].as_str().unwrap_or("");
+    assert!(
+        content.contains("exception handling"),
+        "the book's rendered content should carry its chapter's text, got: {content}"
+    );
 
     eprintln!("✓ order independent: register_kb before register_entity works, multi-entity KB");
 }
@@ -1685,7 +1712,7 @@ fn multi_entity_kb_partial_migration() {
     ]).unwrap();
 
     // Pre-migration: KB has 2 lesson entries
-    let idx_pre = catalog.execute_raw("MATCH (i:knowledge_Index) RETURN count(i)").unwrap();
+    let idx_pre = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(idx_pre.rows[0][0].as_i64().unwrap(), 2, "should have 2 KB entries from lessons");
 
     let search_pre = catalog.search("knowledge", "chlorophyll photosynthesis sunlight", SearchOptions {
@@ -1725,7 +1752,7 @@ fn multi_entity_kb_partial_migration() {
     assert_eq!(stats.records_processed, 2, "should reindex 2 lessons");
 
     // Post-migration: KB entries still there
-    let idx_post = catalog.execute_raw("MATCH (i:knowledge_Index) RETURN count(i)").unwrap();
+    let idx_post = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(idx_post.rows[0][0].as_i64().unwrap(), 2, "should still have 2 KB entries");
 
     // Lesson content still works via KB search
@@ -1746,7 +1773,7 @@ fn multi_entity_kb_partial_migration() {
         l
     }]).unwrap();
 
-    let final_count = catalog.execute_raw("MATCH (i:knowledge_Index) RETURN count(i)").unwrap();
+    let final_count = catalog.execute_raw("MATCH (i:knowledge) RETURN count(i)").unwrap();
     assert_eq!(final_count.rows[0][0].as_i64().unwrap(), 3, "should have 3 KB entries total");
 
     let final_search = catalog.search("knowledge", "citric acid cycle acetyl", SearchOptions {
@@ -1815,7 +1842,7 @@ fn delete_entity_cleans_kb_index() {
     ]).unwrap();
 
     // Verify 3 KB entries
-    let pre_count = catalog.execute_raw("MATCH (i:notes_Index) RETURN count(i)").unwrap();
+    let pre_count = catalog.execute_raw("MATCH (i:notes) RETURN count(i)").unwrap();
     assert_eq!(pre_count.rows[0][0].as_i64().unwrap(), 3, "should have 3 KB entries");
 
     // Find the UUID of the second note
@@ -1834,9 +1861,9 @@ fn delete_entity_cleans_kb_index() {
     assert_eq!(post_notes.rows[0][0].as_i64().unwrap(), 2, "should have 2 notes after delete");
 
     // KB should reflect the deletion
-    let post_idx = catalog.execute_raw("MATCH (i:notes_Index) RETURN count(i)").unwrap();
+    let post_idx = catalog.execute_raw("MATCH (i:notes) RETURN count(i)").unwrap();
     let idx_count = post_idx.rows[0][0].as_i64().unwrap();
-    // Note: KB cleanup of index entries may or may not happen depending on DeleteRecordNode behavior.
+    // Note: KB cleanup of derived rows may or may not happen depending on DeleteRecordNode behavior.
     // At minimum, the deleted note's content shouldn't be searchable.
     eprintln!("  post-delete: {} notes, {} KB entries", 2, idx_count);
 
@@ -1869,7 +1896,7 @@ fn delete_entity_cleans_kb_index() {
     // (If search returns results, verify none contain the deleted content)
     for result in &search_deleted.results {
         if let Some(ref data) = result.data {
-            let content = data.get("_content").and_then(|v| v.as_str()).unwrap_or("");
+            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
             assert!(
                 !content.contains("PostgreSQL"),
                 "deleted note content should not appear in search results"
@@ -1967,7 +1994,7 @@ fn kb_incremental_ingest_across_sessions() {
 
         // Verify configs restored
         assert!(catalog.is_registered_entity("Part"), "Part should be restored");
-        assert!(catalog.get_kb_metadata("inventory").is_some(), "KB 'inventory' should be restored");
+        assert!(catalog.entity_configs().get("inventory").is_some_and(|c| c.derived.is_some()), "KB 'inventory' should be restored");
 
         // Old data searchable
         let old_search = catalog.search("inventory", "carbon fiber aerospace", SearchOptions {
@@ -1990,7 +2017,7 @@ fn kb_incremental_ingest_across_sessions() {
         ]).unwrap();
 
         // All 3 parts in KB
-        let total = catalog.execute_raw("MATCH (i:inventory_Index) RETURN count(i)").unwrap();
+        let total = catalog.execute_raw("MATCH (i:inventory) RETURN count(i)").unwrap();
         assert_eq!(total.rows[0][0].as_i64().unwrap(), 3, "should have 3 KB entries across sessions");
 
         // Search finds data from both sessions
@@ -2073,11 +2100,12 @@ fn kb_incremental_ingest_across_sessions() {
 
 /// Guard against a fix that only works by luck of the alphabet.
 ///
-/// `resolve_kb_title_entities` still keeps a single title entity per KB and now
-/// picks it by sorted name. In test 18 that lands on `Book` — registered first,
-/// and the one whose layout the rest of the KB was built around. Here the second
-/// entity is named `Appendix`, so the sorted pick lands on the entity registered
-/// *last*. Any code path still trusting `kb_meta.title` gets the wrong entity.
+/// Une base n'a qu'une racine (l'entité qui porte `title_for`) ; les autres
+/// contribuent par `gather`, et le gabarit de `content` les range par ordre
+/// alphabétique de nom, racine comprise. In test 18 the contributor (`Chapter`)
+/// sorts *after* the root (`Book`), like it was registered. Here the contributor
+/// is named `Appendix` and is registered *last*, so it sorts *before* the root
+/// `Zbook` : its text must still be gathered, rendered first, and searchable.
 #[test]
 #[ignore]
 fn kb_title_entity_independent_of_alphabetical_order() {
@@ -2088,7 +2116,7 @@ fn kb_title_entity_independent_of_alphabetical_order() {
         ..Default::default()
     }).unwrap();
 
-    // First entity: sorts LAST.
+    // First entity, the root: sorts LAST.
     let mut zbook_fields = HashMap::new();
     zbook_fields.insert("title".into(), SimpleFieldDef {
         field_type: FieldType::String,
@@ -2106,18 +2134,19 @@ fn kb_title_entity_independent_of_alphabetical_order() {
         ..Default::default()
     }).unwrap();
 
-    catalog.ingest_entities("Zbook", vec![{
+    let book_ref = catalog.create("Zbook", {
         let mut b = BTreeMap::new();
         b.insert("title".into(), CypherValue::String("The Pragmatic Programmer".into()));
         b.insert("content".into(), CypherValue::String("A guide to software craftsmanship and pragmatic techniques.".into()));
         b
-    }]).unwrap();
+    }).unwrap();
+    let flush = catalog.drain();
+    assert_eq!(flush.failed, 0, "drain must not fail on the root alone");
 
-    // Second entity: sorts FIRST, so it wins the sorted title pick.
+    // Second entity, a contributor: sorts FIRST, registered last.
     let mut appendix_fields = HashMap::new();
     appendix_fields.insert("heading".into(), SimpleFieldDef {
         field_type: FieldType::String,
-        title_for: Some("shelf".to_string()),
         ..Default::default()
     });
     appendix_fields.insert("text".into(), SimpleFieldDef {
@@ -2130,24 +2159,43 @@ fn kb_title_entity_independent_of_alphabetical_order() {
         signals: SearchSignals::BM25,
         ..Default::default()
     }).unwrap();
+    catalog.register_relation("HAS_APPENDIX", "Zbook", "Appendix").unwrap();
+    // `register_relation` ne retraduit pas la base : on la réenregistre
+    // (idempotent) pour que la règle `gather` d'Appendix soit posée.
+    catalog.register_kb("shelf", KBConfig {
+        signals: SearchSignals::BM25,
+        ..Default::default()
+    }).unwrap();
 
-    let flush = catalog.ingest_entities("Appendix", vec![{
+    let appendix_ref = catalog.create("Appendix", {
         let mut c = BTreeMap::new();
         c.insert("heading".into(), CypherValue::String("Error Handling Patterns".into()));
         c.insert("text".into(), CypherValue::String("Comprehensive guide to exception handling and error propagation.".into()));
         c
-    }]).unwrap();
-    // `ingest_entities` returns Ok even when the drain inside it failed, so the
-    // failure count is the only thing that catches it.
+    }).unwrap();
+    catalog.link("HAS_APPENDIX", book_ref, appendix_ref, BTreeMap::new()).unwrap();
+    let flush = catalog.drain();
     assert_eq!(
         flush.failed, 0,
-        "drain must not fail when the late-registered entity sorts first by name"
+        "drain must not fail when the late-registered contributor sorts first by name"
     );
 
-    let total_idx = catalog.execute_raw("MATCH (i:shelf_Index) RETURN count(i)").unwrap();
+    // Une ligne par racine, quel que soit l'ordre des noms.
+    let total_idx = catalog.execute_raw("MATCH (i:shelf) RETURN count(i)").unwrap();
     assert_eq!(
-        total_idx.rows[0][0].as_i64().unwrap(), 2,
-        "both entities must produce index entries regardless of name ordering"
+        total_idx.rows[0][0].as_i64().unwrap(), 1,
+        "one derived row per root regardless of name ordering"
+    );
+
+    // Le texte de l'appendice est rendu, et avant celui du livre : les
+    // contributrices sont rangées par nom, racine comprise.
+    let rendered = catalog.execute_raw("MATCH (i:shelf) RETURN i.content").unwrap();
+    let content = rendered.rows[0][0].as_str().unwrap_or("").to_string();
+    let appendix_at = content.find("exception handling").expect("appendix text should be rendered");
+    let book_at = content.find("software craftsmanship").expect("book text should be rendered");
+    assert!(
+        appendix_at < book_at,
+        "Appendix sorts before Zbook, so its text should come first: {content}"
     );
 
     let found = catalog.search("shelf", "error handling", SearchOptions {
@@ -2158,5 +2206,5 @@ fn kb_title_entity_independent_of_alphabetical_order() {
     }).unwrap();
     assert!(!found.results.is_empty(), "KB should find the late-registered entity's content");
 
-    eprintln!("✓ KB title entity resolution is independent of alphabetical order");
+    eprintln!("✓ KB gather is independent of alphabetical order");
 }

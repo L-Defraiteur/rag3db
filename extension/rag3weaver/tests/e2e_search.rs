@@ -271,17 +271,19 @@ fn phase0_initialize_with_kb_config() {
     assert!(catalog.get_relation_def("REFERENCES").is_some());
     assert!(catalog.get_relation_def("CITES").is_some());
 
-    // KB metadata resolved
-    let main_kb = catalog.get_kb_metadata("main").expect("main KB should exist");
-    assert_eq!(main_kb.title.entity, "Document");
-    assert_eq!(main_kb.title.field, "title");
-    assert!(main_kb.content.iter().any(|c| c.field == "body"));
-    assert!(main_kb.content.iter().any(|c| c.field == "summary"));
+    // Les bases sont traduites en entités dérivées.
+    let main_kb = catalog.entity_configs().get("main").expect("main KB should exist");
+    let main_d = main_kb.derived.as_ref().expect("dérivée");
+    assert_eq!(main_d.from, "Document");
+    assert!(main_d.render["title"].starts_with("{{ root.title"), "{}", main_d.render["title"]);
+    assert!(main_d.render["content"].contains("root.body"), "{}", main_d.render["content"]);
+    assert!(main_d.render["content"].contains("root.summary"), "{}", main_d.render["content"]);
 
-    let authors_kb = catalog.get_kb_metadata("authors").expect("authors KB");
-    assert_eq!(authors_kb.title.entity, "Author");
-    assert_eq!(authors_kb.title.field, "name");
-    assert!(authors_kb.content.iter().any(|c| c.field == "bio"));
+    let authors_kb = catalog.entity_configs().get("authors").expect("authors KB");
+    let authors_d = authors_kb.derived.as_ref().expect("dérivée");
+    assert_eq!(authors_d.from, "Author");
+    assert!(authors_d.render["title"].starts_with("{{ root.name"), "{}", authors_d.render["title"]);
+    assert!(authors_d.render["content"].contains("root.bio"), "{}", authors_d.render["content"]);
 
     // Empty tables
     assert_eq!(catalog.count("Document").unwrap(), 0);
@@ -909,16 +911,16 @@ fn setup_vector_catalog(embedder: Arc<dyn Embedder>) -> Catalog {
     // Debug: verify DB state after drain
     let docs = catalog.execute_raw("MATCH (d:Document) RETURN count(d) AS cnt").unwrap();
     eprintln!("  Documents: {:?}", docs.rows);
-    let chunks = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN count(c) AS cnt").unwrap();
+    // La base « kb » est une entité dérivée : ses chunks sont `kb_Chunk`.
+    let chunks = catalog.execute_raw("MATCH (c:kb_Chunk) RETURN count(c) AS cnt").unwrap();
     eprintln!("  Chunks: {:?}", chunks.rows);
-    let embs = catalog.execute_raw("MATCH (c:kb_Index_Chunk) RETURN c._uuid, c._parent_uuid, c._text, size(c.kb_embedding) AS dim").unwrap();
+    let embs = catalog.execute_raw("MATCH (c:kb_Chunk) RETURN c._uuid, c._parent_uuid, c._text").unwrap();
     for row in &embs.rows {
         let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("?");
         let parent = row.get(1).and_then(|v| v.as_str()).unwrap_or("?");
         let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("?");
-        let dim = &row.get(3).map(|v| format!("{:?}", v)).unwrap_or("?".to_string());
         let snippet: String = text.chars().take(50).collect();
-        eprintln!("  Chunk: uuid={} parent={} dim={} text='{}'", &uuid[..8], &parent[..8], dim, snippet);
+        eprintln!("  Chunk: uuid={} parent={} text='{}'", &uuid[..8], &parent[..8], snippet);
     }
 
     catalog.regime_d_ecriture(RegimeEcriture::ParLot);
@@ -963,7 +965,7 @@ fn assert_vector_top_result(
     let top_title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("_title"))
+        .and_then(|d| d.get("title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[{model_name}] Top result: '{}' (score={})", top_title, top.score);
@@ -1385,7 +1387,7 @@ fn phase3_sparse_top_result_programming() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("_title"))
+        .and_then(|d| d.get("title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[sparse] Top result: '{}' (score={})", title, top.score);
@@ -1423,7 +1425,7 @@ fn phase3_sparse_data_enriched() {
         );
         let data = r.data.as_ref().unwrap();
         assert!(
-            data.contains_key("_title"),
+            data.contains_key("title"),
             "Result {i} data should contain 'title'"
         );
     }
@@ -1742,7 +1744,7 @@ fn phase4_all_three() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("_title"))
+        .and_then(|d| d.get("title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[all-three] Top: '{}' (score={})", title, top.score);
@@ -1859,7 +1861,7 @@ fn phase5_dual_top_result() {
     let title = top
         .data
         .as_ref()
-        .and_then(|d| d.get("_title"))
+        .and_then(|d| d.get("title"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
     eprintln!("[dual-top] Top: '{}' (score={})", title, top.score);
@@ -2206,7 +2208,7 @@ fn phase6_sparse_mmap_persistence() {
         let title = top
             .data
             .as_ref()
-            .and_then(|d| d.get("_title"))
+            .and_then(|d| d.get("title"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
         eprintln!("[mmap-persist] Top: '{}' (score={})", title, top.score);
@@ -2220,8 +2222,8 @@ fn phase6_sparse_mmap_persistence() {
 
 /// **Une cible KB sur le chemin des agents.** Jusqu'au 6 septembre 2026,
 /// `ResolveParentNode` enrichissait sur `target.name` — `main` — là où la
-/// table qui porte les lignes est `main_Index` : un `MATCH (n:main)` sur une
-/// table qui n'existe pas. Le monolithe passait la table ; le nœud passait le
+/// table qui portait les lignes était `main_Index` : un `MATCH (n:main)` sur
+/// une table qui n'existait pas (depuis le repli des KB, la table est `main`). Le monolithe passait la table ; le nœud passait le
 /// nom. Aucun test n'empruntait une KB par ce chemin — c'est B1 de la
 /// réconciliation.
 #[test]
@@ -2266,7 +2268,7 @@ fn le_chemin_composable_enrichit_une_base_de_connaissances() {
     assert!(!resultats.is_empty(), "la KB doit répondre par le chemin composable");
     assert!(
         resultats.iter().all(|r| r.data.as_ref().is_some_and(|d| !d.is_empty())),
-        "chaque résultat doit être enrichi depuis main_Index : {:?}",
+        "chaque résultat doit être enrichi depuis la table main : {:?}",
         resultats.iter().map(|r| r.data.is_some()).collect::<Vec<_>>()
     );
 }

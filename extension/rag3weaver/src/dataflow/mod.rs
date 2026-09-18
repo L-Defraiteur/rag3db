@@ -95,7 +95,7 @@ pub use checkpoint::{
 };
 pub use checkpoint_store::CypherCheckpointStore;
 pub use record_nodes::{
-    InsertRecordNode, LinkRecordNode, KBEmbedNode,
-    ChunkRecordNode, EmbedNode, KBChunkRecordNode, KBGatherNode, KBUpdateNode, KBChunkNode, FlushNode,
+    InsertRecordNode, LinkRecordNode,
+    ChunkRecordNode, EmbedNode, FlushNode,
     SparseCommitNode, DeleteRecordNode, UpdateRecordNode, RechunkDeleteNode, MarquerDecoupeNode,
 };

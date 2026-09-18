@@ -483,7 +483,7 @@ fn simple_highlight_detailed_multi_field_multi_chunk() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Part 2 — KB: multi-chunk highlight resolution via _content global offsets
+// Part 2 — KB: multi-chunk highlight resolution via `content` global offsets
 // ═══════════════════════════════════════════════════════════════════════════════
 
 fn field_plain(ft: FieldType) -> FieldDef {
@@ -517,7 +517,8 @@ fn text_content_for(kb: &str) -> FieldDef {
 }
 
 /// KB config with small chunk size. Single entity Document with title, body, summary.
-/// body + summary are both contentFor "main", so _content = body + "\n\n" + summary.
+/// body + summary are both contentFor "main" : la dérivée `main` rend
+/// `content` = body + "\n" + summary + "\n" (champs triés, un `\n` après chaque valeur non vide).
 fn make_kb_config_small_chunks() -> CatalogConfig {
     let mut doc_fields = HashMap::new();
     doc_fields.insert("title".into(), text_title_for("main"));
@@ -611,14 +612,15 @@ query latency. The integration of machine learning models directly into database
 represents the next frontier, allowing predictions and classifications to be computed as \
 part of standard SQL queries without external service calls.";
 
-/// Debug helper for KB chunks (Index table).
-/// KB uses {kb}_Index_HAS_CHUNK (FROM Index TO Chunk), so direction is reversed vs simple entity.
+/// Debug helper for KB chunks.
+/// Une KB est une entité dérivée : ses tables sont `{kb}`, `{kb}_Chunk` et
+/// `{kb}_CHUNKED_FROM` (Chunk → parent), comme pour toute entité.
 fn debug_kb_chunks(catalog: &mut Catalog, kb: &str) {
-    let index = format!("{kb}_Index");
-    let chunk = format!("{kb}_Index_Chunk");
-    let rel = format!("{kb}_Index_HAS_CHUNK");
+    let index = kb.to_string();
+    let chunk = format!("{kb}_Chunk");
+    let rel = format!("{kb}_CHUNKED_FROM");
     let query = format!(
-        "MATCH (p:{index})-[:{rel}]->(c:{chunk}) \
+        "MATCH (c:{chunk})-[:{rel}]->(p:{index}) \
          RETURN c._uuid, c._parent_field, c._content_offset, c._start_char, c._end_char, \
                 c._index, substring(c._text, 0, 50) AS snippet \
          ORDER BY c._content_offset, c._start_char"
@@ -653,7 +655,7 @@ fn kb_long_text_generates_multiple_chunks() {
 
     // Count total chunks
     let chunks = catalog
-        .execute_raw("MATCH (c:main_Index_Chunk) RETURN count(c) AS cnt")
+        .execute_raw("MATCH (c:main_Chunk) RETURN count(c) AS cnt")
         
         .unwrap();
     let cnt = chunks.rows[0][0].as_i64().unwrap();
@@ -818,7 +820,7 @@ fn kb_detailed_multi_chunk_attribution() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// KB config with Document (title + body) and Author (bio as content) linked via WRITTEN_BY.
-/// Both entity's content feeds into the "main" KB's _content.
+/// Both entity's content feeds into the "main" KB's rendered `content`.
 fn make_multi_entity_kb_config() -> CatalogConfig {
     let mut doc_fields = HashMap::new();
     doc_fields.insert("title".into(), text_title_for("main"));

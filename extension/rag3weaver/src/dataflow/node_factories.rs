@@ -19,9 +19,8 @@ use super::generic_search_nodes::{
     SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode, PaginateNode,
 };
 use super::record_nodes::{
-    ChunkRecordNode, DeleteRecordNode, EmbedNode, KBChunkNode, KBChunkRecordNode, KBEmbedNode,
-    FlushNode, SparseCommitNode, KBGatherNode, InsertRecordNode, LinkRecordNode, KBUpdateNode,
-    MarquerDecoupeNode, RechunkDeleteNode, UpdateRecordNode,
+    ChunkRecordNode, DeleteRecordNode, EmbedNode, FlushNode, SparseCommitNode, InsertRecordNode,
+    LinkRecordNode, MarquerDecoupeNode, RechunkDeleteNode, UpdateRecordNode,
 };
 use super::migration_nodes::{CypherNodeFactory, ValidateNodeFactory};
 
@@ -110,22 +109,6 @@ named_factory!(
 );
 
 named_factory!(
-    KBChunkRecordNodeFactory,
-    KBChunkRecordNode,
-    "KBChunkRecordNode",
-    "Parallel chunking for KB entities, outputs chunk entities + links",
-    &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-    ],
-    &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-        PortDef { name: "chunks", port_type: PortType::Entities, required: false },
-        PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
-    ],
-);
-
-named_factory!(
     ChunkRecordNodeFactory,
     ChunkRecordNode,
     "ChunkRecordNode",
@@ -153,53 +136,6 @@ named_factory!(
         PortDef { name: "trigger", port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-    ],
-);
-
-named_factory!(
-    KBGatherNodeFactory,
-    KBGatherNode,
-    "KBGatherNode",
-    "Read DB, detect content changes, output changed KBContentRecords",
-    &[
-        // **Pas requis.** Le nœud le dit dans son propre code — « optional —
-        // might be connected to initial input » — et il se nourrit aussi du
-        // service `pending_aggregates`, que remplissent `DeleteRecordNode` et
-        // `UpdateRecordNode`. Le schéma affirmait le contraire ; personne ne
-        // s'en apercevait parce que c'est `Node::inputs` que lit le montage
-        // d'un graphe plat. En unifiant les deux, le runtime s'est mis à
-        // attendre une entrée qui ne vient pas : sept tests d'ingestion.
-        PortDef { name: "aggregates", port_type: PortType::Aggregates, required: false },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
-    ],
-    &[
-        PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-    ],
-);
-
-named_factory!(
-    KBUpdateNodeFactory,
-    KBUpdateNode,
-    "KBUpdateNode",
-    "Update KB_Index entries + delete stale chunks",
-    &[PortDef { name: "kb_content", port_type: PortType::KBContent, required: true }],
-    &[
-        PortDef { name: "kb_content", port_type: PortType::KBContent, required: false },
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-    ],
-);
-
-named_factory!(
-    KBChunkNodeFactory,
-    KBChunkNode,
-    "KBChunkNode",
-    "Generate chunk entities + relations from aggregated content",
-    &[PortDef { name: "kb_content", port_type: PortType::KBContent, required: true }],
-    &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: false },
-        PortDef { name: "relations", port_type: PortType::Relations, required: false },
         PortDef { name: "done", port_type: PortType::Empty, required: false },
     ],
 );
@@ -513,60 +449,6 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     json_schema: None,
                 },
             ],
-        }
-    }
-}
-
-/// Factory for KBEmbedNode (config: gpu_batch_size).
-pub struct KBEmbedNodeFactory;
-
-impl NodeFactory for KBEmbedNodeFactory {
-    fn create(
-        &self,
-        name: &str,
-        config: &serde_json::Value,
-    ) -> Result<Box<dyn super::node::Node>, String> {
-        let gpu_batch_size = config
-            .get("gpu_batch_size")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(64) as usize;
-        Ok(Box::new(KBEmbedNode::new(name, gpu_batch_size)))
-    }
-
-    fn node_type(&self) -> &'static str {
-        "KBEmbedNode"
-    }
-
-    fn schema(&self) -> NodeSchema {
-        NodeSchema {
-            node_type: "KBEmbedNode",
-            description: "Unified embedding with _embed_hash skip",
-            inputs: vec![
-                PortDef {
-                    name: "entities",
-                    port_type: PortType::Entities,
-                    required: true,
-                },
-                PortDef {
-                    name: "trigger",
-                    port_type: PortType::Empty,
-                    required: false,
-                },
-            ],
-            outputs: vec![PortDef {
-                name: "done",
-                port_type: PortType::Empty,
-                required: false,
-            }],
-            config_params: vec![ConfigParam {
-                name: "gpu_batch_size",
-                param_type: ConfigParamType::Int,
-                required: false,
-                default: Some(serde_json::json!(64)),
-                description: "GPU batch size for embedding calls",
-                choices: None,
-                json_schema: None,
-            }],
         }
     }
 }
@@ -1353,7 +1235,7 @@ impl NodeFactory for ResolveParentNodeFactory {
 
 // ─── register_builtins ──────────────────────────────────────────────────────
 
-/// Populate a NodeRegistry with all 28 built-in node types.
+/// Populate a NodeRegistry with all built-in node types (see [`BUILTIN_NODE_COUNT`]).
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     registry.register(Box::new(ComposeNodeFactory));
@@ -1381,13 +1263,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(InsertRecordNodeFactory));
     registry.register(Box::new(LinkRecordNodeFactory));
     registry.register(Box::new(DeriveNodeFactory));
-    registry.register(Box::new(KBEmbedNodeFactory));
     registry.register(Box::new(EmbedNodeFactory));
     registry.register(Box::new(ChunkRecordNodeFactory));
-    registry.register(Box::new(KBChunkRecordNodeFactory));
-    registry.register(Box::new(KBGatherNodeFactory));
-    registry.register(Box::new(KBUpdateNodeFactory));
-    registry.register(Box::new(KBChunkNodeFactory));
     registry.register(Box::new(DeleteRecordNodeFactory));
     registry.register(Box::new(UpdateRecordNodeFactory));
     registry.register(Box::new(RechunkDeleteNodeFactory));
@@ -1418,7 +1295,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 38 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 33 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1468,7 +1345,7 @@ mod tests {
     }
 
     #[test]
-    fn register_builtins_has_all_29_types() {
+    fn register_builtins_has_all_builtin_types() {
         let registry = builtin_registry();
         assert_eq!(registry.types().len(), BUILTIN_NODE_COUNT);
     }
@@ -1546,9 +1423,9 @@ mod tests {
         let registry = builtin_registry();
         let config = serde_json::json!({ "gpu_batch_size": 128 });
         let node = registry
-            .create("KBEmbedNode", "embed_0", &config)
+            .create("EmbedNode", "embed_0", &config)
             .unwrap();
-        assert_eq!(node.node_type(), "KBEmbedNode");
+        assert_eq!(node.node_type(), "EmbedNode");
         assert_eq!(node.name(), "embed_0");
     }
 
@@ -1556,9 +1433,9 @@ mod tests {
     fn embed_record_factory_default_batch_size() {
         let registry = builtin_registry();
         let node = registry
-            .create("KBEmbedNode", "embed_1", &serde_json::json!({}))
+            .create("EmbedNode", "embed_1", &serde_json::json!({}))
             .unwrap();
-        assert_eq!(node.node_type(), "KBEmbedNode");
+        assert_eq!(node.node_type(), "EmbedNode");
     }
 
     #[test]

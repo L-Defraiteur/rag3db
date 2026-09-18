@@ -598,8 +598,8 @@ pub struct SearchDiagnostics {
 /// Resolved search target — encapsulates table names, relationship patterns,
 /// and default configs for either a KB or a simple entity.
 ///
-/// Built by `Catalog::resolve_search_target()` which dispatches between
-/// `kb_metadata` and `entity_configs`.
+/// Built by `Catalog::resolve_search_target()` depuis `entity_configs` —
+/// une entité simple ou dérivée (les bases de connaissances en sont).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchTarget {
@@ -2137,8 +2137,7 @@ const POIDS_TRIGRAMME: f64 = 0.20;
 /// 0,20 est au milieu.
 const POIDS_JARO: f64 = 0.80;
 
-/// Le champ où vit le texte d'un chunk, sur les deux familles de tables de
-/// chunks (`{Entité}_Chunk` et `{KB}_Index_Chunk`).
+/// Le champ où vit le texte d'un chunk (`{Entité}_Chunk`).
 const CHAMP_TEXTE_CHUNK: &str = "_text";
 
 /// **Sous ce score, on ne promet rien** — et on le dit.

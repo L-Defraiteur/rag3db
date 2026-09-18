@@ -368,65 +368,15 @@ impl RelationRecord {
     }
 }
 
-// ─── AggregateRecord ─────────────────────────────────────────────────────────
+// ─── Derivation ──────────────────────────────────────────────────────────────
 
-/// A KB Index entry to rebuild (replaces AggregateOp).
-///
-/// Quasi-identical to AggregateOp — the "instruction" was already implicit
-/// in the old AggregateOp (rebuild = query graph + re-chunk + re-embed).
 /// **Une dérivation à rendre** : une entité dérivée et l'uuid de sa racine
-/// (doc du 7 septembre 2026). Ce qui remplace `AggregateRecord`.
+/// (doc du 7 septembre 2026). Ce qui a remplacé l'agrégat des bases de
+/// connaissances.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Derivation {
     pub entity: String,
     pub root_uuid: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AggregateRecord {
-    pub index_entry_uuid: String,
-    pub kb_name: String,
-    pub title_entity: String,
-    pub source_uuid: String,
-}
-
-// ─── KBContentRecord ────────────────────────────────────────────────────────
-
-/// Content collected from a single source field of a contributing entity.
-///
-/// Used by KBGatherNode to collect content from DB, and by KBChunkNode
-/// to produce chunk entities with correct _source_entity / _source_uuid.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordSourceContent {
-    pub entity_name: String,
-    pub entity_uuid: String,
-    pub field_name: String,
-    pub text: String,
-}
-
-/// A KB Index entry whose content has changed and needs re-chunking.
-///
-/// Produced by KBGatherNode (Steps 1-4: read DB, detect changes),
-/// consumed by KBUpdateNode (Steps 5-6: update index, delete old chunks)
-/// and KBChunkNode (Step 7: generate chunk records).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KBContentRecord {
-    /// UUID of the {KB}_Index entity
-    pub index_entry_uuid: String,
-    /// Knowledge base name
-    pub kb_name: String,
-    /// Title entity name (needed for MERGE on {KB}_Index + IN_{KB} rel)
-    pub source_entity: String,
-    /// Source entity UUID (the title entity's _uuid)
-    pub source_uuid: String,
-    /// Title text (truncated)
-    pub title_text: String,
-    /// Aggregated content text (for SET on index)
-    pub content_text: String,
-    /// New content hash (title + content)
-    pub new_hash: String,
-    /// Source fields with text — needed for per-source chunking + SOURCED relations
-    pub sources: Vec<RecordSourceContent>,
 }
 
 // ─── Checkpoint types ────────────────────────────────────────────────────────
@@ -648,8 +598,7 @@ pub struct UpdateRecord {
 /// An entity deletion queued for drain processing.
 ///
 /// `delete()` pushes these into `PendingWork`. At drain time,
-/// `DeleteRecordNode` cascades chunk/index deletion, removes entities,
-/// and emits `AggregateRecord`s for affected KB indexes.
+/// `DeleteRecordNode` cascades chunk deletion and removes entities.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteRecord {
     pub entity_name: String,
@@ -664,12 +613,11 @@ pub struct DeleteRecord {
 /// `delete()` push update/delete records. `build_ingestion_graph()`
 /// drains them into the dataflow graph as typed inputs.
 ///
-/// Processing order at drain: deletes → updates → inserts → links → KB aggregation.
+/// Processing order at drain: deletes → updates → inserts → links → dérivées.
 #[derive(Default)]
 pub struct PendingWork {
     pub entities: Vec<EntityRecord>,
     pub relations: Vec<RelationRecord>,
-    pub aggregates: Vec<AggregateRecord>,
     pub updates: Vec<UpdateRecord>,
     pub deletes: Vec<DeleteRecord>,
     /// Les lignes d'entités dérivées à rendre (racines touchées).
@@ -684,7 +632,6 @@ impl PendingWork {
     pub fn is_empty(&self) -> bool {
         self.entities.is_empty()
             && self.relations.is_empty()
-            && self.aggregates.is_empty()
             && self.updates.is_empty()
             && self.deletes.is_empty()
             && self.derivations.is_empty()
@@ -693,7 +640,6 @@ impl PendingWork {
     pub fn total_count(&self) -> usize {
         self.entities.len()
             + self.relations.len()
-            + self.aggregates.len()
             + self.updates.len()
             + self.deletes.len()
             + self.derivations.len()
@@ -731,7 +677,6 @@ impl PendingWork {
         PendingWork {
             entities: partager(&mut self.entities, |e| dans(&e.entity_name)),
             relations: partager(&mut self.relations, relation_dedans),
-            aggregates: partager(&mut self.aggregates, |a| dans(&format!("{}_Index", a.kb_name))),
             updates: partager(&mut self.updates, |u| dans(&u.entity_name)),
             deletes: partager(&mut self.deletes, |d| dans(&d.entity_name)),
             derivations: partager(&mut self.derivations, |d| dans(&d.entity)),
@@ -757,7 +702,6 @@ impl PendingWork {
                         .is_some_and(|(de, vers)| dans(&de) && dans(&vers))
                 })
                 .count()
-            + self.aggregates.iter().filter(|a| dans(&format!("{}_Index", a.kb_name))).count()
             + self.updates.iter().filter(|u| dans(&u.entity_name)).count()
             + self.deletes.iter().filter(|d| dans(&d.entity_name)).count()
             + self.derivations.iter().filter(|d| dans(&d.entity)).count()
@@ -857,12 +801,7 @@ mod tests {
             entity_ref,
         ));
 
-        pw.aggregates.push(AggregateRecord {
-            index_entry_uuid: "idx-1".to_string(),
-            kb_name: "TreeKB".to_string(),
-            title_entity: "Directory".to_string(),
-            source_uuid: "dir-1".to_string(),
-        });
+        pw.derivations.push(Derivation { entity: "TreeKB".to_string(), root_uuid: "dir-1".to_string() });
 
         assert!(!pw.is_empty());
         assert_eq!(pw.total_count(), 2);

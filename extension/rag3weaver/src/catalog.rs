@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
-use crate::config::{CatalogConfig, ChunkingConfig, EntityDef, FieldType, RelationDef};
+use crate::config::{CatalogConfig, EntityDef, FieldType, RelationDef};
 use crate::connection::{CypherValue, DbConnection, QueryParam, SyncDbConnection};
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
@@ -18,13 +18,13 @@ use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
-use crate::records::{AggregateRecord, DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
+use crate::records::{DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
 use crate::refs::{EntityRef, RelationRef};
-use crate::schema::{generate_full_schema_with_dialect, resolve_entity_kbs};
+use crate::schema::generate_full_schema_with_dialect;
 use crate::search_backend::MoteurTexte;
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::uuid::hashsafe_uuid;
-use crate::validator::{validate_schema, KBFieldRef};
+use crate::validator::validate_schema;
 use crate::buffered_blob_store::BufferedBlobStore;
 use crate::cypher_blob_store::CypherBlobStore;
 use sparse_vector::blob_store::BlobStore;
@@ -35,28 +35,12 @@ use crate::dataflow::checkpoint_store::CypherCheckpointStore;
 use crate::dataflow::graph::DataflowGraph;
 use crate::dataflow::port::{BatchPayload, PortType, PortValue};
 use crate::dataflow::record_nodes::{
-    ChunkRecordNode, DeleteRecordNode, EmbedMode, EmbedNode, KBChunkNode, KBEmbedNode, FlushNode,
-    KBGatherNode, InsertMode, InsertRecordNode, LinkRecordNode, KBUpdateNode, MarquerDecoupeNode,
+    ChunkRecordNode, DeleteRecordNode, EmbedMode, EmbedNode, FlushNode,
+    InsertMode, InsertRecordNode, LinkRecordNode, MarquerDecoupeNode,
     RechunkDeleteNode, UpdateRecordNode,
 };
 use crate::dataflow::runtime::DataflowRuntime;
 use crate::dataflow::services::ServiceRegistry;
-
-// ─── KBMetadata ────────────────────────────────────────────────────────────
-
-/// Resolved metadata for a Knowledge Base, built at `Catalog::initialize()`.
-#[derive(Debug, Clone)]
-pub struct KBMetadata {
-    pub name: String,
-    pub title: KBFieldRef,
-    pub content: Vec<KBFieldRef>,
-    pub entities: HashSet<String>,
-    pub signals: search::SearchSignals,
-    pub keyword_weight: f64,
-    pub title_boost: f64,
-    pub content_boost: f64,
-    pub chunking: ChunkingConfig,
-}
 
 // ─── CatalogError ──────────────────────────────────────────────────────────
 
@@ -177,7 +161,6 @@ pub struct Catalog {
     troncatures_signalees: usize,
     drain_counters: DrainCounters,
     event_bus: EventBus,
-    kb_metadata: HashMap<String, KBMetadata>,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
     entity_configs: HashMap<String, crate::config::EntityConfig>,
     /// **Les modèles que ce processus sait enregistrés**, en plus de ce que la
@@ -305,7 +288,6 @@ impl Catalog {
             // doit pas en perdre. Au-delà, le plus ancien est écarté sans
             // bloquer, et le drain le dit (`EventsMissed`).
             event_bus: EventBus::new(1024),
-            kb_metadata: HashMap::new(),
             entity_configs: HashMap::new(),
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
@@ -780,9 +762,6 @@ impl Catalog {
         for name in self.entity_configs.keys() {
             fts_tables.push(name.clone());
         }
-        for kb_name in self.kb_metadata.keys() {
-            fts_tables.push(format!("{kb_name}_Index"));
-        }
         let sparse_tables: Vec<String> = self.sparse_handles.keys().cloned().collect();
 
         self.emit_event(CatalogEvent::ShutdownStarted {
@@ -874,48 +853,6 @@ impl Catalog {
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
 
-        // 5. Build KB metadata from validation result + config
-        for (kb_name, kb_validation) in &validation.knowledge_bases {
-            let kb_config = self
-                .config
-                .knowledge_bases
-                .get(kb_name)
-                .cloned()
-                .unwrap_or_default();
-
-            let title = match &kb_validation.title {
-                Some(t) => KBFieldRef {
-                    entity: t.entity.clone(),
-                    field: t.field.clone(),
-                },
-                None => continue,
-            };
-
-            let content: Vec<KBFieldRef> = kb_validation
-                .content
-                .iter()
-                .map(|c| KBFieldRef {
-                    entity: c.entity.clone(),
-                    field: c.field.clone(),
-                })
-                .collect();
-
-            self.kb_metadata.insert(
-                kb_name.clone(),
-                KBMetadata {
-                    name: kb_name.clone(),
-                    title,
-                    content,
-                    entities: kb_validation.entities.clone(),
-                    signals: kb_config.signals,
-                    keyword_weight: kb_config.keyword_weight,
-                    title_boost: kb_config.title_boost,
-                    content_boost: kb_config.content_boost,
-                    chunking: kb_config.chunking,
-                },
-            );
-        }
-
         // 6. Pre-warm chunker cache for ingestion nodes
         self.warm_chunker_cache();
 
@@ -1004,21 +941,30 @@ impl Catalog {
             self.blob_store = Some(buffer);
         }
 
-        // 9. Create sparse vector handles for KBs that have sparse=true.
-        if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
-            let kb_sparse_tables: Vec<String> = self.config.knowledge_bases.iter()
-                .filter(|(_, kbc)| kbc.signals.sparse())
-                .map(|(kb_name, _)| format!("{kb_name}_Index_Chunk"))
-                .collect();
-            for table in kb_sparse_tables {
-                self.ensure_sparse_handle(&table);
-            }
-        }
-
         // 10. Load persisted entity configs, relations, and KB configs from _catalog_meta
         self.load_entity_configs()?;
         self.load_relations()?;
         self.load_kb_configs()?;
+        // **Les bases de connaissances sont des entités dérivées** : les
+        // entités du schéma reçoivent leur config d'enregistrement, puis
+        // chaque KB — du schéma ou persistée — est traduite et posée.
+        let version_avant = self.read_meta_key(crate::scope::SCHEMA_VERSION_KEY)?;
+        self.traduire_les_kb(true)?;
+
+        // 11. Les index sparse de toute entité découpée à signal sparse —
+        //     dérivées comprises — rouverts depuis les blobs.
+        if self.sparse_embedder.is_some() || self.dual_embedder.is_some() {
+            let mut tables_sparse: Vec<String> = self
+                .entity_configs
+                .iter()
+                .filter(|(_, c)| c.has_simple_pipeline() && c.signals.sparse() && c.chunked != Some(false))
+                .map(|(nom, _)| format!("{nom}_Chunk"))
+                .collect();
+            tables_sparse.sort();
+            for table in tables_sparse {
+                self.ensure_sparse_handle(&table);
+            }
+        }
 
         // 10 ter. Un chargement en masse interrompu a pu laisser un index
         // vectoriel détruit : on le rebâtit avant de servir la moindre requête.
@@ -1030,6 +976,7 @@ impl Catalog {
             self.conn.execute(&ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         self.migrate_scope_columns()?;
+        self.migrer_les_kb_v7(version_avant.as_deref())?;
         self.noter_la_dette_du_modele_courant();
         self.ensure_scope_nodes()?;
         self.multi_cell = self.multi_cell || self.count_scope_nodes()? > 1;
@@ -1117,7 +1064,17 @@ impl Catalog {
         config: crate::config::EntityConfig,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.enregistrer_l_entite(entity_name, config)
+    }
 
+    /// Le corps de [`Self::register_entity`], sans exiger que le catalogue
+    /// soit déclaré initialisé : `initialize` s'en sert pour poser les
+    /// entités dérivées traduites des bases de connaissances.
+    fn enregistrer_l_entite(
+        &mut self,
+        entity_name: &str,
+        config: crate::config::EntityConfig,
+    ) -> Result<(), CatalogError> {
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
         if let Some(derivee) = &config.derived {
@@ -1150,12 +1107,6 @@ impl Catalog {
             )));
         }
 
-        if self.kb_metadata.contains_key(entity_name) {
-            return Err(CatalogError::SchemaError(
-                format!("Name '{}' conflicts with an existing knowledge base", entity_name),
-            ));
-        }
-
         if !config.has_simple_pipeline() && !config.has_kb_participation() {
             return Err(CatalogError::SchemaError(
                 format!("Entity '{}' has no content fields — need at least is_content=true (simple pipeline) or content_for/title_for (KB participation)", entity_name),
@@ -1183,26 +1134,29 @@ impl Catalog {
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
 
-        // Re-trigger KBs that this entity mentions (existing in kb_metadata OR
-        // pre-registered in knowledge_bases but not yet materialized)
-        let mut kb_names_to_retrigger = HashSet::new();
+        // Les bases que cette entité alimente (`title_for` / `content_for`) :
+        // leur dérivée est (re)traduite — c'est l'entité qui porte `title_for`
+        // qui donne sa racine à une base enregistrée avant elle.
+        let mut kbs: Vec<String> = Vec::new();
         for f in config.fields.values() {
             if let Some(ref kb) = f.title_for {
-                if kb != "self" && (self.kb_metadata.contains_key(kb) || self.config.knowledge_bases.contains_key(kb)) {
-                    kb_names_to_retrigger.insert(kb.clone());
+                if kb != "self" && self.config.knowledge_bases.contains_key(kb) {
+                    kbs.push(kb.clone());
                 }
             }
-            if let Some(ref kbs) = f.content_for {
-                for kb in kbs {
-                    if kb != "self" && (self.kb_metadata.contains_key(kb) || self.config.knowledge_bases.contains_key(kb)) {
-                        kb_names_to_retrigger.insert(kb.clone());
+            if let Some(ref liste) = f.content_for {
+                for kb in liste {
+                    if kb != "self" && self.config.knowledge_bases.contains_key(kb) {
+                        kbs.push(kb.clone());
                     }
                 }
             }
         }
-        for kb_name in kb_names_to_retrigger {
-            let kb_config = self.config.knowledge_bases.get(&kb_name).cloned().unwrap_or_default();
-            self.register_kb(&kb_name, kb_config)?;
+        kbs.sort();
+        kbs.dedup();
+        for kb in kbs {
+            let kb_config = self.config.knowledge_bases.get(&kb).cloned().unwrap_or_default();
+            self.traduire_une_kb(&kb, &kb_config)?;
         }
 
         Ok(())
@@ -1668,22 +1622,43 @@ impl Catalog {
             properties: (!properties.is_empty()).then_some(properties),
         };
         self.persist_relation(rel_name, &rel_def)?;
+        let (de, vers) = (rel_def.from.clone(), rel_def.to.clone());
         self.config.relations.insert(rel_name.to_string(), rel_def);
+
+        // Une relation de plus peut lier une contributrice à la racine d'une
+        // base : les bases dont un bout est la racine sont retraduites.
+        let mut kbs: Vec<(String, crate::config::KBConfig)> = self
+            .config
+            .knowledge_bases
+            .iter()
+            .filter(|(kb, _)| {
+                self.entity_configs
+                    .get(*kb)
+                    .and_then(|c| c.derived.as_ref())
+                    .is_some_and(|d| d.from == de || d.from == vers)
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        kbs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (kb, kb_config) in kbs {
+            self.traduire_une_kb(&kb, &kb_config)?;
+        }
 
         Ok(())
     }
 
     // ── KB Registration ─────────────────────────────────────────────────
 
-    /// Register a Knowledge Base. Idempotent with additive migration.
+    /// **Enregistrer une base de connaissances : une entité dérivée.**
+    /// Idempotent. La base se traduit depuis les entités qui portent
+    /// `title_for` / `content_for` vers son nom (`derived_kb`) : l'entité
+    /// titre est la racine, chaque contributrice une règle `gather`, et les
+    /// gabarits rendent `title` et `content`. Ses tables sont celles de toute
+    /// entité (`{KB}`, `{KB}_Chunk`, `{KB}_DERIVED_FROM`).
     ///
-    /// Scans registered entities for fields with `title_for`/`content_for` pointing
-    /// to this KB name. Creates `{KB}_Index`, `{KB}_Index_Chunk`, relation tables,
-    /// FTS index, and vector/sparse indexes.
-    ///
-    /// Order-independent with `register_entity()`: if entities are registered
-    /// after the KB, `register_entity()` will re-trigger this method. If
-    /// re-called with new content refs, rebuilds the FTS index on `{KB}_Index`.
+    /// Indépendant de l'ordre avec `register_entity()` : une entité
+    /// enregistrée après la base retraduit la base. Une contribution de plus
+    /// re-rend toutes les racines.
     pub fn register_kb(
         &mut self,
         kb_name: &str,
@@ -1696,7 +1671,7 @@ impl Catalog {
 
         // **Ce qu'on accepte sans l'appliquer, on le dit au moment où on
         // l'accepte.** `title_boost` et `content_boost` sont copiés dans
-        // `KBMetadata` et jamais relus — vérifié le 25 août 2026, toujours vrai.
+        // la config et jamais relus — vérifié le 25 août 2026, toujours vrai.
         // Les taire, c'est laisser quelqu'un régler un cadran débranché et
         // conclure que le moteur ne fait pas la différence.
         //
@@ -1740,163 +1715,139 @@ impl Catalog {
             }
         }
 
-        // Find the title entity (entity with a field that has title_for = kb_name)
-        let kb_title_entities = crate::schema::resolve_kb_title_entities(&self.config);
-        let kb_info = kb_title_entities.get(kb_name);
-
-        // Collect all entities contributing to this KB
-        let mut kb_entities = HashSet::new();
-        let mut content_refs = Vec::new();
-        for (entity_name, entity_def) in &self.config.entities {
-            let entity_kbs = crate::schema::resolve_entity_kbs(entity_def);
-            if let Some(mapping) = entity_kbs.get(kb_name) {
-                kb_entities.insert(entity_name.clone());
-                for field in &mapping.content_fields {
-                    content_refs.push(KBFieldRef {
-                        entity: entity_name.clone(),
-                        field: field.clone(),
-                    });
-                }
-            }
-        }
-
-        if let Some(info) = kb_info {
-            // Title entity exists — can create/update tables
-            if let Some(old_meta) = self.kb_metadata.get(kb_name) {
-                // ── Idempotent: KB already exists — check if content refs changed ──
-                let old_content: HashSet<_> = old_meta.content.iter()
-                    .map(|r| (r.entity.as_str(), r.field.as_str()))
-                    .collect();
-                let new_content: HashSet<_> = content_refs.iter()
-                    .map(|r| (r.entity.as_str(), r.field.as_str()))
-                    .collect();
-                // Les champs de contenu ont pu changer. L'ancien code droppait puis
-                // recréait l'index C++ ici, en laissant le handle Rust intact.
-                // Ne rien faire est désormais correct : `reindex()` droppe l'index
-                // avant de tout réécrire, et c'est lui que le drapeau
-                // `needs_reindex` posé plus bas réclame. Dropper ici sans recréer
-                // laissait la KB sans index jusqu'au prochain reindex.
-                let _ = (&old_content, &new_content);
-
-                // An entity registered *after* the KB brings its own relation
-                // tables, which only the fresh-KB branch below used to create.
-                // Without them the aggregation drain died on
-                // `Table {Entity}_SOURCED_{KB} does not exist`. Both DDLs are
-                // IF NOT EXISTS, so replaying them for every member is free.
-                let in_ddl = crate::schema::generate_index_rel_ddl_with_dialect(&info.title_entity, kb_name, self.dialect.as_ref())
-                    .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-                self.conn.execute(&in_ddl)
-                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-                for entity_name in &kb_entities {
-                    let source_ddl = crate::schema::generate_source_rel_ddl_with_dialect(entity_name, kb_name, self.dialect.as_ref())
-                        .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-                    self.conn.execute(&source_ddl)
-                        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-                }
-            } else {
-                // ── Fresh KB: create all tables + indexes ──
-                self.create_kb_tables(kb_name, &kb_config, info, &kb_entities)?;
-            }
-
-            // Create sparse handle if needed
-            if kb_config.signals.sparse() {
-                let chunk_table = format!("{kb_name}_Index_Chunk");
-                self.ensure_sparse_handle(&chunk_table);
-            }
-
-            // Build + store KBMetadata
-            let title_ref = KBFieldRef {
-                entity: info.title_entity.clone(),
-                field: info.title_field.clone(),
-            };
-            let kb_meta = KBMetadata {
-                name: kb_name.to_string(),
-                title: title_ref,
-                content: content_refs,
-                entities: kb_entities,
-                signals: kb_config.signals,
-                keyword_weight: kb_config.keyword_weight,
-                title_boost: kb_config.title_boost,
-                content_boost: kb_config.content_boost,
-                chunking: kb_config.chunking.clone(),
-            };
-            self.kb_metadata.insert(kb_name.to_string(), kb_meta);
-        }
-        // else: no entities yet — just persist config. When register_entity()
-        // is called later with title_for/content_for pointing to this KB,
-        // it will re-trigger register_kb() and create the tables then.
-
-        // Persist + update config
+        // **Une KB est une entité dérivée.** Traduite depuis `title_for` /
+        // `content_for` des entités connues et les relations déclarées ; sans
+        // racine encore, la config est gardée et la traduction viendra avec
+        // l'entité qui portera `title_for` (par `register_entity`).
         self.persist_kb_config(kb_name, &kb_config)?;
-        self.config.knowledge_bases.insert(kb_name.to_string(), kb_config);
-
-        // Warm chunker cache for the new KB
+        self.config.knowledge_bases.insert(kb_name.to_string(), kb_config.clone());
+        self.traduire_une_kb(kb_name, &kb_config)?;
         self.warm_chunker_cache();
-
         Ok(())
     }
 
-    /// Create all tables and indexes for a new Knowledge Base.
-    fn create_kb_tables(
-        &self,
-        kb_name: &str,
-        kb_config: &crate::config::KBConfig,
-        kb_info: &crate::schema::KBSchemaInfo,
-        kb_entities: &HashSet<String>,
-    ) -> Result<(), CatalogError> {
-        let embedding_dim = self.config.embedding_dim;
-
-        // 1. {KB}_Index table
-        let idx_ddl = crate::schema::generate_index_table_ddl_with_dialect(kb_name, kb_config, embedding_dim, self.dialect.as_ref())
-            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&idx_ddl)
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        // 2. {KB}_Index_Chunk table
-        let chunk_ddl = crate::schema::generate_index_chunk_table_ddl_with_dialect(kb_name, kb_config, embedding_dim, self.dialect.as_ref())
-            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&chunk_ddl)
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        // 3. {KB}_Index_HAS_CHUNK rel
-        let has_chunk_ddl = crate::schema::generate_index_chunk_rel_ddl_with_dialect(kb_name, self.dialect.as_ref())
-            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&has_chunk_ddl)
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        // 4. {TitleEntity}_IN_{KB} rel
-        let in_ddl = crate::schema::generate_index_rel_ddl_with_dialect(&kb_info.title_entity, kb_name, self.dialect.as_ref())
-            .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-        self.conn.execute(&in_ddl)
-            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-        // 5. {Entity}_SOURCED_{KB} rels (one per contributing entity)
-        for entity_name in kb_entities {
-            let source_ddl = crate::schema::generate_source_rel_ddl_with_dialect(entity_name, kb_name, self.dialect.as_ref())
-                .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
-            self.conn.execute(&source_ddl)
-                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+    /// **Traduire les bases de connaissances en entités dérivées**, à
+    /// l'initialisation. Les entités du schéma qui n'ont pas de config
+    /// d'enregistrement en reçoivent une (des données, sans pipeline simple :
+    /// ce que les dérivées rassemblent), puis chaque KB — du schéma ou
+    /// persistée — est traduite. Un écrivain la pose (`ecrire`), un lecteur
+    /// ne fait que la connaître.
+    fn traduire_les_kb(&mut self, ecrire: bool) -> Result<(), CatalogError> {
+        let mut noms: Vec<String> = self.config.entities.keys().cloned().collect();
+        noms.sort();
+        for nom in noms {
+            if self.entity_configs.contains_key(&nom) {
+                continue;
+            }
+            let def = &self.config.entities[&nom];
+            if def.derived_from.is_some() {
+                continue;
+            }
+            let cfg = crate::derived_kb::entity_config_from_def(def);
+            self.entity_configs.insert(nom, cfg);
         }
-
-        // 6. Idem pour {KB}_Index : l'index FTS est celui du `ShardedHandle`.
-
-        // 7. Vector index on {KB}_Index_Chunk
-        if kb_config.signals.vector() {
-            let chunk_table = format!("{kb_name}_Index_Chunk");
-            let emb_col = format!("{kb_name}_embedding");
-            let idx_name = format!("{kb_name}_Index_Chunk_vec");
-            let vec_ddl = self.dialect.create_vector_index(&chunk_table, &emb_col, &idx_name);
-            // Par `poser_index`, pas par `let _ =`. Les deux dialectes rendent
-            // ce DDL idempotent (`skip_if_exists`, `IF NOT EXISTS`) : une
-            // erreur ici n'est donc **pas** « il existe déjà », c'est un index
-            // vectoriel absent — et une recherche sémantique qui rend zéro sans
-            // que rien ne le signale.
-            self.poser_index(vec![vec_ddl]);
+        let mut kbs: Vec<(String, crate::config::KBConfig)> =
+            self.config.knowledge_bases.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        kbs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (kb, kb_config) in kbs {
+            if ecrire {
+                self.traduire_une_kb(&kb, &kb_config)?;
+            } else if !self.entity_configs.contains_key(&kb) {
+                if let Some(derivee) = crate::derived_kb::derived_config_for_kb(&kb, &kb_config, &self.config) {
+                    self.config.entities.insert(kb.clone(), Self::entity_config_to_entity_def(&derivee));
+                    self.entity_configs.insert(kb, derivee);
+                }
+            }
         }
+        Ok(())
+    }
 
-        // 8. Sparse handle — created by register_kb() after create_kb_tables().
+    /// **Migration v7** : une base ouverte au schéma 6 ou avant avait ses
+    /// tables `_Index*`, `_IN_`, `_SOURCED_` ; elles sont supprimées, et
+    /// chaque base traduite est re-rendue depuis ses racines au drain suivant.
+    /// Rien à faire sur une base neuve ou déjà au schéma 7.
+    fn migrer_les_kb_v7(&mut self, version_avant: Option<&str>) -> Result<(), CatalogError> {
+        let avant: u32 = match version_avant {
+            None => return Ok(()),
+            Some(v) => v.parse().unwrap_or(0),
+        };
+        if avant >= 7 {
+            return Ok(());
+        }
+        let mut kbs: Vec<String> = self.config.knowledge_bases.keys().cloned().collect();
+        kbs.sort();
+        let mut entites: Vec<String> = self.config.entities.keys().cloned().collect();
+        entites.sort();
+        for kb in &kbs {
+            // Les relations d'abord, puis les nœuds ; une table absente est
+            // une erreur qu'on ignore : la base n'avait peut-être jamais eu
+            // cette KB matérialisée.
+            let mut tables: Vec<String> = Vec::new();
+            for e in &entites {
+                tables.push(format!("{e}_IN_{kb}"));
+                tables.push(format!("{e}_SOURCED_{kb}"));
+            }
+            tables.push(format!("{kb}_Index_HAS_CHUNK"));
+            tables.push(format!("{kb}_Index_Chunk"));
+            tables.push(format!("{kb}_Index"));
+            let mut supprimees = 0usize;
+            for t in tables {
+                if self.conn.execute(&self.dialect.drop_table(&t)).is_ok() {
+                    supprimees += 1;
+                }
+            }
+            if self.entity_configs.get(kb).is_some_and(|c| c.derived.is_some()) {
+                self.rederiver_tout(kb)?;
+            }
+            eprintln!(
+                "[rag3weaver] schéma v7: base « {kb} » repliée en entité dérivée — {supprimees} table(s) d'avant supprimée(s), racines à re-rendre au prochain drain"
+            );
+        }
+        Ok(())
+    }
 
+    /// Traduire **une** base et poser sa dérivée. Si la dérivée existait et
+    /// a changé (une contribution de plus, un gabarit qui bouge), toutes ses
+    /// racines sont re-rendues. Sans racine, rien : la base attend.
+    fn traduire_une_kb(&mut self, kb: &str, kb_config: &crate::config::KBConfig) -> Result<(), CatalogError> {
+        let Some(derivee) = crate::derived_kb::derived_config_for_kb(kb, kb_config, &self.config) else {
+            return Ok(());
+        };
+        let deja = self.entity_configs.get(kb).cloned();
+        // `EntityConfig` ne se compare pas ; sa forme sérialisée, si.
+        let meme = deja.as_ref().is_some_and(|d| {
+            serde_json::to_value(d).ok() == serde_json::to_value(&derivee).ok()
+        });
+        if meme {
+            return Ok(());
+        }
+        self.enregistrer_l_entite(kb, derivee)?;
+        if deja.is_some() {
+            self.rederiver_tout(kb)?;
+        }
+        Ok(())
+    }
+
+    /// **Re-rendre toutes les lignes d'une entité dérivée** : chaque racine
+    /// est mise en file. Le court-circuit par `_render_hash` évite d'écrire
+    /// ce qui n'a pas bougé.
+    fn rederiver_tout(&mut self, entity: &str) -> Result<(), CatalogError> {
+        let Some(racine) = self.entity_configs.get(entity).and_then(|c| c.derived.as_ref()).map(|d| d.from.clone()) else {
+            return Ok(());
+        };
+        let lu = self
+            .conn
+            .execute(&self.dialect.select_all_uuids(&racine))
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let derivations: Vec<crate::records::Derivation> = lu
+            .rows
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_str()))
+            .map(|u| crate::records::Derivation { entity: entity.to_string(), root_uuid: u.to_string() })
+            .collect();
+        if !derivations.is_empty() {
+            self.mettre_en_file_les_derivations(derivations);
+        }
         Ok(())
     }
 
@@ -2174,10 +2125,8 @@ impl Catalog {
         self.read_meta_key(crate::scope::EMBEDDING_MODEL_KEY)
     }
 
-    /// Les tables qui portent des vecteurs : les chunks des entités simples à
-    /// signal vectoriel. Les tables `_Index*` des bases de connaissances n'y
-    /// sont pas — elles gardent leur stockage d'avant et meurent avec le repli
-    /// des KB en entités dérivées (chantier voisin du 7 septembre).
+    /// Les tables qui portent des vecteurs : les chunks des entités à signal
+    /// vectoriel — les dérivées (anciennes bases de connaissances) comprises.
     fn vector_tables(&self) -> Vec<String> {
         let mut t: Vec<String> = self
             .entity_configs
@@ -2319,9 +2268,6 @@ impl Catalog {
         }
         for d in &self.pending.deletes {
             doit(&d.entity_name, D::TOUT);
-        }
-        for a in &self.pending.aggregates {
-            doit(&format!("{}_Index", a.kb_name), D::PLEIN_TEXTE | D::SPARSE | D::DENSE);
         }
         for d in &self.pending.derivations {
             doit(&d.entity, D::TOUT);
@@ -2472,10 +2418,8 @@ impl Catalog {
     /// 2026 j'avais extrait le noyau identique en laissant la divergence
     /// « faute de savoir si elle est voulue ». L'après-midi, vérifié :
     ///
-    /// - `kb_metadata` : aucun nœud du graphe d'`ingest_entities` ne le lit
-    ///   (ses lecteurs sont `KBChunkRecordNode`, `KBGatherNode`,
-    ///   `KBUpdateNode`, `KBChunkNode`, `DeleteRecordNode`, `UpdateRecordNode`,
-    ///   et aucun n'y est). L'absence était sans effet.
+    /// - `kb_metadata` (retiré depuis avec le repli des KB) : aucun nœud du
+    ///   graphe d'`ingest_entities` ne le lisait. L'absence était sans effet.
     /// - `event_bus` : c'est le **runtime** qui le lit, pour publier
     ///   `RunStarted` / `RunFinished` sur le sujet `catalog`. Les runs du drain
     ///   étaient donc sur le bus, ceux d'`ingest_entities` et de `drain_resume`
@@ -2521,7 +2465,6 @@ impl Catalog {
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
         services.register("embedding_slug", self.current_embedding_slug());
         services.register("config", self.config.clone());
-        services.register("kb_metadata", self.kb_metadata.clone());
         services.register("entity_configs", self.entity_configs.clone());
         services.register("has_sparse",
             self.sparse_embedder.is_some() || self.dual_embedder.is_some());
@@ -2585,24 +2528,17 @@ impl Catalog {
     /// [`PendingWork::extraire_les_tables`] demande pour juger une relation.
     ///
     /// Deux familles : les relations **déclarées** (`config.relations`), et les
-    /// liens **implicites** `{Entité}_IN_{KB}` que `create` met en file entre
-    /// une entité et sa ligne d'index — ceux-là ne sont dans aucune
-    /// déclaration, et les oublier laissait la ligne d'index hors de la
-    /// fermeture de son entité.
+    /// liens `{Dérivée}_DERIVED_FROM` d'une entité dérivée vers sa racine —
+    /// ceux-là ne sont dans aucune déclaration, et les oublier laisserait la
+    /// dérivée hors de la fermeture de sa racine.
     fn bouts_des_relations(config: &CatalogConfig) -> impl Fn(&str) -> Option<(String, String)> + '_ {
         move |nom: &str| {
             if let Some(d) = config.relations.get(nom) {
                 return Some((d.from.clone(), d.to.clone()));
             }
-            if let Some(derivee) = nom.strip_suffix("_DERIVED_FROM") {
-                if let Some(racine) = config.entities.get(derivee).and_then(|d| d.derived_from.clone()) {
-                    return Some((derivee.to_string(), racine));
-                }
-            }
-            config.knowledge_bases.keys().find_map(|kb| {
-                nom.strip_suffix(&format!("_IN_{kb}"))
-                    .map(|entite| (entite.to_string(), format!("{kb}_Index")))
-            })
+            let derivee = nom.strip_suffix("_DERIVED_FROM")?;
+            let racine = config.entities.get(derivee).and_then(|d| d.derived_from.clone())?;
+            Some((derivee.to_string(), racine))
         }
     }
 
@@ -2613,46 +2549,29 @@ impl Catalog {
     /// ressources sans lien bloquées l'une par l'autre*. Deux ressources **en
     /// lien** s'attendent, et la fermeture est la définition du lien :
     ///
-    /// - une base de connaissances dépend de ses **sources** : ses agrégats
-    ///   relisent les entités titre et contenu, qui doivent donc être posées ;
+    /// - une entité dérivée dépend de sa **racine** et de ses **voisines** :
+    ///   son rendu les relit, elles doivent donc être posées ;
     /// - une relation en file dont un bout est dans l'ensemble y amène
     ///   **l'autre bout** — on ne pose pas un lien vers une ligne absente ;
-    /// - et pour un **écrivain** (`pour_ecrire`), une entité amène les bases
-    ///   qu'elle alimente : ce qu'un `ingest_entities` a mis en file pour ses
-    ///   index, c'est à lui de le solder.
+    /// - et pour un **écrivain** (`pour_ecrire`), une racine ou une voisine
+    ///   amène les dérivées qui en dépendent : ce qu'un `ingest_entities` a
+    ///   mis en file pour elles, c'est à lui de le solder.
     ///
     /// Un **lecteur** ne prend pas la troisième règle : chercher dans une
-    /// entité qui alimente une base n'oblige pas à agréger cette base — c'est
-    /// le dérivé de la base, pas de l'entité, et c'est son lecteur qui le
-    /// paiera. C'est exactement la différence entre « ce que ma lecture exige »
-    /// et « ce que mon écriture a causé ».
+    /// entité qu'une dérivée rassemble n'oblige pas à rendre cette dérivée —
+    /// c'est le dérivé de la dérivée, pas de l'entité, et c'est son lecteur
+    /// qui le paiera. C'est exactement la différence entre « ce que ma lecture
+    /// exige » et « ce que mon écriture a causé ».
     ///
     /// Seules les relations **en file** comptent : un type de relation déclaré
     /// entre A et B sans enregistrement en attente ne lie rien.
     pub fn fermeture(&self, graine: &str, pour_ecrire: bool) -> HashSet<String> {
         let mut tables: HashSet<String> = HashSet::new();
-        if self.kb_metadata.contains_key(graine) {
-            tables.insert(format!("{graine}_Index"));
-        } else {
-            tables.insert(graine.to_string());
-        }
+        tables.insert(graine.to_string());
         loop {
             let avant = tables.len();
             let instantane: Vec<String> = tables.iter().cloned().collect();
             for t in &instantane {
-                if let Some(kb) = t.strip_suffix("_Index") {
-                    if let Some(meta) = self.kb_metadata.get(kb) {
-                        tables.insert(meta.title.entity.clone());
-                        tables.extend(meta.entities.iter().cloned());
-                    }
-                }
-                if pour_ecrire {
-                    if let Some(def) = self.config.entities.get(t) {
-                        for kb in resolve_entity_kbs(def).keys() {
-                            tables.insert(format!("{kb}_Index"));
-                        }
-                    }
-                }
                 // **Les entités dérivées** : lire une dérivée dépend de sa racine
                 // et de ses voisines ; écrire une racine ou une voisine emporte
                 // les dérivées qui en dépendent.
@@ -2723,7 +2642,6 @@ impl Catalog {
         table: &str,
         marqueur: &str,
         limite: usize,
-        avec_kb_name: bool,
     ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
         let maintenant = crate::dataflow::checkpoint::timestamp_ms();
         let reclamation = format!("{maintenant:020}|{}", self.writer_id);
@@ -2731,7 +2649,7 @@ impl Catalog {
         let mien = format!("|{}", self.writer_id);
         let requete = self
             .dialect
-            .reclamer_chunks_sans_marqueur(table, marqueur, limite, avec_kb_name);
+            .reclamer_chunks_sans_marqueur(table, marqueur, limite);
         let res = self
             .conn
             .execute_with_params(
@@ -2753,9 +2671,6 @@ impl Catalog {
             }
             if let Some(h) = ligne.get(2).and_then(|v| v.as_str()) {
                 data.insert("_text_hash".to_string(), CypherValue::String(h.to_string()));
-            }
-            if let Some(k) = ligne.get(3).and_then(|v| v.as_str()).filter(|k| !k.is_empty()) {
-                data.insert("_kb_name".to_string(), CypherValue::String(k.to_string()));
             }
             pris.push(data);
         }
@@ -2857,20 +2772,15 @@ impl Catalog {
         // Les tables de chunks et ce que chacune déclare. Clonées d'abord :
         // la suite prend `&mut self`.
         let retenue = |parent: &str| tables.is_none_or(|t| t.contains(parent));
-        let mut cibles: Vec<(String, bool, search::SearchSignals)> = Vec::new();
+        let mut cibles: Vec<(String, search::SearchSignals)> = Vec::new();
         for (nom, cfg) in &self.entity_configs {
-            if cfg.chunked != Some(false) && retenue(nom) {
-                cibles.push((format!("{nom}_Chunk"), false, cfg.signals));
-            }
-        }
-        for (kb, meta) in &self.kb_metadata {
-            if retenue(&format!("{kb}_Index")) {
-                cibles.push((format!("{kb}_Index_Chunk"), true, meta.signals));
+            if cfg.has_simple_pipeline() && cfg.chunked != Some(false) && retenue(nom) {
+                cibles.push((format!("{nom}_Chunk"), cfg.signals));
             }
         }
 
         let mut total = 0usize;
-        for (table, est_kb, signaux) in cibles {
+        for (table, signaux) in cibles {
             // On ne rattrape que ce qui est **à la fois** exigé et déclaré :
             // inutile de chercher un retard dense sur une entité qui n'a pas de
             // signal vectoriel.
@@ -2878,11 +2788,8 @@ impl Catalog {
             // Le marqueur dense est **celui du modèle courant** : c'est par lui
             // que « migrer de modèle » est un rattrapage ordinaire — un modèle
             // qui vient d'être enregistré a un retard de 100 %, et cette boucle
-            // le solde chunk par chunk sans redécouper. Les tables de KB gardent
-            // `_embed_hash` : leur chaîne meurt avec le repli en entités dérivées.
-            let dense_marker: String = if est_kb {
-                "_embed_hash".to_string()
-            } else {
+            // le solde chunk par chunk sans redécouper.
+            let dense_marker: String = {
                 let storage = self.vector_storage(&table)?;
                 if exige.dense() && signaux.vector() {
                     let retard = self.count_marqueur_manquant(&table, &storage.marker);
@@ -2910,7 +2817,7 @@ impl Catalog {
                 // n'est pas périmée. Et **ne pas avaler cette erreur** : la
                 // première version le faisait, et elle a caché son propre
                 // défaut pendant une demi-heure.
-                let pris = match self.reclamer_le_retard(&table, marqueur, limite, est_kb) {
+                let pris = match self.reclamer_le_retard(&table, marqueur, limite) {
                     Ok(p) => p,
                     Err(e) => {
                         self.emit_event(CatalogEvent::Warning {
@@ -2945,13 +2852,8 @@ impl Catalog {
                 .collect();
 
             let mut graph = DataflowGraph::new();
-            if est_kb {
-                graph.add_node(Box::new(KBEmbedNode::new("rattrapage", 32)))
-                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
-            } else {
-                graph.add_node(Box::new(EmbedNode::new("rattrapage", signaux, 32)))
-                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
-            }
+            graph.add_node(Box::new(EmbedNode::new("rattrapage", signaux, 32)))
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
             graph.set_initial_input(
                 "rattrapage",
                 "entities",
@@ -3556,7 +3458,7 @@ impl Catalog {
         if std::env::var_os("RAG3WEAVER_INGESTION_LIGNE_A_LIGNE").is_some() {
             return false;
         }
-        if !self.dialect.supports_copy_from() || config.has_kb_participation() {
+        if !self.dialect.supports_copy_from() {
             return false;
         }
         if !self.table_vide(entity_name) {
@@ -3615,10 +3517,6 @@ impl Catalog {
         for entity in self.entity_configs.keys() {
             tables.push(entity.clone());
             tables.push(format!("{entity}_Chunk"));
-        }
-        for kb in self.kb_metadata.keys() {
-            tables.push(format!("{kb}_Index"));
-            tables.push(format!("{kb}_Index_Chunk"));
         }
         let default_literal = format!("'{}'", crate::scope::DEFAULT_ID);
         let mut altered = 0usize;
@@ -3832,8 +3730,8 @@ impl Catalog {
         self.persist_meta_key(&format!("kb_config:{kb_name}"), &json)
     }
 
-    /// Load all persisted KB configs from `_catalog_meta` and rebuild KBMetadata.
-    /// Called at the end of `initialize()` to restore dynamically registered KBs.
+    /// Les configs de bases persistées (`kb_config:`), remises dans
+    /// `config.knowledge_bases` ; leur traduction en dérivée suit.
     fn load_kb_configs(&mut self) -> Result<(), CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self.conn.execute_with_params(
@@ -3852,53 +3750,15 @@ impl Catalog {
             };
             let kb_name = key.strip_prefix("kb_config:").unwrap_or(&key);
 
-            // Skip if already loaded by initialize() (config-driven KBs)
-            if self.kb_metadata.contains_key(kb_name) {
+            // Une base du schéma garde la config du schéma.
+            if self.config.knowledge_bases.contains_key(kb_name) {
                 continue;
             }
-
             let kb_config: crate::config::KBConfig = serde_json::from_str(&value)
                 .map_err(|e| CatalogError::SchemaError(
                     format!("deserialize kb config for '{kb_name}': {e}")
                 ))?;
 
-            // Rebuild KBMetadata from entity fields
-            let kb_title_entities = crate::schema::resolve_kb_title_entities(&self.config);
-            let kb_info = match kb_title_entities.get(kb_name) {
-                Some(info) => info,
-                None => continue, // No title entity found, skip
-            };
-
-            let mut kb_entities = HashSet::new();
-            let mut content_refs = Vec::new();
-            for (entity_name, entity_def) in &self.config.entities {
-                let entity_kbs = crate::schema::resolve_entity_kbs(entity_def);
-                if let Some(mapping) = entity_kbs.get(kb_name) {
-                    kb_entities.insert(entity_name.clone());
-                    for field in &mapping.content_fields {
-                        content_refs.push(KBFieldRef {
-                            entity: entity_name.clone(),
-                            field: field.clone(),
-                        });
-                    }
-                }
-            }
-
-            let title_ref = KBFieldRef {
-                entity: kb_info.title_entity.clone(),
-                field: kb_info.title_field.clone(),
-            };
-            self.kb_metadata.insert(kb_name.to_string(), KBMetadata {
-                name: kb_name.to_string(),
-                title: title_ref,
-                content: content_refs,
-                entities: kb_entities,
-                signals: kb_config.signals,
-                keyword_weight: kb_config.keyword_weight,
-                title_boost: kb_config.title_boost,
-                content_boost: kb_config.content_boost,
-                chunking: kb_config.chunking.clone(),
-            });
             self.config.knowledge_bases.insert(kb_name.to_string(), kb_config);
         }
 
@@ -3936,51 +3796,29 @@ impl Catalog {
 
     // ── SearchTarget resolution ─────────────────────────────────────────
 
-    /// Resolve a name (KB or simple entity) into a [`SearchTarget`](search::SearchTarget).
-    ///
-    /// Checks `kb_metadata` first (for KBs), then `entity_configs` (for simple entities).
+    /// Resolve a name (entité simple ou dérivée) into a [`SearchTarget`](search::SearchTarget).
     pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
-        // Try KB first
-        if let Some(kb) = self.kb_metadata.get(name) {
-            let kb_config = self
-                .config
-                .knowledge_bases
-                .get(name)
-                .cloned()
-                .unwrap_or_default();
-            let entity = format!("{name}_Index");
-            let chunk_entity = format!("{name}_Index_Chunk");
-            let title_entity = kb.title.entity.clone();
-            let in_rel = format!("{title_entity}_IN_{name}");
-            return Ok(search::SearchTarget {
-                name: name.to_string(),
-                parent_table: entity.clone(),
-                chunk_table: chunk_entity,
-                chunk_rel: format!("{entity}_HAS_CHUNK"),
-                chunk_rel_fwd: true,
-                bm25_fields: vec!["_title".to_string(), "_content".to_string()],
-                enrich_fields: vec![
-                    "_title".to_string(),
-                    "_content".to_string(),
-                    "_source_entity".to_string(),
-                    "_source_uuid".to_string(),
-                    "_content_hash".to_string(),
-                ],
-                default_signals: kb_config.signals,
-                default_fusion: kb_config.fusion_config(),
-                has_source_refs: true,
-                filter_indirection: Some((title_entity, in_rel)),
-            });
-        }
-
         // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
             if !ec.has_simple_pipeline() {
-                // Find which KBs this entity participates in for a helpful error
-                let kb_names: Vec<&String> = self.kb_metadata.iter()
-                    .filter(|(_, meta)| meta.entities.contains(name))
-                    .map(|(kb_name, _)| kb_name)
+                // Les dérivées qui la rassemblent, pour une erreur qui aide.
+                let mut kb_names: Vec<&String> = self
+                    .entity_configs
+                    .iter()
+                    .filter(|(_, c)| {
+                        c.derived.as_ref().is_some_and(|d| {
+                            d.from == name
+                                || d.gather.iter().any(|r| {
+                                    self.config.relations.get(&r.relation).is_some_and(|rel| match r.direction {
+                                        crate::config::GatherDirection::Out => rel.to == name,
+                                        crate::config::GatherDirection::In => rel.from == name,
+                                    })
+                                })
+                        })
+                    })
+                    .map(|(n, _)| n)
                     .collect();
+                kb_names.sort();
                 let suggestion = if kb_names.is_empty() {
                     String::new()
                 } else {
@@ -4006,11 +3844,18 @@ impl Catalog {
                 }
             }
             enrich_fields.push("_content_hash".to_string());
-            let bm25_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
+            let mut bm25_fields: Vec<String> = ec.content_fields().into_iter().map(|s| s.to_string()).collect();
             // Une entité dérivée rend sa racine (`_source_entity`, `_source_uuid`),
-            // se filtre par elle, et porte ses poids de fusion.
+            // se filtre par elle, et porte ses poids de fusion. Son titre, rendu
+            // par gabarit, se cherche en plein texte comme celui de l'ancienne
+            // ligne d'index (`_title` + `_content`).
             let derivee = ec.derived.as_ref();
             if derivee.is_some() {
+                if let Some(title) = ec.title_field() {
+                    if !bm25_fields.iter().any(|f| f == title) {
+                        bm25_fields.push(title.to_string());
+                    }
+                }
                 for f in [crate::config::DerivedConfig::SOURCE_ENTITY, crate::config::DerivedConfig::SOURCE_UUID] {
                     if !enrich_fields.iter().any(|e| e == f) {
                         enrich_fields.push(f.to_string());
@@ -4226,11 +4071,6 @@ impl Catalog {
     ) -> (Vec<EntityRecord>, usize) {
         const NULL: CypherValue = CypherValue::Null;
 
-        // Le pipeline des bases de connaissance repart de chaque
-        // enregistrement : on ne lui coupe rien.
-        if config.has_kb_participation() {
-            return (records, 0);
-        }
         let Some(entity_def) = self.config.entities.get(entity_name) else {
             return (records, 0);
         };
@@ -4512,13 +4352,6 @@ impl Catalog {
             eprintln!("[ingest-profile] {entity_name} : {unchanged}/{record_count} inchangés, travail dérivé sauté");
         }
 
-        // Keep data copies for KB pipeline triggering (if needed)
-        let kb_data: Vec<BTreeMap<String, CypherValue>> = if entity_config.has_kb_participation() {
-            entity_records.iter().map(|r| r.data.clone()).collect()
-        } else {
-            Vec::new()
-        };
-
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
         let signals = entity_config.signals;
@@ -4625,45 +4458,6 @@ impl Catalog {
         let mut kb_failed = 0usize;
         match result {
             Ok(_output) => {
-                // If this entity participates in KBs, trigger the KB pipeline.
-                // The simple pipeline only inserts entity records + handles
-                // chunking/embedding for the simple pipeline. We need drain()
-                // (via UpdateRecordNode) to detect KB participation and route
-                // records through the KB aggregate pipeline.
-                if entity_config.has_kb_participation() {
-                    for data in &kb_data {
-                        let uuid = data.get("_uuid")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        // Strip internal fields from data — UpdateRecordNode
-                        // does SET n.field = item.field and _uuid is the PK
-                        let clean_data: BTreeMap<String, CypherValue> = data.iter()
-                            .filter(|(k, _)| !k.starts_with('_'))
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
-                        // Use empty sentinel hash to force UpdateRecordNode to
-                        // detect a change and enqueue AggregateRecords. For
-                        // composite entities (has both is_content AND content_for),
-                        // build_content_text would return the same hash as the
-                        // simple pipeline, causing no-op detection.
-                        self.pending.updates.push(crate::records::UpdateRecord {
-                            entity_name: entity_name.to_string(),
-                            uuid,
-                            data: clean_data,
-                            new_content_hash: String::new(),
-                        });
-                        self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
-                    }
-                    // Le drain secondaire suit la même consigne — pas de GPU
-                    // pour les lignes d'index si l'appelant n'en a pas voulu
-                    // pour ses entités — et **sa fermeture d'écrivain** : ce que
-                    // cette ingestion a mis en file pour ses bases, et rien de
-                    // ce qu'un autre a laissé.
-                    kb_failed = self
-                        .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
-                        .failed;
-                }
                 // Les entités dérivées de celle-ci, ou qui la rassemblent : à
                 // rendre, dans un drain borné à sa fermeture.
                 let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
@@ -4770,33 +4564,6 @@ impl Catalog {
             }
         }
 
-        // 5. Les métadonnées des bases de connaissances, depuis la config.
-        for (kb_name, kb_validation) in &validation.knowledge_bases {
-            let kb_config = self.config.knowledge_bases.get(kb_name).cloned().unwrap_or_default();
-            let title = match &kb_validation.title {
-                Some(t) => KBFieldRef { entity: t.entity.clone(), field: t.field.clone() },
-                None => continue,
-            };
-            let content: Vec<KBFieldRef> = kb_validation
-                .content
-                .iter()
-                .map(|c| KBFieldRef { entity: c.entity.clone(), field: c.field.clone() })
-                .collect();
-            self.kb_metadata.insert(
-                kb_name.clone(),
-                KBMetadata {
-                    name: kb_name.clone(),
-                    title,
-                    content,
-                    entities: kb_validation.entities.clone(),
-                    signals: kb_config.signals,
-                    keyword_weight: kb_config.keyword_weight,
-                    title_boost: kb_config.title_boost,
-                    content_boost: kb_config.content_boost,
-                    chunking: kb_config.chunking,
-                },
-            );
-        }
         self.warm_chunker_cache();
 
         // 8. Le magasin de blobs, **sans sa table** : elle existe, un écrivain
@@ -4814,16 +4581,12 @@ impl Catalog {
         self.load_entity_configs()?;
         self.load_relations()?;
         self.load_kb_configs()?;
+        self.traduire_les_kb(false)?;
 
         // 9. Les index sparse, ouverts depuis les blobs.
         let mut tables_sparse: Vec<String> = Vec::new();
-        for (kb, meta) in &self.kb_metadata {
-            if meta.signals.sparse() {
-                tables_sparse.push(format!("{kb}_Index_Chunk"));
-            }
-        }
         for (nom, cfg) in &self.entity_configs {
-            if cfg.signals.sparse() && cfg.chunked != Some(false) {
+            if cfg.has_simple_pipeline() && cfg.signals.sparse() && cfg.chunked != Some(false) {
                 tables_sparse.push(format!("{nom}_Chunk"));
             }
         }
@@ -5029,6 +4792,7 @@ impl Catalog {
             if vues.insert((d.entity.clone(), d.root_uuid.clone())) {
                 entites.insert(d.entity.clone());
                 self.pending.derivations.push(d);
+                self.drain_counters.total_queued += 1;
             }
         }
         for e in entites {
@@ -5086,90 +4850,6 @@ impl Catalog {
         self.drain_counters.total_queued += 1;
         let derivations = self.derivations_pour_racine(entity_name, std::slice::from_ref(&uuid));
         self.mettre_en_file_les_derivations(derivations);
-
-        // For each KB where this entity has titleFor, create Index entry + Link + Aggregate.
-        let entity_kbs = resolve_entity_kbs(&entity_def);
-        for (kb_name, mapping) in &entity_kbs {
-            if mapping.title_field.is_none() {
-                continue; // This entity only has contentFor for this KB, not titleFor
-            }
-            let title_field = mapping.title_field.as_ref().unwrap();
-
-            // Build {KB}_Index entry data
-            let index_uuid = hashsafe_uuid(
-                &format!("{kb_name}_Index"),
-                &[entity_name, &uuid],
-            );
-            let title_max_chars = self.kb_metadata.get(kb_name.as_str())
-                .map(|m| m.chunking.title_max_chars)
-                .unwrap_or(256);
-            let raw_title = data
-                .get(title_field)
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let title_text: String = if title_max_chars > 0 && raw_title.len() > title_max_chars {
-                raw_title.chars().take(title_max_chars).collect()
-            } else {
-                raw_title.to_string()
-            };
-
-            // Collect content from this entity's own contentFor fields
-            let mut content_parts: Vec<String> = Vec::new();
-            for field_name in &mapping.content_fields {
-                if let Some(text) = data.get(field_name).and_then(|v| v.as_str()) {
-                    if !text.is_empty() {
-                        content_parts.push(text.to_string());
-                    }
-                }
-            }
-            let content_text = content_parts.join("\n");
-
-            let index_table = format!("{kb_name}_Index");
-            let mut index_data = BTreeMap::new();
-            index_data.insert("_uuid".to_string(), CypherValue::String(index_uuid.clone()));
-            index_data.insert("_source_entity".to_string(), CypherValue::String(entity_name.to_string()));
-            index_data.insert("_source_uuid".to_string(), CypherValue::String(uuid.clone()));
-            // Sentinel hash: empty string forces KBGatherNode to always run on first drain.
-            index_data.insert("_content_hash".to_string(), CypherValue::String(String::new()));
-            index_data.insert("_title".to_string(), CypherValue::String(title_text));
-            index_data.insert("_content".to_string(), CypherValue::String(content_text));
-            self.scope.stamp(&mut index_data);
-
-            // Index entity with resolver
-            let (index_ref, index_resolver) = EntityRef::new(&index_table);
-            self.pending.entities.push(EntityRecord::new(
-                index_table.clone(),
-                index_data,
-                index_resolver,
-                index_ref.clone(),
-            ));
-            self.devoir(&index_table, crate::disponibilite::Disponibilites::TOUT);
-
-            // Link: {Entity}_IN_{KB}
-            let in_rel_name = format!("{entity_name}_IN_{kb_name}");
-            let (in_rel_ref, in_rel_resolver) = RelationRef::new(&in_rel_name);
-            self.pending.relations.push(RelationRecord::new(
-                in_rel_name,
-                RefOrUuid::Ref(entity_ref.clone()),
-                RefOrUuid::Ref(index_ref),
-                BTreeMap::new(),
-                in_rel_resolver,
-                in_rel_ref,
-            ));
-            // Les deux bouts sont déjà déclarés ; le lien ne doit rien de plus.
-
-            // Aggregate (deferred: will rebuild _content + chunks at drain time)
-            self.pending.aggregates.push(AggregateRecord {
-                index_entry_uuid: index_uuid,
-                kb_name: kb_name.clone(),
-                title_entity: entity_name.to_string(),
-                source_uuid: uuid.clone(),
-            });
-            // L'agrégat : la ligne d'index doit son contenu et ses index.
-            // Elle est déjà déclarée pour tout ; rien de plus à dire.
-
-            self.drain_counters.total_queued += 3; // index entity + link + aggregate
-        }
 
         Ok(entity_ref)
     }
@@ -5231,14 +4911,6 @@ impl Catalog {
             .get(rel_name)
             .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
         let (from_entity, to_entity) = (rel_def.from.clone(), rel_def.to.clone());
-        if !self.kb_metadata.is_empty() {
-            let mut n = 0usize;
-            for (de, vers, props) in liens {
-                self.mettre_en_file_le_lien(rel_name, RefOrUuid::Uuid(de), RefOrUuid::Uuid(vers), props)?;
-                n += 1;
-            }
-            return Ok(n);
-        }
         let mut n = 0usize;
         let mut derivations = Vec::new();
         for (de, vers, props) in liens {
@@ -5302,45 +4974,6 @@ impl Catalog {
             to_ref.try_resolve().ok().as_deref(),
         );
         self.mettre_en_file_les_derivations(derivations);
-
-        // Incremental: if this relation connects a content entity to a title entity
-        // for a KB, enqueue an AggregateRecord so the title entity's index is rebuilt.
-        // Only when UUIDs are already resolved (incremental case). In batch mode,
-        // UUIDs are pending EntityRefs and create() already enqueued AggregateRecords.
-        let mut annoncer_apres: Vec<String> = Vec::new();
-        for (kb_name, kb_meta) in &self.kb_metadata {
-            let title_entity = &kb_meta.title.entity;
-            let title_uuid = if from_entity == *title_entity && kb_meta.entities.contains(&to_entity) {
-                from_ref.try_resolve().ok()
-            } else if to_entity == *title_entity && kb_meta.entities.contains(&from_entity) {
-                to_ref.try_resolve().ok()
-            } else {
-                None
-            };
-            if let Some(t_uuid) = title_uuid {
-                let index_uuid = hashsafe_uuid(
-                    &format!("{kb_name}_Index"),
-                    &[title_entity, &t_uuid],
-                );
-                self.pending.aggregates.push(AggregateRecord {
-                    index_entry_uuid: index_uuid,
-                    kb_name: kb_name.clone(),
-                    title_entity: title_entity.clone(),
-                    source_uuid: t_uuid,
-                });
-                self.drain_counters.total_queued += 1;
-                annoncer_apres.push(kb_name.clone());
-            }
-        }
-        // Hors de la boucle : elle emprunte `self.kb_metadata`.
-        for kb in annoncer_apres {
-            self.devoir(
-                &format!("{kb}_Index"),
-                crate::disponibilite::Disponibilites::PLEIN_TEXTE
-                    | crate::disponibilite::Disponibilites::SPARSE
-                    | crate::disponibilite::Disponibilites::DENSE,
-            );
-        }
 
         Ok(relation_ref)
     }
@@ -5590,28 +5223,17 @@ impl Catalog {
     /// ```text
     /// entities → InsertRecordNode("inserts")
     ///                 └── done → LinkRecordNode("links") ← relations
-    ///                               └── done → KBGatherNode("gather_kb") ← aggregates
-    ///                                             └── kb_content → KBUpdateNode("update_kb")
-    ///                                                                  └── kb_content → KBChunkNode("chunk_kb")
-    ///                                                                                      ├── entities → InsertRecordNode("agg_inserts")
-    ///                                                                                      ├── relations → LinkRecordNode("agg_links")
-    ///                                                                                      └── agg_inserts ── done → KBEmbedNode("agg_embeds")
+    ///                               └── done → DeriveNode("derive") ← derivations
+    ///                                             └── … insertion, lien, découpe, embarquement des dérivées
     /// ```
-    ///
-    /// No KBChunkRecordNode (entity-level chunks unused by search — future Mermaid template).
-    /// No KBEmbedNode on raw entities (only KB_Index_Chunk are searched).
     /// Ouvre les index FTS des tables concernées, avant construction du graphe.
     ///
     /// À appeler depuis **chaque** point d'entrée d'ingestion : sans handle
-    /// ouvert, `InsertRecordNode` et `KBUpdateNode` sautent l'indexation en
-    /// silence, et la recherche rend 0 sans que rien ne le signale.
-    ///
-    /// Les KB se résolvent par leur **nom de KB**, pas par celui de leurs
-    /// entités sources — d'où le balayage des deux.
+    /// ouvert, `InsertRecordNode` saute l'indexation en silence, et la
+    /// recherche rend 0 sans que rien ne le signale.
     fn open_fts_handles_for(&mut self, entity_names: &[String]) {
-        let mut names: std::collections::HashSet<String> =
+        let names: std::collections::HashSet<String> =
             entity_names.iter().cloned().collect();
-        names.extend(self.kb_metadata.keys().cloned());
         for name in names {
             if let Ok(target) = self.resolve_search_target(&name) {
                 if target.default_signals.bm25() {
@@ -5697,7 +5319,6 @@ impl Catalog {
         let op_count = pending.total_count();
         let has_entities = !pending.entities.is_empty();
         let has_relations = !pending.relations.is_empty();
-        let has_aggregates = !pending.aggregates.is_empty();
         let derivations = std::mem::take(&mut pending.derivations);
         let has_derivations = !derivations.is_empty();
         if has_derivations {
@@ -5720,22 +5341,6 @@ impl Catalog {
             Arc::new(Mutex::new(HashMap::new()));
         let delete_results: Arc<Mutex<Vec<DeleteResult>>> = Arc::new(Mutex::new(Vec::new()));
 
-        // Seed pending_aggregates with initial aggregates; DeleteRecordNode and
-        // UpdateRecordNode will push additional ones during execution.
-        let pending_aggregates: Arc<Mutex<Vec<AggregateRecord>>> =
-            Arc::new(Mutex::new(pending.aggregates));
-
-        // KB pipeline needed if initial aggregates or delete/update might produce more
-        let needs_kb = has_aggregates
-            || (!self.kb_metadata.is_empty() && (has_deletes || has_updates));
-
-        // Capture KB index table names for FTS flush
-        let flush_tables: Vec<String> = if needs_kb {
-            self.kb_metadata.keys().map(|k| format!("{k}_Index")).collect()
-        } else {
-            vec![]
-        };
-
         // Collect updated entity names before pending.updates is moved
         let update_entity_tables: Vec<String> = if has_updates {
             pending.updates.iter()
@@ -5747,8 +5352,8 @@ impl Catalog {
             vec![]
         };
 
-        // Warm chunker cache if needed by KB pipeline or rechunk pipeline
-        if needs_kb || has_updates || has_derivations {
+        // Le cache de découpe, s'il y a rechunkage ou dérivées à découper.
+        if has_updates || has_derivations {
             self.warm_chunker_cache();
         }
 
@@ -5845,47 +5450,6 @@ impl Catalog {
             }
         }
 
-        // ─── 5. KB pipeline: gather → update → chunk ───────────────
-        if needs_kb {
-            // KBGatherNode reads from pending_aggregates service (not port input).
-            // It must wait until all aggregate producers (delete, update) are done.
-            graph.add_node(Box::new(KBGatherNode::new("gather_kb"))).unwrap();
-            if has_relations {
-                graph.connect("links", "done", "gather_kb", "trigger").unwrap();
-            } else if has_entities {
-                graph.connect("inserts", "done", "gather_kb", "trigger").unwrap();
-            } else if has_updates {
-                graph.connect("updates", "done", "gather_kb", "trigger").unwrap();
-            } else if has_deletes {
-                graph.connect("deletes", "done", "gather_kb", "trigger").unwrap();
-            }
-
-            graph.add_node(Box::new(KBUpdateNode::new("update_kb"))).unwrap();
-            graph.connect("gather_kb", "kb_content", "update_kb", "kb_content").unwrap();
-
-            graph.add_node(Box::new(KBChunkNode::new("chunk_kb"))).unwrap();
-            graph.connect("update_kb", "kb_content", "chunk_kb", "kb_content").unwrap();
-
-            graph.add_node(Box::new(InsertRecordNode::new("agg_inserts"))).unwrap();
-            graph.connect("chunk_kb", "entities", "agg_inserts", "entities").unwrap();
-
-            graph.add_node(Box::new(LinkRecordNode::new("agg_links"))).unwrap();
-            graph.connect("chunk_kb", "relations", "agg_links", "relations").unwrap();
-            graph.connect("agg_inserts", "done", "agg_links", "trigger").unwrap();
-
-            // Une feuille : rien ne consomme sa sortie, donc l'omettre ne
-            // déséquilibre rien. Les chunks sont posés et indexés en plein
-            // texte ; leur dette d'embarquement est dans la base, marqueur vide.
-            if avec_embarquement {
-                graph.add_node(Box::new(KBEmbedNode::new("agg_embeds", 32))).unwrap();
-                graph.connect("agg_inserts", "inserted", "agg_embeds", "entities").unwrap();
-                graph.connect("agg_links", "done", "agg_embeds", "trigger").unwrap();
-            }
-
-            graph.add_node(Box::new(FlushNode::new("flush_fts", flush_tables.clone()))).unwrap();
-            graph.connect("update_kb", "done", "flush_fts", "trigger").unwrap();
-        }
-
         // ─── Services ──────────────────────────────────────────────
         // **Les entités dérivées** (doc du 7 septembre 2026) : rendues après
         // que tout ce dont elles dépendent est posé, puis la chaîne de
@@ -5940,13 +5504,12 @@ impl Catalog {
 
         // Ce que seul ce graphe partage entre ses nœuds : les résultats des
         // mises à jour et des suppressions, mesurés en aval.
-        services.register("pending_aggregates", pending_aggregates);
         services.register("update_results", update_results.clone());
         services.register("chunk_counts", chunk_counts.clone());
         services.register("delete_results", delete_results.clone());
 
-        // chunker_cache needed by KBChunkNode and ChunkRecordNode (rechunk)
-        if needs_kb || has_updates || has_derivations {
+        // chunker_cache : ChunkRecordNode (rechunkage, dérivées)
+        if has_updates || has_derivations {
             services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
         }
         if let Some(ref fail_node) = self.fail_node {
@@ -6346,7 +5909,6 @@ impl Catalog {
             let bouts = Self::bouts_des_relations(&self.config);
             self.pending.extraire_les_tables(&tables, &bouts)
         };
-        self.pending.aggregates.append(&mut lot.aggregates);
         self.pending.derivations.append(&mut lot.derivations);
         self.pending.updates.append(&mut lot.updates);
         self.pending.deletes.append(&mut lot.deletes);
@@ -6544,9 +6106,8 @@ impl Catalog {
         services.register("update_results", Arc::new(Mutex::new(Vec::<UpdateResult>::new())));
         services.register("delete_results", Arc::new(Mutex::new(Vec::<DeleteResult>::new())));
         services.register("chunk_counts", Arc::new(Mutex::new(HashMap::<String, (usize, usize)>::new())));
-        services.register("pending_aggregates", Arc::new(Mutex::new(Vec::<AggregateRecord>::new())));
 
-        // Chunker cache: rebuild for KB nodes
+        // Le cache de découpe, pour ce que la reprise redécoupe.
         self.warm_chunker_cache();
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
         if let Some(ref fail_node) = self.fail_node {
@@ -6960,10 +6521,6 @@ impl Catalog {
 
     // ── Schema queries ─────────────────────────────────────────────────
 
-    pub fn get_kb_metadata(&self, kb_name: &str) -> Option<&KBMetadata> {
-        self.kb_metadata.get(kb_name)
-    }
-
     pub fn get_entity_def(&self, name: &str) -> Option<&EntityDef> {
         self.config.entities.get(name)
     }
@@ -6973,20 +6530,15 @@ impl Catalog {
     }
 
     /// Les cibles qu'accepte [`Self::resolve_search_target`], triées : les
-    /// bases de connaissances et les entités simples qui ont leur propre
-    /// pipeline. C'est la liste qu'une fiche d'outil (`@targets`) propose au
-    /// modèle.
+    /// entités qui ont leur propre pipeline, dérivées (anciennes bases de
+    /// connaissances) comprises. C'est la liste qu'une fiche d'outil
+    /// (`@targets`) propose au modèle.
     pub fn search_target_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self
-            .kb_metadata
-            .keys()
-            .cloned()
-            .chain(
-                self.entity_configs
-                    .iter()
-                    .filter(|(_, ec)| ec.has_simple_pipeline())
-                    .map(|(name, _)| name.clone()),
-            )
+            .entity_configs
+            .iter()
+            .filter(|(_, ec)| ec.has_simple_pipeline())
+            .map(|(name, _)| name.clone())
             .collect();
         names.sort();
         names.dedup();
@@ -7005,14 +6557,6 @@ impl Catalog {
             .collect();
         rels.sort();
         rels
-    }
-
-    pub fn get_kbs_for_entity(&self, entity_name: &str) -> Vec<&str> {
-        self.kb_metadata
-            .iter()
-            .filter(|(_, kb)| kb.entities.contains(entity_name))
-            .map(|(name, _)| name.as_str())
-            .collect()
     }
 
     // ── Search ─────────────────────────────────────────────────────────
@@ -7802,14 +7346,8 @@ impl Catalog {
         parts.join("|")
     }
 
-    /// Pre-warm the chunker cache for all KB and simple entity chunking configs.
+    /// Pre-warm the chunker cache for all entity chunking configs.
     fn warm_chunker_cache(&mut self) {
-        for kb in self.kb_metadata.values() {
-            let key = ChunkerConfig::from(&kb.chunking);
-            self.chunker_cache
-                .entry(key.clone())
-                .or_insert_with(|| Chunker::new(key));
-        }
         for ec in self.entity_configs.values() {
             let key = ChunkerConfig::from(&ec.chunking);
             self.chunker_cache
@@ -8478,15 +8016,15 @@ mod tests {
     }
 
     /// Records enqueued at create() time:
-    /// 1 EntityRecord(entity) + 1 EntityRecord({KB}_Index) + 1 RelationRecord(_IN_) + 1 AggregateRecord.
+    /// 1 EntityRecord(entity) + 1 Derivation (la base « main », dérivée).
     fn ops_enqueued_per_create(_body: &str) -> usize {
-        4
+        2
     }
 
     /// Total records processed after drain():
-    /// 2 inserts (entity + index) + 1 link (_IN_) + 1 aggregate.
+    /// 1 insert (entity) + 1 dérivation rendue.
     fn ops_per_create(_body: &str) -> usize {
-        4
+        2
     }
 
     // ── lifecycle ──────────────────────────────────────────────────────
@@ -8495,7 +8033,7 @@ mod tests {
     fn new_catalog() {
         let catalog = make_catalog();
         assert!(!catalog.initialized);
-        assert!(catalog.kb_metadata.is_empty());
+        assert!(catalog.entity_configs.is_empty());
     }
 
     #[test]
@@ -8503,8 +8041,10 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
         assert!(catalog.initialized);
-        assert_eq!(catalog.kb_metadata.len(), 1);
-        assert!(catalog.kb_metadata.contains_key("main"));
+        // La base « main » du schéma est une entité dérivée de Document.
+        let main = catalog.entity_configs.get("main").expect("la base traduite");
+        assert_eq!(main.derived.as_ref().map(|d| d.from.as_str()), Some("Document"));
+        assert!(catalog.entity_configs.get("Document").is_some_and(|c| !c.has_simple_pipeline()));
     }
 
     #[test]
@@ -8782,42 +8322,29 @@ mod tests {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
 
-        // delete() is sync — just enqueues
+        // delete() is sync — just enqueues : la racine, et la ligne de la
+        // dérivée « main » qui en dépend.
         catalog.delete("Document", "some-uuid").unwrap();
-        assert_eq!(catalog.pending.deletes.len(), 1);
-        assert_eq!(catalog.pending.deletes[0].uuid, "some-uuid");
-        assert_eq!(catalog.pending.deletes[0].entity_name, "Document");
+        assert_eq!(catalog.pending.deletes.len(), 2);
+        assert!(catalog.pending.deletes.iter().any(|d| d.entity_name == "Document" && d.uuid == "some-uuid"));
+        assert!(catalog.pending.deletes.iter().any(|d| d.entity_name == "main"));
     }
 
     // ── schema queries ─────────────────────────────────────────────────
 
     #[test]
-    fn get_kb_metadata_after_init() {
+    fn la_base_du_schema_est_une_derivee_apres_init() {
         let mut catalog = make_catalog();
         catalog.initialize().unwrap();
 
-        let kb = catalog.get_kb_metadata("main").unwrap();
-        assert_eq!(kb.name, "main");
-        assert_eq!(kb.title.entity, "Document");
-        assert_eq!(kb.title.field, "title");
-        assert_eq!(kb.content.len(), 1);
-        assert_eq!(kb.content[0].field, "body");
+        let kb = catalog.entity_configs.get("main").unwrap();
+        let d = kb.derived.as_ref().unwrap();
+        assert_eq!(d.from, "Document");
+        assert!(d.render["title"].starts_with("{{ root.title"), "{}", d.render["title"]);
+        assert!(d.render["content"].contains("root.body"), "{}", d.render["content"]);
         assert_eq!(kb.signals, search::SearchSignals::HYBRID);
-        assert_eq!(kb.keyword_weight, 0.3);
-
-        assert!(catalog.get_kb_metadata("nonexistent").is_none());
-    }
-
-    #[test]
-    fn get_kbs_for_entity_after_init() {
-        let mut catalog = make_catalog();
-        catalog.initialize().unwrap();
-
-        let kbs = catalog.get_kbs_for_entity("Document");
-        assert_eq!(kbs, vec!["main"]);
-
-        let kbs = catalog.get_kbs_for_entity("Ghost");
-        assert!(kbs.is_empty());
+        assert!(catalog.search_target_names().contains(&"main".to_string()));
+        assert!(catalog.entity_configs.get("nonexistent").is_none());
     }
 
     #[test]
@@ -8869,13 +8396,12 @@ mod tests {
         let data = make_doc_data("Partial", body);
         let entity_ref = catalog.create("Document", data).unwrap();
 
-        // La donnée : l'entité, sa ligne d'index KB, **et le lien entre les
-        // deux** — depuis le 6 septembre 2026, `Donnee` est exact.
+        // La donnée : l'entité. La dérivée « main » est du dérivé.
         let result = catalog.flush_insertions();
-        assert_eq!(result.processed, 3);
+        assert_eq!(result.processed, 1);
         assert!(entity_ref.is_ready());
 
-        // Reste l'agrégat : du dérivé.
+        // Reste la dérivation : du dérivé.
         assert!(catalog.has_pending());
 
         let result = catalog.drain();
@@ -9157,17 +8683,17 @@ mod tests {
         catalog.initialize().unwrap();
         catalog.create("Document", make_doc_data("Lié", "corps")).unwrap();
         let avant = catalog.pending_work();
-        assert_eq!(avant.entities.len(), 2, "l'entité et sa ligne d'index");
-        assert_eq!(avant.relations.len(), 1, "le lien entre les deux");
-        assert_eq!(avant.aggregates.len(), 1);
+        assert_eq!(avant.entities.len(), 1, "l'entité");
+        assert!(avant.relations.is_empty());
+        assert_eq!(avant.derivations.len(), 1, "et la dérivation de la base « main »");
 
         let res = catalog.flush_insertions();
-        assert_eq!(res.processed, 3, "deux entités et un lien : {res:?}");
+        assert_eq!(res.processed, 1, "une entité : {res:?}");
         assert_eq!(res.rendu_pret, Some(D::DONNEE));
         let apres = catalog.pending_work();
         assert!(apres.entities.is_empty());
-        assert!(apres.relations.is_empty(), "le lien est parti avec la donnée");
-        assert_eq!(apres.aggregates.len(), 1, "l'agrégat reste : c'est du dérivé");
+        assert!(apres.relations.is_empty());
+        assert_eq!(apres.derivations.len(), 1, "la dérivation reste : c'est du dérivé");
     }
 
     /// **Une relation vers une entité encore en file reste en file avec elle.**
@@ -9191,8 +8717,8 @@ mod tests {
         assert!(apres.entities.is_empty());
         assert_eq!(
             apres.relations.len(),
-            relations_avant - 1,
-            "le lien vers le fantôme reste, celui de la ligne d'index part : {:?}",
+            relations_avant,
+            "le lien vers le fantôme reste : {:?}",
             apres.relations.iter().map(|r| r.rel_name.as_str()).collect::<Vec<_>>()
         );
     }
@@ -9292,10 +8818,10 @@ mod tests {
         // Sans lien déclaré en file : chacun chez soi.
         assert_eq!(catalog.fermeture("Note", false), tables(&["Note"]));
         assert_eq!(catalog.fermeture("Document", false), tables(&["Document"]),
-            "le lien implicite vers main_Index ne tire pas un lecteur");
-        assert_eq!(catalog.fermeture("main", false), tables(&["main_Index", "Document"]),
-            "une base emporte ses sources");
-        assert_eq!(catalog.fermeture("Document", true), tables(&["Document", "main_Index"]),
+            "la dérivée ne tire pas un lecteur de sa racine");
+        assert_eq!(catalog.fermeture("main", false), tables(&["main", "Document"]),
+            "une dérivée emporte sa racine");
+        assert_eq!(catalog.fermeture("Document", true), tables(&["Document", "main"]),
             "l'écrivain solde ce qu'il a causé");
 
         // Un lien déclaré en file amène l'autre bout, dans les deux sens.
@@ -9304,8 +8830,8 @@ mod tests {
         assert_eq!(catalog.fermeture("Document", false), tables(&["Document", "Note"]));
         assert_eq!(
             catalog.fermeture("main", false),
-            tables(&["main_Index", "Document", "Note"]),
-            "transitif : la base → sa source → ce qui la cite"
+            tables(&["main", "Document", "Note"]),
+            "transitif : la dérivée → sa racine → ce qui la cite"
         );
     }
 
@@ -9320,7 +8846,7 @@ mod tests {
         catalog.initialize().unwrap();
         catalog.create("Document", make_doc_data("D", "corps")).unwrap();
         catalog.create("Note", note("N")).unwrap();
-        let en_file_pour_document = 4; // entité, ligne d'index, lien, agrégat
+        let en_file_pour_document = 2; // entité, dérivation de « main »
         assert_eq!(catalog.pending_work().total_count(), en_file_pour_document + 1);
 
         // Donnée pour Note : Note est posée, Document intact, rien de partiel.
@@ -9366,9 +8892,9 @@ mod tests {
         assert_eq!(reste, 0, "{w:?}");
         assert!(!partiel);
         let p = catalog.pending_work();
-        assert!(p.entities.iter().all(|e| e.entity_name == "main_Index"), "seule la ligne d'index attend");
-        assert_eq!(p.relations.len(), 1, "le lien implicite attend avec elle");
-        assert_eq!(p.aggregates.len(), 1);
+        assert!(p.entities.is_empty(), "la donnée de Document est posée");
+        assert!(p.relations.is_empty());
+        assert_eq!(p.derivations.len(), 1, "seule la dérivation de « main » attend");
 
         // Le lecteur de la base, lui, voit ce reste et le solde.
         let mut w = Vec::new();
@@ -9448,9 +8974,9 @@ mod tests {
         use crate::disponibilite::Disponibilites as D;
         let mut dette = BTreeMap::new();
         dette.insert("Document".to_string(), D::TOUT);
-        dette.insert("main_Index".to_string(), D::PLEIN_TEXTE | D::DENSE);
+        dette.insert("main".to_string(), D::PLEIN_TEXTE | D::DENSE);
         let texte = Catalog::texte_de_la_marque(&dette);
-        assert!(texte.contains("|Document:data,textsearch,sparse,dense|main_Index:textsearch,dense"), "{texte}");
+        assert!(texte.contains("|Document:data,textsearch,sparse,dense|main:textsearch,dense"), "{texte}");
         let (ts, lue) = Catalog::lire_une_marque(&texte).expect("lisible");
         assert!(ts > 0);
         assert_eq!(lue, Some(dette));
@@ -9494,7 +9020,7 @@ mod tests {
         catalog.create("Document", make_doc_data("D", "corps")).unwrap();
         assert!(catalog.marque_posee);
         assert_eq!(catalog.dette_publiee.get("Document"), Some(&D::TOUT));
-        assert_eq!(catalog.dette_publiee.get("main_Index"), Some(&D::TOUT));
+        assert_eq!(catalog.dette_publiee.get("main"), Some(&D::TOUT));
         assert!(!catalog.dette_publiee.contains_key("Note"));
 
         catalog.create("Note", note("N")).unwrap();
@@ -9506,15 +9032,11 @@ mod tests {
         assert_eq!(catalog.dette_publiee.get("Document"), Some(&D::TOUT));
         assert!(catalog.marque_posee);
 
-        // La donnée de la base posée : sa ligne d'index ne doit plus que le
-        // dérivé.
+        // La donnée de la racine posée : la dérivée doit encore tout, son
+        // rendu n'est pas fait.
         catalog.flush_insertions_de("main");
         assert!(!catalog.dette_publiee.contains_key("Document"), "{:?}", catalog.dette_publiee);
-        assert_eq!(
-            catalog.dette_publiee.get("main_Index"),
-            Some(&(D::PLEIN_TEXTE | D::SPARSE | D::DENSE)),
-            "{:?}", catalog.dette_publiee
-        );
+        assert_eq!(catalog.dette_publiee.get("main"), Some(&D::TOUT), "{:?}", catalog.dette_publiee);
 
         catalog.drain();
         assert!(!catalog.marque_posee);
@@ -9538,9 +9060,9 @@ mod tests {
         assert!(r.is_ready(), "le ref rendu est résolu");
         assert!(r.uuid().is_ok());
         let p = catalog.pending_work();
-        assert!(p.entities.is_empty(), "l'entité et sa ligne d'index sont posées");
-        assert!(p.relations.is_empty(), "et le lien entre elles");
-        assert_eq!(p.aggregates.len(), 1, "reste l'agrégat : du dérivé, et il se dit");
+        assert!(p.entities.is_empty(), "l'entité est posée");
+        assert!(p.relations.is_empty());
+        assert_eq!(p.derivations.len(), 1, "reste la dérivation : du dérivé, et il se dit");
         assert!(catalog.has_pending());
     }
 
@@ -9567,7 +9089,8 @@ mod tests {
         catalog.initialize().unwrap();
         let r = catalog.create("Document", make_doc_data("Lot", "corps")).unwrap();
         assert!(!r.is_ready());
-        assert_eq!(catalog.pending_work().entities.len(), 2);
+        assert_eq!(catalog.pending_work().entities.len(), 1);
+        assert_eq!(catalog.pending_work().derivations.len(), 1);
     }
 
     /// **Un verbe qui rend moins le dit, un verbe qui rend plus aussi.**
@@ -9587,10 +9110,10 @@ mod tests {
         let (r, res) = catalog.create_jusqu_a("Document", make_doc_data("B", "corps"), D::DONNEE).unwrap();
         assert!(r.is_ready());
         assert_eq!(res.rendu_pret, Some(D::DONNEE));
-        // B, sa ligne d'index, son lien — et A, sa ligne, son lien : la
-        // fermeture d'écrivain de `Document` emporte ce qui attendait dans
-        // les mêmes tables. C'est en lien.
-        assert_eq!(res.processed, 6, "{res:?}");
+        // B — et A, qui attendait dans la même table : la fermeture
+        // d'écrivain de `Document` emporte ce qui attendait. Les dérivations
+        // de « main » sont du dérivé, pas de la donnée.
+        assert_eq!(res.processed, 2, "{res:?}");
 
         let (_, res) = catalog.create_jusqu_a("Document", make_doc_data("C", "corps"), D::TOUT).unwrap();
         assert_eq!(res.rendu_pret, Some(D::TOUT));
@@ -9618,7 +9141,7 @@ mod tests {
         let p = catalog.pending_work();
         assert!(p.entities.is_empty());
         assert!(p.relations.is_empty());
-        assert_eq!(p.aggregates.len(), 1, "l'agrégat de Document reste : du dérivé");
+        assert_eq!(p.derivations.len(), 1, "la dérivation de Document reste : du dérivé");
     }
 
     /// **Une mise à jour se pose au niveau donnée sans redécouper** (C5) :
@@ -9711,19 +9234,12 @@ mod tests {
         let _ref = catalog.create("Document", make_doc_data("Hello", "World")).unwrap();
 
         let pw = catalog.pending_work();
-        // 1 Document entity + 1 main_Index entity
-        assert_eq!(pw.entities.len(), 2, "should have 2 entity records (Document + main_Index)");
+        assert_eq!(pw.entities.len(), 1, "l'entité Document");
         assert_eq!(pw.entities[0].entity_name, "Document");
-        assert_eq!(pw.entities[1].entity_name, "main_Index");
-
-        // 1 Document_IN_main relation
-        assert_eq!(pw.relations.len(), 1, "should have 1 relation record (Document_IN_main)");
-        assert_eq!(pw.relations[0].rel_name, "Document_IN_main");
-
-        // 1 AggregateRecord
-        assert_eq!(pw.aggregates.len(), 1, "should have 1 aggregate record");
-        assert_eq!(pw.aggregates[0].kb_name, "main");
-        assert_eq!(pw.aggregates[0].title_entity, "Document");
+        assert!(pw.relations.is_empty(), "plus de lien implicite vers une ligne d'index");
+        // Une dérivation : la base « main », dérivée de ce Document.
+        assert_eq!(pw.derivations.len(), 1);
+        assert_eq!(pw.derivations[0].entity, "main");
     }
 
     #[test]
@@ -9737,11 +9253,10 @@ mod tests {
         let _rel = catalog.link("REFERENCES", from_ref, to_ref, BTreeMap::new()).unwrap();
 
         let pw = catalog.pending_work();
-        // 2 creates × (1 Document + 1 main_Index) = 4 entities
-        assert_eq!(pw.entities.len(), 4);
-        // 2 creates × 1 Document_IN_main + 1 REFERENCES = 3 relations
-        assert_eq!(pw.relations.len(), 3);
-        assert_eq!(pw.relations[2].rel_name, "REFERENCES");
+        assert_eq!(pw.entities.len(), 2);
+        assert_eq!(pw.relations.len(), 1);
+        assert_eq!(pw.relations[0].rel_name, "REFERENCES");
+        assert_eq!(pw.derivations.len(), 2, "une dérivation de « main » par Document");
     }
 
     #[test]
@@ -9974,16 +9489,18 @@ mod tests {
 
         let t = catalog.resolve_search_target("main").unwrap();
         assert_eq!(t.name, "main");
-        assert_eq!(t.parent_table, "main_Index");
-        assert_eq!(t.chunk_table, "main_Index_Chunk");
-        assert_eq!(t.chunk_rel, "main_Index_HAS_CHUNK");
-        assert!(t.chunk_rel_fwd);
-        assert_eq!(t.bm25_fields, vec!["_title", "_content"]);
+        assert_eq!(t.parent_table, "main");
+        assert_eq!(t.chunk_table, "main_Chunk");
+        assert_eq!(t.chunk_rel, "main_CHUNKED_FROM");
+        assert!(!t.chunk_rel_fwd);
+        // Le plein texte porte sur le contenu et sur le titre rendu, comme
+        // l'ancienne ligne d'index (`_content` + `_title`).
+        assert_eq!(t.bm25_fields, vec!["content", "title"]);
+        assert!(t.enrich_fields.iter().any(|f| f == "title"));
         assert!(t.has_source_refs);
-        assert!(t.filter_indirection.is_some());
-        let (title_ent, in_rel) = t.filter_indirection.unwrap();
-        assert_eq!(title_ent, "Document");
-        assert_eq!(in_rel, "Document_IN_main");
+        let (racine, rel) = t.filter_indirection.expect("filtre par la racine");
+        assert_eq!(racine, "Document");
+        assert_eq!(rel, "main_DERIVED_FROM");
     }
 
     #[test]
@@ -10029,7 +9546,7 @@ mod tests {
         let pattern = t.parent_to_chunk_match("n", "c");
         assert_eq!(
             pattern,
-            "MATCH (n:main_Index)-[:main_Index_HAS_CHUNK]->(c:main_Index_Chunk)"
+            "MATCH (n:main)<-[:main_CHUNKED_FROM]-(c:main_Chunk)"
         );
     }
 
@@ -10059,7 +9576,7 @@ mod tests {
         let pattern = t.chunk_to_parent_match("p", "c");
         assert_eq!(
             pattern,
-            "MATCH (p:main_Index)-[:main_Index_HAS_CHUNK]->(c)"
+            "MATCH (c)-[:main_CHUNKED_FROM]->(p:main)"
         );
     }
 
@@ -10153,10 +9670,10 @@ impl Drop for Catalog {
             let p = &self.pending;
             eprintln!(
                 "[rag3weaver] drop: {} opérations en file perdues, jamais écrites \
-                 ({} entités, {} relations, {} agrégats, {} mises à jour, {} suppressions) \
+                 ({} entités, {} relations, {} dérivations, {} mises à jour, {} suppressions) \
                  — il manque un drain() avant la destruction du catalogue",
                 p.total_count(),
-                p.entities.len(), p.relations.len(), p.aggregates.len(),
+                p.entities.len(), p.relations.len(), p.derivations.len(),
                 p.updates.len(), p.deletes.len(),
             );
         }

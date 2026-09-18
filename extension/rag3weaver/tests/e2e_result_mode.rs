@@ -181,8 +181,8 @@ fn make_catalog() -> Catalog {
 }
 
 /// Setup: 1 Directory ("src") with 2 Files, both linked via HAS_FILE.
-/// TreeKB has 1 index entry (Directory = title entity), aggregating content from Dir + Files.
-/// FileKB has 2 index entries (one per File).
+/// TreeKB est une dérivée de Directory : 1 ligne (une par racine), dont le
+/// `content` rend Dir + Files. FileKB est une dérivée de File : 2 lignes.
 fn setup_catalog() -> Catalog {
     let mut catalog = make_catalog();
     catalog.initialize().unwrap();
@@ -288,25 +288,34 @@ fn result_mode_aggregated_default() {
     assert!(!response.results.is_empty(), "Should find 'auth' in TreeKB");
 
     let top = &response.results[0];
-    // Aggregated: entity should be TreeKB_Index
+    // Aggregated : l'entité est la dérivée elle-même, TreeKB
     assert_eq!(
         top.entity.as_deref(),
-        Some("TreeKB_Index"),
-        "Aggregated result entity should be TreeKB_Index"
+        Some("TreeKB"),
+        "Aggregated result entity should be TreeKB"
     );
-    // Should have data with _title
+    // Should have data with title (le champ rendu) and the root refs
     let data = top.data.as_ref().expect("should have data");
     assert!(
-        data.contains_key("_title"),
-        "Aggregated data should contain _title"
+        data.contains_key("title"),
+        "Aggregated data should contain title"
+    );
+    assert_eq!(
+        data.get("_source_entity").and_then(|v| v.as_str()),
+        Some("Directory"),
+        "Aggregated data should carry the root entity in _source_entity"
+    );
+    assert!(
+        data.get("_source_uuid").and_then(|v| v.as_str()).is_some_and(|u| !u.is_empty()),
+        "Aggregated data should carry the root uuid in _source_uuid"
     );
     // Should have best chunk (or title-only match is acceptable)
     if top.chunk.is_none() {
         eprintln!("  NOTE: BM25 hit has no chunk — likely title-only match. Checking diagnostics...");
         if let Some(ref diag) = response.meta.diagnostics {
             if let Some(hit) = diag.bm25_hits.first() {
-                let has_content_hl = hit.highlights_parsed.contains_key("_content");
-                let has_title_hl = hit.highlights_parsed.contains_key("_title");
+                let has_content_hl = hit.highlights_parsed.contains_key("content");
+                let has_title_hl = hit.highlights_parsed.contains_key("title");
                 eprintln!("    has_content_hl={has_content_hl}, has_title_hl={has_title_hl}");
                 if !has_content_hl && has_title_hl {
                     eprintln!("    -> Title-only match confirmed. chunk=None is expected behavior.");
@@ -357,7 +366,7 @@ fn result_mode_aggregated_explicit() {
 
     assert!(!response.results.is_empty());
     let top = &response.results[0];
-    assert_eq!(top.entity.as_deref(), Some("TreeKB_Index"));
+    assert_eq!(top.entity.as_deref(), Some("TreeKB"));
     // chunk may be None for title-only BM25 matches — that's acceptable
     assert!(top.chunks.is_none());
 }
@@ -397,43 +406,32 @@ fn result_mode_source_resolved() {
             r.entity, r.uuid, r.score
         );
 
-        // Entity should be a source entity (Directory or File), NOT TreeKB_Index
+        // L'entité est la racine de la dérivée (Directory), pas TreeKB —
+        // une ligne dérivée n'a qu'une source : sa racine, jamais un File.
         let entity = r.entity.as_deref().expect("should have entity");
-        assert!(
-            entity == "Directory" || entity == "File",
-            "SourceResolved entity should be Directory or File, got '{entity}'"
+        assert_eq!(
+            entity, "Directory",
+            "SourceResolved entity should be the root Directory, got '{entity}'"
         );
 
-        // Data should contain the source entity's fields, NOT _title/_content
+        // Data should contain the root's fields, NOT the rendered title/content
         let data = r.data.as_ref().expect("should have data");
         assert!(
-            !data.contains_key("_title"),
-            "SourceResolved data should NOT contain _title (index field)"
+            !data.contains_key("title"),
+            "SourceResolved data should NOT contain title (rendered field)"
         );
-
-        if entity == "Directory" {
-            assert!(
-                data.contains_key("name"),
-                "Directory data should contain 'name'"
-            );
-            assert!(
-                data.contains_key("absolute_path"),
-                "Directory data should contain 'absolute_path'"
-            );
-            assert!(
-                data.contains_key("depth"),
-                "Directory data should contain 'depth'"
-            );
-        } else {
-            assert!(
-                data.contains_key("name"),
-                "File data should contain 'name'"
-            );
-            assert!(
-                data.contains_key("body"),
-                "File data should contain 'body'"
-            );
-        }
+        assert!(
+            data.contains_key("name"),
+            "Directory data should contain 'name'"
+        );
+        assert!(
+            data.contains_key("absolute_path"),
+            "Directory data should contain 'absolute_path'"
+        );
+        assert!(
+            data.contains_key("depth"),
+            "Directory data should contain 'depth'"
+        );
 
         // chunks should be None in SourceResolved
         assert!(
@@ -537,8 +535,8 @@ fn result_mode_detailed_chunks() {
     for (i, r) in response.results.iter().enumerate() {
         assert_eq!(
             r.entity.as_deref(),
-            Some("TreeKB_Index"),
-            "Detailed result entity should be TreeKB_Index"
+            Some("TreeKB"),
+            "Detailed result entity should be TreeKB"
         );
 
         // chunks should be populated (may be empty for title-only matches)
@@ -552,8 +550,8 @@ fn result_mode_detailed_chunks() {
             // Check diagnostics to confirm title-only match
             if let Some(ref diag) = response.meta.diagnostics {
                 if let Some(hit) = diag.bm25_hits.get(i) {
-                    let has_content = hit.highlights_parsed.contains_key("_content");
-                    let has_title = hit.highlights_parsed.contains_key("_title");
+                    let has_content = hit.highlights_parsed.contains_key("content");
+                    let has_title = hit.highlights_parsed.contains_key("title");
                     eprintln!("    has_content={has_content}, has_title={has_title}");
                 }
             }
@@ -575,13 +573,15 @@ fn result_mode_detailed_chunks() {
                 chunk.score,
             );
 
-            assert!(
-                chunk.source_entity == "Directory" || chunk.source_entity == "File",
-                "chunk source_entity should be Directory or File, got '{}'",
+            // Les chunks d'une dérivée portent sa racine : toujours Directory.
+            assert_eq!(
+                chunk.source_entity, "Directory",
+                "chunk source_entity should be the root Directory, got '{}'",
                 chunk.source_entity
             );
             assert!(!chunk.source_uuid.is_empty(), "chunk source_uuid should not be empty");
-            assert!(!chunk.source_field.is_empty(), "chunk source_field should not be empty");
+            // Plus d'assertion sur source_field : le contenu rendu est un seul texte,
+            // ses chunks ne sont plus attribués à un champ d'une contributrice.
             assert!(!chunk.text.is_empty(), "chunk text should not be empty");
             assert!(chunk.end_char > chunk.start_char, "end_char > start_char");
         }
@@ -599,13 +599,8 @@ fn result_mode_detailed_chunks() {
 fn result_mode_detailed_chunk_source_uuid_valid() {
     let mut catalog = setup_catalog();
 
-    // Get all entity UUIDs
+    // Get the root UUIDs (Directory : la racine de TreeKB)
     let dir_uuids: Vec<String> = query_rows(&catalog, "MATCH (d:Directory) RETURN d._uuid")
-        
-        .iter()
-        .filter_map(|r| r[0].as_str().map(|s| s.to_string()))
-        .collect();
-    let file_uuids: Vec<String> = query_rows(&catalog, "MATCH (f:File) RETURN f._uuid")
         
         .iter()
         .filter_map(|r| r[0].as_str().map(|s| s.to_string()))
@@ -629,9 +624,9 @@ fn result_mode_detailed_chunk_source_uuid_valid() {
     for r in &response.results {
         if let Some(ref chunks) = r.chunks {
             for chunk in chunks {
+                // Un chunk de TreeKB ne renvoie qu'à sa racine, jamais à un File.
                 let valid = match chunk.source_entity.as_str() {
                     "Directory" => dir_uuids.contains(&chunk.source_uuid),
-                    "File" => file_uuids.contains(&chunk.source_uuid),
                     other => panic!("unexpected source_entity: {other}"),
                 };
                 assert!(
@@ -670,7 +665,7 @@ fn result_mode_detailed_filekb() {
     assert!(!response.results.is_empty());
 
     for r in &response.results {
-        assert_eq!(r.entity.as_deref(), Some("FileKB_Index"));
+        assert_eq!(r.entity.as_deref(), Some("FileKB"));
         let chunks = r.chunks.as_ref().expect("should have chunks");
         assert!(!chunks.is_empty());
 
@@ -723,8 +718,8 @@ fn result_mode_source_resolved_filekb() {
         assert!(data.contains_key("name"), "File data should have 'name'");
         assert!(data.contains_key("body"), "File data should have 'body'");
         assert!(
-            !data.contains_key("_title"),
-            "SourceResolved should NOT have _title"
+            !data.contains_key("title"),
+            "SourceResolved should NOT have title (rendered field)"
         );
     }
 }
@@ -738,11 +733,17 @@ fn result_mode_source_resolved_filekb() {
 fn result_mode_chunk_columns_persisted() {
     let catalog = setup_catalog();
 
-    // Verify _source_entity and _source_uuid are stored on chunks
+    // Verify _source_entity and _source_uuid are stored on chunks.
+    // Plus de `_source_field` : les chunks d'une dérivée découpent un seul
+    // texte rendu, ils ne renvoient qu'à la racine.
+    let dir_uuid = query_rows(&catalog, "MATCH (d:Directory {name: 'src'}) RETURN d._uuid")[0][0]
+        .as_str()
+        .unwrap()
+        .to_string();
     let chunk_rows = query_rows(
         &catalog,
-        "MATCH (c:TreeKB_Index_Chunk) \
-         RETURN c._source_entity, c._source_uuid, c._source_field \
+        "MATCH (c:TreeKB_Chunk) \
+         RETURN c._source_entity, c._source_uuid \
          ORDER BY c._source_entity",
     )
     ;
@@ -752,31 +753,26 @@ fn result_mode_chunk_columns_persisted() {
     for row in &chunk_rows {
         let source_entity = row[0].as_str().unwrap_or("");
         let source_uuid = row[1].as_str().unwrap_or("");
-        let source_field = row[2].as_str().unwrap_or("");
 
         eprintln!(
-            "  chunk: entity={source_entity}, uuid={}, field={source_field}",
+            "  chunk: entity={source_entity}, uuid={}",
             &source_uuid[..8.min(source_uuid.len())]
         );
 
-        assert!(
-            source_entity == "Directory" || source_entity == "File",
-            "_source_entity should be Directory or File, got '{source_entity}'"
+        assert_eq!(
+            source_entity, "Directory",
+            "_source_entity should be the root Directory, got '{source_entity}'"
         );
-        assert!(
-            !source_uuid.is_empty(),
-            "_source_uuid should not be empty"
-        );
-        assert!(
-            !source_field.is_empty(),
-            "_source_field should not be empty"
+        assert_eq!(
+            source_uuid, dir_uuid,
+            "_source_uuid should be the root Directory's uuid"
         );
     }
 
     // Also check FileKB chunks
     let filekb_chunks = query_rows(
         &catalog,
-        "MATCH (c:FileKB_Index_Chunk) \
+        "MATCH (c:FileKB_Chunk) \
          RETURN c._source_entity, c._source_uuid",
     )
     ;
@@ -799,7 +795,7 @@ fn result_mode_chunk_columns_persisted() {
 fn result_mode_aggregated_data_enrichment() {
     let mut catalog = setup_catalog();
 
-    // Aggregated mode: data should contain index fields (_title, _source_entity, _source_uuid, etc.)
+    // Aggregated mode: data should contain the derived row's fields (title, _source_entity, _source_uuid, etc.)
     let response = catalog
         .search(
             "TreeKB",
@@ -835,8 +831,8 @@ fn result_mode_aggregated_data_enrichment() {
     let top = &response.results[0];
     let data = top.data.as_ref().expect("should have data");
 
-    // Index fields should be present
-    assert!(data.contains_key("_title"), "data should have _title");
+    // Rendered fields should be present
+    assert!(data.contains_key("title"), "data should have title");
 
     // Best chunk — may be None for title-only matches
     if let Some(ref chunk) = top.chunk {

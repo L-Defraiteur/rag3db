@@ -131,26 +131,13 @@ pub struct VectorStorage {
 }
 
 impl VectorStorage {
-    /// Résout les noms pour `table` — `{Entity}_Chunk`, ou une table de base
-    /// de connaissances (`{KB}_Index`, `{KB}_Index_Chunk`).
-    ///
-    /// **Une table de base de connaissances garde ses noms d'avant, quel que
-    /// soit le modèle.** Sa chaîne (`KBEmbedNode`, les DDL `_Index*`) n'a pas
-    /// appris les modèles multiples — elle meurt avec le repli des KB en
-    /// entités dérivées (chantier du 7 septembre 2026) — et elle écrit
-    /// `{kb}_embedding` / `_embed_hash` / `{table}_vec`. Résoudre autre chose
-    /// pour elle, c'est chercher dans un index qui n'existe pas
-    /// (trouvé par `e2e_phase0b` le 8 septembre).
+    /// Résout les noms pour `table` (`{Entity}_Chunk`). Les tables `_Index*`
+    /// des anciennes bases de connaissances, qui forçaient le stockage
+    /// d'avant, n'existent plus depuis le repli des KB en entités dérivées.
     pub fn resolve(table: &str, entry: &EmbeddingModelEntry) -> Self {
-        let kb = table.strip_suffix("_Index_Chunk").or_else(|| table.strip_suffix("_Index"));
-        let base_column = match kb {
-            Some(kb) => format!("{kb}_embedding"),
-            None => "embedding".to_string(),
-        };
-        let storage = if kb.is_some() { StorageKind::Legacy } else { entry.storage };
-        match storage {
+        match entry.storage {
             StorageKind::Legacy => Self {
-                column: base_column,
+                column: "embedding".to_string(),
                 marker: "_embed_hash".into(),
                 index: format!("{table}_vec"),
                 dim: entry.dim,
@@ -158,7 +145,7 @@ impl VectorStorage {
             StorageKind::Suffixed => {
                 let slug = entry.slug();
                 Self {
-                    column: format!("{base_column}{SEPARATOR}{slug}"),
+                    column: format!("embedding{SEPARATOR}{slug}"),
                     marker: format!("_embed_hash{SEPARATOR}{slug}"),
                     index: format!("{table}_vec{SEPARATOR}{slug}"),
                     dim: entry.dim,
@@ -225,16 +212,6 @@ mod tests {
     /// **elles le gardent quel que soit le modèle** : leur chaîne n'écrit rien
     /// d'autre, et résoudre un nom suffixé pour elles cherchait un index
     /// inexistant.
-    #[test]
-    fn une_table_de_kb_garde_ses_noms_d_avant_quel_que_soit_le_modele() {
-        let legacy = EmbeddingModelEntry { name: "bge-m3".into(), dim: 1024, storage: StorageKind::Legacy };
-        assert_eq!(VectorStorage::resolve("docs_Index_Chunk", &legacy).column, "docs_embedding");
-        assert_eq!(VectorStorage::resolve("docs_Index", &legacy).column, "docs_embedding");
-        let suffixed = EmbeddingModelEntry { name: "granite-278m".into(), dim: 768, storage: StorageKind::Suffixed };
-        let s = VectorStorage::resolve("docs_Index_Chunk", &suffixed);
-        assert_eq!((s.column.as_str(), s.marker.as_str(), s.index.as_str()), ("docs_embedding", "_embed_hash", "docs_Index_Chunk_vec"));
-    }
-
     #[test]
     fn la_signature_d_avant_devient_une_entree_legacy() {
         let e = EmbeddingModelEntry::from_legacy_signature("bge-m3:1024").expect("signature lisible");

@@ -370,6 +370,18 @@ pub trait SchemaDialect: Send + Sync {
     /// Count rows in a table.
     fn count_rows(&self, table: &str) -> String;
 
+    /// Tous les uuids d'une table — pour re-rendre une entité dérivée entière.
+    fn select_all_uuids(&self, table: &str) -> String {
+        format!("MATCH (n:{table}) RETURN n._uuid")
+    }
+
+    /// Supprime une table (nœud ou relation) — pour une migration qui retire
+    /// ce qu'un schéma d'avant avait posé. Une table absente fait échouer
+    /// l'instruction sur le moteur Cypher : l'appelant ignore cette erreur.
+    fn drop_table(&self, table: &str) -> String {
+        format!("DROP TABLE {table}")
+    }
+
     /// **Charger des lignes en masse depuis un CSV** (sans en-tête, une
     /// cellule par colonne de `columns`, dans cet ordre), quand le moteur
     /// sait le faire. `None` : pas de chemin de masse, l'appelant reste sur
@@ -415,7 +427,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// **Les chunks qui doivent encore un embarquement**, bornés.
     ///
-    /// Rend `_uuid, _text, _text_hash, _kb_name` — de quoi reconstruire le
+    /// Rend `_uuid, _text, _text_hash` — de quoi reconstruire le
     /// travail d'embarquement sans rien avoir gardé en mémoire. C'est la
     /// contrepartie de [`Self::count_marqueur_manquant`] : l'un dit combien,
     /// l'autre dit lesquels.
@@ -423,18 +435,7 @@ pub trait SchemaDialect: Send + Sync {
     /// La borne n'est pas une commodité : une passe de rattrapage doit pouvoir
     /// avancer par morceaux sur une base qui en doit des millions, sans tenir
     /// le tout en mémoire ni monopoliser la carte.
-    ///
-    /// `avec_kb_name` : les chunks d'une base de connaissances portent
-    /// `_kb_name`, ceux d'une entité simple **non** — leur table est
-    /// délibérément plus étroite. Demander une colonne absente ne rend pas une
-    /// ligne vide, ça fait échouer la requête.
-    fn select_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String;
+    fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String;
 
     /// Copie une colonne dans une autre, sur toute la table. Sert à une
     /// migration qui pose un marqueur là où l'invariant tenait déjà.
@@ -453,16 +454,10 @@ pub trait SchemaDialect: Send + Sync {
     /// horodatage zéro-rembourré suivi de `|`), ou **la nôtre** (`ENDS WITH
     /// $mien`, soit `|écrivain`) — reprendre sa propre réclamation est
     /// légitime, une passe interrompue ne doit pas s'attendre elle-même. Pose
-    /// `$reclamation` dessus, et rend `_uuid, _text, _text_hash[, _kb_name]`.
+    /// `$reclamation` dessus, et rend `_uuid, _text, _text_hash`.
     ///
     /// Paramètres : `$reclamation`, `$perime`, `$mien`.
-    fn reclamer_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String;
+    fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String;
 
     // ── Search resolution ────────────────────────────────────────────
 
@@ -470,7 +465,7 @@ pub trait SchemaDialect: Send + Sync {
     /// Used by resolve_vector_chunks for chunk→parent join with optional source_refs.
     ///
     /// Returns columns: chunk_uuid, parent_uuid, c_text, c_idx, c_sline, c_eline, c_start, c_end,
-    /// [c_source_entity, c_source_uuid, c_source_field if has_source_refs],
+    /// [c_source_entity, c_source_uuid, c_source_field (= _parent_field) if has_source_refs],
     /// [parent_field1, parent_field2, ...]
     fn resolve_chunks_with_parent(
         &self,
@@ -1069,17 +1064,10 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn select_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String {
-        let kb = if avec_kb_name { ", n._kb_name" } else { "" };
+    fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' \
-             RETURN n._uuid, n._text, n._text_hash{kb} LIMIT {limite}"
+             RETURN n._uuid, n._text, n._text_hash LIMIT {limite}"
         )
     }
 
@@ -1096,14 +1084,7 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn reclamer_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String {
-        let kb = if avec_kb_name { ", n._kb_name" } else { "" };
+    fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         format!(
             "MATCH (n:{table}) \
              WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '') \
@@ -1111,7 +1092,7 @@ impl SchemaDialect for Rag3dbDialect {
                     OR n._embed_claim < $perime OR n._embed_claim ENDS WITH $mien) \
              WITH n LIMIT {limite} \
              SET n._embed_claim = $reclamation \
-             RETURN n._uuid, n._text, n._text_hash{kb}"
+             RETURN n._uuid, n._text, n._text_hash"
         )
     }
 
@@ -1137,7 +1118,9 @@ impl SchemaDialect for Rag3dbDialect {
         if has_source_refs {
             return_cols.push("c._source_entity AS c_source_entity".to_string());
             return_cols.push("c._source_uuid AS c_source_uuid".to_string());
-            return_cols.push("c._source_field AS c_source_field".to_string());
+            // Le champ d'origine d'un chunk est son `_parent_field` : les chunks
+            // d'une dérivée ne sont plus attribués par contributrice.
+            return_cols.push("c._parent_field AS c_source_field".to_string());
         }
         for f in parent_fields {
             return_cols.push(format!("p.{f} AS {f}"));
@@ -1635,6 +1618,14 @@ impl SchemaDialect for PostgresDialect {
         format!("SELECT _uuid, _row_id FROM {table} WHERE _uuid = ANY($uuids)")
     }
 
+    fn select_all_uuids(&self, table: &str) -> String {
+        format!("SELECT _uuid FROM {table}")
+    }
+
+    fn drop_table(&self, table: &str) -> String {
+        format!("DROP TABLE IF EXISTS {table} CASCADE")
+    }
+
     fn batch_update_returning(
         &self,
         table: &str,
@@ -1775,16 +1766,9 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
-    fn select_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String {
-        let kb = if avec_kb_name { ", _kb_name" } else { "" };
+    fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         format!(
-            "SELECT _uuid, _text, _text_hash{kb} FROM {table} \
+            "SELECT _uuid, _text, _text_hash FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = '' LIMIT {limite}"
         )
     }
@@ -1802,14 +1786,7 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
-    fn reclamer_chunks_sans_marqueur(
-        &self,
-        table: &str,
-        marqueur: &str,
-        limite: usize,
-        avec_kb_name: bool,
-    ) -> String {
-        let kb = if avec_kb_name { ", _kb_name" } else { "" };
+    fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         format!(
             "UPDATE {table} SET _embed_claim = $reclamation \
              WHERE _uuid IN (SELECT _uuid FROM {table} \
@@ -1817,7 +1794,7 @@ impl SchemaDialect for PostgresDialect {
                   AND (_embed_claim IS NULL OR _embed_claim = '' \
                        OR _embed_claim < $perime OR _embed_claim LIKE '%' || $mien) \
                 LIMIT {limite}) \
-             RETURNING _uuid, _text, _text_hash{kb}"
+             RETURNING _uuid, _text, _text_hash"
         )
     }
 
@@ -1843,7 +1820,7 @@ impl SchemaDialect for PostgresDialect {
         if has_source_refs {
             select_cols.push(format!("{chunk_table}._source_entity AS c_source_entity"));
             select_cols.push(format!("{chunk_table}._source_uuid AS c_source_uuid"));
-            select_cols.push(format!("{chunk_table}._source_field AS c_source_field"));
+            select_cols.push(format!("{chunk_table}._parent_field AS c_source_field"));
         }
         for f in parent_fields {
             select_cols.push(format!("{parent_table}.{f}"));

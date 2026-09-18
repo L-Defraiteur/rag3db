@@ -133,10 +133,8 @@ pub enum PortType {
     // ── Ingestion ports ───────────────────────────────────────────────
     Entities,
     Relations,
-    Aggregates,
     /// `Vec<Derivation>` — des lignes dérivées à rendre.
     Derivations,
-    KBContent,
     Updates,
     Deletes,
     // ── Ports média / OCR ─────────────────────────────────────────────

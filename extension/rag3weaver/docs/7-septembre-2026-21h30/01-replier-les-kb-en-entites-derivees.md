@@ -266,3 +266,58 @@ ont des KB. Les tests à réécrire pour les noms de tables : `e2e_phase0b`
 (`RAG3DB_ROOT` sans surcharge) — corrigé ; et l'index plein texte d'une
 entité qui naît dans le graphe doit être ouvert avant le graphe, ce que la
 branche `derive` fait maintenant.
+
+## État au 18 septembre, soir : le pas A est fini
+
+**Une base de connaissances est une entité dérivée, et rien d'autre.**
+`src/derived_kb.rs` traduit `knowledge_bases` + `title_for` / `content_for`
+en `EntityConfig { derived }` : la racine est l'entité qui porte `title_for`,
+chaque contributrice une règle `gather` par la relation qui la lie à la
+racine, et deux champs rendus — `title` (`{{ root.<champ>[:title_max_chars] }}`)
+et `content` (les champs de contenu, entités par nom puis champs triés,
+chaque valeur suivie d'un saut de ligne). Les réglages (`signals`, découpe,
+fusion) suivent. La traduction se fait à `initialize` (`traduire_les_kb`),
+à `register_kb`, à `register_entity` (l'entité qui apporte `title_for` ou
+`content_for`) et à `register_relation` (la relation qui lie une
+contributrice à la racine) ; une dérivée qui change re-rend toutes ses
+racines (`rederiver_tout`). Les entités du schéma sans config reçoivent une
+config « données seules » (`entity_config_from_def`), ce que les dérivées
+rassemblent.
+
+**Retiré** : `KBMetadata`, `kb_metadata`, `AggregateRecord`,
+`KBContentRecord`, `PendingWork.aggregates`, les cinq nœuds KB
+(`KBGatherNode`, `KBUpdateNode`, `KBChunkNode`, `KBEmbedNode`,
+`KBChunkRecordNode`), `PortType::{Aggregates, KBContent}`, les DDL `_Index`,
+`_Index_Chunk`, `_Index_HAS_CHUNK`, `_IN_`, `_SOURCED_`, les gabarits
+`ingestion.mmd` et `kb_pipeline.mmd`, la branche « stockage legacy forcé »
+des tables `_Index` dans `VectorStorage::resolve`, le paramètre
+`avec_kb_name` des requêtes de rattrapage, le second drain KB
+d'`ingest_entities`, les gardes `has_kb_participation` du chemin de masse et
+de `split_unchanged`. `record_nodes.rs` perd deux mille lignes.
+
+**Ce qui change, et qui est voulu** :
+- une base a **une** racine ; un second `title_for` vers la même base est
+  ignoré (avant : une ligne d'index par entité titre) ;
+- les chunks d'une dérivée ne sont plus attribués par contributrice (plus de
+  `_SOURCED_`, plus de `_source_field`) : `_source_entity` / `_source_uuid`
+  sont ceux de la racine, et le champ d'origine d'un chunk est son
+  `_parent_field` ;
+- le plein texte d'une dérivée porte sur `content` **et** `title`, comme
+  l'ancienne ligne d'index ; celui d'une entité simple reste sur ses champs
+  de contenu ;
+- l'undo d'une suppression ne restaure pas les lignes dérivées : elles se
+  re-rendent depuis la racine à sa prochaine écriture ;
+- `create` d'une racine met en file 1 entité + 1 dérivation (avant : 4
+  opérations) ; `delete` d'une racine supprime aussi sa ligne dérivée.
+
+**Migration v7** (`migrer_les_kb_v7`) : une base ouverte au schéma 6 ou avant
+voit ses tables `_Index*`, `_IN_`, `_SOURCED_` supprimées et chaque base
+traduite re-rendue depuis ses racines au drain suivant.
+
+**Vert** : 1045 unitaires ; e2e search 39, phase0b 14, result_mode 10,
+highlight_long_text 8, idempotent_registration 22, batch_observe 2, undo 4,
+entites_derivees 2, chemin_de_masse 4, simple_entity 20.
+
+**Reste** : le pas B (`rendre_le_retard` par `_render_hash`), le pas C
+(`FuseResultsNode` pesé par entité, catalogue de gabarits), et
+`e2e_postgres` non rejoué ici (pas de serveur).

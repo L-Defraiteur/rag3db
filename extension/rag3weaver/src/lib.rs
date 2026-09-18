@@ -144,6 +144,7 @@ pub mod fts_handle;
 pub mod disponibilite;
 pub mod hash;
 pub mod node_id_cache;
+pub mod derived_kb;
 pub mod ocr;
 pub mod origin;
 pub mod records;
@@ -216,13 +217,13 @@ pub use events::{topic, CatalogEvent, Event, EventBus};
 pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterValue, ParsedFilter};
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
-pub use records::{EntityRecord, RelationRecord, AggregateRecord, UpdateRecord, DeleteRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
+pub use records::{EntityRecord, RelationRecord, UpdateRecord, DeleteRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
 pub use query::{PreparedQuery, QueryBuilder};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;
 pub use uuid::{chunk_uuid, hashsafe_uuid};
-pub use catalog::{Catalog, CatalogError, KBMetadata, ReindexStats};
+pub use catalog::{Catalog, CatalogError, ReindexStats};
 pub use records::{DeleteResult, UpdateResult, UpdateStatus};
 pub use search::{
     AttributedChunk, BM25HitDiagnostic, BM25Mode, BoostType, ChunkInfo, ChunkOverlapDiag,

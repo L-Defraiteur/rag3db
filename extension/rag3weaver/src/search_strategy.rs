@@ -165,19 +165,19 @@ pub struct SearchStrategyResponse {
 /// regardless of whether `ResultMode` was Aggregated or SourceResolved.
 ///
 /// - **SourceResolved**: `entity` is the source type, `uuid` is the source UUID.
-/// - **Aggregated**: `entity` is `"{KB}_Index"`, source info is in `data._source_entity/_source_uuid`.
+/// - **Aggregated** (entité dérivée) : la source est dans
+///   `data._source_entity/_source_uuid`, qui gagnent quand ils sont là.
 pub fn source_info(result: &UnifiedResult) -> Option<(String, String)> {
-    // SourceResolved path: entity is already the source type
-    if let Some(ref entity) = result.entity {
-        if !entity.ends_with("_Index") {
-            return Some((entity.clone(), result.uuid.clone()));
+    if let Some(data) = result.data.as_ref() {
+        if let (Some(entity), Some(uuid)) = (
+            data.get("_source_entity").and_then(|v| v.as_str()),
+            data.get("_source_uuid").and_then(|v| v.as_str()),
+        ) {
+            return Some((entity.to_string(), uuid.to_string()));
         }
     }
-    // Aggregated path: read from data
-    let data = result.data.as_ref()?;
-    let entity = data.get("_source_entity")?.as_str()?.to_string();
-    let uuid = data.get("_source_uuid")?.as_str()?.to_string();
-    Some((entity, uuid))
+    let entity = result.entity.as_ref()?;
+    Some((entity.clone(), result.uuid.clone()))
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -275,13 +275,14 @@ mod tests {
         assert_eq!(uuid, "dir-uuid-123");
     }
 
+    /// Sans donnée, l'entité du résultat est la source.
     #[test]
     fn source_info_no_data() {
         let ur = UnifiedResult {
             signal: None,
             uuid: "x".into(),
             score: 0.0,
-            entity: Some("SomeKB_Index".into()),
+            entity: Some("SomeKB".into()),
             data: None,
             chunk: None,
             chunks: None,
@@ -290,7 +291,7 @@ mod tests {
             other_children: None,
             graph: None,
         };
-        assert!(source_info(&ur).is_none());
+        assert_eq!(source_info(&ur), Some(("SomeKB".to_string(), "x".to_string())));
     }
 
     #[test]

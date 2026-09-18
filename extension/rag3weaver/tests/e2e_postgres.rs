@@ -1619,11 +1619,11 @@ fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
 
     let uuid_de = |d: &BTreeMap<String, CypherValue>| d["_uuid"].as_str().unwrap().to_string();
 
-    let pris_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 1, false).expect("A réclame");
+    let pris_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 1).expect("A réclame");
     assert_eq!(pris_a.len(), 1, "A prend exactement un chunk");
     let celui_de_a = uuid_de(&pris_a[0]);
 
-    let pris_b = b.reclamer_le_retard("Product_Chunk", "_embed_hash", 10, false).expect("B réclame");
+    let pris_b = b.reclamer_le_retard("Product_Chunk", "_embed_hash", 10).expect("B réclame");
     eprintln!("[réclamation] A a pris 1, B a pris {}", pris_b.len());
     assert!(!pris_b.is_empty(), "il reste de la dette libre pour B");
     assert!(
@@ -1632,7 +1632,7 @@ fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
     );
 
     // A reprend les siens, et seulement les siens.
-    let encore_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 10, false).expect("A reprend");
+    let encore_a = a.reclamer_le_retard("Product_Chunk", "_embed_hash", 10).expect("A reprend");
     assert_eq!(encore_a.len(), 1);
     assert_eq!(uuid_de(&encore_a[0]), celui_de_a, "une passe reprend sa propre réclamation");
 

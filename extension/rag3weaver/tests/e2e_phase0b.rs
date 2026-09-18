@@ -1,8 +1,13 @@
-//! E2E integration tests: Phase 0b — cross-entity KB, AggregateBatchNode,
-//! highlight→chunk resolution, _content_offset, SOURCED rels, title truncation,
-//! delete/update contentFor-only propagation.
+//! E2E integration tests: Phase 0b — KB multi-entité rendue en entité dérivée
+//! (une ligne par racine, chunks portant la racine), résolution
+//! surlignage→chunk, _content_offset, titre, propagation delete/update d'une
+//! entité contributrice (contentFor seulement).
 //!
 //! Config: TreeKB (multi-entity, BM25 only) + FileKB (single-entity, BM25+vector).
+//! Les deux KB sont traduites en entités dérivées : `TreeKB` depuis Directory
+//! (rassemble File par HAS_FILE), `FileKB` depuis File. Tables `{KB}` et
+//! `{KB}_Chunk`, relations `{KB}_DERIVED_FROM` (dérivée → racine) et
+//! `{KB}_CHUNKED_FROM` (chunk → dérivée).
 //!
 //! Run with: ./run_e2e.sh --test e2e_phase0b
 
@@ -227,16 +232,18 @@ fn phase0b_ingest_and_schema() {
     assert!(catalog.get_entity_def("File").is_some());
     assert!(catalog.get_relation_def("HAS_FILE").is_some());
 
-    // KB metadata
-    let tree_kb = catalog.get_kb_metadata("TreeKB").expect("TreeKB metadata");
-    assert_eq!(tree_kb.title.entity, "Directory");
-    assert_eq!(tree_kb.title.field, "name");
-    assert!(tree_kb.entities.contains("Directory"));
-    assert!(tree_kb.entities.contains("File"));
+    // Les bases sont des entités dérivées : TreeKB de Directory, qui
+    // rassemble File ; FileKB de File.
+    let tree_kb = catalog.entity_configs().get("TreeKB").expect("TreeKB traduite");
+    let tree_d = tree_kb.derived.as_ref().expect("dérivée");
+    assert_eq!(tree_d.from, "Directory");
+    assert!(tree_d.render["title"].starts_with("{{ root.name"), "{}", tree_d.render["title"]);
+    assert!(tree_d.gather.iter().any(|g| g.name == "File"), "{:?}", tree_d.gather);
 
-    let file_kb = catalog.get_kb_metadata("FileKB").expect("FileKB metadata");
-    assert_eq!(file_kb.title.entity, "File");
-    assert_eq!(file_kb.title.field, "name");
+    let file_kb = catalog.entity_configs().get("FileKB").expect("FileKB traduite");
+    let file_d = file_kb.derived.as_ref().expect("dérivée");
+    assert_eq!(file_d.from, "File");
+    assert!(file_d.render["title"].starts_with("{{ root.name"), "{}", file_d.render["title"]);
 
     // Create entities
     let dir_ref = catalog.create("Directory", make_directory("src", "/repo/src/")).unwrap();
@@ -254,59 +261,78 @@ fn phase0b_ingest_and_schema() {
     assert_eq!(catalog.count("Directory").unwrap(), 1);
     assert_eq!(catalog.count("File").unwrap(), 1);
 
-    // TreeKB_Index should have 1 entry (Directory = title entity)
-    let tree_idx_count = query_count(&catalog, "MATCH (t:TreeKB_Index) RETURN count(t)");
-    assert_eq!(tree_idx_count, 1, "TreeKB should have 1 index entry (for the Directory)");
+    // TreeKB : une ligne dérivée par racine (Directory)
+    let tree_count = query_count(&catalog, "MATCH (t:TreeKB) RETURN count(t)");
+    assert_eq!(tree_count, 1, "TreeKB should have 1 derived row (for the Directory)");
 
-    // TreeKB_Index entry should have aggregated content from Directory + File
+    // La ligne TreeKB rend le contenu de Directory + File, et porte sa racine
     let rows = query_rows(
         &catalog,
-        "MATCH (t:TreeKB_Index) RETURN t._title, t._content, t._content_hash",
+        "MATCH (t:TreeKB) RETURN t.title, t.content, t._content_hash, t._source_entity, t._source_uuid, t._uuid",
     );
     assert_eq!(rows.len(), 1);
     let title = rows[0][0].as_str().unwrap_or("");
     let content = rows[0][1].as_str().unwrap_or("");
     let content_hash = rows[0][2].as_str().unwrap_or("");
+    let source_entity = rows[0][3].as_str().unwrap_or("");
+    let source_uuid = rows[0][4].as_str().unwrap_or("");
+    let derived_uuid = rows[0][5].as_str().unwrap_or("");
     assert_eq!(title, "src", "TreeKB title should be Directory.name");
     assert!(content.contains("/repo/src/"), "TreeKB content should contain Directory.absolute_path");
     assert!(content.contains("auth.ts"), "TreeKB content should contain File.name");
     assert!(content.contains("/repo/src/auth.ts"), "TreeKB content should contain File.absolute_path");
     assert!(!content_hash.is_empty(), "content_hash should be set (not sentinel)");
+    let dir_uuid = dir_ref.uuid().unwrap();
+    assert_eq!(source_entity, "Directory", "_source_entity = entité racine");
+    assert_eq!(source_uuid, dir_uuid, "_source_uuid = uuid de la racine");
+    assert_eq!(
+        derived_uuid,
+        rag3weaver::dataflow::derive_nodes::derived_uuid("TreeKB", &dir_uuid),
+        "l'uuid de la dérivée est déterministe depuis la racine"
+    );
 
-    // TreeKB_Index_Chunk should exist
-    let chunk_count = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
+    // La dérivée pointe sa racine : TreeKB_DERIVED_FROM (dérivée → Directory)
+    let derived_from = query_count(
+        &catalog,
+        "MATCH (:TreeKB)-[:TreeKB_DERIVED_FROM]->(:Directory) RETURN count(*)",
+    );
+    assert_eq!(derived_from, 1, "TreeKB row should be linked to its Directory root");
+
+    // TreeKB_Chunk : des chunks, chacun rattaché à sa ligne dérivée (chunk → parent)
+    let chunk_count = query_count(&catalog, "MATCH (c:TreeKB_Chunk) RETURN count(c)");
     assert!(chunk_count > 0, "TreeKB should have chunks: got {chunk_count}");
+    let chunked_from = query_count(
+        &catalog,
+        "MATCH (:TreeKB_Chunk)-[:TreeKB_CHUNKED_FROM]->(:TreeKB) RETURN count(*)",
+    );
+    assert_eq!(chunked_from, chunk_count, "every TreeKB chunk should be linked to its derived row");
 
-    // FileKB_Index should have 1 entry (File = title entity for FileKB)
-    let file_idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)");
-    assert_eq!(file_idx_count, 1, "FileKB should have 1 index entry");
+    // Les chunks d'une dérivée portent la racine (_source_entity/_source_uuid)
+    let chunks_from_dir = query_count(
+        &catalog,
+        "MATCH (c:TreeKB_Chunk) WHERE c._source_entity = 'Directory' RETURN count(c)",
+    );
+    assert_eq!(chunks_from_dir, chunk_count, "every TreeKB chunk should carry the Directory root");
 
-    // FileKB chunks
-    let filekb_chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)");
+    // FileKB : une ligne dérivée par File
+    let file_kb_count = query_count(&catalog, "MATCH (f:FileKB) RETURN count(f)");
+    assert_eq!(file_kb_count, 1, "FileKB should have 1 derived row");
+
+    // FileKB chunks, rattachés et portant leur racine File
+    let filekb_chunk_count = query_count(&catalog, "MATCH (c:FileKB_Chunk) RETURN count(c)");
     assert!(filekb_chunk_count > 0, "FileKB should have chunks: got {filekb_chunk_count}");
-
-    // SOURCED rels should exist
-    let dir_sourced = query_count(
+    let filekb_chunks_from_file = query_count(
         &catalog,
-        "MATCH (:Directory)-[:Directory_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
+        "MATCH (c:FileKB_Chunk) WHERE c._source_entity = 'File' RETURN count(c)",
     );
-    assert!(dir_sourced > 0, "Directory should have SOURCED rels to TreeKB chunks");
+    assert_eq!(filekb_chunks_from_file, filekb_chunk_count, "every FileKB chunk should carry the File root");
 
-    let file_sourced_tree = query_count(
-        &catalog,
-        "MATCH (:File)-[:File_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
-    );
-    assert!(file_sourced_tree > 0, "File should have SOURCED rels to TreeKB chunks");
-
-    let file_sourced_file = query_count(
-        &catalog,
-        "MATCH (:File)-[:File_SOURCED_FileKB]->(:FileKB_Index_Chunk) RETURN count(*)",
-    );
-    assert!(file_sourced_file > 0, "File should have SOURCED rels to FileKB chunks");
+    // Plus de liens `_SOURCED_` par contributrice : le contenu rendu est un seul
+    // texte, ses chunks ne sont plus attribués à chaque entité contributrice.
 
     eprintln!(
         "Schema OK: TreeKB chunks={chunk_count}, FileKB chunks={filekb_chunk_count}, \
-         SOURCED: dir→tree={dir_sourced}, file→tree={file_sourced_tree}, file→file={file_sourced_file}"
+         DERIVED_FROM: tree→dir={derived_from}"
     );
 }
 
@@ -462,25 +488,30 @@ fn phase0b_vector_chunk_to_source_entity() {
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
-    // FileKB should have 2 index entries
-    let idx_count = query_count(&catalog, "MATCH (f:FileKB_Index) RETURN count(f)");
-    assert_eq!(idx_count, 2, "FileKB should have 2 index entries");
+    // FileKB : une ligne dérivée par File
+    let idx_count = query_count(&catalog, "MATCH (f:FileKB) RETURN count(f)");
+    assert_eq!(idx_count, 2, "FileKB should have 2 derived rows");
 
-    // Chunks should exist and be linked via SOURCED
-    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Index_Chunk) RETURN count(c)");
+    // Des chunks, rattachés à leur ligne dérivée
+    let chunk_count = query_count(&catalog, "MATCH (c:FileKB_Chunk) RETURN count(c)");
     assert!(chunk_count >= 2, "FileKB should have at least 2 chunks");
 
-    // Verify SOURCED rels link chunks back to the correct File
+    // Chaque chunk remonte au bon File : chunk → dérivée (CHUNKED_FROM) → racine
+    // (DERIVED_FROM), et son _source_uuid est l'uuid de ce File.
     let sourced_rows = query_rows(
         &catalog,
-        "MATCH (f:File)-[:File_SOURCED_FileKB]->(c:FileKB_Index_Chunk) \
-         RETURN f.name, c._text",
+        "MATCH (c:FileKB_Chunk)-[:FileKB_CHUNKED_FROM]->(:FileKB)-[:FileKB_DERIVED_FROM]->(f:File) \
+         RETURN f.name, c._text, c._source_uuid, f._uuid",
     );
-    assert!(!sourced_rows.is_empty(), "SOURCED rels should exist");
+    assert!(!sourced_rows.is_empty(), "chunks should resolve to their File root");
+    assert_eq!(sourced_rows.len() as i64, chunk_count, "every chunk should resolve to exactly one File");
     for row in &sourced_rows {
         let file_name = row[0].as_str().unwrap_or("");
         let chunk_text = row[1].as_str().unwrap_or("");
-        eprintln!("  SOURCED: {} -> '{}'", file_name, &chunk_text[..chunk_text.len().min(50)]);
+        let source_uuid = row[2].as_str().unwrap_or("");
+        let file_uuid = row[3].as_str().unwrap_or("");
+        eprintln!("  chunk of {} -> '{}'", file_name, &chunk_text[..chunk_text.len().min(50)]);
+        assert_eq!(source_uuid, file_uuid, "chunk._source_uuid should be the File root uuid");
         // Each chunk should belong to the right file
         if chunk_text.contains("JWT") || chunk_text.contains("session") || chunk_text.contains("login") {
             assert_eq!(file_name, "auth.ts", "auth chunk should be sourced from auth.ts");
@@ -511,20 +542,28 @@ fn phase0b_content_offset_arithmetic() {
     let result = catalog.drain();
     assert_eq!(result.failed, 0);
 
-    // Get the concatenated _content
+    // Le contenu rendu de la dérivée (un seul champ `content`)
     let content_rows = query_rows(
         &catalog,
-        "MATCH (t:TreeKB_Index) RETURN t._content",
+        "MATCH (t:TreeKB) RETURN t.content",
     );
     assert_eq!(content_rows.len(), 1);
     let full_content = content_rows[0][0].as_str().unwrap();
-    eprintln!("TreeKB _content: '{full_content}' (len={})", full_content.len());
+    eprintln!("TreeKB content: '{full_content}' (len={})", full_content.len());
+
+    // Le gabarit traduit : entités contributrices par nom (Directory < File),
+    // champs de contenu triés (absolute_path < name), chaque valeur suivie
+    // d'un saut de ligne.
+    assert_eq!(
+        full_content, "/app/src/\n/app/src/main.rs\nmain.rs\n",
+        "rendered content should follow the translated template"
+    );
 
     // Get all chunks with their offsets
     let chunk_rows = query_rows(
         &catalog,
-        "MATCH (c:TreeKB_Index_Chunk) \
-         RETURN c._text, c._start_char, c._end_char, c._content_offset, c._source_field \
+        "MATCH (c:TreeKB_Chunk) \
+         RETURN c._text, c._start_char, c._end_char, c._content_offset, c._parent_field \
          ORDER BY c._content_offset, c._start_char",
     );
     assert!(!chunk_rows.is_empty(), "Should have TreeKB chunks");
@@ -534,11 +573,14 @@ fn phase0b_content_offset_arithmetic() {
         let start_char = row[1].as_i64().unwrap() as usize;
         let end_char = row[2].as_i64().unwrap() as usize;
         let content_offset = row[3].as_i64().unwrap() as usize;
-        let source_field = row[4].as_str().unwrap_or("");
+        let parent_field = row[4].as_str().unwrap_or("");
 
         eprintln!(
-            "  chunk: field={source_field}, offset={content_offset}, start={start_char}, end={end_char}, text='{chunk_text}'"
+            "  chunk: field={parent_field}, offset={content_offset}, start={start_char}, end={end_char}, text='{chunk_text}'"
         );
+        // Un seul champ de contenu sur la dérivée : l'offset est toujours 0
+        assert_eq!(parent_field, "content", "derived chunks come from the single `content` field");
+        assert_eq!(content_offset, 0, "single content field: offset is 0");
 
         // Verify: full_content[content_offset + start_char .. content_offset + end_char]
         // should contain the chunk text (modulo trimming)
@@ -578,23 +620,23 @@ fn phase0b_delete_content_for_only() {
     assert_eq!(result.failed, 0);
 
     // Verify File content is in TreeKB
-    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content_before = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let content_str = content_before[0][0].as_str().unwrap();
     assert!(content_str.contains("auth.ts"), "Before delete: content should contain 'auth.ts'");
-    let hash_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
+    let hash_before = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t._content_hash");
     let hash_str = hash_before[0][0].as_str().unwrap().to_string();
 
     // Delete the File (contentFor-only for TreeKB)
     let file_uuid = file_ref.uuid().unwrap();
     catalog.delete("File", &file_uuid).unwrap();
 
-    // Drain the AggregateOp that was enqueued by delete
+    // Drain the derivation enqueued by delete (the Directory root is re-rendered)
     let drain2 = catalog.drain();
     eprintln!("drain after delete: processed={}, failed={}", drain2.processed, drain2.failed);
     assert_eq!(drain2.failed, 0);
 
     // TreeKB content should no longer contain File data
-    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content_after = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let content_after_str = content_after[0][0].as_str().unwrap();
     assert!(
         !content_after_str.contains("auth.ts"),
@@ -606,16 +648,17 @@ fn phase0b_delete_content_for_only() {
     );
 
     // Hash should have changed
-    let hash_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
+    let hash_after = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t._content_hash");
     let hash_after_str = hash_after[0][0].as_str().unwrap();
     assert_ne!(hash_str, hash_after_str, "content_hash should change after delete");
 
-    // File SOURCED rels should be gone
-    let file_sourced = query_count(
+    // Plus de liens `_SOURCED_` : on vérifie à la place qu'aucun chunk de TreeKB
+    // ne porte encore le texte du File supprimé.
+    let stale_chunks = query_count(
         &catalog,
-        "MATCH (:File)-[:File_SOURCED_TreeKB]->(:TreeKB_Index_Chunk) RETURN count(*)",
+        "MATCH (c:TreeKB_Chunk) WHERE c._text CONTAINS 'auth.ts' RETURN count(c)",
     );
-    assert_eq!(file_sourced, 0, "File SOURCED rels should be deleted");
+    assert_eq!(stale_chunks, 0, "no TreeKB chunk should still carry the deleted File's text");
 
     // BM25 search for "auth" should return 0 results
     let response = catalog.search(
@@ -650,7 +693,7 @@ fn phase0b_update_content_for_only() {
     assert_eq!(result.failed, 0);
 
     // Verify initial state
-    let content_before = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content_before = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     assert!(content_before[0][0].as_str().unwrap().contains("auth.ts"));
 
     // Update the File: rename to login.ts
@@ -660,13 +703,12 @@ fn phase0b_update_content_for_only() {
     update_data.insert("absolute_path".into(), CypherValue::String("/repo/src/login.ts".into()));
     catalog.update("File", &file_uuid, update_data).unwrap();
 
-    // Drain the AggregateOp enqueued by update
+    // Drain the derivation enqueued by update (the Directory root is re-rendered)
     let drain2 = catalog.drain();
-    assert_eq!(drain2.failed, 0);
     assert_eq!(drain2.failed, 0);
 
     // TreeKB content should now contain "login.ts" instead of "auth.ts"
-    let content_after = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content_after = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let content_str = content_after[0][0].as_str().unwrap();
     assert!(
         content_str.contains("login.ts"),
@@ -700,7 +742,7 @@ fn phase0b_update_content_for_only() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Test 8: Title truncation (title_max_chars)
+// Test 8: Titre long (title_max_chars) — le titre rendu, les chunks intacts
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -724,24 +766,22 @@ fn phase0b_title_truncation() {
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
-    // FileKB_Index._title should be truncated to 20 chars
+    // Le titre de la dérivée est rendu par gabarit, borné à `title_max_chars`
+    // (`{{ root.name[:20] }}`) : comme l'ancienne ligne d'index.
     let rows = query_rows(
         &catalog,
-        "MATCH (f:FileKB_Index) RETURN f._title",
+        "MATCH (f:FileKB) RETURN f.title",
     );
     assert_eq!(rows.len(), 1);
     let title = rows[0][0].as_str().unwrap();
-    eprintln!("FileKB_Index._title: '{}' (len={})", title, title.len());
-    assert!(
-        title.len() <= 20,
-        "Title should be truncated to <= 20 chars, got {} chars",
-        title.len()
-    );
+    eprintln!("FileKB.title: '{}' (len={})", title, title.len());
+    assert_eq!(title.chars().count(), 20, "derived title bounded by title_max_chars");
+    assert!(long_name.starts_with(title));
 
     // Chunks should still have correct offsets (relative to body, not affected by title)
     let chunk_rows = query_rows(
         &catalog,
-        "MATCH (c:FileKB_Index_Chunk) RETURN c._start_char, c._end_char, c._text",
+        "MATCH (c:FileKB_Chunk) RETURN c._start_char, c._end_char, c._text",
     );
     for row in &chunk_rows {
         let start = row[0].as_i64().unwrap() as usize;
@@ -753,7 +793,8 @@ fn phase0b_title_truncation() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Test 9: SOURCED rels multi-entity correctness
+// Test 9: Multi-entité — les chunks de la dérivée portent la racine, le contenu
+// rendu porte toutes les contributrices
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -779,54 +820,52 @@ fn phase0b_sourced_rels_multi_entity() {
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
     assert_eq!(result.failed, 0);
 
-    // Directory SOURCED → chunks from Directory's own fields (absolute_path)
-    let dir_sourced = query_rows(
+    // Plus de liens `_SOURCED_` par contributrice : le contenu rendu est un seul
+    // texte. Chaque chunk de TreeKB porte la racine (Directory) et remonte à elle
+    // par CHUNKED_FROM → DERIVED_FROM.
+    let dir_uuid = dir_ref.uuid().unwrap();
+    let chunk_rows = query_rows(
         &catalog,
-        "MATCH (d:Directory)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) \
-         RETURN d.name, c._source_field, c._text",
+        "MATCH (c:TreeKB_Chunk)-[:TreeKB_CHUNKED_FROM]->(:TreeKB)-[:TreeKB_DERIVED_FROM]->(d:Directory) \
+         RETURN d.name, d._uuid, c._source_entity, c._source_uuid, c._parent_field, c._text",
     );
-    eprintln!("Directory SOURCED chunks: {}", dir_sourced.len());
-    for row in &dir_sourced {
+    eprintln!("TreeKB chunks resolved to their root: {}", chunk_rows.len());
+    assert!(!chunk_rows.is_empty(), "TreeKB should have chunks resolving to the Directory");
+    for row in &chunk_rows {
         let dname = row[0].as_str().unwrap_or("");
-        let field = row[1].as_str().unwrap_or("");
-        let text = row[2].as_str().unwrap_or("");
-        eprintln!("  Directory.{dname} -> field={field}, text='{text}'");
-        assert_eq!(dname, "components", "Only our Directory should source these chunks");
+        let duuid = row[1].as_str().unwrap_or("");
+        let source_entity = row[2].as_str().unwrap_or("");
+        let source_uuid = row[3].as_str().unwrap_or("");
+        let field = row[4].as_str().unwrap_or("");
+        let text = row[5].as_str().unwrap_or("");
+        eprintln!("  Directory.{dname} <- field={field}, text='{text}'");
+        assert_eq!(dname, "components", "Only our Directory should be the root of these chunks");
+        assert_eq!(duuid, dir_uuid, "root reached by DERIVED_FROM is our Directory");
+        assert_eq!(source_entity, "Directory", "chunk._source_entity is the root entity");
+        assert_eq!(source_uuid, dir_uuid, "chunk._source_uuid is the root uuid");
     }
 
-    // File SOURCED → chunks from File's contentFor fields (name, absolute_path)
-    let file_sourced = query_rows(
-        &catalog,
-        "MATCH (f:File)-[:File_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) \
-         RETURN f.name, c._source_field, c._text \
-         ORDER BY f.name",
-    );
-    eprintln!("File SOURCED chunks: {}", file_sourced.len());
-    for row in &file_sourced {
-        let fname = row[0].as_str().unwrap_or("");
-        let field = row[1].as_str().unwrap_or("");
-        let text = row[2].as_str().unwrap_or("");
-        eprintln!("  File.{fname} -> field={field}, text='{text}'");
-    }
+    // Tous les chunks sont rattachés : autant de liens CHUNKED_FROM que de chunks
+    let chunk_count = query_count(&catalog, "MATCH (c:TreeKB_Chunk) RETURN count(c)");
+    assert_eq!(chunk_rows.len() as i64, chunk_count, "every TreeKB chunk should resolve to the root");
 
-    // Both files should have SOURCED rels
-    let file_names: Vec<&str> = file_sourced.iter()
-        .filter_map(|r| r[0].as_str())
-        .collect();
-    assert!(file_names.contains(&"Button.tsx"), "Button.tsx should have SOURCED rels");
-    assert!(file_names.contains(&"Modal.tsx"), "Modal.tsx should have SOURCED rels");
+    // Le contenu rendu porte les deux fichiers (contributrices via HAS_FILE)
+    let content_rows = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
+    assert_eq!(content_rows.len(), 1, "one derived row for the Directory");
+    let content = content_rows[0][0].as_str().unwrap_or("");
+    eprintln!("TreeKB content: '{content}'");
+    assert!(content.contains("Button.tsx"), "content should carry Button.tsx");
+    assert!(content.contains("Modal.tsx"), "content should carry Modal.tsx");
+    assert!(content.contains("/repo/components/"), "content should carry the Directory path");
 
-    // No chunk should be SOURCED from a wrong entity
-    // (e.g., a Directory chunk shouldn't be SOURCED from a File)
-    let cross_check = query_count(
-        &catalog,
-        "MATCH (f:File)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN count(*)",
-    );
-    assert_eq!(cross_check, 0, "No File should have Directory_SOURCED_TreeKB rels");
+    // Les chunks, mis bout à bout, portent aussi les deux fichiers
+    let all_text: String = chunk_rows.iter().filter_map(|r| r[5].as_str()).collect::<Vec<_>>().join("");
+    assert!(all_text.contains("Button.tsx"), "chunks should carry Button.tsx");
+    assert!(all_text.contains("Modal.tsx"), "chunks should carry Modal.tsx");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Test 10: Aggregate idempotent (hash unchanged → skip)
+// Test 10: Dérivation idempotente (entrées inchangées → rien de réécrit)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -846,39 +885,41 @@ fn phase0b_aggregate_skip_unchanged() {
     let drain1 = catalog.drain();
     assert_eq!(drain1.failed, 0);
 
-    // Record hash and chunk count
-    let hash1_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash, t._uuid");
+    // Record hashes and chunk count
+    let hash1_rows = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t._content_hash, t._render_hash, t._uuid");
     let hash1 = hash1_rows[0][0].as_str().unwrap().to_string();
-    let _idx_uuid = hash1_rows[0][1].as_str().unwrap().to_string();
-    let chunk_count1 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
+    let render_hash1 = hash1_rows[0][1].as_str().unwrap().to_string();
+    let _derived_uuid = hash1_rows[0][2].as_str().unwrap().to_string();
+    let chunk_count1 = query_count(&catalog, "MATCH (c:TreeKB_Chunk) RETURN count(c)");
 
-    eprintln!("After drain 1: hash={hash1}, chunks={chunk_count1}");
+    eprintln!("After drain 1: hash={hash1}, render_hash={render_hash1}, chunks={chunk_count1}");
 
-    // Manually enqueue another AggregateOp for the same index entry
-    // We do this by updating the Directory with the same data (no actual change to entity,
-    // but it triggers re-aggregate)
+    // Enqueue another derivation for the same root: update the Directory with
+    // the same data (no actual change to the entity, but the root is re-derived)
     let dir_uuid = dir_ref.uuid().unwrap();
     let mut same_data = BTreeMap::new();
     same_data.insert("name".into(), CypherValue::String("src".into()));
     catalog.update("Directory", &dir_uuid, same_data).unwrap();
 
-    // Second drain: AggregateBatchNode should detect hash unchanged and skip
+    // Second drain: the derive node sees `_render_hash` unchanged and skips
     let drain2 = catalog.drain();
     eprintln!("After drain 2: processed={}, failed={}", drain2.processed, drain2.failed);
     assert_eq!(drain2.failed, 0);
 
-    // Hash should be identical
-    let hash2_rows = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content_hash");
+    // Hashes should be identical
+    let hash2_rows = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t._content_hash, t._render_hash");
     let hash2 = hash2_rows[0][0].as_str().unwrap();
-    assert_eq!(hash1, hash2, "content_hash should be unchanged after re-aggregate with same content");
+    let render_hash2 = hash2_rows[0][1].as_str().unwrap();
+    assert_eq!(hash1, hash2, "content_hash should be unchanged after re-deriving with same inputs");
+    assert_eq!(render_hash1, render_hash2, "render_hash should be unchanged after re-deriving with same inputs");
 
     // Chunk count should be the same
-    let chunk_count2 = query_count(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN count(c)");
+    let chunk_count2 = query_count(&catalog, "MATCH (c:TreeKB_Chunk) RETURN count(c)");
     assert_eq!(chunk_count1, chunk_count2, "chunk count should be unchanged");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Test 11: link() incremental triggers AggregateOp
+// Test 11: link() met en file une dérivation de la racine
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -893,7 +934,7 @@ fn phase0b_link_incremental_aggregate() {
     assert_eq!(drain1.failed, 0);
 
     // TreeKB should have the Directory's content only
-    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content1 = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let content1_str = content1[0][0].as_str().unwrap();
     assert!(!content1_str.contains("utils.ts"), "Before link: no File content in TreeKB");
 
@@ -905,14 +946,14 @@ fn phase0b_link_incremental_aggregate() {
     let drain2 = catalog.drain();
     assert_eq!(drain2.failed, 0);
 
-    // Now link File to Directory — should trigger incremental AggregateOp
+    // Now link File to Directory — enqueues 1 relation + 1 derivation of the root
     catalog.link("HAS_FILE", dir_ref.clone(), file_ref.clone(), BTreeMap::new()).unwrap();
     let drain3 = catalog.drain();
     eprintln!("drain after link: processed={}, failed={}", drain3.processed, drain3.failed);
     assert_eq!(drain3.failed, 0);
 
     // TreeKB content should now include the File's data
-    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content2 = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let content2_str = content2[0][0].as_str().unwrap();
     assert!(
         content2_str.contains("utils.ts"),
@@ -950,7 +991,7 @@ fn phase0b_delete_one_of_multiple_files() {
     assert_eq!(drain1.failed, 0);
 
     // Both files should be in TreeKB
-    let content1 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content1 = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let c1 = content1[0][0].as_str().unwrap();
     assert!(c1.contains("alpha.ts"), "TreeKB should contain alpha.ts");
     assert!(c1.contains("beta.ts"), "TreeKB should contain beta.ts");
@@ -962,7 +1003,7 @@ fn phase0b_delete_one_of_multiple_files() {
     assert_eq!(drain2.failed, 0);
 
     // Only beta.ts should remain
-    let content2 = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._content");
+    let content2 = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t.content");
     let c2 = content2[0][0].as_str().unwrap();
     assert!(
         !c2.contains("alpha.ts"),
@@ -1015,65 +1056,72 @@ fn phase0b_debug_trace_pipeline() {
     let files = query_rows(&catalog, "MATCH (f:File) RETURN f._uuid, f.name");
     eprintln!("Files: {:?}", files);
 
-    let tree_idx = query_rows(&catalog,
-        "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content, t._content_hash, t._source_entity, t._source_uuid"
+    let tree_rows = query_rows(&catalog,
+        "MATCH (t:TreeKB) RETURN t._uuid, t.title, t.content, t._content_hash, t._render_hash, t._source_entity, t._source_uuid"
     );
-    eprintln!("TreeKB_Index entries: {}", tree_idx.len());
-    for row in &tree_idx {
+    eprintln!("TreeKB rows: {}", tree_rows.len());
+    for row in &tree_rows {
         eprintln!("  {:?}", row);
     }
 
     let tree_chunks = query_rows(&catalog,
-        "MATCH (c:TreeKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field, c._content_offset, c._start_char, c._end_char"
+        "MATCH (c:TreeKB_Chunk) RETURN c._uuid, c._text, c._parent_field, c._content_offset, c._start_char, c._end_char, c._source_entity, c._source_uuid"
     );
-    eprintln!("TreeKB_Index_Chunk: {}", tree_chunks.len());
+    eprintln!("TreeKB_Chunk: {}", tree_chunks.len());
     for row in &tree_chunks {
         eprintln!("  {:?}", row);
     }
 
-    let file_idx = query_rows(&catalog,
-        "MATCH (f:FileKB_Index) RETURN f._uuid, f._title, f._content, f._content_hash, f._source_entity, f._source_uuid"
+    let file_rows = query_rows(&catalog,
+        "MATCH (f:FileKB) RETURN f._uuid, f.title, f.content, f._content_hash, f._render_hash, f._source_entity, f._source_uuid"
     );
-    eprintln!("FileKB_Index entries: {}", file_idx.len());
-    for row in &file_idx {
+    eprintln!("FileKB rows: {}", file_rows.len());
+    for row in &file_rows {
         eprintln!("  {:?}", row);
     }
 
     let file_chunks = query_rows(&catalog,
-        "MATCH (c:FileKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field, c._content_offset"
+        "MATCH (c:FileKB_Chunk) RETURN c._uuid, c._text, c._parent_field, c._content_offset"
     );
-    eprintln!("FileKB_Index_Chunk: {}", file_chunks.len());
+    eprintln!("FileKB_Chunk: {}", file_chunks.len());
     for row in &file_chunks {
         eprintln!("  {:?}", row);
     }
 
-    // SOURCED rels — query each known rel type separately
-    let dir_sourced = query_rows(&catalog,
-        "MATCH (d:Directory)-[:Directory_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN d.name, c._uuid, c._text"
+    // Relations des dérivées : dérivée → racine, chunk → dérivée
+    // (plus de liens `_SOURCED_` par contributrice)
+    let tree_derived_from = query_rows(&catalog,
+        "MATCH (t:TreeKB)-[:TreeKB_DERIVED_FROM]->(d:Directory) RETURN t._uuid, d.name"
     );
-    eprintln!("Directory_SOURCED_TreeKB: {}", dir_sourced.len());
-    for row in &dir_sourced { eprintln!("  {:?}", row); }
+    eprintln!("TreeKB_DERIVED_FROM: {}", tree_derived_from.len());
+    for row in &tree_derived_from { eprintln!("  {:?}", row); }
 
-    let file_sourced_tree = query_rows(&catalog,
-        "MATCH (f:File)-[:File_SOURCED_TreeKB]->(c:TreeKB_Index_Chunk) RETURN f.name, c._uuid, c._text"
+    let tree_chunked_from = query_rows(&catalog,
+        "MATCH (c:TreeKB_Chunk)-[:TreeKB_CHUNKED_FROM]->(t:TreeKB) RETURN c._uuid, t.title, c._text"
     );
-    eprintln!("File_SOURCED_TreeKB: {}", file_sourced_tree.len());
-    for row in &file_sourced_tree { eprintln!("  {:?}", row); }
+    eprintln!("TreeKB_CHUNKED_FROM: {}", tree_chunked_from.len());
+    for row in &tree_chunked_from { eprintln!("  {:?}", row); }
 
-    let file_sourced_file = query_rows(&catalog,
-        "MATCH (f:File)-[:File_SOURCED_FileKB]->(c:FileKB_Index_Chunk) RETURN f.name, c._uuid, c._text"
+    let file_derived_from = query_rows(&catalog,
+        "MATCH (k:FileKB)-[:FileKB_DERIVED_FROM]->(f:File) RETURN k._uuid, f.name"
     );
-    eprintln!("File_SOURCED_FileKB: {}", file_sourced_file.len());
-    for row in &file_sourced_file { eprintln!("  {:?}", row); }
+    eprintln!("FileKB_DERIVED_FROM: {}", file_derived_from.len());
+    for row in &file_derived_from { eprintln!("  {:?}", row); }
+
+    let file_chunked_from = query_rows(&catalog,
+        "MATCH (c:FileKB_Chunk)-[:FileKB_CHUNKED_FROM]->(k:FileKB) RETURN c._uuid, k.title, c._text"
+    );
+    eprintln!("FileKB_CHUNKED_FROM: {}", file_chunked_from.len());
+    for row in &file_chunked_from { eprintln!("  {:?}", row); }
 
     // Try Lucivy raw query to check if FTS index has data
     eprintln!("\n══ RAW LUCIVY QUERY ══");
     let fts_result = catalog.execute_raw(
-        "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{\"type\":\"parse\",\"fields\":[\"_title\",\"_content\"],\"value\":\"auth\"}', 10) RETURN node_id, score"
+        "CALL QUERY_LUCIVY_INDEX('TreeKB', '{\"type\":\"parse\",\"fields\":[\"title\",\"content\"],\"value\":\"auth\"}', 10) RETURN node_id, score"
     );
     match fts_result {
         Ok(r) => {
-            eprintln!("Lucivy 'auth' on TreeKB_Index: {} results", r.rows.len());
+            eprintln!("Lucivy 'auth' on TreeKB: {} results", r.rows.len());
             for row in &r.rows { eprintln!("  {:?}", row); }
         }
         Err(e) => eprintln!("Lucivy error: {e:?}"),
@@ -1111,40 +1159,40 @@ fn phase0b_lucivy_contains_vs_parse() {
     let result = catalog.drain();
     eprintln!("drain: processed={}, failed={}", result.processed, result.failed);
 
-    // Dump what's in the index
-    let idx = query_rows(&catalog, "MATCH (t:TreeKB_Index) RETURN t._uuid, t._title, t._content");
-    eprintln!("\nTreeKB_Index rows:");
+    // Dump what's in the derived table
+    let idx = query_rows(&catalog, "MATCH (t:TreeKB) RETURN t._uuid, t.title, t.content");
+    eprintln!("\nTreeKB rows:");
     for row in &idx { eprintln!("  {:?}", row); }
 
-    let chunks = query_rows(&catalog, "MATCH (c:TreeKB_Index_Chunk) RETURN c._uuid, c._text, c._source_field");
-    eprintln!("TreeKB_Index_Chunk rows:");
+    let chunks = query_rows(&catalog, "MATCH (c:TreeKB_Chunk) RETURN c._uuid, c._text, c._parent_field");
+    eprintln!("TreeKB_Chunk rows:");
     for row in &chunks { eprintln!("  {:?}", row); }
 
-    // ── Test raw Lucivy queries directly ──
+    // ── Test raw Lucivy queries directly (champs `title`/`content` de la dérivée) ──
     let queries = vec![
-        ("parse, fields=[_title,_content], 'auth'",
-         r#"{"type":"parse","fields":["_title","_content"],"value":"auth"}"#),
-        ("parse, field=_content, 'auth'",
-         r#"{"type":"parse","field":"_content","value":"auth"}"#),
-        ("parse, field=_title, 'src'",
-         r#"{"type":"parse","field":"_title","value":"src"}"#),
-        ("contains, field=_content, 'auth', distance=1",
-         r#"{"type":"contains","field":"_content","value":"auth","distance":1}"#),
-        ("contains, field=_title, 'src', distance=1",
-         r#"{"type":"contains","field":"_title","value":"src","distance":1}"#),
-        ("contains, field=_content, 'auth', distance=0",
-         r#"{"type":"contains","field":"_content","value":"auth","distance":0}"#),
-        ("boolean should [contains _title + _content], 'auth'",
-         r#"{"type":"boolean","should":[{"type":"contains","field":"_title","value":"auth","distance":1},{"type":"contains","field":"_content","value":"auth","distance":1}]}"#),
-        ("contains, field=_content, 'authenticate', distance=1",
-         r#"{"type":"contains","field":"_content","value":"authenticate","distance":1}"#),
+        ("parse, fields=[title,content], 'auth'",
+         r#"{"type":"parse","fields":["title","content"],"value":"auth"}"#),
+        ("parse, field=content, 'auth'",
+         r#"{"type":"parse","field":"content","value":"auth"}"#),
+        ("parse, field=title, 'src'",
+         r#"{"type":"parse","field":"title","value":"src"}"#),
+        ("contains, field=content, 'auth', distance=1",
+         r#"{"type":"contains","field":"content","value":"auth","distance":1}"#),
+        ("contains, field=title, 'src', distance=1",
+         r#"{"type":"contains","field":"title","value":"src","distance":1}"#),
+        ("contains, field=content, 'auth', distance=0",
+         r#"{"type":"contains","field":"content","value":"auth","distance":0}"#),
+        ("boolean should [contains title + content], 'auth'",
+         r#"{"type":"boolean","should":[{"type":"contains","field":"title","value":"auth","distance":1},{"type":"contains","field":"content","value":"auth","distance":1}]}"#),
+        ("contains, field=content, 'authenticate', distance=1",
+         r#"{"type":"contains","field":"content","value":"authenticate","distance":1}"#),
     ];
 
     eprintln!("\n══ RAW LUCIVY QUERY COMPARISON ══");
     for (label, json) in &queries {
         let escaped = json.replace('\'', "''");
         let cypher = format!(
-            "CALL QUERY_LUCIVY_INDEX('TreeKB_Index', '{}', 10) RETURN node_id, score, highlights",
+            "CALL QUERY_LUCIVY_INDEX('TreeKB', '{}', 10) RETURN node_id, score, highlights",
             escaped,
         );
         match catalog.execute_raw(&cypher) {

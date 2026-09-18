@@ -60,7 +60,13 @@ pub const EMBEDDING_MODEL_KEY: &str = "embedding_model";
 /// c'est la résolution qui sait les retrouver. Ajouter un modèle ensuite est
 /// une opération **hors version**, idempotente, à la volée
 /// (`Catalog::register_embedding_model`).
-pub const SCHEMA_VERSION: &str = "6";
+///
+/// **7** le 18 septembre 2026 : **les bases de connaissances sont des entités
+/// dérivées**. Les tables `{KB}_Index`, `{KB}_Index_Chunk`, `{KB}_Index_HAS_CHUNK`,
+/// `{E}_IN_{KB}` et `{E}_SOURCED_{KB}` d'une base d'avant sont supprimées, et
+/// chaque base traduite est re-rendue depuis ses racines au drain suivant
+/// (`Catalog::migrer_les_kb_v7`).
+pub const SCHEMA_VERSION: &str = "7";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -139,8 +145,8 @@ impl Scope {
 }
 
 /// Les deux colonnes système de scope, à ajouter sur toute table de données
-/// (entités, `{KB}_Index`, `{KB}_Index_Chunk`, `{Entity}_Chunk` — les chunks
-/// aussi : le filtre vectoriel s'exécute sur la table des chunks).
+/// (entités, dérivées comprises, et `{Entity}_Chunk` — les chunks aussi : le
+/// filtre vectoriel s'exécute sur la table des chunks).
 pub fn scope_columns() -> Vec<ColumnDef> {
     vec![
         ColumnDef { name: ORG_COLUMN.into(), col_type: ColumnType::Text },

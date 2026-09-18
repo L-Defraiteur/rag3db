@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::config::{CatalogConfig, EntityDef, FieldType, KBConfig, RelationDef};
+use crate::config::{CatalogConfig, EntityDef, FieldType, RelationDef};
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ pub fn resolve_kb_title_entities(config: &CatalogConfig) -> HashMap<String, KBSc
 /// Generate CREATE NODE TABLE for an entity.
 ///
 /// Entity tables are pure data storage: system columns (`_uuid`, `_content_hash`)
-/// and user fields. No embedding columns — those live on `{KB}_Index` tables.
+/// and user fields. No embedding columns — those live on the chunk tables.
 pub fn generate_node_table_ddl(
     entity_name: &str,
     entity_def: &EntityDef,
@@ -222,102 +222,6 @@ pub fn generate_node_table_ddl_with_dialect(
 ///
 /// One entry per instance of the title entity. Contains `_title`, `_content`,
 /// and per-KB embedding columns.
-pub fn generate_index_table_ddl(
-    kb_name: &str,
-    _kb_config: &KBConfig,
-    embedding_dim: usize,
-) -> Result<String, SchemaError> {
-    generate_index_table_ddl_with_dialect(kb_name, _kb_config, embedding_dim, &crate::dialect::Rag3dbDialect)
-}
-
-pub fn generate_index_table_ddl_with_dialect(
-    kb_name: &str,
-    _kb_config: &KBConfig,
-    embedding_dim: usize,
-    dialect: &dyn crate::dialect::SchemaDialect,
-) -> Result<String, SchemaError> {
-    use crate::dialect::{ColumnDef, ColumnType};
-    validate_identifier(kb_name, "knowledge_base")?;
-    let table_name = format!("{kb_name}_Index");
-
-    let mut columns = vec![
-        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_source_entity".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_source_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_title".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_content".into(), col_type: ColumnType::Text },
-    ];
-    columns.extend(crate::scope::scope_columns());
-    columns.push(ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) });
-
-    Ok(dialect.create_table(&table_name, &columns))
-}
-
-/// Generate CREATE NODE TABLE for KB Index chunks (for dense/sparse/highlight resolution).
-///
-/// Tracks parent index entry, text, offsets, and per-KB embedding columns.
-pub fn generate_index_chunk_table_ddl(
-    kb_name: &str,
-    _kb_config: &KBConfig,
-    embedding_dim: usize,
-) -> Result<String, SchemaError> {
-    generate_index_chunk_table_ddl_with_dialect(kb_name, _kb_config, embedding_dim, &crate::dialect::Rag3dbDialect)
-}
-
-pub fn generate_index_chunk_table_ddl_with_dialect(
-    kb_name: &str,
-    _kb_config: &KBConfig,
-    embedding_dim: usize,
-    dialect: &dyn crate::dialect::SchemaDialect,
-) -> Result<String, SchemaError> {
-    use crate::dialect::{ColumnDef, ColumnType};
-    validate_identifier(kb_name, "knowledge_base")?;
-    let table_name = format!("{kb_name}_Index_Chunk");
-
-    let mut columns = vec![
-        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_parent_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_parent_field".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_kb_name".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_source_field".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_source_entity".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_source_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_text".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_text_hash".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_embed_hash".into(), col_type: ColumnType::Text },
-        // **Le marqueur sparse, séparé du dense.** Un seul `_embed_hash` ne
-        // peut pas répondre à deux questions : « dense prêt ? » et « sparse
-        // prêt ? » sont deux disponibilités distinctes, et sur le chemin dual
-        // l'écriture dense marquait pour les deux — un vecteur sparse perdu
-        // restait donc annoncé écrit. Vide = pas encore embarqué en sparse.
-        ColumnDef { name: "_sparse_hash".into(), col_type: ColumnType::Text },
-        // **La réclamation d'une passe de rattrapage** : `horodatage|écrivain`,
-        // posée quand une passe prend ce chunk pour l'embarquer, périmée après
-        // `MARQUE_PERIMEE_MS`. Deux processus qui rattrapent ne calculent
-        // plus deux fois le même vecteur. Vide ou nulle = libre.
-        ColumnDef { name: "_embed_claim".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_index".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_start_char".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_end_char".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_start_line".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_end_line".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_core_start_char".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_core_end_char".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_core_start_line".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_core_end_line".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: "_content_offset".into(), col_type: ColumnType::Int64 },
-        ColumnDef { name: format!("{kb_name}_embedding"), col_type: ColumnType::Vector(embedding_dim) },
-    ];
-    columns.extend(crate::scope::scope_columns());
-
-    Ok(dialect.create_table(&table_name, &columns))
-}
-
-/// Generate CREATE NODE TABLE for a simple entity's chunk table.
-///
-/// Simpler than KB chunks: no `_kb_name`, `_source_field`, `_source_entity`, `_source_uuid`.
-/// Embedding columns use generic names (`embedding`) instead of `{kb}_embedding`.
 pub fn generate_simple_chunk_table_ddl(
     entity_name: &str,
     entity_config: &crate::config::EntityConfig,
@@ -423,62 +327,6 @@ pub fn generate_derived_rel_ddl_with_dialect(
     Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
 }
 
-pub fn generate_index_chunk_rel_ddl(kb_name: &str) -> Result<String, SchemaError> {
-    generate_index_chunk_rel_ddl_with_dialect(kb_name, &crate::dialect::Rag3dbDialect)
-}
-
-pub fn generate_index_chunk_rel_ddl_with_dialect(
-    kb_name: &str,
-    dialect: &dyn crate::dialect::SchemaDialect,
-) -> Result<String, SchemaError> {
-    validate_identifier(kb_name, "knowledge_base")?;
-    let index_table = format!("{kb_name}_Index");
-    let chunk_table = format!("{kb_name}_Index_Chunk");
-    let rel_name = format!("{kb_name}_Index_HAS_CHUNK");
-    Ok(dialect.create_rel_table(&rel_name, &index_table, &chunk_table, &[]))
-}
-
-/// Generate CREATE REL TABLE for title entity → KB Index relationship.
-pub fn generate_index_rel_ddl(
-    title_entity: &str,
-    kb_name: &str,
-) -> Result<String, SchemaError> {
-    generate_index_rel_ddl_with_dialect(title_entity, kb_name, &crate::dialect::Rag3dbDialect)
-}
-
-pub fn generate_index_rel_ddl_with_dialect(
-    title_entity: &str,
-    kb_name: &str,
-    dialect: &dyn crate::dialect::SchemaDialect,
-) -> Result<String, SchemaError> {
-    validate_identifier(title_entity, "entity")?;
-    validate_identifier(kb_name, "knowledge_base")?;
-    let index_table = format!("{kb_name}_Index");
-    let rel_name = format!("{title_entity}_IN_{kb_name}");
-    Ok(dialect.create_rel_table(&rel_name, title_entity, &index_table, &[]))
-}
-
-/// Generate CREATE REL TABLE for entity → KB Index Chunk (source tracking).
-pub fn generate_source_rel_ddl(
-    entity_name: &str,
-    kb_name: &str,
-) -> Result<String, SchemaError> {
-    generate_source_rel_ddl_with_dialect(entity_name, kb_name, &crate::dialect::Rag3dbDialect)
-}
-
-pub fn generate_source_rel_ddl_with_dialect(
-    entity_name: &str,
-    kb_name: &str,
-    dialect: &dyn crate::dialect::SchemaDialect,
-) -> Result<String, SchemaError> {
-    validate_identifier(entity_name, "entity")?;
-    validate_identifier(kb_name, "knowledge_base")?;
-    let chunk_table = format!("{kb_name}_Index_Chunk");
-    let rel_name = format!("{entity_name}_SOURCED_{kb_name}");
-    Ok(dialect.create_rel_table(&rel_name, entity_name, &chunk_table, &[]))
-}
-
-/// Generate CREATE REL TABLE for a user-defined relation.
 pub fn generate_rel_table_ddl(
     rel_name: &str,
     rel_def: &RelationDef,
@@ -605,7 +453,8 @@ pub fn entity_has_chunks(entity_def: &EntityDef) -> bool {
 ///
 /// Order: meta table → entity tables → user rels → KB index tables + rels.
 /// Entity tables are pure data storage (no embeddings).
-/// Each KB gets: `{KB}_Index`, `{KB}_Index_Chunk`, rels, and search indexes.
+/// Les bases de connaissances n'ont pas de tables ici : le catalogue les
+/// traduit en entités dérivées (`derived_kb`).
 ///
 /// Index creation (vector + FTS) is returned separately since indexes
 /// require tables to exist first.
@@ -621,7 +470,7 @@ pub fn generate_full_schema_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<FullSchema, SchemaError> {
     let mut ddl = Vec::new();
-    let mut indexes = Vec::new();
+    let indexes = Vec::new();
 
     // 1. Meta table (via dialect for correct schema namespace)
     ddl.push(dialect.create_meta_table());
@@ -650,50 +499,9 @@ pub fn generate_full_schema_with_dialect(
     }
 
     // 4. KB Index tables, chunks, rels, and search indexes (sorted by KB name)
-    let kb_title_entities = resolve_kb_title_entities(config);
-    let mut kb_names: Vec<&String> = config.knowledge_bases.keys().collect();
-    kb_names.sort();
-
-    for kb_name in kb_names {
-        let kb_config = &config.knowledge_bases[kb_name];
-        let kb_info = match kb_title_entities.get(kb_name.as_str()) {
-            Some(info) => info,
-            None => continue,
-        };
-
-        // {KB}_Index table
-        ddl.push(generate_index_table_ddl_with_dialect(kb_name, kb_config, config.embedding_dim, dialect)?);
-
-        // {KB}_Index_Chunk table
-        ddl.push(generate_index_chunk_table_ddl_with_dialect(kb_name, kb_config, config.embedding_dim, dialect)?);
-
-        // {KB}_Index_HAS_CHUNK rel
-        ddl.push(generate_index_chunk_rel_ddl_with_dialect(kb_name, dialect)?);
-
-        // {TitleEntity}_IN_{KB} rel
-        ddl.push(generate_index_rel_ddl_with_dialect(&kb_info.title_entity, kb_name, dialect)?);
-
-        // {Entity}_SOURCED_{KB} rels (one per entity contributing to this KB)
-        for entity_name in &entity_names {
-            let entity_def = &config.entities[*entity_name];
-            let entity_kbs = resolve_entity_kbs(entity_def);
-            if entity_kbs.contains_key(kb_name.as_str()) {
-                ddl.push(generate_source_rel_ddl_with_dialect(entity_name, kb_name, dialect)?);
-            }
-        }
-
-        // Pas d'index FTS C++ sur {KB}_Index : la recherche passe par le
-        // `ShardedHandle` Rust. `generate_fts_index_ddl` reste exposée pour qui
-        // veut encore un index interrogeable en Cypher natif (`SEARCH()` dans le
-        // WHERE), mais le catalogue ne l'émet plus.
-
-        // Vector index on {KB}_Index_Chunk (via dialect)
-        let chunk_table = format!("{kb_name}_Index_Chunk");
-        let emb_col = format!("{kb_name}_embedding");
-        let idx_name = format!("{kb_name}_Index_Chunk_vec");
-        indexes.push(dialect.create_vector_index(&chunk_table, &emb_col, &idx_name));
-    }
-
+    // Les bases de connaissances n'ont plus de tables à elles : chacune est
+    // une entité dérivée, traduite et enregistrée par le catalogue
+    // (`derived_kb`, doc du 7 septembre 2026).
     Ok(FullSchema { ddl, indexes })
 }
 
@@ -941,170 +749,6 @@ mod tests {
         assert!(generate_node_table_ddl("my-table", &entity).is_err());
     }
 
-    // ── generate_index_table_ddl ────────────────────────────────────────
-
-    #[test]
-    fn index_table_basic() {
-        let kb_config = KBConfig::default();
-        let ddl = generate_index_table_ddl("main", &kb_config, 384).unwrap();
-        assert!(ddl.contains("CREATE NODE TABLE IF NOT EXISTS main_Index("));
-        assert!(ddl.contains("_uuid STRING"));
-        assert!(ddl.contains("_source_entity STRING"));
-        assert!(ddl.contains("_source_uuid STRING"));
-        assert!(ddl.contains("_title STRING"));
-        assert!(ddl.contains("_content STRING"));
-        assert!(ddl.contains("main_embedding FLOAT[384]"));
-        assert!(ddl.contains("PRIMARY KEY(_uuid)"));
-        assert!(!ddl.contains("sparse_indices"));
-    }
-
-    #[test]
-    fn index_table_with_sparse() {
-        use crate::search::SearchSignals;
-        let mut kb_config = KBConfig::default();
-        kb_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
-        let ddl = generate_index_table_ddl("ScopeKB", &kb_config, 384).unwrap();
-        assert!(ddl.contains("ScopeKB_embedding FLOAT[384]"));
-        // Sparse columns removed — sparse vectors stored in BlobStore via SparseHandle
-        assert!(!ddl.contains("sparse_indices"));
-        assert!(!ddl.contains("sparse_weights"));
-    }
-
-    // ── generate_index_chunk_table_ddl ──────────────────────────────────
-
-    #[test]
-    fn index_chunk_table_basic() {
-        let kb_config = KBConfig::default();
-        let ddl = generate_index_chunk_table_ddl("main", &kb_config, 384).unwrap();
-        assert!(ddl.contains("CREATE NODE TABLE IF NOT EXISTS main_Index_Chunk("));
-        assert!(ddl.contains("_uuid STRING"));
-        assert!(ddl.contains("_parent_uuid STRING"));
-        assert!(ddl.contains("_parent_field STRING"));
-        assert!(ddl.contains("_kb_name STRING"));
-        assert!(ddl.contains("_text STRING"));
-        assert!(ddl.contains("_text_hash STRING"));
-        assert!(ddl.contains("_index INT64"));
-        assert!(ddl.contains("_start_char INT64"));
-        assert!(ddl.contains("_end_char INT64"));
-        assert!(ddl.contains("_start_line INT64"));
-        assert!(ddl.contains("_end_line INT64"));
-        assert!(ddl.contains("_core_start_char INT64"));
-        assert!(ddl.contains("_core_end_char INT64"));
-        assert!(ddl.contains("_core_start_line INT64"));
-        assert!(ddl.contains("_core_end_line INT64"));
-        assert!(ddl.contains("main_embedding FLOAT[384]"));
-        assert!(ddl.contains("PRIMARY KEY(_uuid)"));
-    }
-
-    #[test]
-    fn index_chunk_table_with_sparse() {
-        use crate::search::SearchSignals;
-        let mut kb_config = KBConfig::default();
-        kb_config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
-        let ddl = generate_index_chunk_table_ddl("ScopeKB", &kb_config, 384).unwrap();
-        assert!(ddl.contains("ScopeKB_embedding FLOAT[384]"));
-        // Sparse columns removed — sparse vectors stored in BlobStore via SparseHandle
-        assert!(!ddl.contains("sparse_indices"));
-        assert!(!ddl.contains("sparse_weights"));
-    }
-
-    // ── generate_index_chunk_rel_ddl ────────────────────────────────────
-
-    #[test]
-    fn index_chunk_rel_ddl() {
-        let ddl = generate_index_chunk_rel_ddl("main").unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS main_Index_HAS_CHUNK(FROM main_Index TO main_Index_Chunk)"
-        );
-    }
-
-    // ── generate_index_rel_ddl ──────────────────────────────────────────
-
-    #[test]
-    fn index_rel_ddl() {
-        let ddl = generate_index_rel_ddl("Document", "main").unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS Document_IN_main(FROM Document TO main_Index)"
-        );
-    }
-
-    #[test]
-    fn index_rel_ddl_tree_kb() {
-        let ddl = generate_index_rel_ddl("Directory", "TreeKB").unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS Directory_IN_TreeKB(FROM Directory TO TreeKB_Index)"
-        );
-    }
-
-    // ── generate_source_rel_ddl ──────────────────────────────────────────
-
-    #[test]
-    fn source_rel_ddl() {
-        let ddl = generate_source_rel_ddl("File", "TreeKB").unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS File_SOURCED_TreeKB(FROM File TO TreeKB_Index_Chunk)"
-        );
-    }
-
-    #[test]
-    fn source_rel_ddl_single_entity() {
-        let ddl = generate_source_rel_ddl("Document", "main").unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS Document_SOURCED_main(FROM Document TO main_Index_Chunk)"
-        );
-    }
-
-    // ── generate_rel_table_ddl ───────────────────────────────────────────
-
-    #[test]
-    fn rel_table_basic() {
-        let rel = RelationDef {
-            from: "Document".to_string(),
-            to: "Document".to_string(),
-            properties: None,
-        };
-        let config = make_config_with_entity("Document");
-        let ddl = generate_rel_table_ddl("REFERENCES", &rel, &config).unwrap();
-        assert_eq!(
-            ddl,
-            "CREATE REL TABLE IF NOT EXISTS REFERENCES(FROM Document TO Document)"
-        );
-    }
-
-    #[test]
-    fn rel_table_with_properties() {
-        let mut props = HashMap::new();
-        props.insert("role".to_string(), make_field(FieldType::String));
-        props.insert("weight".to_string(), make_field(FieldType::Double));
-        let rel = RelationDef {
-            from: "Author".to_string(),
-            to: "Book".to_string(),
-            properties: Some(props),
-        };
-        let config = make_config_with_entities(&["Author", "Book"]);
-        let ddl = generate_rel_table_ddl("WROTE", &rel, &config).unwrap();
-        assert!(ddl.contains("FROM Author TO Book"));
-        assert!(ddl.contains("role STRING"));
-        assert!(ddl.contains("weight DOUBLE"));
-    }
-
-    #[test]
-    fn rel_table_unknown_entity() {
-        let rel = RelationDef {
-            from: "Ghost".to_string(),
-            to: "Document".to_string(),
-            properties: None,
-        };
-        let config = make_config_with_entity("Document");
-        let err = generate_rel_table_ddl("BAD", &rel, &config).unwrap_err();
-        assert!(err.to_string().contains("Ghost"));
-    }
-
     // ── index DDL ────────────────────────────────────────────────────────
 
     #[test]
@@ -1170,11 +814,11 @@ mod tests {
         // DDL order: meta → entity tables → user rels → KB index tables
         assert!(schema.ddl[0].contains("_catalog_meta"), "first is meta table");
 
-        // Should have: meta, Document, REFERENCES rel,
-        // main_Index, main_Index_Chunk, main_Index_HAS_CHUNK, Document_IN_main
+        // Should have: meta, Document, REFERENCES rel — la base « main » n'a
+        // pas de table ici, elle est traduite en entité dérivée par le catalogue.
         assert!(
-            schema.ddl.len() >= 6,
-            "expected at least 6 DDL statements, got {}: {:?}",
+            schema.ddl.len() >= 3,
+            "expected at least 3 DDL statements, got {}: {:?}",
             schema.ddl.len(),
             schema.ddl
         );
@@ -1183,25 +827,9 @@ mod tests {
         let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).expect("Document table");
         assert!(!doc_ddl.contains("embedding"), "entity table must not have embeddings");
 
-        // KB Index tables exist
-        assert!(schema.ddl.iter().any(|s| s.contains("main_Index(")), "main_Index table");
-        assert!(schema.ddl.iter().any(|s| s.contains("main_Index_Chunk(")), "main_Index_Chunk table");
-
-        // Rels
-        assert!(schema.ddl.iter().any(|s| s.contains("main_Index_HAS_CHUNK")), "chunk rel");
-        assert!(schema.ddl.iter().any(|s| s.contains("Document_IN_main")), "title entity rel");
-        assert!(schema.ddl.iter().any(|s| s.contains("Document_SOURCED_main")), "sourced rel");
-
-        // Indexes: FTS on main_Index, vector on main_Index_Chunk
-        assert!(
-            schema.indexes.iter().any(|s| s.contains("CREATE_VECTOR_INDEX") && s.contains("main_Index_Chunk")),
-            "vector index on chunks: {:?}", schema.indexes
-        );
-        // Plus d'index FTS C++ : la recherche full-text passe par le handle Rust.
-        assert!(
-            !schema.indexes.iter().any(|s| s.contains("CREATE_LUCIVY_INDEX")),
-            "le schéma ne doit plus émettre d'index FTS C++: {:?}", schema.indexes
-        );
+        assert!(schema.ddl.iter().any(|s| s.contains("REFERENCES")), "user rel");
+        assert!(!schema.ddl.iter().any(|s| s.contains("_Index")), "plus de tables de base : {:?}", schema.ddl);
+        assert!(schema.indexes.is_empty(), "plus d'index de base : {:?}", schema.indexes);
     }
 
     /// `generate_fts_index_ddl` reste disponible pour qui veut un index
@@ -1304,23 +932,10 @@ mod tests {
         let file_ddl = schema.ddl.iter().find(|s| s.contains(" File(") || s.starts_with("CREATE NODE TABLE IF NOT EXISTS File(")).expect("File table");
         assert!(!file_ddl.contains("embedding"));
 
-        // TreeKB_Index table
-        assert!(schema.ddl.iter().any(|s| s.contains("TreeKB_Index(")), "TreeKB_Index table");
-        assert!(schema.ddl.iter().any(|s| s.contains("TreeKB_Index_Chunk(")), "TreeKB_Index_Chunk");
-
-        // Only Directory (title entity) has _IN_ rel
-        assert!(schema.ddl.iter().any(|s| s.contains("Directory_IN_TreeKB")), "Directory_IN_TreeKB");
-        assert!(!schema.ddl.iter().any(|s| s.contains("File_IN_TreeKB")), "File should NOT have _IN_ rel");
-
-        // SOURCED rels: both Directory and File contribute to TreeKB
-        assert!(
-            schema.ddl.iter().any(|s| s.contains("Directory_SOURCED_TreeKB") && s.contains("FROM Directory TO TreeKB_Index_Chunk")),
-            "Directory_SOURCED_TreeKB rel"
-        );
-        assert!(
-            schema.ddl.iter().any(|s| s.contains("File_SOURCED_TreeKB") && s.contains("FROM File TO TreeKB_Index_Chunk")),
-            "File_SOURCED_TreeKB rel"
-        );
+        // Plus de tables de base : la KB est une entité dérivée, posée par
+        // le catalogue.
+        assert!(!schema.ddl.iter().any(|s| s.contains("_Index")), "{:?}", schema.ddl);
+        assert!(!schema.ddl.iter().any(|s| s.contains("_IN_") || s.contains("_SOURCED_")), "{:?}", schema.ddl);
 
         // Plus d'index FTS C++ sur TreeKB_Index (handle Rust à la place).
         assert!(
@@ -1328,11 +943,7 @@ mod tests {
             "aucun index FTS C++ attendu: {:?}", schema.indexes
         );
 
-        // Vector on TreeKB_Index_Chunk
-        assert!(
-            schema.indexes.iter().any(|s| s.contains("TreeKB_Index_Chunk") && s.contains("CREATE_VECTOR_INDEX")),
-            "Vector on TreeKB_Index_Chunk"
-        );
+        assert!(schema.indexes.is_empty(), "aucun index de base attendu : {:?}", schema.indexes);
     }
 
     #[test]
@@ -1375,9 +986,9 @@ mod tests {
         let doc = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
         assert!(!doc.contains("embedding"));
 
-        // main_Index has embedding FLOAT[4]
-        let idx = schema.ddl.iter().find(|s| s.contains("main_Index(")).unwrap();
-        assert!(idx.contains("main_embedding FLOAT[4]"));
+        // La base « main » n'a pas de table ici : entité dérivée, posée par
+        // le catalogue.
+        assert!(!schema.ddl.iter().any(|s| s.contains("main_Index(")));
     }
 
     #[test]
@@ -1410,33 +1021,11 @@ mod tests {
         let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
         assert!(!doc_ddl.contains("embedding"));
 
-        // main_Index n'a plus d'index FTS C++.
-        assert!(!schema.indexes.iter().any(|s| s.contains("LUCIVY")));
+        // Plus d'index de base ici : la KB est une entité dérivée.
+        assert!(schema.indexes.is_empty(), "{:?}", schema.indexes);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
-
-    fn make_config_with_entity(name: &str) -> CatalogConfig {
-        make_config_with_entities(&[name])
-    }
-
-    fn make_config_with_entities(names: &[&str]) -> CatalogConfig {
-        let mut entities = HashMap::new();
-        for name in names {
-            entities.insert(
-                name.to_string(),
-                EntityDef {
-                    fields: HashMap::new(),
-                    hashsafe: None,
-                    derived_from: None,
-                },
-            );
-        }
-        CatalogConfig {
-            entities,
-            ..Default::default()
-        }
-    }
 
     fn make_full_config() -> CatalogConfig {
         let mut fields = HashMap::new();

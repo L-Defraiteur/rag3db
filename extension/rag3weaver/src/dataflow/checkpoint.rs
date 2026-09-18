@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use super::graph::DataflowGraph;
 use super::port::{BatchPayload, PortType, PortValue};
 use crate::records::{
-    AggregateRecord, CheckpointEntityRecord, CheckpointRelationRecord, DeleteRecord,
-    EntityRecord, KBContentRecord, RelationRecord, UpdateRecord,
+    CheckpointEntityRecord, CheckpointRelationRecord, DeleteRecord, EntityRecord,
+    RelationRecord, UpdateRecord,
 };
 
 // ─── CheckpointPortValue ────────────────────────────────────────────────────
@@ -186,9 +186,7 @@ fn checkpoint_encode_batch(payload: &BatchPayload) -> Result<Vec<u8>, String> {
                 records.iter().map(|r| r.to_checkpoint()).collect();
             enc(&checkpoint)
         }
-        PortType::Aggregates => enc(boxed.downcast_ref::<Vec<AggregateRecord>>().ok_or("type mismatch: expected Vec<AggregateRecord>")?),
         PortType::Derivations => enc(boxed.downcast_ref::<Vec<crate::records::Derivation>>().ok_or("type mismatch: expected Vec<Derivation>")?),
-        PortType::KBContent => enc(boxed.downcast_ref::<Vec<KBContentRecord>>().ok_or("type mismatch: expected Vec<KBContentRecord>")?),
         PortType::Updates => enc(boxed.downcast_ref::<Vec<UpdateRecord>>().ok_or("type mismatch: expected Vec<UpdateRecord>")?),
         PortType::Deletes => enc(boxed.downcast_ref::<Vec<DeleteRecord>>().ok_or("type mismatch: expected Vec<DeleteRecord>")?),
         other => Err(format!("unsupported batch_type for checkpoint: {other:?}")),
@@ -208,9 +206,7 @@ fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPay
             let checkpoint: Vec<CheckpointRelationRecord> = dec(bytes)?;
             Ok(BatchPayload::new(PortType::Relations, checkpoint.into_iter().map(|c| c.into_relation_record()).collect::<Vec<RelationRecord>>()))
         }
-        PortType::Aggregates => Ok(BatchPayload::new(PortType::Aggregates, dec::<Vec<AggregateRecord>>(bytes)?)),
         PortType::Derivations => Ok(BatchPayload::new(PortType::Derivations, dec::<Vec<crate::records::Derivation>>(bytes)?)),
-        PortType::KBContent => Ok(BatchPayload::new(PortType::KBContent, dec::<Vec<KBContentRecord>>(bytes)?)),
         PortType::Updates => Ok(BatchPayload::new(PortType::Updates, dec::<Vec<UpdateRecord>>(bytes)?)),
         PortType::Deletes => Ok(BatchPayload::new(PortType::Deletes, dec::<Vec<DeleteRecord>>(bytes)?)),
         other => Err(format!("unsupported batch_type for checkpoint: {other:?}")),
@@ -241,19 +237,9 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
                 .collect();
             Ok(BatchPayload::new(PortType::Relations, records))
         }
-        PortType::Aggregates => {
-            let records: Vec<AggregateRecord> =
-                serde_json::from_str(json).map_err(|e| e.to_string())?;
-            Ok(BatchPayload::new(PortType::Aggregates, records))
-        }
         PortType::Derivations => {
             let records: Vec<crate::records::Derivation> = serde_json::from_str(json).map_err(|e| e.to_string())?;
             Ok(BatchPayload::new(PortType::Derivations, records))
-        }
-        PortType::KBContent => {
-            let records: Vec<KBContentRecord> =
-                serde_json::from_str(json).map_err(|e| e.to_string())?;
-            Ok(BatchPayload::new(PortType::KBContent, records))
         }
         PortType::Updates => {
             let records: Vec<UpdateRecord> =
@@ -508,9 +494,8 @@ mod tests {
     use crate::connection::CypherValue;
     use crate::dataflow::node_factories::register_builtins;
     use crate::dataflow::node_registry::NodeRegistry;
-    use crate::dataflow::record_nodes::{
-        KBEmbedNode, InsertRecordNode, LinkRecordNode,
-    };
+    use crate::dataflow::record_nodes::{EmbedNode, InsertRecordNode, LinkRecordNode};
+    use crate::search::SearchSignals;
     use crate::records::{CheckpointRefStatus, EntityRecord};
     use crate::refs::EntityRef;
 
@@ -582,34 +567,6 @@ mod tests {
         assert_eq!(records[0].entity_ref.uuid().unwrap(), "uuid-abc");
         // No resolver (consumed in original execution)
         assert!(records[0].resolver.is_none());
-    }
-
-    #[test]
-    fn checkpoint_aggregate_batch_roundtrip() {
-        let records = vec![
-            AggregateRecord {
-                index_entry_uuid: "idx-1".into(),
-                kb_name: "TreeKB".into(),
-                title_entity: "Directory".into(),
-                source_uuid: "dir-1".into(),
-            },
-            AggregateRecord {
-                index_entry_uuid: "idx-2".into(),
-                kb_name: "TreeKB".into(),
-                title_entity: "Directory".into(),
-                source_uuid: "dir-2".into(),
-            },
-        ];
-        let pv = PortValue::new(BatchPayload::new(PortType::Aggregates, records));
-
-        let cpv = port_value_to_checkpoint(&pv).unwrap();
-        let restored = port_value_from_checkpoint(cpv).unwrap();
-
-        let payload = restored.take::<BatchPayload>().expect("expected BatchPayload");
-        let records = payload.take::<AggregateRecord>().unwrap();
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].index_entry_uuid, "idx-1");
-        assert_eq!(records[1].index_entry_uuid, "idx-2");
     }
 
     #[test]
@@ -693,10 +650,10 @@ mod tests {
     #[test]
     fn graph_definition_hash_changes_with_config() {
         let mut g1 = DataflowGraph::new();
-        g1.add_node(Box::new(KBEmbedNode::new("embeds", 32))).unwrap();
+        g1.add_node(Box::new(EmbedNode::new("embeds", SearchSignals::HYBRID, 32))).unwrap();
 
         let mut g2 = DataflowGraph::new();
-        g2.add_node(Box::new(KBEmbedNode::new("embeds", 64))).unwrap();
+        g2.add_node(Box::new(EmbedNode::new("embeds", SearchSignals::HYBRID, 64))).unwrap();
 
         assert_ne!(g1.to_definition().hash(), g2.to_definition().hash());
     }
@@ -704,14 +661,14 @@ mod tests {
     #[test]
     fn graph_definition_serializable() {
         let mut graph = DataflowGraph::new();
-        graph.add_node(Box::new(KBEmbedNode::new("embeds", 32))).unwrap();
+        graph.add_node(Box::new(EmbedNode::new("embeds", SearchSignals::HYBRID, 32))).unwrap();
 
         let def = graph.to_definition();
         let json = serde_json::to_string(&def).unwrap();
         let restored: GraphDefinition = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored.nodes.len(), 1);
-        assert_eq!(restored.nodes[0].node_type, "KBEmbedNode");
+        assert_eq!(restored.nodes[0].node_type, "EmbedNode");
         assert_eq!(
             restored.nodes[0].config.get("gpu_batch_size").unwrap().as_u64(),
             Some(32)
@@ -725,13 +682,8 @@ mod tests {
         let cases = vec![
             ("InsertRecordNode", serde_json::json!({})),
             ("LinkRecordNode", serde_json::json!({})),
-            ("KBEmbedNode", serde_json::json!({"gpu_batch_size": 16})),
             ("ChunkRecordNode", serde_json::json!({})),
-            ("EmbedNode", serde_json::json!({})),
-            ("KBChunkRecordNode", serde_json::json!({})),
-            ("KBGatherNode", serde_json::json!({})),
-            ("KBUpdateNode", serde_json::json!({})),
-            ("KBChunkNode", serde_json::json!({})),
+            ("EmbedNode", serde_json::json!({"gpu_batch_size": 16})),
             ("FlushNode", serde_json::json!({"table": "Test_Index"})),
             ("SparseCommitNode", serde_json::json!({"table": "Test_Chunk"})),
         ];
@@ -753,7 +705,7 @@ mod tests {
     fn registry_embed_node_preserves_config() {
         let registry = builtin_registry();
         let config = serde_json::json!({"gpu_batch_size": 64});
-        let node = registry.create("KBEmbedNode", "embeds", &config).unwrap();
+        let node = registry.create("EmbedNode", "embeds", &config).unwrap();
         let restored_config = node.node_config()
             .and_then(|b| b.downcast::<serde_json::Value>().ok())
             .expect("expected serde_json::Value config");

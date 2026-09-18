@@ -278,8 +278,8 @@ pub struct KBConfig {
     #[serde(alias = "keyword_weight")]
     pub keyword_weight: f64,
 
-    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : copié dans
-    /// `KBMetadata`, jamais lu ensuite. Voir `docs/vision_roadmap_09_2026/06`.
+    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : gardé dans
+    /// la config, jamais lu ensuite. Voir `docs/vision_roadmap_09_2026/06`.
     #[serde(alias = "title_boost")]
     pub title_boost: f64,
 
