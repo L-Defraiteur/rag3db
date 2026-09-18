@@ -34,7 +34,12 @@ Karissa|40
 Zhang|50
 Noura|25
 
+# Décision du 18 septembre 2026 : il n'y a pas de dépôt d'extensions, et
+# extension.rag3db.com n'existe pas — le renommage l'avait inventé. Ce cas
+# chargeait un jeu de données depuis ce domaine. Le jour où httpfs est rouvert,
+# servir city.csv localement (comme AttachHTTPDatabase le fait sur localhost).
 -CASE ScanFromHTTPS
+-SKIP
 -LOAD_DYNAMIC_EXTENSION httpfs
 -STATEMENT load from "https://extension.rag3db.com/dataset/test/city.csv" return *;
 ---- 3
