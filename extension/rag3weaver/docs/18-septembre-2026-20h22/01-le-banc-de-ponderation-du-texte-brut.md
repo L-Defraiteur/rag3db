@@ -208,9 +208,13 @@ ajoute `codeparsers/docs/30-aout-2026-06h00/`) ; à rejouer.
 
 **Deux données pour le pas C — des données, pas des conclusions :**
 
-1. **Hybride ≤ vecteur à 5** : 22 contre 24. RRF avec BM25 à 0,3 tire deux
-   bonnes réponses du vecteur hors du top 5. Sur du code, avec 278m, le plein
-   texte coûte plus qu'il n'apporte à ce poids-là.
+1. **Hybride ≤ vecteur à 5** : 22 contre 24 — **mesuré aux poids BM25 0,3 /
+   vecteur 0,7**, les défauts du moteur. La session recherche a trouvé le même
+   jour que ses appelants migrés fusionnaient à ces défauts là où le gabarit
+   `search_base` dit 0,6 / 0,4 ; après son correctif, une fusion déclarée sur
+   l'entité prime, sinon le gabarit fait foi. Ce chiffre est donc celui d'un
+   réglage qui n'est plus le défaut : **l'hybride est à rejouer après la fusion
+   de sa branche**, et le poids ira à côté du chiffre.
 2. **Ce qui pollue le haut des listes n'est pas le texte brut, c'est le code
    lui-même** : `tests (namespace)`, `file_scope_NN (module)` — les scopes de
    fichier entier — et `validate_identifier` devant `validate_id`. C'est un
