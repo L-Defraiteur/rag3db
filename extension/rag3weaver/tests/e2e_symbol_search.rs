@@ -156,7 +156,7 @@ fn titles(catalog: &Arc<Mutex<Catalog>>, query: &str, mode: BM25Mode) -> Vec<Str
         .filter_map(|r| {
             r.data
                 .as_ref()
-                .and_then(|d| d.get("_title"))
+                .and_then(|d| d.get("title"))
                 .and_then(|v| v.as_str())
                 .map(str::to_string)
         })
@@ -282,7 +282,7 @@ fn parse_boolean_syntax_keeps_highlights_and_attributes_chunks() {
     let mut hits: Vec<String> = response
         .results
         .iter()
-        .filter_map(|r| r.data.as_ref()?.get("_title")?.as_str().map(str::to_string))
+        .filter_map(|r| r.data.as_ref()?.get("title")?.as_str().map(str::to_string))
         .collect();
     hits.sort();
     hits.dedup();
@@ -418,7 +418,7 @@ fn relaxed_ascii_dash_is_separator_em_dash_is_content() {
     let mut hits: Vec<String> = response
         .results
         .iter()
-        .filter_map(|r| r.data.as_ref()?.get("_title")?.as_str().map(str::to_string))
+        .filter_map(|r| r.data.as_ref()?.get("title")?.as_str().map(str::to_string))
         .collect();
     hits.sort();
     eprintln!("  Contains(d=0)  \"foo bar\" -> {hits:?}");
