@@ -197,7 +197,7 @@ fn title_of(result: &rag3weaver::search::SearchResult) -> String {
     result
         .data
         .as_ref()
-        .and_then(|d| d.get("_title"))
+        .and_then(|d| d.get("title"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string()

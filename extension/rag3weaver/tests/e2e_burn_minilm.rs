@@ -158,7 +158,7 @@ fn top_title(catalog: &Arc<Mutex<Catalog>>, query: &str, signals: SearchSignals)
     .unwrap();
     assert!(!response.results.is_empty(), "no results for {query:?}");
     let top = &response.results[0];
-    let title = top.data.as_ref().and_then(|d| d.get("_title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let title = top.data.as_ref().and_then(|d| d.get("title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
     eprintln!("  {signals:?} {query:?} -> {title:?} (score={:.4}, vector={}, bm25={})",
         top.score, response.meta.vector_count, response.meta.bm25_count);
     title
@@ -187,7 +187,7 @@ fn minilm_hybrid_both_signals() {
     .unwrap();
     assert!(response.meta.vector_count > 0, "vector should contribute");
     assert!(response.meta.bm25_count > 0, "bm25 should contribute");
-    let top = response.results[0].data.as_ref().and_then(|d| d.get("_title")).and_then(|v| v.as_str()).unwrap_or("");
+    let top = response.results[0].data.as_ref().and_then(|d| d.get("title")).and_then(|v| v.as_str()).unwrap_or("");
     assert_eq!(top, "Rust");
 }
 
