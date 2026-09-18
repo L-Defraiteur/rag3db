@@ -947,6 +947,47 @@ fn un_modele_absent_refuse_en_nommant_les_disponibles() {
     let _ = std::fs::remove_dir_all(&dossier);
 }
 
+/// **Pourquoi ce modèle est là le premier** se note une fois, se relit, et un
+/// lecteur ne l'écrit pas. `embedding_model:{slug}` dit ce que l'index porte ;
+/// `embedding_choice` dit ce qui a décidé du premier — et ne bouge plus : le
+/// seuil décide du premier index, et le premier index a eu lieu.
+#[test]
+#[ignore]
+fn le_choix_du_premier_index_se_note_une_fois_et_se_relit() {
+    use rag3weaver::embedding_choice::{recommended_model, CardClass, Choice};
+    let dossier = dossier_temporaire("modeles-choix");
+    {
+        let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
+        a.register_entity("Produit", produit_entite()).unwrap();
+        assert!(a.embedding_choice().unwrap().is_none(), "rien avant qu'on ait dit pourquoi");
+        // Le cœur sur une vraie carte : 278m, et la raison le dit.
+        let choix = recommended_model(1_642, 10 * 1024 * 1024, CardClass::Dedicated { vram_bytes: 31 << 30 });
+        a.note_embedding_choice(&choix).unwrap();
+        let note = a.embedding_choice().unwrap().expect("noté");
+        assert_eq!(note.model, "granite-278m");
+        assert!(note.reason.contains("1642 fichiers"), "{}", note.reason);
+        assert!(note.at > 0);
+        // Une seconde note ne remplace pas la première : le premier index a eu lieu.
+        a.note_embedding_choice(&Choice { model: "granite-107m".into(), reason: "après coup".into() }).unwrap();
+        assert_eq!(a.embedding_choice().unwrap().unwrap().model, "granite-278m", "le choix du premier index ne bouge plus");
+        a.ingest_entities("Produit", produit_ligne("un clavecin")).unwrap();
+        let _ = a.execute_raw("CHECKPOINT");
+    }
+    {
+        // Un lecteur relit la note et n'en écrit pas.
+        let conn = Rag3dbConnection::read_only(&dossier).expect("ouvrir en lecture");
+        let mut config = rag3weaver::CatalogConfig::default();
+        config.embedding_dim = 4;
+        let mut lecteur = rag3weaver::Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(EmbarqueurNomme("modele-a", 4)), config);
+        lecteur.initialize().unwrap();
+        assert_eq!(lecteur.embedding_choice().unwrap().unwrap().model, "granite-278m");
+        lecteur.note_embedding_choice(&Choice { model: "x".into(), reason: "un lecteur".into() }).unwrap();
+        assert_eq!(lecteur.embedding_choice().unwrap().unwrap().model, "granite-278m", "un lecteur n'écrit rien");
+        drop(lecteur);
+    }
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
 /// **Le lot ne détruit que l'index du modèle courant**, et un arrêt brutal
 /// entre la destruction et la reconstruction se répare à l'ouverture suivante.
 #[test]
