@@ -290,9 +290,41 @@ R@1, R@5 sur les 45 questions, vecteur seul, granite-278m. L'étage qui fait
 bondir le MRR est celui à corriger ; s'ils bougent tous un peu, la perte est
 répartie et il faudra les trois.
 
-Sans code ici : ce plan attend un go, comme le banc l'a attendu. M1 est le
-premier à faire — c'est celui qui, s'il explique l'écart, change la façon
-d'embarquer le code pour tout le monde.
+### 18 septembre 2026 — les quatre lignes, `granite-278m`
+
+`tests/e2e_banc_etage.rs`, vecteur seul, 45 questions, carte TV, 47 s.
+
+| ligne | MRR | R@1 | R@5 |
+|---|---:|---:|---:|
+| tel quel — `Catalog::search` sur `src/` (4 819 scopes) | 0,346 | 10 | 24 |
+| **M1 — même texte que le cosinus nu, un chunk par fonction (67 scopes)** | **0,833** | **31** | **45** |
+| M2 — cosinus exact au lieu du HNSW, même résolution | 0,354 | 10 | 25 |
+| M3 — les 20 chunks bruts du HNSW, avant résolution | 0,179 | 1 | 16 |
+
+M3 : le bon parent est dans les 20 chunks bruts pour 31 questions sur 45.
+
+**Ce que ça dit.** M2 ≈ tel quel : le HNSW ne perd rien — un rappel exact
+ne change pas le classement. M3 < tel quel : la résolution au parent *aide*,
+elle ne perd pas ; l'ordre brut des chunks est pire que le résultat rendu.
+**M1 rend 0,833 — les 0,844 du cosinus nu, retrouvés à travers le
+catalogue.** L'index et la résolution sont hors de cause. Ce qui reste, c'est
+le texte embarqué : le découpage par champ, le nom absent du vecteur.
+
+**Un facteur confondu, nommé.** M1 change le texte *et* la taille du corpus —
+67 scopes contre 4 819. Une part de l'écart peut venir des distracteurs, pas
+du texte. La mesure qui les sépare, sans toucher à `EntityConfig` :
+
+**M1b** — les 4 819 scopes de `src/`, chacun embarqué comme *un* texte
+`nom + doc + signature + corps` assemblé côté test depuis `analysis.scopes`,
+dans l'entité `Fonction` du M1. Même corpus que tel quel, même texte que M1.
+Si M1b tient près de 0,83, le texte explique tout ; s'il retombe vers 0,35,
+c'est la taille du corpus. À faire sur go — c'est une mesure de plus que les
+trois accordées.
+
+**Et rien n'est corrigé dans `EntityConfig`.** Embarquer le nom avec le texte,
+ou découper les champs ensemble, change les offsets, les surlignages et le
+contrat chunk → parent : c'est une décision de Lucie, avec ce tableau sous les
+yeux — et M1b d'abord, pour que le chiffre soit propre.
 
 ## 10. Ce que ça coûte
 
