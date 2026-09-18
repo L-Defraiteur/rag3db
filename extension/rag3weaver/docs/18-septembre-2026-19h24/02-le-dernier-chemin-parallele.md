@@ -101,3 +101,21 @@ manquait aux graphes d'agents pour calculer leurs requêtes en amont ;
 `search_strategy.rs` qui cesse de cacher l'infrastructure du graphe sous le
 nom d'un chemin mort ; et ~250 lignes de moins une fois E tranché en faveur
 de la suppression.
+
+## 5. Livraison (18 au soir, tard)
+
+A, B, C, D livrés dans l'ordre, chacun vert seul (lib 977 et les suites du
+chemin à chaque pas ; C : observe 7, agent_loop 8, code 24 — les traces
+montrent désormais les neuf nœuds internes de la recherche sous le run du
+graphe stratégie). `KBQuerySourceNode` reste : c'est l'émetteur de payload,
+et l'absorber exigerait un param `options` sur la fiche de `search_base`,
+surface héritée par l'outil des agents — à arbitrer si on le veut.
+
+Une leçon en passant : le pas D avait d'abord posé `UnifiedResult` dans
+`port.rs` — et `e2e_code` a rougi, JSON gonflé de 6 963 à 17 511 caractères.
+Rien de cassé : **`port.rs` est le corpus vivant du test** (`read_sources`
+filtré sur lui), et 300 lignes de plus y diluaient `merge_port_values`. Le
+test-canari a fait son travail ; les types vivent dans
+`dataflow/resultat.rs`, leur propre module, et le corpus n'a bougé que d'une
+ligne d'import. E — le sort de `search_with_strategy` — attend le mot de
+Lucie, porté avec explore et `fuse_results`.
