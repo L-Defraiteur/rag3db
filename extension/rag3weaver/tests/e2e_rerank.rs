@@ -6,7 +6,7 @@
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::{CypherValue, DbConnection};
@@ -43,8 +43,8 @@ fn note(name: &str, body: &str) -> BTreeMap<String, CypherValue> {
     d
 }
 
-fn names(catalog: &mut Catalog, q: &str, opts: SearchOptions) -> (Vec<String>, rag3weaver::search::SearchMeta) {
-    let resp = catalog.search("Note", q, opts).unwrap();
+fn names(catalog: &Arc<Mutex<Catalog>>, q: &str, opts: SearchOptions) -> (Vec<String>, rag3weaver::search::SearchMeta) {
+    let resp = Catalog::rechercher(catalog, "Note", q, opts).unwrap();
     let names = resp
         .results
         .iter()
@@ -71,19 +71,19 @@ fn opts(rerank: Option<RerankOptions>) -> SearchOptions {
 #[test]
 #[ignore]
 fn rerank_reorders_the_fused_pool() {
-    let mut catalog = catalog();
-    catalog.ingest_entities("Note", vec![
+    let catalog = Arc::new(Mutex::new(catalog()));
+    catalog.lock().unwrap().ingest_entities("Note", vec![
         note("A", "scheduler scheduler scheduler scheduler scheduler notes"),
         note("B", "the scheduler handles preemption of tasks"),
         note("C", "scheduler overview"),
     ]).unwrap();
 
-    let (baseline, meta) = names(&mut catalog, "scheduler preemption", opts(None));
+    let (baseline, meta) = names(&catalog, "scheduler preemption", opts(None));
     assert_eq!(baseline.len(), 3);
     assert_eq!(meta.reranked_count, 0);
 
-    catalog.set_reranker(Arc::new(MockReranker));
-    let (reranked, meta) = names(&mut catalog, "scheduler preemption", opts(Some(RerankOptions::default())));
+    catalog.lock().unwrap().set_reranker(Arc::new(MockReranker));
+    let (reranked, meta) = names(&catalog, "scheduler preemption", opts(Some(RerankOptions::default())));
     assert_eq!(reranked[0], "B", "la note qui couvre les deux termes passe devant : {reranked:?}");
     assert_eq!(reranked.len(), 3);
     assert_eq!(meta.reranked_count, 3, "warnings: {:?}", meta.warnings);
@@ -95,10 +95,10 @@ fn rerank_reorders_the_fused_pool() {
 #[test]
 #[ignore]
 fn rerank_without_reranker_warns_and_keeps_order() {
-    let mut catalog = catalog();
-    catalog.ingest_entities("Note", vec![note("A", "scheduler"), note("B", "scheduler preemption")]).unwrap();
-    let (plain, _) = names(&mut catalog, "scheduler preemption", opts(None));
-    let (with, meta) = names(&mut catalog, "scheduler preemption", opts(Some(RerankOptions::default())));
+    let catalog = Arc::new(Mutex::new(catalog()));
+    catalog.lock().unwrap().ingest_entities("Note", vec![note("A", "scheduler"), note("B", "scheduler preemption")]).unwrap();
+    let (plain, _) = names(&catalog, "scheduler preemption", opts(None));
+    let (with, meta) = names(&catalog, "scheduler preemption", opts(Some(RerankOptions::default())));
     assert_eq!(plain, with);
     assert_eq!(meta.reranked_count, 0);
     assert!(meta.warnings.iter().any(|w| w.contains("aucun reranker")), "{:?}", meta.warnings);
@@ -109,30 +109,30 @@ fn rerank_without_reranker_warns_and_keeps_order() {
 #[test]
 #[ignore]
 fn rerank_pool_and_pagination() {
-    let mut catalog = catalog();
+    let catalog = Arc::new(Mutex::new(catalog()));
     let mut rows = Vec::new();
     for i in 0..12 {
         rows.push(note(&format!("N{i:02}"), &format!("scheduler note number {i}")));
     }
     rows.push(note("GOLD", "scheduler preemption and priority inheritance"));
-    catalog.ingest_entities("Note", rows).unwrap();
-    catalog.set_reranker(Arc::new(MockReranker));
+    catalog.lock().unwrap().ingest_entities("Note", rows).unwrap();
+    catalog.lock().unwrap().set_reranker(Arc::new(MockReranker));
 
     let mut o = opts(Some(RerankOptions { candidates: 50 }));
     o.limit = 2;
-    let (page1, meta) = names(&mut catalog, "scheduler preemption priority", o.clone());
+    let (page1, meta) = names(&catalog, "scheduler preemption priority", o.clone());
     assert_eq!(page1.len(), 2);
     assert_eq!(page1[0], "GOLD");
     assert!(meta.reranked_count >= 13, "pool = tout : {}", meta.reranked_count);
 
     o.offset = 2;
-    let (page2, _) = names(&mut catalog, "scheduler preemption priority", o);
+    let (page2, _) = names(&catalog, "scheduler preemption priority", o);
     assert_eq!(page2.len(), 2);
     assert!(!page2.contains(&"GOLD".to_string()) && page2.iter().all(|n| !page1.contains(n)));
 
     // Pool minimal : limit + offset quand candidates est plus petit.
     let mut small = opts(Some(RerankOptions { candidates: 1 }));
     small.limit = 3;
-    let (_, meta) = names(&mut catalog, "scheduler preemption priority", small);
+    let (_, meta) = names(&catalog, "scheduler preemption priority", small);
     assert_eq!(meta.reranked_count, 3);
 }
