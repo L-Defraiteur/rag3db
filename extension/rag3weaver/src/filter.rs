@@ -26,6 +26,8 @@ pub enum FilterError {
 
     #[error("no relation found between \"{from}\" and \"{to}\"")]
     NoRelation { from: String, to: String },
+    #[error("invalid structured filter: {0}")]
+    Structured(String),
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -86,6 +88,10 @@ pub enum FilterValue {
 pub enum FilterCondition {
     /// Single field filter.
     Field { key: String, value: FilterValue },
+    /// Explicit local object path; dots in `Field.key` still mean entity joins.
+    Path { path: Vec<String>, value: FilterValue },
+    /// At least one element must satisfy the WHOLE condition, recursively.
+    Nested { path: Vec<String>, condition: Box<FilterCondition> },
     /// AND: all conditions must match.
     Must(Vec<FilterCondition>),
     /// OR: at least one condition must match.
@@ -268,6 +274,8 @@ impl<'a> FilterParser<'a> {
         alias_counter: &mut usize,
     ) -> Result<String, FilterError> {
         match condition {
+            FilterCondition::Path { .. } | FilterCondition::Nested { .. } =>
+                self.structured_clause(condition, result_alias, params, 0),
             FilterCondition::Field { key, value } => {
                 let (entity, field) = if let Some((e, f)) = key.split_once('.') {
                     (e.to_string(), f.to_string())
@@ -387,6 +395,46 @@ impl<'a> FilterParser<'a> {
         }
     }
 
+    fn structured_clause(
+        &mut self, condition: &FilterCondition, alias: &str,
+        params: &mut Vec<QueryParam>, depth: usize,
+    ) -> Result<String, FilterError> {
+        if self.dialect.name() != "rag3db" {
+            return Err(FilterError::Structured("native nested filters require rag3db".into()));
+        }
+        if depth > 32 { return Err(FilterError::Structured("nesting exceeds 32".into())); }
+        let path_expr = |path: &[String]| -> Result<String, FilterError> {
+            if path.is_empty() { return Err(FilterError::Structured("empty path".into())); }
+            for part in path { validate_identifier(part, "path component")?; }
+            Ok(path.join("."))
+        };
+        match condition {
+            FilterCondition::Path { path, value } => {
+                let field = path_expr(path)?;
+                self.build_clause(alias, &field, value, params)
+                    .ok_or_else(|| FilterError::Structured("empty predicate".into()))
+            }
+            FilterCondition::Field { key, value } => {
+                validate_identifier(key, "nested field")?;
+                self.build_clause(alias, key, value, params)
+                    .ok_or_else(|| FilterError::Structured("empty predicate".into()))
+            }
+            FilterCondition::Nested { path, condition } => {
+                let field = path_expr(path)?;
+                let element = format!("nested_{depth}");
+                let predicate = self.structured_clause(condition, &element, params, depth + 1)?;
+                Ok(format!("COALESCE(any({element} IN {alias}.{field} WHERE COALESCE(({predicate}), false)), false)"))
+            }
+            FilterCondition::Must(cs) | FilterCondition::Should(cs) | FilterCondition::MustNot(cs) => {
+                if cs.is_empty() { return Err(FilterError::Structured("empty boolean group".into())); }
+                let clauses = cs.iter().map(|c| self.structured_clause(c, alias, params, depth + 1)).collect::<Result<Vec<_>, _>>()?;
+                let join = if matches!(condition, FilterCondition::Should(_)) { " OR " } else { " AND " };
+                let expression = format!("({})", clauses.join(join));
+                Ok(if matches!(condition, FilterCondition::MustNot(_)) { format!("NOT {expression}") } else { expression })
+            }
+        }
+    }
+
     fn next_param(&mut self) -> String {
         let name = format!("filter_p{}", self.param_counter);
         self.param_counter += 1;
@@ -476,6 +524,23 @@ impl<'a> FilterParser<'a> {
         op: &FilterOp,
         params: &mut Vec<QueryParam>,
     ) -> Option<String> {
+        // Scalar membership avoids list lambdas unsupported in rag3db projected-graph
+        // filters and the native list-parameter/lambda evaluation crash.
+        if let FilterOp::HasAny(items) | FilterOp::HasAll(items) | FilterOp::HasNone(items) = op {
+            if self.dialect.filter_list_scalar_contains(prop, "probe").is_some() {
+                if items.is_empty() {
+                    return Some(if matches!(op, FilterOp::HasAny(_)) { "false" } else { "true" }.into());
+                }
+                let clauses: Vec<_> = items.iter().map(|item| {
+                    let p = self.next_param();
+                    params.push(QueryParam::new(&p, item.clone()));
+                    self.dialect.filter_list_scalar_contains(prop, &p).unwrap()
+                }).collect();
+                let separator = if matches!(op, FilterOp::HasAll(_)) { " AND " } else { " OR " };
+                let clause = format!("({})", clauses.join(separator));
+                return Some(if matches!(op, FilterOp::HasNone(_)) { format!("NOT {clause}") } else { clause });
+            }
+        }
         let p = self.next_param();
         match op {
             FilterOp::In(items) => {
@@ -1015,7 +1080,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["list_any_match(n.tags, v -> list_contains($filter_p0, v))"]
+            vec!["(list_contains(n.tags, $filter_p0) OR list_contains(n.tags, $filter_p1))"]
         );
     }
 
@@ -1034,7 +1099,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["list_all($filter_p0, v -> list_contains(n.tags, v))"]
+            vec!["(list_contains(n.tags, $filter_p0) AND list_contains(n.tags, $filter_p1))"]
         );
     }
 
@@ -1050,7 +1115,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["NOT list_any_match(n.tags, v -> list_contains($filter_p0, v))"]
+            vec!["NOT (list_contains(n.tags, $filter_p0))"]
         );
     }
 
@@ -1580,5 +1645,40 @@ mod tests_aller_retour {
         assert!(matches!(direct, FilterValue::Direct(CypherValue::String(s)) if s == "x"));
         let nul: FilterValue = serde_json::from_str("null").unwrap();
         assert!(matches!(nul, FilterValue::Direct(CypherValue::Null)));
+    }
+}
+
+#[cfg(test)]
+mod structured_tests {
+    use super::*;
+    use crate::dialect::{Rag3dbDialect, PostgresDialect};
+    use serde_json::json;
+    #[test]
+    fn nested_has_one_scope_and_parameterized_values() {
+        let relations=HashMap::new();
+        let mut p=FilterParser::new(&relations,&Rag3dbDialect);
+        let c: FilterCondition=serde_json::from_value(json!({"nested":{"path":["abilities"],"condition":{"must":[
+            {"field":{"key":"label","value":"Flying' OR true"}},
+            {"field":{"key":"level","value":[{"op":"gte","value":3}]}}
+        ]}}})).unwrap();
+        let f=p.parse_condition(&c,"Card","n").unwrap();
+        assert_eq!(f.params.len(),2);
+        assert_eq!(f.combine_where().matches("any(").count(),1);
+        assert!(f.combine_where().contains("nested_0.label"));
+        assert!(f.combine_where().contains("nested_0.level"));
+        assert!(!f.combine_where().contains("Flying"));
+        assert!(FilterParser::new(&relations,&PostgresDialect).parse_condition(&c,"Card","n").is_err());
+    }
+    #[test]
+    fn explicit_paths_do_not_become_entity_joins() {
+        let relations=HashMap::new();
+        let mut p=FilterParser::new(&relations,&Rag3dbDialect);
+        for path in [vec![], vec!["bad) OR true".into()]] {
+            assert!(p.parse_condition(&FilterCondition::Path{path,value:FilterValue::Direct(3.into())},"Card","n").is_err());
+        }
+        let c=FilterCondition::Path{path:vec!["stats".into(),"power".into()],value:FilterValue::Direct(3.into())};
+        let parsed=p.parse_condition(&c,"Card","n").unwrap();
+        assert!(parsed.match_clauses.is_empty());
+        assert_eq!(parsed.combine_where(),"n.stats.power = $filter_p0");
     }
 }

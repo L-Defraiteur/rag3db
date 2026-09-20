@@ -1,0 +1,8 @@
+%% tool: link_snapshot
+%% description: Relier des identités existantes dans un snapshot ; validation du lot avant écriture.
+%% param: relation string! -- Relation déclarée sans propriétés.
+%% param: links -- Paires from/to contenant les champs d'identité hashsafe.
+%% result: link.report
+
+graph LR
+    link["RelationBatchNode(relation=$relation, links=$links)"]

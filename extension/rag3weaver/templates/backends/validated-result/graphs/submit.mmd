@@ -1,0 +1,9 @@
+%% tool: submit_result
+%% description: Submit a result for validation and persistence. Rejected proposals must be corrected.
+%% param: result json! -- Result conforming to the exposed schema.
+%% param: empty json! -- Host bound empty record default.
+%% result: save.record
+graph LR
+    prepare["RhaiNode(script_id=prepare_record, value=$result)"]
+    save["EntityRecordNode(entity=Submission, action=put, record=$empty)"]
+    prepare -->|result:record| save

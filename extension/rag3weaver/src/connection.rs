@@ -37,9 +37,26 @@ pub enum CypherValue {
     Map(BTreeMap<String, CypherValue>),
     #[serde(skip)]
     Blob(Vec<u8>),
+    /// Parameter-only type annotation; stored records/checkpoints retain plain values.
+    #[serde(skip)]
+    Typed { value: Box<CypherValue>, field_type: crate::config::FieldType },
 }
 
 impl CypherValue {
+    /// Validate explicit parameter types before crossing the native FFI boundary.
+    pub fn validate_parameter_types(&self) -> Result<(), String> {
+        match self {
+            Self::Typed { value, field_type } => {
+                crate::config::validate_payload_type(field_type, 0)?;
+                let json = serde_json::to_value(value).map_err(|e| e.to_string())?;
+                crate::json_schema::normalize(field_type, &json).map(|_| ())
+            }
+            Self::List(values) => values.iter().try_for_each(Self::validate_parameter_types),
+            Self::Map(values) => values.values().try_for_each(Self::validate_parameter_types),
+            _ => Ok(()),
+        }
+    }
+
     pub fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }

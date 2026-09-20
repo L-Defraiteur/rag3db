@@ -1,0 +1,8 @@
+%% tool: get_record
+%% description: Lit un record persistant par ses champs d'identité stable.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: record json! -- Champs d'identité du record.
+%% result: read.record
+
+graph LR
+    read["EntityRecordNode(entity=$entity, action='get', record=$record)"]

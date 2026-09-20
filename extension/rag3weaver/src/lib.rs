@@ -132,6 +132,9 @@ pub mod config;
 pub mod connection;
 pub mod dialect;
 pub mod embedder;
+#[cfg(feature = "daemon")]
+pub mod http_embedder;
+pub mod chat;
 // Fournisseur LLM distant (endpoint compatible OpenAI) et l'authentification
 // Google qui va avec. Le trait `Llm` de `llm.rs` existe sans cette feature.
 #[cfg(feature = "openai-llm")]
@@ -240,3 +243,10 @@ pub use search_strategy::{
 pub use validator::{validate_schema, KBFieldRef};
 #[cfg(feature = "rag3db-native")]
 pub use rag3db_connection::Rag3dbConnection;
+
+/// JSON Schema storage mapping and typed filter descriptors.
+pub mod json_schema;
+
+pub mod harness;
+pub mod backend;
+mod backend_nodes;

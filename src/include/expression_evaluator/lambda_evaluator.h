@@ -42,6 +42,7 @@ struct ListLambdaBindData {
     std::vector<common::idx_t> paramIndices;
     ExpressionEvaluator* rootEvaluator = nullptr;
     ListSliceInfo* sliceInfo = nullptr;
+    std::vector<uint64_t> quantifierCounts;
 };
 
 // E.g. for function list_transform([0,1,2], x->x+1)

@@ -1,0 +1,6 @@
+%% tool: get_result
+%% description: Read a persisted submission by its stable key.
+%% param: record json! -- Key of the submission.
+%% result: get.record
+graph LR
+    get["EntityRecordNode(entity=Submission, action=get, record=$record)"]

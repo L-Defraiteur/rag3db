@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "text",
+    "payload_json",
+    "created_at"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string"
+    },
+    "payload_json": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "integer"
+    }
+  }
+}

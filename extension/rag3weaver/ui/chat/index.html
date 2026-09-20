@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>rag3weaver · Chat</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<aside><div class="brand">rag3weaver<span>atelier local</span></div><button id="new">＋ Nouvelle conversation</button><h2>Conversations</h2><nav id="sessions"></nav><h2>Exports</h2><nav id="artifacts"></nav><p class="hint">Les fichiers et conversations restent dans le dossier de cette application. Le modèle reçoit les messages et les résultats de ses outils.</p></aside>
+<main><header><div><h1 id="name">Chat</h1><p id="model">Connexion…</p></div><span id="status" role="status">Prêt</span></header><section id="messages" aria-label="Conversation" aria-live="polite"><p class="empty">Une question, une recherche, une idée à explorer.</p></section><form id="composer"><label for="message">Votre message</label><textarea id="message" rows="3" placeholder="Que voulez-vous explorer ?" required></textarea><div class="actions"><small>Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne</small><button id="stop" type="button" disabled>Arrêter</button><button id="send" type="submit">Envoyer ↗</button></div></form></main>
+</body></html>

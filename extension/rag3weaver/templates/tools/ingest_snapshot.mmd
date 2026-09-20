@@ -1,0 +1,8 @@
+%% tool: ingest_snapshot
+%% description: Ingestion validée par lots d’un snapshot externe.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: records json! -- Tableau de records.
+%% result: ingest.report
+
+graph LR
+    ingest["EntityBatchNode(entity=$entity, records=$records)"]

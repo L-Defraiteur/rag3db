@@ -1,0 +1,10 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["key", "text", "labels", "created_at"],
+  "properties": {
+    "key": {"type": "string", "minLength": 1},
+    "text": {"type": "string", "minLength": 1},
+    "labels": {"type": "array", "items": {"type": "string"}},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"}
+  }
+}

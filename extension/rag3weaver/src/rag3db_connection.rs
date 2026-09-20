@@ -219,6 +219,8 @@ impl Rag3dbConnection {
             .prepare(cypher)
             .map_err(|e| DbError::QueryError(e.to_string()))?;
 
+        for p in params { p.value.validate_parameter_types().map_err(DbError::TypeError)?; }
+
         let rag3db_params: Vec<(&str, rag3db::Value)> = params
             .iter()
             .map(|p| (p.name.as_str(), cypher_to_rag3db_value(&p.value)))
@@ -339,6 +341,7 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
 /// Convert our `CypherValue` to a rag3db `Value` (for prepared statement params).
 fn cypher_to_rag3db_value(value: &CypherValue) -> rag3db::Value {
     match value {
+        CypherValue::Typed { value, field_type } => typed_rag3db_value(value, field_type),
         CypherValue::Null => rag3db::Value::Null(rag3db::LogicalType::String),
         CypherValue::Bool(b) => rag3db::Value::Bool(*b),
         CypherValue::Int(i) => rag3db::Value::Int64(*i),
@@ -360,6 +363,31 @@ fn cypher_to_rag3db_value(value: &CypherValue) -> rag3db::Value {
                 .collect();
             rag3db::Value::Struct(fields)
         }
+    }
+}
+
+fn payload_logical_type(ty: &crate::config::FieldType) -> rag3db::LogicalType {
+    use crate::config::FieldType as F;
+    use rag3db::LogicalType as L;
+    match ty {
+        F::List(item) => L::List { child_type: Box::new(payload_logical_type(item)) },
+        F::Struct(fields) => L::Struct { fields: fields.iter().map(|(k,t)| (k.clone(),payload_logical_type(t))).collect() },
+        F::Int64 | F::Integer => L::Int64,
+        F::Double | F::Number => L::Double,
+        F::Boolean => L::Bool,
+        // Payload dates arrive as ISO strings, converted by the destination column.
+        _ => L::String,
+    }
+}
+
+fn typed_rag3db_value(v: &CypherValue, ty: &crate::config::FieldType) -> rag3db::Value {
+    use crate::config::FieldType as F;
+    if v.is_null() { return rag3db::Value::Null(payload_logical_type(ty)); }
+    match (ty,v) {
+        (F::List(item), CypherValue::List(values)) => rag3db::Value::List(payload_logical_type(item), values.iter().map(|v| typed_rag3db_value(v,item)).collect()),
+        (F::Struct(fields), CypherValue::Map(values)) => rag3db::Value::Struct(fields.iter().map(|(k,t)| (k.clone(),typed_rag3db_value(values.get(k).unwrap_or(&CypherValue::Null), t))).collect()),
+        (F::Double | F::Number, CypherValue::Int(i)) => rag3db::Value::Double(*i as f64),
+        _ => cypher_to_rag3db_value(v),
     }
 }
 

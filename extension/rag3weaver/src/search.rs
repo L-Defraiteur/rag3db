@@ -833,6 +833,7 @@ pub fn embed_query(
 /// Uses double quotes for strings to avoid conflicts with the outer single-quoted wrapping.
 fn cypher_value_to_literal(value: &CypherValue) -> String {
     match value {
+        CypherValue::Typed { value, .. } => cypher_value_to_literal(value),
         CypherValue::Null => "null".to_string(),
         CypherValue::Bool(b) => if *b { "true" } else { "false" }.to_string(),
         CypherValue::Int(i) => i.to_string(),
@@ -854,14 +855,28 @@ fn cypher_value_to_literal(value: &CypherValue) -> String {
 }
 
 /// Replace `$param_name` placeholders with literal values in a Cypher query string.
-fn inline_params(query: &str, params: &[QueryParam]) -> String {
-    let mut result = query.to_string();
-    // Sort by name length descending to avoid partial replacements (e.g. $f vs $f_0)
-    let mut sorted_params: Vec<&QueryParam> = params.iter().collect();
-    sorted_params.sort_by(|a, b| b.name.len().cmp(&a.name.len()));
-    for param in sorted_params {
-        let literal = cypher_value_to_literal(&param.value);
-        result = result.replace(&format!("${}", param.name), &literal);
+pub(crate) fn inline_params(query: &str, params: &[QueryParam]) -> String {
+    // One pass: inserted string contents must never become parameter placeholders.
+    let mut result = String::with_capacity(query.len());
+    let mut chars = query.chars().peekable();
+    let mut quote = None;
+    while let Some(ch) = chars.next() {
+        if let Some(delimiter) = quote {
+            result.push(ch);
+            if ch == '\\' {
+                if let Some(escaped) = chars.next() { result.push(escaped); }
+            } else if ch == delimiter { quote = None; }
+        } else if matches!(ch, '\'' | '"' | '`') {
+            quote = Some(ch); result.push(ch);
+        } else if ch == '$' {
+            let mut name = String::new();
+            while chars.peek().is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_') {
+                name.push(chars.next().unwrap());
+            }
+            if let Some(param) = params.iter().find(|p| p.name == name) {
+                result.push_str(&cypher_value_to_literal(&param.value));
+            } else { result.push('$'); result.push_str(&name); }
+        } else { result.push(ch); }
     }
     result
 }
@@ -1012,7 +1027,7 @@ fn search_vector_hnsw_filtered(
         extra_params,
     );
     // Escape single quotes for embedding in the outer CALL string
-    let escaped = filter_cypher.replace('\'', "\\'");
+    let escaped = filter_cypher.replace('\\', "\\\\").replace('\'', "\\'");
 
     // Drop previous projected graph if it exists (ignore errors)
     let _ = conn
@@ -3034,6 +3049,16 @@ mod tests {
     use crate::embedder::{EmbedError, MockEmbedder};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn inline_filter_lists_without_replacing_literal_contents() {
+        let params = vec![
+            QueryParam { name: "f".into(), value: CypherValue::String("$f_0".into()) },
+            QueryParam { name: "f_0".into(), value: CypherValue::List(vec![CypherValue::String("Blue".into())]) },
+        ];
+        assert_eq!(inline_params("$f $f_0 '$f' $f_other", &params),
+            "\"$f_0\" [\"Blue\"] '$f' $f_other");
+    }
 
     // ── test helpers ──────────────────────────────────────────────────────
 

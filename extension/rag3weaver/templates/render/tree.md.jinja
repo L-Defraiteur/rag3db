@@ -1,0 +1,4 @@
+{{ count }} results{% if query %} · {{ query }}{% endif %}
+{% if domain %}{{ domain }}
+{% endif %}{% for warning in warnings %}Warning: {{ warning }}
+{% endfor %}{{ payload | tree }}

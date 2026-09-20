@@ -157,6 +157,13 @@ impl Node for SearchSourceNode {
         // cible, avant que les signaux ne lisent quoi que ce soit.
         let (reste_en_file, partiel, mut avertissements, embedding, sparse) = {
             let mut cat = catalog.lock().unwrap();
+            if let Some(condition) = options.filter_condition.as_ref() {
+                if let Some(config) = cat.entity_configs().get(&target.parent_table) {
+                    crate::json_schema::validate_structured_filter(condition, &config.fields)?;
+                }
+                // A malformed restriction must abort before any signal can broaden it.
+                cat.compile_filter_utilisateur(&target.parent_table, Some(condition)).map_err(|e|e.to_string())?;
+            }
             let mut w: Vec<String> = Vec::new();
             let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
             // Bornée à la fermeture de la cible : ce que d'autres entités ont
@@ -1084,7 +1091,16 @@ impl Node for SparseSearchNode {
 /// étiquette vaut 1,0. `boost` nomme les étiquettes en rôle `Boost` : elles ne
 /// participent pas à la fusion mais modulent le score fusionné — c'est ainsi
 /// qu'un [`RerankNode`] se **mélange** au lieu de remplacer.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DuplicatePolicy {
+    #[default]
+    Merge,
+    Keep,
+}
+
 pub struct FuseResultsNode {
+    duplicates: DuplicatePolicy,
     node_name: String,
     strategy: FusionStrategy,
     rrf_k: f64,
@@ -1097,6 +1113,7 @@ pub struct FuseResultsNode {
 impl FuseResultsNode {
     pub fn new(name: &str) -> Self {
         Self {
+            duplicates: DuplicatePolicy::Merge,
             node_name: name.to_string(),
             strategy: FusionStrategy::Rrf,
             rrf_k: DEFAULT_RRF_K,
@@ -1105,6 +1122,11 @@ impl FuseResultsNode {
             top_k: None,
             signal: None,
         }
+    }
+
+    pub fn with_duplicates(mut self, policy: DuplicatePolicy) -> Self {
+        self.duplicates = policy;
+        self
     }
 
     pub fn with_strategy(mut self, strategy: FusionStrategy) -> Self {
@@ -1201,6 +1223,7 @@ impl Node for FuseResultsNode {
         let mut boost: Vec<&String> = self.boost.iter().collect();
         boost.sort();
         Some(Box::new(serde_json::json!({
+            "duplicates": self.duplicates,
             "strategy": self.strategy,
             "rrf_k": self.rrf_k,
             "weights": self.weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
@@ -1247,64 +1270,74 @@ impl Node for FuseResultsNode {
             (base.strategy, base.rrf_k)
         };
 
-        // Convert UnifiedResult → SearchResult for fuse_signals()
-        let lists: Vec<(Vec<SearchResult>, SignalConfig)> = groups
-            .iter()
-            .map(|(label, v)| {
-                (
-                    v.iter().cloned().map(SearchResult::from).collect(),
-                    self.signal_config(label, &base, gabarit_decide),
-                )
-            })
-            .collect();
+        // Encode the typed identity only while scoring; external UUIDs remain untouched.
+        let identity = |r: &UnifiedResult| serde_json::to_string(&(&r.entity, &r.uuid)).unwrap();
+        let mut originals: HashMap<String, Vec<(String, UnifiedResult)>> = HashMap::new();
+        let mut lists = Vec::new();
+        for (label, rows) in groups {
+            let mut cfg = self.signal_config(&label, &base, gabarit_decide);
+            let mut seen = HashSet::new();
+            let mut scored = Vec::new();
+            // top_k bounds occurrences before either deduplication or evidence collection.
+            for r in rows.into_iter().take(cfg.top_k.unwrap_or(usize::MAX)) {
+                let id = identity(&r);
+                originals.entry(id.clone()).or_default().push((label.clone(), r.clone()));
+                if seen.insert(id.clone()) {
+                    let mut sr = SearchResult::from(r);
+                    sr.uuid = id;
+                    scored.push(sr);
+                }
+            }
+            cfg.top_k = None;
+            ctx.metric(&format!("signal.{label}"), scored.len() as f64);
+            lists.push((scored, cfg));
+        }
         let borrowed: Vec<(&[SearchResult], SignalConfig)> =
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
-        let fused_sr = fuse_signals(&borrowed, strategy, rrf_k);
-
-        for (label, v) in &groups {
-            ctx.metric(&format!("signal.{label}"), v.len() as f64);
-        }
-
-        // Build a lookup from all input results to preserve rich data, **et
-        // qui l'a trouvé**. Jusqu'au 27 août 2026 la fusion écrasait
-        // `signal` par son propre nom : la provenance mourait ici, et une
-        // trace ne pouvait plus dire si un résultat venait du plein texte,
-        // du vecteur, ou des deux. C'est exactement la question qu'on s'est
-        // posée en relisant un artefact.
-        let mut all_by_uuid: HashMap<String, UnifiedResult> = HashMap::new();
-        let mut from_by_uuid: HashMap<String, Vec<String>> = HashMap::new();
-        for (label, v) in groups {
-            for r in v {
-                let seen = from_by_uuid.entry(r.uuid.clone()).or_default();
-                if !seen.iter().any(|l| *l == label) {
-                    seen.push(label.clone());
+        let mut scores = fuse_signals(&borrowed, strategy, rrf_k);
+        scores.sort_by(|a,b| b.score.total_cmp(&a.score).then(a.uuid.cmp(&b.uuid)));
+        let mut fused = Vec::new();
+        for sr in scores {
+            let occurrences = originals.remove(&sr.uuid).unwrap_or_default();
+            if self.duplicates == DuplicatePolicy::Keep {
+                // Keep the original evidence and branch label on each occurrence.
+                // The score remains the object's fused score, not a raw branch score.
+                for (label, mut r) in occurrences {
+                    r.score = sr.score;
+                    r.signal = Some(label);
+                    fused.push(r);
                 }
-                all_by_uuid.entry(r.uuid.clone()).or_insert(r);
+                continue;
             }
+            let Some((_, first)) = occurrences.first() else {continue;};
+            let mut u = first.clone();
+            u.score = sr.score;
+            u.chunk = sr.chunk;
+            u.chunks = sr.chunks;
+            let mut labels = Vec::new();
+            for (label, r) in &occurrences {
+                if !labels.contains(label) {labels.push(label.clone());}
+                if let Some(children) = &r.matched_children {
+                    let merged = u.matched_children.get_or_insert_with(Vec::new);
+                    for child in children {
+                        // Distinct proofs for the same entity are preserved as well.
+                        if !merged.iter().any(|old| serde_json::to_value(old).ok() == serde_json::to_value(child).ok()) {
+                            merged.push(child.clone());
+                        }
+                    }
+                }
+                if let Some(children) = &r.other_children {
+                    let merged = u.other_children.get_or_insert_with(Vec::new);
+                    for child in children {
+                        if !merged.iter().any(|old| serde_json::to_value(old).ok() == serde_json::to_value(child).ok()) {
+                            merged.push(child.clone());
+                        }
+                    }
+                }
+            }
+            u.signal = Some(self.signal.clone().unwrap_or_else(|| if labels.is_empty(){label_out.clone()}else{labels.join("+")}));
+            fused.push(u);
         }
-
-        // Reconstruct UnifiedResult with fused scores
-        let fused: Vec<UnifiedResult> = fused_sr
-            .into_iter()
-            .map(|sr| {
-                let mut u = all_by_uuid
-                    .get(&sr.uuid)
-                    .cloned()
-                    .unwrap_or_else(|| UnifiedResult::from(sr.clone()));
-                u.score = sr.score;
-                // Une étiquette explicite est un choix de l'appelant et prime.
-                // Sinon : les signaux qui ont contribué, dans l'ordre des
-                // listes — `bm25+vector` se lit tout seul.
-                u.signal = Some(match &self.signal {
-                    Some(explicit) => explicit.clone(),
-                    None => match from_by_uuid.get(&sr.uuid) {
-                        Some(labels) if !labels.is_empty() => labels.join("+"),
-                        _ => label_out.clone(),
-                    },
-                });
-                u
-            })
-            .collect();
 
         ctx.set_output("results", PortValue::new(fused));
         Ok(())
@@ -2223,6 +2256,46 @@ mod tests {
     /// Le port `signals` regroupe par étiquette : deux branches BM25 arrivent
     /// concaténées et sont pesées séparément. Poids 0 sur une branche = elle
     /// ne compte plus.
+    #[test]
+    fn fusion_duplicate_policy_preserves_typed_identity_and_evidence() {
+        let mut a = tagged("same", 0.9, "ability");
+        a.entity = Some("Card".into());
+        a.matched_children = Some(vec![tagged("proof_a", 0.9, "ability")]);
+        let mut b = tagged("same", 0.7, "text");
+        b.entity = Some("Card".into());
+        b.matched_children = Some(vec![tagged("proof_b", 0.7, "text")]);
+        let mut other = b.clone(); other.entity = Some("Deck".into());
+        let run = |policy| {
+            let mut ctx = NodeContext::new();
+            ctx.set_input("signals", PortValue::new(vec![a.clone(), a.clone(), b.clone(), other.clone()]));
+            FuseResultsNode::new("fusion").with_duplicates(policy)
+                .with_weight("ability", 2.0).with_weight("text", 1.0)
+                .execute(&mut ctx).unwrap();
+            results_of(&mut ctx)
+        };
+        let merged = run(DuplicatePolicy::Merge);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].entity.as_deref(), Some("Card"));
+        assert_eq!(merged[0].uuid, "same");
+        assert_eq!(merged[0].matched_children.as_ref().unwrap().len(), 2);
+        assert_eq!(merged[0].signal.as_deref(), Some("ability+text"));
+        assert!((merged[0].score - 3.0 / (DEFAULT_RRF_K + 1.0)).abs() < 1e-12);
+        let kept = run(DuplicatePolicy::Keep);
+        assert_eq!(kept.len(), 4);
+        assert_eq!(kept.iter().filter(|r|r.signal.as_deref()==Some("ability")).count(), 2);
+        assert!(kept.iter().filter(|r|r.entity.as_deref()==Some("Card")).all(|r|r.score==merged[0].score));
+        // One active branch must also deduplicate, without rank inflation.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("signals", PortValue::new(vec![a.clone(),a]));
+        FuseResultsNode::new("fusion").execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx).len(),1);
+        // Truncated occurrences are not reported as contributing evidence.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("signals", PortValue::new(vec![b, other]));
+        FuseResultsNode::new("fusion").with_top_k(1).with_duplicates(DuplicatePolicy::Keep).execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx).len(),1);
+    }
+
     #[test]
     fn fuse_signals_port_groups_by_label_and_weights_apply() {
         let mut ctx = NodeContext::new();

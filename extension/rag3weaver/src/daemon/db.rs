@@ -72,11 +72,13 @@ pub enum ValeurFil {
     Map(BTreeMap<String, ValeurFil>),
     /// Base64 — le seul cas où la représentation du fil diffère de la valeur.
     Blob(String),
+    Typed { value: Box<ValeurFil>, field_type: crate::config::FieldType },
 }
 
 impl From<&CypherValue> for ValeurFil {
     fn from(v: &CypherValue) -> Self {
         match v {
+            CypherValue::Typed { value, field_type } => Self::Typed { value: Box::new(Self::from(value.as_ref())), field_type: field_type.clone() },
             CypherValue::Null => Self::Null,
             CypherValue::Bool(b) => Self::Bool(*b),
             CypherValue::Int(i) => Self::Int(*i),
@@ -97,6 +99,7 @@ impl ValeurFil {
     /// Le retour. Un base64 illisible est une erreur franche, pas un blob vide.
     pub fn en_valeur(&self) -> Result<CypherValue, String> {
         Ok(match self {
+            Self::Typed { value, field_type } => CypherValue::Typed { value: Box::new(value.en_valeur()?), field_type: field_type.clone() },
             Self::Null => CypherValue::Null,
             Self::Bool(b) => CypherValue::Bool(*b),
             Self::Int(i) => CypherValue::Int(*i),

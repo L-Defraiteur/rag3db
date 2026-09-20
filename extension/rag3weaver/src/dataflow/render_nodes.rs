@@ -216,6 +216,8 @@ fn group_key(r: &UnifiedResult, lens: &PathLens) -> Option<(String, String)> {
 /// elle n'a rien à faire dans un `format!`.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ResultsView {
+    /// Full structured results for lossless product-specific templates.
+    pub payload: serde_json::Value,
     /// Le texte cherché, quand le nœud le reçoit sur son port `query`.
     pub query: Option<String>,
     /// L'entité ou la base où l'on a cherché.
@@ -478,6 +480,7 @@ pub fn build_view(
     types.sort_by(|a, b| b.count.cmp(&a.count).then(a.name.cmp(&b.name)));
 
     ResultsView {
+        payload: serde_json::to_value(results).expect("serializable results"),
         query: None,
         target: None,
         count: results.len(),
@@ -502,6 +505,7 @@ pub fn builtin_template(name: &str) -> Option<&'static str> {
     match name {
         "" | "default" | "results" => Some(DEFAULT_TEMPLATE),
         "compact" => Some(COMPACT_TEMPLATE),
+        "tree" => Some(include_str!("../../templates/render/tree.md.jinja")),
         "schema" => Some(SCHEMA_TEMPLATE),
         _ => None,
     }
@@ -557,6 +561,39 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
         ))
 }
 
+/// Format a JSON value as a tree without shortening domain values or arrays.
+/// Scalar siblings share one line; complex children remain explicit branches.
+/// This is a view only: graph payloads are never modified.
+pub fn structured_tree(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    fn scalar(v: &Value) -> Option<String> {
+        match v {
+            Value::Object(_) => None,
+            Value::Array(xs) if xs.iter().any(|x| x.is_object() || x.is_array()) => None,
+            Value::Array(xs) => Some(format!("[{}]", xs.iter().map(|x| scalar(x).unwrap()).collect::<Vec<_>>().join("; "))),
+            Value::String(s) => Some(s.replace('\r', "\\r").replace('\n', " ↵ ").replace('\t', "\\t")),
+            _ => Some(v.to_string()),
+        }
+    }
+    fn walk(v: &Value, prefix: &str, lines: &mut Vec<String>) {
+        let children: Vec<(String, &Value)> = match v {
+            Value::Object(o) => o.iter().map(|(k,v)| (k.clone(),v)).collect(),
+            Value::Array(a) => a.iter().enumerate().map(|(i,v)| (format!("#{}",i+1),v)).collect(),
+            _ => { lines.push(format!("{prefix}{}",scalar(v).unwrap())); return; }
+        };
+        let scalars=children.iter().filter_map(|(k,v)| scalar(v).map(|s| format!("{k}: {s}"))).collect::<Vec<_>>();
+        if !scalars.is_empty() { lines.push(format!("{prefix}{}",scalars.join(" · "))); }
+        let complex=children.iter().filter(|(_,v)| scalar(v).is_none()).collect::<Vec<_>>();
+        if children.is_empty() { lines.push(format!("{prefix}{}",if v.is_array(){"[]"}else{"{}"})); }
+        for (i,(key,child)) in complex.iter().enumerate() {
+            let last=i+1==complex.len();
+            lines.push(format!("{prefix}{}{key}",if last {"`-- "} else {"|-- "}));
+            walk(child,&format!("{prefix}{}",if last {"    "}else{"|   "}),lines);
+        }
+    }
+    let mut lines=Vec::new();walk(value,"",&mut lines);lines.join("\n")
+}
+
 /// Rend une vue à travers un gabarit.
 /// **Rendre n'importe quoi par un gabarit.**
 ///
@@ -568,8 +605,28 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
 /// Lucie, en le voyant venir sur `schema` : *« attention au formatage, faut se
 /// standardiser les affichages pour pas avoir 30 types de sorties
 /// différentes »*.
+/// Optional presentation projection for heterogeneous graph rows: remove engine
+/// internals, vector columns and null padding. The structured payload stays intact.
+fn public_payload(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::Object(object) => Value::Object(object.into_iter()
+            .filter(|(k,v)| !k.starts_with('_') && !k.starts_with("embedding__") && !v.is_null())
+            .map(|(k,v)| (k, public_payload(v))).collect()),
+        Value::Array(values) => Value::Array(values.into_iter().map(public_payload).collect()),
+        other => other,
+    }
+}
+
 pub fn rendre<T: serde::Serialize>(donnees: &T, gabarit: &str) -> Result<String, String> {
     let mut env = minijinja::Environment::new();
+    env.add_filter("public_payload", |v: minijinja::Value| minijinja::Value::from_serialize(public_payload(serde_json::to_value(v).unwrap_or(serde_json::Value::Null))));
+    env.add_filter("without_fields", |v: minijinja::Value, fields: Vec<String>| {
+        let mut value = serde_json::to_value(v).unwrap_or(serde_json::Value::Null);
+        if let Some(object) = value.as_object_mut() { for field in fields { object.remove(&field); } }
+        minijinja::Value::from_serialize(value)
+    });
+    env.add_filter("tree", |v: minijinja::Value| structured_tree(&serde_json::to_value(v).unwrap_or(serde_json::Value::Null)));
     env.add_template("vue", gabarit).map_err(|e| format!("gabarit invalide : {e}"))?;
     let tpl = env.get_template("vue").map_err(|e| format!("gabarit : {e}"))?;
     tpl.render(donnees).map_err(|e| format!("gabarit : {e}"))
@@ -864,8 +921,8 @@ impl NodeFactory for RenderResultsNodeFactory {
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("default")),
-                    description: "Gabarit de rendu : un nom fourni (default | compact), un chemin de fichier, ou la source Jinja elle-même",
-                    choices: Some(Choices::fixed(["default", "compact"])),
+                    description: "Gabarit de rendu : default, compact, tree, un nom dans le répertoire de templates, ou une source Jinja",
+                    choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1257,5 +1314,52 @@ mod tests {
         // Le type est dans la fiche, plus dans la liste des colonnes brutes.
         assert!(md.contains("(function) ★"), "{md}");
         assert!(!md.contains("scope_type="), "{md}");
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn tree_keeps_nested_values_long_text_and_empty_values() {
+        let long = "resurrection ".repeat(100);
+        let value = json!({"name":"Example","colors":["Black","Green"],"owned":0,
+            "abilities":[{"id":7,"text":long}],"missing":null,"empty":[],
+            "matchedChildren":[{"uuid":"same","relation":"CardAbility","score":0.7}]});
+        let output=structured_tree(&value);
+        assert!(output.contains(&long));
+        for expected in ["colors: [Black; Green]","owned: 0","missing: null","empty: []","abilities","matchedChildren","CardAbility","uuid: same"] {
+            assert!(output.contains(expected),"missing {expected}: {output}");
+        }
+        assert_eq!(value["abilities"][0]["text"],long);
+    }
+    #[test]
+    fn template_can_project_without_mutating_the_payload() {
+        let value=json!({"name":"Card","internal":"hash","nested":{"x":[1,2,3]}});
+        let output=rendre(&json!({"payload":value}),"{{ payload | without_fields(['internal']) | tree }}").unwrap();
+        assert!(!output.contains("hash"));
+        assert!(output.contains("x: [1; 2; 3]"));
+        assert_eq!(value["internal"],"hash");
+    }
+    #[test]
+    fn public_projection_preserves_domain_values_and_excludes_vector_padding() {
+        let original=serde_json::json!({"uuid":"id","data":{"_hash":"secret","embedding__model":[0.1],"unused":null,"owned":0,"flag":false,"abilities":[{"text":"all rules"}]}});
+        let projected=public_payload(original.clone());
+        assert_eq!(projected["uuid"],"id");
+        assert_eq!(projected["data"]["owned"],0);
+        assert_eq!(projected["data"]["flag"],false);
+        assert_eq!(projected["data"]["abilities"][0]["text"],"all rules");
+        assert!(!projected["data"].as_object().unwrap().contains_key("embedding__model"));
+        assert!(!projected["data"].as_object().unwrap().contains_key("unused"));
+        assert!(original["data"].as_object().unwrap().contains_key("embedding__model"));
+    }
+    #[test]
+    fn tree_template_uses_full_payload_instead_of_bounded_snippets() {
+        let results: Vec<UnifiedResult>=serde_json::from_value(json!([{"uuid":"u","score":0.5,"entity":"Card","data":{"name":"Title","text":"z".repeat(1000),"abilities":[{"text":"unique nested effect"}]}}])).unwrap();
+        let view=build_view(&results,10,false,&PathLens::default());
+        let rendered=render_view(&view,builtin_template("tree").unwrap()).unwrap();
+        assert!(rendered.contains(&"z".repeat(1000)));
+        assert!(rendered.contains("unique nested effect"));
     }
 }

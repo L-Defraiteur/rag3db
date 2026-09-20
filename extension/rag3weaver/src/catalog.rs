@@ -46,6 +46,8 @@ use crate::dataflow::services::ServiceRegistry;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
+    #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
+    IndexPersistence(String),
     #[error("not initialized")]
     NotInitialized,
     /// Ce catalogue a été ouvert en lecture : il ne met rien en file et ne
@@ -217,6 +219,7 @@ pub struct Catalog {
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
     fts_storage: crate::fts_handle::FtsStorage,
+    fts_positions: bool,
     /// **L'identité de cet écrivain**, pour que sa marque de travail en attente
     /// ne se confonde pas avec celle d'un autre processus. Tirée à la
     /// construction : deux catalogues du même programme sont deux écrivains.
@@ -325,6 +328,7 @@ impl Catalog {
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
             fts_storage: Default::default(),
+            fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
                 "_writer",
                 &[&format!("{:?}", std::time::SystemTime::now()), &format!("{:?}", std::thread::current().id())],
@@ -547,10 +551,12 @@ impl Catalog {
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
     }
 
-    /// Choisit la topologie de stockage des index FTS.
-    ///
-    /// À appeler **avant** le premier `ensure_fts_handle` : les handles déjà
-    /// ouverts gardent leur stockage d'origine.
+    /// Creation-time positions policy; existing persisted indexes keep their schema.
+    pub fn set_fts_positions(&mut self, positions: bool) {
+        self.fts_positions = positions;
+    }
+
+    /// Choose storage before opening any FTS handle.
     pub fn set_fts_storage(&mut self, storage: crate::fts_handle::FtsStorage) {
         self.fts_storage = storage;
     }
@@ -742,10 +748,11 @@ impl Catalog {
         let handle = match ShardedHandle::open_with_storage(storage()?) {
             Ok(h) => h,
             Err(_) => {
-                let config = match crate::fts_handle::build_schema_config(
+                let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
                     crate::fts_handle::DEFAULT_SHARDS,
+                    self.fts_positions,
                 ) {
                     Ok(c) => c,
                     Err(e) => {
@@ -820,7 +827,7 @@ impl Catalog {
 
         // 3. Everything above committed into the buffer; this is the last
         //    boundary before the connection goes away.
-        self.flush_blob_store("shutdown");
+        self.flush_blob_store("shutdown")?;
 
         self.emit_event(CatalogEvent::ShutdownCompleted {
             fts_closed,
@@ -1095,6 +1102,10 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
+        if self.dialect.name() != "rag3db" && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
+            return Err(CatalogError::SchemaError("native structured payloads currently require rag3db".into()));
+        }
+
         if let Some(derivee) = &config.derived {
             self.verifier_la_derivation(entity_name, derivee).map_err(CatalogError::SchemaError)?;
         }
@@ -2011,7 +2022,7 @@ impl Catalog {
 
         // The per-table commits above wrote into the buffer; make them durable
         // before declaring the reindex done.
-        self.flush_blob_store("reindex");
+        self.flush_blob_store("reindex")?;
 
         // Clear the needs_reindex flag
         self.persist_meta_key(
@@ -2936,7 +2947,7 @@ impl Catalog {
             }
         }
 
-        self.flush_blob_store("rattrapage");
+        self.flush_blob_store("rattrapage")?;
         self.signaler_les_troncatures("rattrapage");
         // Le tour est fait. S'il restait plus que la borne quelque part, il en
         // reste encore : l'indice reste posé et la passe suivante reprendra.
@@ -3063,7 +3074,7 @@ impl Catalog {
                 }),
             }
         }
-        self.flush_blob_store("rattrapage_decoupage");
+        self.flush_blob_store("rattrapage_decoupage")?;
         if total < limite {
             self.peut_devoir_un_redecoupage = false;
         }
@@ -4624,7 +4635,7 @@ impl Catalog {
             }
         }
         if entity_records.is_empty() {
-            self.flush_blob_store("ingest");
+            self.flush_blob_store("ingest")?;
             // Un lot entièrement refusé ne doit pas se lire comme un lot
             // entièrement inchangé : c'est la différence entre « rien à
             // faire » et « rien n'a été fait ».
@@ -4765,7 +4776,7 @@ impl Catalog {
                 // Frontière de durabilité : sans ce flush, les fichiers d'index
                 // commités par ce graphe restaient dans le tampon jusqu'au
                 // prochain drain — ou au Drop.
-                self.flush_blob_store("ingest");
+                self.flush_blob_store("ingest")?;
                 self.signaler_les_troncatures("ingest_entities");
                 // Les lignes refusées par la machine à états ne sont jamais
                 // descendues dans le graphe : elles sortent du compte des
@@ -6041,7 +6052,7 @@ impl Catalog {
         let avertissements = ramasser_les_avertissements(&mut ecoute);
         let echecs = Self::relever_les_echecs(&canal);
 
-        let outcome = match result {
+        let mut outcome = match result {
             Ok(_output) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
@@ -6141,7 +6152,13 @@ impl Catalog {
         // index files before dying, and pushing them is what the write-through
         // store did anyway. What's not flushed here is retried at the next
         // boundary, never dropped.
-        self.flush_blob_store("drain");
+        if let Err(e) = self.flush_blob_store("drain") {
+            // The records may already be written; persistence is a separate failed
+            // operation. Never advertise ready indexes after an unsuccessful flush.
+            outcome.failed += 1;
+            outcome.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+            outcome.warnings.push(e.to_string());
+        }
         self.signaler_les_troncatures("drain");
 
         // **Le rattrapage opportuniste** (réconciliation, A4). Qui paie déjà
@@ -6218,11 +6235,10 @@ impl Catalog {
 
     /// Push buffered index blobs to the database, at a commit boundary.
     ///
-    /// Failure is loud but not fatal here: the buffer keeps the unpushed
-    /// entries, so shutdown/drop gets another go. What we refuse to do is
-    /// silently report a drain as durable when its index isn't.
-    fn flush_blob_store(&self, context: &str) {
-        let Some(ref buffer) = self.blob_buffer else { return };
+    /// Return failures to the caller as well as emitting an event. Retaining
+    /// pending blobs permits retry but does not mean the index is durable.
+    fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
+        let Some(ref buffer) = self.blob_buffer else { return Ok(()) };
         let t0 = std::time::Instant::now();
         match buffer.flush() {
             Ok(stats) => {
@@ -6244,8 +6260,10 @@ impl Catalog {
                     context: format!("blob_flush:{context}"),
                     message: format!("index blobs not persisted: {e}"),
                 });
+                return Err(CatalogError::IndexPersistence(format!("{context}: {e}")));
             }
         }
+        Ok(())
     }
 
     /// Ne vide que les insertions d'entités, par un graphe minimal. Relations
@@ -7334,6 +7352,16 @@ impl Catalog {
         columns: &[String],
         row: &[CypherValue],
     ) -> BTreeMap<String, CypherValue> {
+        // rag3db returns a whole node in one column (`RETURN n`), while SQL
+        // returns its columns. Unwrap only this known node shape, not arbitrary
+        // object-valued projections such as `RETURN n.payload`.
+        if columns.len() == 1 && columns[0] == "n" && row.len() == 1 {
+            if let CypherValue::Map(node) = &row[0] {
+                if node.contains_key("_label") && node.contains_key("_uuid") {
+                    return node.clone();
+                }
+            }
+        }
         let mut data = BTreeMap::new();
         for (i, col) in columns.iter().enumerate() {
             if i < row.len() {
@@ -8019,6 +8047,47 @@ mod tests {
             make_test_config(),
         )
         .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
+    }
+
+    fn inject_blob_failure(cat: &mut Catalog) -> Arc<BufferedBlobStore<CypherBlobStore>> {
+        let store = CypherBlobStore::new(Arc::new(|_, _| Err("injected buffer pool full".into())));
+        let buffer = Arc::new(BufferedBlobStore::new(store));
+        buffer.save("test-index", "segment", b"must survive retry").unwrap();
+        cat.blob_buffer = Some(buffer.clone());
+        buffer
+    }
+
+    #[test]
+    fn index_flush_failure_is_returned_and_pending_bytes_survive() {
+        let mut cat = make_catalog();
+        let buffer = inject_blob_failure(&mut cat);
+        assert!(matches!(cat.flush_blob_store("test"), Err(CatalogError::IndexPersistence(_))));
+        assert_eq!(buffer.pending_len(), 1);
+        assert_eq!(buffer.load("test-index", "segment").unwrap(), b"must survive retry");
+        assert!(matches!(cat.shutdown(), Err(CatalogError::IndexPersistence(_))));
+        assert_eq!(buffer.pending_len(), 1);
+    }
+
+    #[test]
+    fn ingestion_does_not_acknowledge_unpersisted_index_blobs() {
+        let mut cat = make_catalog();
+        cat.initialize().unwrap();
+        let buffer = inject_blob_failure(&mut cat);
+        let result = cat.ingest_entities("Document", vec![make_doc_data("hello", "text")]);
+        assert!(matches!(result, Err(CatalogError::IndexPersistence(_))), "{result:?}");
+        assert_eq!(buffer.pending_len(), 1);
+    }
+
+    #[test]
+    fn drain_does_not_advertise_ready_after_blob_failure() {
+        let mut cat = make_catalog();
+        cat.initialize().unwrap();
+        inject_blob_failure(&mut cat);
+        cat.create("Document", make_doc_data("hello", "text")).unwrap();
+        let result = cat.drain();
+        assert!(result.failed > 0);
+        assert_eq!(result.rendu_pret, Some(crate::disponibilite::Disponibilites::AUCUNE));
+        assert!(result.warnings.iter().any(|w| w.contains("index persistence failed")));
     }
 
     fn make_doc_data(title: &str, body: &str) -> BTreeMap<String, CypherValue> {
@@ -9804,6 +9873,6 @@ impl Drop for Catalog {
             }
         }
         // `conn` is the last field to drop, so the backend is still reachable.
-        self.flush_blob_store("drop");
+        let _ = self.flush_blob_store("drop"); // Drop can only log; explicit APIs propagate.
     }
 }

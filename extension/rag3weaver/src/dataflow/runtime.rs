@@ -540,18 +540,21 @@ impl DataflowRuntime {
                         }
                         // For required inputs, OR optional inputs with connected edges:
                         // wait for upstream data to be available
-                        let has_edge_data = graph.edges.iter().any(|e| {
-                            e.to_node == **name
-                                && e.to_port == input.name
-                                && port_data_available.contains(&(
-                                    e.from_node.clone(),
-                                    e.from_port.clone(),
-                                ))
-                        });
+                        // Wait for every producer, even on a longer branch.
+                        // An optional output may legitimately publish nothing
+                        // (e.g. metadata from a disabled search signal).
+                        let producers_finished = graph.edges.iter()
+                            .filter(|e| e.to_node == **name && e.to_port == input.name)
+                            .all(|e| completed.contains(&e.from_node));
+                        let has_edge_data = graph.edges.iter()
+                            .filter(|e| e.to_node == **name && e.to_port == input.name)
+                            .any(|e| port_data_available.contains(&(
+                                e.from_node.clone(), e.from_port.clone(),
+                            )));
                         let has_initial = initial_inputs
                             .get(*name)
                             .map_or(false, |ports| ports.contains_key(input.name));
-                        has_edge_data || has_initial
+                        if has_incoming_edge { producers_finished && (!input.required || has_edge_data || has_initial) } else { has_initial }
                     })
                 })
                 .cloned()
@@ -927,19 +930,22 @@ impl DataflowRuntime {
                         }
                         // For required inputs, OR optional inputs with connected edges:
                         // wait for upstream data to be available
-                        let has_edge_data = graph.edges.iter().any(|e| {
-                            e.to_node == **name
-                                && e.to_port == input.name
-                                && port_data_available.contains(&(
-                                    e.from_node.clone(),
-                                    e.from_port.clone(),
-                                ))
-                        });
+                        // Wait for every producer, even on a longer branch.
+                        // An optional output may legitimately publish nothing
+                        // (e.g. metadata from a disabled search signal).
+                        let producers_finished = graph.edges.iter()
+                            .filter(|e| e.to_node == **name && e.to_port == input.name)
+                            .all(|e| completed.contains(&e.from_node));
+                        let has_edge_data = graph.edges.iter()
+                            .filter(|e| e.to_node == **name && e.to_port == input.name)
+                            .any(|e| port_data_available.contains(&(
+                                e.from_node.clone(), e.from_port.clone(),
+                            )));
                         // Or initial_inputs provides it
                         let has_initial = initial_inputs
                             .get(*name)
                             .map_or(false, |ports| ports.contains_key(input.name));
-                        has_edge_data || has_initial
+                        if has_incoming_edge { producers_finished && (!input.required || has_edge_data || has_initial) } else { has_initial }
                     })
                 })
                 .cloned()
@@ -1350,6 +1356,42 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+        }
+    }
+
+    #[test]
+    fn fan_in_waits_for_longer_branches_in_live_and_checkpoint_execution() {
+        use crate::dataflow::generic_search_nodes::FuseResultsNode;
+        use crate::dataflow::checkpoint_store::MockCheckpointStore;
+        struct SilentSource;
+        impl Node for SilentSource {
+            fn name(&self)->&str {"delay"}
+            fn node_type(&self)->&'static str {"SilentSource"}
+            fn inputs(&self)->Vec<PortDef>{vec![PortDef{name:"in",port_type:PortType::Results,required:true}]}
+            fn outputs(&self)->Vec<PortDef>{vec![PortDef{name:"out",port_type:PortType::Results,required:false}]}
+            fn execute(&mut self,_:&mut NodeContext)->Result<(),String>{Ok(())}
+        }
+        for checkpoint in [false, true] {
+            for variant in 0..3 {
+                let empty_late_branch=variant!=0;
+                let mut graph = DataflowGraph::new();
+                graph.add_node(Box::new(SourceNode{name:"early".into(),results:vec![test_result("early")]})).unwrap();
+                graph.add_node(Box::new(SourceNode{name:"late_source".into(),results:if empty_late_branch {vec![]}else{vec![test_result("late")]}})).unwrap();
+                if variant==2 {graph.add_node(Box::new(SilentSource)).unwrap();}
+                else {graph.add_node(Box::new(PassthroughNode{name:"delay".into()})).unwrap();}
+                graph.add_node(Box::new(FuseResultsNode::new("fuse"))).unwrap();
+                graph.connect("early","out","fuse","signals").unwrap();
+                graph.connect("late_source","out","delay","in").unwrap();
+                graph.connect("delay","out","fuse","signals").unwrap();
+                let runtime=DataflowRuntime::new(20);
+                let store=MockCheckpointStore::new();
+                let output=if checkpoint {runtime.execute_with_checkpoint(&mut graph,&store,"fanin").unwrap()}
+                    else {runtime.execute(&mut graph).unwrap()};
+                let results=output.get("fuse","results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
+                assert_eq!(results.len(),if empty_late_branch {1}else{2});
+                assert!(results.iter().any(|r|r.uuid=="early"));
+                assert_eq!(results.iter().any(|r|r.uuid=="late"),!empty_late_branch);
+            }
         }
     }
 

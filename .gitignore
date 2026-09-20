@@ -100,3 +100,6 @@ references/
 .vault/
 *.env
 !*.env.example
+
+# Local MTG Arena experiment and private exports
+/experiments/mtga/

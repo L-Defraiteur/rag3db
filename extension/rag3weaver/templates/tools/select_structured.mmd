@@ -1,0 +1,8 @@
+%% tool: select_structured
+%% description: Sélection exhaustive typée sans top-k, pour inventaire et vérification.
+%% param: entity string! -- Entité fixée.
+%% param: filter json! -- FilterCondition.
+%% result: select.results
+
+graph LR
+    select["SelectRecordsNode(entity=$entity, filter=$filter)"]

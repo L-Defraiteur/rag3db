@@ -35,6 +35,10 @@ pub enum FieldType {
     Tags,
     #[serde(alias = "Choice")]
     Choice,
+    /// Native typed array. Legacy `Tags` remains text for compatibility.
+    List(Box<FieldType>),
+    /// Fixed, named object fields; deterministic ordering is part of its type.
+    Struct(std::collections::BTreeMap<String, FieldType>),
 }
 
 impl Default for FieldType {
@@ -877,6 +881,7 @@ impl EntityConfig {
 
     /// Validate field definitions (mutual exclusivity of is_title/title_for, is_content/content_for).
     pub fn validate(&self) -> Result<(), String> {
+        for field in self.fields.values() { validate_payload_type(&field.field_type, 0)?; }
         if let Some(derivee) = &self.derived {
             derivee.validate(&self.fields)?;
             // L'identité d'une dérivée est sa racine : un uuid par ligne
@@ -1630,5 +1635,22 @@ mod tests {
         // Et une entité sans machine n'écrit pas la clé.
         let nu = EntityConfig { fields: avec_status(), signals: SearchSignals::BM25, ..Default::default() };
         assert!(!serde_json::to_string(&nu).unwrap().contains("lifecycle"));
+    }
+}
+
+/// Validate recursively before generating DDL (including direct Rust configs).
+pub fn validate_payload_type(ty: &FieldType, depth: usize) -> Result<(), String> {
+    if depth > 32 { return Err("payload type nesting exceeds 32".into()); }
+    match ty {
+        FieldType::List(item) => validate_payload_type(item, depth + 1),
+        FieldType::Struct(fields) => {
+            if fields.is_empty() { return Err("empty struct: use explicit Json for open objects".into()); }
+            for (name, ty) in fields {
+                crate::schema::validate_identifier(name, "struct field").map_err(|e| e.to_string())?;
+                validate_payload_type(ty, depth + 1)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }

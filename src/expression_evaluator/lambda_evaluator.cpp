@@ -40,7 +40,7 @@ void ListLambdaEvaluator::init(const ResultSet& resultSet, ClientContext* client
                 ListVector::getSharedDataVector(listInputVector) :
                 std::make_shared<ValueVector>(
                     ListType::getChildType(listInputVector->dataType).copy(), memoryManager);
-        evaluator->resultVector->state = lambdaVarState;
+        evaluator->resultVector->setState(lambdaVarState);
         lambdaParamEvaluators.push_back(evaluator->ptrCast<LambdaParamEvaluator>());
     }
     lambdaRootEvaluator->init(resultSet, clientContext);
@@ -57,6 +57,7 @@ void ListLambdaEvaluator::evaluateInternal() {
         ListVector::resizeDataVector(resultVector.get(),
             ListVector::getDataVectorSize(inputVector));
     }
+    bindData.quantifierCounts.assign(DEFAULT_VECTOR_CAPACITY, 0);
     ListSliceInfo sliceInfo{inputVector};
     bindData.sliceInfo = &sliceInfo;
     auto selVectors = SelectionVector::fromValueVectors(params);

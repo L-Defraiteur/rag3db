@@ -1,0 +1,19 @@
+-DATASET CSV tinysnb
+--
+
+-CASE StructuredSlices
+-STATEMENT UNWIND range(1,5000) AS i WITH collect({id:i, label:CASE WHEN i % 7 = 0 THEN 'Treasure with a long payload' ELSE 'Other long payload' END}) AS xs RETURN size(list_filter(xs, x -> contains(x.label, 'Treasure')));
+---- 1
+714
+-STATEMENT UNWIND range(1,5000) AS i WITH collect({id:i, label:'Treasure'}) AS xs RETURN any(x IN xs WHERE x.id = 4999), all(x IN xs WHERE contains(x.label,'Treasure')), none(x IN xs WHERE x.id = 5001), single(x IN xs WHERE x.id = 4999);
+---- 1
+True|True|True|True
+-STATEMENT UNWIND range(1,5000) AS i WITH i, [{label:CASE WHEN i % 7 = 0 THEN 'Treasure' ELSE 'Other' END}] AS xs WHERE i % 3 = 0 WITH i, size(list_filter(xs, x -> contains(x.label,'Treasure'))) AS n RETURN sum(n);
+---- 1
+238
+-STATEMENT UNWIND range(1,5000) AS i WITH [{label:'Treasure',level:1},{label:'Other',level:3}] AS xs RETURN sum(size(list_filter(xs, x -> contains(x.label,'Treasure') AND x.level >= 3)));
+---- 1
+0
+-STATEMENT RETURN any(x IN [] WHERE true), all(x IN [] WHERE true), none(x IN [] WHERE true), single(x IN [] WHERE true);
+---- 1
+False|True|True|False

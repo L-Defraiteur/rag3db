@@ -1404,6 +1404,14 @@ fn read_sse(
             }
         }
 
+        if let Some(text) = delta["reasoning_content"].as_str()
+            .or_else(|| delta["reasoning"].as_str()).filter(|t| !t.is_empty())
+        {
+            if sink.on_reasoning(text) == Flow::Stop {
+                return Ok((Finish::cancelled().with_tool_calls(ToolAcc::collect(&tools)), usage));
+            }
+        }
+
         if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty()) {
             if opts.stop.is_empty() {
                 // Rien à surveiller : chemin direct, aucune rétention.
@@ -1521,6 +1529,35 @@ mod tests {
         r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
         r#"{"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}}"#,
     ];
+
+    #[test]
+    fn provider_reasoning_is_separate_and_can_cancel_before_public_text() {
+        #[derive(Default)]
+        struct Sink { text: String, reasoning: String, cancel: bool }
+        impl TokenSink for Sink {
+            fn on_token(&mut self, text: &str) -> Flow {
+                self.text.push_str(text); Flow::Continue
+            }
+            fn on_reasoning(&mut self, text: &str) -> Flow {
+                self.reasoning.push_str(text);
+                if self.cancel { Flow::Stop } else { Flow::Continue }
+            }
+        }
+        let frames = [
+            r#"{"choices":[{"delta":{"reasoning_content":"inspect "}}]}"#,
+            r#"{"choices":[{"delta":{"reasoning":"data","content":"Answer"}}]}"#,
+            r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+        ];
+        let mut sink = Sink::default();
+        let (finish, _) = replay(&frames, &GenOptions::default(), &mut sink);
+        assert_eq!(sink.reasoning, "inspect data");
+        assert_eq!(sink.text, "Answer");
+        assert_eq!(finish.reason, FinishReason::Eos);
+        let mut sink = Sink { cancel: true, ..Default::default() };
+        let (finish, _) = replay(&frames, &GenOptions::default(), &mut sink);
+        assert_eq!(finish.reason, FinishReason::Cancelled);
+        assert!(sink.text.is_empty());
+    }
 
     #[test]
     fn streams_text_and_takes_usage_from_the_last_chunk() {

@@ -22,22 +22,7 @@ impl Rag3dbSearchBackend {
     }
 }
 
-/// Inline parameter values into a Cypher string (for PROJECT_GRAPH_CYPHER).
-fn inline_params(cypher: &str, params: &[QueryParam]) -> String {
-    let mut result = cypher.to_string();
-    for p in params {
-        let replacement = match &p.value {
-            CypherValue::String(s) => format!("'{}'", s.replace('\'', "''")),
-            CypherValue::Int(i) => i.to_string(),
-            CypherValue::Float(f) => f.to_string(),
-            CypherValue::Bool(b) => b.to_string(),
-            CypherValue::Null => "NULL".to_string(),
-            _ => format!("{:?}", p.value),
-        };
-        result = result.replace(&format!("${}", p.name), &replacement);
-    }
-    result
-}
+use crate::search::inline_params;
 
 
 impl SearchBackend for Rag3dbSearchBackend {
@@ -111,7 +96,7 @@ impl SearchBackend for Rag3dbSearchBackend {
             &format!("{match_clause}{where_clause} RETURN n"),
             filter_params,
         );
-        let escaped = filter_cypher.replace('\'', "\\'");
+        let escaped = filter_cypher.replace('\\', "\\\\").replace('\'', "\\'");
         if std::env::var_os("RAG3W_VEC_TRACE").is_some() { eprintln!("[vec-trace] {filter_cypher}"); }
 
         // Drop previous projected graph

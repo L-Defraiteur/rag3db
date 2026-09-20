@@ -93,6 +93,47 @@ pub trait ToolBox {
     }
 }
 
+/// Bound what a tool may add to model context. Applies to any tool transport.
+/// Execution has already happened; preserve a readable prefix and mark omitted
+/// lines explicitly. This is a text view, not a complete structured payload.
+pub struct ToolOutputLimit<'a> {
+    pub inner: &'a (dyn ToolBox + Sync),
+    pub max_bytes: usize,
+}
+impl ToolBox for ToolOutputLimit<'_> {
+    fn tool_defs(&self) -> Vec<ToolDef> { self.inner.tool_defs() }
+    fn is_async(&self, tool: &str) -> bool { self.inner.is_async(tool) }
+    fn call(&self, call: &ToolCall) -> Turn { self.call_in(call, "") }
+    fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
+        let mut result = self.inner.call_in(call, run);
+        if result.content.len() > self.max_bytes {
+            result.content = truncate_tool_output(&result.content, self.max_bytes);
+        }
+        result
+    }
+}
+
+/// Bound UTF-8 text including the marker, preferring complete lines. A single
+/// very long line is cut at a character boundary and reports omitted bytes.
+pub fn truncate_tool_output(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes { return text.to_owned(); }
+    let line_marker = format!("\n... {} more lines (output truncated)\n", text.lines().count());
+    let byte_marker = format!("\n... output truncated ({} more bytes)\n", text.len());
+    let reserve = line_marker.len().max(byte_marker.len());
+    if max_bytes <= reserve {
+        return "... output truncated".bytes().take(max_bytes).map(char::from).collect();
+    }
+    let mut cut = max_bytes - reserve;
+    while !text.is_char_boundary(cut) { cut -= 1; }
+    let marker = if let Some(last_newline) = text[..cut].rfind('\n') {
+        cut = last_newline + 1;
+        format!("\n... {} more lines (output truncated)\n", text[cut..].lines().count())
+    } else {
+        format!("\n... output truncated ({} more bytes)\n", text.len() - cut)
+    };
+    format!("{}{marker}", &text[..cut])
+}
+
 impl<T: ToolBox + ?Sized> ToolBox for &T {
     fn call(&self, call: &ToolCall) -> Turn {
         (**self).call(call)
@@ -441,6 +482,8 @@ pub const CONFIRM_PAUSE: &str = "confirm_pause";
 /// plus dans le même vecteur.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentRun {
+    /// None for ordinary conversations; authoritative acceptance for a required submission.
+    pub task_accepted: Option<bool>,
     /// L'identifiant du run — celui de ses événements et de sa trace.
     pub run: String,
     /// Le dernier texte émis par le modèle, quel que soit le tour.
@@ -486,6 +529,9 @@ struct TeeSink<'a> {
 }
 
 impl TokenSink for TeeSink<'_> {
+    fn on_reasoning(&mut self, delta: &str) -> Flow {
+        self.inner.on_reasoning(delta)
+    }
     fn on_token(&mut self, delta: &str) -> Flow {
         self.text.push_str(delta);
         self.inner.on_token(delta)
@@ -499,7 +545,13 @@ impl TokenSink for TeeSink<'_> {
 // ─── L'agent ────────────────────────────────────────────────────────────────
 
 /// Un modèle, un outillage, des bornes.
+pub trait CompletionCheck: Sync {
+    fn accepted(&self) -> bool;
+    fn instruction(&self) -> String;
+}
+
 pub struct Agent<'a> {
+    completion: Option<&'a dyn CompletionCheck>,
     llm: &'a dyn Llm,
     tools: &'a (dyn ToolBox + Sync),
     opts: GenOptions,
@@ -555,6 +607,7 @@ impl<'a> Agent<'a> {
     /// qu'on ne veut pas avoir à diagnostiquer.
     pub fn new(llm: &'a dyn Llm, tools: &'a (dyn ToolBox + Sync)) -> Self {
         Self {
+            completion: None,
             llm,
             tools,
             opts: GenOptions::default().with_tools(tools.tool_defs()),
@@ -570,6 +623,12 @@ impl<'a> Agent<'a> {
             resource: None,
             provider: "unknown".to_string(),
         }
+    }
+
+    /// Require an authoritative tool receipt, independent of the model's final claim.
+    pub fn with_completion_check(mut self, check: Option<&'a dyn CompletionCheck>) -> Self {
+        self.completion = check;
+        self
     }
 
     /// Partager les postures de la session.
@@ -1055,6 +1114,7 @@ impl<'a> Agent<'a> {
         run_id: &str,
     ) -> Result<AgentRun, LlmError> {
         let mut run = AgentRun {
+            task_accepted: self.completion.map(|_|false),
             run: run_id.to_string(),
             text: String::new(),
             iterations: 0,
@@ -1077,6 +1137,7 @@ impl<'a> Agent<'a> {
         // travaillent pendant qu'on parle, et il est joint quand le run se
         // termine. Aucun résultat ne peut donc survivre à l'agent qui l'a
         // demandé — c'est le même choix qu'au runtime dataflow.
+        if let Some(check) = self.completion { turns.push(Turn::user(check.instruction())); }
         let interrupted: Result<(), LlmError> = std::thread::scope(|scope| {
         loop {
             if run.iterations >= self.limits.max_iterations {
@@ -1125,7 +1186,7 @@ impl<'a> Agent<'a> {
                 opts.tools = frais;
                 opts.tools.extend(ajoutes);
             }
-            if last_call && run.iterations > 0 {
+            if last_call && run.iterations > 0 && self.completion.is_none_or(|c| c.accepted()) {
                 if let Some(nudge) = &self.limits.final_nudge {
                     if !turns.last().is_some_and(|t| t.role == "user" && t.content == *nudge) {
                         turns.push(Turn::user(nudge.clone()));
@@ -1266,6 +1327,10 @@ impl<'a> Agent<'a> {
                 if !text.is_empty() {
                     turns.push(Turn::assistant(text));
                 }
+                if finish.reason != FinishReason::Cancelled && self.completion.is_some_and(|c| !c.accepted()) {
+                    turns.push(Turn::user(self.completion.unwrap().instruction()));
+                    continue;
+                }
                 run.stop = if finish.reason == FinishReason::Cancelled {
                     StopReason::Cancelled
                 } else {
@@ -1382,6 +1447,7 @@ impl<'a> Agent<'a> {
         Ok(())
         }); // fin du fil de portée : les outils asynchrones sont joints ici
         interrupted?;
+        run.task_accepted = self.completion.map(|c| c.accepted());
         // Une pause ne produit **pas** de texte : c'est ce qui la distingue
         // d'une réponse. Un agent qui répondrait « d'accord, j'attends »
         // aurait mal compris la consigne (doc 11 §1).

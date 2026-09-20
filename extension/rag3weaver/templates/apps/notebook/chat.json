@@ -1,0 +1,13 @@
+{
+  "name": "Atelier",
+  "system_prompt": "Tu aides à explorer des idées et à rédiger des documents. Réponds dans la langue de la personne. Utilise les outils disponibles lorsque nécessaire. Ne prétends jamais avoir recherché ou exporté quelque chose sans résultat d'outil. Enregistre les exports demandés avec save_artifact ; utilise un nouveau nom pour chaque version.",
+  "llm": {
+    "base_url": "http://127.0.0.1:8080/v1",
+    "model": "local-model",
+    "context_tokens": 32768
+  },
+  "backend_command": [],
+  "state_dir": "data",
+  "max_iterations": 12,
+  "max_output_tokens": 4096
+}

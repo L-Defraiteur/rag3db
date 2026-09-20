@@ -203,7 +203,11 @@ impl EmbedDaemon {
             dual: self.dual.is_some(),
             sparse: self.sparse.is_some(),
             factice: self.embedder.is_mock(),
+            // Le client HTTP se compile aussi sans les modèles Burn.
+            #[cfg(any(feature = "burn-embedder", feature = "burn-ocr"))]
             precision: crate::burn_device::precision_par_defaut(),
+            #[cfg(not(any(feature = "burn-embedder", feature = "burn-ocr")))]
+            precision: "unknown".to_string(),
             lot_conseille: self.embedder.budget_conseille(),
             executable: String::new(),
         }
