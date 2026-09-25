@@ -1,0 +1,43 @@
+{
+  "name": "select_cards",
+  "arguments": {
+    "filter": {
+      "must": [
+        {
+          "field": {
+            "key": "is_land",
+            "value": false
+          }
+        },
+        {
+          "path": {
+            "path": [
+              "color_identity"
+            ],
+            "value": [
+              {
+                "op": "has_none",
+                "value": [
+                  "White",
+                  "Blue",
+                  "Green"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "field": {
+            "key": "text_en",
+            "value": [
+              {
+                "op": "contains",
+                "value": "Treasure"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

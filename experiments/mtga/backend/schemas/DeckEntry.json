@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "deck_key": {
+      "type": "string"
+    },
+    "arena_deck_id": {
+      "type": "string"
+    },
+    "card_key": {
+      "type": "string"
+    },
+    "arena_id": {
+      "type": "integer"
+    },
+    "quantity": {
+      "type": "integer"
+    },
+    "pile": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "in_owned_collection": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "deck_key",
+    "arena_deck_id",
+    "card_key",
+    "arena_id",
+    "quantity",
+    "pile",
+    "text",
+    "in_owned_collection"
+  ]
+}

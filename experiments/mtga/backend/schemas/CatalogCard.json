@@ -1,0 +1,240 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "name_en": {
+      "type": "string"
+    },
+    "name_fr": {
+      "type": "string"
+    },
+    "type_en": {
+      "type": "string"
+    },
+    "text_en": {
+      "type": "string"
+    },
+    "text_fr": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "mana_cost": {
+      "type": "string"
+    },
+    "set": {
+      "type": "string"
+    },
+    "collector_number": {
+      "type": "string"
+    },
+    "mana_conditions": {
+      "type": "string"
+    },
+    "arena_id": {
+      "type": "integer"
+    },
+    "owned": {
+      "type": "integer"
+    },
+    "is_land": {
+      "type": "boolean"
+    },
+    "has_land_face": {
+      "type": "boolean"
+    },
+    "is_primary": {
+      "type": "boolean"
+    },
+    "is_token": {
+      "type": "boolean"
+    },
+    "mana_has_conditions": {
+      "type": "boolean"
+    },
+    "colors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "color_identity": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "card_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "land_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mana_symbols_possible": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mana_symbols_explicit": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "linked_card_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ability_id",
+          "text_en",
+          "text_fr"
+        ],
+        "properties": {
+          "ability_id": {
+            "type": "integer"
+          },
+          "text_en": {
+            "type": "string"
+          },
+          "text_fr": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "canonical_name": {
+      "type": "string"
+    },
+    "name_normalized": {
+      "type": "string"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "basic",
+        "common",
+        "uncommon",
+        "rare",
+        "mythic"
+      ]
+    },
+    "craftability_status": {
+      "type": "string"
+    },
+    "rarity_code": {
+      "type": "integer"
+    },
+    "printing_family_id": {
+      "type": "integer"
+    },
+    "owned_printing_family": {
+      "type": "integer"
+    },
+    "owned_name_total": {
+      "type": "integer"
+    },
+    "missing_for_one": {
+      "type": "integer"
+    },
+    "missing_for_playset": {
+      "type": "integer"
+    },
+    "printed_mana_value": {
+      "type": "integer"
+    },
+    "is_basic_land": {
+      "type": "boolean"
+    },
+    "is_rebalanced": {
+      "type": "boolean"
+    },
+    "is_digital_only": {
+      "type": "boolean"
+    },
+    "is_craft_candidate": {
+      "type": "boolean"
+    },
+    "craft_preferred": {
+      "type": "boolean"
+    },
+    "has_owned_copy": {
+      "type": "boolean"
+    },
+    "subtypes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "name_en",
+    "name_fr",
+    "type_en",
+    "text_en",
+    "text_fr",
+    "text",
+    "mana_cost",
+    "set",
+    "collector_number",
+    "mana_conditions",
+    "arena_id",
+    "owned",
+    "is_land",
+    "has_land_face",
+    "is_primary",
+    "is_token",
+    "mana_has_conditions",
+    "colors",
+    "color_identity",
+    "card_types",
+    "land_types",
+    "mana_symbols_possible",
+    "mana_symbols_explicit",
+    "linked_card_ids",
+    "abilities",
+    "canonical_name",
+    "name_normalized",
+    "rarity",
+    "craftability_status",
+    "rarity_code",
+    "printing_family_id",
+    "owned_printing_family",
+    "owned_name_total",
+    "missing_for_one",
+    "missing_for_playset",
+    "printed_mana_value",
+    "is_basic_land",
+    "is_rebalanced",
+    "is_digital_only",
+    "is_craft_candidate",
+    "craft_preferred",
+    "has_owned_copy",
+    "subtypes"
+  ]
+}

@@ -1,0 +1,575 @@
+{
+  "search_graphs": true,
+  "fts_positions": false,
+  "version": 1,
+  "name": "magic_collection",
+  "database": "/home/lucied/git_workspaces/rag3db/experiments/mtga/data/engine-search-lucivy43-recovered.rag3db",
+  "embeddings": {
+    "address": "127.0.0.1:7878",
+    "model": "bge-m3",
+    "dimensions": 1024
+  },
+  "vector_extension": "/home/lucied/git_workspaces/rag3db/extension/vector/build/libvector.rag3db_extension",
+  "entities": {
+    "OwnedCard": {
+      "schema": "schemas/card.json",
+      "config": {
+        "fields": {
+          "name_en": {
+            "type": "string",
+            "isTitle": true
+          },
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "name_en",
+          "name_fr",
+          "type_en",
+          "text_en",
+          "text_fr",
+          "text",
+          "mana_cost",
+          "set",
+          "collector_number",
+          "mana_conditions",
+          "arena_id",
+          "owned",
+          "is_land",
+          "has_land_face",
+          "is_primary",
+          "is_token",
+          "mana_has_conditions",
+          "colors",
+          "color_identity",
+          "card_types",
+          "land_types",
+          "mana_symbols_possible",
+          "mana_symbols_explicit",
+          "linked_card_ids",
+          "abilities"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "Ability": {
+      "schema": "schemas/Ability.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "ability_id",
+          "text_id",
+          "text_en",
+          "text_fr",
+          "text",
+          "glossary_ids"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "Mechanic": {
+      "schema": "schemas/Mechanic.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          },
+          "name": {
+            "type": "string",
+            "isTitle": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "name",
+          "text",
+          "definition_status"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "Deck": {
+      "schema": "schemas/Deck.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          },
+          "name": {
+            "type": "string",
+            "isTitle": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "arena_deck_id",
+          "name",
+          "format",
+          "text",
+          "main_deck_count",
+          "sideboard_count"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "DeckEntry": {
+      "schema": "schemas/DeckEntry.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "deck_key",
+          "arena_deck_id",
+          "card_key",
+          "arena_id",
+          "quantity",
+          "pile",
+          "text",
+          "in_owned_collection"
+        ],
+        "signals": []
+      }
+    },
+    "CatalogCard": {
+      "schema": "schemas/CatalogCard.json",
+      "config": {
+        "fields": {
+          "name_en": {
+            "type": "string",
+            "isTitle": true
+          },
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "arena_id",
+          "owned",
+          "name_en",
+          "name_fr",
+          "type_en",
+          "text_en",
+          "text_fr",
+          "mana_cost",
+          "set",
+          "collector_number",
+          "colors",
+          "color_identity",
+          "is_primary",
+          "is_token",
+          "is_rebalanced",
+          "is_digital_only",
+          "rarity_code",
+          "printing_family_id",
+          "canonical_name",
+          "name_normalized",
+          "owned_printing_family",
+          "owned_name_total",
+          "key",
+          "snapshot_id",
+          "text",
+          "is_land",
+          "is_basic_land",
+          "has_land_face",
+          "card_types",
+          "subtypes",
+          "land_types",
+          "mana_symbols_possible",
+          "mana_symbols_explicit",
+          "mana_has_conditions",
+          "mana_conditions",
+          "linked_card_ids",
+          "abilities",
+          "rarity",
+          "is_craft_candidate",
+          "craft_preferred",
+          "craftability_status",
+          "has_owned_copy",
+          "missing_for_one",
+          "missing_for_playset",
+          "printed_mana_value"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "CatalogAbility": {
+      "schema": "schemas/CatalogAbility.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "ability_id",
+          "text_id",
+          "text_en",
+          "text_fr",
+          "text",
+          "glossary_ids"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      }
+    },
+    "WildcardInventory": {
+      "schema": "schemas/WildcardInventory.json",
+      "config": {
+        "fields": {
+          "snapshot_id": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "signals": [],
+        "returnFields": [
+          "key",
+          "snapshot_id",
+          "captured_at",
+          "common",
+          "uncommon",
+          "rare",
+          "mythic"
+        ]
+      }
+    }
+  },
+  "tools": {
+    "ingest_cards": {
+      "graph": "graphs/ingest.mmd",
+      "bindings": {
+        "entity": "OwnedCard"
+      }
+    },
+    "select_cards": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_cards.mmd",
+      "bindings": {
+        "entity": "OwnedCard"
+      }
+    },
+    "search_cards": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_cards.mmd",
+      "bindings": {
+        "target": "OwnedCard"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_ability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "Ability"
+      }
+    },
+    "select_ability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_ability.mmd",
+      "bindings": {
+        "entity": "Ability"
+      }
+    },
+    "search_ability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_ability.mmd",
+      "bindings": {
+        "target": "Ability"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_mechanic": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "Mechanic"
+      }
+    },
+    "select_mechanic": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_mechanic.mmd",
+      "bindings": {
+        "entity": "Mechanic"
+      }
+    },
+    "search_mechanic": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_mechanic.mmd",
+      "bindings": {
+        "target": "Mechanic"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_deck": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "Deck"
+      }
+    },
+    "select_deck": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_deck.mmd",
+      "bindings": {
+        "entity": "Deck"
+      }
+    },
+    "search_deck": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_deck.mmd",
+      "bindings": {
+        "target": "Deck"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_deckentry": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "DeckEntry"
+      }
+    },
+    "select_deckentry": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_deckentry.mmd",
+      "bindings": {
+        "entity": "DeckEntry"
+      }
+    },
+    "search_deckentry": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_deckentry.mmd",
+      "bindings": {
+        "target": "DeckEntry"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "link_cardability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "CardAbility"
+      }
+    },
+    "link_abilitymechanic": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "AbilityMechanic"
+      }
+    },
+    "link_deckentries": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "DeckEntries"
+      }
+    },
+    "link_entryownedcard": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "EntryOwnedCard"
+      }
+    },
+    "search_deck_mechanics": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_deck_mechanics.mmd",
+      "bindings": {
+        "mechanic_entity": "Mechanic",
+        "ability_entity": "Ability",
+        "card_entity": "OwnedCard",
+        "scope_entity": "DeckEntry",
+        "ability_mechanic_relation": "AbilityMechanic",
+        "card_ability_relation": "CardAbility",
+        "scope_card_relation": "EntryOwnedCard"
+      }
+    },
+    "search_ability_cards": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_ability_cards.mmd",
+      "bindings": {
+        "target": "Ability",
+        "relation": "CardAbility",
+        "direction": "Incoming"
+      }
+    },
+    "ingest_catalog": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "CatalogCard"
+      }
+    },
+    "select_catalog": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_catalog.mmd",
+      "bindings": {
+        "entity": "CatalogCard"
+      }
+    },
+    "search_catalog": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_catalog.mmd",
+      "bindings": {
+        "target": "CatalogCard"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_catalogability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "CatalogAbility"
+      }
+    },
+    "select_catalogability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_catalogability.mmd",
+      "bindings": {
+        "entity": "CatalogAbility"
+      }
+    },
+    "search_catalogability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_catalogability.mmd",
+      "bindings": {
+        "target": "CatalogAbility"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "ingest_wildcardinventory": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/ingest_snapshot.mmd",
+      "bindings": {
+        "entity": "WildcardInventory"
+      }
+    },
+    "select_wildcardinventory": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-select_wildcardinventory.mmd",
+      "bindings": {
+        "entity": "WildcardInventory"
+      }
+    },
+    "link_catalogcardability": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "CatalogCardAbility"
+      }
+    },
+    "link_catalogabilitymechanic": {
+      "graph": "/home/lucied/git_workspaces/rag3db/extension/rag3weaver/templates/tools/link_snapshot.mmd",
+      "bindings": {
+        "relation": "CatalogAbilityMechanic"
+      }
+    },
+    "search_catalog_ability_cards": {
+      "graph": "/home/lucied/git_workspaces/rag3db/experiments/mtga/backend/graphs/readable-search_catalog_ability_cards.mmd",
+      "bindings": {
+        "target": "CatalogAbility",
+        "relation": "CatalogCardAbility",
+        "direction": "Incoming"
+      }
+    }
+  },
+  "relations": {
+    "CardAbility": {
+      "from": "OwnedCard",
+      "to": "Ability"
+    },
+    "AbilityMechanic": {
+      "from": "Ability",
+      "to": "Mechanic"
+    },
+    "DeckEntries": {
+      "from": "Deck",
+      "to": "DeckEntry"
+    },
+    "EntryOwnedCard": {
+      "from": "DeckEntry",
+      "to": "OwnedCard"
+    },
+    "CatalogCardAbility": {
+      "from": "CatalogCard",
+      "to": "CatalogAbility"
+    },
+    "CatalogAbilityMechanic": {
+      "from": "CatalogAbility",
+      "to": "Mechanic"
+    }
+  }
+}

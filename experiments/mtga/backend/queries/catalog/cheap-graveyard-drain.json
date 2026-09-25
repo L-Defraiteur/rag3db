@@ -1,0 +1,75 @@
+{
+  "name": "search_catalog",
+  "arguments": {
+    "query": "Whenever creature cards leave your graveyard each opponent loses life",
+    "options": {
+      "signals": [
+        "vector"
+      ],
+      "limit": 20,
+      "filter_condition": {
+        "must": [
+          {
+            "field": {
+              "key": "craft_preferred",
+              "value": true
+            }
+          },
+          {
+            "field": {
+              "key": "has_owned_copy",
+              "value": false
+            }
+          },
+          {
+            "field": {
+              "key": "rarity",
+              "value": [
+                {
+                  "op": "in",
+                  "value": [
+                    "common",
+                    "uncommon"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "field": {
+              "key": "printed_mana_value",
+              "value": [
+                {
+                  "op": "lte",
+                  "value": 2
+                }
+              ]
+            }
+          },
+          {
+            "path": {
+              "path": [
+                "color_identity"
+              ],
+              "value": [
+                {
+                  "op": "has_none",
+                  "value": [
+                    "Blue",
+                    "Red"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "field": {
+              "key": "is_land",
+              "value": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

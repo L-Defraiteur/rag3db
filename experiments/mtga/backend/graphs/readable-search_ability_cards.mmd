@@ -1,0 +1,24 @@
+%% tool: search_dense_related
+%% description: Recherche dense sur une entité, résolution des parents, puis parcours des relations avec dédoublonnage.
+%% param: target string! -- Entité dont les textes sont recherchés.
+%% param: query string! -- Intention sémantique.
+%% param: options json! -- Options et limite de la recherche dense initiale.
+%% param: relation string! -- Relation à parcourir.
+%% param: direction string! -- Incoming ou Outgoing.
+%% result: presentation.results
+
+graph LR
+    source["SearchSourceNode(target_name=$target, query=$query, options=$options)"]
+    dense["VectorSearchNode"]
+    resolve["ResolveParentNode"]
+    links["FetchRelatedNode(relation=$relation, direction=$direction, limit=0)"]
+    related["RelatedResultsNode(signal=semantic_relation)"]
+    source -->|query| dense
+    source -->|query| resolve
+    dense -->|results| resolve
+    resolve -->|results| links
+    resolve -->|results:parents| related
+    links -->|children| related
+
+    presentation["RenderResultsNode(template=magic)"]
+    related -->|results| presentation

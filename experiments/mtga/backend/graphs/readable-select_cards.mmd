@@ -1,0 +1,11 @@
+%% tool: select_cards
+%% description: Sélection exhaustive typée sans top-k, pour inventaire et vérification.
+%% param: entity string! -- Entité fixée.
+%% param: filter json! -- FilterCondition.
+%% result: presentation.results
+
+graph LR
+    select["SelectRecordsNode(entity=$entity, filter=$filter)"]
+
+    presentation["RenderResultsNode(template=magic)"]
+    select -->|results| presentation

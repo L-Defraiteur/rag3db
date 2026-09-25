@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "arena_deck_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "main_deck_count": {
+      "type": "integer"
+    },
+    "sideboard_count": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "arena_deck_id",
+    "name",
+    "format",
+    "text",
+    "main_deck_count",
+    "sideboard_count"
+  ]
+}

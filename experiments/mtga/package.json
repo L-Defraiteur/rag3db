@@ -1,0 +1,1 @@
+{"name":"mtga-local-experiment","version":"0.1.0","private":true,"description":"Local MTG Arena collection reader","dependencies":{"mtga-reader":"^0.1.13"}}

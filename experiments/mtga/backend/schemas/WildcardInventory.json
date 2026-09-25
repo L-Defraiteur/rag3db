@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "common": {
+      "type": "integer"
+    },
+    "uncommon": {
+      "type": "integer"
+    },
+    "rare": {
+      "type": "integer"
+    },
+    "mythic": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "captured_at",
+    "common",
+    "uncommon",
+    "rare",
+    "mythic"
+  ]
+}

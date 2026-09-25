@@ -101,5 +101,8 @@ references/
 *.env
 !*.env.example
 
-# Local MTG Arena experiment and private exports
-/experiments/mtga/
+# MTG Arena experiment: code versioned, private data and local envs ignored
+/experiments/mtga/data/
+/experiments/mtga/.venv/
+/experiments/mtga/node_modules/
+/experiments/mtga/rag3bridge/target/

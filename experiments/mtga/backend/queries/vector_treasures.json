@@ -1,0 +1,39 @@
+{
+  "name": "search_cards",
+  "arguments": {
+    "query": "Treasure tokens sacrifice artifacts deal damage to opponent",
+    "options": {
+      "signals": [
+        "vector"
+      ],
+      "limit": 20,
+      "filter_condition": {
+        "must": [
+          {
+            "field": {
+              "key": "is_land",
+              "value": false
+            }
+          },
+          {
+            "path": {
+              "path": [
+                "color_identity"
+              ],
+              "value": [
+                {
+                  "op": "has_none",
+                  "value": [
+                    "White",
+                    "Blue",
+                    "Green"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
