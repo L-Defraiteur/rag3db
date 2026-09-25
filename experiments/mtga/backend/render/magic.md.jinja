@@ -1,0 +1,10 @@
+{{ count }} résultat{% if count != 1 %}s{% endif %}{% if query %} · {{ query }}{% endif %}
+{% for warning in warnings %}Avertissement : {{ warning }}
+{% endfor %}{% for r in payload | public_payload %}
+{{ loop.index }}. {{ r.data.name_en | default(r.entity) }}{% if r.data.name_fr %} / {{ r.data.name_fr }}{% endif %} · {{ r.entity }}:{{ r.uuid }} · score={{ r.score }}{% if r.signal %} · {{ r.signal }}{% endif %}
+{% set data = r.data | without_fields(['name_en','name_fr']) %}{% if data.type_en is defined %}|-- type_en: {{ data.type_en }} · mana_cost: {{ data.mana_cost }}{% if data.rarity is defined %} · rarity: {{ data.rarity }}{% endif %}
+{% set data = data | without_fields(['type_en','mana_cost','rarity']) %}{% endif %}{% if data.text_en is defined %}|-- text_en: {{ data.text_en | tree }}
+{% endif %}{% if data.text_fr is defined %}|-- text_fr: {{ data.text_fr | tree }}
+{% endif %}{% if data.text_en is defined and data.text_fr is defined %}{% set data = data | without_fields(['text']) %}{% endif %}{% set data = data | without_fields(['text_en','text_fr']) %}{{ data | tree }}
+{% set links = r | without_fields(['data','uuid','entity','score','signal']) %}{% if links %}{{ links | tree }}
+{% endif %}{% endfor %}

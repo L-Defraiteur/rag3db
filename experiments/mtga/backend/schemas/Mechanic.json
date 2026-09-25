@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "definition_status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "name",
+    "text",
+    "definition_status"
+  ]
+}

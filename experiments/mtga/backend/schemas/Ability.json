@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "ability_id": {
+      "type": "integer"
+    },
+    "text_id": {
+      "type": "integer"
+    },
+    "text_en": {
+      "type": "string"
+    },
+    "text_fr": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "glossary_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "key",
+    "snapshot_id",
+    "ability_id",
+    "text_id",
+    "text_en",
+    "text_fr",
+    "text",
+    "glossary_ids"
+  ]
+}

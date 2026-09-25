@@ -1,0 +1,31 @@
+{
+  "name": "select_cards",
+  "arguments": {
+    "filter": {
+      "must": [
+        {
+          "field": {
+            "key": "is_land",
+            "value": true
+          }
+        },
+        {
+          "path": {
+            "path": [
+              "mana_symbols_possible"
+            ],
+            "value": [
+              {
+                "op": "has_all",
+                "value": [
+                  "R",
+                  "B"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
