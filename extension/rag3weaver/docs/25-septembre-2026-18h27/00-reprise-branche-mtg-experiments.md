@@ -17,7 +17,7 @@ Le travail a été fait par Codex, donc l'historique Claude Code n'en contient r
 | `master` | 2 commits en avance sur `origin/master` : `945cd6706` et `20a8f6ee8`. **Non poussés.** |
 | `mtg-experiments` | `master` + 1 commit `ab95c3a2d`. **N'existe pas sur origin.** |
 | `extension/rag3weaver/docs/23-09-2026/` | non suivi (2 docs de decks Paradox Engine / Bant) |
-| `experiments/mtga/` (604 Ko de code Python, backend, rag3bridge) | **ignoré par git** (`.gitignore`). Il n'existe que sur le disque (restauré depuis la clé USB). |
+| `experiments/mtga/` (code Python, backend, rag3bridge) | versionné depuis le 25/09 (commit `1f9e67342`). Seuls `data/`, `.venv/`, `node_modules/` et `rag3bridge/target/` restent ignorés. |
 | `experiments/mtga/data/`, `.venv` | **absents** (exclus de la sauvegarde) : bases, snapshots, decks générés, poids de modèles |
 | `follows.csv`, `user.csv`, `user.parquet` à la racine | restes de démo sans lien avec MTG (sortie d'un `COPY TO`, 7/09). Ils peuvent être supprimés. |
 | Worktrees `rag3db-embarquements`, `rag3db-recherche`, `rag3db-lifecycle` | dossiers absents (non sauvegardés). Leurs branches sont sur origin. Il faut faire un `git worktree prune`. |
@@ -84,7 +84,7 @@ Voir `docs/19-09-2026/`, `docs/20-09-2026/` et `docs/23-09-2026/` pour le détai
 Ce ne sont pas des problèmes bloquants, mais des choses à rendre génériques plus tard.
 
 - **Un commit monolithique** mélange correctifs C++, fonctionnalités Rust, docs et gitignore. Il faudrait au minimum extraire les correctifs moteur (§1) sur master.
-- **`experiments/mtga/` hors git** : c'est le code de la démonstration (backend, rag3bridge, scripts de decks), sans aucune sauvegarde versionnée. Il faut le versionner à part (dépôt privé ?) ou retirer la règle du `.gitignore` et ignorer seulement `data/`.
+- **`experiments/mtga/`** : le code est versionné, mais le dépôt est public. Avant d'en faire un produit, il faudra vérifier les droits (Wizards of the Coast, GPL-3.0 de `mtga-reader`). Aucune donnée extraite n'est versionnée.
 - **Parties propres à MTG** :
   - `templates/tools/search_related_scoped.mmd`, dont les paramètres et descriptions parlent de mechanic/ability/card/deck ;
   - `tests/structured_payloads.rs::composed_magic_snapshot` (entités `Magic*`, `RAG3WEAVER_TEST_MTGA`) ;
@@ -114,8 +114,8 @@ Ce ne sont pas des problèmes bloquants, mais des choses à rendre génériques 
 
 ## Actions suggérées, dans l'ordre
 
-1. Pousser `master` et `mtg-experiments` sur origin (pour sauvegarder).
-2. Versionner `experiments/mtga/` (code seulement, sans `data/`).
+1. ~~Pousser `master` et `mtg-experiments` sur origin~~ (fait le 25/09).
+2. ~~Versionner `experiments/mtga/`~~ (fait le 25/09).
 3. Extraire les correctifs moteur (§1) sur master, et ajouter un test pour `ParsedParameterExpression::copy`.
 4. Traiter le bug de persistance des `abilities` imbriquées (§5.1).
 5. Rendre génériques les éléments listés dans la Dette (§6) au fil de l'eau.
