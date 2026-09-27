@@ -10,9 +10,8 @@ B = P.parent / 'backend'
 C = ROOT / 'extension/rag3weaver'
 sys.path.insert(0, str(P.parent))
 from identity import card_id, stable_id
-from catalog_model import RARITIES, ownership_model, printed_mana_value
-from ability_facts import ability_facts, card_facts
-from vocabulary import declare
+from ability_facts import ability_facts
+from card_rows import build_rows, card_schema
 
 
 def write(path, value):
@@ -25,61 +24,13 @@ def prepare():
     snapshot = json.loads((P / 'card-records.jsonl').open().readline())['snapshot_id']
     status = json.loads((P / 'status.json').read_text())
     assert status['collection_available'], 'Do not interpret an absent collection as zero ownership'
-    ownership = ownership_model(cards)
     manifest = json.loads((B / 'backend.json').read_text())
-    schema = json.loads((B / 'schemas/card.json').read_text())
-    fields = schema['properties']
-    for name in ['canonical_name', 'name_normalized', 'rarity', 'craftability_status']:
-        fields[name] = {'type': 'string'}
-    fields['rarity']['enum'] = list(RARITIES.values())
-    for name in ['rarity_code', 'printing_family_id', 'owned_printing_family', 'owned_name_total',
-                 'missing_for_one', 'missing_for_playset', 'printed_mana_value']:
-        fields[name] = {'type': 'integer'}
-    for name in ['is_basic_land', 'is_rebalanced', 'is_digital_only', 'is_craft_candidate', 'craft_preferred', 'has_owned_copy']:
-        fields[name] = {'type': 'boolean'}
-    fields['subtypes'] = {'type': 'array', 'items': {'type': 'string'}}
-    declare(fields)
-    schema['required'] = list(fields)
+    # La même fiche que la collection (card_rows) : toutes les cartes du snapshot.
+    schema = card_schema()
     write(B / 'schemas/CatalogCard.json', schema)
     records, abilities, card_links, mechanic_links = [], {}, set(), set()
-    base_types = {'Plains': 'W', 'Island': 'U', 'Swamp': 'B', 'Mountain': 'R', 'Forest': 'G'}
-    for c in cards:
-        types = c['type_en'].split(' — ')[0].split()
-        subtypes = c['type_en'].split(' — ')[1].split() if ' — ' in c['type_en'] else []
-        is_land = 'Land' in types
-        mana_lines = [s for s in c['text_en'].splitlines() if re.search(r'\badd\b', s, re.I)] if is_land else []
-        explicit = {base_types[t] for t in subtypes if is_land and t in base_types}
-        for line in mana_lines:
-            clause = re.split(r'\badd\b', line, maxsplit=1, flags=re.I)[1].split('.')[0]
-            explicit.update(re.findall(r'\{([WUBRGC])\}', clause))
-        possible = set(explicit)
-        if any('any color' in s.lower() or 'chosen color' in s.lower() for s in mana_lines):
-            possible.update('WUBRG')
-        row = {k: c[k] for k in ['arena_id', 'owned', 'name_en', 'name_fr', 'type_en', 'text_en', 'text_fr',
-                                 'mana_cost', 'set', 'collector_number', 'colors', 'color_identity',
-                                 'is_primary', 'is_token', 'is_rebalanced', 'is_digital_only', 'rarity_code']}
-        own = ownership[c['arena_id']]
-        basic = is_land and 'Basic' in types
-        candidate = c['is_primary'] and not c['is_token'] and not c['is_rebalanced'] and c['rarity_code'] in (2, 3, 4, 5)
-        row.update(own)
-        row.update(key=card_id(c['arena_id']), snapshot_id=snapshot,
-                   text=c['name_en'] + ' / ' + c['name_fr'] + '\n' + c['type_en'] + '\n' + c['text_en'] + '\n' + c['text_fr'],
-                   is_land=is_land, is_basic_land=basic,
-                   has_land_face=is_land or any('Land' in by_id.get(i, {}).get('type_en', '').split(' — ')[0].split() for i in c['linked_faces']),
-                   card_types=[t for t in types if t not in ['Legendary', 'Basic', 'Snow', 'World', 'Ongoing']],
-                   subtypes=subtypes, land_types=subtypes if is_land else [],
-                   mana_symbols_possible=sorted(possible), mana_symbols_explicit=sorted(explicit),
-                   mana_has_conditions=any(any(x in s.lower() for x in ['only', 'if ', 'chosen', 'choose', 'among', 'spend', 'could produce', 'that color', 'colors of']) for s in mana_lines) or (is_land and 'choose a color' in c['text_en'].lower()),
-                   mana_conditions=c['text_en'] if is_land else '', linked_card_ids=[card_id(i) for i in c['linked_faces']],
-                   abilities=[{k: a[k] for k in ['ability_id', 'text_en', 'text_fr']} for a in c['abilities']],
-                   rarity=RARITIES[c['rarity_code']], is_craft_candidate=candidate, craft_preferred=False,
-                   craftability_status='candidate_requires_arena_validation' if candidate else 'not_a_direct_craft_candidate',
-                   has_owned_copy=own['owned_name_total'] > 0,
-                   missing_for_one=0 if basic and own['owned_name_total'] else max(0, 1 - own['owned_name_total']),
-                   missing_for_playset=0 if basic and own['owned_name_total'] else max(0, 4 - own['owned_name_total']),
-                   printed_mana_value=printed_mana_value(c['mana_cost']), **card_facts(c['abilities']))
-        assert set(row) == set(fields), set(row) ^ set(fields)
-        records.append(row)
+    records = build_rows(cards, snapshot)
+    for row, c in zip(records, cards):
         for a in c['abilities']:
             key = stable_id(f"mtga:ability:{a['ability_id']}:{a['text_id']}")
             ar = {'key': key, 'snapshot_id': snapshot, 'ability_id': a['ability_id'], 'text_id': a['text_id'],
@@ -89,15 +40,6 @@ def prepare():
             abilities[key] = ar
             card_links.add((row['key'], key))
             mechanic_links.update((key, mid) for mid in a['glossary_ids'])
-    preferred = {}
-    for row in records:
-        if row['is_craft_candidate']:
-            rank = (row['rarity_code'], -row['owned_printing_family'], row['arena_id'])
-            name = row['name_normalized']
-            if name not in preferred or rank < preferred[name][0]:
-                preferred[name] = (rank, row)
-    for _, row in preferred.values():
-        row['craft_preferred'] = True
     inv = json.loads((P / 'inventory.json').read_text())
     inventory = {'key': stable_id('mtga:wildcard-inventory'), 'snapshot_id': snapshot,
                  'captured_at': status['collection_captured_at'],
@@ -140,7 +82,7 @@ def prepare():
     write(B / 'backend.json', manifest)
     report = {'snapshot_id': snapshot, 'catalog_records': len(records), 'unique_abilities': len(abilities),
               'primary_nontoken': sum(r['is_primary'] and not r['is_token'] for r in records),
-              'craft_preferred_names': len(preferred), 'relations': {k: len(v) for k, v in links.items()},
+              'craft_preferred_names': sum(r['craft_preferred'] for r in records), 'relations': {k: len(v) for k, v in links.items()},
               'wildcard_inventory': inventory, 'status': 'prepared_not_ingested'}
     write(P / 'engine-catalog-preparation.json', report)
     from prepare_engine_render import prepare as prepare_render

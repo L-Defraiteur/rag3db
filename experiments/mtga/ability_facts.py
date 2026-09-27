@@ -11,6 +11,9 @@ the schemas; an unrecognised text simply gets no value.
 import re
 
 KINDS = ['keyword', 'activated', 'triggered', 'static']
+# What limits an ability: a mana ability under an activation condition (Mox
+# Jasper: "Activate only if you control a Dragon") produces nothing outside it.
+RESTRICTIONS = ['activation_condition', 'spend_restriction', 'sorcery_speed', 'once_per_turn']
 COSTS = ['tap', 'untap', 'mana', 'sacrifice', 'discard', 'life', 'exile', 'remove_counter',
          'tap_other', 'return', 'reveal', 'loyalty']
 TRIGGERS = ['cast', 'enters', 'landfall', 'dies', 'leaves', 'attacks', 'blocks', 'combat_damage', 'damage',
@@ -126,7 +129,15 @@ def ability_facts(text_en):
         inner = _cost(accorde.strip())
         if inner is not None:
             costs |= _costs(inner)
+    t = text.lower()
+    restrictions = {name for name, pattern in [
+        ('activation_condition', r'activate only if|activate only during|activate only while'),
+        ('spend_restriction', r'spend this mana only|this mana can\'t be spent|can\'t be spent to'),
+        ('sorcery_speed', r'activate only as a sorcery|activate only any time you could cast a sorcery'),
+        ('once_per_turn', r'activate only once each turn|only once each turn'),
+    ] if re.search(pattern, t)}
     return {'kind': kind,
+            'restrictions': [r for r in RESTRICTIONS if r in restrictions],
             'costs': [c for c in COSTS if c in costs],
             'triggers': [t for t in TRIGGERS if t in triggers],
             'effects': [e for e in EFFECTS if e in effects]}
@@ -139,4 +150,5 @@ def card_facts(abilities):
     return {'ability_kinds': [k for k in KINDS if any(f['kind'] == k for f in facts)],
             'ability_costs': union('costs', COSTS),
             'triggers': union('triggers', TRIGGERS),
-            'effects': union('effects', EFFECTS)}
+            'effects': union('effects', EFFECTS),
+            'ability_restrictions': union('restrictions', RESTRICTIONS)}

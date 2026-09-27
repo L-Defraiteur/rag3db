@@ -38,6 +38,18 @@
         "static"
       ]
     },
+    "restrictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "activation_condition",
+          "spend_restriction",
+          "sorcery_speed",
+          "once_per_turn"
+        ]
+      }
+    },
     "costs": {
       "type": "array",
       "items": {
@@ -144,6 +156,7 @@
     "text",
     "glossary_ids",
     "kind",
+    "restrictions",
     "costs",
     "triggers",
     "effects"

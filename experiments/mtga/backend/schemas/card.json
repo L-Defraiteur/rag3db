@@ -38,10 +38,48 @@
     "mana_conditions": {
       "type": "string"
     },
+    "canonical_name": {
+      "type": "string"
+    },
+    "name_normalized": {
+      "type": "string"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "basic",
+        "common",
+        "uncommon",
+        "rare",
+        "mythic"
+      ]
+    },
+    "craftability_status": {
+      "type": "string"
+    },
     "arena_id": {
       "type": "integer"
     },
     "owned": {
+      "type": "integer"
+    },
+    "rarity_code": {
+      "type": "integer"
+    },
+    "printing_family_id": {
+      "type": "integer"
+    },
+    "owned_printing_family": {
+      "type": "integer"
+    },
+    "owned_name_total": {
+      "type": "integer"
+    },
+    "missing_for_one": {
+      "type": "integer"
+    },
+    "missing_for_playset": {
       "type": "integer"
     },
     "printed_mana_value": {
@@ -63,6 +101,24 @@
       "type": "boolean"
     },
     "mana_has_conditions": {
+      "type": "boolean"
+    },
+    "is_basic_land": {
+      "type": "boolean"
+    },
+    "is_rebalanced": {
+      "type": "boolean"
+    },
+    "is_digital_only": {
+      "type": "boolean"
+    },
+    "is_craft_candidate": {
+      "type": "boolean"
+    },
+    "craft_preferred": {
+      "type": "boolean"
+    },
+    "has_owned_copy": {
       "type": "boolean"
     },
     "colors": {
@@ -113,6 +169,12 @@
           "Instant"
         ]
       ]
+    },
+    "subtypes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "land_types": {
       "type": "array",
@@ -256,6 +318,18 @@
         ]
       }
     },
+    "ability_restrictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "activation_condition",
+          "spend_restriction",
+          "sorcery_speed",
+          "once_per_turn"
+        ]
+      }
+    },
     "abilities": {
       "type": "array",
       "items": {
@@ -293,17 +367,34 @@
     "set",
     "collector_number",
     "mana_conditions",
+    "canonical_name",
+    "name_normalized",
+    "rarity",
+    "craftability_status",
     "arena_id",
     "owned",
+    "rarity_code",
+    "printing_family_id",
+    "owned_printing_family",
+    "owned_name_total",
+    "missing_for_one",
+    "missing_for_playset",
     "printed_mana_value",
     "is_land",
     "has_land_face",
     "is_primary",
     "is_token",
     "mana_has_conditions",
+    "is_basic_land",
+    "is_rebalanced",
+    "is_digital_only",
+    "is_craft_candidate",
+    "craft_preferred",
+    "has_owned_copy",
     "colors",
     "color_identity",
     "card_types",
+    "subtypes",
     "land_types",
     "mana_symbols_possible",
     "mana_symbols_explicit",
@@ -312,6 +403,7 @@
     "ability_costs",
     "triggers",
     "effects",
+    "ability_restrictions",
     "abilities"
   ]
 }
