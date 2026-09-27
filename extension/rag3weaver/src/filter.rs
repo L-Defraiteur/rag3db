@@ -125,6 +125,31 @@ impl<'de> Deserialize<'de> for FilterCondition {
         if value.as_object().is_some_and(|o| o.is_empty()) {
             return Ok(FilterCondition::Must(Vec::new()));
         }
+        // **must / should / must_not ensemble**, la forme booléenne que les
+        // modèles écrivent d'eux-mêmes (Qdrant, Elasticsearch) : tout `must`,
+        // au moins un `should`, aucun `must_not`. Les listes vides ne
+        // contraignent rien. Deux refus d'affilée pour un `"must_not": []`
+        // ajouté par politesse, le 27 septembre 2026.
+        if let Some(o) = value.as_object() {
+            let booleennes = ["must", "should", "must_not"];
+            if o.len() > 1 && o.keys().all(|k| booleennes.contains(&k.as_str())) {
+                let liste = |k: &str| -> Result<Vec<FilterCondition>, D::Error> {
+                    match o.get(k) {
+                        None => Ok(Vec::new()),
+                        Some(v) => serde_json::from_value(v.clone()).map_err(serde::de::Error::custom),
+                    }
+                };
+                let (must, should, must_not) = (liste("must")?, liste("should")?, liste("must_not")?);
+                let mut all = must;
+                if !should.is_empty() {
+                    all.push(FilterCondition::Should(should));
+                }
+                if !must_not.is_empty() {
+                    all.push(FilterCondition::MustNot(must_not));
+                }
+                return Ok(FilterCondition::Must(all));
+            }
+        }
         FilterConditionDef::deserialize(value).map_err(|e| {
             serde::de::Error::custom(format!(
                 "filtre invalide ({e}) : un objet à une seule clé parmi field, path, nested, must, should, must_not ; \
@@ -917,6 +942,21 @@ mod tests {
         let erreur = serde_json::from_value::<FilterCondition>(serde_json::json!({"owned": 1, "rare": true})).unwrap_err().to_string();
         assert!(erreur.contains("must_not") && erreur.contains("{} pour ne rien filtrer"), "{erreur}");
     }
+    /// must / should / must_not dans un même objet : combinés, listes vides ignorées.
+    #[test]
+    fn les_trois_listes_booleennes_se_combinent() {
+        let f: FilterCondition = serde_json::from_value(serde_json::json!({
+            "must":[{"field":{"key":"a","value":1}}],"should":[],"must_not":[{"field":{"key":"b","value":2}}]})).unwrap();
+        match f {
+            FilterCondition::Must(v) => {
+                assert_eq!(v.len(), 2, "{v:?}");
+                assert!(matches!(v[1], FilterCondition::MustNot(ref n) if n.len() == 1));
+            }
+            autre => panic!("{autre:?}"),
+        }
+        assert!(serde_json::from_value::<FilterCondition>(serde_json::json!({"must":[],"field":{"key":"a","value":1}})).is_err());
+    }
+
     use crate::dialect::Rag3dbDialect;
 
     fn no_relations() -> HashMap<String, RelationDef> {

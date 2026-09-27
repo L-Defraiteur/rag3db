@@ -160,6 +160,9 @@ impl Node for SearchSourceNode {
             if let Some(condition) = options.filter_condition.as_ref() {
                 if let Some(config) = cat.entity_configs().get(&target.parent_table) {
                     crate::json_schema::validate_structured_filter(condition, &config.fields)?;
+                    if config.derived.is_none() {
+                        crate::json_schema::check_field_names(condition, &config.fields)?;
+                    }
                 }
                 // A malformed restriction must abort before any signal can broaden it.
                 cat.compile_filter_utilisateur(&target.parent_table, Some(condition)).map_err(|e|e.to_string())?;

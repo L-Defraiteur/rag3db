@@ -188,6 +188,9 @@ impl Node for SetNode {
                     serde_json::from_value(self.config["filter"].clone())
                         .map_err(|e| e.to_string())?;
                 crate::json_schema::validate_structured_filter(&condition, &config.fields)?;
+                if config.derived.is_none() {
+                    crate::json_schema::check_field_names(&condition, &config.fields)?;
+                }
                 // Single-entity selection: traverse relations explicitly in the DAG.
                 let relations = HashMap::new();
                 let dialect = cat.dialect_arc();

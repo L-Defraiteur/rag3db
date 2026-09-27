@@ -205,7 +205,9 @@ fn nom_de_type(ty: &FieldType) -> &'static str {
 /// avec ses propres messages ; les recopier ici dans chaque outil coûtait
 /// ~16 000 jetons par tour au modèle (27 septembre 2026).
 pub fn filter_condition_schema() -> Value {
-    serde_json::json!({"type":"object","maxProperties":1,"additionalProperties":false,"properties":{
+    // Une clé, ou must / should / must_not ensemble (la forme booléenne de
+    // Qdrant ou d'Elasticsearch) ; le moteur refuse les autres mélanges.
+    serde_json::json!({"type":"object","additionalProperties":false,"properties":{
         "field":{"type":"object","additionalProperties":false,"required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}},
         "must":{"type":"array","items":{"type":"object"}},
         "should":{"type":"array","items":{"type":"object"}},
@@ -329,6 +331,20 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Un champ inconnu est refusé avant la base, avec les champs qui existent ;
+    /// jointures et colonnes internes passent.
+    #[test]
+    fn un_champ_inconnu_est_refuse_avec_la_liste() {
+        let mapping = JsonSchemaMapping::from_schema(&json!({"type":"object","properties":{
+            "kind":{"type":"string"},"effects":{"type":"array","items":{"type":"string"}}}})).unwrap();
+        let f = |v| serde_json::from_value::<crate::filter::FilterCondition>(v).unwrap();
+        let e = check_field_names(&f(json!({"must":[{"field":{"key":"card_types","value":["Artifact"]}}]})), &mapping.fields).unwrap_err();
+        assert!(e.contains("card_types") && e.contains("effects, kind"), "{e}");
+        for ok in [json!({"field":{"key":"kind","value":"activated"}}), json!({"field":{"key":"deck.name","value":"x"}}), json!({"field":{"key":"_uuid","value":"x"}})] {
+            check_field_names(&f(ok.clone()), &mapping.fields).unwrap_or_else(|e| panic!("{ok} : {e}"));
+        }
+    }
+
     /// Le filtre d'un outil se décrit depuis le schéma de l'entité : les
     /// champs par type, le vocabulaire déclaré, un exemple tiré des
     /// `examples` ; la forme refuse deux clés, les options une clé inconnue.
@@ -354,7 +370,8 @@ mod tests {
         for ok in [json!({}), json!({"field":{"key":"cost","value":[{"op":"lte","value":2}]}}), json!({"must":[{"field":{"key":"a","value":1}}]})] {
             assert!(filtre.is_valid(&ok), "{ok}");
         }
-        for ko in [json!({"field":{"key":"a","value":1},"must":[]}), json!({"owned":1}), json!({"field":{"key":"a"}})] {
+        assert!(filtre.is_valid(&json!({"must":[{"field":{"key":"a","value":1}}],"must_not":[],"should":[]})), "forme booléenne combinée");
+        for ko in [json!({"owned":1}), json!({"field":{"key":"a"}})] {
             assert!(!filtre.is_valid(&ko), "{ko}");
         }
         let options = jsonschema::validator_for(&search_options_schema("…")).unwrap();
@@ -393,6 +410,27 @@ mod tests {
 pub fn validate_structured_filter(condition: &crate::filter::FilterCondition, fields: &HashMap<String, SimpleFieldDef>) -> Result<(), String> {
     let root = FieldType::Struct(fields.iter().map(|(k,v)| (k.clone(),v.field_type.clone())).collect());
     validate_condition(condition, &root, false, 0)
+}
+
+/// **Un champ inconnu est refusé avant la base**, avec les champs qui existent.
+/// Il descendait jusqu'au moteur de requêtes : « Binder exception: Cannot find
+/// property card_types for p » — vrai, et inutilisable par un agent, qui
+/// réessayait le même champ (27 septembre 2026). Les jointures (`a.b`) et les
+/// colonnes internes (`_…`) gardent leur sens ; les `nested` sont vérifiés
+/// plus bas, dans leur portée.
+/// À n'appeler que là où `fields` fait foi : une entité **dérivée** (une base
+/// de connaissances traduite) filtre aussi sur les champs de ses sources.
+pub fn check_field_names(c: &crate::filter::FilterCondition, fields: &HashMap<String, SimpleFieldDef>) -> Result<(), String> {
+    use crate::filter::FilterCondition as C;
+    match c {
+        C::Field { key, .. } if !key.contains('.') && !key.starts_with('_') && !fields.contains_key(key) => {
+            let mut known: Vec<&str> = fields.keys().map(String::as_str).filter(|k| !k.starts_with('_')).collect();
+            known.sort_unstable();
+            Err(format!("champ inconnu « {key} » pour cette entité ; champs filtrables : {}", known.join(", ")))
+        }
+        C::Must(cs) | C::Should(cs) | C::MustNot(cs) => cs.iter().try_for_each(|c| check_field_names(c, fields)),
+        _ => Ok(()),
+    }
 }
 fn validate_condition(c: &crate::filter::FilterCondition, root: &FieldType, nested: bool, depth: usize) -> Result<(), String> {
     use crate::filter::FilterCondition as C;
