@@ -54,6 +54,51 @@ async function load(id) {
     for (const call of turn.tool_calls || []) calls.set(call.id, tool(call.name, call.arguments));
   }
   await lists(); $("messages").scrollTop = $("messages").scrollHeight;
+  // Un tour tourne encore sur cette conversation (page rechargée, autre onglet) :
+  // on s'y rattache — ses événements rejoués une fois, puis la suite en direct.
+  if (result.running && !busy) await follow(api(`/api/attach?session=${encodeURIComponent(id)}`), true);
+}
+// Le flux d'un tour, qu'on l'ait lancé (envoi) ou retrouvé (rattachement).
+async function follow(request, replay) {
+  setBusy(true);
+  let output = null, ended = false, thought = null; const calls = new Map();
+  // La réflexion du modèle, en direct : un bloc ouvert qui se remplit, replié
+  // avec sa durée dès que le modèle répond ou appelle un outil.
+  function closeThought() {
+    if (!thought) return;
+    thought.box.open = false;
+    thought.title.textContent = `Réflexion (${Math.max(1, Math.round((Date.now() - thought.start) / 1000))} s)`;
+    thought = null;
+  }
+  function event(ev) {
+    if (ev.event === "user") { if (replay) message("user", ev.text); }
+    else if (ev.event === "reasoning") {
+      if (!thought) {
+        const box = document.createElement("details"), title = document.createElement("summary"), body = document.createElement("pre");
+        box.className = "reasoning"; box.open = true; title.textContent = "Réflexion…"; box.append(title, body); $("messages").append(box);
+        thought = {box, title, body, start: Date.now()}; output = null;
+      }
+      thought.body.textContent += ev.text; thought.body.scrollTop = thought.body.scrollHeight; $("status").textContent = "Réflexion…";
+    }
+    else if (ev.event === "generation_start") { $("status").textContent = `Lecture du contexte (${ev.turns} messages)…`; }
+    else if (ev.event === "token") { closeThought(); output ||= message("assistant"); output.textContent += ev.text; $("status").textContent = "Réponse…"; }
+    else if (ev.event === "tool_start") { closeThought(); calls.set(ev.id, tool(ev.name, ev.arguments)); output = null; $("status").textContent = ev.name; }
+    else if (ev.event === "tool_end") { if (calls.has(ev.id)) calls.get(ev.id).textContent += `\n\n${ev.content}`; }
+    else if (ev.event === "status") $("status").textContent = ev.text;
+    else if (ev.event === "done") {
+      closeThought(); ended = true; if (!ev.ok) throw new Error(ev.error);
+      if (!output && ev.result.text) message("assistant", ev.result.text);
+      if (ev.result.task_accepted === false && ev.result.tool_calls > 0) message("error", "Aucun résultat accepté par les validations pour cette demande.");
+      else if (ev.result.task_accepted === true) message("assistant", "Résultat accepté par les validations.");
+    }
+    $("messages").scrollTop = $("messages").scrollHeight;
+  }
+  try {
+    const response = await request, reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = "";
+    while (true) { const {value, done} = await reader.read(); buffer += decoder.decode(value, {stream: !done}); let end; while ((end = buffer.indexOf("\n")) >= 0) { const line = buffer.slice(0, end); buffer = buffer.slice(end + 1); if (line.trim()) event(JSON.parse(line)); } if (done) break; }
+    if (!ended && !replay) throw new Error("Flux interrompu. Rechargez la conversation pour vérifier son état.");
+  } catch (err) { showError(err); }
+  finally { setBusy(false); await lists().catch(showError); $("message").focus(); }
 }
 $("new").onclick = () => load(crypto.randomUUID()).catch(showError);
 $("stop").onclick = () => { $("status").textContent = "Annulation demandée…"; api("/api/cancel", {session}).catch(showError); };
@@ -61,26 +106,7 @@ $("message").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preven
 $("composer").onsubmit = async e => {
   e.preventDefault(); if (busy) return;
   const text = $("message").value.trim(); if (!text) return;
-  setBusy(true); message("user", text); $("message").value = "";
-  let output = null, ended = false; const calls = new Map();
-  function event(ev) {
-    if (ev.event === "token") { output ||= message("assistant"); output.textContent += ev.text; }
-    else if (ev.event === "tool_start") { calls.set(ev.id, tool(ev.name, ev.arguments)); output = null; $("status").textContent = ev.name; }
-    else if (ev.event === "tool_end") { if (calls.has(ev.id)) calls.get(ev.id).textContent += `\n\n${ev.content}`; }
-    else if (ev.event === "status") $("status").textContent = ev.text;
-    else if (ev.event === "done") {
-      ended = true; if (!ev.ok) throw new Error(ev.error);
-      if (!output && ev.result.text) message("assistant", ev.result.text);
-      if (ev.result.task_accepted === false) message("error", "Aucun résultat accepté par les validations pour cette demande.");
-      else if (ev.result.task_accepted === true) message("assistant", "Résultat accepté par les validations.");
-    }
-    $("messages").scrollTop = $("messages").scrollHeight;
-  }
-  try {
-    const response = await api("/api/chat", {session, message: text}), reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = "";
-    while (true) { const {value, done} = await reader.read(); buffer += decoder.decode(value, {stream: !done}); let end; while ((end = buffer.indexOf("\n")) >= 0) { const line = buffer.slice(0, end); buffer = buffer.slice(end + 1); if (line.trim()) event(JSON.parse(line)); } if (done) break; }
-    if (!ended) throw new Error("Flux interrompu. Rechargez la conversation pour vérifier son état.");
-  } catch (err) { showError(err); }
-  finally { setBusy(false); await lists().catch(showError); $("message").focus(); }
+  message("user", text); $("message").value = "";
+  await follow(api("/api/chat", {session, message: text}), false);
 };
 (async () => { const info = await (await api("/api/info")).json(); $("name").textContent = info.name; $("model").textContent = `${info.model} · ${info.tools.length} outils${info.demo ? " · MODE DÉMONSTRATION" : ""}`; await load(session); })().catch(showError);

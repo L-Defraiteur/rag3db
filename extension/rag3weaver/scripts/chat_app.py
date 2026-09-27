@@ -34,6 +34,11 @@ class Bridge:
         self.writer = threading.Lock()
         self.closing = False
         self.active_session = None
+        # Les événements du tour en cours, gardés pour qu'une page rechargée
+        # les rejoue une fois puis suive la suite (/api/attach).
+        self.turn_events = []
+        self.turn_done = True
+        self.changed = threading.Condition()
 
     def send(self, value):
         with self.writer:
@@ -46,19 +51,47 @@ class Bridge:
         try:
             if self.closing:
                 raise RuntimeError("Le service s'arrête.")
-            self.active_session = value.get("session") if value.get("op") == "chat" else None
+            chat = value.get("op") == "chat"
+            if chat:
+                with self.changed:
+                    self.turn_events = [{"event": "user", "text": value.get("message", "")}]
+                    self.turn_done = False
+            self.active_session = value.get("session") if chat else None
             self.send(value)
             while True:
                 line = self.child.stdout.readline()
                 if not line:
                     raise RuntimeError("Le processus agent s'est arrêté ; voir le terminal.")
                 event = json.loads(line)
+                if chat:
+                    with self.changed:
+                        self.turn_events.append(event)
+                        self.changed.notify_all()
                 yield event
                 if event.get("event") == "done":
                     break
         finally:
+            with self.changed:
+                self.turn_done = True
+                self.changed.notify_all()
             self.active_session = None
             self.turn.release()
+
+    def attach(self, session):
+        """Le tour en cours de cette conversation : tous ses événements une fois,
+        puis les suivants au fil de l'eau, jusqu'à « done ». Rien si aucun tour."""
+        with self.changed:
+            if self.turn_done or self.active_session != session:
+                return
+            sent = 0
+        while True:
+            with self.changed:
+                while sent == len(self.turn_events) and not self.turn_done:
+                    self.changed.wait(timeout=15)
+                batch, sent, done = self.turn_events[sent:], len(self.turn_events), self.turn_done
+            yield from batch
+            if done or any(e.get("event") == "done" for e in batch):
+                return
 
     def request(self, value):
         result = list(self.events(value))[-1]
@@ -145,10 +178,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.response(200, {"sessions": [{"id": p.stem, "modified": p.stat().st_mtime} for p in files if simple_name(p.stem)]})
             if parsed.path == "/api/history":
                 session = urllib.parse.parse_qs(parsed.query).get("session", [""])[0]
-                result = self.server.bridge.request({"op": "history", "session": session})
+                if not simple_name(session):
+                    return self.response(400, {"error": "Identifiant de conversation invalide"})
+                # Lue sur disque, pas par l'agent : un tour en cours tient le pont,
+                # et une page rechargée doit pouvoir s'afficher quand même.
+                path = self.server.state / "sessions" / f"{session}.json"
+                turns = json.loads(path.read_text()).get("turns", []) if path.is_file() else []
                 # System prompts stay server-side, including after a reload.
-                result["turns"] = [t for t in result["turns"] if t["role"] != "system"]
+                # Le tour en cours n'est pas encore dans le fichier : la page s'y
+                # rattache par /api/attach quand « running » est vrai.
+                result = {"turns": [t for t in turns if t["role"] != "system"],
+                          "running": self.server.bridge.active_session == session}
                 return self.response(200, result)
+            if parsed.path == "/api/attach":
+                session = urllib.parse.parse_qs(parsed.query).get("session", [""])[0]
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                try:
+                    for event in self.server.bridge.attach(session):
+                        self.wfile.write((json.dumps(event, ensure_ascii=False) + "\n").encode())
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             if parsed.path == "/api/artifacts":
                 root = self.server.state / "artifacts"
                 return self.response(200, {"artifacts": [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(root.glob("*")) if simple_name(p.name) and p.is_file() and not p.is_symlink()]})
@@ -201,9 +256,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         self.wfile.write((json.dumps(event, ensure_ascii=False) + "\n").encode())
                         self.wfile.flush()
                     except (BrokenPipeError, ConnectionResetError):
+                        # La page n'est qu'une fenêtre sur l'agent : la fermer ou la
+                        # recharger n'arrête pas son tour. On cesse d'écrire, on
+                        # draine jusqu'à « done » (pas de désynchronisation), et la
+                        # page rechargée retrouve le tour par /api/history. Seul
+                        # « Arrêter » annule.
                         connected = False
-                        self.server.bridge.cancel(value["session"])
-                        # Drain through done before releasing the lock; no protocol desync.
         except (OSError, RuntimeError, ValueError) as exc:
             if connected:
                 try:
