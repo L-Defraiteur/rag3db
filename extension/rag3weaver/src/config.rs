@@ -500,6 +500,59 @@ pub struct EntityConfig {
     /// `None` (défaut) : l'entité n'a pas d'état, et rien ne change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<Lifecycle>,
+
+    /// **Ce qu'est le contenu de cette entité**, pour le rendu des extraits.
+    /// Un document (du code, un long texte) a des lignes : l'extrait se lit
+    /// entre ses bornes. Une fiche (une carte, un produit) n'en a pas : les
+    /// positions ne veulent rien dire, et un extrait qui répète la fiche
+    /// n'apprend rien. Lucie, 27 septembre 2026.
+    #[serde(default, skip_serializing_if = "ContentKind::is_document")]
+    pub content_kind: ContentKind,
+
+    /// **Le champ dont les lignes sont celles d'un fichier**, et comment les
+    /// retrouver. Sans cette déclaration, un extrait n'affiche aucun numéro :
+    /// une position relative au champ, montrée à côté d'un chemin de fichier,
+    /// enverrait un `replace` à la mauvaise ligne.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_lines: Option<SourceLines>,
+}
+
+/// Voir [`EntityConfig::content_kind`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ContentKind {
+    /// Du code, un long texte : l'extrait est encadré par ses lignes quand
+    /// [`EntityConfig::source_lines`] les donne.
+    #[default]
+    Document,
+    /// Une fiche autonome : ni positions ni bornes, et pas d'extrait quand
+    /// son texte est déjà un champ rendu.
+    Record,
+}
+
+impl ContentKind {
+    pub fn is_document(&self) -> bool {
+        *self == ContentKind::Document
+    }
+}
+
+/// Voir [`EntityConfig::source_lines`]. La ligne 0 du champ `field` est la
+/// ligne `start_line` du fichier (1 sans champ déclaré) ; les replis décalent
+/// la suite.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceLines {
+    /// Le champ de contenu dont les lignes sont celles du fichier (`content`).
+    pub field: String,
+    /// Le champ entier qui donne sa première ligne dans le fichier, en
+    /// commençant à 1. Absent : le champ est le fichier entier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<String>,
+    /// Le champ texte qui liste les lignes repliées : `ligne:début-fin`
+    /// séparés par des virgules, la ligne comptée dans le champ depuis 0, les
+    /// bornes dans le fichier. Une ligne repliée tient lieu de `début..=fin`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folds: Option<String>,
 }
 
 /// Ce qui regroupe une entité sous son parent au rendu (voir
@@ -612,6 +665,8 @@ impl Default for EntityConfig {
             checkpoint: None,
             derived: None,
             fusion: None,
+            content_kind: ContentKind::Document,
+            source_lines: None,
         }
     }
 }
