@@ -27,7 +27,28 @@ pub type QueryFn = Arc<dyn Fn(&str, &[QueryParam]) -> Result<QueryResult, String
 /// Each blob is keyed as `"{index_name}/{file_name}"`.
 pub struct CypherBlobStore {
     query_fn: QueryFn,
+    /// Sauvegardes (lots `save_many`) pendant lesquelles un fichier supprimé
+    /// garde ses octets — de quoi revenir à un état récent de l'index.
+    retention: i64,
+    /// Numéro de la sauvegarde en cours ; repris de la base à la première
+    /// utilisation.
+    generation: std::sync::atomic::AtomicI64,
+    prepared: std::sync::OnceLock<Result<(), String>>,
 }
+
+/// **Supprimer un fichier ne supprime pas la ligne** (27 septembre 2026).
+///
+/// rag3db ne rend jamais la place d'une ligne supprimée : mesuré, 60
+/// réécritures d'un blob de 2 Mo par « DELETE puis CREATE » ou « nouvelle clé,
+/// ancienne supprimée » — ce que fait lucivy à chaque commit — laissent 355 Mo ;
+/// les mêmes par `SET` en laissent 5. `_index_blobs` pesait ~2 Go pour 148 Mo
+/// d'index vivant. Alors : une suppression marque la ligne (`_deleted_gen`,
+/// invisible aussitôt), et les lignes marquées depuis plus de `retention`
+/// sauvegardes sont vidées par `SET` — ce qui, lui, rend la place. Les
+/// dernières versions restent intactes pour un retour en arrière. À corriger
+/// aussi dans rag3db : récupérer les lignes supprimées au checkpoint.
+const RETENTION_ENV: &str = "RAG3WEAVER_BLOB_RETENTION";
+const VISIBLE: &str = "b._deleted_gen IS NULL OR b._deleted_gen < 0";
 
 impl CypherBlobStore {
     /// Create a new CypherBlobStore with a sync query function.
@@ -35,7 +56,23 @@ impl CypherBlobStore {
     /// The query function must execute Cypher with parameters and return results.
     /// For `Rag3dbConnection`, use [`from_connection`].
     pub fn new(query_fn: QueryFn) -> Self {
-        Self { query_fn }
+        let retention = std::env::var(RETENTION_ENV).ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+        Self { query_fn, retention, generation: 0.into(), prepared: std::sync::OnceLock::new() }
+    }
+
+    /// La colonne de marquage, et le numéro de sauvegarde repris de la base.
+    fn prepare(&self) -> io::Result<()> {
+        self.prepared
+            .get_or_init(|| {
+                // Existe déjà sur une base préparée : l'erreur ne dit rien d'autre.
+                let _ = self.execute("ALTER TABLE _index_blobs ADD _deleted_gen INT64 DEFAULT -1", &[]);
+                let r = self.execute("MATCH (b:_index_blobs) RETURN max(b._deleted_gen)", &[])?;
+                let last = r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(-1);
+                self.generation.store(last.max(-1) + 1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })
+            .clone()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 
     /// Create a CypherBlobStore from a sync database connection.
@@ -46,7 +83,7 @@ impl CypherBlobStore {
             conn.execute_with_params(cypher, params)
                 .map_err(|e| e.to_string())
         });
-        Self { query_fn }
+        Self::new(query_fn)
     }
 
     /// Ensure the `_index_blobs` table exists. Call once during initialization.
@@ -69,9 +106,10 @@ impl CypherBlobStore {
 
 impl BlobStore for CypherBlobStore {
     fn save(&self, index_name: &str, file_name: &str, data: &[u8]) -> io::Result<()> {
+        self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         self.execute(
-            "MERGE (b:_index_blobs {_key: $key}) SET b._data = $data",
+            "MERGE (b:_index_blobs {_key: $key}) SET b._data = $data, b._deleted_gen = -1",
             &[
                 QueryParam::new("key", CypherValue::String(key)),
                 QueryParam::new("data", CypherValue::Blob(data.to_vec())),
@@ -82,10 +120,11 @@ impl BlobStore for CypherBlobStore {
     }
 
     fn load(&self, index_name: &str, file_name: &str) -> io::Result<Vec<u8>> {
+        self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         let result = self
             .execute(
-                "MATCH (b:_index_blobs {_key: $key}) RETURN b._data",
+                &format!("MATCH (b:_index_blobs {{_key: $key}}) WHERE {VISIBLE} RETURN b._data"),
                 &[QueryParam::new("key", CypherValue::String(key.clone()))],
             )
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -102,10 +141,11 @@ impl BlobStore for CypherBlobStore {
     /// mode paresseux : il n'a besoin que des tailles pour cartographier les
     /// fichiers, puis lit des plages à la demande via [`Self::load_range`].
     fn blob_len(&self, index_name: &str, file_name: &str) -> io::Result<Option<u64>> {
+        self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         let result = self
             .execute(
-                "MATCH (b:_index_blobs {_key: $key}) RETURN SIZE(b._data)",
+                &format!("MATCH (b:_index_blobs {{_key: $key}}) WHERE {VISIBLE} RETURN octet_length(b._data)"),
                 &[QueryParam::new("key", CypherValue::String(key))],
             )
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -127,6 +167,7 @@ impl BlobStore for CypherBlobStore {
         file_name: &str,
         range: std::ops::Range<u64>,
     ) -> io::Result<Option<Vec<u8>>> {
+        self.prepare()?;
         if range.end <= range.start {
             return Ok(Some(Vec::new()));
         }
@@ -134,8 +175,8 @@ impl BlobStore for CypherBlobStore {
         let len = (range.end - range.start) as i64;
         let result = self
             .execute(
-                "MATCH (b:_index_blobs {_key: $key}) \
-                 RETURN SUBSTRING(b._data, $from, $len)",
+                &format!("MATCH (b:_index_blobs {{_key: $key}}) WHERE {VISIBLE} \
+                 RETURN SUBSTRING(b._data, $from, $len)"),
                 &[
                     QueryParam::new("key", CypherValue::String(key)),
                     QueryParam::new("from", CypherValue::Int(range.start as i64 + 1)),
@@ -150,20 +191,25 @@ impl BlobStore for CypherBlobStore {
     }
 
     fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
+        self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         self.execute(
-            "MATCH (b:_index_blobs {_key: $key}) DELETE b",
-            &[QueryParam::new("key", CypherValue::String(key))],
+            "MATCH (b:_index_blobs {_key: $key}) SET b._deleted_gen = $gen",
+            &[
+                QueryParam::new("key", CypherValue::String(key)),
+                QueryParam::new("gen", CypherValue::Int(self.generation.load(std::sync::atomic::Ordering::SeqCst))),
+            ],
         )
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
 
     fn exists(&self, index_name: &str, file_name: &str) -> io::Result<bool> {
+        self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         let result = self
             .execute(
-                "MATCH (b:_index_blobs {_key: $key}) RETURN count(b)",
+                &format!("MATCH (b:_index_blobs {{_key: $key}}) WHERE {VISIBLE} RETURN count(b)"),
                 &[QueryParam::new("key", CypherValue::String(key))],
             )
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -174,10 +220,11 @@ impl BlobStore for CypherBlobStore {
     }
 
     fn list(&self, index_name: &str) -> io::Result<Vec<String>> {
+        self.prepare()?;
         let prefix = format!("{index_name}/");
         let result = self
             .execute(
-                "MATCH (b:_index_blobs) WHERE b._key STARTS WITH $prefix RETURN b._key",
+                &format!("MATCH (b:_index_blobs) WHERE b._key STARTS WITH $prefix AND ({VISIBLE}) RETURN b._key"),
                 &[QueryParam::new(
                     "prefix",
                     CypherValue::String(prefix.clone()),
@@ -203,6 +250,7 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
     /// are capped by payload size so a large segment set doesn't become one
     /// giant parameter.
     fn save_many(&self, items: Vec<(String, String, Vec<u8>)>) -> io::Result<()> {
+        self.prepare()?;
         // Escape hatch to isolate the batched UNWIND path when chasing memory
         // corruption in the FFI: one MERGE per blob instead.
         if std::env::var_os("RAG3W_NO_BATCH_SAVE").is_some() {
@@ -225,7 +273,7 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
             self.execute(
                 "UNWIND $items AS item \
                  MERGE (b:_index_blobs {_key: item.key}) \
-                 SET b._data = item.data",
+                 SET b._data = item.data, b._deleted_gen = -1",
                 &[QueryParam::new("items", items)],
             )
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -245,7 +293,20 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
             item.insert("data".to_string(), CypherValue::Blob(data));
             batch.push(CypherValue::Map(item));
         }
-        flush_batch(&mut batch)
+        flush_batch(&mut batch)?;
+        // Une sauvegarde de plus : les fichiers supprimés il y a plus de
+        // `retention` sauvegardes rendent leur place (voir `RETENTION_ENV`).
+        let gen = self.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.execute(
+            "MATCH (b:_index_blobs) WHERE b._deleted_gen >= 0 AND b._deleted_gen <= $limit AND octet_length(b._data) > 0 \
+             SET b._data = $empty",
+            &[
+                QueryParam::new("limit", CypherValue::Int(gen - self.retention)),
+                QueryParam::new("empty", CypherValue::Blob(Vec::new())),
+            ],
+        )
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(())
     }
 }
 
@@ -278,7 +339,16 @@ mod tests {
                 .and_then(|p| p.value.as_str())
                 .map(|s| s.to_string());
 
-            if cypher.contains("UNWIND") {
+            if cypher.contains("ALTER TABLE") || cypher.contains("SET b._data = $empty") {
+                Ok(QueryResult::default())
+            } else if cypher.contains("max(b._deleted_gen)") {
+                Ok(QueryResult { columns: vec!["max".into()], rows: vec![vec![CypherValue::Int(-1)]] })
+            } else if cypher.contains("SET b._deleted_gen = $gen") {
+                // delete: the row stays, invisible — the mock just forgets it
+                let key = key.ok_or("missing key")?;
+                store.write().unwrap().remove(&key);
+                Ok(QueryResult::default())
+            } else if cypher.contains("UNWIND") {
                 // save_many: `$items` is a list of {key, data} maps
                 let items = params
                     .iter()
@@ -385,7 +455,11 @@ mod tests {
         let statements = Arc::new(AtomicUsize::new(0));
         let counter = statements.clone();
         let qf: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
-            counter.fetch_add(1, Ordering::SeqCst);
+            // Les écritures groupées seulement : préparation et purge des
+            // fichiers supprimés sont d'autres requêtes.
+            if cypher.contains("UNWIND") {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }
             inner_qf(cypher, params)
         });
         let bs = CypherBlobStore::new(qf);
@@ -410,7 +484,11 @@ mod tests {
         let statements = Arc::new(AtomicUsize::new(0));
         let counter = statements.clone();
         let qf: QueryFn = Arc::new(move |cypher: &str, params: &[QueryParam]| {
-            counter.fetch_add(1, Ordering::SeqCst);
+            // Les écritures groupées seulement : préparation et purge des
+            // fichiers supprimés sont d'autres requêtes.
+            if cypher.contains("UNWIND") {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }
             inner_qf(cypher, params)
         });
         let bs = CypherBlobStore::new(qf);
