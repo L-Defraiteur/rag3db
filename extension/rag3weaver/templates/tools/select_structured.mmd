@@ -1,8 +1,9 @@
 %% tool: select_structured
-%% description: Sélection exhaustive typée sans top-k, pour inventaire et vérification.
+%% description: Sélection typée par filtre, sans classement, pour inventaire et vérification. Sans filtre ni limit : 20 lignes et le total.
 %% param: entity string! -- Entité fixée.
-%% param: filter json! -- FilterCondition.
+%% param: filter json = {} -- Filtre, FilterCondition. {} : aucun. Un champ : {"field":{"key":"owned","value":[{"op":"gt","value":0}]}} (op : eq, neq, lt, lte, gt, gte, between, in, not_in, has_any, has_all, has_none, contains, starts_with, is_null, is_not_null, is_empty, is_not_empty ; une liste simple vaut in, une valeur simple vaut eq). Combinaisons : {"must":[…]}, {"should":[…]}, {"must_not":[…]}. Champs et exemples : describe_backend.
+%% param: limit int = -1 -- Nombre maximum de lignes. 0 : toutes. Non fourni (-1) : toutes avec un filtre, 20 sans filtre.
 %% result: select.results
 
 graph LR
-    select["SelectRecordsNode(entity=$entity, filter=$filter)"]
+    select["SelectRecordsNode(entity=$entity, filter=$filter, limit=$limit, unfiltered_limit=20)"]

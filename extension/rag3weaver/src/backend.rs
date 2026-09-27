@@ -392,6 +392,43 @@ impl PreparedBackend {
                         .is_none_or(|k| !attachment.bindings.contains_key(k))
                 });
             }
+            // **Les filtres et options de recherche, typés depuis l'entité.** Le
+            // graphe dit quel paramètre alimente un filtre ou des options, et
+            // sur quelle entité (littérale ou liée) : le schéma, la grammaire,
+            // les champs, leur vocabulaire et un exemple en découlent, pour
+            // n'importe quel backend. Le validateur plus bas les applique.
+            for node in &tool.template().nodes {
+                let (cle_param, cle_entite, options) = match node.node_type.as_str() {
+                    "SelectRecordsNode" => ("filter", "entity", false),
+                    "SearchSourceNode" => ("options", "target_name", true),
+                    _ => continue,
+                };
+                let Some(param) = node.config.get(cle_param).and_then(Value::as_str).and_then(|v| v.strip_prefix('$')) else {
+                    continue;
+                };
+                if input["properties"].get(param).is_none() {
+                    continue;
+                }
+                let entite = match node.config.get(cle_entite).and_then(Value::as_str) {
+                    Some(v) => match v.strip_prefix('$') {
+                        Some(lie) => attachment.bindings.get(lie).and_then(Value::as_str).map(str::to_string),
+                        None => Some(v.to_string()),
+                    },
+                    None => None,
+                };
+                let Some(mapping) = entite.and_then(|e| mappings.get(&e)) else {
+                    continue;
+                };
+                let description = crate::json_schema::filter_description(&mapping.filter_fields);
+                input["properties"][param] = if options {
+                    crate::json_schema::search_options_schema(&description)
+                } else {
+                    let mut filtre = crate::json_schema::filter_condition_schema();
+                    filtre["description"] = Value::String(description);
+                    filtre["default"] = json!({});
+                    filtre
+                };
+            }
             if let Some(path) = &attachment.harness.input_schema {
                 input = serde_json::from_slice(
                     &std::fs::read(directory.join(path)).map_err(|e| e.to_string())?,

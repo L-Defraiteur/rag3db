@@ -14,6 +14,15 @@ pub struct FilterField {
     /// Array-object scopes that must be entered with a `nested` condition.
     pub nested_scopes: Vec<Vec<String>>,
     pub operators: Vec<String>,
+    /// **Le vocabulaire déclaré** (`enum` du schéma, ou de ses `items`) :
+    /// ce qu'un agent peut écrire dans un filtre sans deviner `"Red"` ou
+    /// `"R"`. Absent pour un vocabulaire ouvert.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<Value>>,
+    /// Le premier des `examples` déclarés par le schéma : c'est lui que
+    /// l'exemple de filtre montre, plutôt qu'une valeur devinée.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub example: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +41,16 @@ impl JsonSchemaMapping {
         let mut filter_fields = vec![];
         for (name, ty) in &properties {
             describe(ty, vec![name.clone()], vec![], &mut filter_fields);
+        }
+        let props = resolve(root, root, 0).and_then(|r| r.get("properties")).and_then(Value::as_object);
+        for f in filter_fields.iter_mut().filter(|f| f.path.len() == 1) {
+            let schema = props.and_then(|p| p.get(&f.path[0]));
+            f.values = schema.and_then(|s| declared_values(root, s));
+            f.example = schema
+                .and_then(|s| resolve(root, s, 0))
+                .and_then(|s| s.get("examples"))
+                .and_then(Value::as_array)
+                .and_then(|e| e.first().cloned());
         }
         let fields = properties.into_iter().map(|(k, field_type)| (k, SimpleFieldDef { field_type, ..Default::default() })).collect();
         Ok(Self { fields, filter_fields, opaque_paths })
@@ -105,6 +124,36 @@ fn map_type(root: &Value, s: &Value, path: &mut Vec<String>, opaque: &mut Vec<Ve
     })
 }
 
+/// Suit les `$ref` locaux et les unions nullables jusqu'au schéma concret.
+fn resolve<'a>(root: &'a Value, s: &'a Value, depth: usize) -> Option<&'a Value> {
+    if depth > 32 {
+        return None;
+    }
+    if let Some(reference) = s.get("$ref").and_then(Value::as_str) {
+        return resolve(root, root.pointer(reference.strip_prefix('#')?)?, depth + 1);
+    }
+    for keyword in ["anyOf", "oneOf"] {
+        if let Some(variants) = s.get(keyword).and_then(Value::as_array) {
+            let nonnull: Vec<_> = variants.iter().filter(|v| v.get("type").and_then(Value::as_str) != Some("null")).collect();
+            return match nonnull.as_slice() {
+                [one] => resolve(root, one, depth + 1),
+                _ => None,
+            };
+        }
+    }
+    Some(s)
+}
+
+/// L'`enum` d'un champ, ou celui de ses éléments pour une liste.
+fn declared_values(root: &Value, s: &Value) -> Option<Vec<Value>> {
+    let s = resolve(root, s, 0)?;
+    let s = match s.get("items") {
+        Some(items) => resolve(root, items, 0)?,
+        None => s,
+    };
+    s.get("enum").and_then(Value::as_array).map(|v| v.iter().filter(|x| !x.is_null()).cloned().collect())
+}
+
 fn describe(ty: &FieldType, path: Vec<String>, scopes: Vec<Vec<String>>, out: &mut Vec<FilterField>) {
     let ops: &[&str] = match ty {
         FieldType::Struct(fields) => {
@@ -122,7 +171,140 @@ fn describe(ty: &FieldType, path: Vec<String>, scopes: Vec<Vec<String>>, out: &m
         FieldType::Boolean => &["eq", "neq", "is_null"],
         _ => &["eq", "neq", "in", "starts_with", "contains", "is_null"],
     };
-    out.push(FilterField { path, field_type: ty.clone(), nested_scopes: scopes, operators: ops.iter().map(|s| s.to_string()).collect() });
+    out.push(FilterField { path, field_type: ty.clone(), nested_scopes: scopes, operators: ops.iter().map(|s| s.to_string()).collect(), values: None, example: None });
+}
+
+// ─── Filtres exposés aux agents ──────────────────────────────────────────────
+//
+// Un paramètre `filter` ou `options` d'un outil n'était annoncé que comme
+// « json » : l'agent ne connaissait ni la grammaire, ni les champs, ni leur
+// vocabulaire. Il écrivait `{}` (refusé), mettait « instant cost {1} » dans
+// le texte de la requête, ou `"filter"` au lieu de `"filter_condition"` —
+// ignoré sans bruit. Tout ce qu'il faut savoir est dans le schéma de
+// l'entité : on le génère ici, pour n'importe quel backend (27 septembre 2026).
+
+/// Les champs qu'un filtre peut nommer par `key` : ceux du premier niveau,
+/// hors listes d'objets (celles-là passent par `nested`).
+fn champs_simples(fields: &[FilterField]) -> Vec<&FilterField> {
+    fields.iter().filter(|f| f.path.len() == 1 && f.nested_scopes.is_empty() && !f.path[0].starts_with('_')).collect()
+}
+
+fn nom_de_type(ty: &FieldType) -> &'static str {
+    match ty {
+        FieldType::Int64 | FieldType::Integer => "entiers",
+        FieldType::Double | FieldType::Number => "nombres",
+        FieldType::Boolean => "booléens",
+        FieldType::List(_) => "listes",
+        FieldType::Timestamp => "dates",
+        _ => "textes",
+    }
+}
+
+/// Le schéma JSON d'une condition de filtre : **sa forme seulement**. Les
+/// clés, les opérateurs et les niveaux imbriqués sont vérifiés par le moteur,
+/// avec ses propres messages ; les recopier ici dans chaque outil coûtait
+/// ~16 000 jetons par tour au modèle (27 septembre 2026).
+pub fn filter_condition_schema() -> Value {
+    serde_json::json!({"type":"object","maxProperties":1,"additionalProperties":false,"properties":{
+        "field":{"type":"object","additionalProperties":false,"required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}},
+        "must":{"type":"array","items":{"type":"object"}},
+        "should":{"type":"array","items":{"type":"object"}},
+        "must_not":{"type":"array","items":{"type":"object"}},
+        "path":{},"nested":{}
+    }})
+}
+
+/// La description d'un paramètre de filtre : la grammaire en une ligne, les
+/// champs **groupés par type** avec leurs opérateurs et leur vocabulaire, et
+/// un exemple construit depuis les champs réels. Compacte : elle part vers
+/// le modèle à chaque tour.
+pub fn filter_description(fields: &[FilterField]) -> String {
+    let simples = champs_simples(fields);
+    let mut groupes: BTreeMap<&str, (Vec<String>, Vec<String>)> = BTreeMap::new();
+    for f in &simples {
+        let g = groupes.entry(nom_de_type(&f.field_type)).or_default();
+        let nom = match &f.values {
+            Some(v) if !v.is_empty() => format!(
+                "{} [{}]",
+                f.path[0],
+                v.iter().map(|x| x.as_str().map(str::to_string).unwrap_or_else(|| x.to_string())).collect::<Vec<_>>().join(", ")
+            ),
+            _ => f.path[0].clone(),
+        };
+        g.0.push(nom);
+        if g.1.is_empty() {
+            g.1 = f.operators.clone();
+        }
+    }
+    let champs = groupes
+        .iter()
+        .map(|(t, (noms, ops))| format!("{t} ({}) : {}", ops.join(", "), noms.join(", ")))
+        .collect::<Vec<_>>()
+        .join(" ; ");
+    format!(
+        "{{}} : aucun filtre. field.value : [{{\"op\":…,\"value\":…}}], une liste (in) ou une valeur (eq) ; must/should/must_not : liste de filtres. Champs — {champs}. Exemple : {}",
+        filter_example(&simples)
+    )
+}
+
+/// Un exemple réaliste. D'abord les `examples` déclarés par le schéma (deux
+/// au plus, combinés par `must`) ; sinon une liste au vocabulaire déclaré et
+/// un nombre, en évitant les champs techniques (`key`, `…_id`, `…_code`) et
+/// les valeurs vides de sens (`unknown`, `none`, `other`).
+fn filter_example(simples: &[&FilterField]) -> String {
+    let condition = |f: &FilterField, v: &Value| match (&f.field_type, v) {
+        (FieldType::List(_), Value::Array(_)) => serde_json::json!({"field":{"key":f.path[0],"value":[{"op":"has_any","value":v}]}}),
+        (FieldType::List(_), _) => serde_json::json!({"field":{"key":f.path[0],"value":[{"op":"has_any","value":[v]}]}}),
+        _ => serde_json::json!({"field":{"key":f.path[0],"value":[v]}}),
+    };
+    let mut conditions: Vec<Value> = simples
+        .iter()
+        .filter_map(|f| f.example.as_ref().map(|v| condition(f, v)))
+        .take(2)
+        .collect();
+    if conditions.is_empty() {
+        let technique = |f: &&&FilterField| {
+            let n = f.path[0].as_str();
+            n == "key" || n.ends_with("_id") || n.ends_with("_code") || n.ends_with("_ids")
+        };
+        let parlante = |v: &&Value| !matches!(v.as_str(), Some("unknown" | "none" | "other" | ""));
+        let vocabulaire = simples
+            .iter()
+            .filter(|f| !technique(f))
+            .filter_map(|f| f.values.as_ref().and_then(|v| v.iter().find(parlante)).map(|v| (f, v)))
+            .min_by_key(|(f, _)| !matches!(f.field_type, FieldType::List(_)));
+        if let Some((f, v)) = vocabulaire {
+            conditions.push(condition(f, v));
+        }
+        if let Some(f) = simples.iter().filter(|f| !technique(f)).find(|f| {
+            matches!(f.field_type, FieldType::Int64 | FieldType::Integer | FieldType::Double | FieldType::Number)
+        }) {
+            conditions.push(serde_json::json!({"field":{"key":f.path[0],"value":[{"op":"lte","value":2}]}}));
+        }
+    }
+    match conditions.len() {
+        0 => "{}".into(),
+        1 => conditions.remove(0).to_string(),
+        _ => serde_json::json!({"must":conditions}).to_string(),
+    }
+}
+
+/// Le schéma des `options` d'une recherche exposée : le filtre typé, la
+/// pagination, et **rien d'autre** — une clé inconnue (`filter` pour
+/// `filter_condition`) devient une erreur au lieu d'être ignorée.
+pub fn search_options_schema(filter_description: &str) -> Value {
+    let mut filtre = filter_condition_schema();
+    filtre["description"] = Value::String(filter_description.to_string());
+    serde_json::json!({
+        "type":"object","additionalProperties":false,
+        "description":"Options : filter_condition (critères structurés : type, coût, couleur, possession… jamais dans le texte de la requête), limit, offset.",
+        "properties":{
+            "filter_condition":filtre,
+            "limit":{"type":"integer","minimum":1,"maximum":200},
+            "offset":{"type":"integer","minimum":0},
+            "signals":{},"consistency":{}
+        }
+    })
 }
 
 pub(crate) fn normalize(ty: &FieldType, v: &Value) -> Result<CypherValue, String> {
@@ -146,6 +328,39 @@ pub(crate) fn normalize(ty: &FieldType, v: &Value) -> Result<CypherValue, String
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Le filtre d'un outil se décrit depuis le schéma de l'entité : les
+    /// champs par type, le vocabulaire déclaré, un exemple tiré des
+    /// `examples` ; la forme refuse deux clés, les options une clé inconnue.
+    #[test]
+    fn le_filtre_d_un_outil_se_decrit_depuis_le_schema() {
+        let schema = json!({"type":"object","properties":{
+            "key":{"type":"string"},
+            "types":{"type":"array","items":{"type":"string","enum":["Creature","Instant"]},"examples":[["Instant"]]},
+            "rarity":{"type":"string","enum":["unknown","common","rare"]},
+            "cost":{"type":"integer","examples":[2]},
+            "owned":{"type":"integer"}
+        }});
+        let mapping = JsonSchemaMapping::from_schema(&schema).unwrap();
+        let d = filter_description(&mapping.filter_fields);
+        assert!(d.contains("types [Creature, Instant]") && d.contains("rarity [unknown, common, rare]"), "{d}");
+        assert!(d.contains(r#"{"must":[{"field":{"key":"cost","value":[2]}},{"field":{"key":"types","value":[{"op":"has_any","value":["Instant"]}]}}]}"#), "{d}");
+        let sans_exemples = JsonSchemaMapping::from_schema(&json!({"type":"object","properties":{
+            "rarity":{"type":"string","enum":["unknown","common"]},"owned":{"type":"integer"},"set_id":{"type":"integer"}}})).unwrap();
+        let d = filter_description(&sans_exemples.filter_fields);
+        assert!(d.contains(r#""key":"rarity","value":["common"]"#) && d.contains(r#""key":"owned""#) && !d.contains(r#""key":"set_id""#), "{d}");
+
+        let filtre = jsonschema::validator_for(&filter_condition_schema()).unwrap();
+        for ok in [json!({}), json!({"field":{"key":"cost","value":[{"op":"lte","value":2}]}}), json!({"must":[{"field":{"key":"a","value":1}}]})] {
+            assert!(filtre.is_valid(&ok), "{ok}");
+        }
+        for ko in [json!({"field":{"key":"a","value":1},"must":[]}), json!({"owned":1}), json!({"field":{"key":"a"}})] {
+            assert!(!filtre.is_valid(&ko), "{ko}");
+        }
+        let options = jsonschema::validator_for(&search_options_schema("…")).unwrap();
+        assert!(options.is_valid(&json!({"limit":20,"filter_condition":{"field":{"key":"cost","value":[1]}}})));
+        assert!(!options.is_valid(&json!({"filter":{"field":{"key":"cost","value":[1]}}})), "une clé inconnue est refusée");
+    }
     #[test]
     fn nullable_refs_and_nested_arrays_preserve_types() {
         let schema = json!({"type":"object", "properties": {

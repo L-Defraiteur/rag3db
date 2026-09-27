@@ -60,6 +60,13 @@ impl NodeFactory for SetFactory {
                 vec![
                     param("entity", ConfigParamType::String),
                     param("filter", ConfigParamType::Json),
+                    // `0` : sans limite. Absent : exhaustive, sauf `unfiltered_limit`.
+                    ConfigParam { required: false, ..param("limit", ConfigParamType::Int) },
+                    // Le plafond d'une sélection **sans filtre ni limite**, déclaré
+                    // par l'outil exposé : un agent qui demande `{}` sur une
+                    // collection de cinq mille lignes en reçoit vingt, et le total.
+                    // Les graphes qui composent gardent l'exhaustivité.
+                    ConfigParam { required: false, ..param("unfiltered_limit", ConfigParamType::Int) },
                 ],
             ),
             "RelatedResultsNode" => (
@@ -85,11 +92,14 @@ impl NodeFactory for SetFactory {
             node_type: self.0,
             description: "Composable entity sets; selection and intersection never paginate",
             inputs,
-            outputs: vec![PortDef {
-                name: "results",
-                port_type: PortType::Results,
-                required: false,
-            }],
+            outputs: {
+                let mut out = vec![PortDef { name: "results", port_type: PortType::Results, required: false }];
+                if self.0 == "SelectRecordsNode" {
+                    // Ce que la sélection n'a pas montré, pour le rendu.
+                    out.push(PortDef { name: "meta", port_type: PortType::Meta, required: false });
+                }
+                out
+            },
             config_params: params,
         }
     }
@@ -103,6 +113,11 @@ impl NodeFactory for SetFactory {
                 .map_err(|e| e.to_string())?;
                 serde_json::from_value::<FilterCondition>(config["filter"].clone())
                     .map_err(|e| e.to_string())?;
+                for key in ["limit", "unfiltered_limit"] {
+                    if !config[key].is_null() && config[key].as_i64().is_none() {
+                        return Err(format!("{key} must be an integer"));
+                    }
+                }
             }
             "RelatedResultsNode" => {
                 if config["signal"].as_str().is_none_or(str::is_empty) {
@@ -150,6 +165,7 @@ impl Node for SetNode {
         Some(Box::new(self.config.clone()))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let mut select_meta: Option<crate::search::SearchMeta> = None;
         let output = match self.kind {
             "LabelResultsNode" => {
                 let mut rows = results(ctx, "results")?;
@@ -188,12 +204,51 @@ impl Node for SetNode {
                 } else {
                     format!(" WHERE {predicate}")
                 };
-                let rows = cat
+                // `limit` explicite l'emporte (0 = sans limite) ; négatif ou absent,
+                // il n'est pas fourni (une fiche d'outil ne sait pas dire `null`
+                // pour un entier) : le plafond déclaré vaut alors pour une
+                // sélection sans filtre.
+                let limite = match self.config["limit"].as_i64().and_then(|n| u64::try_from(n).ok()) {
+                    Some(0) => None,
+                    Some(n) => Some(n),
+                    None if predicate.is_empty() => self.config["unfiltered_limit"].as_u64().filter(|n| *n > 0),
+                    None => None,
+                };
+                let borne = limite.map(|n| format!(" LIMIT {}", n + 1)).unwrap_or_default();
+                let mut rows = cat
                     .execute_raw_with_params(
-                        &format!("MATCH (n:{entity}){clause} RETURN n ORDER BY n._uuid"),
+                        &format!("MATCH (n:{entity}){clause} RETURN n ORDER BY n._uuid{borne}"),
                         &parsed.params,
                     )
                     .map_err(|e| e.to_string())?;
+                let mut warnings = Vec::new();
+                if let Some(n) = limite.filter(|n| rows.rows.len() as u64 > *n) {
+                    rows.rows.truncate(n as usize);
+                    let total = cat
+                        .execute_raw_with_params(&format!("MATCH (n:{entity}){clause} RETURN count(n)"), &parsed.params)
+                        .ok()
+                        .and_then(|r| r.rows.first().and_then(|row| row.first()).and_then(|v| v.as_i64()));
+                    let sur = total.map(|t| format!("sur {t}")).unwrap_or_else(|| "sur davantage".into());
+                    warnings.push(format!(
+                        "{n} lignes affichées {sur} : ajouter un filtre, ou passer limit (0 = sans limite)"
+                    ));
+                }
+                select_meta = Some(crate::search::SearchMeta {
+                        query: String::new(),
+                        target: entity.to_string(),
+                        signals: crate::search::SearchSignals::BM25,
+                        consistency: crate::search::Consistency::Immediate,
+                        partial: false,
+                        pending_count: 0,
+                        vector_count: 0,
+                        bm25_count: 0,
+                        sparse_count: 0,
+                        fused_count: rows.rows.len(),
+                        reranked_count: 0,
+                        search_time_ms: 0,
+                        warnings,
+                        diagnostics: None,
+                    });
                 let mut out = Vec::new();
                 for row in rows.rows {
                     let Some(CypherValue::Map(data)) = row.into_iter().next() else {
@@ -286,6 +341,9 @@ impl Node for SetNode {
         };
         ctx.metric("results", output.len() as f64);
         ctx.set_output("results", PortValue::new(output));
+        if let Some(meta) = select_meta {
+            ctx.set_output("meta", PortValue::new(meta));
+        }
         Ok(())
     }
 }

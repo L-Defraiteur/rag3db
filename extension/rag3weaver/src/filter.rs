@@ -83,7 +83,10 @@ pub enum FilterValue {
 }
 
 /// Composable filter condition (Qdrant-like Must/Should/MustNot).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Désérialisé à la main (voir plus bas) : `{}` veut dire « aucun filtre »,
+/// et une forme inconnue reçoit un message qui dit les formes attendues.
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FilterCondition {
     /// Single field filter.
@@ -98,6 +101,38 @@ pub enum FilterCondition {
     Should(Vec<FilterCondition>),
     /// NOT: none of the conditions must match.
     MustNot(Vec<FilterCondition>),
+}
+
+/// La forme dérivée de [`FilterCondition`], variante pour variante.
+#[derive(Deserialize)]
+#[serde(remote = "FilterCondition", rename_all = "snake_case")]
+enum FilterConditionDef {
+    Field { key: String, value: FilterValue },
+    Path { path: Vec<String>, value: FilterValue },
+    Nested { path: Vec<String>, condition: Box<FilterCondition> },
+    Must(Vec<FilterCondition>),
+    Should(Vec<FilterCondition>),
+    MustNot(Vec<FilterCondition>),
+}
+
+/// **`{}` est « aucun filtre ».** Un modèle qui veut tout sélectionner écrit
+/// `{"filter": {}}` ; le refuser avec « expected map with a single key » le
+/// laissait boucler sur la même erreur (27 septembre 2026, session MTG). Le
+/// reste suit la forme dérivée, avec les formes attendues dans l'erreur.
+impl<'de> Deserialize<'de> for FilterCondition {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        if value.as_object().is_some_and(|o| o.is_empty()) {
+            return Ok(FilterCondition::Must(Vec::new()));
+        }
+        FilterConditionDef::deserialize(value).map_err(|e| {
+            serde::de::Error::custom(format!(
+                "filtre invalide ({e}) : un objet à une seule clé parmi field, path, nested, must, should, must_not ; \
+                 par exemple {{\"field\":{{\"key\":\"owned\",\"value\":[{{\"op\":\"gt\",\"value\":0}}]}}}} \
+                 ou {{\"must\":[…]}} ; {{}} pour ne rien filtrer"
+            ))
+        })
+    }
 }
 
 impl From<HashMap<String, FilterValue>> for FilterCondition {
@@ -871,6 +906,17 @@ impl Default for FilterBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `{}` ne filtre rien ; une forme inconnue dit les formes attendues.
+    #[test]
+    fn un_filtre_vide_ne_filtre_rien_et_une_erreur_explique() {
+        let vide: FilterCondition = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(matches!(vide, FilterCondition::Must(ref v) if v.is_empty()), "{vide:?}");
+        let imbrique: FilterCondition = serde_json::from_value(serde_json::json!({"must":[{}, {"field":{"key":"owned","value":[{"op":"gt","value":0}]}}]})).unwrap();
+        assert!(matches!(imbrique, FilterCondition::Must(ref v) if v.len() == 2));
+        let erreur = serde_json::from_value::<FilterCondition>(serde_json::json!({"owned": 1, "rare": true})).unwrap_err().to_string();
+        assert!(erreur.contains("must_not") && erreur.contains("{} pour ne rien filtrer"), "{erreur}");
+    }
     use crate::dialect::Rag3dbDialect;
 
     fn no_relations() -> HashMap<String, RelationDef> {
