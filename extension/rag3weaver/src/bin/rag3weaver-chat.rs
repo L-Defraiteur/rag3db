@@ -143,10 +143,10 @@ impl AppTools {
             // CompletionTools must see the authoritative receipt before rendering/clipping.
             Ok(result.to_string())
         } else if let Some(text) = result["presentation"].as_str() {
-            Ok(format!(
-                "{text}\nMetadata: {}",
-                result.get("metadata").unwrap_or(&Value::Null)
-            ))
+            match result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())) {
+                Some(metadata) => Ok(format!("{text}\nMetadata: {metadata}")),
+                None => Ok(text.to_string()),
+            }
         } else {
             Ok(result.to_string())
         }

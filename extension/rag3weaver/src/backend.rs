@@ -539,6 +539,41 @@ impl PreparedBackend {
     }
 }
 
+/// **Ce qu'un outil à harnais rend à lire**, pour tous les transports (MCP,
+/// chat, API). Sa sortie utile vit dans la livraison (`on_accept`) — le texte
+/// d'import d'un deck — et aucun client ne savait la montrer : le modèle
+/// recevait le reçu en JSON, avec une chaîne échappée qu'il ne recopiait pas
+/// (27 septembre 2026). Accepté : les textes livrés tels quels ; refusé : les
+/// erreurs ; les avertissements en clair dessous. Une présentation déjà posée
+/// par le graphe de l'outil n'est pas touchée.
+fn harness_presentation(response: &mut Value) {
+    let Some(validation) = response.get("validation").cloned() else { return };
+    if response.get("presentation").is_some_and(|p| p.is_string()) {
+        return;
+    }
+    let issues = |key: &str, label: &str| -> Vec<String> {
+        validation[key].as_array().into_iter().flatten()
+            .map(|i| format!("- {label} {} : {}", i["code"].as_str().unwrap_or("?"), i["message"].as_str().unwrap_or("")))
+            .collect()
+    };
+    let mut parts: Vec<String> = Vec::new();
+    if validation["accepted"] == false {
+        parts.push("Refusé par la validation : corriger chaque erreur et soumettre à nouveau.".into());
+        parts.extend(issues("errors", "erreur"));
+    } else if response["delivery"]["ok"] == false {
+        parts.push(format!("Accepté, mais la livraison a échoué : {}", response["delivery"]["error"]));
+    } else {
+        let delivered: Vec<&str> = response["delivery"]["results"].as_array().into_iter().flatten()
+            .filter_map(Value::as_str).collect();
+        if delivered.is_empty() {
+            return;
+        }
+        parts.push(delivered.join("\n\n"));
+    }
+    parts.extend(issues("warnings", "avertissement"));
+    response["presentation"] = Value::String(parts.join("\n"));
+}
+
 // An explicit capability list: no SQL, script, write node or nested graph factory.
 const SEARCH_NODES: &[&str] = &[
     "KBQuerySourceNode",
@@ -748,6 +783,12 @@ impl Backend {
     }
 
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
+        let mut response = self.call_tool(name, args)?;
+        harness_presentation(&mut response);
+        Ok(response)
+    }
+
+    fn call_tool(&self, name: &str, args: Value) -> Result<Value, String> {
         if self.prepared.manifest.search_graphs && SEARCH_TOOLS.contains(&name) {
             let definition = search_tool_definitions()
                 .into_iter()

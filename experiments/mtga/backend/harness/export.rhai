@@ -16,7 +16,10 @@ for board in [["Deck", deck.mainboard], ["Sideboard", side]] {
     if board[1].len() == 0 { continue; }
     let order = []; let qty = #{};
     for entry in board[1] {
-        let line = card(cards[entry.arena_id.to_string()]).arena_line;
+        // Le nom seul : Arena choisit une impression possédée (ou celle par
+        // défaut). « Nom (SET) numéro » échouait sur les impressions sans code
+        // importable — Special Guests numérotées 0, éditions Commander, promos.
+        let line = card(cards[entry.arena_id.to_string()]).name;
         if !qty.contains(line) { qty[line] = 0; order.push(line); }
         qty[line] += entry.quantity;
     }
