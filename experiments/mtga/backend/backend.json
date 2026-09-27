@@ -42,6 +42,7 @@
           "mana_conditions",
           "arena_id",
           "owned",
+          "printed_mana_value",
           "is_land",
           "has_land_face",
           "is_primary",
@@ -54,12 +55,17 @@
           "mana_symbols_possible",
           "mana_symbols_explicit",
           "linked_card_ids",
+          "ability_kinds",
+          "ability_costs",
+          "triggers",
+          "effects",
           "abilities"
         ],
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "Ability": {
@@ -82,12 +88,17 @@
           "text_en",
           "text_fr",
           "text",
-          "glossary_ids"
+          "glossary_ids",
+          "kind",
+          "costs",
+          "triggers",
+          "effects"
         ],
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "Mechanic": {
@@ -116,7 +127,8 @@
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "Deck": {
@@ -148,7 +160,8 @@
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "DeckEntry": {
@@ -175,7 +188,8 @@
           "text",
           "in_owned_collection"
         ],
-        "signals": []
+        "signals": [],
+        "contentKind": "record"
       }
     },
     "CatalogCard": {
@@ -239,12 +253,17 @@
           "has_owned_copy",
           "missing_for_one",
           "missing_for_playset",
-          "printed_mana_value"
+          "printed_mana_value",
+          "ability_kinds",
+          "ability_costs",
+          "triggers",
+          "effects"
         ],
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "CatalogAbility": {
@@ -267,12 +286,17 @@
           "text_en",
           "text_fr",
           "text",
-          "glossary_ids"
+          "glossary_ids",
+          "kind",
+          "costs",
+          "triggers",
+          "effects"
         ],
         "signals": [
           "bm25",
           "vector"
-        ]
+        ],
+        "contentKind": "record"
       }
     },
     "WildcardInventory": {
@@ -288,6 +312,7 @@
           "key"
         ],
         "signals": [],
+        "contentKind": "record",
         "returnFields": [
           "key",
           "snapshot_id",
@@ -544,6 +569,37 @@
         "relation": "CatalogCardAbility",
         "direction": "Incoming"
       }
+    },
+    "submit_deck": {
+      "graph": "harness/submit.mmd",
+      "harness": {
+        "input_schema": "harness/input.json",
+        "before": [
+          {
+            "graph": "harness/validate.mmd",
+            "data": {
+              "cards": "harness/cards.json",
+              "policy": "harness/policy.json",
+              "wildcards": "harness/wildcards.json"
+            }
+          }
+        ],
+        "on_accept": [
+          {
+            "graph": "harness/export.mmd",
+            "data": {
+              "cards": "harness/cards.json"
+            }
+          },
+          {
+            "graph": "harness/craft_plan.mmd",
+            "data": {
+              "cards": "harness/cards.json",
+              "wildcards": "harness/wildcards.json"
+            }
+          }
+        ]
+      }
     }
   },
   "relations": {
@@ -571,5 +627,20 @@
       "from": "CatalogAbility",
       "to": "Mechanic"
     }
+  },
+  "scripts": {
+    "deck_facts": "harness/prepare.rhai",
+    "deck_accept": "harness/accept.rhai",
+    "deck_export": "harness/export.rhai",
+    "deck_craft_plan": "harness/craft_plan.rhai",
+    "deck_size": "harness/deck_size.rhai",
+    "sideboard_size": "harness/sideboard_size.rhai",
+    "land_count": "harness/land_count.rhai",
+    "known_card": "harness/known_card.rhai",
+    "copy_limit": "harness/copy_limit.rhai",
+    "craftable": "harness/craftable.rhai",
+    "wildcard_budget": "harness/wildcard_budget.rhai",
+    "mana_sources": "harness/mana_sources.rhai",
+    "mana_distribution": "harness/mana_distribution.rhai"
   }
 }

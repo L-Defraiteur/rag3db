@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[3];P=ROOT/'experiments/mtga/data';B=ROOT/'
 p=argparse.ArgumentParser();p.add_argument('--manifest',type=Path,default=B/'backend.json');p.add_argument('--ingest',action='store_true');p.add_argument('--request',type=Path);p.add_argument('--output',type=Path);p.add_argument('--verify',action='store_true');p.add_argument('--ingest-relations',action='store_true');p.add_argument('--ingest-catalog-links',action='store_true');p.add_argument('--ingest-catalog',action='store_true');args=p.parse_args()
 env=dict(os.environ,RAG3WEAVER_RENDER_TEMPLATES=str(B/'render'),LD_LIBRARY_PATH=str(ROOT/'build/lecteurs-csv/src'),RAG3DB_BUFFER_POOL_SIZE=os.environ.get('RAG3DB_BUFFER_POOL_SIZE','16106127360'),RAG3DB_MAX_DB_SIZE='68719476736')
 with (P/'engine-backend.log').open('a') as err:
- proc=subprocess.Popen([str(ROOT/'extension/rag3weaver/target/debug/rag3weaver-backend'),str(args.manifest.resolve())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,text=True,env=env)
+ proc=subprocess.Popen([os.environ.get('RAG3WEAVER_BACKEND_BIN',str(ROOT/'extension/rag3weaver/target/debug/rag3weaver-backend')),str(args.manifest.resolve())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,text=True,env=env)
  def call(name,arguments):
   try:
    proc.stdin.write(json.dumps({'op':'call','name':name,'arguments':arguments})+'\n');proc.stdin.flush();line=proc.stdout.readline()
@@ -15,7 +15,8 @@ with (P/'engine-backend.log').open('a') as err:
    detail='\n'.join((P/'engine-backend.log').read_text(errors='replace').splitlines()[-12:])
    raise RuntimeError(f'backend exited while calling {name}:\n{detail}')
   reply=json.loads(line)
-  if not reply['ok']:raise RuntimeError(str(reply)[-2400:])
+  if not reply['ok']:
+   (P/'engine-last-error.json').write_text(json.dumps(reply,ensure_ascii=False));err=str(reply.get('error',reply));raise RuntimeError(err[:300]+' … '+err[-300:]+' (réponse complète : data/engine-last-error.json)')
   return reply['result']
  try:
   if args.ingest:

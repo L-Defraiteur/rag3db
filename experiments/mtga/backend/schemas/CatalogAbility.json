@@ -28,6 +28,110 @@
       "items": {
         "type": "string"
       }
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "keyword",
+        "activated",
+        "triggered",
+        "static"
+      ]
+    },
+    "costs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "tap",
+          "untap",
+          "mana",
+          "sacrifice",
+          "discard",
+          "life",
+          "exile",
+          "remove_counter",
+          "tap_other",
+          "return",
+          "reveal",
+          "loyalty"
+        ]
+      },
+      "examples": [
+        [
+          "tap"
+        ]
+      ]
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cast",
+          "enters",
+          "landfall",
+          "dies",
+          "leaves",
+          "attacks",
+          "blocks",
+          "combat_damage",
+          "damage",
+          "becomes_tapped",
+          "becomes_untapped",
+          "upkeep",
+          "draw_step",
+          "combat_step",
+          "end_step",
+          "draw",
+          "discard",
+          "sacrifice",
+          "life_gain",
+          "life_loss",
+          "counters",
+          "token",
+          "targeted",
+          "graveyard",
+          "main_phase",
+          "state"
+        ]
+      }
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "untap",
+          "tap",
+          "draw",
+          "discard",
+          "token",
+          "counter_spell",
+          "counters",
+          "destroy",
+          "exile",
+          "damage",
+          "gain_life",
+          "lose_life",
+          "add_mana",
+          "search_library",
+          "bounce",
+          "reanimate",
+          "regrowth",
+          "mill",
+          "sacrifice",
+          "pump",
+          "shrink",
+          "copy",
+          "scry",
+          "surveil",
+          "cost_reduction",
+          "fight",
+          "extra_combat",
+          "grants_ability"
+        ]
+      }
     }
   },
   "required": [
@@ -38,6 +142,10 @@
     "text_en",
     "text_fr",
     "text",
-    "glossary_ids"
+    "glossary_ids",
+    "kind",
+    "costs",
+    "triggers",
+    "effects"
   ]
 }

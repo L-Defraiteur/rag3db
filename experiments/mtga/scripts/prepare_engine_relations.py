@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3];P=ROOT/'experiments/mtga/data';B=ROOT/'experiments/mtga/backend';C=ROOT/'extension/rag3weaver'
 sys.path.insert(0,str(P.parent))
 from identity import stable_id,card_id
+from ability_facts import ability_facts
+from vocabulary import declare
 
 def lines(name):return [json.loads(l) for l in (P/name).open()]
 def write(path,value):path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
@@ -18,7 +20,7 @@ def link(rel,a,b):links.setdefault(rel,set()).add((a,b))
 for card in owned:
  for a in card['abilities']:
   key=stable_id(f"mtga:ability:{a['ability_id']}:{a['text_id']}")
-  row={'key':key,'snapshot_id':snapshot,'ability_id':a['ability_id'],'text_id':a['text_id'],'text_en':a['text_en'],'text_fr':a['text_fr'],'text':a['text_en']+'\n'+a['text_fr'],'glossary_ids':sorted(a['glossary_ids'])}
+  row={'key':key,'snapshot_id':snapshot,'ability_id':a['ability_id'],'text_id':a['text_id'],'text_en':a['text_en'],'text_fr':a['text_fr'],'text':a['text_en']+'\n'+a['text_fr'],'glossary_ids':sorted(a['glossary_ids']),**ability_facts(a['text_en'])}
   if key in abilities:assert abilities[key]==row,('conflicting ability identity',key)
   abilities[key]=row;link('CardAbility',card_id(card['arena_id']),key)
   for mid in a['glossary_ids']:
@@ -42,10 +44,11 @@ for entity,rows in entities.items():
  for k,v in rows[0].items():
   props[k]={'type':'boolean' if isinstance(v,bool) else 'integer' if isinstance(v,int) else 'array' if isinstance(v,list) else 'string'}
   if isinstance(v,list):props[k]['items']={'type':'string'}
+ declare(props)
  schema={'type':'object','additionalProperties':False,'properties':props,'required':list(props)}
  write(B/f'schemas/{entity}.json',schema)
  (P/f'engine-{entity}.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in rows))
- config={'fields':{},'hashsafe':['key'],'returnFields':list(props),'signals':[]}
+ config={'fields':{},'hashsafe':['key'],'returnFields':list(props),'signals':[],'contentKind':'record'}
  if 'text' in props:config['fields']['text']={'type':'string','isContent':True};config['signals']=['bm25','vector'] if entity!='DeckEntry' else []
  if 'name' in props:config['fields']['name']={'type':'string','isTitle':True}
  manifest['entities'][entity]={'schema':f'schemas/{entity}.json','config':config}

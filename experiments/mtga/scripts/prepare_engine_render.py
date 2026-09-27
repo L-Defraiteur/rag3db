@@ -14,6 +14,8 @@ def prepare():
    source_node=result.group(1)
    text=text[:result.start()]+"%% result: presentation.results"+text[result.end():]
    text+='\n    presentation["RenderResultsNode(template=magic)"]\n    '+source_node+' -->|results| presentation\n'
+   # Une sélection plafonnée dit ce qu'elle n'a pas montré : son méta va au rendu.
+   if re.search(rf'^\s*{source_node}\["SelectRecordsNode\(',text,re.M):text+='    '+source_node+' -->|meta| presentation\n'
   text=text.replace('RenderResultsNode"','RenderResultsNode(template=magic)"')
   target=B/'graphs'/f'readable-{name}.mmd'
   target.write_text(text)

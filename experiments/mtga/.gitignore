@@ -1,0 +1,4 @@
+
+# Faits figés du harnais submit_deck : données extraites, régénérées par scripts/prepare_deck_harness.py
+backend/harness/cards.json
+backend/harness/wildcards.json

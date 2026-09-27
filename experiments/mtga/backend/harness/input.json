@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result"],
+  "properties": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "plan", "mainboard"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "description": "Deck name."},
+        "plan": {"type": "string", "description": "Game plan in a few sentences."},
+        "mainboard": {"$ref": "#/$defs/entries", "minItems": 1},
+        "sideboard": {"$ref": "#/$defs/entries"}
+      }
+    }
+  },
+  "$defs": {
+    "entries": {
+      "type": "array",
+      "maxItems": 150,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["arena_id", "quantity"],
+        "properties": {
+          "arena_id": {"type": "integer", "minimum": 1, "description": "arena_id from search_catalog / select_catalog / search_cards results."},
+          "quantity": {"type": "integer", "minimum": 1, "maximum": 250}
+        }
+      }
+    }
+  }
+}

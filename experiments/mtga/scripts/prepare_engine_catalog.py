@@ -11,6 +11,8 @@ C = ROOT / 'extension/rag3weaver'
 sys.path.insert(0, str(P.parent))
 from identity import card_id, stable_id
 from catalog_model import RARITIES, ownership_model, printed_mana_value
+from ability_facts import ability_facts, card_facts
+from vocabulary import declare
 
 
 def write(path, value):
@@ -36,6 +38,7 @@ def prepare():
     for name in ['is_basic_land', 'is_rebalanced', 'is_digital_only', 'is_craft_candidate', 'craft_preferred', 'has_owned_copy']:
         fields[name] = {'type': 'boolean'}
     fields['subtypes'] = {'type': 'array', 'items': {'type': 'string'}}
+    declare(fields)
     schema['required'] = list(fields)
     write(B / 'schemas/CatalogCard.json', schema)
     records, abilities, card_links, mechanic_links = [], {}, set(), set()
@@ -74,14 +77,14 @@ def prepare():
                    has_owned_copy=own['owned_name_total'] > 0,
                    missing_for_one=0 if basic and own['owned_name_total'] else max(0, 1 - own['owned_name_total']),
                    missing_for_playset=0 if basic and own['owned_name_total'] else max(0, 4 - own['owned_name_total']),
-                   printed_mana_value=printed_mana_value(c['mana_cost']))
+                   printed_mana_value=printed_mana_value(c['mana_cost']), **card_facts(c['abilities']))
         assert set(row) == set(fields), set(row) ^ set(fields)
         records.append(row)
         for a in c['abilities']:
             key = stable_id(f"mtga:ability:{a['ability_id']}:{a['text_id']}")
             ar = {'key': key, 'snapshot_id': snapshot, 'ability_id': a['ability_id'], 'text_id': a['text_id'],
                   'text_en': a['text_en'], 'text_fr': a['text_fr'], 'text': a['text_en'] + '\n' + a['text_fr'],
-                  'glossary_ids': sorted(a['glossary_ids'])}
+                  'glossary_ids': sorted(a['glossary_ids']), **ability_facts(a['text_en'])}
             assert key not in abilities or abilities[key] == ar, key
             abilities[key] = ar
             card_links.add((row['key'], key))
@@ -107,7 +110,7 @@ def prepare():
     (B / 'schemas/CatalogAbility.json').write_text((B / 'schemas/Ability.json').read_text())
     for entity, data, source in [('CatalogCard', records, 'OwnedCard'), ('CatalogAbility', list(abilities.values()), 'Ability'),
                                  ('WildcardInventory', [inventory], None)]:
-        config = json.loads(json.dumps(manifest['entities'][source]['config'])) if source else {'fields': {'snapshot_id': {'type': 'string', 'isContent': True}}, 'hashsafe': ['key'], 'signals': []}
+        config = json.loads(json.dumps(manifest['entities'][source]['config'])) if source else {'fields': {'snapshot_id': {'type': 'string', 'isContent': True}}, 'hashsafe': ['key'], 'signals': [], 'contentKind': 'record'}
         config['returnFields'] = list(data[0])
         manifest['entities'][entity] = {'schema': f'schemas/{entity}.json', 'config': config}
         (P / f'engine-{entity}.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False) + '\n' for r in data))
@@ -129,6 +132,11 @@ def prepare():
         'graph': str(C / 'templates/tools/search_dense_related.mmd'),
         'bindings': {'target': 'CatalogAbility', 'relation': 'CatalogCardAbility', 'direction': 'Incoming'}}
     write(P / 'engine-catalog-links.json', {k: [{'from': {'key': a}, 'to': {'key': b}} for a, b in sorted(v)] for k, v in links.items()})
+    # Les faits figés du harnais submit_deck, puis sa déclaration : la chaîne
+    # régénère backend.json, le harnais doit y revenir à chaque fois.
+    from prepare_deck_harness import main as prepare_harness, register as register_harness
+    prepare_harness()
+    register_harness(manifest)
     write(B / 'backend.json', manifest)
     report = {'snapshot_id': snapshot, 'catalog_records': len(records), 'unique_abilities': len(abilities),
               'primary_nontoken': sum(r['is_primary'] and not r['is_token'] for r in records),

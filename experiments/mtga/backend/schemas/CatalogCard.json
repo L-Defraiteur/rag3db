@@ -44,6 +44,12 @@
     "owned": {
       "type": "integer"
     },
+    "printed_mana_value": {
+      "type": "integer",
+      "examples": [
+        2
+      ]
+    },
     "is_land": {
       "type": "boolean"
     },
@@ -62,20 +68,51 @@
     "colors": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "White",
+          "Blue",
+          "Black",
+          "Red",
+          "Green"
+        ]
       }
     },
     "color_identity": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "White",
+          "Blue",
+          "Black",
+          "Red",
+          "Green"
+        ]
       }
     },
     "card_types": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "enum": [
+          "Creature",
+          "Instant",
+          "Sorcery",
+          "Artifact",
+          "Enchantment",
+          "Land",
+          "Planeswalker",
+          "Battle",
+          "Kindred",
+          "Dungeon"
+        ]
+      },
+      "examples": [
+        [
+          "Instant"
+        ]
+      ]
     },
     "land_types": {
       "type": "array",
@@ -86,19 +123,137 @@
     "mana_symbols_possible": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "W",
+          "U",
+          "B",
+          "R",
+          "G",
+          "C"
+        ]
       }
     },
     "mana_symbols_explicit": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "W",
+          "U",
+          "B",
+          "R",
+          "G",
+          "C"
+        ]
       }
     },
     "linked_card_ids": {
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "ability_kinds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "keyword",
+          "activated",
+          "triggered",
+          "static"
+        ]
+      }
+    },
+    "ability_costs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "tap",
+          "untap",
+          "mana",
+          "sacrifice",
+          "discard",
+          "life",
+          "exile",
+          "remove_counter",
+          "tap_other",
+          "return",
+          "reveal",
+          "loyalty"
+        ]
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cast",
+          "enters",
+          "landfall",
+          "dies",
+          "leaves",
+          "attacks",
+          "blocks",
+          "combat_damage",
+          "damage",
+          "becomes_tapped",
+          "becomes_untapped",
+          "upkeep",
+          "draw_step",
+          "combat_step",
+          "end_step",
+          "draw",
+          "discard",
+          "sacrifice",
+          "life_gain",
+          "life_loss",
+          "counters",
+          "token",
+          "targeted",
+          "graveyard",
+          "main_phase",
+          "state"
+        ]
+      }
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "untap",
+          "tap",
+          "draw",
+          "discard",
+          "token",
+          "counter_spell",
+          "counters",
+          "destroy",
+          "exile",
+          "damage",
+          "gain_life",
+          "lose_life",
+          "add_mana",
+          "search_library",
+          "bounce",
+          "reanimate",
+          "regrowth",
+          "mill",
+          "sacrifice",
+          "pump",
+          "shrink",
+          "copy",
+          "scry",
+          "surveil",
+          "cost_reduction",
+          "fight",
+          "extra_combat",
+          "grants_ability"
+        ]
       }
     },
     "abilities": {
@@ -162,9 +317,6 @@
     "missing_for_playset": {
       "type": "integer"
     },
-    "printed_mana_value": {
-      "type": "integer"
-    },
     "is_basic_land": {
       "type": "boolean"
     },
@@ -205,6 +357,7 @@
     "mana_conditions",
     "arena_id",
     "owned",
+    "printed_mana_value",
     "is_land",
     "has_land_face",
     "is_primary",
@@ -217,6 +370,10 @@
     "mana_symbols_possible",
     "mana_symbols_explicit",
     "linked_card_ids",
+    "ability_kinds",
+    "ability_costs",
+    "triggers",
+    "effects",
     "abilities",
     "canonical_name",
     "name_normalized",
@@ -228,7 +385,6 @@
     "owned_name_total",
     "missing_for_one",
     "missing_for_playset",
-    "printed_mana_value",
     "is_basic_land",
     "is_rebalanced",
     "is_digital_only",
