@@ -43,7 +43,13 @@ fn run() -> Result<(), String> {
                     v["name"].as_str().ok_or("tool name missing")?,
                     v.get("arguments").cloned().unwrap_or(json!({})),
                 ),
-                _ => Err("op must be describe or call".into()),
+                // Réservées à l'hôte : jamais exposées comme outils.
+                Some("journal") => backend.journal(v["events"].as_array().ok_or("events missing")?),
+                Some("journal_read") => backend.journal_read(
+                    v["conversation"].as_str().ok_or("conversation missing")?,
+                    v["since_ms"].as_i64().unwrap_or(0),
+                ),
+                _ => Err("op must be describe, call, journal or journal_read".into()),
             }
         });
         let response = match result {

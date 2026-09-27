@@ -989,6 +989,54 @@ impl Backend {
         }
         Ok(response)
     }
+    /// **Le journal d'une conversation, écrit au fil de l'eau** (27 septembre
+    /// 2026). L'hôte (pas l'agent : ce n'est pas un outil) envoie chaque
+    /// événement dès qu'il arrive, avec l'instant où il est arrivé : `RunStarted`,
+    /// `Message` — le format de [`crate::dataflow::trace_nodes::record_runs_and_messages`].
+    /// Ils deviennent `Run`, `Message`, `Conversation`, `Participant` liés :
+    /// cherchables comme le reste, et relisibles par un agent plus tard.
+    pub fn journal(&self, events: &[Value]) -> Result<Value, String> {
+        let mut cat = self.catalog.lock().map_err(|_| "catalog lock poisoned")?;
+        crate::dataflow::trace_nodes::register_trace_schema(&mut cat).map_err(|e| e.to_string())?;
+        let (mut runs, mut messages) = (0, 0);
+        for event in events {
+            // Chaque événement garde **son** instant : un lot ne les aplatit pas.
+            let at_ms = event.get("at_ms").and_then(Value::as_i64).ok_or("journal event without at_ms")?;
+            let (r, m) = crate::dataflow::trace_nodes::record_runs_and_messages(&mut cat, std::slice::from_ref(event), at_ms)?;
+            runs += r;
+            messages += m;
+        }
+        Ok(json!({"runs": runs, "messages": messages}))
+    }
+
+    /// Les messages d'un fil, dans l'ordre où ils sont arrivés (`at_ms`).
+    pub fn journal_read(&self, conversation: &str, since_ms: i64) -> Result<Value, String> {
+        let cat = self.catalog.lock().map_err(|_| "catalog lock poisoned")?;
+        if !cat.is_registered_entity(crate::dataflow::trace_nodes::MESSAGE_ENTITY) {
+            return Ok(json!({"messages": []}));
+        }
+        let rows = cat
+            .execute_raw_with_params(
+                "MATCH (m:Message)-[:IN_CONVERSATION]->(c:Conversation) \
+                 WHERE c.conversation_id = $conversation AND m.at_ms >= $since \
+                 RETURN m.at_ms, m.at, m.from, m.to, m.content ORDER BY m.at_ms, m.seq",
+                &[
+                    crate::connection::QueryParam::new("conversation", conversation),
+                    crate::connection::QueryParam::new("since", since_ms),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        let messages: Vec<Value> = rows
+            .rows
+            .iter()
+            .map(|r| {
+                let v = |i: usize| r.get(i).map(|c| serde_json::to_value(c).unwrap_or(Value::Null)).unwrap_or(Value::Null);
+                json!({"at_ms": v(0), "at": v(1), "from": v(2), "to": v(3), "content": v(4)})
+            })
+            .collect();
+        Ok(json!({"messages": messages}))
+    }
+
     pub fn shutdown(&mut self) -> Result<(), String> {
         self.catalog
             .lock()
