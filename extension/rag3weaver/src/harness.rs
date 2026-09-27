@@ -22,7 +22,7 @@ impl crate::agent::CompletionCheck for CompletionTools<'_> {
         self.accepted.load(std::sync::atomic::Ordering::Relaxed)
     }
     fn instruction(&self) -> String {
-        format!("Task completion requires an accepted submission through {}. Correct any validation errors and resubmit. A final message or saved draft does not count as acceptance.", self.tool.unwrap_or("the configured tool"))
+        format!("If the request calls for a result, it is complete only once submitted and accepted through {}: correct any validation errors and resubmit; a final message or saved draft does not count as acceptance. If the request does not call for a result (a greeting, a question, a clarification), answer it and stop.", self.tool.unwrap_or("the configured tool"))
     }
 }
 impl crate::agent::ToolBox for CompletionTools<'_> {

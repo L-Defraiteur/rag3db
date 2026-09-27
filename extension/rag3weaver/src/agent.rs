@@ -1137,7 +1137,15 @@ impl<'a> Agent<'a> {
         // travaillent pendant qu'on parle, et il est joint quand le run se
         // termine. Aucun résultat ne peut donc survivre à l'agent qui l'a
         // demandé — c'est le même choix qu'au runtime dataflow.
-        if let Some(check) = self.completion { turns.push(Turn::user(check.instruction())); }
+        // **Le contrat de complétion ne s'impose qu'à un travail commencé.** La
+        // consigne était ajoutée avant chaque demande, et rappelée après chaque
+        // réponse finale sans limite : « bonjour » devenait une commande de deck,
+        // une question de précision tournait jusqu'au plafond (27 septembre
+        // 2026). Désormais : aucune consigne d'entrée — le prompt système dit
+        // quand soumettre. Au plus **un** rappel si l'agent n'a appelé aucun
+        // outil (une salutation passe, un « c'est fait » inventé est relancé
+        // une fois), **deux** après un travail commencé sans soumission acceptée.
+        let mut completion_nudges = 0usize;
         let interrupted: Result<(), LlmError> = std::thread::scope(|scope| {
         loop {
             if run.iterations >= self.limits.max_iterations {
@@ -1327,7 +1335,11 @@ impl<'a> Agent<'a> {
                 if !text.is_empty() {
                     turns.push(Turn::assistant(text));
                 }
-                if finish.reason != FinishReason::Cancelled && self.completion.is_some_and(|c| !c.accepted()) {
+                if finish.reason != FinishReason::Cancelled
+                    && self.completion.is_some_and(|c| !c.accepted())
+                    && completion_nudges < if run.tool_calls > 0 { 2 } else { 1 }
+                {
+                    completion_nudges += 1;
                     turns.push(Turn::user(self.completion.unwrap().instruction()));
                     continue;
                 }

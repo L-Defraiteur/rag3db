@@ -165,6 +165,18 @@ impl Node for SearchSourceNode {
                 cat.compile_filter_utilisateur(&target.parent_table, Some(condition)).map_err(|e|e.to_string())?;
             }
             let mut w: Vec<String> = Vec::new();
+            // **Une requête vide ne cherche rien.** Le plein texte n'a aucun terme
+            // à trouver, le vectoriel embarque une chaîne vide : un filtre seul
+            // rendait 0 résultat muet, qu'un agent lisait « la carte n'existe
+            // pas » (27 septembre 2026). Le dire, et dire quoi faire.
+            if self.query.trim().is_empty() {
+                w.push(
+                    "requête vide : une recherche part d'un texte (un nom, un effet décrit) ; \
+                     pour ne filtrer que par critères, utiliser l'outil de sélection (select_*) \
+                     avec le même filtre"
+                        .into(),
+                );
+            }
             let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
             // Bornée à la fermeture de la cible : ce que d'autres entités ont
             // en file n'attend pas cette recherche, et ne la rend pas partielle.
