@@ -43,6 +43,21 @@ graph LR
     merge7["ValidationMergeNode"]
     merge6 -->|report:left| merge7
     mana_sources -->|report:right| merge7
+    merge8["ValidationMergeNode"]
+    merge7 -->|report:left| merge8
+    mana_distribution -->|report:right| merge8
+    land_bounds["ValidationRuleNode(script_id=land_bounds, code=land_bounds, path=/result/mainboard, severity=error, message='{actual} lands: a constructed deck needs {minimum} to {maximum}. Do not pad with basic lands; add spells that serve the plan.')"]
+    facts -->|result:value| land_bounds
+    commander_card["ValidationRuleNode(script_id=commander_card, code=commander_card, path=/result/mainboard, severity=error, message='{name} refers to a commander: it does nothing (or almost) in a 60-card deck without one. Replace it.')"]
+    facts -->|result:value| commander_card
+    legendary_copies["ValidationRuleNode(script_id=legendary_copies, code=legendary_copies, path=/result/mainboard, severity=warning, message='{actual} copies of legendary {name}: extra copies are often dead; {number} is usually enough.')"]
+    facts -->|result:value| legendary_copies
+    merge10["ValidationMergeNode"]
+    land_bounds -->|report:left| merge10
+    commander_card -->|report:right| merge10
+    merge11["ValidationMergeNode"]
+    merge10 -->|report:left| merge11
+    legendary_copies -->|report:right| merge11
     merge9["ValidationMergeNode"]
-    merge7 -->|report:left| merge9
-    mana_distribution -->|report:right| merge9
+    merge8 -->|report:left| merge9
+    merge11 -->|report:right| merge9

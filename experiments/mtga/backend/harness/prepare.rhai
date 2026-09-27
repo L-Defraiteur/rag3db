@@ -4,7 +4,8 @@ fn card(line) {
     let f = line.split("\t");
     #{name:f[0], arena_line:f[1], owned:parse_int(f[2]), craftable:f[3] == "1", rarity:f[4],
       is_land:f[5] == "1", basic:f[6] == "1", required:letters(f[7]), hybrid:f[8] == "1",
-      sources:letters(f[9]), fetch:letters(f[10]), copy_limit:parse_int(f[11])}
+      sources:letters(f[9]), fetch:letters(f[10]), copy_limit:parse_int(f[11]),
+      commander:f[12] == "1", legendary:f[13] == "1"}
 }
 // Faits du deck proposé, calculés une fois ; chaque règle décide seule de sa validité.
 let deck = input.arguments.result;
@@ -45,11 +46,13 @@ for board in boards {
 for row in fetchers {
     for color in row.card.fetch { if basics[color] > 0 && !row.card.sources.contains(color) { sources[color] += row.qty; } }
 }
-let copies = []; let uncraftable = [];
+let copies = []; let uncraftable = []; let commanders = []; let legendaries = [];
 let cost = #{common:0,uncommon:0,rare:0,mythic:0}; let to_craft = [];
 for name in names.keys() {
     let card = rows[name]; let qty = names[name];
     copies.push(#{params:#{name:name,number:card.copy_limit,actual:qty}});
+    if card.commander { commanders.push(#{params:#{name:name}}); }
+    if card.legendary { legendaries.push(#{params:#{name:name,number:policy.maximum_legendary,actual:qty}}); }
     let missing = if card.basic { 0 } else if qty > card.owned { qty - card.owned } else { 0 };
     if missing == 0 { continue; }
     if !card.craftable || !cost.contains(card.rarity) {
@@ -70,5 +73,5 @@ for color in needed.keys() {
         low_mana.push(#{params:#{color:color,number:policy.warning_sources,actual:sources[color]}});
     }
 }
-#{total:total,side_total:side_total,lands:lands,policy:policy,known:known,copies:copies,
+#{total:total,side_total:side_total,lands:lands,policy:policy,known:known,copies:copies,commanders:commanders,legendaries:legendaries,
   uncraftable:uncraftable,budget:budget,to_craft:to_craft,mana:mana,low_mana:low_mana}

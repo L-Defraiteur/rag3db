@@ -74,7 +74,11 @@ def main():
             fields = [r['canonical_name'] or r['name_en'], export, owned, int(craft is not None),
                       craft['rarity'] if craft else r['rarity'], int(r['is_land'] or r['has_land_face']),
                       int(r['is_basic_land']), required, int('/' in cost), sources,
-                      ''.join(fetch_colors(r)), copy_limit(r)]
+                      ''.join(fetch_colors(r)), copy_limit(r),
+                      # Une carte qui parle du commandant ne fait rien, ou presque,
+                      # dans un deck de 60 (Arcane Signet : aucun mana sans commandant).
+                      int(bool(re.search(r"\bcommander\b", r['text_en'], re.I))),
+                      int('Legendary' in r['type_en'].split(' — ')[0] and not (r['is_land'] or r['has_land_face']))]
             if any('\t' in str(f) for f in fields):
                 raise SystemExit(f'tab in card fields: {fields}')
             cards[str(r['arena_id'])] = '\t'.join(map(str, fields))
@@ -90,7 +94,8 @@ def main():
 
 
 HARNESS_SCRIPTS = ['prepare', 'accept', 'export', 'craft_plan', 'deck_size', 'sideboard_size', 'land_count',
-                   'known_card', 'copy_limit', 'craftable', 'wildcard_budget', 'mana_sources', 'mana_distribution']
+                   'known_card', 'copy_limit', 'craftable', 'wildcard_budget', 'mana_sources', 'mana_distribution',
+                   'land_bounds', 'commander_card', 'legendary_copies']
 SCRIPT_IDS = {'prepare': 'deck_facts', 'accept': 'deck_accept', 'export': 'deck_export', 'craft_plan': 'deck_craft_plan'}
 
 

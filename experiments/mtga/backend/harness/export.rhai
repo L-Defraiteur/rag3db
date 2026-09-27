@@ -4,7 +4,8 @@ fn card(line) {
     let f = line.split("\t");
     #{name:f[0], arena_line:f[1], owned:parse_int(f[2]), craftable:f[3] == "1", rarity:f[4],
       is_land:f[5] == "1", basic:f[6] == "1", required:letters(f[7]), hybrid:f[8] == "1",
-      sources:letters(f[9]), fetch:letters(f[10]), copy_limit:parse_int(f[11])}
+      sources:letters(f[9]), fetch:letters(f[10]), copy_limit:parse_int(f[11]),
+      commander:f[12] == "1", legendary:f[13] == "1"}
 }
 // Texte d'import Arena, regroupé par nom (une impression possédée si possible).
 let deck = input.arguments.result;

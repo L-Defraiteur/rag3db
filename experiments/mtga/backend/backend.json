@@ -641,6 +641,9 @@
     "craftable": "harness/craftable.rhai",
     "wildcard_budget": "harness/wildcard_budget.rhai",
     "mana_sources": "harness/mana_sources.rhai",
-    "mana_distribution": "harness/mana_distribution.rhai"
+    "mana_distribution": "harness/mana_distribution.rhai",
+    "land_bounds": "harness/land_bounds.rhai",
+    "commander_card": "harness/commander_card.rhai",
+    "legendary_copies": "harness/legendary_copies.rhai"
   }
 }
