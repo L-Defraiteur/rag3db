@@ -721,6 +721,36 @@ protected:
         return total;
     }
 
+    static std::string readAll(const std::string& path) {
+        std::ifstream file(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    }
+
+    // Le journal d'origine (`original`, avant réouverture) = le journal tronqué
+    // + le fichier écarté, à l'octet près : rien n'est perdu.
+    void expectNothingLost(const std::string& original) const {
+        std::string aside;
+        for (const auto& entry : std::filesystem::directory_iterator(
+                 std::filesystem::path(databasePath).parent_path())) {
+            if (entry.path().string().find(".ecarte-") != std::string::npos) {
+                aside += readAll(entry.path().string());
+            }
+        }
+        EXPECT_TRUE(readAll(walPath) + aside == original)
+            << "journal " << std::filesystem::file_size(walPath) << " + écarté " << aside.size()
+            << " != origine " << original.size();
+    }
+
+    // Écrit `value` (little endian, `width` octets) à `offset` dans le journal.
+    void patchWAL(uint64_t offset, uint64_t value, int width) const {
+        std::fstream wal(walPath, std::ios::in | std::ios::out | std::ios::binary);
+        wal.seekp(offset);
+        for (int i = 0; i < width; ++i) {
+            const char byte = static_cast<char>((value >> (8 * i)) & 0xff);
+            wal.write(&byte, 1);
+        }
+    }
+
     std::string walPath;
 };
 
@@ -751,6 +781,7 @@ TEST_F(WalTornEndTest, ReopensAtTheLastCompleteCommitWithDefaultSettings) {
         EXPECT_EQ(ids, (std::vector<int64_t>{1, 2}));
         // Ce qui suit le dernier COMMIT est copié à côté, pas perdu en silence.
         EXPECT_EQ(discardedBytes(), length - begin3);
+        expectNothingLost(readAll(walPath + ".pristine").substr(0, length));
     }
     restoreWithWALCutAt(end3);
     EXPECT_EQ(idsAfterReopen(), (std::vector<int64_t>{1, 2, 3}));
@@ -780,4 +811,68 @@ TEST_F(WalTornEndTest, CorruptionBeforeCommittedTransactionsStillRefusesToOpen) 
     EXPECT_EQ(discardedBytes(), 0u);
     // Le journal n'a pas été tronqué : rien de validé n'est jeté.
     EXPECT_EQ(std::filesystem::file_size(walPath), ends[3]);
+}
+
+// La limite connue, fixée par un test : sans longueur par enregistrement, une
+// longueur abîmée au milieu du journal fait demander plus que le fichier, et se
+// lit comme une fin déchirée. La base rouvre alors au dernier COMMIT avant la
+// corruption : la transaction 3, pourtant validée, est écartée — mais copiée à
+// côté, à l'octet près, et rien n'est supprimé.
+TEST_F(WalTornEndTest, CorruptedLengthReadsAsATornEndAndIsSetAsideWhole) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    std::vector<uint64_t> ends;
+    writeThreeTransactions(ends);
+    systemConfig->throwOnWalReplayFailure = true;
+    restoreWithWALCutAt(ends[3]);
+    // La longueur de la chaîne de la transaction 2, juste avant ses octets.
+    const auto pristine = readAll(walPath);
+    const auto text = longText(2, 100);
+    const auto at = pristine.find(text, ends[1]);
+    ASSERT_NE(at, std::string::npos);
+    ASSERT_LT(at, ends[2]);
+    uint64_t width = 0;
+    for (const uint64_t candidate : {8u, 4u}) {
+        uint64_t value = 0;
+        for (uint64_t i = 0; i < candidate; ++i) {
+            value |= static_cast<uint64_t>(static_cast<uint8_t>(pristine[at - candidate + i]))
+                     << (8 * i);
+        }
+        if (value == text.size()) {
+            width = candidate;
+            break;
+        }
+    }
+    ASSERT_NE(width, 0u) << "longueur de la chaîne introuvable avant ses octets";
+    patchWAL(at - width, pristine.size() + 4096, static_cast<int>(width));
+    const auto corrupted = readAll(walPath);
+    std::vector<int64_t> ids;
+    ASSERT_NO_THROW(ids = idsAfterReopen());
+    EXPECT_EQ(ids, (std::vector<int64_t>{1}));
+    EXPECT_EQ(std::filesystem::file_size(walPath), ends[1]);
+    EXPECT_EQ(discardedBytes(), ends[3] - ends[1]);
+    expectNothingLost(corrupted);
+}
+
+// throwOnWalReplayFailure=false sur une vraie corruption : le journal est
+// tronqué après le dernier COMMIT lisible, et ce qui est retiré est aussi copié
+// à côté — plus aucune troncature sans copie.
+TEST_F(WalTornEndTest, ReplayFailureWithoutThrowSetsTheCutAside) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    std::vector<uint64_t> ends;
+    writeThreeTransactions(ends);
+    systemConfig->throwOnWalReplayFailure = false;
+    restoreWithWALCutAt(ends[3]);
+    const auto flipAt = ends[1] + (ends[2] - ends[1]) / 2;
+    const auto pristine = readAll(walPath);
+    patchWAL(flipAt, static_cast<uint8_t>(~static_cast<uint8_t>(pristine[flipAt])), 1);
+    const auto corrupted = readAll(walPath);
+    std::vector<int64_t> ids;
+    ASSERT_NO_THROW(ids = idsAfterReopen());
+    EXPECT_EQ(ids, (std::vector<int64_t>{1}));
+    EXPECT_EQ(discardedBytes(), ends[3] - ends[1]);
+    expectNothingLost(corrupted);
 }
