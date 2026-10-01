@@ -36,16 +36,22 @@ def invoke(ask,name,arguments):
     assert reply['ok'],reply
     return reply['result']['result']
 
-async def mcp_roundtrip(manifest):
+async def mcp_roundtrip(manifest,hide=()):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-    parameters=StdioServerParameters(command=sys.executable,args=[str(CRATE/'scripts/serve_backend_mcp.py'),str(manifest)],env=dict(os.environ))
+    parameters=StdioServerParameters(command=sys.executable,args=[str(CRATE/'scripts/serve_backend_mcp.py'),str(manifest),*(a for p in hide for a in ('--hide',p))],env=dict(os.environ))
     async with stdio_client(parameters) as streams:
         async with ClientSession(*streams) as session:
             await session.initialize()
             tools=await session.list_tools()
             names={t.name for t in tools.tools}
-            assert names=={'put_note','get_note','save_snapshot','get_snapshot','search_notes'},names
+            # The bridge adds close_backend for batch clients; --hide removes it
+            # (the MTG server hides it from llama-server's agent).
+            expected={'put_note','get_note','save_snapshot','get_snapshot','search_notes'}
+            if 'close_backend' not in hide: expected.add('close_backend')
+            assert names==expected,names
+            if 'close_backend' in hide:
+                assert (await session.call_tool('close_backend',{})).isError
             assert all('entity' not in t.inputSchema.get('properties',{}) for t in tools.tools)
             put=next(t for t in tools.tools if t.name=='put_note')
             properties=put.inputSchema['properties']['record']['properties']
@@ -96,4 +102,5 @@ with tempfile.TemporaryDirectory(prefix='rag3-backend-persistence-') as tmp:
         assert unchanged['unchanged']
     # Third process, this time through the actual SDK MCP transport.
     asyncio.run(mcp_roundtrip(manifest))
+    asyncio.run(mcp_roundtrip(manifest,hide=('close_backend',)))
 print('PASS: persistent data + lucivy + local dense after process restart; revisions, dates, immutable records; generated MCP list/call.')
