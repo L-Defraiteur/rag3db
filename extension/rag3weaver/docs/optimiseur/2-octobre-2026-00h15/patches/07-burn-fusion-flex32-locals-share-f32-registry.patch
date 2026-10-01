@@ -1,0 +1,101 @@
+From 49bb1396f409332c76fe70ebb74e6a6e730cca41 Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(cubecl-fusion): number F32 and Flex32 locals together,
+ they share one registry
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The generated kernel keeps F32 and Flex32 block locals in the same l_f32
+registry (codegen/io.rs), but LocalVariablePool numbered each declared
+precision on its own: a Flex32 local and an F32 local could get the same
+position and overwrite each other. It happens as soon as a fused kernel
+casts Flex32 to F32 mid-chain — hard_sigmoid on a Flex32 tensor computes
+in F32 — and the overwritten local is an input still to be read.
+
+The pool is now keyed by storage precision (Flex32 maps to F32) and keeps
+the declared precision next to each position.
+---
+ .../src/engine/trace/block.rs                 | 45 +++++++++++--------
+ 1 file changed, 27 insertions(+), 18 deletions(-)
+
+diff --git a/crates/burn-cubecl-fusion/src/engine/trace/block.rs b/crates/burn-cubecl-fusion/src/engine/trace/block.rs
+index a4d3db2b..f5688fef 100644
+--- a/crates/burn-cubecl-fusion/src/engine/trace/block.rs
++++ b/crates/burn-cubecl-fusion/src/engine/trace/block.rs
+@@ -484,13 +484,31 @@ impl FuseBlockBuilder {
+ 
+ #[derive(Default, Clone, Debug)]
+ pub struct LocalVariablePool {
+-    values: BTreeMap<FuseType, BTreeMap<TensorId, usize>>,
++    /// Keyed by the *storage* precision, not the declared one: the generated
++    /// kernel keeps `F32` and `Flex32` locals in the same `l_f32` registry
++    /// (see `codegen/io.rs`), so their positions must come from one sequence.
++    /// With one sequence per declared precision, a `Flex32` local and an
++    /// `F32` local could share a position and overwrite each other — which is
++    /// exactly what happened whenever a fused kernel cast `Flex32` to `F32` in
++    /// the middle of a chain (`hard_sigmoid` on a Flex32 tensor computes in
++    /// `F32`): the PP-OCR detector rendered an empty map in Flex32 while every
++    /// operation taken alone was exact.
++    values: BTreeMap<FuseType, BTreeMap<TensorId, (usize, FuseType)>>,
+ }
+ 
+ impl LocalVariablePool {
++    /// The registry a precision is stored in by the generated kernel.
++    fn storage(precision: FuseType) -> FuseType {
++        match precision {
++            FuseType::Flex32 => FuseType::F32,
++            other => other,
++        }
++    }
++
+     fn get(&self, precision: FuseType, tensor_id: TensorId) -> Option<FuseArg> {
+-        if let Some(indexes) = self.values.get(&precision)
+-            && let Some(index) = indexes.get(&tensor_id)
++        if let Some(indexes) = self.values.get(&Self::storage(precision))
++            && let Some((index, declared)) = indexes.get(&tensor_id)
++            && *declared == precision
+         {
+             return Some(FuseArg::BlockLocal {
+                 pos: *index,
+@@ -502,11 +520,11 @@ impl LocalVariablePool {
+     }
+ 
+     fn get_any_precision(&self, tensor_id: TensorId) -> Option<FuseArg> {
+-        for (precision, indexes) in self.values.iter() {
+-            if let Some(index) = indexes.get(&tensor_id) {
++        for indexes in self.values.values() {
++            if let Some((index, declared)) = indexes.get(&tensor_id) {
+                 return Some(FuseArg::BlockLocal {
+                     pos: *index,
+-                    ty: *precision,
++                    ty: *declared,
+                 });
+             }
+         }
+@@ -515,18 +533,9 @@ impl LocalVariablePool {
+     }
+ 
+     fn create(&mut self, precision: FuseType, tensor_id: TensorId) -> FuseArg {
+-        if let Some(indexes) = self.values.get_mut(&precision) {
+-            let new_index = indexes.len();
+-            indexes.insert(tensor_id, new_index);
+-            return FuseArg::BlockLocal {
+-                pos: new_index,
+-                ty: precision,
+-            };
+-        }
+-
+-        let new_index = 0;
+-        self.values
+-            .insert(precision, BTreeMap::from_iter([(tensor_id, new_index)]));
++        let indexes = self.values.entry(Self::storage(precision)).or_default();
++        let new_index = indexes.len();
++        indexes.insert(tensor_id, (new_index, precision));
+ 
+         FuseArg::BlockLocal {
+             pos: new_index,
+-- 
+2.55.0
+

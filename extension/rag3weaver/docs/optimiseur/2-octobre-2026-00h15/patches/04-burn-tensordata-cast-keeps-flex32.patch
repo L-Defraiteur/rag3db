@@ -1,0 +1,92 @@
+From 54e54c4418e1297bbbe33f8880eb7724901259a4 Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(tensor): TensorData::try_cast to Flex32 keeps the Flex32
+ dtype
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Flex32 shares f32's storage, and the conversion helpers tag their result
+with the element type's dtype (`self.dtype = Target::dtype()`, with
+Target = f32 for both F32 and Flex32). Casting any data to Flex32 thus
+returned data tagged F32: `convert_dtype(DType::Flex32)`, and the
+FloatCastAdapter built on it, silently did nothing for a Flex32 target —
+the weights stayed F32 and the whole model computed in f32.
+---
+ crates/burn-std/src/data/tensor/base.rs       | 21 +++++++++++++++++++
+ crates/burn-std/src/data/tensor/conversion.rs | 17 +++++++++++----
+ 2 files changed, 34 insertions(+), 4 deletions(-)
+
+diff --git a/crates/burn-std/src/data/tensor/base.rs b/crates/burn-std/src/data/tensor/base.rs
+index a92ac6fb..3aeb0fdd 100644
+--- a/crates/burn-std/src/data/tensor/base.rs
++++ b/crates/burn-std/src/data/tensor/base.rs
+@@ -1179,6 +1179,27 @@ mod tests {
+         ));
+     }
+ 
++    #[test]
++    fn try_cast_to_flex32_keeps_the_flex32_dtype() {
++        // Same size as the source: the in-place path.
++        let data = TensorData::from([1.0f32, 2.0, 3.0])
++            .try_cast(DType::Flex32)
++            .unwrap();
++        assert_eq!(data.dtype(), DType::Flex32);
++        assert_eq!(data.as_slice::<f32>().unwrap(), &[1.0, 2.0, 3.0]);
++
++        // Different size: the cloning path.
++        let data = TensorData::from([1.0f64, 2.0, 3.0])
++            .try_cast(DType::Flex32)
++            .unwrap();
++        assert_eq!(data.dtype(), DType::Flex32);
++        assert_eq!(data.as_slice::<f32>().unwrap(), &[1.0, 2.0, 3.0]);
++
++        // And back: Flex32 to F32 is tagged F32.
++        let data = data.try_cast(DType::F32).unwrap();
++        assert_eq!(data.dtype(), DType::F32);
++    }
++
+     #[test]
+     fn try_cast_propagates_invalid_storage() {
+         let invalid_inplace =
+diff --git a/crates/burn-std/src/data/tensor/conversion.rs b/crates/burn-std/src/data/tensor/conversion.rs
+index e7c19a5e..1c726232 100644
+--- a/crates/burn-std/src/data/tensor/conversion.rs
++++ b/crates/burn-std/src/data/tensor/conversion.rs
+@@ -270,8 +270,8 @@ impl TensorData {
+     /// Returns an error if storage access fails, the conversion isn't supported, or the stored
+     /// representation or element count is invalid.
+     pub fn try_cast(self, dtype: DType) -> Result<TensorData, DataError> {
+-        if dtype == self.dtype {
+-            Ok(self)
++        let mut data = if dtype == self.dtype {
++            self
+         } else if dtype.size() == self.dtype.size()
+             && !matches!(
+                 self.dtype,
+@@ -279,10 +279,19 @@ impl TensorData {
+             )
+             && !matches!(dtype, DType::Bool(BoolStore::Native) | DType::QFloat(_))
+         {
+-            self.try_cast_inplace(dtype)
++            self.try_cast_inplace(dtype)?
+         } else {
+-            self.try_cast_clone(dtype)
++            self.try_cast_clone(dtype)?
++        };
++
++        // Flex32 shares f32's storage, so the element-driven conversions tag
++        // their result with `f32::dtype()`: without this, a cast *to* Flex32
++        // comes back as F32 and the requested dtype is silently lost.
++        if dtype == DType::Flex32 {
++            data.dtype = DType::Flex32;
+         }
++
++        Ok(data)
+     }
+ 
+     // Self-to-Self casts should be stripped before this point.
+-- 
+2.55.0
+

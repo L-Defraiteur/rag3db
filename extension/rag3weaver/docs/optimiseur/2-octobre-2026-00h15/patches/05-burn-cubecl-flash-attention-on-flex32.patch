@@ -1,0 +1,89 @@
+From 3318780622696bf9698d6998c37938a3a2c00c7b Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(cubecl): launch the accelerated flash attention on Flex32
+ inputs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The blackbox accelerated routine requires the global type to be the tile
+type (f16) and rejects Flex32 with `Query global and tile types must be
+the same because no stage to cast in between`. `attention` degrades that
+InvalidConfig to the fallback — including inside the autotune candidates,
+which then benchmark the fallback three times under the flash names and
+pick it. On Flex32 the flash kernels never ran, and a long batch
+materialized the full score matrix (3 GiB at [256, 12, 512, 64]).
+
+flash_attention now casts Q, K and V to f16 for the accelerated routine
+when the input is Flex32 and the shape can launch, and returns the output
+as Flex32. The degradation logs its reason at debug level.
+---
+ .../burn-cubecl/src/kernel/attention/base.rs  | 44 +++++++++++++++++--
+ 1 file changed, 41 insertions(+), 3 deletions(-)
+
+diff --git a/crates/burn-cubecl/src/kernel/attention/base.rs b/crates/burn-cubecl/src/kernel/attention/base.rs
+index 1ae85edf..3338705a 100644
+--- a/crates/burn-cubecl/src/kernel/attention/base.rs
++++ b/crates/burn-cubecl/src/kernel/attention/base.rs
+@@ -95,9 +95,15 @@ pub fn attention(
+         options,
+         flash,
+     ) {
+-        Err(AttentionSetupError::InvalidConfig(_)) => Ok(attention_fallback::<CubeBackend>(
+-            query, key, value, mask, attn_bias, options,
+-        )),
++        Err(AttentionSetupError::InvalidConfig(reason)) => {
++            log::debug!(
++                "flash attention can't launch for q {:?} ({reason}); degrading to the fallback",
++                query.meta.shape
++            );
++            Ok(attention_fallback::<CubeBackend>(
++                query, key, value, mask, attn_bias, options,
++            ))
++        }
+         other => other,
+     }
+ }
+@@ -113,6 +119,38 @@ pub fn flash_attention(
+     options: AttentionModuleOptions,
+     strategy: launch::Strategy,
+ ) -> Result<CubeTensor, AttentionSetupError> {
++    // Flex32 means f16 on the tensor cores with f32 accumulation. The
++    // accelerated blackbox routine loads its fragments straight from global
++    // memory, with no stage to cast in between, so it requires the global type
++    // to be the tile type (f16) and refuses Flex32 inputs — and `attention`
++    // then degrades to the fallback, which materializes the full score matrix.
++    // Casting the inputs to f16 here costs three elementwise passes over Q, K
++    // and V, which is exactly the precision Flex32 promises; the output comes
++    // back as Flex32.
++    //
++    // The casts are only worth it when the routine has a chance to launch: its
++    // stage `seq_q` (16 rows per tile, 2 to 8 planes) must divide the
++    // problem's, and the tile head dim (16) the problem's. A shape that fails
++    // those checks degrades to the fallback anyway.
++    let seq_q = query.meta.shape[2];
++    let head_dim = query.meta.shape[3];
++    let launchable = seq_q.is_multiple_of(32) && head_dim.is_multiple_of(16);
++    if query.dtype == DType::Flex32
++        && launchable
++        && matches!(strategy, launch::Strategy::BlackboxAccelerated(_))
++    {
++        let out = flash_attention(
++            crate::kernel::cast(query, DType::F16),
++            crate::kernel::cast(key, DType::F16),
++            crate::kernel::cast(value, DType::F16),
++            mask,
++            _attn_bias,
++            options,
++            strategy,
++        )?;
++        return Ok(crate::kernel::cast(out, DType::Flex32));
++    }
++
+     let client = query.client.clone();
+     let out = init_attention_output(&query, &value);
+ 
+-- 
+2.55.0
+

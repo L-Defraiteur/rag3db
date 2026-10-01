@@ -1,0 +1,31 @@
+From ec71d198d3d9095413963b3e4079d5640870247a Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(matmul): a Flex32 output accumulates in f32, like f16 and
+ bf16
+
+from_globals promotes the accumulator to f32 for f16 and bf16 outputs but
+keeps it as-is for Flex32. adjust_dtypes then lowers the Flex32 stage and
+register types to f16 for the accelerated routines, and no cooperative
+matrix configuration takes f16 operands with a Flex32 accumulator: every
+cmma candidate is dropped and a Flex32 matmul never reaches the tensor
+cores, which is the whole point of the type.
+---
+ crates/cubek-matmul/src/definition/elems.rs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crates/cubek-matmul/src/definition/elems.rs b/crates/cubek-matmul/src/definition/elems.rs
+index 3b823f67..2a11775f 100644
+--- a/crates/cubek-matmul/src/definition/elems.rs
++++ b/crates/cubek-matmul/src/definition/elems.rs
+@@ -29,6 +29,7 @@ impl MatmulElems {
+     pub fn from_globals(global_elems: &MatmulGlobalElems) -> Self {
+         let acc_type = if global_elems.out == half::f16::elem_type_native()
+             || global_elems.out == half::bf16::elem_type_native()
++            || global_elems.out == flex32::elem_type_native()
+         {
+             f32::elem_type_native()
+         } else {
+-- 
+2.55.0
+

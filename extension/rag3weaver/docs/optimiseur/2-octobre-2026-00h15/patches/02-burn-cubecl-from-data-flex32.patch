@@ -1,0 +1,31 @@
+From 5624daaa549fc5fb3a7fb623518fc6b7254ad787 Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(cubecl): accept Flex32 data in float_from_data
+
+Flex32 is stored as f32, so its bytes upload exactly like F32 ones, but
+float_from_data only lists F64, F32, F16 and BF16 and hits
+unimplemented!() for a TensorData tagged Flex32. Loading a record whose
+float tensors were cast to Flex32 panicked on the first parameter.
+---
+ crates/burn-cubecl/src/ops/tensor.rs | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/crates/burn-cubecl/src/ops/tensor.rs b/crates/burn-cubecl/src/ops/tensor.rs
+index 6945fb5b..7c2eb904 100644
+--- a/crates/burn-cubecl/src/ops/tensor.rs
++++ b/crates/burn-cubecl/src/ops/tensor.rs
+@@ -26,7 +26,9 @@ impl FloatTensorOps<Self> for CubeBackend {
+     ))]
+     fn float_from_data(data: TensorData, device: &Device<Self>) -> FloatTensor<Self> {
+         match data.dtype() {
+-            DType::F64 | DType::F32 | DType::F16 | DType::BF16 => super::from_data(data, device),
++            DType::F64 | DType::F32 | DType::Flex32 | DType::F16 | DType::BF16 => {
++                super::from_data(data, device)
++            }
+             _ => unimplemented!("Unsupported dtype for `float_from_data`"),
+         }
+     }
+-- 
+2.55.0
+
