@@ -84,7 +84,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
 | Budget de reprise du lecteur en lecture seule | `master`, mesuré (`20a8f6ee8`) | 250 ms de budget contre un pic à 567 ms sous charge : relever le budget, ou tester l'invariant par `read_only_patient`. Attend une décision. |
 | Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée | promis le 18 septembre à la session optimiseur, **jamais confié** | Attendait que `Lifecycle` soit appliqué à l'écriture : c'est fait (`780acfd2d`). À cadrer avec les sessions optimiseur et lifecycle. |
-| Écritures parallèles | **objectif décidé par Lucie le 2 octobre** : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » | Plan demandé à la session cœur C++ (lecture seule) : cible A, plusieurs transactions d'écriture dans le processus qui tient la base ; cible B, plusieurs processus écrivains ; un ordre de marches testables une à une. Rien à coder avant que Lucie ait vu le plan. État d'aujourd'hui : Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
+| Écritures parallèles | **objectif décidé par Lucie le 2 octobre** : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » | **Cible tranchée par Lucie : « oui jusque B, et A d'abord si dans même chemin »** — B, plusieurs processus écrivains sur le même fichier ; A, plusieurs transactions d'écriture dans le processus qui tient la base, en première étape seulement si elle est sur la route de B. Plan demandé à la session cœur C++ (lecture seule) : ce que B réutilise de A, un ordre de marches testables une à une, et le lecteur d'un autre processus comme premier cas. Rien à coder avant que Lucie ait vu le plan. État d'aujourd'hui : Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
 
 ## 4. Décisions en attente de Lucie
 
@@ -147,6 +147,17 @@ sessions, pas d'une vérification.
   passe : il leur est antérieur, et aucun contrôle de livraison ne jouait
   `api_test` (il y entre désormais). Diagnostic en cours avant de livrer la
   fin de journal déchirée, qui touche le même chemin ; rien n'est corrigé.
+  **Cause, par lecture du code (session cœur C++, 2 octobre)** : un lecteur
+  en lecture seule rejoue le journal d'un écrivain vivant (`database.cpp:136`
+  → `StorageManager::recover`, sans condition sur `readOnly`) par trois
+  lectures non atomiques — `dryReplay` décide, `readCheckpoint` lit le
+  fichier de données, puis le rejeu. Si l'écrivain fait son checkpoint entre
+  les deux premières, le lecteur rejoue des transactions déjà dans le
+  fichier. Déduit et **non vérifié par exécution** : avec des relations (pas
+  de clé primaire) le doublon serait silencieux, dans la mémoire du lecteur
+  seulement. Vela a la même forme. Indépendant de la fin déchirée, qui se
+  livre en nommant ce rouge ; le correctif est un choix de conception et
+  entre dans le plan des écritures parallèles (§3).
 - **WAL illisible : la vraie cause est un bug d'écriture**, pas l'arrêt
   brutal (trouvé le 1er octobre 2026). `resizeBufferIfNeeded`
   (`src/storage/wal/checksum_writer.cpp`, même défaut dans
