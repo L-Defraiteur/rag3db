@@ -134,7 +134,8 @@ sessions, pas d'une vérification.
 | Chantier | Où | État connu |
 |---|---|---|
 | Forks burn, cubecl, cubek | `github.com/L-Defraiteur/{burn,cubecl,cubek}`, branche `rag3weaver/pre.3` | Utilisés tels quels (burn `630c546c`). |
-| PR amont burn / cubek | à ouvrir | Sept préparées par la session optimiseur au 18 septembre ; **aucune envoyée**. Lucie, 2 octobre : d'accord pour les proposer, **après vérification que l'amont n'a pas déjà corrigé** — vérification confiée à la session optimiseur ; l'envoi attend son mot sur la liste finale. |
+| Adresse professionnelle sur les forks | `L-Defraiteur/{burn,cubecl,cubek}`, branche `rag3weaver/pre.3` | **Six commits publics portent l'adresse professionnelle de Lucie** (auteur et committer ; l'identité git globale du poste, héritée par les clones). Règle de Lucie, 2 octobre : elle ne doit figurer dans aucun de ses dépôts. `rag3db` vérifié, toutes branches : aucune. Corriger = réécrire ces branches, pousser en force, remonter les révisions épinglées dans les `Cargo.toml` : **attend son mot**. |
+| PR amont burn / cubek | à ouvrir | Sept préparées par la session optimiseur au 18 septembre ; **aucune envoyée**. Lucie, 2 octobre : d'accord pour les proposer, **après vérification que l'amont n'a pas déjà corrigé** — vérifié le 2 octobre : **aucune des sept n'est corrigée en amont**, textes et correctifs prêts (`extension/rag3weaver/docs/optimiseur/2-octobre-2026-00h15/01-les-sept-pr-amont.md`, avec `patches/`). Reste : compiler contre leur branche principale, puis le mot de Lucie sur l'envoi (compte `L-Defraiteur`, adresse personnelle ; la 6 avant la 5). |
 | lucivy | crates.io | 4.3.0 utilisée par `mtg-experiments`. |
 | Amont Vela | remote `vela`, branche `storage/concurrent-checkpoint-recovery` (27 septembre) | En cours de relecture par la session cœur C++ (2 octobre), voir « Un seul écrivain à la fois » au §3. Le WAL illisible, lui, venait de notre bug d'écriture, corrigé (§6). |
 
