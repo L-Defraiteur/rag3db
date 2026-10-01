@@ -102,6 +102,34 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée | promis le 18 septembre à la session optimiseur, **jamais confié** | Attendait que `Lifecycle` soit appliqué à l'écriture : c'est fait (`780acfd2d`). À cadrer avec les sessions optimiseur et lifecycle. |
 | Écritures parallèles | **objectif décidé par Lucie le 2 octobre** : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » | **Cible tranchée par Lucie : « oui jusque B, et A d'abord si dans même chemin »** — B, plusieurs processus écrivains sur le même fichier ; A, plusieurs transactions d'écriture dans le processus qui tient la base, en première étape seulement si elle est sur la route de B. Plan demandé à la session cœur C++ (lecture seule) : ce que B réutilise de A, un ordre de marches testables une à une, et le lecteur d'un autre processus comme premier cas. Rien à coder avant que Lucie ait vu le plan. État d'aujourd'hui : Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
 
+### Dette de généricité : ce qui est câblé pour le code dans le cœur du crate
+
+Relevé le 2 octobre 2026, à la demande de Lucie (« ça ne doit pas faire que
+du code »), par lecture des noms de champs — peut-être pas exhaustif. Rien
+n'est corrigé ; règle : une organisation se déclare dans `EntityConfig`,
+jamais en dur.
+
+- `code_tools.rs`, `reingest_file` : le seul chemin qui supprime aujourd'hui
+  les lignes disparues ; entité `SCOPE` et champs `file_path`, `key`,
+  `source` en dur. À remplacer par la synchronisation par périmètre déclaré
+  (ci-dessus, « supprimer les lignes disparues »).
+- `work_domain.rs`, `Selector` : `sources` / `repos` / `languages` / `under`
+  deviennent des filtres sur les champs `source`, `repo`, `language` et un
+  champ de chemin. Le domaine de travail est un vocabulaire de code, pas un
+  filtre sur des champs déclarés.
+- `generic_search_nodes.rs` (application du domaine) : champ de chemin choisi
+  par heuristique (`file_path`, sinon `path`).
+- `render_nodes.rs` : une liste de champs consommés en dur par le rendu
+  (`file_path`, `start_line`, `language`, `repo`, `revision`, `docstring`,
+  `signature`, `scope_type`…), le choix du titre et la langue de l'extrait.
+  `contentKind` et `sourceLines` (27 septembre) en déclarent une partie.
+- `code.rs` : l'identité d'une source est un curseur de dépôt.
+
+Conséquence pour le produit : pas d'entité « source » intégrée au moteur. Le
+générique est une **session de synchronisation** (début, lots, fin) avec un
+périmètre déclaré par l'entité ; un backend qui veut un « dépôt » ou un
+« dossier » le déclare comme n'importe quelle entité.
+
 ## 4. Décisions en attente de Lucie
 
 Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
