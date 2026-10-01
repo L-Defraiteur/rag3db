@@ -84,7 +84,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
 | Budget de reprise du lecteur en lecture seule | `master`, mesuré (`20a8f6ee8`) | 250 ms de budget contre un pic à 567 ms sous charge : relever le budget, ou tester l'invariant par `read_only_patient`. Attend une décision. |
 | Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée | promis le 18 septembre à la session optimiseur, **jamais confié** | Attendait que `Lifecycle` soit appliqué à l'écriture : c'est fait (`780acfd2d`). À cadrer avec les sessions optimiseur et lifecycle. |
-| Un seul écrivain à la fois | question rouverte par Lucie le 2 octobre | Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
+| Écritures parallèles | **objectif décidé par Lucie le 2 octobre** : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » | Plan demandé à la session cœur C++ (lecture seule) : cible A, plusieurs transactions d'écriture dans le processus qui tient la base ; cible B, plusieurs processus écrivains ; un ordre de marches testables une à une. Rien à coder avant que Lucie ait vu le plan. État d'aujourd'hui : Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
 
 ## 4. Décisions en attente de Lucie
 
@@ -134,12 +134,19 @@ sessions, pas d'une vérification.
 | Chantier | Où | État connu |
 |---|---|---|
 | Forks burn, cubecl, cubek | `github.com/L-Defraiteur/{burn,cubecl,cubek}`, branche `rag3weaver/pre.3` | Utilisés tels quels (burn `630c546c`). |
-| PR amont burn / cubek | à ouvrir | Sept préparées par la session optimiseur au 18 septembre ; **aucune envoyée**, elles attendent le mot de Lucie. |
+| PR amont burn / cubek | à ouvrir | Sept préparées par la session optimiseur au 18 septembre ; **aucune envoyée**. Lucie, 2 octobre : d'accord pour les proposer, **après vérification que l'amont n'a pas déjà corrigé** — vérification confiée à la session optimiseur ; l'envoi attend son mot sur la liste finale. |
 | lucivy | crates.io | 4.3.0 utilisée par `mtg-experiments`. |
 | Amont Vela | remote `vela`, branche `storage/concurrent-checkpoint-recovery` (27 septembre) | En cours de relecture par la session cœur C++ (2 octobre), voir « Un seul écrivain à la fois » au §3. Le WAL illisible, lui, venait de notre bug d'écriture, corrigé (§6). |
 
 ## 6. Bugs connus, non corrigés
 
+- **`LecteursConcurrents.CeQueLeLecteurVoitEstCoherent` est rouge sur
+  `master`** (`api_test`, vu le 2 octobre) : le lecteur en lecture seule est
+  refusé avec « Found duplicated primary key value » au lieu du seul refus
+  attendu. Présent avec et sans les deux correctifs du journal, à chaque
+  passe : il leur est antérieur, et aucun contrôle de livraison ne jouait
+  `api_test` (il y entre désormais). Diagnostic en cours avant de livrer la
+  fin de journal déchirée, qui touche le même chemin ; rien n'est corrigé.
 - **WAL illisible : la vraie cause est un bug d'écriture**, pas l'arrêt
   brutal (trouvé le 1er octobre 2026). `resizeBufferIfNeeded`
   (`src/storage/wal/checksum_writer.cpp`, même défaut dans
