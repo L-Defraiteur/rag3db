@@ -24,7 +24,8 @@ private:
         bool tornEnd = false;
     };
 
-    void setAsideTornEnd(common::FileInfo& fileInfo, uint64_t offsetDeserialized) const;
+    void setAsideCutBytes(common::FileInfo& fileInfo, uint64_t offsetDeserialized,
+        bool tornEnd) const;
 
     void replayWALRecord(WALRecord& walRecord) const;
     void replayCreateCatalogEntryRecord(WALRecord& walRecord) const;

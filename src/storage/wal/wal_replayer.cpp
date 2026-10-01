@@ -115,8 +115,10 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
         // CHECKPOINT or COMMIT.
         auto [offsetDeserialized, isLastRecordCheckpoint, tornEnd] =
             dryReplay(*fileInfo, throwOnWalReplayFailure, enableChecksums);
-        if (tornEnd) {
-            setAsideTornEnd(*fileInfo, offsetDeserialized);
+        // Whatever is about to be cut from the journal is copied aside first,
+        // torn end or not (throwOnWalReplayFailure=false on a corruption).
+        if (!isLastRecordCheckpoint) {
+            setAsideCutBytes(*fileInfo, offsetDeserialized, tornEnd);
         }
         if (isLastRecordCheckpoint) {
             // If the last record is a checkpoint, we resume by replaying the shadow file.
@@ -599,34 +601,46 @@ void WALReplayer::syncWALFile(const FileInfo& fileInfo) const {
     fileInfo.syncFile();
 }
 
-// What follows the last complete COMMIT of a torn journal is about to be
-// truncated: copy it next to the journal first, and say so. An absence is named.
-void WALReplayer::setAsideTornEnd(FileInfo& fileInfo, uint64_t offsetDeserialized) const {
+// What follows the last complete COMMIT is about to be truncated: copy it next
+// to the journal first, and say so. An absence is named. Without record lengths
+// a corrupted length can read as a torn end, so the message does not claim the
+// bytes were uncommitted.
+void WALReplayer::setAsideCutBytes(FileInfo& fileInfo, uint64_t offsetDeserialized,
+    bool tornEnd) const {
     const auto fileSize = fileInfo.getFileSize();
     if (fileSize <= offsetDeserialized) {
         return;
     }
-    const auto discarded = fileSize - offsetDeserialized;
+    const auto cut = fileSize - offsetDeserialized;
+    const auto why = tornEnd ? "the journal ends inside a record or without a COMMIT" :
+                               "a record could not be replayed";
     if (StorageManager::Get(clientContext)->isReadOnly()) {
-        std::cerr << stringFormat("rag3db: WAL {} has a torn end of {} bytes after offset {}; "
-                                  "read-only, left in place.\n",
-            walPath, discarded, offsetDeserialized);
+        std::cerr << stringFormat("rag3db: WAL {}: {} bytes after offset {} cannot be replayed "
+                                  "({}); read-only, left in place.\n",
+            walPath, cut, offsetDeserialized, why);
         return;
     }
     const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch())
                             .count();
     const auto asidePath = stringFormat("{}.ecarte-{}", walPath, millis);
-    std::vector<uint8_t> bytes(discarded);
-    fileInfo.readFromFile(bytes.data(), discarded, offsetDeserialized);
-    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
-    auto aside = vfs->openFile(asidePath,
-        FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
-    aside->writeFile(bytes.data(), discarded, 0);
+    auto aside = VirtualFileSystem::GetUnsafe(clientContext)
+                     ->openFile(asidePath,
+                         FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
+    // By blocks: after a bulk ingestion the cut can be large.
+    constexpr uint64_t BLOCK_SIZE = 1 << 20;
+    std::vector<uint8_t> block(std::min(cut, BLOCK_SIZE));
+    for (uint64_t done = 0; done < cut;) {
+        const auto size = std::min(cut - done, BLOCK_SIZE);
+        fileInfo.readFromFile(block.data(), size, offsetDeserialized + done);
+        aside->writeFile(block.data(), size, done);
+        done += size;
+    }
     aside->syncFile();
-    std::cerr << stringFormat("rag3db: WAL {} had a torn end: {} bytes after offset {} (an "
-                              "uncommitted transaction) set aside in {}.\n",
-        walPath, discarded, offsetDeserialized, asidePath);
+    std::cerr << stringFormat("rag3db: WAL {}: {} bytes after offset {} were cut from the journal "
+                              "({}) and copied to {}. They may hold committed transactions if the "
+                              "journal was corrupted rather than cut; nothing was deleted.\n",
+        walPath, cut, offsetDeserialized, why, asidePath);
 }
 
 void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {
