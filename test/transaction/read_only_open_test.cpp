@@ -54,6 +54,19 @@ public:
     }
 };
 
+// Un point de reprise arrêté encore plus tôt : sa phase de stockage est faite —
+// des pages neuves écrites directement dans le fichier de données, d'autres
+// préparées dans le fichier fantôme — et RIEN n'est encore journalisé. Ni
+// l'en-tête ni le journal ne portent trace de ce point de reprise.
+class CheckpointerStoppedAfterStoragePhase final : public Checkpointer {
+public:
+    explicit CheckpointerStoppedAfterStoragePhase(ClientContext& context) : Checkpointer(context) {}
+
+    void serializeCatalogAndMetadata(DatabaseHeader&, bool) override {
+        throw RuntimeException("checkpoint stopped after its storage phase.");
+    }
+};
+
 class ReadOnlyOpenTest : public PrivateApiTest {
 protected:
     // Pas de jeu de données : chaque test pose le sien, petit.
@@ -114,8 +127,9 @@ protected:
     }
 
     // Arme le crochet : au point `phase`, l'écrivain commence un point de
-    // reprise qui s'arrête après avoir appliqué ses pages, journal intact.
-    void writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase phase) {
+    // reprise qui s'arrête en chemin, à l'endroit que choisit `Stopped`.
+    template<typename Stopped>
+    void writerCheckpointStopsAt(ReadOnlyOpenPhase phase) {
         auto fired = std::make_shared<bool>(false);
         WALReplayer::setReadOnlyOpenHookForTesting([this, phase, fired](ReadOnlyOpenPhase current) {
             if (current != phase || *fired) {
@@ -123,7 +137,7 @@ protected:
             }
             *fired = true;
             FlakyCheckpointer([](ClientContext& context) -> std::unique_ptr<Checkpointer> {
-                return std::make_unique<CheckpointerStoppedBeforeTruncatingJournal>(context);
+                return std::make_unique<Stopped>(context);
             }).setCheckpointer(*getClientContext(*conn));
             auto result = conn->query("CHECKPOINT");
             EXPECT_FALSE(result->isSuccess()) << "le point de reprise devait s'arrêter à mi-chemin";
@@ -191,7 +205,8 @@ TEST_F(ReadOnlyOpenTest, HalfDoneCheckpointAfterJournalScanIsRefusedNotMisread) 
         run("CREATE (:Pair {id: " + std::to_string(i) + ", twice: " + std::to_string(i * 2) + "})");
     }
 
-    writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase::JOURNAL_SCANNED);
+    writerCheckpointStopsAt<CheckpointerStoppedBeforeTruncatingJournal>(
+        ReadOnlyOpenPhase::JOURNAL_SCANNED);
     openReader();
     ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
     ASSERT_FALSE(reader.opened()) << "ouvert alors qu'un point de reprise a traversé l'ouverture";
@@ -224,7 +239,8 @@ TEST_F(ReadOnlyOpenTest, RelationshipsAreNotDoubledByAHalfDoneCheckpoint) {
     }
     ASSERT_EQ(single(*conn, "MATCH ()-[l:Link]->() RETURN count(l)"), 9);
 
-    writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase::JOURNAL_SCANNED);
+    writerCheckpointStopsAt<CheckpointerStoppedBeforeTruncatingJournal>(
+        ReadOnlyOpenPhase::JOURNAL_SCANNED);
     openReader();
     ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
     if (reader.opened()) {
@@ -280,5 +296,42 @@ TEST_F(ReadOnlyOpenTest, CommitDuringOpenIsNotRefused) {
         EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) RETURN count(*)"), before);
         EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) WHERE p.twice <> p.id * 2 RETURN count(*)"),
             0);
+    }
+}
+
+// Le point de reprise n'en est qu'à sa phase de stockage quand le lecteur
+// arrive : rien n'est journalisé, l'en-tête n'a pas bougé. Mais l'écrivain a
+// déjà écrit des pages directement dans le fichier de données.
+TEST_F(ReadOnlyOpenTest, CheckpointInItsStoragePhaseIsRefusedNotMisread) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    run("CREATE NODE TABLE Pair(id INT64 PRIMARY KEY, twice INT64)");
+    // Une table qui a déjà vécu : plusieurs points de reprise derrière elle, des
+    // pages réécrites et d'autres libérées, puis un lot encore au journal.
+    auto next = 0;
+    for (auto cycle = 0; cycle < 12; cycle++) {
+        for (auto i = 0; i < 25; i++, next++) {
+            run("CREATE (:Pair {id: " + std::to_string(next) +
+                ", twice: " + std::to_string(next * 2) + "})");
+        }
+        if (cycle < 11) {
+            run("CHECKPOINT");
+        }
+    }
+
+    for (auto phase : {ReadOnlyOpenPhase::JOURNAL_SCANNED, ReadOnlyOpenPhase::DATA_FILE_READ}) {
+        writerCheckpointStopsAt<CheckpointerStoppedAfterStoragePhase>(phase);
+        openReader();
+        ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
+        if (reader.opened()) {
+            // S'il s'ouvre, ce qu'il lit doit être juste.
+            EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) RETURN count(*)"), next);
+            EXPECT_EQ(
+                single(*reader.conn, "MATCH (p:Pair) WHERE p.twice <> p.id * 2 RETURN count(*)"),
+                0);
+        } else {
+            EXPECT_THAT(reader.error, HasSubstr(WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN));
+        }
     }
 }
