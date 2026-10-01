@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 
 #include "api_test/private_api_test.h"
@@ -5,6 +6,7 @@
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/wal.h"
+#include "test_helper/flaky_buffer_manager.h"
 #include "transaction/transaction_manager.h"
 
 using namespace rag3db::common;
@@ -156,6 +158,143 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointSerializeFailureAfterEarlierC
     createDBAndConn();
     EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), numRows + 1);
     EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(DISTINCT a.id);"), numRows + 1);
+}
+
+// Un point de reprise ordinaire, qui note s'il est dans sa phase de stockage.
+class CheckpointerTellingItsStoragePhase final : public Checkpointer {
+public:
+    CheckpointerTellingItsStoragePhase(main::ClientContext& context, bool& inStoragePhase)
+        : Checkpointer(context), inStoragePhase{inStoragePhase} {}
+
+    bool checkpointStorage() override {
+        inStoragePhase = true;
+        const auto hasChanges = Checkpointer::checkpointStorage();
+        // Non atteint si la phase échoue : le drapeau reste levé, c'est ce qu'on lit.
+        inStoragePhase = false;
+        return hasChanges;
+    }
+
+private:
+    bool& inStoragePhase;
+};
+
+// La panne PENDANT la phase de stockage, et non plus après elle. Le douzième
+// point de reprise est interrompu à chacune de ses allocations, l'une après
+// l'autre : à la k-ième, pour tout k, jusqu'à ce qu'il n'y en ait plus et qu'il
+// réussisse. Deux tables, parce qu'une table écrit son index en dernier : quand
+// la seconde échoue, les pages de l'index de la première sont déjà sur disque.
+// Après chaque panne on rouvre, et le contenu doit être celui du dernier commit.
+TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpoint) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    static constexpr auto NUM_CYCLES = 12;
+    static constexpr auto NUM_ROWS_PER_CYCLE = 25;
+    static constexpr int64_t NUM_ROWS = NUM_CYCLES * NUM_ROWS_PER_CYCLE;
+    const std::vector<std::string> tables = {"test", "other"};
+    const auto single = [&](const std::string& query) {
+        auto res = conn->query(query);
+        EXPECT_TRUE(res->isSuccess()) << query << " : " << res->getErrorMessage();
+        return res->isSuccess() && res->hasNext() ?
+                   res->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    };
+    auto numFailures = 0u;
+    auto numFailuresInStoragePhase = 0u;
+    for (uint64_t k = 1;; k++) {
+        ASSERT_LT(k, 5000u) << "le point de reprise n'en finit pas d'allouer";
+        // Une base neuve, sur un gestionnaire de tampons qu'on peut faire échouer.
+        conn.reset();
+        database.reset();
+        removeParentDirectoryOfDBPath(databasePath);
+        std::filesystem::create_directories(std::filesystem::path(databasePath).parent_path());
+        std::atomic<uint64_t> failureFrequency = UINT64_MAX;
+        FlakyBufferManager* bufferManager = nullptr;
+        database =
+            constructDB(databasePath, *systemConfig, [&](const main::Database& db) {
+                auto bm = std::make_unique<FlakyBufferManager>(databasePath,
+                    databasePath + ".checkpoint.tmp", systemConfig->bufferPoolSize,
+                    systemConfig->maxDBSize, getFileSystem(db), systemConfig->readOnly,
+                    failureFrequency, false /* canFailDuringExecute */,
+                    true /* canFailDuringCheckpoint */, false /* canFailDuringCommit */);
+                bufferManager = bm.get();
+                return bm;
+            });
+        conn = std::make_unique<main::Connection>(database.get());
+        bufferManager->setClientContext(getClientContext(*conn));
+        conn->query("CALL force_checkpoint_on_close=false;");
+        conn->query("CALL auto_checkpoint=false");
+        for (const auto& table : tables) {
+            ASSERT_TRUE(conn->query(stringFormat(
+                                        "CREATE NODE TABLE {}(id INT64 PRIMARY KEY, name STRING);",
+                                        table))
+                            ->isSuccess());
+        }
+        auto numRows = 0;
+        for (auto cycle = 0; cycle < NUM_CYCLES; cycle++) {
+            for (auto i = 0; i < NUM_ROWS_PER_CYCLE; i++, numRows++) {
+                for (const auto& table : tables) {
+                    auto res = conn->query(stringFormat("CREATE (a:{} {id: {}, name: 'name_{}'});",
+                        table, numRows, numRows));
+                    ASSERT_TRUE(res->isSuccess()) << res->getErrorMessage();
+                }
+            }
+            if (cycle < NUM_CYCLES - 1) {
+                ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+            }
+        }
+        auto inStoragePhase = false;
+        FlakyCheckpointer tellingCheckpointer([&](main::ClientContext& context) {
+            return std::make_unique<CheckpointerTellingItsStoragePhase>(context, inStoragePhase);
+        });
+        tellingCheckpointer.setCheckpointer(*getClientContext(*conn));
+        // La k-ième allocation à partir d'ici est refusée.
+        bufferManager->reserveCount = 0;
+        failureFrequency = k;
+        const auto checkpointed = conn->query("CHECKPOINT;")->isSuccess();
+        const auto allocationWasRefused = failureFrequency != k;
+        failureFrequency = UINT64_MAX;
+        if (checkpointed && !allocationWasRefused) {
+            // Moins de k allocations : le balayage a couvert tout le point de reprise.
+            break;
+        }
+        if (!checkpointed) {
+            numFailures++;
+            if (inStoragePhase) {
+                numFailuresInStoragePhase++;
+            }
+        }
+        // La « panne » : on rouvre, sur un gestionnaire de tampons ordinaire.
+        conn.reset();
+        createDBAndConn();
+        for (const auto& table : tables) {
+            const auto where = stringFormat(" (panne à l'allocation {}, table {}{})", k, table,
+                inStoragePhase ? ", pendant la phase de stockage" : "");
+            ASSERT_EQ(single(stringFormat("MATCH (a:{}) RETURN COUNT(a);", table)), NUM_ROWS)
+                << where;
+            ASSERT_EQ(single(stringFormat("MATCH (a:{}) RETURN COUNT(DISTINCT a.id);", table)),
+                NUM_ROWS)
+                << where;
+            ASSERT_EQ(single(stringFormat("MATCH (a:{}) RETURN SUM(a.id);", table)),
+                NUM_ROWS * (NUM_ROWS - 1) / 2)
+                << where;
+            ASSERT_EQ(single(stringFormat("MATCH (a:{}) WHERE a.name <> 'name_' + "
+                                          "cast(a.id AS STRING) RETURN COUNT(a);",
+                          table)),
+                0)
+                << where;
+            for (auto id = 0; id < NUM_ROWS; id++) {
+                ASSERT_EQ(single(stringFormat("MATCH (a:{}) WHERE a.id = {} RETURN COUNT(a);",
+                              table, id)),
+                    1)
+                    << "clé " << id << where;
+            }
+        }
+    }
+    // Un balayage qui n'aurait rien interrompu ne prouverait rien.
+    EXPECT_GT(numFailuresInStoragePhase, 0u);
+    std::cout << "  points de reprise interrompus : " << numFailures << ", dont "
+              << numFailuresInStoragePhase << " pendant la phase de stockage" << std::endl;
 }
 
 class FlakyCheckpointerFailsOnWritingHeader final : public Checkpointer {
