@@ -4,6 +4,7 @@
 #include "common/exception/runtime.h"
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
+#include "common/string_format.h"
 #include "main/client_context.h"
 #include "storage/buffer_manager/memory_manager.h"
 
@@ -76,7 +77,10 @@ std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
         throw RuntimeException("Corrupted wal file. Read out invalid WAL record type.");
     }
     default: {
-        KU_UNREACHABLE;
+        // A type outside the enumeration is a corrupted journal, not an
+        // impossible state: say so instead of asserting.
+        throw RuntimeException(common::stringFormat(
+            "Corrupted wal file. Read out unknown WAL record type {}.", static_cast<unsigned>(type)));
     }
     }
     walRecord->type = type;

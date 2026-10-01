@@ -14,18 +14,23 @@ ChecksumWriter::ChecksumWriter(std::shared_ptr<common::Writer> outputWriter,
     : outputSerializer(std::move(outputWriter)),
       entryBuffer(memoryManager.allocateBuffer(false, INITIAL_BUFFER_SIZE)) {}
 
-static void resizeBufferIfNeeded(std::unique_ptr<MemoryBuffer>& entryBuffer,
+// The bytes already accumulated for the current entry move to the new buffer:
+// without the copy, every record over the initial 4096 bytes lost its start
+// (record type included), and its checksum was computed over the wrong bytes.
+static void resizeBufferIfNeeded(std::unique_ptr<MemoryBuffer>& entryBuffer, uint64_t usedSize,
     uint64_t requestedSize) {
     const auto currentBufferSize = entryBuffer->getBuffer().size_bytes();
     if (requestedSize > currentBufferSize) {
         auto* memoryManager = entryBuffer->getMemoryManager();
-        entryBuffer = memoryManager->allocateBuffer(false, std::bit_ceil(requestedSize));
+        auto newBuffer = memoryManager->allocateBuffer(false, std::bit_ceil(requestedSize));
+        std::memcpy(newBuffer->getData(), entryBuffer->getData(), usedSize);
+        entryBuffer = std::move(newBuffer);
     }
 }
 
 void ChecksumWriter::write(const uint8_t* data, uint64_t size) {
     if (currentEntrySize.has_value()) {
-        resizeBufferIfNeeded(entryBuffer, *currentEntrySize + size);
+        resizeBufferIfNeeded(entryBuffer, *currentEntrySize, *currentEntrySize + size);
         std::memcpy(entryBuffer->getData() + *currentEntrySize, data, size);
         *currentEntrySize += size;
     } else {

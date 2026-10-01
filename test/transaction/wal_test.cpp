@@ -1,4 +1,5 @@
 #include <fstream>
+#include <map>
 
 #include "api_test/api_test.h"
 #include "common/exception/runtime.h"
@@ -585,4 +586,65 @@ TEST_F(WalTest, ReadOnlyRecoveryNoWALFile) {
     auto res = conn->query("CALL show_tables() WHERE name='test' RETURN *;");
     ASSERT_TRUE(res->isSuccess());
     ASSERT_EQ(res->getNumTuples(), 0);
+}
+
+// Un texte reconnaissable à chaque position : un début perdu ne peut pas
+// passer pour une valeur juste.
+static std::string longText(char seed, size_t size) {
+    std::string text(size, ' ');
+    for (size_t i = 0; i < size; ++i) {
+        text[i] = static_cast<char>('a' + (i * 7 + seed) % 26);
+    }
+    return text;
+}
+
+// Des enregistrements de plus de 4096 octets se rejouent avec leurs valeurs.
+// ChecksumWriter::resizeBufferIfNeeded remplaçait le tampon sans recopier le
+// début déjà écrit : l'enregistrement perdait son octet de type, sa somme
+// était calculée sur le tampon faux, et le rejeu échouait (wal_record.cpp,
+// type inconnu ou nul) — vu sur la base MTG le 27 septembre 2026. On compare
+// les valeurs relues, pas un message : le début perdu est du tas non
+// initialisé, l'erreur varie d'une exécution à l'autre.
+TEST_F(WalTest, LongRecordsReplayWithTheirValues) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    systemConfig->throwOnWalReplayFailure = true;
+    conn->query("CALL force_checkpoint_on_close=false");
+    ASSERT_TRUE(conn->query("CREATE NODE TABLE t(id INT64 PRIMARY KEY, s STRING);")->isSuccess());
+    const std::map<int64_t, std::string> expected{{1, longText(1, 20000)}, {2, longText(2, 4097)},
+        {3, longText(3, 8193)}, {4, longText(4, 100000)}};
+    auto create = conn->prepare("CREATE (:t {id: $id, s: $s});");
+    ASSERT_TRUE(create->isSuccess()) << create->getErrorMessage();
+    auto run = [&](int64_t id, const std::string& s) {
+        auto result = conn->execute(create.get(), std::make_pair(std::string("id"), id),
+            std::make_pair(std::string("s"), s));
+        ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    };
+    // Seul dans sa transaction, puis plusieurs gros enregistrements dans une même.
+    run(1, longText(9, 4097));
+    ASSERT_TRUE(conn->query("BEGIN TRANSACTION;")->isSuccess());
+    run(2, expected.at(2));
+    run(3, expected.at(3));
+    run(4, expected.at(4));
+    ASSERT_TRUE(conn->query("COMMIT;")->isSuccess());
+    auto set = conn->prepare("MATCH (n:t) WHERE n.id = 1 SET n.s = $s;");
+    auto updated = conn->execute(set.get(), std::make_pair(std::string("s"), expected.at(1)));
+    ASSERT_TRUE(updated->isSuccess()) << updated->getErrorMessage();
+    auto walFilePath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+    ASSERT_GT(std::filesystem::file_size(walFilePath), 100000u);
+
+    createDBAndConn();
+    auto result = conn->query("MATCH (n:t) RETURN n.id, n.s ORDER BY n.id;");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    std::map<int64_t, std::string> replayed;
+    while (result->hasNext()) {
+        auto row = result->getNext();
+        replayed[row->getValue(0)->getValue<int64_t>()] = row->getValue(1)->getValue<std::string>();
+    }
+    ASSERT_EQ(replayed.size(), expected.size());
+    for (const auto& [id, text] : expected) {
+        ASSERT_EQ(replayed[id].size(), text.size()) << "id " << id;
+        ASSERT_TRUE(replayed[id] == text) << "id " << id << " : la valeur relue diffère";
+    }
 }
