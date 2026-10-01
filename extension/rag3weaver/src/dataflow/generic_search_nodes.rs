@@ -1120,6 +1120,7 @@ pub struct FuseResultsNode {
     strategy: FusionStrategy,
     rrf_k: f64,
     weights: HashMap<String, f64>,
+    default_weights: HashMap<String, f64>,
     boost: HashSet<String>,
     top_k: Option<usize>,
     signal: Option<String>,
@@ -1133,6 +1134,7 @@ impl FuseResultsNode {
             strategy: FusionStrategy::Rrf,
             rrf_k: DEFAULT_RRF_K,
             weights: HashMap::new(),
+            default_weights: HashMap::new(),
             boost: HashSet::new(),
             top_k: None,
             signal: None,
@@ -1154,9 +1156,17 @@ impl FuseResultsNode {
         self
     }
 
-    /// Poids d'une étiquette.
+    /// Poids d'une étiquette — un **choix** du graphe : il prime sur la
+    /// fusion déclarée par l'entité (échelle du 2 octobre 2026, pas C).
     pub fn with_weight(mut self, label: impl Into<String>, weight: f64) -> Self {
         self.weights.insert(label.into(), weight);
+        self
+    }
+
+    /// Poids **par défaut** d'une étiquette : ne s'applique que si personne
+    /// ne déclare — ni l'appelant, ni l'entité, ni un `with_weight`.
+    pub fn with_default_weight(mut self, label: impl Into<String>, weight: f64) -> Self {
+        self.default_weights.insert(label.into(), weight);
         self
     }
 
@@ -1242,6 +1252,7 @@ impl Node for FuseResultsNode {
             "strategy": self.strategy,
             "rrf_k": self.rrf_k,
             "weights": self.weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
+            "default_weights": self.default_weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
             "boost": boost,
             "top_k": self.top_k,
             "signal": self.signal,
@@ -2379,6 +2390,104 @@ mod tests {
         };
         assert_eq!(monter(false), vec!["b", "v"], "sans requête, le gabarit décide");
         assert_eq!(monter(true), vec!["v", "b"], "avec, l'appelant décide");
+    }
+
+    fn cible_de_test(fusion: Option<FusionConfig>) -> crate::search::SearchTarget {
+        crate::search::SearchTarget {
+            name: "T".into(),
+            parent_table: "T".into(),
+            chunk_table: "T_Chunk".into(),
+            chunk_rel: "T_CHUNKED_FROM".into(),
+            chunk_rel_fwd: false,
+            bm25_fields: vec![],
+            enrich_fields: vec![],
+            default_signals: crate::search::SearchSignals::HYBRID,
+            default_fusion: fusion,
+            has_source_refs: false,
+            filter_indirection: None,
+        }
+    }
+
+    fn fusion_tout_sur_vector() -> FusionConfig {
+        FusionConfig {
+            bm25: SignalConfig { weight: 0.0, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 1.0, ..SignalConfig::default() },
+            ..FusionConfig::default()
+        }
+    }
+
+    /// **L'échelle du 2 octobre** (pas C) : `default_weights` est le défaut
+    /// du gabarit — il pèse quand personne ne déclare.
+    #[test]
+    fn fuse_default_weights_pesent_sans_declaration() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
+        let mut node = FuseResultsNode::new("fuse")
+            .with_default_weight("bm25", 1.0)
+            .with_default_weight("vector", 0.0);
+        node.execute(&mut ctx).unwrap();
+        let out: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
+        assert_eq!(out, vec!["b", "v"], "sans déclaration, le défaut du gabarit pèse");
+    }
+
+    /// Une entité qui déclare sa fusion bat le **défaut** du gabarit —
+    /// `search_base` porte ses 0,6/0,4 en `default_weights`, et une entité
+    /// déclarante reste entendue par l'outil des agents.
+    #[test]
+    fn fuse_l_entite_bat_le_defaut_du_gabarit() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
+        let mut qp = query_payload("q");
+        qp.target = Some(cible_de_test(Some(fusion_tout_sur_vector())));
+        ctx.set_input("query", PortValue::new(qp));
+        let mut node = FuseResultsNode::new("fuse")
+            .with_default_weight("bm25", 1.0)
+            .with_default_weight("vector", 0.0);
+        node.execute(&mut ctx).unwrap();
+        let out: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
+        assert_eq!(out, vec!["v", "b"], "l'entité déclarante bat le défaut du gabarit");
+    }
+
+    /// … mais le **choix** du graphe (`weights`) bat l'entité : c'est
+    /// l'exigence de Lucie — les pondérations se règlent dans les graphes.
+    #[test]
+    fn fuse_le_choix_du_graphe_bat_l_entite() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
+        let mut qp = query_payload("q");
+        qp.target = Some(cible_de_test(Some(fusion_tout_sur_vector())));
+        ctx.set_input("query", PortValue::new(qp));
+        let mut node = FuseResultsNode::new("fuse")
+            .with_weight("bm25", 1.0)
+            .with_weight("vector", 0.0);
+        node.execute(&mut ctx).unwrap();
+        let out: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
+        assert_eq!(out, vec!["b", "v"], "le choix du graphe bat l'entité");
+    }
+
+    /// Et l'appelant bat tout : le choix du graphe comme l'entité.
+    #[test]
+    fn fuse_l_appelant_bat_le_choix_du_graphe_et_l_entite() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
+        ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
+        let mut qp = query_payload("q");
+        qp.options.fusion = Some(fusion_tout_sur_vector());
+        qp.target = Some(cible_de_test(Some(FusionConfig {
+            bm25: SignalConfig { weight: 1.0, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 0.0, ..SignalConfig::default() },
+            ..FusionConfig::default()
+        })));
+        ctx.set_input("query", PortValue::new(qp));
+        let mut node = FuseResultsNode::new("fuse")
+            .with_weight("bm25", 1.0)
+            .with_weight("vector", 0.0);
+        node.execute(&mut ctx).unwrap();
+        let out: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
+        assert_eq!(out, vec!["v", "b"], "l'appelant bat le choix du graphe et l'entité");
     }
 
     /// Une étiquette en `boost` ne participe pas à la fusion : elle module.

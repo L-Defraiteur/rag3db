@@ -990,6 +990,29 @@ impl NodeFactory for FuseResultsNodeFactory {
                 _ => return Err("FuseResultsNode: 'weights' must be an object or 'label:weight,…'".into()),
             }
         }
+        // `default_weights` : mêmes formes que `weights`, mais c'est un
+        // **défaut** — il ne pèse que si personne ne déclare (pas C).
+        if let Some(w) = config.get("default_weights") {
+            match w {
+                serde_json::Value::Object(m) => {
+                    for (label, v) in m {
+                        let v = v.as_f64().ok_or_else(|| format!("FuseResultsNode: default weight of '{label}' must be a number"))?;
+                        node = node.with_default_weight(label.clone(), v);
+                    }
+                }
+                serde_json::Value::String(s) => {
+                    for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+                        let (label, v) = part
+                            .split_once(':')
+                            .ok_or_else(|| format!("FuseResultsNode: default_weights entry '{part}' must be 'label:weight'"))?;
+                        let v: f64 = v.trim().parse()
+                            .map_err(|_| format!("FuseResultsNode: default weight of '{label}' must be a number"))?;
+                        node = node.with_default_weight(label.trim(), v);
+                    }
+                }
+                _ => return Err("FuseResultsNode: 'default_weights' must be an object or 'label:weight,…'".into()),
+            }
+        }
         if let Some(b) = config.get("boost") {
             for label in parse_str_list(b, "FuseResultsNode", "boost")? {
                 node = node.with_boost(label);
