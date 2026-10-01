@@ -7426,9 +7426,9 @@ dependencies = [
 
 [[package]]
 name = "sparse-vector"
-version = "4.0.1"
+version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "818bd9d1ca17433724088c950e500d31013820363b91cfc416952bf5b76b8f97"
+checksum = "bad942a5080bde85e5b0fb243f82cb5c2c3357026d8d19ed458a892124c4ffec"
 dependencies = [
  "bincode",
  "crc32fast",
