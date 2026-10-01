@@ -3,11 +3,39 @@
 # un rouge absent d'ici, comme un nom d'ici qui passe au vert, la fait échouer.
 # Une ligne ne se retire que dans le commit de la marche qui corrige le cas.
 #
+# Étape 2, EN COURS : liste tirée de la passe complète du 2 octobre. C7_RandomMix
+# n'y est pas : il est probabiliste (vert ou rouge selon l'ordonnancement, vu les deux
+# sur la même graine) ; tant que son sort n'est pas décidé, la comparaison peut
+# échouer par lui.
+#
 # C1 — deux insertions de la même clé primaire validées toutes les deux (marche A3).
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread
+# Survit au point de reprise et au rejeu, à l'identique.
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Hot
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Reopen
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash
 # C2 — relation vers un nœud supprimé par une transaction concurrente (marche A4).
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Hot
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Hot
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Reopen
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Reopen
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Crash
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Crash
 # C3 — relations rattachées aux nœuds de l'autre transaction (marche A2).
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Hot
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Reopen
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Crash
+# C4 — virements : la somme monte ; une transaction qui échoue sur sa seconde mise
+# à jour garde la première, sous concurrence réelle seulement (mécanisme non identifié).
+Launchers/ConcurrencyBench.C4_Transfers/Thread_Hot
+Launchers/ConcurrencyBench.C4_Transfers/Thread_Reopen
+Launchers/ConcurrencyBench.C4_Transfers/Thread_Crash
+# C6 — suppression et mise à jour de la même ligne validées toutes les deux.
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Hot
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Reopen
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Crash
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash
