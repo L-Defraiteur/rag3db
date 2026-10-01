@@ -614,10 +614,10 @@ void WALReplayer::setAsideCutBytes(FileInfo& fileInfo, uint64_t offsetDeserializ
     const auto cut = fileSize - offsetDeserialized;
     const auto why = tornEnd ? "the journal ends inside a record or without a COMMIT" :
                                "a record could not be replayed";
+    // A reader opening while a live writer appends sees an incomplete end:
+    // that is normal, not a tear, and it happens on every concurrent open.
+    // Nothing is written or removed in read-only mode, so nothing is said.
     if (StorageManager::Get(clientContext)->isReadOnly()) {
-        std::cerr << stringFormat("rag3db: WAL {}: {} bytes after offset {} cannot be replayed "
-                                  "({}); read-only, left in place.\n",
-            walPath, cut, offsetDeserialized, why);
         return;
     }
     const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
