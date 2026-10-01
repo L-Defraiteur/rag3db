@@ -35,7 +35,24 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
-*Aucune.* `correctif-wal-enregistrements-longs` a été fusionnée dans `master`
+Au 2 octobre 2026, trois branches en cours, chacune dans son arbre, avec la
+session qui la porte (les noms `rag3db-xx` changent à chaque relance : se fier
+au sujet) :
+
+| Branche | Arbre | Session (sujet) | Ce que c'est | Où elle s'arrête |
+|---|---|---|---|---|
+| `lecteur-reverifie-a-l-ouverture` | `../rag3db-moteur` | cœur C++ | Marche 1 du plan des écritures parallèles : le lecteur d'un autre processus revérifie l'identité du journal et de l'en-tête après avoir lu le fichier de données ; quatre tests déterministes par un crochet de test. | Branche poussée, `api_test` vert en entier ; la fusion et les suites Rust attendent le contrôle de l'orchestration. |
+| `banc-de-concurrence` | `../rag3db-banc` | banc de concurrence | Marche 2 : banc de concurrence et vérificateur d'intégrité (spécification dans la branche, `docs/…/01-specification-du-banc-de-concurrence.md`). Étape 1 : cas C0 à C3, qui tranchent les corruptions seulement déduites. | Après l'étape 1, compte rendu avant de continuer. Ses cas rouges restent rouges, sous le label `concurrence-rouge-connu`. |
+| `sparse-et-suppressions` | arbre principal | produit | `sparse-vector` 4.3.0, puis les trois suppressions décidées au §4 (tests de `fuse_results` portés sur `fuse_signals`, garde `max_rounds` déplacée dans `build_dataflow_graph`). | Livrée sans le banc de recherche (poids granite absents, voir §6). |
+
+Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
+(§12, l'ordre des marches) ; côté crate :
+`extension/rag3weaver/docs/2-octobre-2026-00h16/01-ce-que-rag3weaver-suppose-d-une-seule-base.md`.
+
+`origin/fin-de-journal-dechiree` est périmée (son contenu est sur `master`
+depuis `a66bb0b9d`, rebasé) : à supprimer par Lucie.
+
+`correctif-wal-enregistrements-longs` a été fusionnée dans `master`
 en avance rapide le 1er octobre 2026 (`955b1b136`, `84d783afc`), après
 reconstruction de `build/lecteurs-csv` et des suites vertes.
 
@@ -141,6 +158,16 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- **Les poids granite ne sont ni sur ce poste ni publiés** (vu le 2 octobre) :
+  `~/.cache/rag3weaver/` n'a que bge-m3, minilm et multilingual-minilm ;
+  granite-278m (le modèle par défaut), granite-107m et l'OCR ppocrv6-tiny
+  n'ont jamais été mis sur Hugging Face. Conséquence : le banc de recherche
+  (`e2e_banc_etage`) ne donne aucune référence, et la mesure des poids de
+  fusion attend. En cours : régénération depuis les ONNX d'IBM par la session
+  optimiseur, avec preuve par écart absolu contre l'ONNX, puis publication en
+  dépôts privés (accord de Lucie). Les originaux sont peut-être sur l'ancien
+  poste : une note sur la clé USB de Lucie dit quoi y copier ; s'ils
+  reviennent, ce sont eux qu'on garde.
 - **`LecteursConcurrents.CeQueLeLecteurVoitEstCoherent` est rouge sur
   `master`** (`api_test`, vu le 2 octobre) : le lecteur en lecture seule est
   refusé avec « Found duplicated primary key value » au lieu du seul refus
