@@ -4253,9 +4253,11 @@ impl Catalog {
         // n'est pas une erreur de requête : c'est soit des uuids vides, soit
         // une table qui ne contient pas ce qu'on croit. Les deux méritent
         // d'être dits, parce qu'aucun des deux ne lève.
-        // Un lot de naissances (uuids présents, aucun en base) est normal : il
-        // prend le chemin de masse. On ne prévient que s'il manque des uuids.
-        if stored.is_empty() && !records.is_empty() && uuids_non_vides < lignes_demandees {
+        // Un lot de naissances (uuids présents, aucun en base) n'est muet que
+        // s'il part effectivement par le chemin de masse : sans lui, rien ne
+        // distingue des naissances d'une table qui ne contient pas ce qu'on croit.
+        let naissances_par_copy = uuids_non_vides == lignes_demandees && self.naissances_par_copy_possibles();
+        if stored.is_empty() && !records.is_empty() && !naissances_par_copy {
             self.emit_event(CatalogEvent::Warning {
                 context: "split_unchanged".into(),
                 message: format!(
