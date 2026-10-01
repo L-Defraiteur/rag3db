@@ -35,9 +35,9 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
-| Branche | Qui | État | Ce qui reste |
-|---|---|---|---|
-| `correctif-wal-enregistrements-longs` | session Products Experiments, contrôlée par « rag3weaver archi » (1er oct.) | étape D faite : test prouvé rouge, recopie du tampon, message « journal corrompu », `transaction_test` 50/50 ; non fusionnée | Étape E (fin déchirée, décision de Lucie du 1er octobre), puis reconstruction de `build/lecteurs-csv` et rejeu des e2e. Doc : `docs/1-octobre-2026-23h37/01-wal-enregistrements-longs.md`. |
+*Aucune.* `correctif-wal-enregistrements-longs` a été fusionnée dans `master`
+en avance rapide le 1er octobre 2026 (`955b1b136`, `84d783afc`), après
+reconstruction de `build/lecteurs-csv` et des suites vertes.
 
 `mtg-experiments` a été fusionnée dans `master` le 1er octobre 2026
 (fusion `32d6e0b44`, `master` poussé à `d4f32f9e0`) ; la branche reste sur
@@ -136,10 +136,12 @@ sessions, pas d'une vérification.
   somme de contrôle, calculée sur le tampon faux, ne voit rien. Un arrêt
   propre supprime le journal ; un arrêt brutal force le rejeu d'un journal
   déjà faux (`wal_record.cpp:79` ou `:76`). Hérité de l'amont (#5940), non
-  corrigé chez Vela. **Correctif : étape D faite sur
-  `correctif-wal-enregistrements-longs` (recopie, message « journal
-  corrompu », doc `docs/1-octobre-2026-23h37/01-…`) ; étape E à venir (fin
-  déchirée : rouvrir au dernier COMMIT, décidé par Lucie le 1er octobre).** En attendant : arrêt par SIGTERM ou
+  corrigé chez Vela. **Le bug d'écriture est corrigé sur `master`** (`955b1b136`, étape D :
+  recopie des deux côtés, message « journal corrompu », doc
+  `docs/1-octobre-2026-23h37/01-…`). **Reste ouvert : la fin déchirée**
+  (étape E, décidée par Lucie le 1er octobre : rouvrir au dernier COMMIT,
+  écarter le reste en le copiant à côté) ; d'ici là un arrêt brutal pendant
+  l'écriture d'un commit peut encore refuser l'ouverture. En attendant : arrêt par SIGTERM ou
   EOF, copie reflink avant une longue écriture, un seul processus par base.
   **La base MTG actuelle a un `.wal` déjà corrompu (30 enregistrements
   illisibles) : ne pas l'ouvrir, et jamais avec
