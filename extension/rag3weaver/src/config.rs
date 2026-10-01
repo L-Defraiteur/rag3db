@@ -515,6 +515,60 @@ pub struct EntityConfig {
     /// enverrait un `replace` à la mauvaise ligne.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_lines: Option<SourceLines>,
+
+    /// **La synchronisation par instantané**, s'il y en a une : un instantané
+    /// complet d'un périmètre fait disparaître les lignes qu'il ne contient
+    /// plus. Voir [`SnapshotConfig`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<SnapshotConfig>,
+}
+
+/// **La synchronisation par instantané d'une entité.**
+///
+/// Un instantané complet arrive en plusieurs lots, marqués d'un même
+/// identifiant de session ; un appel de fin retire, **dans le périmètre
+/// seulement**, les lignes qu'aucun lot de la session n'a portées. Le moteur
+/// ne connaît aucun nom de champ : le périmètre est une liste de champs que
+/// l'entité déclare (des cartes par extension, des documents par dossier, des
+/// fichiers par dépôt), vide pour l'entité entière. Décidé avec Lucie le
+/// 2 octobre 2026.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnapshotConfig {
+    /// Les champs qui délimitent un périmètre. `[]` : l'entité entière.
+    #[serde(default)]
+    pub scope: Vec<String>,
+    /// Au-delà de cette part du périmètre, la fin refuse de retirer sans
+    /// `force` — c'est ce qui attrape un instantané tronqué qui paraît complet.
+    #[serde(default = "SnapshotConfig::default_max_missing_ratio")]
+    pub max_missing_ratio: f64,
+    /// Ce que devient une ligne disparue.
+    #[serde(default)]
+    pub on_missing: OnMissing,
+    /// Réservé à la corbeille (garder une ligne retirée un temps, pour la
+    /// rendre sans la réembarquer si elle reparaît). Pas encore implémentée :
+    /// une valeur est refusée plutôt qu'ignorée.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_for: Option<String>,
+}
+
+impl SnapshotConfig {
+    fn default_max_missing_ratio() -> f64 {
+        0.5
+    }
+}
+
+/// Ce que devient une ligne qu'un instantané complet ne porte plus.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OnMissing {
+    /// Retirée, avec ses chunks, ses entrées d'index, ses dérivées et ses
+    /// relations (comptées).
+    #[default]
+    Delete,
+    /// Passée à cet état de la machine à états de l'entité, par une
+    /// transition déclarée : la ligne reste, son historique aussi.
+    State(String),
 }
 
 /// Voir [`EntityConfig::content_kind`].
@@ -667,6 +721,7 @@ impl Default for EntityConfig {
             fusion: None,
             content_kind: ContentKind::Document,
             source_lines: None,
+            snapshot: None,
         }
     }
 }
