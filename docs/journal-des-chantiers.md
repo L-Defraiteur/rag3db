@@ -25,7 +25,7 @@ done
 git stash list ; git worktree list ; git status --short
 ```
 
-Dernière mise à jour : **1er octobre 2026**.
+Dernière mise à jour : **1er octobre 2026**, après la fusion de `mtg-experiments`.
 
 **À lire avec ce journal** : la réconciliation des objectifs et le knowledge
 dump du 1er octobre 2026, dans
@@ -34,9 +34,9 @@ existe, ce qui est en suspens, et l'ordre proposé.
 
 ## 1. Branches ouvertes
 
-| Branche | Qui | État | Ce qui reste |
-|---|---|---|---|
-| `mtg-experiments` | Codex (19-23 sept.), puis la session « rag3db Products Experiments » (25-27 sept.) | 18 commits devant `master`, **poussée le 1er octobre** (`2ef3017fe`) | Fusion dans `master` à décider. Avant : extraire les quatre correctifs du moteur C++ dans un commit à part (voir §3). Doc de reprise : `extension/rag3weaver/docs/25-septembre-2026-18h27/00-reprise-branche-mtg-experiments.md`, puis `docs/27-septembre-2026-03h57/01-…`. |
+*Aucune.* `mtg-experiments` a été fusionnée dans `master` le 1er octobre 2026
+(fusion `32d6e0b44`, `master` poussé à `d4f32f9e0`) ; la branche reste sur
+`origin`, à supprimer quand Lucie le dira.
 
 Les neuf branches des sessions du 18 septembre (`heuristique-taille`,
 `retrait-monolithe-recherche`, `nettoyage-apres-monolithe`,
@@ -69,10 +69,11 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 
 | Chantier | Où | Ce qui reste |
 |---|---|---|
-| Correctifs du moteur C++ (lambdas sur structs, quantificateurs, `ParsedParameterExpression::copy`, `StringChunkData::finalize`) | dans `ab95c3a2d`, sur `mtg-experiments` | Les extraire sur `master` ; ajouter un test pour `copy`. |
 | Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Attend une décision (§4). |
 | Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
-| Deck builder MTG (produit) | `experiments/mtga`, `mtg-experiments` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
+| Deck builder MTG (produit) | `experiments/mtga`, `master` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
+| Synchronisation par identifiant : supprimer les lignes disparues d'un snapshot | moteur (`ingest_snapshot` / `EntityBatchNode`) | Décidé avec Lucie le 1er octobre, après les étapes D et E du WAL. Générique ; aujourd'hui seuls les fichiers de code le font (`reingest_file`). |
+| Lever le refus d'écrire en lot sur une entité à `Lifecycle` | `backend_nodes.rs` (« bulk snapshot writes cannot bypass a lifecycle ») | Décidé avec Lucie le 1er octobre, après D et E. Depuis le 18 septembre `ingest_entities` garde les transitions lui-même : le refus peut devenir une vérification. |
 | Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
@@ -94,7 +95,11 @@ Posées le 18 septembre 2026, non tranchées depuis :
 Depuis :
 
 7. Le budget de reprise du lecteur (§3).
-8. Fusionner `mtg-experiments` dans `master`, et quand.
+8. ~~Fusionner `mtg-experiments` dans `master`~~ — **tranchée et faite le
+   1er octobre 2026** : correctifs C++ extraits seuls (`9edf6f3b4`, avec le
+   test de `ParsedParameterExpression::copy` prouvé rouge sans le correctif),
+   fusion `32d6e0b44`, trois corrections de tests et du chat par-dessus, `master`
+   vert puis poussé (`d4f32f9e0`).
 Tranchée le 1er octobre 2026 : les trailers d'attribution à une IA
 (`Co-Authored-By: Claude…`) ont été retirés des 17 commits de
 `mtg-experiments` qui en portaient, par réécriture des messages et push en
@@ -118,17 +123,34 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
-- **WAL illisible après un arrêt brutal** (`wal_record.cpp:79`). En attendant :
-  arrêt par SIGTERM ou EOF, copie reflink avant une longue écriture, un seul
-  processus par base.
+- **WAL illisible : la vraie cause est un bug d'écriture**, pas l'arrêt
+  brutal (trouvé le 1er octobre 2026). `resizeBufferIfNeeded`
+  (`src/storage/wal/checksum_writer.cpp`, même défaut dans
+  `checksum_reader.cpp`) remplace le tampon de 4096 octets sans recopier ce
+  qui y était : tout enregistrement de plus de 4 Kio perd son début, et sa
+  somme de contrôle, calculée sur le tampon faux, ne voit rien. Un arrêt
+  propre supprime le journal ; un arrêt brutal force le rejeu d'un journal
+  déjà faux (`wal_record.cpp:79` ou `:76`). Hérité de l'amont (#5940), non
+  corrigé chez Vela. **Correctif en cours : étapes D (recopie, message
+  « journal corrompu ») et E (fin déchirée : rouvrir au dernier COMMIT,
+  décidé par Lucie le 1er octobre).** En attendant : arrêt par SIGTERM ou
+  EOF, copie reflink avant une longue écriture, un seul processus par base.
+  **La base MTG actuelle a un `.wal` déjà corrompu (30 enregistrements
+  illisibles) : ne pas l'ouvrir, et jamais avec
+  `throw_on_wal_replay_failure=false`** — le rejeu tronquerait le journal.
 - **Persistance des `abilities` imbriquées** : après réouverture, des textes
   rattachés au mauvais élément. Bloquant pour les filtres sur ce champ.
 - **SIGSEGV avec un buffer pool de 1 Gio** ; contournement : 8 à 15 Gio.
 - La synchronisation MTG ne fait que des upserts : pas de suppression des
-  cartes absentes d'un nouveau snapshot.
+  cartes absentes d'un nouveau snapshot (chantier au §3).
 - `list_filter.cpp:113` lit `inputVector.isNull(i)` au lieu de `pos`.
 
 ## 7. Ménage
+
+- **Sur cette machine (ROG Flow Z13)**, les poids minilm et multilingual-minilm
+  sont installés depuis le 1er octobre dans `~/.cache/rag3weaver/` (procédure
+  de `extension/rag3weaver/generated/README.md`, sha256 vérifiés) : sans eux,
+  16 tests e2e ne tournent pas et ne doivent pas être comptés verts.
 
 - `git worktree prune` : trois worktrees dont les dossiers n'existent plus
   (`rag3db-embarquements`, `rag3db-recherche`, `rag3db-lifecycle`).
