@@ -184,7 +184,7 @@ public:
 
     private:
         void unpin();
-        void getPage(common::page_idx_t newPageIdx, bool isNewlyAdded);
+        void getPage(common::page_idx_t apIdx, common::page_idx_t newPageIdx, bool isNewlyAdded);
     };
 
     WriteIterator iter_mut(uint64_t valueSize);
@@ -193,9 +193,27 @@ public:
 
 protected:
     // Updates to new pages (new to this transaction) bypass the wal file.
-    void updatePage(uint64_t pageIdx, bool isNewPage, std::function<void(uint8_t*)> updateOp);
+    void updatePage(common::page_idx_t apIdx, uint64_t pageIdx, bool isNewPage,
+        std::function<void(uint8_t*)> updateOp);
 
-    void updateLastPageOnDisk();
+    // Whether the array page at position `apIdx` already existed at the last checkpoint. Such a
+    // page is referenced by the state on disk: it may only be modified through the shadow file,
+    // so that a checkpoint interrupted before its CHECKPOINT record leaves the data file exactly
+    // as the previous checkpoint left it. A page added since is referenced by nothing on disk and
+    // can be written to directly.
+    //
+    // The answer is the position in the array against the read header, which IS the state of the
+    // last checkpoint. It used to be the page's position in the FILE against a cached threshold
+    // (the file page of the last array page), which was wrong twice over: that threshold was
+    // refreshed before the read header was, so it described the checkpoint before last (and
+    // stayed 0 for an array that was created empty); and array pages are not in file order, since
+    // the free space manager hands out reclaimed pages. Existing pages were then rewritten in
+    // place, and a checkpoint interrupted during its storage phase left an index holding keys the
+    // database header did not know about — replaying the journal failed on a duplicated primary
+    // key and the database would not open.
+    bool existedAtLastCheckpoint(common::page_idx_t apIdx) const {
+        return !bypassShadowing || apIdx < getNumAPs(header);
+    }
 
     uint64_t getNumElementsNoLock(transaction::TransactionType trxType) const {
         return getDiskArrayHeader(trxType).numElements;
@@ -250,7 +268,8 @@ protected:
     std::shared_mutex diskArraySharedMtx;
     // For write transactions only
     common::page_idx_t lastAPPageIdx;
-    common::page_idx_t lastPageOnDisk;
+    // If false, every page goes through the shadow file, new or not.
+    bool bypassShadowing;
 };
 
 template<typename U>
