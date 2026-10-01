@@ -1,0 +1,13 @@
+# Les rouges attendus du banc de concurrence, un nom complet gtest par ligne.
+# La passe compare le résultat à cette liste (test ctest concurrence_test.known_red) :
+# un rouge absent d'ici, comme un nom d'ici qui passe au vert, la fait échouer.
+# Une ligne ne se retire que dans le commit de la marche qui corrige le cas.
+#
+# C1 — deux insertions de la même clé primaire validées toutes les deux (marche A3).
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread
+# C2 — relation vers un nœud supprimé par une transaction concurrente (marche A4).
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread
+# C3 — relations rattachées aux nœuds de l'autre transaction (marche A2).
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread
