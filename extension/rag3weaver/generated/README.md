@@ -379,13 +379,46 @@ Research. Nous n'avons fait que changer le format pour les charger depuis Rust.
 
 ### Les poids
 
-Pas dans ce dépôt. `~/.cache/rag3weaver/granite-107m/model.bpk` (428 007 424
-octets, sha256 `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1`)
-et `~/.cache/rag3weaver/granite-278m/model.bpk` (1 112 227 840 octets, sha256
-`a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3`), avec le
-`tokenizer.json` de chaque dépôt HF à côté. Produits le 6 septembre 2026 ; à
-publier sur Hugging Face comme BGE-M3 (même réserve : le `.bpk` n'est pas
-reproductible octet à octet).
+Pas dans ce dépôt. `~/.cache/rag3weaver/granite-{107m,278m}/model.bpk`, avec le
+`tokenizer.json` de chaque dépôt HF à côté.
+
+| | granite-278m | granite-107m |
+|---|---|---|
+| `model.bpk`, taille | 1 112 227 840 octets | 428 007 424 octets |
+| sha256, **régénéré le 2 octobre 2026** | `69aed115297450766add7d305d7eaa597aa744a611ded245ca3a8a7a8e52723f` | `8cb4d5db10a9e80375314713c9744dfca482ff724f45b5294861fd74b4b8ca0c` |
+| sha256 du 6 septembre 2026 (fichier perdu) | `a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3` | `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1` |
+| `tokenizer.json` | 9 081 351 octets, sha256 `2a0d7366dd7780ea36cc42431dd74cd79289b783ab01acd33013fcc96865a8e9` | 9 081 382 octets, sha256 `7fc9e475f2ac473f070052d92b0c46ec2b91d9cd672935feb6fd837a65d33f78` |
+| source : `model.onnx` d'IBM | 1 112 413 925 octets, sha256 `aefac97b384f92932a61a19900d41c870679d5b8e6ceb682768eb153d0e31c7d` | 428 102 968 octets, sha256 `387e6f91dce3c651cb3dc06661d74fb1d3947f20ed9c3ecf49d2b3b77086b954` |
+| publié (dépôt **privé**, 2 octobre 2026) | `Lucie666/granite-embedding-278m-multilingual-burnpack` | `Lucie666/granite-embedding-107m-multilingual-burnpack` |
+
+**Pourquoi deux empreintes.** Les fichiers du 6 septembre n'avaient pas été
+publiés et sont restés sur l'ancien poste : il a fallu les régénérer. Même
+ONNX (les dépôts d'IBM n'ont pas bougé depuis août 2025), même `burn-onnx
+0.22.0-pre.3`, **même taille à l'octet**, et le code généré est identique à
+celui de ce dossier une fois passé par `patch_attention.py` (seul le
+commentaire d'en-tête, qui cite le chemin de l'ONNX, diffère). L'empreinte
+change parce que le `.bpk` n'est pas reproductible octet à octet ; ses valeurs
+le sont, et c'est ce qui est mesuré :
+
+**La preuve, par l'écart absolu maximal.** Vingt-quatre phrases fixes
+(français, anglais, code, quatre autres langues ; de 4 jetons à des textes
+tronqués à 512), une phrase par passe, vecteur CLS normalisé L2 comparé
+composante par composante à celui d'onnxruntime 1.30.0 (CPU, f32) sur le
+`model.onnx` d'IBM. Sur l'iGPU Radeon 8060S (Vulkan, radv) du 2 octobre :
+
+| précision | granite-278m | granite-107m |
+|---|---|---|
+| f32 | 3·10⁻⁷ | 3·10⁻⁷ |
+| Flex32 (défaut) | 4,6·10⁻⁵ | 7,6·10⁻⁵ |
+
+Les références sont dans `tests/fixtures/granite/reference-{278m,107m}.json`
+(phrases, nombre de jetons, vecteurs), produites par
+`generated/reference_granite.py` sur les phrases de
+`generated/phrases_granite.py` ; le test
+`e2e_burn_granite::granite_{278m,107m}_contre_la_reference_onnx` rejoue la
+mesure (seuil 5·10⁻⁴, six fois la plus grande mesure Flex32). Les tests
+sémantiques rendent les chiffres du 6 septembre à la troisième décimale
+(paraphrase fr/en 0,977 contre 0,479 pour 107m, 0,974 contre 0,425 pour 278m).
 
 ### Interface
 
@@ -400,8 +433,22 @@ pub fn forward(&self, input_ids: Tensor<2, Int>, attention_mask: Tensor<2, Int>)
 ### Régénérer
 
 Même recette que BGE-M3 (`ModelGen` + `LoadStrategy::Bytes`, un `out_dir` par
-modèle), avec `burn-onnx = "0.22.0-pre.3"` ; le `model.onnx` est à la racine
-des dépôts HF, sans external data. 40 s pour les deux, aucun opérateur manquant.
+modèle), avec `burn-onnx = "=0.22.0-pre.3"` ; le `model.onnx` est à la racine
+des dépôts HF, sans external data. Deux secondes par modèle une fois le
+convertisseur construit, aucun opérateur manquant. Rejoué le 2 octobre 2026 :
+
+1. télécharger `model.onnx` et `tokenizer.json` des deux dépôts d'IBM, vérifier
+   le sha256 de l'ONNX (tableau ci-dessus) ;
+2. un binaire de trois lignes — `ModelGen::new().input(onnx).out_dir(dossier)
+   .load_strategy(LoadStrategy::Bytes).run_from_cli()` — rend `model.rs` et
+   `model.bpk` ;
+3. `patch_attention.py --casts-neutres model.rs` : le résultat doit être ce
+   fichier-ci, à l'en-tête près — sinon le graphe a changé et les poids ne
+   vont pas avec le code ;
+4. installer `model.bpk` et `tokenizer.json` dans
+   `~/.cache/rag3weaver/granite-<taille>/`, puis jouer
+   `granite_<taille>_contre_la_reference_onnx` : l'écart doit être de l'ordre
+   de ceux du tableau.
 
 ## `msmarco_minilm_onnx.rs`
 

@@ -107,3 +107,53 @@ fn granite_107m_lots_longs_selon_la_taille() { lots_longs_selon_la_taille(common
 #[test]
 #[ignore]
 fn granite_278m_lots_longs_selon_la_taille() { lots_longs_selon_la_taille(common::burn::GRANITE_278M.as_ref(), "granite-278m"); }
+
+/// **Le modèle chargé contre la référence ONNX**, phrase par phrase, par
+/// l'écart absolu maximal — pas par un cosinus arrondi. Les références
+/// (`tests/fixtures/granite/reference-{278m,107m}.json`) sont les vecteurs
+/// d'onnxruntime (CPU, f32) sur le `model.onnx` d'IBM, pour un jeu fixe de 24
+/// phrases : français, anglais, code, autres langues, du mot seul au texte
+/// tronqué à 512 jetons. `generated/reference_granite.py` les reproduit.
+///
+/// C'est ce qui prouve un `model.bpk` régénéré : le fichier n'est pas
+/// reproductible à l'octet, ses vecteurs le sont. Chaque phrase passe seule,
+/// comme dans la référence, pour qu'aucun remplissage n'entre dans la mesure.
+/// Mesuré le 2 octobre 2026 sur un iGPU Radeon 8060S (Vulkan, radv) : 3e-7 en
+/// f32 pour les deux modèles, 4,6e-5 (278m) et 7,6e-5 (107m) en Flex32. Le
+/// seuil par défaut, 5e-4, est six fois la plus grande de ces mesures ;
+/// `RAG3WEAVER_GRANITE_ECART_MAX` le déplace pour une autre carte.
+fn contre_la_reference_onnx(e: &dyn Embedder, fichier: &str) {
+    let chemin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/granite").join(fichier);
+    let r: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&chemin).unwrap()).unwrap();
+    let phrases: Vec<String> = serde_json::from_value(r["phrases"].clone()).unwrap();
+    let reference: Vec<Vec<f32>> = serde_json::from_value(r["vecteurs"].clone()).unwrap();
+    let jetons: Vec<usize> = serde_json::from_value(r["jetons"].clone()).unwrap();
+    let (mut pire, mut ou, mut pire_cos) = (0f32, 0usize, 1f32);
+    for (i, (p, attendu)) in phrases.iter().zip(&reference).enumerate() {
+        let v = e.embed(std::slice::from_ref(p)).unwrap().remove(0);
+        assert_eq!(v.len(), attendu.len(), "dimension de la phrase {i}");
+        let ecart = v.iter().zip(attendu).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+        if ecart > pire {
+            pire = ecart;
+            ou = i;
+        }
+        pire_cos = pire_cos.min(cos(&v, attendu));
+    }
+    let seuil: f32 = std::env::var("RAG3WEAVER_GRANITE_ECART_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(5e-4);
+    eprintln!(
+        "[granite] {fichier} : {} phrases ({}–{} jetons), dim {}, écart absolu max {pire:.7} (phrase {ou}, {} jetons), cosinus minimal {pire_cos:.7}, seuil {seuil}",
+        phrases.len(),
+        jetons.iter().min().unwrap(),
+        jetons.iter().max().unwrap(),
+        reference[0].len(),
+        jetons[ou]
+    );
+    assert!(pire < seuil, "{fichier} : écart absolu max {pire} au-dessus de {seuil} (phrase {ou})");
+}
+
+#[test]
+#[ignore]
+fn granite_278m_contre_la_reference_onnx() { contre_la_reference_onnx(common::burn::GRANITE_278M.as_ref(), "reference-278m.json"); }
+#[test]
+#[ignore]
+fn granite_107m_contre_la_reference_onnx() { contre_la_reference_onnx(common::burn::GRANITE_107M.as_ref(), "reference-107m.json"); }
