@@ -10,9 +10,9 @@ bout en bout sur Vulkan. Elles vivent dans des forks, pas ici :
 | cubecl-wgpu | https://github.com/L-Defraiteur/cubecl | `crates/cubecl-wgpu/src/backend/vulkan.rs` | Vulkan inscrit `FloatKind::Flex32` parmi ses types, comme WGSL |
 | burn-cubecl | https://github.com/L-Defraiteur/burn | `crates/burn-cubecl/src/ops/tensor.rs` | `float_from_data` accepte un `TensorData` en Flex32 |
 | cubek-matmul | https://github.com/L-Defraiteur/cubek | `crates/cubek-matmul/src/definition/spec.rs` | une sortie Flex32 accumule en f32, comme f16 et bf16 |
-| burn-cubecl | idem burn, commit `ee16daac` | `crates/burn-cubecl/src/kernel/attention/{base,tune}.rs` | la flash accélérée se lance en Flex32 (q, k, v castés en f16 : elle exige type global = type de tuile), et la voie naïve reste en lice sous 256 Mio de scores |
-| burn-cubecl-fusion | idem burn, commit `630c546c` | `crates/burn-cubecl-fusion/src/engine/trace/block.rs` | les locaux F32 et Flex32 partagent une numérotation comme ils partagent un registre : sans ça un noyau fusionné qui promeut du Flex32 en F32 (`hard_sigmoid`) écrasait une entrée, et l'OCR rendait une carte vide en Flex32 |
-| cubek-attention | idem cubek, commit `e9821ceb` | `crates/cubek-attention/src/components/global/simple/{attention.rs,reader/mask.rs}` | le masque matérialisé se lit avec `stride(2)`, pas `seq_kv` (un masque `[b,1,1,sk]` étendu était lu de travers) |
+| burn-cubecl | idem burn, commit `d0f369ff` | `crates/burn-cubecl/src/kernel/attention/{base,tune}.rs` | la flash accélérée se lance en Flex32 (q, k, v castés en f16 : elle exige type global = type de tuile), et la voie naïve reste en lice sous 256 Mio de scores |
+| burn-cubecl-fusion | idem burn, commit `21674205` | `crates/burn-cubecl-fusion/src/engine/trace/block.rs` | les locaux F32 et Flex32 partagent une numérotation comme ils partagent un registre : sans ça un noyau fusionné qui promeut du Flex32 en F32 (`hard_sigmoid`) écrasait une entrée, et l'OCR rendait une carte vide en Flex32 |
+| cubek-attention | idem cubek, commit `7ba8affd` | `crates/cubek-attention/src/components/global/simple/{attention.rs,reader/mask.rs}` | le masque matérialisé se lit avec `stride(2)`, pas `seq_kv` (un masque `[b,1,1,sk]` étendu était lu de travers) |
 
 Branches : `rag3weaver/pre.3` (du tag `v0.11.0-pre.3` / `v0.22.0-pre.3` /
 `v0.3.0-pre.3`, ce que le lock utilise depuis le 6 septembre 2026 au soir) et
@@ -22,6 +22,16 @@ patcher un seul crate d'un dépôt tire ses voisins en double de ceux du
 registre, et deux `cubecl_common::Device` ne sont pas le même trait. Tout ce
 qui n'est pas la ligne du commit est identique à crates.io. cargo clone les
 dépôts une fois dans `~/.cargo/git`.
+
+**Révisions réécrites le 2 octobre 2026.** Les commits de `rag3weaver/pre.3`
+ont été recréés à l'identité personnelle de Lucie (mêmes diffs, mêmes
+messages, mêmes dates d'auteur) et poussés par-dessus les anciens, qui
+portaient une adresse qui n'avait rien à faire dans un dépôt public ; les
+branches `rag3weaver/pre.2`, qui ne servaient plus, ont été supprimées. Les
+sommets : burn `21674205`, cubecl `bdf6b77a`, cubek `7ba8affd`. Les docs datés et les
+messages de commit d'avant citent les anciens hashes : ils ne mènent plus à
+une branche, et un commit de rag3db antérieur à cette remontée ne se
+construit plus sur un poste qui n'a pas ces révisions dans `~/.cargo/git`.
 
 Sans ces lignes, chaque trou rendait des vecteurs identiques au bit près à
 f32, sans un message. Avec, BGE-M3 passe de 3 800 à 11 500 jetons/s sur un lot
