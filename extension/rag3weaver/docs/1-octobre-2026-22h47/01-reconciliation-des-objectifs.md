@@ -179,6 +179,24 @@ cette forme :
   sémantiquement, plusieurs réalisations physiques.
 - **Une nouvelle machine**, des modèles locaux de 120 milliards de paramètres.
 
+*Ajouts de la session Products Experiments (27 septembre) :*
+
+- **Une surface pensée pour un agent qui n'est pas Claude** : le refus du
+  harnais arrive comme une erreur de requête MCP ; la livraison acceptée
+  devient le texte même de la réponse de l'outil (le texte d'import Arena,
+  pas un JSON à recopier) ; les sorties sont élaguées sans perte (anglais
+  seul, champs vides omis, `contentKind: record`). Ces changements sont dans
+  le moteur, génériques ; aucun n'est écrit pour gpt-oss.
+- **Les conversations en base, au fil de l'eau**, avec l'heure de chaque
+  événement : c'est la première trace d'agent que le moteur stocke lui-même,
+  et un début pour « l'agent qui se relit » des visions.
+- **Des faits extraits pour raisonner** : les capacités d'une carte décomposées
+  en coûts, déclencheurs, effets et restrictions, déclarés comme vocabulaire
+  dans le schéma. C'est un cas concret de « structurer le texte pour que
+  l'agent filtre au lieu de lire », réutilisable hors de Magic.
+- **Le stockage des index lucivy borné** (`d1aa7d296`), qui a révélé qu'une
+  ligne supprimée n'est jamais récupérée par rag3db.
+
 Ce que ça a révélé du moteur : quatre défauts du cœur C++ (lambdas,
 quantificateurs), un `COPY` qui coûte la taille de la table, des blobs
 d'index qui grossissaient sans fin, un WAL illisible après un arrêt brutal.
@@ -225,6 +243,26 @@ d'index qui grossissaient sans fin, un WAL illisible après un arrêt brutal.
 5. **Le chemin de masse s'est dégradé hors de son cas.** Rapide sur une table
    vide, plus lent que l'ancien chemin dès que la table grandit.
 
+*Note de la session Products Experiments sur 2 et 3.* Le constat est juste ;
+deux nuances. (2) Les scripts Python ne font que **déclarer** : ils écrivent
+schémas, vocabulaires et entrées de `backend.json`, puis tout passe par le
+moteur (graphes, harnais, nœuds d'écriture). C'est donc un manifeste écrit à
+la main par procuration, pas un contournement du moteur — mais oui, rien ne
+vient des gabarits ni de `place` / `adopt`. (3) La synchronisation passe par
+`EntityBatchNode`, que Codex a conçu exprès pour les snapshots externes
+(identités explicites, lot validé avant écriture) : c'est un chemin du moteur,
+pas un détour. Ce qui manque est réel : la suppression des cartes absentes
+d'un nouveau snapshot, et le fait que ces entités n'utilisent ni dérivées ni
+`Lifecycle`. J'ajouterais une sixième tension :
+
+6. **Une partie du travail produit se décide face à un modèle faible.** Lucie
+   a posé la règle le 27 septembre : pas de rustine pour la médiocrité d'un
+   modèle, seulement des changements qui servent en général. Le harnais, les
+   schémas générés et les sorties élaguées passent ce filtre ; le contrat de
+   complétion forcé ne l'a pas passé et a été retiré de MTG. Tant que les
+   essais se font sur gpt-oss-120b, chaque correction est à juger contre cette
+   règle, et l'essai Gemini via Vertex dira ce qui relevait du modèle.
+
 ## 8. Les objectifs immédiats que je propose
 
 Dans cet ordre. Chaque point dit pourquoi il passe avant le suivant.
@@ -265,6 +303,27 @@ base étrangère ; l'empaquetage ; la parole.
 **Ce que je ne ferais pas maintenant** : le design des accès déclaratifs et
 de l'optimisation adaptative. Il est bien pensé, mais il optimise des accès
 qu'aucun produit n'a encore sous charge.
+
+### Avis de la session Products Experiments sur l'ordre
+
+D'accord sur le fond et sur 1, 3, 4, 5. Trois réserves :
+
+- **Dans 2, mettre la place disque avec le WAL.** La récupération des lignes
+  supprimées est un défaut du même cœur, du même ordre de gravité pour un
+  produit : sans elle, une base qui vit (index lucivy, journal des
+  conversations) grossit sans fin, et le contournement côté rag3weaver ne
+  couvre que les blobs. La base MTG actuelle (~8 Go dont ~6 récupérables)
+  ne se rétrécira qu'en la reconstruisant.
+- **Avant 4, un petit pas générique tiré de MTG** : la description d'entité
+  dans le manifeste, reprise par les descriptions d'outils générées. Le
+  constat du 27 septembre (des `search_*` qui disent tous la même chose, une
+  requête décrite comme « nom de carte ») vaudra exactement pour un manifeste
+  `code` : un agent qui ne sait pas ce qu'un outil couvre appelle le mauvais.
+  C'est une journée, et 4 en hérite.
+- **Le deck builder ne doit pas attendre 5 pour rester utilisable.** Ses
+  restes sont petits (sources de mana des artefacts et créatures dans le
+  harnais, barre de défilement du chat, essai Gemini) ; les faire entre deux
+  pas évite de juger la boucle de 5 sur un produit de référence dégradé.
 
 ## 9. Annexe — les relevés
 

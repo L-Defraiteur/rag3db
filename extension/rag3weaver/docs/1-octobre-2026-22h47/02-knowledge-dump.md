@@ -184,25 +184,190 @@ de `SchemaDialect`, avec sa version Cypher (défaut du trait) et sa version SQL.
 - **Aucun Cypher pour les agents** (décision de Lucie) : une capacité qui
   manque s'ajoute à l'abstraction.
 
-### 3.7 Backend déclaratif, harnais, chat — **[À enrichir]**
+### 3.7 Backend déclaratif, harnais, chat
 
-Ce que j'en sais par lecture, à corriger et compléter par la session qui l'a
-construit :
+*Rédigé par la session qui a construit la partie du 27 septembre (Products
+Experiments), sur la base de Codex du 19-20 septembre (`ab95c3a2d`).*
 
-- `rag3weaver-backend <backend.json>` : JSONL sur stdio, ops `describe`,
-  `call`, `shutdown`, `journal`. Le manifeste déclare base, entités, scripts
-  Rhai et outils ; chaque outil est un graphe `.mmd` avec bindings.
-- **Harnais** (`harness.rs`, `dataflow/validation_nodes.rs`) : `input_schema`,
-  puis `before` (peut refuser), `after` (valide sans annuler), `on_accept`
-  (livre). Une règle par `ValidationRuleNode`, script Rhai borné, message par
-  substitution. Contrat : `templates/backends/validated-result/README.md`.
-- Pont MCP : `scripts/serve_backend_mcp.py` (`--hide`, `--fixed-format`).
-- Chat : `rag3weaver-chat` + `scripts/chat_app.py` + `ui/chat`.
-- **Un seul hôte par base** : ne jamais ouvrir deux processus sur le même
-  fichier.
+**Le manifeste** (`backend.rs::BackendManifest`, `deny_unknown_fields`
+partout) : `version`, `name`, `database`, `embeddings`
+(`{address, model, dimensions, provider: daemon|compatible, api_key_env}` :
+le démon rag3weaver ou un service compatible OpenAI), `vector_extension`,
+`scripts` (nom → fichier `.rhai`, **choisis par l'hôte, jamais par
+l'appelant**), `entities` (`{schema: JSON Schema, config: EntityConfig,
+writes: WritePolicy}`), `relations`, `tools`, `search_graphs` (outils de
+recherche Mermaid ad hoc, en option), `fts_positions` (option lucivy à la
+création). Chemins relatifs au dossier du manifeste.
 
-*À ajouter ici : le détail du protocole, les `WritePolicy`, `EntityBatchNode`,
-le journal des conversations, les limites Rhai, la préparation des faits.*
+**Un outil** (`ToolAttachment`) : `graph` (`.mmd`), `bindings` (paramètres
+fixés par le manifeste, **non surchargeables par l'appelant**),
+`input_payloads` (`{entity, view: identity|editable}` : le schéma d'entrée est
+dérivé de celui de l'entité, sans les champs que possède le serveur),
+`metadata` (ports terminaux `{node, port}` rendus à côté du résultat — c'est
+par là que sort le port `meta` de `SelectRecordsNode`), `harness`.
+
+**`WritePolicy`** (par entité) : `created_at`, `updated_at`, `revision`
+(noms de champs entiers, dates en millisecondes posées **par le serveur**),
+`immutable` (une ligne s'insère ou se rejoue à l'identique, jamais ne
+s'écrase), `transition_dates` (`{field, to, timestamp_field}` : date posée
+quand un champ passe à une valeur). Lue par les nœuds d'écriture via le
+service `backend_write_policies`.
+
+**Les nœuds d'écriture** (`backend_nodes.rs`) : `EntityRecordNode` pour un
+enregistrement métier géré (identité calculée, WritePolicy) ;
+`EntityBatchNode` pour les **snapshots externes** — au plus 512 objets par
+appel, tout le lot validé par le JSON Schema avant d'écrire, identités
+explicites, doublon dans le lot refusé ; `RelationBatchNode` — au plus 512
+paires `{from, to}` d'identités stables (jamais d'uuid interne fourni par
+l'appelant), relations sans propriétés. Les outils `ingest_*` / `link_*` du
+manifeste MTG sont ces deux nœuds ; le pont MCP les masque (`--hide`).
+
+**Le protocole** (`bin/rag3weaver-backend.rs`) : une requête JSON par ligne
+sur stdin, une réponse par ligne sur stdout, `{ok:true, result}` ou
+`{ok:false, error}`.
+
+| op | entrée | rend |
+|---|---|---|
+| `describe` | — | `{name, tools:[{name, description, inputSchema}], …}` ; aussi `rag3weaver-backend backend.json --describe` hors boucle |
+| `call` | `name`, `arguments` | le résultat de l'outil, voir ci-dessous |
+| `journal` | `events:[…]` | écrit des événements de conversation (hôte seulement) |
+| `journal_read` | `conversation`, `since_ms` | relit une conversation depuis un instant |
+| `shutdown` | — | checkpoint et destruction de la base **avant** l'accusé `{closed:true}` ; EOF fait pareil |
+
+Un `call` sur un outil harnaché rend `{stage, executed, validation:{accepted,
+errors[], warnings[]}, delivery:{ok, results[], error}, result,
+presentation}`. **`presentation` est le texte que l'agent doit voir**
+(`backend.rs::harness_presentation`, `a59ca01de` → `2ef3017fe`) : une
+livraison acceptée est rendue telle quelle (ici le texte d'import Arena),
+un refus devient la liste des erreurs, les avertissements suivent. Une
+présentation déjà posée par le graphe n'est pas écrasée.
+
+**Les schémas d'entrée sont générés par le moteur** (`json_schema.rs`) :
+pour `SelectRecordsNode.filter` et `SearchSourceNode.options`, l'entité est
+résolue par les bindings et le schéma porte la forme du filtre, la
+description des champs groupés par type avec leurs opérateurs, le
+vocabulaire (`enum`, `items.enum`, `examples` du JSON Schema de l'entité) et
+un exemple. Un champ inconnu est refusé avec la liste des champs filtrables
+(`check_field_names`, seulement si l'entité n'est pas dérivée). Un filtre
+peut combiner `must` / `should` / `must_not` dans un même objet ; `{}` vaut
+« tout ». `SelectRecordsNode` : `limit` (0 = sans limite, absent = non
+donné), `unfiltered_limit` (20 par défaut dans le gabarit
+`select_structured.mmd`), port `meta` « N lignes affichées sur T ».
+
+**Le harnais** (`harness.rs`, `dataflow/validation_nodes.rs`) :
+`input_schema` vérifié d'abord, puis `before` (refuse : l'outil ne s'exécute
+pas), `after` (valide le résultat, n'annule pas les effets), `on_accept`
+(transforme et livre ; un échec est un échec de **livraison**, pas un
+retour arrière). Chaque hook est un graphe `{graph, data}` ; `data` nomme
+des fichiers JSON de faits, lus **au chargement du backend**. Le hook reçoit
+un seul paramètre `context = {tool, arguments, result, data}`. Une règle par
+`ValidationRuleNode` (`script_id`, `code`, `message`, `path`, `severity`) ;
+le script rend `#{valid, params}` ou `#{checks:[…]}` ; le message est rendu
+par substitution de scalaires. `ValidationMergeNode` combine `left`/`right`.
+Un script en échec donne `hook_failed` sans faire taire les règles
+indépendantes. Contrat de référence :
+`templates/backends/validated-result/README.md`.
+
+**Les limites Rhai** (`harness.rs::RhaiLimits`, posées par l'hôte, non
+relevables par un script) : 1 000 000 d'opérations, 64 Kio de source,
+16 Mio de JSON en entrée, **131 072 éléments par collection** (tableau ou
+map, imbriqués compris), 1 000 ms, 32 niveaux d'appel et de profondeur.
+`eval`, `import`, `export` désactivés (donc **`export` ne peut pas servir de
+nom de champ** dans un script), aucune fonction d'E/S ; deux fonctions hôtes :
+`json_string`, `content_hash` (blake3). Ce n'est pas un bac à sable OS ni un
+plafond mémoire global.
+
+**La préparation des faits** : les faits d'un harnais sont des fichiers
+produits hors du moteur, par un script, puis référencés par `data`. Pour
+MTG, `scripts/prepare_deck_harness.py` écrit `backend/harness/cards.json`
+et `wildcards.json` (ignorés par git) et enregistre les scripts et les hooks
+dans `backend.json`. **Piège payé** : un objet par impression dépassait le
+budget de collection (27 000 impressions × 14 champs) ; `cards.json` porte
+donc **une chaîne séparée par des tabulations par impression**, décodée par
+la fonction `card()` de `prepare.rhai`. Les règles MTG : `deck_size`,
+`sideboard_size`, `land_count`, `known_card`, `copy_limit`, `craftable`,
+`wildcard_budget`, `mana_sources`, `mana_distribution`, `land_bounds`,
+`commander_card`, `legendary_copies` ; seuils dans `policy.json`.
+
+**Le contrat de complétion** (`completion_tool` dans la config de chat,
+`task_accepted` dans le résultat du run) existe toujours dans l'agent, avec
+au plus 1 relance si aucun outil n'a été appelé, 2 sinon. **Retiré de la
+config MTG par Lucie** : `submit_deck` est un outil de vérification que
+l'agent utilise quand on lui demande un deck, pas une obligation de fin de
+tour.
+
+**Le pont MCP** (`scripts/serve_backend_mcp.py`, SDK `mcp` officiel) : lance
+le backend en sous-processus, une requête à la fois (verrou), et finit
+l'aller-retour même si le client annule (sinon l'appel suivant lirait la
+réponse du précédent). Un refus du harnais ou une livraison ratée devient
+`isError` avec des diagnostics lisibles. `--hide PREFIX` (répétable),
+`--fixed-format` (le client ne choisit plus `response_format` : les petits
+modèles demandaient le JSON complet), `--response-format text|json`.
+
+**Le chat** : `rag3weaver-chat <config.json>` (`agent.rs`, `chat.rs`) pilote
+un LLM compatible OpenAI sur les outils du backend lancé par
+`backend_command` ; `allowed_tools`, `max_iterations`, `state_dir`.
+`scripts/chat_app.py config.json --binary … [--port 8740] [--web-only]`
+sert `ui/chat` en NDJSON, avec un jeton d'accès (lien affiché au
+lancement ; `RAG3WEAVER_CHAT_TOKEN` pour `--attach`). Un tour **continue si
+la page se ferme** ; `GET /api/attach` rattache et rejoue ses événements une
+fois ; `/api/history` lit le disque. La réflexion du modèle s'affiche en
+direct.
+
+**Le journal des conversations** (`e32561453` → `9ab639392`) :
+`rag3weaver-chat` écrit chaque événement **à l'instant où il arrive**
+(`at_ms` strictement croissant) dans `state_dir/journal/<session>.jsonl`, et
+en base par un fil d'écriture (canal mpsc, joint avant la fermeture du
+backend) qui appelle l'op `journal` : `register_trace_schema`, puis
+`record_runs_and_messages` par événement. Jetons et réflexion sont tamponnés
+et vidés aux frontières (début d'outil, fin de tour). Un événement
+`turn_end` clôt le tour.
+
+**Un seul hôte par base**, et c'est un piège réel : le serveur MCP de
+`llama-server` et `rag3weaver-chat` lancent chacun leur `rag3weaver-backend`
+sur la même base. Le second échoue sur le verrou (vu : `llama-server`
+redémarré n'avait plus **0 outil**). Choisir l'un ou l'autre, ou
+`LLM_SERVE_NO_MCP=1`.
+
+### 3.8 L'expérience MTG (`experiments/mtga`)
+
+Aucun scraping : collection lue par `mtga-reader` (npm, GPL-3.0), decks par
+`Player.log` (*Detailed Logs* activé dans Arena), textes et glossaire depuis
+les SQLite locales du client. Tout ce qui est sous `data/` reste hors git.
+
+L'ordre, de la capture au chat :
+
+1. `scripts/refresh.sh` : `collect.cjs` (collection via `mtga-reader`, Arena
+   lancé sous Proton) puis `build.py` → `data/arena.sqlite`.
+2. `scripts/fetch_source.py` (cards, decks, mechanics) depuis l'API locale
+   (`serve.sh`, port 8731).
+3. `prepare_engine_collection.py`, `prepare_engine_catalog.py`,
+   `prepare_engine_relations.py`, `prepare_engine_render.py` : écrivent les
+   schémas et enregistrent entités et outils dans `backend/backend.json`. La
+   fiche de carte est **une seule** pour collection et catalogue
+   (`card_rows.py`) ; `OwnedCard` = le catalogue restreint aux impressions
+   possédées. Faits de capacités (`ability_facts.py` : coûts, déclencheurs,
+   effets, restrictions dont mana conditionnelle) et vocabulaire déclaré
+   dans le schéma (`vocabulary.py`) : c'est ce qui alimente les `enum` des
+   filtres générés.
+4. `engine_collection.py --ingest --ingest-relations --ingest-catalog
+   --ingest-catalog-links` (ou `sync_engine.sh`) : ingestion par les outils
+   `ingest_*` / `link_*`. **À lancer détaché** (`setsid nohup … & disown`),
+   copie reflink de la base avant.
+5. `prepare_deck_harness.py` : faits et hooks du harnais.
+6. Servir : `serve_engine_mcp.sh` (pour `llama-server`, via
+   `~/.config/llm-serve/mcp.json`) **ou** `engine_backend.sh` (pour
+   `rag3weaver-chat`, `chat/chat.json`), jamais les deux.
+
+Tests : `scripts/test_engine_catalog.py`, `test_engine_mcp.py`,
+`test_engine_render.py` (MTG) ; `extension/rag3weaver/scripts/test_backend_harness.py`,
+`test_backend_persistence.py`, `test_backend_mcp_render.py`,
+`test_chat_app.py` (moteur, sur une base temporaire, sans LLM ni
+embarquement réel).
+
+Le rendu des résultats : `backend/render/magic.md.jinja` (vue de carte
+compacte en anglais, champs vides omis), choisi par
+`RAG3WEAVER_RENDER_TEMPLATES`. Les entités MTG sont en `contentKind: record`.
 
 ## 4. Construire et tester
 
@@ -269,6 +434,11 @@ qui n'ont rien à voir. Un type nouveau va dans un module neuf.
 | `RAG3WEAVER_BANC_MODELE`, `RAG3WEAVER_MESURE_*` | paramètres des bancs |
 | `RAG3DB_BUFFER_POOL_SIZE`, `RAG3DB_MAX_DB_SIZE` | mémoire du moteur (pool de 8 à 15 Gio pour MTG) |
 | `RAG3DB_EXTENSION_REPO` | dépôt d'extensions ; sans lui `INSTALL` refuse en le nommant |
+| `RAG3DB_SHARED=1`, `RAG3DB_LIBRARY_DIR`, `RAG3DB_INCLUDE_DIR` | à la compilation du crate : lier `build/lecteurs-csv/src` (et `LD_LIBRARY_PATH` vers le même dossier à l'exécution des binaires) |
+| `RAG3WEAVER_RENDER_TEMPLATES` | dossier des gabarits de rendu d'un backend (MTG : `experiments/mtga/backend/render`) |
+| `RAG3WEAVER_BACKEND_BIN` | binaire `rag3weaver-backend` utilisé par les scripts MTG (défaut : `target/release` pour le service, `target/debug` pour `engine_collection.py`) |
+| `RAG3WEAVER_CHAT_TOKEN` | jeton du chat web pour `chat_app.py --attach` |
+| `LLM_SERVE_NO_MCP=1` | `llm-serve` sans `mcp.json`, quand le chat tient déjà la base |
 
 ## 6. Les pièges, par famille
 
@@ -290,10 +460,45 @@ qu'il mesurait, champ à champ contre la référence.
 - `COPY` refuse tout le fichier dès qu'une clé manque ou existe déjà.
 - `""` est lu comme NULL par le lecteur CSV : `null_strings` dédié.
 - Un `COPY` sur une table **non vide** coûte en proportion de la table
-  (mesuré le 27 septembre, cause non trouvée).
+  (mesuré le 27 septembre : `chunk_insert` passe de 781 à 4 474 ms par lot de 512 cartes ; cause non
+  trouvée). Deux suspects à séparer par `RAG3WEAVER_INGEST_PROFILE=1` :
+  l'index vectoriel retiré puis reconstruit à chaque lot
+  (`ajuster_l_index_pour_le_retard`), la relecture `select_node_ids`.
 - La fenêtre de refus d'un lecteur pendant un checkpoint : 18 ms au repos,
   567 ms sous charge, contre un budget de reprise de 250 ms.
 - L'extension `vector` doit être reliée après un rebuild de `librag3db.so`.
+- **Une ligne supprimée n'est jamais récupérée**, alors qu'un `SET` récupère
+  sa place. Les blobs d'index lucivy (`_index_blobs`) supprimant leurs
+  anciens segments à chaque sauvegarde, la base MTG a atteint ~8 Go pour
+  ~150 Mo de données vivantes. Contourné côté rag3weaver
+  (`cypher_blob_store.rs`, `d1aa7d296` : suppression marquée par
+  `_deleted_gen`, purge par `SET _data = vide` au-delà de
+  `RAG3WEAVER_BLOB_RETENTION` générations) ; la correction dans rag3db reste
+  à faire, et la base MTG existante doit être reconstruite pour rendre la place.
+  Pour regarder : `FSM_INFO()`, `storage_info()` ; `SIZE()` refuse un BLOB,
+  prendre `octet_length`.
+- **Deux processus sur une base** : le second échoue sur le verrou — ou pire,
+  si l'un est tué pendant que l'autre écrit, le WAL est à refaire. Le cas
+  vécu : `llama-server` (MCP) et `rag3weaver-chat` lancent chacun leur hôte.
+- **Récupérer un WAL illisible** : base arrêtée, mettre de côté la base et
+  son `.wal`, restaurer la dernière copie reflink (ou la base sans le WAL,
+  c'est-à-dire le dernier checkpoint), refaire les écritures perdues. Les
+  ingestions MTG se rejouent (upserts).
+
+**Le côté agent.**
+- Un `kill -INT` ne traverse pas un `chat_app.py` lancé en arrière-plan :
+  `kill -TERM`, qui laisse le backend fermer la base proprement.
+- Une description d'outil trop générique se paie : tous les `search_*`
+  disaient la même chose, et la requête se disait « nom de carte » ; le
+  modèle cherchait par nom ce qu'un filtre aurait trouvé. Correction
+  proposée, pas faite : une description d'entité dans le manifeste, reprise
+  dans les descriptions générées.
+- Les sorties d'outil se paient en contexte : texte anglais seul, champs vides
+  omis, pas de ligne `Metadata: {}` vide, extraits sans répétition des champs
+  (`contentKind: record`). Ne rien retirer qui porte de l'information sans
+  l'accord de Lucie.
+- minijinja n'a pas `.endswith` (prendre `is endingwith`) et une variable
+  modifiée dans une boucle demande `namespace()`.
 
 **Les mesures.**
 - Le banc de qualité (cosinus nu, 0,84 de MRR) mesure **l'embarqueur sans
@@ -312,12 +517,53 @@ qu'il mesurait, champ à champ contre la référence.
 - Les scripts de remplacement par ancre : toujours afficher le texte exact
   avant de remplacer, et compter les occurrences.
 
-## 7. La machine — **[À enrichir]**
+## 7. La machine
 
-Depuis le 25-26 septembre : ROG Flow Z13, Ryzen AI MAX+ 395 (Strix Halo),
-iGPU Radeon 8060S, 128 Go unifiés, CachyOS. Les modèles de langage tournent
-en local sous `llama-server` Vulkan (`llm-serve` : gpt-oss-120b, Qwen3.5).
-Le démon d'embarquement tourne sur `igpu:0`, environ 8 500 jetons/s.
+Depuis le 25-26 septembre : ROG Flow Z13 (GZ302EAC), Ryzen AI MAX+ 395
+(Strix Halo), iGPU Radeon 8060S (gfx1151), 128 Go unifiés dont 112 Go
+accessibles au GPU (`ttm.pages_limit=29360128`), 32 fils, CachyOS (noyau 7.2),
+KDE Plasma sous Wayland, shell fish, disque en btrfs (d'où les copies
+`cp --reflink=always`, instantanées).
+
+**Les services, et leurs ports** (aucun n'est un service systemd ; tous se
+lancent à la main) :
+
+| Service | Lancement | Port |
+|---|---|---|
+| Modèle de langage | `llm-serve gptoss` (ou `qwen`, `qwen1m`), `llm-serve stop` / `status` ; script dans `~/.local/bin`, copie dans `~/setup/llm-serve` ; journal `~/models/llama-server.log` | 8080 (UI web + API OpenAI) |
+| Démon d'embarquement | `RAG3WEAVER_EMBED_MODEL=bge-m3 RAG3WEAVER_BURN_DEVICE_EMBEDDER=igpu:0 target/release/rag3weaver-embeddings --adresse 127.0.0.1:7878` | 7878 |
+| Serveur MCP MTG | lancé **par** `llama-server` depuis `~/.config/llm-serve/mcp.json` (`serve_engine_mcp.sh --hide close_backend --fixed-format`) | stdio |
+| Chat web | `chat_app.py experiments/mtga/chat/chat.json --binary target/release/rag3weaver-chat --web-only` | 8740 |
+| API locale MTG | `experiments/mtga/scripts/serve.sh` (uvicorn) | 8731 |
+
+L'ordre : le démon d'embarquement d'abord (le backend s'y connecte à
+l'ouverture), puis `llm-serve`, puis le chat. Le démon doit tourner pour que
+le serveur MCP déclare ses outils.
+
+`llm-serve` : gpt-oss-120b MXFP4, 128k de contexte, ~50 jetons/s en
+génération ; Qwen3.5-122B-A10B (UD-Q4_K_XL), 262k, ~21 jetons/s ; `-np 1`
+(une conversation à la fois). Poids dans `~/models`.
+
+**Ce qui a dû être refait après la migration** :
+- prérequis `ninja` et `vulkan-headers` ; `single_file_header` ajouté à la
+  cible C++ (sans `rag3db.hpp`, le pont Rust ne compile pas) ;
+- les forks burn / cubecl / cubek (`rag3weaver/pre.3`) n'ont rien eu à
+  changer pour gfx1151 ;
+- les données MTG reconstituées : `mtga-reader` sous Proton, *Detailed Logs*
+  réactivé dans Arena, puis la chaîne du §3.8 ;
+- `llm-serve` et `mcp.json` écrits pour cette machine.
+
+**Les réglages système qui touchent le travail** :
+- **Pas de veille sur secteur** (`~/.config/powerdevilrc` :
+  `[AC][SuspendAndShutdown] AutoSuspendAction=0`, couvercle = écran éteint).
+  Le 27 septembre le poste s'est réveillé seul capot fermé puis figé en
+  s2idle, et a emporté un WAL. Une longue ingestion ne se lance pas sur
+  batterie.
+- Chrome : `--disable-features=DbusSecretPortal` dans
+  `~/.config/chrome-flags.conf` (KWallet sans portefeuille contre
+  gnome-keyring : Chrome ne chargeait plus aucune page).
+- `rg` de VSCodium : ouvrir le dépôt, pas tout `~` (sinon une recherche de
+  `package.json` occupe 12 fils).
 
 **Périmé** : tout ce que les docs d'avant le 25 septembre disent des deux
 Radeon R9700, de « la carte TV » (`07:00.0`) et de « la carte du bureau »
