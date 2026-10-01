@@ -7,15 +7,19 @@
 // connexion, son numéro et la barrière commune. Le lanceur décide si les écrivains
 // sont des fils ou des processus. Tout l'état partagé (barrière, comptes rendus) vit
 // dans une projection MAP_SHARED anonyme, pour que le même code serve aux deux.
-// Étape 1 : seul le lanceur Fil existe ; le lanceur Processus vient à l'étape 2.
+// En mode Processus, chaque écrivain est un processus créé par fork() qui ouvre sa
+// propre Database : le père ne doit en tenir aucune ouverte à ce moment-là.
 
 #include <sys/mman.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -30,12 +34,14 @@ namespace rag3db {
 namespace testing {
 namespace concurrency {
 
-enum class LaunchMode { Thread };
+enum class LaunchMode { Thread, Process };
 
 inline std::string launchModeName(LaunchMode mode) {
     switch (mode) {
     case LaunchMode::Thread:
         return "Thread";
+    case LaunchMode::Process:
+        return "Process";
     }
     return "?";
 }
@@ -47,9 +53,11 @@ enum class Refusal : uint8_t {
     DuplicatePrimaryKey,
     ConnectedEdges,
     WriterRefused,
+    CheckpointTimeout,
+    FileLock,
     Unexpected,
 };
-constexpr size_t NUM_REFUSALS = 5;
+constexpr size_t NUM_REFUSALS = 7;
 
 inline std::string_view refusalName(Refusal refusal) {
     switch (refusal) {
@@ -61,6 +69,10 @@ inline std::string_view refusalName(Refusal refusal) {
         return "connected edges";
     case Refusal::WriterRefused:
         return "second writer refused";
+    case Refusal::CheckpointTimeout:
+        return "checkpoint timeout";
+    case Refusal::FileLock:
+        return "file lock";
     case Refusal::Unexpected:
         return "UNEXPECTED";
     }
@@ -80,11 +92,20 @@ inline Refusal classifyRefusal(std::string_view message) {
     if (message.find("Only one write transaction at a time") != std::string_view::npos) {
         return Refusal::WriterRefused;
     }
+    if (message.find("Timeout waiting for active transactions") != std::string_view::npos) {
+        return Refusal::CheckpointTimeout;
+    }
+    if (message.find("Could not set lock on file") != std::string_view::npos) {
+        return Refusal::FileLock;
+    }
     return Refusal::Unexpected;
 }
 
 constexpr uint32_t MAX_WORKERS = 16;
 constexpr size_t MESSAGE_CAPACITY = 512;
+
+// Entre processus, une atomique n'est sûre que si elle n'a pas de verrou caché.
+static_assert(std::atomic<uint32_t>::is_always_lock_free);
 
 // Ce qu'un écrivain rapporte. Des atomiques et des tableaux fixes seulement : la
 // structure doit pouvoir vivre dans une page partagée entre processus.
@@ -95,13 +116,12 @@ struct WorkerReport {
     char firstUnexpected[MESSAGE_CAPACITY]{};
 };
 
-// Entre processus, une atomique n'est sûre que si elle n'a pas de verrou caché.
-static_assert(std::atomic<uint32_t>::is_always_lock_free);
-
 struct SharedArea {
     std::atomic<uint32_t> barrierArrived{0};
     std::atomic<uint32_t> barrierGeneration{0};
     std::atomic<uint32_t> barrierTimedOut{0};
+    // Un drapeau libre pour les scénarios (C8 : les écrivains ont fini).
+    std::atomic<uint32_t> flag{0};
     uint32_t numWorkers = 0;
     std::array<WorkerReport, MAX_WORKERS> workers{};
 };
@@ -111,6 +131,9 @@ struct SharedArea {
 class SharedMapping {
 public:
     explicit SharedMapping(uint32_t numWorkers) {
+        if (numWorkers > MAX_WORKERS) {
+            throw std::runtime_error("too many workers for the shared area");
+        }
         memory = mmap(nullptr, sizeof(SharedArea), PROT_READ | PROT_WRITE,
             MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (memory == MAP_FAILED) {
@@ -136,16 +159,24 @@ private:
 // Un écrivain vu par son scénario.
 class Worker {
 public:
-    Worker(uint32_t index, main::Connection& connection, SharedArea& area)
+    // connection est nul quand l'écrivain n'a pas pu ouvrir la base (mode Processus) :
+    // il participe encore aux barrières, mais toute instruction échoue.
+    Worker(uint32_t index, main::Connection* connection, SharedArea& area)
         : workerIndex{index}, connection{connection}, area{area}, report{area.workers[index]} {}
 
     uint32_t index() const { return workerIndex; }
     uint32_t numWorkers() const { return area.numWorkers; }
+    bool connected() const { return connection != nullptr; }
+    SharedArea& shared() { return area; }
 
     // Exécute une instruction ; en cas d'échec, lit et classe le message. Un échec
     // dans une transaction explicite la tient pour perdue : commit() fera ROLLBACK.
     bool run(const std::string& query) {
-        auto result = connection.query(query);
+        if (connection == nullptr) {
+            recordFailure("no connection: the database could not be opened");
+            return false;
+        }
+        auto result = connection->query(query);
         if (result->isSuccess()) {
             report.statementsSucceeded.fetch_add(1);
             return true;
@@ -163,6 +194,23 @@ public:
         return inTransaction;
     }
 
+    // Annule volontairement la transaction ouverte. Si une instruction y a échoué, le
+    // moteur l'a déjà annulée : le ROLLBACK est envoyé sans être compté, comme dans
+    // commit().
+    void rollback() {
+        if (!inTransaction) {
+            return;
+        }
+        inTransaction = false;
+        if (transactionFailed) {
+            if (connection != nullptr) {
+                connection->query("ROLLBACK;");
+            }
+            return;
+        }
+        run("ROLLBACK;");
+    }
+
     // Valide la transaction ouverte. Si une instruction y a échoué, on ne valide pas :
     // on annule, et l'éventuel refus de ROLLBACK (transaction déjà annulée par le
     // moteur) n'est pas compté, il ne dit rien du conflit observé.
@@ -172,7 +220,9 @@ public:
         }
         inTransaction = false;
         if (transactionFailed) {
-            connection.query("ROLLBACK;");
+            if (connection != nullptr) {
+                connection->query("ROLLBACK;");
+            }
             return false;
         }
         if (run("COMMIT;")) {
@@ -214,7 +264,6 @@ public:
         }
     }
 
-private:
     void recordFailure(const std::string& message) {
         const auto refusal = classifyRefusal(message);
         if (refusal == Refusal::Unexpected &&
@@ -224,8 +273,9 @@ private:
         report.refusals[static_cast<size_t>(refusal)].fetch_add(1);
     }
 
+private:
     uint32_t workerIndex;
-    main::Connection& connection;
+    main::Connection* connection;
     SharedArea& area;
     WorkerReport& report;
     bool inTransaction = false;
@@ -234,30 +284,97 @@ private:
 
 using Scenario = std::function<void(Worker&)>;
 
-// Lance numWorkers écrivains sur la même base et attend qu'ils aient fini.
-inline void launch(LaunchMode mode, main::Database& database, SharedArea& area,
+// Ce qu'il faut pour donner une base à un écrivain : la Database commune en mode Fil,
+// le chemin et la configuration pour l'ouvrir soi-même en mode Processus.
+struct Opener {
+    main::Database* shared = nullptr;
+    std::string path;
+    main::SystemConfig config;
+};
+
+// Les réglages du banc sur une Database qu'on vient d'ouvrir (voir l'en-tête du banc).
+// Le premier n'est pas persistant : il se repose à chaque ouverture.
+inline void applyBenchSettings(main::Connection& connection) {
+    for (const auto* query :
+        {"CALL debug_enable_multi_writes=true;", "CALL auto_checkpoint=false;"}) {
+        auto result = connection.query(query);
+        if (!result->isSuccess()) {
+            throw std::runtime_error(std::string(query) + ": " + result->getErrorMessage());
+        }
+    }
+}
+
+// Lance area.numWorkers écrivains sur la même base et attend qu'ils aient fini.
+// Rend faux si un processus écrivain n'est pas sorti normalement.
+inline bool launch(LaunchMode mode, const Opener& opener, SharedArea& area,
     const Scenario& scenario) {
     switch (mode) {
     case LaunchMode::Thread: {
         std::vector<std::thread> threads;
         for (auto i = 0u; i < area.numWorkers; ++i) {
             threads.emplace_back([&, i] {
-                main::Connection connection(&database);
-                Worker worker(i, connection, area);
+                main::Connection connection(opener.shared);
+                Worker worker(i, &connection, area);
                 scenario(worker);
             });
         }
         for (auto& thread : threads) {
             thread.join();
         }
-    } break;
+        return true;
     }
+    case LaunchMode::Process: {
+        std::vector<pid_t> children;
+        for (auto i = 0u; i < area.numWorkers; ++i) {
+            const auto pid = fork();
+            if (pid == 0) {
+                std::unique_ptr<main::Database> database;
+                std::unique_ptr<main::Connection> connection;
+                std::string openError;
+                try {
+                    database = std::make_unique<main::Database>(opener.path, opener.config);
+                    connection = std::make_unique<main::Connection>(database.get());
+                    applyBenchSettings(*connection);
+                } catch (const std::exception& e) {
+                    openError = e.what();
+                    connection.reset();
+                    database.reset();
+                }
+                Worker worker(i, connection.get(), area);
+                if (!openError.empty()) {
+                    worker.recordFailure(openError);
+                }
+                scenario(worker);
+                connection.reset();
+                database.reset();
+                _exit(0);
+            }
+            children.push_back(pid);
+        }
+        bool allExited = true;
+        for (const auto pid : children) {
+            int status = 0;
+            waitpid(pid, &status, 0);
+            allExited = allExited && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        }
+        return allExited;
+    }
+    }
+    return false;
 }
 
 inline uint32_t totalCommits(const SharedArea& area) {
     uint32_t total = 0;
     for (auto i = 0u; i < area.numWorkers; ++i) {
         total += area.workers[i].commitsSucceeded.load();
+    }
+    return total;
+}
+
+inline uint32_t totalStatements(const SharedArea& area) {
+    uint32_t total = 0;
+    for (auto i = 0u; i < area.numWorkers; ++i) {
+        total += area.workers[i].statementsSucceeded.load();
     }
     return total;
 }

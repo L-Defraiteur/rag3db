@@ -8,30 +8,78 @@
 // Réglages communs, et pourquoi :
 // - debug_enable_multi_writes=true : sans lui le second écrivain est refusé et il n'y
 //   a pas de concurrence à mesurer.
-// - auto_checkpoint=false : un point de reprise déclenché par un commit attend que
-//   toutes les autres transactions soient sorties et expire au bout de 5 s ; il
-//   mesurerait le point de reprise, pas les conflits. Les points de reprise sont
-//   explicites, dans les cas qui les veulent (C8, étape 2).
+// - auto_checkpoint=false partout sauf C8 : un point de reprise déclenché par un
+//   commit attend que toutes les autres transactions soient sorties et expire au bout
+//   de 5 s ; il mesurerait le point de reprise, pas les conflits. C8 est le cas du
+//   point de reprise, explicite et automatique.
 //
 // Les cas déterministes tiennent la fenêtre de course ouverte par des transactions
 // explicites et une barrière : BEGIN, écriture, barrière, puis les commits l'un
 // après l'autre dans un ordre fixé. Aucun crochet dans le moteur.
+//
+// Chaque cas tourne sous plusieurs paramètres : le lanceur (fils ou processus) et le
+// moment où l'on vérifie — à chaud (Hot), après CHECKPOINT, fermeture et réouverture
+// (Reopen), après arrêt brutal et rejeu du journal (Crash). Les deux derniers
+// comparent aussi toutes les réponses à celles d'avant (vidage canonique).
 
 #ifndef __SINGLE_THREADED__
 
+#include <signal.h>
+
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <random>
 
 #include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "integrity/integrity_checker.h"
+#include "storage/storage_utils.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
 using namespace rag3db::testing::concurrency;
 
-static std::vector<uint32_t> ascending(uint32_t numWorkers) {
+namespace {
+
+enum class Check { Hot, Reopen, Crash };
+
+std::string checkName(Check check) {
+    switch (check) {
+    case Check::Hot:
+        return "Hot";
+    case Check::Reopen:
+        return "Reopen";
+    case Check::Crash:
+        return "Crash";
+    }
+    return "?";
+}
+
+struct BenchParam {
+    LaunchMode launcher;
+    Check check;
+};
+
+std::string paramName(const ::testing::TestParamInfo<BenchParam>& info) {
+    return launchModeName(info.param.launcher) + "_" + checkName(info.param.check);
+}
+
+// Graine des cas aléatoires, imprimée en tête de chaque cas, rejouable par
+// CONCURRENCE_GRAINE. Par défaut fixe, pour que la passe soit comparable d'une fois à
+// l'autre ; l'ordonnancement des fils, lui, ne l'est pas.
+uint64_t benchSeed() {
+    const auto* value = std::getenv("CONCURRENCE_GRAINE");
+    return value != nullptr && *value != '\0' ? std::stoull(value) : 20261002;
+}
+
+uint32_t benchIterations(uint32_t defaultValue) {
+    const auto* value = std::getenv("CONCURRENCE_ITERATIONS");
+    return value != nullptr && *value != '\0' ? std::stoul(value) : defaultValue;
+}
+
+std::vector<uint32_t> ascending(uint32_t numWorkers) {
     std::vector<uint32_t> order;
     for (auto i = 0u; i < numWorkers; ++i) {
         order.push_back(i);
@@ -39,8 +87,27 @@ static std::vector<uint32_t> ascending(uint32_t numWorkers) {
     return order;
 }
 
-class ConcurrencyBench : public EmptyDBTest, public ::testing::WithParamInterface<LaunchMode> {
-protected:
+} // namespace
+
+class ConcurrencyBench;
+
+// Un cas du banc : la préparation (sur la connexion du test, avant les écrivains), le
+// scénario d'un écrivain, et ce qu'on attend une fois les écrivains finis — évalué sur
+// la base telle qu'elle est au moment de la vérification (à chaud, rouverte, rejouée).
+struct BenchCase {
+    uint32_t numWorkers = 2;
+    std::function<void(ConcurrencyBench&)> setup;
+    Scenario scenario;
+    std::function<void(ConcurrencyBench&, const SharedArea&)> expect;
+    // Un cas de conflit entre écrivains n'a pas de sens à plusieurs processus tant que
+    // B n'existe pas : le second processus écrivain est refusé à l'ouverture (C9).
+    bool runsInProcesses = false;
+    bool onlyInProcesses = false;
+    bool autoCheckpoint = false;
+};
+
+class ConcurrencyBench : public EmptyDBTest, public ::testing::WithParamInterface<BenchParam> {
+public:
     void SetUp() override {
         EmptyDBTest::SetUp();
         if (inMemMode) {
@@ -49,8 +116,7 @@ protected:
         systemConfig->maxDBSize = 1024ull * 1024 * 1024 * 1024;
         systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
         createDBAndConn();
-        mustRun("CALL debug_enable_multi_writes=true;");
-        mustRun("CALL auto_checkpoint=false;");
+        applyBenchSettings(*conn);
     }
 
     void TearDown() override {
@@ -81,158 +147,548 @@ protected:
         return result->getNext()->getValue(0)->getValue<int64_t>();
     }
 
-    // Lance le scénario, écrit le compte rendu brut, puis passe le vérificateur sur la
-    // base encore ouverte, après la fin des écrivains (jamais depuis un lecteur
-    // concurrent : la course du lecteur d'un autre processus n'est pas corrigée sur
-    // master, journal des chantiers §6).
-    std::vector<integrity::Violation> runScenario(uint32_t numWorkers, const Scenario& scenario) {
-        SharedMapping mapping(numWorkers);
-        auto& area = mapping.get();
-        launch(GetParam(), *database, area, scenario);
-        const auto violations = integrity::checkLevel1(*conn);
+    // Fait tourner un cas sous le paramètre du test, écrit le compte rendu brut, puis
+    // vérifie. Le vérificateur lit toujours après la fin des écrivains, jamais depuis un
+    // lecteur concurrent : la course du lecteur d'un autre processus n'est pas corrigée
+    // sur master (journal des chantiers §6).
+    void runCase(const BenchCase& benchCase) {
+        const auto [launcher, check] = GetParam();
+        if (benchCase.onlyInProcesses && (launcher != LaunchMode::Process || check != Check::Hot)) {
+            GTEST_SKIP() << "an inter-process case, checked hot with the Process launcher";
+        }
+        if (launcher == LaunchMode::Process && !benchCase.runsInProcesses) {
+            GTEST_SKIP() << "B not built: a second writer process is refused when it opens "
+                            "the database (case C9)";
+        }
         std::cerr << "[bench] " << ::testing::UnitTest::GetInstance()->current_test_info()->name()
-                  << " (" << launchModeName(GetParam()) << ")\n"
-                  << describe(area) << integrity::describe(violations);
+                  << " (seed " << benchSeed() << ")\n";
+        if (benchCase.autoCheckpoint) {
+            mustRun("CALL auto_checkpoint=true;");
+        }
+        benchCase.setup(*this);
+
+        SharedMapping mapping(benchCase.numWorkers);
+        auto& area = mapping.get();
+        std::vector<integrity::Violation> violations;
+        switch (check) {
+        case Check::Hot:
+            launchHere(launcher, benchCase, area);
+            violations = verify("hot");
+            break;
+        case Check::Reopen:
+            violations = runThenReopen(benchCase, area);
+            break;
+        case Check::Crash:
+            violations = runThenCrash(benchCase, area);
+            break;
+        }
+        EXPECT_TRUE(violations.empty()) << "integrity violations, see the raw report";
         EXPECT_EQ(totalRefusals(area, Refusal::Unexpected), 0u) << "an unexpected error";
         EXPECT_EQ(area.barrierTimedOut.load(), 0u) << "a writer never reached the barrier";
-        lastCommits = totalCommits(area);
+        benchCase.expect(*this, area);
+    }
+
+private:
+    void launchHere(LaunchMode launcher, const BenchCase& benchCase, SharedArea& area) {
+        if (launcher == LaunchMode::Thread) {
+            launch(launcher, Opener{database.get()}, area, benchCase.scenario);
+        } else {
+            // Les écrivains ouvrent eux-mêmes la base : le test doit l'avoir fermée.
+            conn.reset();
+            database.reset();
+            EXPECT_TRUE(launch(launcher, Opener{nullptr, databasePath, *systemConfig}, area,
+                benchCase.scenario))
+                << "a writer process did not exit normally";
+            createDBAndConn();
+        }
+        std::cerr << describe(area);
+    }
+
+    std::vector<integrity::Violation> verify(const std::string& moment) {
+        auto violations = integrity::checkLevel1(*conn);
+        std::cerr << "  -- integrity " << moment << ":\n" << integrity::describe(violations);
         return violations;
     }
 
-    // C1 : un même nœud de clé 7 créé par chaque écrivain (commentaire du cas, plus bas).
-    std::vector<integrity::Violation> samePrimaryKey(uint32_t numWorkers) {
-        return runScenario(numWorkers, [&](Worker& worker) {
-            worker.begin();
-            worker.run(stringFormat("CREATE (:Item {id: 7, writer: {}});", worker.index()));
-            worker.sync();
-            worker.commitInOrder(ascending(worker.numWorkers()));
-        });
+    std::vector<integrity::Violation> runThenReopen(const BenchCase& benchCase, SharedArea& area) {
+        launchHere(LaunchMode::Thread, benchCase, area);
+        verify("hot");
+        const auto before = integrity::canonicalDump(*conn);
+        {
+            // Un résultat ne doit pas survivre à sa base : il est détruit avant la réouverture.
+            auto checkpoint = conn->query("CHECKPOINT;");
+            std::cerr << "  -- CHECKPOINT: "
+                      << (checkpoint->isSuccess() ? "ok" : checkpoint->getErrorMessage()) << "\n";
+            EXPECT_TRUE(checkpoint->isSuccess()) << checkpoint->getErrorMessage();
+        }
+        createDBAndConn();
+        auto violations = verify("after checkpoint and reopen");
+        const auto sameAnswers = integrity::compareDumps(before, integrity::canonicalDump(*conn),
+            "before the checkpoint", "after the reopen");
+        std::cerr << "  -- answers before / after:\n" << integrity::describe(sameAnswers);
+        violations.insert(violations.end(), sameAnswers.begin(), sameAnswers.end());
+        return violations;
     }
 
-    // C2 : suppression du nœud 1 contre relation 1 -> 2 (commentaire du cas, plus bas).
-    std::vector<integrity::Violation> deleteVersusNewRelation(
-        const std::vector<uint32_t>& commitOrder) {
-        return runScenario(2, [&](Worker& worker) {
-            worker.begin();
-            if (worker.index() == 0) {
-                worker.run("MATCH (a:Item {id: 1}) DELETE a;");
-            } else {
-                worker.run("MATCH (a:Item {id: 1}), (b:Item {id: 2}) "
-                           "CREATE (a)-[:Link {src_id: 1, dst_id: 2}]->(b);");
+    // Les écrivains tournent dans un processus fils qui ouvre la base, fait son
+    // scénario, note ses réponses, puis se tue par SIGKILL : tous ses commits ont été
+    // acquittés, la base n'a pas été fermée. Le père rouvre, ce qui rejoue le journal,
+    // et compare.
+    std::vector<integrity::Violation> runThenCrash(const BenchCase& benchCase, SharedArea& area) {
+        const auto hotDumpPath = databasePath + ".hot-dump";
+        conn.reset();
+        database.reset();
+        const auto pid = fork();
+        if (pid == 0) {
+            std::ofstream out(hotDumpPath);
+            try {
+                rag3db::main::Database childDatabase(databasePath, *systemConfig);
+                rag3db::main::Connection childConnection(&childDatabase);
+                applyBenchSettings(childConnection);
+                if (benchCase.autoCheckpoint) {
+                    childConnection.query("CALL auto_checkpoint=true;");
+                }
+                launch(LaunchMode::Thread, Opener{&childDatabase}, area, benchCase.scenario);
+                for (const auto& line : integrity::canonicalDump(childConnection)) {
+                    out << line << "\n";
+                }
+            } catch (const std::exception& e) {
+                out << "CHILD FAILED: " << e.what() << "\n";
             }
-            worker.sync();
-            worker.commitInOrder(commitOrder);
-        });
+            out.close();
+            kill(getpid(), SIGKILL);
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+        EXPECT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+            << "the writer process was expected to die by SIGKILL";
+        std::cerr << describe(area);
+
+        std::vector<std::string> before;
+        {
+            std::ifstream in(hotDumpPath);
+            for (std::string line; std::getline(in, line);) {
+                before.push_back(line);
+            }
+        }
+        std::filesystem::remove(hotDumpPath);
+        createDBAndConn();
+        reportSetAsideJournals();
+        auto violations = verify("after kill and replay");
+        const auto sameAnswers = integrity::compareDumps(before, integrity::canonicalDump(*conn),
+            "before the kill", "after the replay");
+        std::cerr << "  -- answers before / after:\n" << integrity::describe(sameAnswers);
+        violations.insert(violations.end(), sameAnswers.begin(), sameAnswers.end());
+        return violations;
     }
 
-    uint32_t lastCommits = 0;
+    // Depuis l'étape E du journal, une fin coupée est copiée dans <wal>.ecarte-<ms>. Un
+    // arrêt après des commits acquittés ne devrait rien écarter : on le dit, et on
+    // nettoie pour le cas suivant.
+    void reportSetAsideJournals() {
+        const auto walPath =
+            std::filesystem::path(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+        const auto prefix = walPath.filename().string() + ".ecarte-";
+        for (const auto& entry : std::filesystem::directory_iterator(walPath.parent_path())) {
+            if (entry.path().filename().string().starts_with(prefix)) {
+                std::cerr << "  -- set-aside journal: " << entry.path().filename() << " ("
+                          << entry.file_size() << " bytes)\n";
+                ADD_FAILURE() << "the replay set aside part of the journal after acknowledged "
+                                 "commits: "
+                              << entry.path();
+                std::filesystem::remove(entry.path());
+            }
+        }
+    }
 };
 
 // C0 — témoin. Clés disjointes : chaque écrivain crée ses propres nœuds, chacun dans
 // sa transaction, puis des relations entre ses nœuds déjà validés. Doit être vert :
 // il prouve que le banc et le vérificateur ne crient pas sans raison.
 TEST_P(ConcurrencyBench, C0_DisjointKeysWitness) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    mustRun("CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
-    constexpr uint32_t numWorkers = 4;
-    constexpr int64_t numNodes = 50;
-    const auto violations = runScenario(numWorkers, [&](Worker& worker) {
-        const int64_t base = worker.index() * 1000;
-        for (auto i = 0; i < numNodes; ++i) {
-            worker.run(
-                stringFormat("CREATE (:Item {id: {}, writer: {}});", base + i, worker.index()));
-        }
-        worker.sync();
-        for (auto i = 0; i + 1 < numNodes; ++i) {
-            worker.run(stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
-                                    "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
-                base + i, base + i + 1, base + i, base + i + 1));
-        }
-    });
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
-    EXPECT_EQ(queryInt("MATCH ()-[r:Link]->() RETURN count(r);"), numWorkers * (numNodes - 1));
+    static constexpr uint32_t numWorkers = 4;
+    static constexpr int64_t numNodes = 50;
+    runCase({.numWorkers = numWorkers,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun(
+                    "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+            },
+        .scenario =
+            [](Worker& worker) {
+                const int64_t base = worker.index() * 1000;
+                for (auto i = 0; i < numNodes; ++i) {
+                    worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});", base + i,
+                        worker.index()));
+                }
+                worker.sync();
+                for (auto i = 0; i + 1 < numNodes; ++i) {
+                    worker.run(stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
+                                            "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
+                        base + i, base + i + 1, base + i, base + i + 1));
+                }
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea&) {
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
+                EXPECT_EQ(bench.queryInt("MATCH ()-[r:Link]->() RETURN count(r);"),
+                    numWorkers * (numNodes - 1));
+            }});
 }
 
 // C1 — même clé primaire. Chaque écrivain ouvre une transaction, crée le nœud de clé
 // 7, attend les autres, puis tous valident l'un après l'autre. Invariant : un seul
-// commit réussit, une seule ligne de clé 7. Attendu aujourd'hui (déduit) : rouge, la
-// clé non validée de l'autre transaction est invisible au contrôle d'unicité
-// (node_table.cpp, validatePkNotExists).
+// commit réussit, une seule ligne de clé 7. Rouge à l'étape 1 : la clé non validée de
+// l'autre transaction est invisible au contrôle d'unicité (node_table.cpp,
+// validatePkNotExists).
+static BenchCase samePrimaryKey(uint32_t numWorkers) {
+    return {.numWorkers = numWorkers,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+            },
+        .scenario =
+            [](Worker& worker) {
+                worker.begin();
+                worker.run(stringFormat("CREATE (:Item {id: 7, writer: {}});", worker.index()));
+                worker.sync();
+                worker.commitInOrder(ascending(worker.numWorkers()));
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 1u) << "exactly one writer of key 7 may commit";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1);
+            }};
+}
+
 TEST_P(ConcurrencyBench, C1_SamePrimaryKeyTwoWriters) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    const auto violations = samePrimaryKey(2);
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(lastCommits, 1u) << "exactly one writer of key 7 may commit";
-    EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1);
+    runCase(samePrimaryKey(2));
 }
 
 TEST_P(ConcurrencyBench, C1_SamePrimaryKeyThreeWriters) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    const auto violations = samePrimaryKey(3);
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(lastCommits, 1u) << "exactly one writer of key 7 may commit";
-    EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1);
+    runCase(samePrimaryKey(3));
 }
 
 // C2 — relation vers un nœud supprimé. Les nœuds 1 et 2 sont validés avant. L'écrivain
 // 0 supprime le nœud 1 ; l'écrivain 1 crée une relation 1 -> 2. Barrière, puis les deux
-// commits dans l'ordre donné. Invariant : jamais les deux à la fois — soit le nœud est
-// supprimé et il n'y a pas de relation, soit la relation existe et le nœud aussi.
-// Attendu aujourd'hui (déduit) : rouge dans les deux ordres, chacun ne voit que son
-// instantané (delete_executor.cpp, throwIfNodeHasRels).
+// commits dans l'ordre donné. Invariant : jamais les deux à la fois. Rouge à l'étape 1,
+// dans les deux ordres : chacun ne voit que son instantané (delete_executor.cpp,
+// throwIfNodeHasRels).
+static BenchCase deleteVersusNewRelation(std::vector<uint32_t> commitOrder) {
+    return {.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun(
+                    "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+                bench.mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
+            },
+        .scenario =
+            [commitOrder](Worker& worker) {
+                worker.begin();
+                if (worker.index() == 0) {
+                    worker.run("MATCH (a:Item {id: 1}) DELETE a;");
+                } else {
+                    worker.run("MATCH (a:Item {id: 1}), (b:Item {id: 2}) "
+                               "CREATE (a)-[:Link {src_id: 1, dst_id: 2}]->(b);");
+                }
+                worker.sync();
+                worker.commitInOrder(commitOrder);
+            },
+        .expect =
+            [](ConcurrencyBench&, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 1u)
+                    << "the delete and the new relation cannot both commit";
+            }};
+}
+
 TEST_P(ConcurrencyBench, C2_DeleteCommitsFirst) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    mustRun("CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
-    mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
-    const auto violations = deleteVersusNewRelation({0, 1});
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(lastCommits, 1u) << "the delete and the new relation cannot both commit";
+    runCase(deleteVersusNewRelation({0, 1}));
 }
 
 TEST_P(ConcurrencyBench, C2_RelationCommitsFirst) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    mustRun("CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
-    mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
-    const auto violations = deleteVersusNewRelation({1, 0});
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(lastCommits, 1u) << "the delete and the new relation cannot both commit";
+    runCase(deleteVersusNewRelation({1, 0}));
 }
 
 // C3 — offsets locaux qui se chevauchent (marche A2). Chaque écrivain, dans une seule
 // transaction, crée ses nœuds puis une chaîne de relations entre eux ; chaque relation
 // porte les clés de ses extrémités. Les deux transactions numérotent leurs nœuds à
 // partir de la même taille de table. Invariant : chaque relation relie les nœuds dont
-// elle porte les clés. Attendu aujourd'hui (déduit) : rouge, sans erreur — les
-// relations du second à valider pointent vers les nœuds du premier (pas de
-// remappage des offsets au commit).
+// elle porte les clés. Rouge à l'étape 1, sans erreur : les relations du second à
+// valider pointent vers les nœuds du premier.
 TEST_P(ConcurrencyBench, C3_OverlappingLocalOffsets) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-    mustRun("CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
-    constexpr uint32_t numWorkers = 2;
-    constexpr int64_t numNodes = 8;
-    const auto violations = runScenario(numWorkers, [&](Worker& worker) {
-        const int64_t base = (worker.index() + 1) * 100;
-        worker.begin();
-        for (auto i = 0; i < numNodes; ++i) {
-            worker.run(
-                stringFormat("CREATE (:Item {id: {}, writer: {}});", base + i, worker.index()));
-        }
-        for (auto i = 0; i + 1 < numNodes; ++i) {
-            worker.run(stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
-                                    "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
-                base + i, base + i + 1, base + i, base + i + 1));
-        }
-        worker.sync();
-        worker.commitInOrder(ascending(worker.numWorkers()));
-    });
-    EXPECT_TRUE(violations.empty());
-    EXPECT_EQ(lastCommits, numWorkers);
-    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
-    EXPECT_EQ(queryInt("MATCH ()-[r:Link]->() RETURN count(r);"), numWorkers * (numNodes - 1));
+    static constexpr uint32_t numWorkers = 2;
+    static constexpr int64_t numNodes = 8;
+    runCase({.numWorkers = numWorkers,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun(
+                    "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+            },
+        .scenario =
+            [](Worker& worker) {
+                const int64_t base = (worker.index() + 1) * 100;
+                worker.begin();
+                for (auto i = 0; i < numNodes; ++i) {
+                    worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});", base + i,
+                        worker.index()));
+                }
+                for (auto i = 0; i + 1 < numNodes; ++i) {
+                    worker.run(stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
+                                            "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
+                        base + i, base + i + 1, base + i, base + i + 1));
+                }
+                worker.sync();
+                worker.commitInOrder(ascending(worker.numWorkers()));
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), numWorkers);
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
+                EXPECT_EQ(bench.queryInt("MATCH ()-[r:Link]->() RETURN count(r);"),
+                    numWorkers * (numNodes - 1));
+            }});
 }
 
-INSTANTIATE_TEST_SUITE_P(Launchers, ConcurrencyBench, ::testing::Values(LaunchMode::Thread),
-    [](const ::testing::TestParamInfo<LaunchMode>& info) { return launchModeName(info.param); });
+// C4 — virements. Huit comptes à 100 ; chaque écrivain fait des virements aléatoires,
+// chacun dans sa transaction (débit puis crédit). Un conflit d'écriture annule le
+// virement entier. Invariant : la somme ne bouge pas — une mise à jour perdue la
+// changerait. Attendu vert : le conflit de mise à jour d'une même ligne existe
+// (update_info.cpp).
+TEST_P(ConcurrencyBench, C4_Transfers) {
+    static constexpr int64_t numAccounts = 8;
+    const auto iterations = benchIterations(100);
+    runCase({.numWorkers = 4,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Account(id INT64 PRIMARY KEY, balance INT64);");
+                for (auto i = 0; i < numAccounts; ++i) {
+                    bench.mustRun(stringFormat("CREATE (:Account {id: {}, balance: 100});", i));
+                }
+            },
+        .scenario =
+            [iterations](Worker& worker) {
+                std::mt19937_64 random(benchSeed() + worker.index());
+                std::uniform_int_distribution<int64_t> account(0, numAccounts - 1);
+                std::uniform_int_distribution<int64_t> amount(1, 10);
+                for (auto i = 0u; i < iterations; ++i) {
+                    const auto from = account(random);
+                    auto to = account(random);
+                    if (to == from) {
+                        to = (to + 1) % numAccounts;
+                    }
+                    const auto value = amount(random);
+                    worker.begin();
+                    worker.run(stringFormat(
+                        "MATCH (a:Account {id: {}}) SET a.balance = a.balance - {};", from, value));
+                    worker.run(stringFormat(
+                        "MATCH (a:Account {id: {}}) SET a.balance = a.balance + {};", to, value));
+                    worker.commit();
+                }
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(bench.queryInt("MATCH (a:Account) RETURN count(a);"), numAccounts);
+                EXPECT_EQ(bench.queryInt("MATCH (a:Account) RETURN sum(a.balance);"),
+                    numAccounts * 100);
+                EXPECT_GT(totalCommits(area), 0u) << "no transfer committed at all";
+            }});
+}
+
+// C5 — double suppression de la même ligne. Invariant : une seule suppression valide,
+// l'autre est refusée par « Write-write conflict ». Attendu vert (version_info.cpp) ;
+// sous TSan, le chemin sans verrou de cette suppression est la marche A5.
+TEST_P(ConcurrencyBench, C5_DoubleDelete) {
+    runCase({.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
+            },
+        .scenario =
+            [](Worker& worker) {
+                worker.begin();
+                worker.run("MATCH (n:Item {id: 1}) DELETE n;");
+                worker.sync();
+                worker.commitInOrder({0, 1});
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 1u) << "exactly one delete may commit";
+                EXPECT_EQ(totalRefusals(area, Refusal::WriteWriteConflict), 1u);
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), 1);
+            }});
+}
+
+// C6 — suppression contre mise à jour de la même ligne. L'écrivain 0 supprime le nœud
+// 1, l'écrivain 1 change sa valeur ; barrière ; commits dans l'ordre donné. Invariant :
+// jamais les deux — soit la ligne n'existe plus, soit elle porte la mise à jour.
+// Attendu inconnu (plan §13, non examiné).
+static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
+    return {.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun("CREATE (:Item {id: 1, writer: -1});");
+            },
+        .scenario =
+            [commitOrder](Worker& worker) {
+                worker.begin();
+                if (worker.index() == 0) {
+                    worker.run("MATCH (n:Item {id: 1}) DELETE n;");
+                } else {
+                    worker.run("MATCH (n:Item {id: 1}) SET n.writer = 1;");
+                }
+                worker.sync();
+                worker.commitInOrder(commitOrder);
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 1u)
+                    << "the delete and the update of the same row cannot both commit";
+                const auto remaining = bench.queryInt("MATCH (n:Item) RETURN count(n);");
+                const auto updated =
+                    bench.queryInt("MATCH (n:Item) WHERE n.writer = 1 RETURN count(n);");
+                EXPECT_TRUE((remaining == 0) || (remaining == 1 && updated == 1))
+                    << "remaining rows: " << remaining << ", updated rows: " << updated;
+            }};
+}
+
+TEST_P(ConcurrencyBench, C6_DeleteCommitsFirst) {
+    runCase(deleteVersusUpdate({0, 1}));
+}
+
+TEST_P(ConcurrencyBench, C6_UpdateCommitsFirst) {
+    runCase(deleteVersusUpdate({1, 0}));
+}
+
+// C7 — mélange aléatoire sur un petit domaine de clés : créations (doublons
+// possibles), suppressions DETACH, relations, mises à jour, une transaction sur huit
+// annulée volontairement. Invariant : tout le vérificateur. Le filet des marches
+// suivantes ; rouge tant que C1 ou C2 l'est, mais seulement probable : il dépend de
+// l'ordonnancement.
+TEST_P(ConcurrencyBench, C7_RandomMix) {
+    static constexpr int64_t numKeys = 12;
+    const auto iterations = benchIterations(150);
+    runCase({.numWorkers = 4,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun(
+                    "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+            },
+        .scenario =
+            [iterations](Worker& worker) {
+                std::mt19937_64 random(benchSeed() + 100 + worker.index());
+                std::uniform_int_distribution<int64_t> key(0, numKeys - 1);
+                std::uniform_int_distribution<int> operation(0, 3);
+                std::uniform_int_distribution<int> numOperations(1, 3);
+                for (auto i = 0u; i < iterations; ++i) {
+                    worker.begin();
+                    for (auto n = numOperations(random); n > 0; --n) {
+                        const auto k = key(random);
+                        switch (operation(random)) {
+                        case 0:
+                            worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});", k,
+                                worker.index()));
+                            break;
+                        case 1:
+                            worker.run(stringFormat("MATCH (n:Item {id: {}}) DETACH DELETE n;", k));
+                            break;
+                        case 2: {
+                            const auto other = key(random);
+                            worker.run(
+                                stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
+                                             "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
+                                    k, other, k, other));
+                        } break;
+                        default:
+                            worker.run(stringFormat("MATCH (n:Item {id: {}}) SET n.writer = {};", k,
+                                worker.index()));
+                            break;
+                        }
+                    }
+                    if (random() % 8 == 0) {
+                        worker.rollback();
+                    } else {
+                        worker.commit();
+                    }
+                }
+            },
+        .expect = [](ConcurrencyBench&, const SharedArea&) {}});
+}
+
+// C8 — point de reprise sous écrivains. Trois écrivains insèrent des clés disjointes,
+// chacune dans sa transaction, avec le point de reprise automatique allumé et un seuil
+// bas ; le quatrième lance CHECKPOINT en boucle jusqu'à ce qu'ils aient fini.
+// Invariant : chaque insertion acquittée est là, une fois et une seule ; les refus de
+// point de reprise sont lus (délai d'attente). Attendu vert pour l'intégrité.
+// Mesuré à l'étape 2 avec le délai du moteur (5 s) : 17 points de reprise sur 24
+// expirent, et chaque attente gèle les écrivains pendant 5 s (94 s pour ce cas). Le
+// délai se règle par TransactionManager::setCheckPointWaitTimeoutForTransactionsToLeave-
+// InMicros, privé (seul le runner de tests y a accès) : ce cas garde donc 5 s et dure
+// plusieurs minutes. Ce gel est le sujet de la marche A7.
+TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
+    static constexpr uint32_t numWriters = 3;
+    const auto iterations = benchIterations(300);
+    runCase({.numWorkers = numWriters + 1,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+                bench.mustRun("CALL checkpoint_threshold=65536;");
+            },
+        .scenario =
+            [iterations](Worker& worker) {
+                if (worker.index() == numWriters) {
+                    while (worker.shared().flag.load() < numWriters) {
+                        worker.run("CHECKPOINT;");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                    return;
+                }
+                for (auto i = 0u; i < iterations; ++i) {
+                    worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});",
+                        worker.index() * 100000 + i, worker.index()));
+                }
+                worker.shared().flag.fetch_add(1);
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                uint32_t inserted = 0;
+                for (auto i = 0u; i < numWriters; ++i) {
+                    inserted += area.workers[i].statementsSucceeded.load();
+                }
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), inserted)
+                    << "every acknowledged insert must be there, once";
+            },
+        .autoCheckpoint = true});
+}
+
+// C9 — le contrat inter-processus d'aujourd'hui : deux processus ouvrent la base en
+// écriture, un seul y parvient, l'autre est refusé par le verrou de fichier. C'est le
+// cas qu'on retournera avec B.
+TEST_P(ConcurrencyBench, C9_SecondWriterProcessRefused) {
+    runCase({.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+            },
+        .scenario = [](Worker& worker) { worker.sync(); },
+        .expect =
+            [](ConcurrencyBench&, const SharedArea& area) {
+                EXPECT_EQ(totalRefusals(area, Refusal::FileLock), 1u)
+                    << "exactly one of the two writer processes must be refused";
+            },
+        .runsInProcesses = true,
+        .onlyInProcesses = true});
+}
+
+INSTANTIATE_TEST_SUITE_P(Launchers, ConcurrencyBench,
+    ::testing::Values(BenchParam{LaunchMode::Thread, Check::Hot},
+        BenchParam{LaunchMode::Thread, Check::Reopen}, BenchParam{LaunchMode::Thread, Check::Crash},
+        BenchParam{LaunchMode::Process, Check::Hot}),
+    paramName);
 
 #endif
