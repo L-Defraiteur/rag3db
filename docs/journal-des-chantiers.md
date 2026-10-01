@@ -239,6 +239,14 @@ sessions, pas d'une vérification.
   seulement. Vela a la même forme. Indépendant de la fin déchirée, qui se
   livre en nommant ce rouge ; le correctif est un choix de conception et
   entre dans le plan des écritures parallèles (§3).
+- **Reprise après un point de reprise interrompu : corrigée** (2 octobre,
+  `6bf46150b`, trouvée par la session cœur C++). Sur une table qui avait déjà
+  connu des points de reprise, un point de reprise interrompu laissait l'index
+  de clé primaire réécrit en place, et la base ne se rouvrait plus (« Found
+  duplicated primary key »). Défaut hérité de Kuzu, que Vela et Ladybug portent
+  encore. Livré après reconstruction de `build/lecteurs-csv` : transaction_test
+  56/56, api_test 102/102 (la course des lecteurs concurrents ne s'est pas
+  produite à cette passe), lib 1101, huit suites e2e, trois scripts du backend.
 - **WAL illisible : la vraie cause est un bug d'écriture**, pas l'arrêt
   brutal (trouvé le 1er octobre 2026). `resizeBufferIfNeeded`
   (`src/storage/wal/checksum_writer.cpp`, même défaut dans
