@@ -1,10 +1,15 @@
 #include "storage/wal/wal_replayer.h"
 
+#include <chrono>
+#include <iostream>
+
 #include "binder/binder.h"
 #include "catalog/catalog_entry/scalar_macro_catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_entry/type_catalog_entry.h"
+#include "common/exception/end_of_file.h"
+#include "common/string_format.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
@@ -108,8 +113,11 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
     try {
         // First, we dry run the replay to find out the offset of the last record that was
         // CHECKPOINT or COMMIT.
-        auto [offsetDeserialized, isLastRecordCheckpoint] =
+        auto [offsetDeserialized, isLastRecordCheckpoint, tornEnd] =
             dryReplay(*fileInfo, throwOnWalReplayFailure, enableChecksums);
+        if (tornEnd) {
+            setAsideTornEnd(*fileInfo, offsetDeserialized);
+        }
         if (isLastRecordCheckpoint) {
             // If the last record is a checkpoint, we resume by replaying the shadow file.
             ShadowFile::replayShadowPageRecords(clientContext);
@@ -160,6 +168,7 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
     bool enableChecksums) const {
     uint64_t offsetDeserialized = 0;
     bool isLastRecordCheckpoint = false;
+    bool tornEnd = false;
     try {
         Deserializer deserializer = initDeserializer(fileInfo, clientContext, enableChecksums);
 
@@ -190,14 +199,26 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
             }
             }
         }
+        // Records after the last COMMIT that end on a record boundary: a
+        // transaction whose COMMIT was never written. Also a torn end.
+        tornEnd = !isLastRecordCheckpoint &&
+                  getReadOffset(deserializer, enableChecksums) > offsetDeserialized;
+    } catch (const EndOfFileException&) {
+        // The file ended inside a record: a torn end, left by a stop while a
+        // commit was being appended. Every byte before it was read and
+        // verified, so the journal is replayed up to the last COMMIT /
+        // CHECKPOINT, whatever throwOnWalReplayFailure says (decided on
+        // 2026-10-01). A corruption followed by more data is not this case.
+        tornEnd = true;
     } catch (...) {
-        // If we hit an exception while deserializing, we assume that the WAL file is (partially)
-        // corrupted. This should only happen for records of the last transaction recorded.
+        // Any other failure is a corruption in a journal that may continue
+        // with committed transactions: without record lengths we cannot look
+        // past it, so by default the database refuses to open.
         if (throwOnWalReplayFailure) {
             throw;
         }
     }
-    return {offsetDeserialized, isLastRecordCheckpoint};
+    return {offsetDeserialized, isLastRecordCheckpoint, tornEnd};
 }
 
 void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
@@ -576,6 +597,36 @@ void WALReplayer::syncWALFile(const FileInfo& fileInfo) const {
         return;
     }
     fileInfo.syncFile();
+}
+
+// What follows the last complete COMMIT of a torn journal is about to be
+// truncated: copy it next to the journal first, and say so. An absence is named.
+void WALReplayer::setAsideTornEnd(FileInfo& fileInfo, uint64_t offsetDeserialized) const {
+    const auto fileSize = fileInfo.getFileSize();
+    if (fileSize <= offsetDeserialized) {
+        return;
+    }
+    const auto discarded = fileSize - offsetDeserialized;
+    if (StorageManager::Get(clientContext)->isReadOnly()) {
+        std::cerr << stringFormat("rag3db: WAL {} has a torn end of {} bytes after offset {}; "
+                                  "read-only, left in place.\n",
+            walPath, discarded, offsetDeserialized);
+        return;
+    }
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+    const auto asidePath = stringFormat("{}.ecarte-{}", walPath, millis);
+    std::vector<uint8_t> bytes(discarded);
+    fileInfo.readFromFile(bytes.data(), discarded, offsetDeserialized);
+    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
+    auto aside = vfs->openFile(asidePath,
+        FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
+    aside->writeFile(bytes.data(), discarded, 0);
+    aside->syncFile();
+    std::cerr << stringFormat("rag3db: WAL {} had a torn end: {} bytes after offset {} (an "
+                              "uncommitted transaction) set aside in {}.\n",
+        walPath, discarded, offsetDeserialized, asidePath);
 }
 
 void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {

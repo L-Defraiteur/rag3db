@@ -18,7 +18,13 @@ private:
     struct WALReplayInfo {
         uint64_t offsetDeserialized = 0;
         bool isLastRecordCheckpoint = false;
+        // The dry run ran out of file inside a record: the end of the journal
+        // was torn by a stop during an append. Everything after
+        // offsetDeserialized belongs to a transaction that never committed.
+        bool tornEnd = false;
     };
+
+    void setAsideTornEnd(common::FileInfo& fileInfo, uint64_t offsetDeserialized) const;
 
     void replayWALRecord(WALRecord& walRecord) const;
     void replayCreateCatalogEntryRecord(WALRecord& walRecord) const;
