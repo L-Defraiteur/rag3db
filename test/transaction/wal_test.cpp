@@ -648,3 +648,136 @@ TEST_F(WalTest, LongRecordsReplayWithTheirValues) {
         ASSERT_TRUE(replayed[id] == text) << "id " << id << " : la valeur relue diffère";
     }
 }
+
+// ─── Fin de journal déchirée (décision de Lucie, 1er octobre 2026) ───────────
+//
+// Un arrêt brutal pendant l'écriture d'un commit laisse un journal dont la fin
+// est coupée. Avec les réglages par défaut, la base rouvre au dernier COMMIT
+// complet ; ce qui suit est écarté, copié à côté du journal, et dit. Une
+// corruption au milieu d'un journal qui continue reste un refus d'ouvrir.
+
+class WalTornEndTest : public WalTest {
+protected:
+    // Trois transactions validées ; la troisième est longue (plusieurs pages du
+    // lecteur). `ends` reçoit la taille du journal après chacune.
+    void writeThreeTransactions(std::vector<uint64_t>& ends) {
+        conn->query("CALL force_checkpoint_on_close=false");
+        ASSERT_TRUE(
+            conn->query("CREATE NODE TABLE t(id INT64 PRIMARY KEY, s STRING);")->isSuccess());
+        walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+        ends.push_back(std::filesystem::file_size(walPath));
+        auto create = conn->prepare("CREATE (:t {id: $id, s: $s});");
+        for (int64_t id = 1; id <= 3; ++id) {
+            auto result = conn->execute(create.get(), std::make_pair(std::string("id"), id),
+                std::make_pair(std::string("s"), longText(static_cast<char>(id), id == 3 ? 9000 : 100)));
+            ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+            ends.push_back(std::filesystem::file_size(walPath));
+        }
+        conn.reset();
+        database.reset();
+        std::filesystem::copy_file(databasePath, databasePath + ".pristine",
+            std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::copy_file(walPath, walPath + ".pristine",
+            std::filesystem::copy_options::overwrite_existing);
+    }
+
+    // La base d'avant, avec un journal coupé à `length` octets.
+    void restoreWithWALCutAt(uint64_t length) {
+        conn.reset();
+        database.reset();
+        for (const auto& entry : std::filesystem::directory_iterator(
+                 std::filesystem::path(databasePath).parent_path())) {
+            if (entry.path().string().find(".ecarte-") != std::string::npos ||
+                entry.path().string().ends_with(".shadow")) {
+                std::filesystem::remove(entry.path());
+            }
+        }
+        std::filesystem::copy_file(databasePath + ".pristine", databasePath,
+            std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::copy_file(walPath + ".pristine", walPath,
+            std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::resize_file(walPath, length);
+    }
+
+    std::vector<int64_t> idsAfterReopen() {
+        createDBAndConn();
+        std::vector<int64_t> ids;
+        auto result = conn->query("MATCH (n:t) RETURN n.id ORDER BY n.id;");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        while (result->hasNext()) {
+            ids.push_back(result->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        return ids;
+    }
+
+    uint64_t discardedBytes() const {
+        uint64_t total = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(
+                 std::filesystem::path(databasePath).parent_path())) {
+            if (entry.path().string().find(".ecarte-") != std::string::npos) {
+                total += std::filesystem::file_size(entry.path());
+            }
+        }
+        return total;
+    }
+
+    std::string walPath;
+};
+
+TEST_F(WalTornEndTest, ReopensAtTheLastCompleteCommitWithDefaultSettings) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    std::vector<uint64_t> ends;
+    writeThreeTransactions(ends);
+    ASSERT_EQ(ends.size(), 4u);
+    // Les réglages par défaut : un échec du rejeu refuse d'ouvrir.
+    systemConfig->throwOnWalReplayFailure = true;
+    const auto begin3 = ends[2], end3 = ends[3];
+    ASSERT_GT(end3 - begin3, 9000u);
+    const std::vector<std::pair<const char*, uint64_t>> cuts{
+        {"pile sur la frontière du COMMIT 2", begin3},
+        {"juste après l'octet de type du BEGIN", begin3 + 1},
+        {"juste après l'octet de type du premier enregistrement", begin3 + 10},
+        {"au milieu d'un corps", begin3 + (end3 - begin3) / 2},
+        {"entre les données et le COMMIT", end3 - 9},
+        {"au milieu de la somme du COMMIT", end3 - 4},
+    };
+    for (const auto& [where, length] : cuts) {
+        SCOPED_TRACE(where);
+        restoreWithWALCutAt(length);
+        std::vector<int64_t> ids;
+        ASSERT_NO_THROW(ids = idsAfterReopen());
+        EXPECT_EQ(ids, (std::vector<int64_t>{1, 2}));
+        // Ce qui suit le dernier COMMIT est copié à côté, pas perdu en silence.
+        EXPECT_EQ(discardedBytes(), length - begin3);
+    }
+    restoreWithWALCutAt(end3);
+    EXPECT_EQ(idsAfterReopen(), (std::vector<int64_t>{1, 2, 3}));
+    EXPECT_EQ(discardedBytes(), 0u);
+}
+
+TEST_F(WalTornEndTest, CorruptionBeforeCommittedTransactionsStillRefusesToOpen) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    std::vector<uint64_t> ends;
+    writeThreeTransactions(ends);
+    systemConfig->throwOnWalReplayFailure = true;
+    restoreWithWALCutAt(ends[3]);
+    // Un octet retourné dans la transaction 2, suivie de la transaction 3 validée.
+    const auto flipAt = ends[1] + (ends[2] - ends[1]) / 2;
+    {
+        std::fstream wal(walPath, std::ios::in | std::ios::out | std::ios::binary);
+        wal.seekg(flipAt);
+        char byte = 0;
+        wal.read(&byte, 1);
+        byte = static_cast<char>(~byte);
+        wal.seekp(flipAt);
+        wal.write(&byte, 1);
+    }
+    EXPECT_ANY_THROW(createDBAndConn());
+    EXPECT_EQ(discardedBytes(), 0u);
+    // Le journal n'a pas été tronqué : rien de validé n'est jeté.
+    EXPECT_EQ(std::filesystem::file_size(walPath), ends[3]);
+}

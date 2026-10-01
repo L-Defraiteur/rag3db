@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "common/assert.h"
+#include "common/exception/end_of_file.h"
 #include "common/exception/runtime.h"
 #include "common/file_system/file_info.h"
 #include "common/system_config.h"
@@ -73,6 +74,14 @@ BufferedFileReader::BufferedFileReader(FileInfo& fileInfo)
 }
 
 void BufferedFileReader::read(uint8_t* data, uint64_t size) {
+    // Refuse a read that the file cannot satisfy before copying anything: the
+    // page branch below would otherwise copy stale buffer bytes past a short
+    // last page, and the direct branch would accept a short pread at the end.
+    if (getReadOffset() + size > fileSize) {
+        throw EndOfFileException(
+            stringFormat("Reading past the end of the file {} with size {} at offset {}",
+                fileInfo.path, fileSize, getReadOffset() + size));
+    }
     if (size > BUFFER_SIZE) {
         // Clear read buffer.
         fileOffset -= bufferSize;
@@ -100,7 +109,7 @@ bool BufferedFileReader::finished() {
 
 void BufferedFileReader::readNextPage() {
     if (fileSize <= fileOffset) {
-        throw RuntimeException(
+        throw EndOfFileException(
             stringFormat("Reading past the end of the file {} with size {} at offset {}",
                 fileInfo.path, fileSize, fileOffset));
     }
