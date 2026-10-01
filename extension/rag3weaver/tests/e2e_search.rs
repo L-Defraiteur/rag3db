@@ -246,11 +246,10 @@ fn make_catalog_with_extensions() -> Catalog {
 }
 
 /// Extract a property from the node map returned by catalog.get().
+/// `Catalog::get` rend la ligne à plat (champs déclarés, `_uuid`, `_label`),
+/// la même forme sur les deux dialectes — voir `get_rend_une_ligne_a_plat`.
 fn get_prop<'a>(data: &'a BTreeMap<String, CypherValue>, prop: &str) -> Option<&'a CypherValue> {
-    match data.get("n") {
-        Some(CypherValue::Map(m)) => m.get(prop),
-        _ => None,
-    }
+    data.get(prop)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -287,6 +286,30 @@ fn phase0_initialize_with_kb_config() {
     // Empty tables
     assert_eq!(catalog.count("Document").unwrap(), 0);
     assert_eq!(catalog.count("Author").unwrap(), 0);
+}
+
+/// **Le contrat de forme de `get` et `get_many`.** Une ligne à plat : les
+/// champs déclarés, `_uuid`, et aucune enveloppe. Jusqu'au 20 septembre 2026
+/// rag3db rendait `{"n": {…}}` — le `RETURN n` du Cypher qui fuyait dans le
+/// contrat, alors que le dialecte SQL rendait déjà ses colonnes.
+#[test]
+#[ignore]
+fn get_rend_une_ligne_a_plat() {
+    let mut catalog = make_catalog_with_extensions();
+    catalog.initialize().unwrap();
+    let d = catalog
+        .create("Document", make_doc("Forme", "Le corps.", "Résumé.", "programming", 2024, 1.0, false))
+        .unwrap();
+    catalog.drain();
+    let uuid = d.uuid().unwrap();
+    let ligne = catalog.get("Document", &uuid).unwrap().expect("la ligne existe");
+    assert!(!ligne.contains_key("n"), "plus d'enveloppe `n` : {:?}", ligne.keys().collect::<Vec<_>>());
+    assert_eq!(ligne.get("_uuid").and_then(|v| v.as_str()), Some(uuid.as_str()));
+    assert_eq!(ligne.get("title").and_then(|v| v.as_str()), Some("Forme"));
+    assert_eq!(ligne.get("year").and_then(|v| v.as_i64()), Some(2024));
+    let lignes = catalog.get_many("Document", &[uuid.clone()]).unwrap();
+    assert_eq!(lignes.len(), 1);
+    assert_eq!(lignes[0], ligne, "get_many rend la même forme que get");
 }
 
 #[test]

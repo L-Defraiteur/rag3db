@@ -108,16 +108,14 @@ fn make_catalog() -> Catalog {
     .avec_regime(RegimeEcriture::ParLot)
 }
 
-/// Extract a property from the node map returned by catalog.get().
-/// catalog.get() returns {"n": Map({_label, _id, ...properties})}
+/// Extract a property from the row returned by catalog.get(), which is flat
+/// (declared fields, `_uuid`, `_label`) since ab95c3a2d — see
+/// `e2e_search::get_rend_une_ligne_a_plat`.
 fn get_node_prop<'a>(
     data: &'a BTreeMap<String, CypherValue>,
     prop: &str,
 ) -> Option<&'a CypherValue> {
-    match data.get("n") {
-        Some(CypherValue::Map(m)) => m.get(prop),
-        _ => None,
-    }
+    data.get(prop)
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

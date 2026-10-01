@@ -5413,6 +5413,10 @@ impl Catalog {
 
     // ── Direct DB reads ────────────────────────────────────────────────
 
+    /// La ligne `uuid` de `entity_name`, **à plat** : les champs déclarés,
+    /// `_uuid` et `_label` au premier niveau, sans enveloppe. La forme est la
+    /// même sur les deux dialectes (`row_to_map` déplie le nœud de
+    /// `RETURN n` côté rag3db) ; `get_many` rend la même, une par ligne.
     pub fn get(
         &self,
         entity_name: &str,
