@@ -248,8 +248,7 @@ fn observe_execute_with_report_simple() {
         "TreeKB",
         "src",
         strategy_no_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let (output, report) = runtime.execute_with_report(&mut graph).unwrap();
@@ -288,8 +287,7 @@ fn observe_execute_with_report_expansion() {
         "TreeKB",
         "src",
         strategy_with_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
@@ -340,8 +338,7 @@ fn observe_tap_all() {
         "TreeKB",
         "src",
         strategy_with_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let mut runtime = DataflowRuntime::with_services(10, services);
     let mut tap_rx = runtime.tap_all();
@@ -421,8 +418,7 @@ fn observe_tap_specific_edge() {
         "TreeKB",
         "src",
         strategy_no_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let mut runtime = DataflowRuntime::with_services(10, services);
     // Only tap the query edge
@@ -459,8 +455,7 @@ fn observe_record_jsonl() {
         "TreeKB",
         "src",
         strategy_with_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
@@ -504,8 +499,7 @@ fn observe_record_database() {
         "TreeKB",
         "src",
         strategy_with_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();
@@ -569,8 +563,7 @@ fn observe_report_json_structure() {
         "TreeKB",
         "src",
         strategy_with_expansion(),
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let (_output, report) = runtime.execute_with_report(&mut graph).unwrap();

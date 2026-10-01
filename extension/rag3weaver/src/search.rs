@@ -2,10 +2,10 @@
 //! search with fusion.
 //!
 //! Contains free functions called by the `search_base` graph nodes (the
-//! `Catalog::rechercher` path) and by `Catalog::search_with_explore()`,
-//! plus types for search options, results, and graph exploration.
+//! `Catalog::rechercher` path), plus types for search options, results, and
+//! the graph carried by a unified result.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -144,7 +144,8 @@ impl Default for SignalConfig {
     }
 }
 
-/// Resolved fusion configuration passed to `fuse_results`.
+/// Resolved fusion configuration: one `SignalConfig` per signal, read by
+/// `FuseResultsNode` and handed to [`fuse_signals`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FusionConfig {
     pub strategy: FusionStrategy,
@@ -720,29 +721,7 @@ pub struct SearchResponse {
     pub meta: SearchMeta,
 }
 
-// ─── Explore types ───────────────────────────────────────────────────────────
-
-/// Options for graph exploration after search.
-#[derive(Debug, Clone)]
-pub struct ExploreOptions {
-    pub search: SearchOptions,
-    pub depth: usize,
-    pub top_k: usize,
-    pub outgoing_relations: Vec<String>,
-    pub incoming_relations: Vec<String>,
-}
-
-impl Default for ExploreOptions {
-    fn default() -> Self {
-        Self {
-            search: SearchOptions::default(),
-            depth: 2,
-            top_k: 15,
-            outgoing_relations: vec![],
-            incoming_relations: vec![],
-        }
-    }
-}
+// ─── Graph types ───────────────────────────────────────────────────────────
 
 /// A node in the explore graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -773,14 +752,6 @@ pub struct GraphEdge {
 pub struct ExploreGraph {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
-}
-
-/// Complete explore result: search results + graph.
-#[derive(Debug, Clone)]
-pub struct ExploreResult {
-    pub results: Vec<SearchResult>,
-    pub graph: ExploreGraph,
-    pub meta: SearchMeta,
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -2525,38 +2496,13 @@ pub fn search_sparse_via_backend(
     resolve_and_enrich_via_backend(backend, entity, &offsets_scores, return_fields)
 }
 
-/// Fuse vector, BM25, and optional sparse results using per-signal config.
-///
-/// Each signal has a role (Fuse or Boost), a weight, and optional normalization.
-/// Fuse signals are combined first (via RRF or Weighted), then Boost signals
-/// re-rank the fused results.
-///
-/// Forme à trois listes héritée du monolithe (parti le 18 septembre 2026) ;
-/// le cœur est [`fuse_signals`], N-aire.
-pub fn fuse_results(
-    vector_results: &[SearchResult],
-    bm25_results: &[SearchResult],
-    sparse_results: &[SearchResult],
-    config: &FusionConfig,
-) -> Vec<SearchResult> {
-    fuse_signals(
-        &[
-            (vector_results, config.vector),
-            (bm25_results, config.bm25),
-            (sparse_results, config.sparse),
-        ],
-        config.strategy,
-        config.rrf_k,
-    )
-}
-
 /// Fusion N-aire : une liste de résultats et sa configuration par signal, dans
 /// n'importe quel nombre. C'est ce que consomme `FuseResultsNode` quand ses
 /// branches arrivent étiquetées — deux BM25 sur deux champs, un vecteur, un
 /// reranker en rôle `boost`… — sans que la fusion sache ce qu'est chaque
 /// branche.
 ///
-/// Règles, identiques à la forme à trois listes :
+/// Règles :
 /// - une seule liste non vide → rendue telle quelle (scores bruts) ;
 /// - `top_k` tronque chaque liste avant fusion ;
 /// - les signaux `Fuse` sont combinés (RRF pondéré ou somme pondérée de scores
@@ -2796,204 +2742,6 @@ fn normalize_scores(results: &[SearchResult], mode: Option<NormalizeMode>) -> Ha
     }
     map
 }
-
-/// BFS graph exploration from seed nodes.
-///
-/// Follows outgoing and incoming relations up to `depth` hops.
-/// Prunes to `top_k` nodes, keeping seed results and closer nodes.
-pub fn explore_bfs(
-    conn: &dyn DbConnection,
-    seed_nodes: Vec<GraphNode>,
-    outgoing_relations: &[String],
-    incoming_relations: &[String],
-    depth: usize,
-    top_k: usize,
-) -> Result<ExploreGraph, CatalogError> {
-    let mut nodes: HashMap<String, GraphNode> = HashMap::new();
-    let mut edges: Vec<GraphEdge> = Vec::new();
-    let mut visited: HashSet<String> = HashSet::new();
-
-    let mut frontier: Vec<String> = Vec::new();
-    for node in seed_nodes {
-        visited.insert(node.uuid.clone());
-        frontier.push(node.uuid.clone());
-        nodes.insert(node.uuid.clone(), node);
-    }
-
-    for current_depth in 1..=depth {
-        if frontier.is_empty() {
-            break;
-        }
-
-        let mut next_frontier: Vec<String> = Vec::new();
-
-        // Batch: one query per (relation, direction) for the entire frontier
-        for rel in outgoing_relations {
-            let neighbors = explore_relation_batch(conn, &frontier, rel, "outgoing")?;
-            for (from_uuid, n_uuid, n_entity, n_data) in neighbors {
-                if !visited.contains(&n_uuid) {
-                    visited.insert(n_uuid.clone());
-                    let label = n_data
-                        .get("name")
-                        .or_else(|| n_data.get("title"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&n_uuid)
-                        .to_string();
-                    nodes.insert(
-                        n_uuid.clone(),
-                        GraphNode {
-                            uuid: n_uuid.clone(),
-                            entity: n_entity,
-                            label,
-                            depth: current_depth,
-                            is_search_result: false,
-                            data: n_data,
-                        },
-                    );
-                    next_frontier.push(n_uuid.clone());
-                }
-                edges.push(GraphEdge {
-                    from_uuid,
-                    to_uuid: n_uuid,
-                    relation: rel.clone(),
-                    direction: "outgoing".to_string(),
-                    properties: BTreeMap::new(),
-                });
-            }
-        }
-
-        for rel in incoming_relations {
-            let neighbors = explore_relation_batch(conn, &frontier, rel, "incoming")?;
-            for (to_uuid, n_uuid, n_entity, n_data) in neighbors {
-                if !visited.contains(&n_uuid) {
-                    visited.insert(n_uuid.clone());
-                    let label = n_data
-                        .get("name")
-                        .or_else(|| n_data.get("title"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&n_uuid)
-                        .to_string();
-                    nodes.insert(
-                        n_uuid.clone(),
-                        GraphNode {
-                            uuid: n_uuid.clone(),
-                            entity: n_entity,
-                            label,
-                            depth: current_depth,
-                            is_search_result: false,
-                            data: n_data,
-                        },
-                    );
-                    next_frontier.push(n_uuid.clone());
-                }
-                edges.push(GraphEdge {
-                    from_uuid: n_uuid,
-                    to_uuid,
-                    relation: rel.clone(),
-                    direction: "incoming".to_string(),
-                    properties: BTreeMap::new(),
-                });
-            }
-        }
-
-        frontier = next_frontier;
-    }
-
-    // Pruning: keep seed results + closest nodes up to top_k
-    let mut node_list: Vec<GraphNode> = nodes.into_values().collect();
-    if node_list.len() > top_k {
-        node_list.sort_by(|a, b| {
-            let a_prio = if a.is_search_result { 0 } else { 1 };
-            let b_prio = if b.is_search_result { 0 } else { 1 };
-            a_prio.cmp(&b_prio).then(a.depth.cmp(&b.depth))
-        });
-        node_list.truncate(top_k);
-    }
-
-    let remaining: HashSet<&str> = node_list.iter().map(|n| n.uuid.as_str()).collect();
-    edges.retain(|e| {
-        remaining.contains(e.from_uuid.as_str()) && remaining.contains(e.to_uuid.as_str())
-    });
-
-    Ok(ExploreGraph {
-        nodes: node_list,
-        edges,
-    })
-}
-
-// ─── Internal ────────────────────────────────────────────────────────────────
-
-/// Batch explore: one query for the entire frontier × one relation type.
-/// Returns (from_uuid, neighbor_uuid, neighbor_entity, neighbor_data).
-fn explore_relation_batch(
-    conn: &dyn DbConnection,
-    uuids: &[String],
-    relation: &str,
-    direction: &str,
-) -> Result<Vec<(String, String, String, BTreeMap<String, CypherValue>)>, CatalogError> {
-    if uuids.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let uuids_param = CypherValue::List(
-        uuids
-            .iter()
-            .map(|u| CypherValue::String(u.clone()))
-            .collect(),
-    );
-
-    let cypher = if direction == "outgoing" {
-        format!(
-            "UNWIND $uuids AS uid \
-             MATCH (n {{_uuid: uid}})-[:{relation}]->(m) \
-             RETURN uid, m._uuid, label(m), m"
-        )
-    } else {
-        format!(
-            "UNWIND $uuids AS uid \
-             MATCH (n {{_uuid: uid}})<-[:{relation}]-(m) \
-             RETURN uid, m._uuid, label(m), m"
-        )
-    };
-
-    let result = conn
-        .execute_with_params(
-            &cypher,
-            &[QueryParam {
-                name: "uuids".to_string(),
-                value: uuids_param,
-            }],
-        )
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    Ok(result
-        .rows
-        .iter()
-        .map(|row| {
-            let from_uuid = row
-                .get(0)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let n_uuid = row
-                .get(1)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let entity = row
-                .get(2)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let data = match row.get(3) {
-                Some(CypherValue::Map(m)) => m.clone(),
-                _ => BTreeMap::new(),
-            };
-            (from_uuid, n_uuid, entity, data)
-        })
-        .collect())
-}
-
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -3385,7 +3133,23 @@ mod tests {
         assert_eq!(should[1]["regex"], true);
     }
 
-    // ── fuse_results ─────────────────────────────────────────────────────
+    // ── fusion (fuse_signals) ────────────────────────────────────────────
+    //
+    // Ces tests portaient sur `fuse_results`, la forme à trois listes retirée
+    // le 2 octobre 2026 ; ils gardent la sémantique de `fuse_signals`, que la
+    // production utilise (`FuseResultsNode`).
+    fn fuse3(
+        vector: &[SearchResult],
+        bm25: &[SearchResult],
+        sparse: &[SearchResult],
+        config: &FusionConfig,
+    ) -> Vec<SearchResult> {
+        fuse_signals(
+            &[(vector, config.vector), (bm25, config.bm25), (sparse, config.sparse)],
+            config.strategy,
+            config.rrf_k,
+        )
+    }
 
     fn rrf_config() -> FusionConfig {
         FusionConfig {
@@ -3409,14 +3173,14 @@ mod tests {
 
     #[test]
     fn fuse_empty() {
-        let results = fuse_results(&[], &[], &[], &rrf_config());
+        let results = fuse3(&[], &[], &[], &rrf_config());
         assert!(results.is_empty());
     }
 
     #[test]
     fn fuse_vector_only() {
         let vector = vec![make_result("a", 0.9), make_result("b", 0.7)];
-        let results = fuse_results(&vector, &[], &[], &rrf_config());
+        let results = fuse3(&vector, &[], &[], &rrf_config());
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].uuid, "a");
@@ -3428,7 +3192,7 @@ mod tests {
     #[test]
     fn fuse_bm25_only() {
         let bm25 = vec![make_result("x", 5.0), make_result("y", 3.0)];
-        let results = fuse_results(&[], &bm25, &[], &rrf_config());
+        let results = fuse3(&[], &bm25, &[], &rrf_config());
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].uuid, "x");
@@ -3447,7 +3211,7 @@ mod tests {
             make_result("a", 1.0),
         ];
 
-        let results = fuse_results(&vector, &bm25, &[], &rrf_config());
+        let results = fuse3(&vector, &bm25, &[], &rrf_config());
 
         assert_eq!(results.len(), 4);
         let a_score = results.iter().find(|r| r.uuid == "a").unwrap().score;
@@ -3473,7 +3237,7 @@ mod tests {
             },
             sparse: SignalConfig::default(),
         };
-        let results = fuse_results(&vector, &bm25, &[], &config);
+        let results = fuse3(&vector, &bm25, &[], &config);
 
         let a = results.iter().find(|r| r.uuid == "a").unwrap();
         // "a" in vector with score 0.9, boosted by bm25 (normalized=1.0): 0.9 * (1 + 0.3*1.0) = 1.17
@@ -3493,7 +3257,7 @@ mod tests {
         let vector = vec![make_result("a", 0.9), make_result("b", 0.7)];
         let bm25 = vec![make_result("a", 5.0), make_result("c", 3.0)];
 
-        let results = fuse_results(&vector, &bm25, &[], &weighted_config());
+        let results = fuse3(&vector, &bm25, &[], &weighted_config());
 
         // 3 unique UUIDs
         assert_eq!(results.len(), 3);
@@ -3548,31 +3312,6 @@ mod tests {
         assert_eq!(response.meta.fused_count, 0);
     }
 
-    #[test]
-    fn catalog_search_with_explore_empty() {
-        let mut catalog = make_catalog();
-        catalog.initialize().unwrap();
-
-        let result = Catalog::search_with_explore(&Arc::new(Mutex::new(catalog)), "main", "hello", ExploreOptions::default())
-            .unwrap();
-
-        assert!(result.results.is_empty());
-        assert!(result.graph.nodes.is_empty());
-        assert!(result.graph.edges.is_empty());
-        assert_eq!(result.meta.target, "main");
-    }
-
-    // ── explore_bfs ──────────────────────────────────────────────────────
-
-    #[test]
-    fn explore_bfs_empty_seed() {
-        let conn = MockConnection::new();
-        let graph = explore_bfs(&conn, vec![], &["REL".to_string()], &[], 2, 15)
-            .unwrap();
-        assert!(graph.nodes.is_empty());
-        assert!(graph.edges.is_empty());
-    }
-
     // ── 3-way fusion ────────────────────────────────────────────────────
 
     #[test]
@@ -3581,7 +3320,7 @@ mod tests {
         let bm25 = vec![make_result("b", 5.0), make_result("c", 3.0)];
         let sparse = vec![make_result("c", 0.8), make_result("a", 0.4)];
 
-        let results = fuse_results(&vector, &bm25, &sparse, &rrf_config());
+        let results = fuse3(&vector, &bm25, &sparse, &rrf_config());
 
         assert_eq!(results.len(), 3);
         assert!(results[0].score > 0.0);
@@ -3601,7 +3340,7 @@ mod tests {
             bm25: SignalConfig { weight: 0.3, ..SignalConfig::default() },
             sparse: SignalConfig { weight: 0.2, ..SignalConfig::default() },
         };
-        let results = fuse_results(&vector, &bm25, &sparse, &config);
+        let results = fuse3(&vector, &bm25, &sparse, &config);
 
         assert_eq!(results.len(), 1);
         // Single doc: minmax of a single value = 0 range → normalized to 1.0
@@ -3627,7 +3366,7 @@ mod tests {
                 ..SignalConfig::default()
             },
         };
-        let results = fuse_results(&vector, &bm25, &sparse, &config);
+        let results = fuse3(&vector, &bm25, &sparse, &config);
 
         // "a" and "b" from fuse, sparse boosts them
         assert_eq!(results.len(), 2);
@@ -3641,7 +3380,7 @@ mod tests {
     #[test]
     fn fuse_sparse_only() {
         let sparse = vec![make_result("x", 0.7), make_result("y", 0.3)];
-        let results = fuse_results(&[], &[], &sparse, &rrf_config());
+        let results = fuse3(&[], &[], &sparse, &rrf_config());
 
         // Single source => returned directly
         assert_eq!(results.len(), 2);
@@ -3665,7 +3404,7 @@ mod tests {
             },
             sparse: SignalConfig::default(),
         };
-        let results = fuse_results(&vector, &bm25, &[], &config);
+        let results = fuse3(&vector, &bm25, &[], &config);
 
         let a = results.iter().find(|r| r.uuid == "a").unwrap();
         let b = results.iter().find(|r| r.uuid == "b").unwrap();

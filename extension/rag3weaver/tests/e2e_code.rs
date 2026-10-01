@@ -132,8 +132,16 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
         }],
         max_rounds: 3,
     };
-    let expanded = Catalog::search_with_strategy(catalog.clone(), SCOPE, "fn take_results", strategy).unwrap();
-    let take_results = expanded.results.iter()
+    // Le graphe de stratégie et le runtime, directement (l'enveloppe
+    // `search_with_strategy` est retirée le 2 octobre 2026).
+    let (mut graph, services) = Catalog::build_dataflow_graph(catalog.clone(), SCOPE, "fn take_results", strategy).unwrap();
+    let output = DataflowRuntime::with_services(64, services).execute(&mut graph).unwrap();
+    let expanded: Vec<rag3weaver::search_strategy::UnifiedResult> = output
+        .get("compose", "results")
+        .and_then(|v| v.downcast::<Vec<rag3weaver::search_strategy::UnifiedResult>>())
+        .cloned()
+        .expect("compose: results");
+    let take_results = expanded.iter()
         .find(|r| r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()) == Some("take_results"))
         .expect("take_results in results");
     let consumers: Vec<String> = take_results.other_children.iter().flatten()

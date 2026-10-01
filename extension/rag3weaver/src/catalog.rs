@@ -7268,47 +7268,6 @@ impl Catalog {
         Ok(())
     }
 
-    /// Sur l'`Arc<Mutex<Catalog>>`, comme [`Self::rechercher`] qu'elle
-    /// emprunte — la recherche d'abord, l'exploration du graphe ensuite, le
-    /// verrou seulement pour la seconde.
-    pub fn search_with_explore(
-        catalogue: &Arc<Mutex<Catalog>>,
-        kb_name: &str,
-        query: &str,
-        options: search::ExploreOptions,
-    ) -> Result<search::ExploreResult, CatalogError> {
-        let response = Self::rechercher(catalogue, kb_name, query, options.search)?;
-
-        let seed_nodes: Vec<search::GraphNode> = response
-            .results
-            .iter()
-            .map(|r| search::GraphNode {
-                uuid: r.uuid.clone(),
-                entity: r.entity.clone().unwrap_or_default(),
-                label: r.uuid.clone(),
-                depth: 0,
-                is_search_result: true,
-                data: BTreeMap::new(),
-            })
-            .collect();
-
-        let cat = catalogue.lock().unwrap();
-        let graph = search::explore_bfs(
-            cat.conn.as_ref(),
-            seed_nodes,
-            &options.outgoing_relations,
-            &options.incoming_relations,
-            options.depth,
-            options.top_k,
-        )?;
-
-        Ok(search::ExploreResult {
-            results: response.results,
-            graph,
-            meta: response.meta,
-        })
-    }
-
     // ── Private helpers ────────────────────────────────────────────────
 
     fn check_initialized(&self) -> Result<(), CatalogError> {
@@ -7424,13 +7383,32 @@ impl Catalog {
     /// entrent par la config JSON des nœuds après le parse, pas par la
     /// substitution textuelle : une requête a le droit de contenir une
     /// apostrophe.
+    ///
+    /// Garde « max iterations » : les expansions sont déroulées dans le graphe
+    /// (une règle = une passe), `max_rounds` borne ce déroulement — `0`, ou
+    /// plus de règles que de passes permises, est refusé. Elle vivait dans
+    /// `search_with_strategy`, retiré le 2 octobre 2026 (aucun appelant de
+    /// production) ; on exécute le graphe rendu avec `DataflowRuntime`.
     pub fn build_dataflow_graph(
         catalog: Arc<Mutex<Catalog>>,
         kb_name: &str,
         query: &str,
         strategy: crate::search_strategy::SearchStrategy,
-    ) -> (crate::dataflow::DataflowGraph, crate::dataflow::ServiceRegistry) {
+    ) -> Result<(crate::dataflow::DataflowGraph, crate::dataflow::ServiceRegistry), CatalogError> {
         use crate::dataflow::*;
+
+        if strategy.max_rounds == 0 {
+            return Err(CatalogError::DbError(
+                "build_dataflow_graph: max_rounds = 0 (max iterations guard) — must be ≥ 1".into(),
+            ));
+        }
+        if strategy.expansions.len() > strategy.max_rounds {
+            return Err(CatalogError::DbError(format!(
+                "build_dataflow_graph: {} expansions exceed max_rounds = {} (max iterations guard)",
+                strategy.expansions.len(),
+                strategy.max_rounds
+            )));
+        }
 
         // Les services : le même montage que `rechercher`, une seule source.
         let mut services = ServiceRegistry::new();
@@ -7538,72 +7516,7 @@ impl Catalog {
         let (registry, _outils) = builtin_graph_tools().expect("registres fournis");
         let graph = DataflowGraph::from_definition(&def, &registry)
             .expect("search_expansion : graphe");
-        (graph, services)
-    }
-
-    /// Run a search with reactive expansion (graph traversal after search).
-    ///
-    /// This is an associated function taking `Arc<Mutex<Catalog>>` so that
-    /// nodes can call `Catalog::rechercher`.
-    ///
-    /// For event observation, use [`Self::build_dataflow_graph()`] +
-    /// [`DataflowRuntime::subscribe()`] + [`DataflowRuntime::execute()`].
-    pub fn search_with_strategy(
-        catalog: Arc<Mutex<Catalog>>,
-        kb_name: &str,
-        query: &str,
-        strategy: crate::search_strategy::SearchStrategy,
-    ) -> Result<crate::search_strategy::SearchStrategyResponse, CatalogError> {
-        // Garde « max iterations » : les expansions sont déroulées dans le graphe
-        // (une règle = une passe), `max_rounds` borne ce déroulement.
-        if strategy.max_rounds == 0 {
-            return Err(CatalogError::DbError(
-                "search_with_strategy: max_rounds = 0 (max iterations guard) — must be ≥ 1".into(),
-            ));
-        }
-        if strategy.expansions.len() > strategy.max_rounds {
-            return Err(CatalogError::DbError(format!(
-                "search_with_strategy: {} expansions exceed max_rounds = {} (max iterations guard)",
-                strategy.expansions.len(),
-                strategy.max_rounds
-            )));
-        }
-        let has_expansions = !strategy.expansions.is_empty();
-        let (mut graph, services) =
-            Self::build_dataflow_graph(catalog, kb_name, query, strategy);
-
-        // Notre runtime, en parallèle par niveau ; une itération achève au
-        // moins un nœud, donc autant d'itérations que de nœuds suffit.
-        let max_iterations = graph.nodes.len().max(1);
-        let output = crate::dataflow::DataflowRuntime::with_services_arc(max_iterations, std::sync::Arc::new(services))
-            .execute(&mut graph)
-            .map_err(CatalogError::DbError)?;
-
-        // Results from terminal node
-        let (results_node, results_port) = if has_expansions {
-            ("compose", "results")
-        } else {
-            // Sans expansion, le composite est terminal : ses résultats
-            // sortent par le port que son rendu interne réémet.
-            ("primary_search", "render.results")
-        };
-        let results = output
-            .get(results_node, results_port)
-            .and_then(|v| v.downcast::<Vec<crate::search_strategy::UnifiedResult>>())
-            .cloned()
-            .unwrap_or_default();
-
-        let meta = output
-            .get("primary_search", "render.meta")
-            .and_then(|v| v.downcast::<crate::search::SearchMeta>())
-            .cloned()
-            .ok_or_else(|| {
-                CatalogError::DbError(
-                    "search_with_strategy: no meta after processing".into(),
-                )
-            })?;
-
-        Ok(crate::search_strategy::SearchStrategyResponse { results, meta })
+        Ok((graph, services))
     }
 }
 

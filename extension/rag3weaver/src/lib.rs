@@ -232,12 +232,12 @@ pub use catalog::{Catalog, CatalogError, ReindexStats};
 pub use records::{DeleteResult, UpdateResult, UpdateStatus};
 pub use search::{
     AttributedChunk, BM25HitDiagnostic, BM25Mode, BoostType, ChunkInfo, ChunkOverlapDiag,
-    Consistency, ExploreGraph, ExploreOptions, ExploreResult, FusionConfig, FusionStrategy,
+    Consistency, ExploreGraph, FusionConfig, FusionStrategy,
     GraphEdge, GraphNode, NormalizeMode, ResultMode, SearchDiagnostics, SearchMeta,
     SearchOptions, SearchResponse, SearchResult, SearchSignals, SignalConfig, SignalRole,
 };
 pub use search_strategy::{
-    UnifiedResult, ChildSummary, SearchStrategy, SearchStrategyResponse,
+    UnifiedResult, ChildSummary, SearchStrategy,
     ExpansionRule, ExpansionDirection,
 };
 pub use validator::{validate_schema, KBFieldRef};

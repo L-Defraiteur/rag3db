@@ -1,4 +1,4 @@
-//! E2E integration tests: Dataflow search (search_with_strategy).
+//! E2E integration tests: Dataflow search (the strategy graph: `build_dataflow_graph` + runtime).
 //!
 //! Uses the same Directory + File + HAS_FILE schema as e2e_result_mode.
 //!
@@ -17,7 +17,7 @@ use rag3weaver::dataflow::DataflowRuntime;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::search_strategy::{
-    ExpansionDirection, ExpansionRule, SearchStrategy,
+    ExpansionDirection, ExpansionRule, SearchStrategy, UnifiedResult,
 };
 use rag3weaver::{Catalog, Rag3dbConnection};
 use rag3weaver::disponibilite::RegimeEcriture;
@@ -160,6 +160,35 @@ fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     }
 }
 
+/// Une recherche à stratégie, par le graphe et le runtime — ce que faisait
+/// `Catalog::search_with_strategy`, retiré le 2 octobre 2026 (aucun appelant
+/// de production) : `build_dataflow_graph`, `execute`, puis les résultats du
+/// nœud terminal et la méta de la recherche primaire.
+struct StrategyRun {
+    results: Vec<UnifiedResult>,
+    meta: rag3weaver::search::SearchMeta,
+}
+
+fn run_strategy(catalog: Arc<std::sync::Mutex<Catalog>>, kb: &str, query: &str, strategy: SearchStrategy) -> StrategyRun {
+    let has_expansions = !strategy.expansions.is_empty();
+    let (mut graph, services) = Catalog::build_dataflow_graph(catalog, kb, query, strategy).unwrap();
+    let output = DataflowRuntime::with_services(64, services).execute(&mut graph).unwrap();
+    // Sans expansion, le composite est terminal : ses résultats sortent par
+    // le port que son rendu interne réémet.
+    let (node, port) = if has_expansions { ("compose", "results") } else { ("primary_search", "render.results") };
+    let results = output
+        .get(node, port)
+        .and_then(|v| v.downcast::<Vec<UnifiedResult>>())
+        .cloned()
+        .unwrap_or_default();
+    let meta = output
+        .get("primary_search", "render.meta")
+        .and_then(|v| v.downcast::<rag3weaver::search::SearchMeta>())
+        .cloned()
+        .expect("primary_search: render.meta");
+    StrategyRun { results, meta }
+}
+
 fn make_catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
@@ -233,14 +262,10 @@ fn strategy_no_expansion() {
         max_rounds: 10,
     };
 
-    let response = Catalog::search_with_strategy(
-        catalog.clone(),
+    let response = run_strategy(catalog.clone(),
         "TreeKB",
         "src",
-        strategy,
-    )
-    
-    .unwrap();
+        strategy);
 
     eprintln!(
         "no_expansion 'src': {} results, bm25={}",
@@ -295,8 +320,7 @@ fn strategy_expand_has_file() {
         "TreeKB",
         "src",
         strategy,
-    )
-    ;
+    ).unwrap();
 
     let runtime = DataflowRuntime::with_services(10, services);
     let mut rx = runtime.subscribe();
@@ -387,14 +411,10 @@ fn strategy_entity_filter() {
         max_rounds: 10,
     };
 
-    let response = Catalog::search_with_strategy(
-        catalog.clone(),
+    let response = run_strategy(catalog.clone(),
         "TreeKB",
         "auth",
-        strategy,
-    )
-    
-    .unwrap();
+        strategy);
 
     eprintln!(
         "entity_filter 'auth': {} results",
@@ -436,14 +456,10 @@ fn strategy_child_data() {
         max_rounds: 10,
     };
 
-    let response = Catalog::search_with_strategy(
-        catalog.clone(),
+    let response = run_strategy(catalog.clone(),
         "TreeKB",
         "src",
-        strategy,
-    )
-    
-    .unwrap();
+        strategy);
 
     assert!(!response.results.is_empty());
 
@@ -498,7 +514,8 @@ fn strategy_max_rounds_guard() {
         max_rounds: 0, // Should fail
     };
 
-    let result = Catalog::search_with_strategy(
+    // La garde vit dans build_dataflow_graph depuis le 2 octobre 2026.
+    let result = Catalog::build_dataflow_graph(
         catalog.clone(),
         "TreeKB",
         "src",
@@ -507,7 +524,7 @@ fn strategy_max_rounds_guard() {
     ;
 
     assert!(result.is_err(), "max_rounds=0 should produce an error");
-    let err = result.unwrap_err().to_string();
+    let err = result.err().expect("max_rounds=0 refusé").to_string();
     eprintln!("max_rounds error: {err}");
     assert!(
         err.contains("max iterations") || err.contains("max_rounds"),

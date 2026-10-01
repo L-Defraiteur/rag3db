@@ -1,9 +1,9 @@
 //! Search strategy types: `SearchStrategy` config and expansion rules.
-//! Used by `Catalog::search_with_strategy()`.
+//! Used by `Catalog::build_dataflow_graph()` (the strategy graph).
 
 use serde::{Deserialize, Serialize};
 
-use crate::search::{SearchMeta, SearchOptions};
+use crate::search::SearchOptions;
 
 // ─── L'infrastructure du graphe a déménagé ──────────────────────────────────
 //
@@ -66,16 +66,6 @@ impl Default for ExpansionRule {
 pub enum ExpansionDirection {
     Outgoing,
     Incoming,
-}
-
-// ─── SearchStrategyResponse ─────────────────────────────────────────────────
-
-/// Complete response from `search_with_strategy()`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchStrategyResponse {
-    pub results: Vec<UnifiedResult>,
-    pub meta: SearchMeta,
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
