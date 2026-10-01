@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "storage/wal/wal_record.h"
 
 namespace rag3db {
@@ -8,11 +10,32 @@ class ClientContext;
 } // namespace main
 
 namespace storage {
+
+// Test-only: the points of a read-only open at which a test can make a writer
+// act. See WALReplayer::setReadOnlyOpenHookForTesting.
+enum class ReadOnlyOpenPhase : uint8_t {
+    // The journal has been scanned; the data file has not been read yet.
+    JOURNAL_SCANNED = 0,
+    // The data file has been read; the journal has not been replayed yet.
+    DATA_FILE_READ = 1,
+};
+
 class WALReplayer {
 public:
     explicit WALReplayer(main::ClientContext& clientContext);
 
     void replay(bool throwOnWalReplayFailure, bool enableChecksums) const;
+
+    // The refusal of a read-only open that a writer's checkpoint crossed.
+    static constexpr const char* CHECKPOINT_CROSSED_READ_ONLY_OPEN =
+        "The database was checkpointed by another process while this read-only open was reading "
+        "it";
+
+    // Test-only. Runs `hook` at each ReadOnlyOpenPhase of a read-only open, so that a test can
+    // make a writer checkpoint or commit at a precise point instead of racing for it. Never
+    // called on a read-write open, and a no-op unless a test sets it. Pass nullptr to clear.
+    using read_only_open_hook_t = std::function<void(ReadOnlyOpenPhase)>;
+    static void setReadOnlyOpenHookForTesting(read_only_open_hook_t hook);
 
 private:
     struct WALReplayInfo {
@@ -49,6 +72,8 @@ private:
     // storage.
     WALReplayInfo dryReplay(common::FileInfo& fileInfo, bool throwOnWalReplayFailure,
         bool enableChecksums) const;
+
+    void runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const;
 
     void removeWALAndShadowFiles() const;
     void removeFileIfExists(const std::string& path) const;
