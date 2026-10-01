@@ -237,16 +237,25 @@ void StringChunkData::finalize() {
     // disk
     auto newDictionaryChunk = std::make_unique<DictionaryChunk>(getMemoryManager(), numValues,
         enableCompression, residencyState);
-    // Each index is replaced by a new one for the de-duplicated data in the new dictionary.
+    // Build the remapping without changing the live indices. appendString can
+    // throw when the buffer pool is full; partially remapped indices would then
+    // address the old dictionary and corrupt reads (or crash the next checkpoint).
+    std::vector<DictionaryChunk::string_index_t> newIndices(numValues);
     for (auto i = 0u; i < numValues; i++) {
         if (nullData->isNull(i)) {
             continue;
         }
         auto stringData = getValue<std::string_view>(i);
-        auto index = newDictionaryChunk->appendString(stringData);
-        indexColumnChunk->setValue<DictionaryChunk::string_index_t>(index, i);
+        newIndices[i] = newDictionaryChunk->appendString(stringData);
+    }
+    // No more allocations: publish the dictionary and its indices together.
+    for (auto i = 0u; i < numValues; i++) {
+        if (!nullData->isNull(i)) {
+            indexColumnChunk->setValue<DictionaryChunk::string_index_t>(newIndices[i], i);
+        }
     }
     dictionaryChunk = std::move(newDictionaryChunk);
+    needFinalize = false;
 }
 
 void StringChunkData::flush(PageAllocator& pageAllocator) {

@@ -66,7 +66,8 @@ std::vector<std::shared_ptr<common::DataChunkState>> ListSliceInfo::overrideAndS
     // This will be a list data vector that we need to get data from using the sliced offset
     for (auto& lambdaParamEvaluator : lambdaParamEvaluators) {
         auto param = lambdaParamEvaluator->resultVector.get();
-        param->state = sliceDataState;
+        // Struct field evaluators alias child vectors; move their selection state too.
+        param->setState(sliceDataState);
     }
     return savedStates;
 }
@@ -80,7 +81,7 @@ void ListSliceInfo::restoreParamStates(
     std::vector<std::shared_ptr<common::DataChunkState>> savedStates) {
     for (size_t i = 0; i < lambdaParamEvaluators.size(); ++i) {
         auto param = lambdaParamEvaluators[i]->resultVector.get();
-        param->state = savedStates[i];
+        param->setState(savedStates[i]);
     }
 }
 

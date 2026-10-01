@@ -18,7 +18,11 @@ public:
         KU_UNREACHABLE;
     }
 
-    inline std::unique_ptr<ParsedExpression> copy() const override { KU_UNREACHABLE; }
+    inline std::unique_ptr<ParsedExpression> copy() const override {
+        auto result = std::make_unique<ParsedParameterExpression>(parameterName, rawName);
+        result->setAlias(alias);
+        return result;
+    }
 
 private:
     void serializeInternal(common::Serializer&) const override { KU_UNREACHABLE; }

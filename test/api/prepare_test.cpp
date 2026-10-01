@@ -258,3 +258,17 @@ TEST_F(ApiTest, ParameterWith) {
     auto groupTruth = std::vector<std::string>{"abc"};
     ASSERT_EQ(groupTruth, TestHelper::convertResultToString(*result));
 }
+
+// Un paramètre dans le prédicat d'un quantificateur : la liaison du prédicat
+// copie l'expression, et ParsedParameterExpression::copy levait KU_UNREACHABLE
+// (19 septembre 2026, filtres paramétrés de rag3weaver sur des listes).
+TEST_F(ApiTest, ParameterInListQuantifier) {
+    auto preparedStatement =
+        conn->prepare("RETURN any(x IN [1, 2, 3] WHERE x = $v), all(x IN [1, 2, 3] WHERE x > $v)");
+    ASSERT_TRUE(preparedStatement->isSuccess()) << preparedStatement->getErrorMessage();
+    auto result = conn->execute(preparedStatement.get(),
+        std::make_pair(std::string("v"), (int64_t)2));
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    auto groundTruth = std::vector<std::string>{"True|False"};
+    ASSERT_EQ(groundTruth, TestHelper::convertResultToString(*result));
+}
