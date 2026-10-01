@@ -31,7 +31,7 @@ Dernière mise à jour : **1er octobre 2026**.
 
 | Branche | Qui | État | Ce qui reste |
 |---|---|---|---|
-| `mtg-experiments` | Codex (19-23 sept.), puis la session « rag3db Products Experiments » (25-27 sept.) | 18 commits devant `master`, **poussée le 1er octobre** (`a59ca01de`) | Fusion dans `master` à décider. Avant : extraire les quatre correctifs du moteur C++ dans un commit à part (voir §3). Doc de reprise : `extension/rag3weaver/docs/25-septembre-2026-18h27/00-reprise-branche-mtg-experiments.md`, puis `docs/27-septembre-2026-03h57/01-…`. |
+| `mtg-experiments` | Codex (19-23 sept.), puis la session « rag3db Products Experiments » (25-27 sept.) | 18 commits devant `master`, **poussée le 1er octobre** (`2ef3017fe`) | Fusion dans `master` à décider. Avant : extraire les quatre correctifs du moteur C++ dans un commit à part (voir §3). Doc de reprise : `extension/rag3weaver/docs/25-septembre-2026-18h27/00-reprise-branche-mtg-experiments.md`, puis `docs/27-septembre-2026-03h57/01-…`. |
 
 Les neuf branches des sessions du 18 septembre (`heuristique-taille`,
 `retrait-monolithe-recherche`, `nettoyage-apres-monolithe`,
@@ -66,11 +66,11 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 |---|---|---|
 | Correctifs du moteur C++ (lambdas sur structs, quantificateurs, `ParsedParameterExpression::copy`, `StringChunkData::finalize`) | dans `ab95c3a2d`, sur `mtg-experiments` | Les extraire sur `master` ; ajouter un test pour `copy`. |
 | Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Attend une décision (§4). |
-| Chemin de masse des lots de naissances | `b7ae0a683`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
+| Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
 | Deck builder MTG (produit) | `experiments/mtga`, `mtg-experiments` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
-| Champ `folds` des scopes | `98a9f4dac` | Ré-ingérer le code pour le remplir. |
+| Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
-| Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`94555c18b`) en attendant. |
+| Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
 | Budget de reprise du lecteur en lecture seule | `master`, mesuré (`20a8f6ee8`) | 250 ms de budget contre un pic à 567 ms sous charge : relever le budget, ou tester l'invariant par `read_only_patient`. Attend une décision. |
 
 ## 4. Décisions en attente de Lucie
@@ -90,10 +90,14 @@ Depuis :
 
 7. Le budget de reprise du lecteur (§3).
 8. Fusionner `mtg-experiments` dans `master`, et quand.
-9. Les trailers d'attribution : 17 commits de `mtg-experiments` (du 25 et du
-   27 septembre, tous publiés) portent `Co-Authored-By: Claude…`, contre la
-   règle du dépôt. Les réécrire et pousser en force **avant** la fusion dans
-   `master`, ou les laisser. Après la fusion, ce ne sera plus raisonnable.
+Tranchée le 1er octobre 2026 : les trailers d'attribution à une IA
+(`Co-Authored-By: Claude…`) ont été retirés des 17 commits de
+`mtg-experiments` qui en portaient, par réécriture des messages et push en
+force ; arbres, auteurs et dates inchangés, **hash changés** à partir de
+`64a12b05b` (le commit de Codex `ab95c3a2d` garde le sien). Sur `master`,
+quatre commits anciens en portent encore — un de février 2026, trois de
+l'amont Kuzu de 2025 — et ne sont pas réécrits : cela changerait tous les
+hash du dépôt public.
 
 ## 5. Hors de ce dépôt
 

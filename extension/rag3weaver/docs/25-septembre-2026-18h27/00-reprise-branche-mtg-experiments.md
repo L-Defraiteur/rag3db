@@ -17,7 +17,7 @@ Le travail a été fait par Codex, donc l'historique Claude Code n'en contient r
 | `master` | 2 commits en avance sur `origin/master` : `945cd6706` et `20a8f6ee8`. **Non poussés.** |
 | `mtg-experiments` | `master` + 1 commit `ab95c3a2d`. **N'existe pas sur origin.** |
 | `extension/rag3weaver/docs/23-09-2026/` | non suivi (2 docs de decks Paradox Engine / Bant) |
-| `experiments/mtga/` (code Python, backend, rag3bridge) | versionné depuis le 25/09 (commit `1f9e67342`). Seuls `data/`, `.venv/`, `node_modules/` et `rag3bridge/target/` restent ignorés. |
+| `experiments/mtga/` (code Python, backend, rag3bridge) | versionné depuis le 25/09 (commit `8572b1c80`). Seuls `data/`, `.venv/`, `node_modules/` et `rag3bridge/target/` restent ignorés. |
 | `experiments/mtga/data/`, `.venv` | **absents** (exclus de la sauvegarde) : bases, snapshots, decks générés, poids de modèles |
 | `follows.csv`, `user.csv`, `user.parquet` à la racine | restes de démo sans lien avec MTG (sortie d'un `COPY TO`, 7/09). Ils peuvent être supprimés. |
 | Worktrees `rag3db-embarquements`, `rag3db-recherche`, `rag3db-lifecycle` | dossiers absents (non sauvegardés). Leurs branches sont sur origin. Il faut faire un `git worktree prune`. |
