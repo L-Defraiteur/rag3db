@@ -1,0 +1,135 @@
+# Spécification du banc de concurrence et du vérificateur d'intégrité (A1)
+
+**2 octobre 2026, rag3db-19.** Rien n'est bâti ni exécuté : tous les « attendu » sont déduits du code.
+
+LU (sur origin/master aa7d64484) : le plan du 2 octobre (en entier), la relecture MVCC du 6 septembre, le journal, transaction_test.cpp (les neuf Concurrent*) et lecteurs_concurrents_test.cpp (cartographiés par un agent). J'ai vérifié moi-même node_table.cpp:380-403, delete_executor.cpp et in_mem_hash_index.h:284-296.
+
+Faits qui orientent le banc :
+- debug_enable_multi_writes ne s'allume que par CALL : c'est un champ de DBConfig, pas de SystemConfig. On ne peut pas le passer à l'ouverture, et il ne survit pas à une réouverture. Son seul point de lecture est transaction_manager.cpp:35.
+- validatePkNotExists ne cherche que dans l'index global, filtré par isVisible(transaction). La clé non validée d'une autre transaction vit dans son LocalStorage, donc elle est invisible.
+- DELETE d'un nœud vérifie les relations par throwIfNodeHasRels, mais sur l'instantané du supprimeur. Une relation non validée de l'autre transaction lui est invisible.
+- Les neuf Concurrent* utilisent tous des clés disjointes, sans réouverture ni CHECKPOINT. Remarque au passage, non vérifiée : ConcurrentRelationshipUpdatesWithMixedTransactions (l.639) valide si i%3!=0, soit les fils 1, 2 et 3, ce qui ferait 3000 et pas les 2000 attendus. Soit le test ne fait pas ce qu'on croit, soit il est faux. À regarder en le lançant une fois.
+
+## 1. La forme du banc
+
+Nouvel exécutable test/transaction/concurrence/, déclaré par add_rag3db_test(concurrence_test …), pour avoir accès aux internes (niveau 2 du vérificateur). Fixture dérivée d'EmptyDBTest, base sur disque ; le mode mémoire est sauté, avec la raison écrite.
+
+Chaque cas s'écrit une seule fois, sous la forme d'un « scénario » : une fonction scénario(Ouvreur&, int numeroEcrivain, Journal&). Elle obtient sa connexion par l'Ouvreur et range ses issues dans le Journal. Le lanceur est un paramètre du test (TEST_P sur {Fil, Processus}) :
+- Fil : N std::thread, une Database partagée, une Connection par fil.
+- Processus : N fork() faits AVANT toute ouverture de Database dans le père (règle de lecteurs_concurrents_test.cpp). Chaque fils ouvre sa Database sur le même chemin et sort par _exit. Le Journal est alors un tableau en mmap MAP_SHARED, avec une case par écrivain.
+Le Journal compte, par écrivain : les succès, les refus attendus classés par message (« Write-write conflict », « duplicated primary key », « connected edges », « Cannot start a new write transaction », « Could not set lock ») et les erreurs inattendues, texte gardé. Toute erreur inattendue fait échouer le cas : un refus n'est jamais compté vert sans que son message soit lu.
+
+La synchronisation se fait par une barrière : std::barrier en mode fil, compteur atomique sur la page partagée en mode processus. Les cas déterministes n'ont donc besoin d'aucun crochet dans le moteur : la fenêtre de course est tenue ouverte par des transactions explicites (BEGIN … barrière … COMMIT).
+
+Les cas aléatoires tirent leurs nombres d'une graine imprimée en tête, rejouable par variable d'environnement (CONCURRENCE_GRAINE), et d'un nombre d'itérations réglable (CONCURRENCE_ITERATIONS).
+
+Réglages de base : CALL debug_enable_multi_writes=true, auto_checkpoint=false pendant la phase à chaud. Le point de reprise automatique dans un commit attendrait les autres transactions et expirerait au bout de 5 s, ce qui mesurerait autre chose. Les points de reprise sont donc explicites, dans les cas qui les veulent.
+
+Mode Processus aujourd'hui : le second écrivain est refusé à l'ouverture (F_WRLCK). Je propose :
+(a) un cas qui affirme ce contrat tel qu'il est : refus franc, message lu ;
+(b) les cas de conflit sautés en mode Processus, avec la raison « B non construite ». Ces sauts sont comptés et affichés comme sauts, jamais comme verts.
+Le jour où B existe, on retire le saut ; on ne réécrit rien.
+
+Triple vérification de chaque invariant (plan §11) :
+- à chaud, sur la base ouverte ;
+- après CHECKPOINT, fermeture et réouverture ;
+- après arrêt brutal puis rejeu : le scénario tourne dans un fils, SIGKILL après le dernier commit acquitté, puis le père rouvre. Cette dernière passe utilise le lanceur Processus même pour les cas « fil » : les écrivains sont des fils à l'intérieur d'un seul processus fils.
+
+## 2. Les cas
+(rouge = j'attends une corruption aujourd'hui ; *déduit* partout, rien n'est exécuté)
+
+**C0** — Témoin, clés disjointes. N écrivains insèrent des nœuds et des relations sur des domaines disjoints.
+- Invariants : tout le vérificateur.
+- Attendu : VERT. Il prouve que le banc et le vérificateur ne crient pas sans raison.
+
+**C1** — Même clé primaire, déterministe. Deux écrivains : BEGIN, CREATE (:K {id: 7}), barrière, COMMIT tous les deux. Variante à trois écrivains.
+- Invariant : exactement un succès ; count = count(distinct id) ; une seule entrée d'index par clé.
+- Attendu : ROUGE (deux succès, deux lignes « 7 »). Le plan §2 et la marche A3 tiennent à ce cas.
+
+**C1'** — Même clé primaire, sous charge. N fils en auto-commit tirent leurs clés dans un petit domaine (K = 16) pendant un temps fixe.
+- Invariant : count = count(distinct).
+- Attendu : ROUGE probable, mais pas garanti à chaque passe, la fenêtre étant courte. C'est C1 qui fait foi.
+
+**C2** — Relation vers un nœud supprimé, déterministe. Nœuds a et b déjà validés. T1 : BEGIN, MATCH (a) DELETE a, barrière, COMMIT. T2 : BEGIN, MATCH a, b CREATE (a)-[:R]->(b), barrière, COMMIT. Deux ordres de commit (T1 puis T2, T2 puis T1).
+- Invariant : aucune relation pendante ; les directions avant et arrière portent les mêmes arêtes.
+- Attendu : ROUGE dans les deux ordres. C'est la marche A4.
+
+**C2'** — Même chose sous charge : des supprimeurs contre des créateurs de relations sur un petit ensemble de nœuds.
+- Attendu : ROUGE probable.
+
+**C3** — Offsets locaux qui se chevauchent (A2). Deux écrivains, chacun dans une transaction explicite : il crée M nœuds neufs, puis des relations entre ses propres nœuds neufs, chaque relation portant src_id et dst_id en propriétés ; barrière ; COMMIT.
+- Invariant : pour chaque relation, les clés des vraies extrémités sont égales à src_id et dst_id.
+- Attendu : ROUGE (relations vers les nœuds de l'autre). Il n'y a ni remappageNodeOffsets chez nous, ni aucune erreur.
+
+**C4** — Virements. Comptes à solde, transferts aléatoires, réessai sur « Write-write conflict ».
+- Invariant : la somme ne bouge pas ; aucun solde ne vient d'une mise à jour perdue.
+- Attendu : VERT, puisque le conflit de mise à jour existe (update_info.cpp:31-38). Non vérifié.
+
+**C5** — Double suppression de la même ligne, avec barrière.
+- Invariant : exactement un succès, l'autre refusé avec « Write-write conflict ».
+- Attendu : VERT fonctionnellement. Sous TSan, ROUGE possible : création paresseuse de versionInfo sans verrou, marche A5.
+
+**C6** — Suppression contre mise à jour de la même ligne, avec barrière, dans les deux ordres.
+- Invariant : la ligne est soit supprimée, soit mise à jour, jamais une ligne supprimée qui porte la mise à jour.
+- Attendu : INCONNU (plan §13, non examiné). Le banc tranche.
+
+**C7** — Mélange aléatoire : insertions de clés en petit domaine, suppressions (simples et DETACH), relations, mises à jour, rollbacks volontaires.
+- Invariants : tout le vérificateur.
+- Attendu : ROUGE tant que C1 et C2 le sont. C'est le filet des marches suivantes.
+
+**C8** — Point de reprise sous écrivains : un fil lance CHECKPOINT en boucle pendant que d'autres écrivent sur des clés disjointes.
+- Invariant : les refus de point de reprise sont lus (délai d'attente) ; la base reste intègre.
+- Attendu : VERT pour l'intégrité, avec des refus de délai attendus. C'est le futur témoin de A7.
+
+**C9** — Contrat inter-processus d'aujourd'hui, mode Processus seulement : un second écrivain est refusé à l'ouverture, avec « Could not set lock ».
+- Attendu : VERT. C'est lui qu'on retournera avec B.
+
+## 3. Le vérificateur d'intégrité
+
+Une bibliothèque de test (test/include/integrity/…) et non une fonction du moteur pour A1. Je pose plus bas la question d'en faire un CALL check_integrity(). Elle prend une Connection, ou une Database, et rend une liste de violations nommées. Une liste vide veut dire vert ; chaque violation sort avec la ligne fautive.
+
+Niveau 1, par Cypher (API publique, marche dans un fils et sur une base rouverte en lecture seule) :
+- Pour chaque table de nœuds, lue par CALL show_tables() et table_info : count(n) = count(DISTINCT n.pk), et la liste des clés en double si ce n'est pas le cas.
+- Pour chaque table de relations : les extrémités portées en propriétés (src_id, dst_id, quand le schéma du banc les a) égales aux clés des vraies extrémités.
+- Un vidage canonique (toutes les lignes, toutes les relations, triées) haché. Il est comparé à chaud, après point de reprise et réouverture, et après arrêt brutal et rejeu : ce sont les « mêmes réponses avant et après ».
+
+Niveau 2, par les internes (PrivateGraphTest et getStorageManager), sous une transaction de lecture fraîche :
+- PK : pour chaque ligne visible de chaque NodeTable, le lookup de sa clé dans l'index global rend exactement cet offset. Aucune clé de l'index ne mène à une ligne invisible ou absente.
+- Relations : balayage CSR avant et arrière, en multiensembles de (src, dst, relID) ; les deux doivent être égaux. Chaque extrémité doit être une ligne visible de sa table.
+- Compteurs : le nombre de lignes des statistiques égale le balayage.
+- Pages : on réutilise FSMLeakChecker::checkForLeakedPages, déjà présent côté test.
+Le niveau 2 voit ce que Cypher ne voit pas : une relation pendante n'apparaît pas dans un MATCH qui part du nœud supprimé, mais elle reste dans la CSR de l'autre direction.
+
+## 4. ThreadSanitizer et durée
+
+- Build dédié dans le worktree : make relwithdebinfo TSAN=1, répertoire séparé (build/tsan), -j8. Pas de cible make tsan ; ENABLE_THREAD_SANITIZER existe (CMakeLists.txt:117, 272-278).
+- Sous TSan, seul le lanceur Fil tourne : fork avec des fils actifs n'est pas sûr sous TSan. Itérations réduites par variable d'environnement.
+- Aucun fichier de suppression n'existe. Je n'en crée pas pour le moteur : toute course trouvée est une constatation, rapportée. Une suppression ne viendrait que pour une bibliothèque tierce, chacune nommée et justifiée.
+- Durées visées, non mesurées : banc normal sous 60 s pour l'exécutable entier, cas déterministes en millisecondes ; sous TSan, sous 10 min. Le build TSan de tout le moteur est lui aussi à mesurer. Je l'estime à au moins une heure à -j8, sans base pour le dire.
+
+## 5. Ce que je ne sais pas
+
+1. Si le commit d'une transaction relit l'index global avec une visibilité qui lui ferait voir une clé validée après son départ. Si oui, C1 est vert et le plan se trompe. Le banc le dira : c'est le but.
+2. Les API internes exactes pour balayer une NodeTable et une CSR depuis un test (niveau 2). À cartographer avant de coder.
+3. Si une relation pendante fait planter une requête (lecture d'un offset invalide) plutôt que de passer en silence. Cela change la forme de l'échec, pas l'invariant.
+4. Le comportement de throwIfNodeHasRels dans C2, quand T2 valide d'abord sa relation : T1 la voit-il à son commit ? Probablement non, puisque la vérification est faite à l'écriture et pas au commit.
+5. Le coût réel du build TSan et le ralentissement du banc.
+6. HNSW : hors du banc A1, sauf avis contraire (plan §13, non étudié).
+
+## 6. Questions
+
+- **Q1** Un CALL check_integrity() dans le moteur (code neuf, pas une correction), ou une bibliothèque côté test seulement pour A1 ? Je propose la bibliothèque côté test d'abord, et le CALL à une marche suivante.
+- **Q2** Comment les cas rouges entrent dans ctest. Ils restent rouges, jamais relâchés. Je propose un label ctest « concurrence-rouge-connu » et une ligne au journal (§6) qui les nomme, pour qu'une passe complète ne les confonde pas avec une régression. Ou bien les laisser rouges dans la passe par défaut, à ton choix.
+- **Q3** Le cas C8 et le point de reprise automatique : je le coupe partout ailleurs. D'accord ?
+- **Q4** Une ligne au journal des chantiers dans mon premier commit (règle 1) : je la mets sur ma branche ?
+
+## 7. Réponses de l'orchestrateur (2 octobre)
+
+- **Q1** : bibliothèque côté test pour A1 ; le `CALL check_integrity()` viendra à une marche suivante, s'il vient.
+- **Q2** : les cas rouges tournent dans la passe et restent rouges, sous le label ctest `concurrence-rouge-connu`. Une liste des rouges attendus vit dans le dépôt, et la passe la compare au résultat : un rouge connu qui devient vert sans marche qui le corrige se signale autant qu'un vert qui devient rouge. Jamais de `DISABLED_`.
+- **Q3** : point de reprise automatique coupé partout sauf C8, écrit en tête du banc avec la raison.
+- **Q4** : la ligne du journal des chantiers est tenue par l'orchestrateur, sur master.
+- **Arrêt brutal** : master rouvre au dernier COMMIT complet et copie ce qu'il retire dans `<base>.wal.ecarte-<ms>`. Tout commit acquitté avant le SIGKILL doit être là après réouverture ; le fichier écarté est nettoyé entre les cas.
+- **Lecteur concurrent** : tant que `lecteur-reverifie-a-l-ouverture` n'est pas sur master, le vérificateur lit après la fin des écrivains, ou dans leur processus, jamais depuis un lecteur concurrent.
+- **Ordre de livraison** : étape 1, le lanceur Fil, le niveau 1 et C0 à C3, puis le tableau attendu/observé ; étape 2, le niveau 2, C4 à C9, le lanceur Processus et la triple vérification ; étape 3, ThreadSanitizer.
+- HNSW hors du banc A1.
