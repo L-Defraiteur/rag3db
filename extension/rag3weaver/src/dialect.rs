@@ -29,6 +29,8 @@ pub enum ColumnType {
     Blob,
     /// Fixed-size float vector for embeddings (FLOAT[N] / vector(N)).
     Vector(usize),
+    List(Box<ColumnType>),
+    Struct(std::collections::BTreeMap<String, ColumnType>),
 }
 
 impl ColumnType {
@@ -44,6 +46,8 @@ impl ColumnType {
             FieldType::Double | FieldType::Number => ColumnType::Double,
             FieldType::Boolean => ColumnType::Boolean,
             FieldType::Timestamp => ColumnType::Timestamp,
+            FieldType::List(item) => ColumnType::List(Box::new(Self::from_field_type(item))),
+            FieldType::Struct(fields) => ColumnType::Struct(fields.iter().map(|(k, v)| (k.clone(), Self::from_field_type(v))).collect()),
         }
     }
 }
@@ -684,6 +688,9 @@ pub trait SchemaDialect: Send + Sync {
     /// contains filter expression.
     fn filter_contains(&self, prop: &str, param: &str) -> String;
 
+    /// Optional scalar membership lowering for engines whose projected graphs cannot bind lambdas.
+    fn filter_list_scalar_contains(&self, _prop: &str, _param: &str) -> Option<String> { None }
+
     /// List has any match: at least one element of `prop` is in `param` list.
     fn filter_list_any_match(&self, prop: &str, param: &str) -> String;
 
@@ -741,6 +748,8 @@ impl SchemaDialect for Rag3dbDialect {
             ColumnType::Timestamp => "TIMESTAMP".into(),
             ColumnType::Blob => "BLOB".into(),
             ColumnType::Vector(dim) => format!("FLOAT[{dim}]"),
+            ColumnType::List(item) => format!("{}[]", self.type_name(item)),
+            ColumnType::Struct(fields) => format!("STRUCT({})", fields.iter().map(|(k,v)| format!("`{}` {}", k.replace('`', "``"), self.type_name(v))).collect::<Vec<_>>().join(", ")),
         }
     }
 
@@ -753,6 +762,7 @@ impl SchemaDialect for Rag3dbDialect {
             ColumnType::Timestamp => "'1970-01-01 00:00:00'".into(),
             ColumnType::Blob => "''".into(),
             ColumnType::Vector(_) => "[]".into(),
+            ColumnType::List(_) | ColumnType::Struct(_) => "NULL".into(),
         }
     }
 
@@ -1299,16 +1309,20 @@ impl SchemaDialect for Rag3dbDialect {
         format!("contains({prop}, ${param})")
     }
 
+    fn filter_list_scalar_contains(&self, prop: &str, param: &str) -> Option<String> {
+        Some(format!("list_contains({prop}, ${param})"))
+    }
+
     fn filter_list_any_match(&self, prop: &str, param: &str) -> String {
-        format!("list_any_match({prop}, v -> list_contains(${param}, v))")
+        format!("any(v IN {prop} WHERE list_contains(${param}, v))")
     }
 
     fn filter_list_all(&self, prop: &str, param: &str) -> String {
-        format!("list_all(${param}, v -> list_contains({prop}, v))")
+        format!("all(v IN ${param} WHERE list_contains({prop}, v))")
     }
 
     fn filter_list_none(&self, prop: &str, param: &str) -> String {
-        format!("NOT list_any_match({prop}, v -> list_contains(${param}, v))")
+        format!("NOT any(v IN {prop} WHERE list_contains(${param}, v))")
     }
 
     fn filter_resolve_offsets(
@@ -1441,6 +1455,7 @@ impl SchemaDialect for PostgresDialect {
             ColumnType::Timestamp => "TIMESTAMPTZ".into(),
             ColumnType::Blob => "BYTEA".into(),
             ColumnType::Vector(dim) => format!("vector({dim})"),
+            ColumnType::List(_) | ColumnType::Struct(_) => "JSONB".into(),
         }
     }
 
@@ -1453,6 +1468,7 @@ impl SchemaDialect for PostgresDialect {
             ColumnType::Timestamp => "'1970-01-01T00:00:00Z'".into(),
             ColumnType::Blob => "''::bytea".into(),
             ColumnType::Vector(dim) => format!("(ARRAY_FILL(0, ARRAY[{dim}]))::vector({dim})"),
+            ColumnType::List(_) | ColumnType::Struct(_) => "NULL".into(),
         }
     }
 

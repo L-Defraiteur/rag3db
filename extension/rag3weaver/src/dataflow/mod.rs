@@ -101,3 +101,10 @@ pub use record_nodes::{
     ChunkRecordNode, EmbedNode, FlushNode,
     SparseCommitNode, DeleteRecordNode, UpdateRecordNode, RechunkDeleteNode, MarquerDecoupeNode,
 };
+
+pub mod composable_results;
+/// Transport-independent search verbs compiled into the ordinary dataflow DAG.
+pub mod search_chain;
+
+pub mod rhai_node;
+pub mod validation_nodes;

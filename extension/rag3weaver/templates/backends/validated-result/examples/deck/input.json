@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result"
+  ],
+  "properties": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "mainboard",
+        "plan"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan": {
+          "type": "string"
+        },
+        "mainboard": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 150,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "arena_id",
+              "quantity"
+            ],
+            "properties": {
+              "arena_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 250
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -66,6 +66,14 @@ pub fn build_schema_config(
     filter_fields: &[(String, String)],
     shards: usize,
 ) -> Result<lucivy_core::query::SchemaConfig, String> {
+    build_schema_config_with_positions(text_fields, filter_fields, shards, true)
+}
+
+/// Creation-time storage choice; opening an existing index keeps its own schema.
+/// Without positions, Lucivy verifies matches against stored text (required here).
+pub fn build_schema_config_with_positions(
+    text_fields: &[String], filter_fields: &[(String, String)], shards: usize, positions: bool,
+) -> Result<lucivy_core::query::SchemaConfig, String> {
     let mut fields: Vec<serde_json::Value> = text_fields
         .iter()
         .map(|name| {
@@ -88,6 +96,7 @@ pub fn build_schema_config(
     serde_json::from_value(serde_json::json!({
         "fields": fields,
         "sfx_version": 4,
+        "positions": positions,
         "shards": shards.max(1),
     }))
     .map_err(|e| format!("SchemaConfig invalide: {e}"))
@@ -406,6 +415,72 @@ mod tests {
             index_document(&handle, &[("content".into(), text.to_string())], offset).unwrap();
         }
         handle.commit().unwrap();
+
+        let q: lucivy_core::query::QueryConfig = serde_json::from_value(serde_json::json!({
+            "type": "contains", "field": "content", "value": "spin_lock_init"
+        }))
+        .unwrap();
+
+        // Sans filtre : les deux documents concernés.
+        let hits = search_hits(&handle, &q, 10, None).expect("recherche");
+        let mut offsets: Vec<u64> = hits.iter().map(|(o, _, _)| *o).collect();
+        offsets.sort_unstable();
+        assert_eq!(offsets, vec![10, 20]);
+
+        // Les highlights sont clés par nom de champ, avec des bornes cohérentes.
+        let (_, _, hl) = hits.iter().find(|(o, _, _)| *o == 10).unwrap();
+        let spans = hl
+            .get("content")
+            .unwrap_or_else(|| panic!("highlights clés par nom de champ, reçu {hl:?}"));
+        assert!(!spans.is_empty());
+        for (a, b) in spans {
+            assert!(a < b, "span dégénéré ({a},{b})");
+            assert!(
+                *b <= "spin_lock_init protège la file".len(),
+                "offset hors du texte indexé — référentiel cassé"
+            );
+        }
+
+        // Avec filtre : le pré-filtrage BDD doit être respecté.
+        let filtered = search_hits(&handle, &q, 10, Some(&[20])).expect("recherche filtrée");
+        let got: Vec<u64> = filtered.iter().map(|(o, _, _)| *o).collect();
+        assert_eq!(got, vec![20], "allowed_ids non honoré");
+
+        handle.close().ok();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Cycle de vie complet : indexer → ré-indexer → supprimer.
+    ///
+    /// Le point le plus important est la ré-indexation partielle : `add_document`
+    /// n'est pas un merge, donc ré-indexer en ne passant que le champ modifié
+    /// ferait disparaître l'autre. Ce test échouerait si `UpdateRecordNode`
+    /// relisait `rec.data` au lieu de relire la ligne entière.
+    #[test]
+    fn positionless_reopened_index_keeps_hits_highlights_and_filters() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+
+        let tmp = std::env::temp_dir()
+            .join(format!("rag3weaver_fts_nopos_{}", std::process::id()));
+        let store = Arc::new(MemBlobStore::new());
+        let cfg = build_schema_config_with_positions(&["content".to_string()], &[], 2, false).unwrap();
+        assert_eq!(serde_json::to_value(&cfg).unwrap()["positions"], false);
+        let storage = BlobShardStorage::new(store.clone(), fts_index_name("Hits"), &tmp);
+        let handle =
+            ShardedHandle::create_with_storage(Box::new(storage), &cfg).expect("création");
+
+        for (offset, text) in [
+            (10_u64, "spin_lock_init protège la file"),
+            (20_u64, "kmalloc alloue puis spin_lock_init verrouille"),
+            (30_u64, "aucun rapport avec le noyau"),
+        ] {
+            index_document(&handle, &[("content".into(), text.to_string())], offset).unwrap();
+        }
+        handle.commit().unwrap();
+        handle.close().unwrap();
+        drop(handle);
+        let handle = ShardedHandle::open_with_storage(Box::new(BlobShardStorage::new(store, fts_index_name("Hits"), &tmp))).unwrap();
 
         let q: lucivy_core::query::QueryConfig = serde_json::from_value(serde_json::json!({
             "type": "contains", "field": "content", "value": "spin_lock_init"

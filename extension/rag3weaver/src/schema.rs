@@ -51,18 +51,9 @@ fn is_valid_identifier(name: &str) -> bool {
 ///
 /// Text, Json, Tags, Choice are all stored as STRING in Kuzu.
 /// The semantic distinction lives in the config (for chunking, FTS, etc.).
-pub fn field_type_to_kuzu(ft: &FieldType) -> &'static str {
-    match ft {
-        FieldType::String
-        | FieldType::Text
-        | FieldType::Json
-        | FieldType::Tags
-        | FieldType::Choice => "STRING",
-        FieldType::Int64 | FieldType::Integer => "INT64",
-        FieldType::Double | FieldType::Number => "DOUBLE",
-        FieldType::Boolean => "BOOLEAN",
-        FieldType::Timestamp => "TIMESTAMP",
-    }
+pub fn field_type_to_kuzu(ft: &FieldType) -> String {
+    use crate::dialect::{ColumnType, Rag3dbDialect, SchemaDialect};
+    Rag3dbDialect.type_name(&ColumnType::from_field_type(ft))
 }
 
 /// Default value for ALTER TABLE ADD, by field type.
@@ -79,6 +70,7 @@ pub fn kuzu_default_value(ft: &FieldType) -> &'static str {
         FieldType::Double | FieldType::Number => "0.0",
         FieldType::Boolean => "false",
         FieldType::Timestamp => "'1970-01-01 00:00:00'",
+        FieldType::List(_) | FieldType::Struct(_) => "NULL",
     }
 }
 

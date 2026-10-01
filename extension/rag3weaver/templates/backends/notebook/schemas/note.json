@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["key", "text", "labels", "stage", "revision", "created_at", "updated_at", "reviewed_at"],
+  "properties": {
+    "key": {"type": "string", "minLength": 1},
+    "text": {"type": "string", "minLength": 1},
+    "labels": {"type": "array", "items": {"type": "string"}},
+    "stage": {"type": "string", "enum": ["working", "reviewed"]},
+    "revision": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "reviewed_at": {"type": ["integer", "null"], "description": "Last transition to reviewed, server UTC epoch milliseconds"}
+  }
+}

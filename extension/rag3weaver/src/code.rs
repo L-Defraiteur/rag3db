@@ -261,6 +261,9 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     fields.insert("language".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
+    // Les enfants repliés dans `content` : de quoi rendre un extrait avec
+    // les lignes du fichier, pas celles du texte propre.
+    fields.insert("folds".into(), field(FieldType::String));
     fields.insert("start_byte".into(), field(FieldType::Integer));
     fields.insert("end_byte".into(), field(FieldType::Integer));
     // Clé déterministe de `codeparsers` : `blake3(file:name:type:signature)`,
@@ -279,8 +282,13 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         return_fields: Some(vec![
             "file_path".into(), "start_line".into(), "end_line".into(),
             "scope_type".into(), "parent_name".into(),
-            "docstring".into(), "signature".into(),
+            "docstring".into(), "signature".into(), "folds".into(),
         ]),
+        source_lines: Some(crate::config::SourceLines {
+            field: "content".into(),
+            start_line: Some("start_line".into()),
+            folds: Some("folds".into()),
+        }),
         // La vue par parent : les méthodes d'un même impl rendues ensemble,
         // sous sa signature, que l'impl soit ou non un résultat.
         group_by: Some(crate::config::GroupBy { relation: "HAS_PARENT".into(), frame_field: "signature".into() }),
@@ -395,6 +403,10 @@ pub struct ScopeRecord {
     pub scope_type: String,
     pub signature: String,
     pub content: String,
+    /// Les lignes repliées de `content` (voir [`crate::config::SourceLines`]),
+    /// ou `?` quand ses lignes ne sont pas celles du fichier.
+    #[serde(default)]
+    pub folds: String,
     pub docstring: String,
     pub file_path: String,
     pub parent_name: String,
@@ -667,6 +679,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             scope_type: "texte_brut".to_string(),
             signature: String::new(),
             content: sc.content.clone(),
+            folds: String::new(),
             docstring: String::new(),
             file_path: name.clone(),
             parent_name: String::new(),
@@ -738,10 +751,13 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             let Some(key) = by_position.get(&(rel.clone(), s.name.clone(), type_str.clone(), s.scope_start_line)) else {
                 continue;
             };
-            let content = match owned.get(i) {
-                Some(Some(propre)) => propre.clone(),
-                _ if s.content_dedented.is_empty() => s.content.clone(),
-                _ => s.content_dedented.clone(),
+            // Sans texte propre, le repli de l'analyseur peut n'être que le
+            // corps : sa ligne 0 n'est pas `start_line`, d'où `?` — pas de
+            // numéros plutôt que des numéros faux.
+            let (content, folds) = match owned.get(i) {
+                Some(Some((propre, replis))) => (propre.clone(), replis.clone()),
+                _ if s.content_dedented.is_empty() => (s.content.clone(), "?".to_string()),
+                _ => (s.content_dedented.clone(), "?".to_string()),
             };
             analysis.scopes.push(ScopeRecord {
                 key: key.clone(),
@@ -752,6 +768,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 scope_type: type_str,
                 signature: s.signature.clone(),
                 content,
+                folds,
                 docstring: s.docstring.clone().unwrap_or_default(),
                 file_path: indexed_name.clone(),
                 parent_name: s.parent.clone().unwrap_or_default(),
@@ -1176,6 +1193,7 @@ impl ScopeRecord {
             ("scope_type".into(), s(&self.scope_type)),
             ("signature".into(), s(&self.signature)),
             ("content".into(), s(&self.content)),
+            ("folds".into(), s(&self.folds)),
             ("docstring".into(), s(&self.docstring)),
             ("file_path".into(), s(&self.file_path)),
             ("source".into(), s(&self.source)),
@@ -1462,7 +1480,7 @@ impl Catalog {
 /// l'**analyseur** qui décide ce qu'est le contenu d'un scope ; le catalogue
 /// ne sait pas ce qu'est du code, et `content` reste son champ de contenu
 /// (doc du 6 septembre 2026, 19h57).
-fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeInfo]) -> Vec<Option<String>> {
+fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeInfo]) -> Vec<Option<(String, String)>> {
     let n = scopes.len();
     let empan_valide = |i: usize| {
         let s = &scopes[i];
@@ -1500,6 +1518,10 @@ fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeI
             }
             let s = &scopes[i];
             let mut propre = String::new();
+            // Les replis, au format de `SourceLines::folds` : la ligne du
+            // texte propre qui tient lieu d'un enfant de plusieurs lignes, et
+            // l'empan de cet enfant dans le fichier.
+            let mut replis: Vec<String> = Vec::new();
             let mut curseur = s.scope_start_byte;
             for &c in &enfants[i] {
                 let (cd, cf) = (scopes[c].scope_start_byte, scopes[c].scope_end_byte);
@@ -1511,11 +1533,13 @@ fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeI
                 propre.push_str(tranche.lines().next().unwrap_or("").trim_end());
                 if tranche.contains('\n') {
                     propre.push_str(" …");
+                    let ligne = propre.matches('\n').count();
+                    replis.push(format!("{ligne}:{}-{}", scopes[c].scope_start_line, scopes[c].scope_end_line));
                 }
                 curseur = cf;
             }
             propre.push_str(&texte[curseur..s.scope_end_byte]);
-            Some(dedent_after_first_line(&propre))
+            Some((dedent_after_first_line(&propre), replis.join(",")))
         })
         .collect()
 }
@@ -1578,6 +1602,38 @@ mod tests {
         let m = par_nom("calcul");
         assert!(m.content.contains("impl Compteur {"), "{}", m.content);
         assert!(!m.content.contains("pub fn inc"), "le module ne voit que la ligne impl : {}", m.content);
+    }
+
+    /// **Les replis rendent les lignes du fichier.** Dans l'`impl`, chaque
+    /// méthode tient en une ligne : `folds` dit laquelle et l'empan qu'elle
+    /// remplace. Pour tout scope aux lignes connues, chaque ligne non repliée
+    /// de `content` est bien celle du fichier à la position calculée.
+    #[test]
+    fn les_replis_rendent_les_lignes_du_fichier() {
+        let src = "mod calcul {\n    pub struct Compteur { n: u32 }\n\n    impl Compteur {\n        pub fn inc(&mut self) {\n            self.n += 1;\n        }\n\n        pub fn total(&self) -> u32 {\n            let f = |x: u32| x * 2;\n            f(self.n)\n        }\n    }\n}\n";
+        let a = analyze("/virtual", vec![("c.rs".into(), src.into()), ("a.rs".into(), RUST_SRC.into())]);
+        let imp = a.scopes.iter().find(|s| s.content.starts_with("impl Compteur")).expect("l'impl");
+        assert_eq!(imp.start_line, 4);
+        assert_eq!(imp.folds, "1:5-7,3:9-12");
+        for (fichier, texte) in [("/virtual/c.rs", src), ("/virtual/a.rs", RUST_SRC)] {
+            let lignes: Vec<&str> = texte.lines().collect();
+            for s in a.scopes.iter().filter(|s| s.file_path == fichier && s.folds != "?") {
+                let replis: Vec<(usize, usize, usize)> = s.folds.split(',').filter(|m| !m.is_empty()).map(|m| {
+                    let (l, e) = m.split_once(':').unwrap();
+                    let (d, f) = e.split_once('-').unwrap();
+                    (l.parse().unwrap(), d.parse().unwrap(), f.parse().unwrap())
+                }).collect();
+                for (k, ligne) in s.content.lines().enumerate() {
+                    let n = s.start_line + k + replis.iter().filter(|(l, _, _)| *l < k).map(|(_, d, f)| f - d).sum::<usize>();
+                    let attendu = lignes[n - 1].trim();
+                    if replis.iter().any(|(l, _, _)| *l == k) {
+                        assert!(ligne.trim().starts_with(attendu.trim_end_matches('{').trim()), "{} ligne {k} : {ligne:?} / {attendu:?}", s.name);
+                    } else {
+                        assert_eq!(ligne.trim(), attendu, "{} ligne {k} → fichier {n}", s.name);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

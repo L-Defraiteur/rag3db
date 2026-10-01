@@ -1,0 +1,48 @@
+%% tool: validate_deck
+%% description: Independently validate deck constraints and collect all diagnostics.
+%% param: context json! -- Proposal and trusted facts.
+%% result: merge8.report
+graph LR
+    facts["RhaiNode(script_id=deck_facts, value=$context)"]
+    deck_size["ValidationRuleNode(script_id=deck_size, code=deck_size, path=/result/mainboard, severity=error, message='Exactly {number} cards allowed in this deck; received {actual}.')"]
+    facts -->|result:value| deck_size
+    land_count["ValidationRuleNode(script_id=land_count, code=land_count, path=/result/mainboard, severity=error, message='Expected {number} lands for this task; received {actual}.')"]
+    facts -->|result:value| land_count
+    known_card["ValidationRuleNode(script_id=known_card, code=known_card, path=/result/mainboard, severity=error, message='Card ID {id} is absent from the owned-card snapshot.')"]
+    facts -->|result:value| known_card
+    playable_face["ValidationRuleNode(script_id=playable_face, code=playable_face, path=/result/mainboard, severity=error, message='{name} must be a primary non-token card.')"]
+    facts -->|result:value| playable_face
+    owned_quantity["ValidationRuleNode(script_id=owned_quantity, code=owned_quantity, path=/result/mainboard, severity=error, message='Only {number} copies of {name} ({id}) owned; received {actual}.')"]
+    facts -->|result:value| owned_quantity
+    copy_limit["ValidationRuleNode(script_id=copy_limit, code=copy_limit, path=/result/mainboard, severity=error, message='Only {number} copies of {name} allowed across printings; received {actual}.')"]
+    facts -->|result:value| copy_limit
+    mana_sources["ValidationRuleNode(script_id=mana_sources, code=mana_sources, path=/result/mainboard, severity=error, message='Need at least {number} potential land sources for {color}; found {actual}.')"]
+    facts -->|result:value| mana_sources
+    mana_distribution["ValidationRuleNode(script_id=mana_distribution, code=mana_distribution, path=/result/mainboard, severity=warning, message='Only {actual} potential {color} land sources; review against target {number} and casting curve.')"]
+    facts -->|result:value| mana_distribution
+    hybrid_cost["ValidationRuleNode(script_id=hybrid_cost, code=hybrid_cost, path=/result/mainboard, severity=warning, message='Review hybrid or Phyrexian cost of {name} separately.')"]
+    facts -->|result:value| hybrid_cost
+    merge1["ValidationMergeNode"]
+    deck_size -->|report:left| merge1
+    land_count -->|report:right| merge1
+    merge2["ValidationMergeNode"]
+    merge1 -->|report:left| merge2
+    known_card -->|report:right| merge2
+    merge3["ValidationMergeNode"]
+    merge2 -->|report:left| merge3
+    playable_face -->|report:right| merge3
+    merge4["ValidationMergeNode"]
+    merge3 -->|report:left| merge4
+    owned_quantity -->|report:right| merge4
+    merge5["ValidationMergeNode"]
+    merge4 -->|report:left| merge5
+    copy_limit -->|report:right| merge5
+    merge6["ValidationMergeNode"]
+    merge5 -->|report:left| merge6
+    mana_sources -->|report:right| merge6
+    merge7["ValidationMergeNode"]
+    merge6 -->|report:left| merge7
+    mana_distribution -->|report:right| merge7
+    merge8["ValidationMergeNode"]
+    merge7 -->|report:left| merge8
+    hybrid_cost -->|report:right| merge8

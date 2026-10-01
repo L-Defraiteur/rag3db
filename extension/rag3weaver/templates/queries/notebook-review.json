@@ -1,0 +1,17 @@
+{
+  "branches": {
+    "semantic": [
+      {"search": {"entity": "Note", "query": "decisions about persistence and search", "signals": ["vector"], "candidates": 100}},
+      {"where": {"field": {"key": "stage", "value": "reviewed"}}}
+    ],
+    "text": [
+      {"search": {"entity": "Note", "query": "persistence", "signals": ["bm25"], "candidates": 100}},
+      {"where": {"field": {"key": "stage", "value": "reviewed"}}}
+    ]
+  },
+  "pipeline": [
+    {"fuse": {"inputs": {"semantic": 2, "text": 1}, "strategy": "rrf", "duplicates": "merge"}},
+    {"page": {"limit": 20, "offset": 0}},
+    {"render": {"template": "tree"}}
+  ]
+}

@@ -46,6 +46,8 @@ use crate::dataflow::services::ServiceRegistry;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
+    #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
+    IndexPersistence(String),
     #[error("not initialized")]
     NotInitialized,
     /// Ce catalogue a été ouvert en lecture : il ne met rien en file et ne
@@ -217,6 +219,7 @@ pub struct Catalog {
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
     fts_storage: crate::fts_handle::FtsStorage,
+    fts_positions: bool,
     /// **L'identité de cet écrivain**, pour que sa marque de travail en attente
     /// ne se confonde pas avec celle d'un autre processus. Tirée à la
     /// construction : deux catalogues du même programme sont deux écrivains.
@@ -325,6 +328,7 @@ impl Catalog {
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
             fts_storage: Default::default(),
+            fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
                 "_writer",
                 &[&format!("{:?}", std::time::SystemTime::now()), &format!("{:?}", std::thread::current().id())],
@@ -547,10 +551,12 @@ impl Catalog {
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
     }
 
-    /// Choisit la topologie de stockage des index FTS.
-    ///
-    /// À appeler **avant** le premier `ensure_fts_handle` : les handles déjà
-    /// ouverts gardent leur stockage d'origine.
+    /// Creation-time positions policy; existing persisted indexes keep their schema.
+    pub fn set_fts_positions(&mut self, positions: bool) {
+        self.fts_positions = positions;
+    }
+
+    /// Choose storage before opening any FTS handle.
     pub fn set_fts_storage(&mut self, storage: crate::fts_handle::FtsStorage) {
         self.fts_storage = storage;
     }
@@ -742,10 +748,11 @@ impl Catalog {
         let handle = match ShardedHandle::open_with_storage(storage()?) {
             Ok(h) => h,
             Err(_) => {
-                let config = match crate::fts_handle::build_schema_config(
+                let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
                     crate::fts_handle::DEFAULT_SHARDS,
+                    self.fts_positions,
                 ) {
                     Ok(c) => c,
                     Err(e) => {
@@ -820,7 +827,7 @@ impl Catalog {
 
         // 3. Everything above committed into the buffer; this is the last
         //    boundary before the connection goes away.
-        self.flush_blob_store("shutdown");
+        self.flush_blob_store("shutdown")?;
 
         self.emit_event(CatalogEvent::ShutdownCompleted {
             fts_closed,
@@ -1095,6 +1102,10 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
+        if self.dialect.name() != "rag3db" && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
+            return Err(CatalogError::SchemaError("native structured payloads currently require rag3db".into()));
+        }
+
         if let Some(derivee) = &config.derived {
             self.verifier_la_derivation(entity_name, derivee).map_err(CatalogError::SchemaError)?;
         }
@@ -2011,7 +2022,7 @@ impl Catalog {
 
         // The per-table commits above wrote into the buffer; make them durable
         // before declaring the reindex done.
-        self.flush_blob_store("reindex");
+        self.flush_blob_store("reindex")?;
 
         // Clear the needs_reindex flag
         self.persist_meta_key(
@@ -2936,7 +2947,7 @@ impl Catalog {
             }
         }
 
-        self.flush_blob_store("rattrapage");
+        self.flush_blob_store("rattrapage")?;
         self.signaler_les_troncatures("rattrapage");
         // Le tour est fait. S'il restait plus que la borne quelque part, il en
         // reste encore : l'indice reste posé et la passe suivante reprendra.
@@ -3063,7 +3074,7 @@ impl Catalog {
                 }),
             }
         }
-        self.flush_blob_store("rattrapage_decoupage");
+        self.flush_blob_store("rattrapage_decoupage")?;
         if total < limite {
             self.peut_devoir_un_redecoupage = false;
         }
@@ -3521,6 +3532,21 @@ impl Catalog {
     /// connaissances (ce pipeline a ses propres nœuds), et que personne n'a
     /// demandé le ligne à ligne (`RAG3WEAVER_INGESTION_LIGNE_A_LIGNE`, pour
     /// mesurer l'un contre l'autre).
+    /// Le chemin de masse pour un lot de naissances (table non vide, aucune
+    /// ligne du lot en base) : mêmes interrupteurs que la première ingestion,
+    /// sans la condition de table vide.
+    ///
+    /// **Désactivé par défaut** (`RAG3WEAVER_COPY_NAISSANCES=1` pour l'essayer) :
+    /// mesuré le 27 septembre 2026 sur le catalogue MTG, le COPY des chunks sur
+    /// une table non vide croît avec la table (781 → 4 474 ms par lot de 512),
+    /// et l'ingestion complète finit plus lente que par MERGE. Voir
+    /// docs/27-septembre-2026-03h57/01.
+    fn naissances_par_copy_possibles(&self) -> bool {
+        std::env::var_os("RAG3WEAVER_COPY_NAISSANCES").is_some()
+            && std::env::var_os("RAG3WEAVER_INGESTION_LIGNE_A_LIGNE").is_none()
+            && self.dialect.supports_copy_from()
+    }
+
     fn premiere_ingestion_possible(&self, entity_name: &str, config: &crate::config::EntityConfig) -> bool {
         if std::env::var_os("RAG3WEAVER_INGESTION_LIGNE_A_LIGNE").is_some() {
             return false;
@@ -4138,12 +4164,16 @@ impl Catalog {
     /// serait payer deux fois la même chose — et la seconde mentirait, parce
     /// qu'elle verrait un état que les écritures en attente du même lot ont
     /// peut-être déjà changé.
+    /// Rend aussi **combien de lignes du lot existaient déjà en base** :
+    /// `Some(n)` quand la relecture a réussi, `None` quand on ne sait pas
+    /// (entité inconnue, relecture impossible). `Some(0)`, c'est un lot de
+    /// naissances : aucune clé ne peut heurter, le chemin de masse est permis.
     fn split_unchanged(
         &self,
         entity_name: &str,
         config: &crate::config::EntityConfig,
         records: Vec<EntityRecord>,
-    ) -> (Vec<EntityRecord>, usize, HashMap<String, String>) {
+    ) -> (Vec<EntityRecord>, usize, HashMap<String, String>, Option<usize>) {
         const NULL: CypherValue = CypherValue::Null;
 
         let Some(entity_def) = self.config.entities.get(entity_name) else {
@@ -4151,7 +4181,7 @@ impl Catalog {
                 context: "split_unchanged".into(),
                 message: format!("{entity_name} : entité absente de la configuration, court-circuit de l'inchangé sauté"),
             });
-            return (records, 0, HashMap::new());
+            return (records, 0, HashMap::new(), None);
         };
 
         // Les colonnes comparées : les champs déclarés, le hash de contenu, et
@@ -4205,7 +4235,7 @@ impl Catalog {
                         "{entity_name} : relecture impossible ({e}), court-circuit de l'inchangé sauté et état d'avant inconnu"
                     ),
                 });
-                return (records, 0, HashMap::new());
+                return (records, 0, HashMap::new(), None);
             }
         };
         let stored: HashMap<String, Vec<CypherValue>> = result
@@ -4223,7 +4253,11 @@ impl Catalog {
         // n'est pas une erreur de requête : c'est soit des uuids vides, soit
         // une table qui ne contient pas ce qu'on croit. Les deux méritent
         // d'être dits, parce qu'aucun des deux ne lève.
-        if stored.is_empty() && !records.is_empty() {
+        // Un lot de naissances (uuids présents, aucun en base) n'est muet que
+        // s'il part effectivement par le chemin de masse : sans lui, rien ne
+        // distingue des naissances d'une table qui ne contient pas ce qu'on croit.
+        let naissances_par_copy = uuids_non_vides == lignes_demandees && self.naissances_par_copy_possibles();
+        if stored.is_empty() && !records.is_empty() && !naissances_par_copy {
             self.emit_event(CatalogEvent::Warning {
                 context: "split_unchanged".into(),
                 message: format!(
@@ -4301,7 +4335,7 @@ impl Catalog {
             };
             let Some(result) = result else {
                 // `complete` reste vide : aucune ligne ne sera sautée.
-                return (records, 0, Self::previous_states_de(config, &columns, &stored));
+                return (records, 0, Self::previous_states_de(config, &columns, &stored), Some(stored.len()));
             };
             // Par parent : combien de chunks, combien embarqués **en dense**,
             // combien **en sparse**.
@@ -4358,7 +4392,7 @@ impl Catalog {
         // `stored` porte les valeurs dans l'ordre de `columns` ; le champ
         // d'état en est un. On ne le sort que si une machine est déclarée —
         // sinon c'est une table vide qu'on promènerait pour rien.
-        (todo, skipped, Self::previous_states_de(config, &columns, &stored))
+        (todo, skipped, Self::previous_states_de(config, &columns, &stored), Some(stored.len()))
     }
 
     /// **L'état d'avant, pour la machine à états.**
@@ -4586,15 +4620,30 @@ impl Catalog {
         // et complet, ne redescend pas dans le graphe (doc 17 §6). Le compte
         // rendu ne bouge pas — ces enregistrements *sont* ingérés, ils
         // l'étaient déjà. Sur une table vide, il n'y a rien à relire.
-        let (entity_records, unchanged, previous_states) = if premiere_ingestion {
+        let (entity_records, unchanged, previous_states, deja_en_base) = if premiere_ingestion {
             // Table vide : rien à relire, donc aucun état d'avant. Toutes les
             // lignes sont des naissances, et c'est la règle des naissances qui
             // s'applique — pas l'absence de règle. Il n'y a pas de transition à
             // vérifier, mais il y a toujours un état à **écrire**.
-            (entity_records, 0, HashMap::new())
+            (entity_records, 0, HashMap::new(), Some(0))
         } else {
             self.split_unchanged(entity_name, &entity_config, entity_records)
         };
+
+        // **Un lot de naissances : le chemin de masse aussi.** La table n'est
+        // pas vide, mais aucune ligne de ce lot n'y est : la relecture vient de
+        // le dire. Rien à comparer, aucune clé ne peut heurter — c'est le cas de
+        // la première ingestion, lot après lot (les outils `ingest_*` plafonnent
+        // à 512 lignes par appel : sans ça, seul le premier lot prenait COPY).
+        // Si le moteur refuse malgré tout un COPY (clé orpheline d'un chunk,
+        // p. ex.), le groupe repasse par le MERGE avec un avertissement.
+        let lot_de_naissances = !premiere_ingestion
+            && deja_en_base == Some(0)
+            && self.naissances_par_copy_possibles();
+        if lot_de_naissances && profil {
+            eprintln!("[ingest-profile] {entity_name} : lot de naissances, {record_count} lignes par le chemin de masse");
+        }
+        let chemin_de_masse = premiere_ingestion || lot_de_naissances;
 
         // **La machine à états, avant toute écriture.** Ici plutôt que dans un
         // nœud : sur le chemin de masse les lignes partent en CSV, et une
@@ -4616,7 +4665,7 @@ impl Catalog {
         // posés » tient quand même : si ce graphe meurt entre les deux, la
         // table n'est plus vide, l'ingestion suivante relit la ligne et son
         // absence de chunks (`split_unchanged`), et la redécoupe.
-        if premiere_ingestion {
+        if chemin_de_masse {
             for rec in &mut entity_records {
                 if let Some(hash) = rec.data.get("_content_hash").cloned() {
                     rec.data.insert("_chunked_hash".into(), hash);
@@ -4624,7 +4673,7 @@ impl Catalog {
             }
         }
         if entity_records.is_empty() {
-            self.flush_blob_store("ingest");
+            self.flush_blob_store("ingest")?;
             // Un lot entièrement refusé ne doit pas se lire comme un lot
             // entièrement inchangé : c'est la différence entre « rien à
             // faire » et « rien n'a été fait ».
@@ -4643,7 +4692,7 @@ impl Catalog {
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
         let signals = entity_config.signals;
-        let mode_insert = if premiere_ingestion { InsertMode::Copy } else { InsertMode::Upsert };
+        let mode_insert = if chemin_de_masse { InsertMode::Copy } else { InsertMode::Upsert };
 
         // 1. Insert entities
         graph.add_node(Box::new(InsertRecordNode::new("insert").with_mode(mode_insert))).unwrap();
@@ -4658,7 +4707,7 @@ impl Catalog {
         // l'embarquement passe **avant** : les chunks arrivent à l'insertion
         // avec leurs vecteurs et leurs marqueurs, et se posent en une fois.
         graph.add_node(Box::new(InsertRecordNode::new("chunk_insert").with_mode(mode_insert))).unwrap();
-        if premiere_ingestion && avec_embarquement {
+        if chemin_de_masse && avec_embarquement {
             graph.add_node(Box::new(EmbedNode::new("embed", signals, 32).with_mode(EmbedMode::Enrich))).unwrap();
             graph.connect("chunk", "chunks", "embed", "entities").unwrap();
             graph.connect("embed", "embedded", "chunk_insert", "entities").unwrap();
@@ -4674,7 +4723,7 @@ impl Catalog {
         // 4 bis. Le marqueur de découpage, **après** les liens : `_chunked_hash`
         // dit que les chunks de ce contenu existent, il ne le dit qu'une fois
         // que c'est vrai. Sur une première ingestion, il est déjà dans la ligne.
-        if !premiere_ingestion {
+        if !chemin_de_masse {
             graph.add_node(Box::new(MarquerDecoupeNode::new("marquer_decoupe"))).unwrap();
             graph.connect("chunk", "parents", "marquer_decoupe", "entities").unwrap();
             graph.connect("chunk_link", "done", "marquer_decoupe", "trigger").unwrap();
@@ -4684,7 +4733,7 @@ impl Catalog {
         // Une feuille : le flush FTS se déclenche depuis l'insertion, pas
         // depuis l'embarquement. L'omettre ne déséquilibre donc rien, et les
         // chunks restent posés et indexés en plein texte.
-        if avec_embarquement && !premiere_ingestion {
+        if avec_embarquement && !chemin_de_masse {
             graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
             graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
             graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
@@ -4765,7 +4814,7 @@ impl Catalog {
                 // Frontière de durabilité : sans ce flush, les fichiers d'index
                 // commités par ce graphe restaient dans le tampon jusqu'au
                 // prochain drain — ou au Drop.
-                self.flush_blob_store("ingest");
+                self.flush_blob_store("ingest")?;
                 self.signaler_les_troncatures("ingest_entities");
                 // Les lignes refusées par la machine à états ne sont jamais
                 // descendues dans le graphe : elles sortent du compte des
@@ -6041,7 +6090,7 @@ impl Catalog {
         let avertissements = ramasser_les_avertissements(&mut ecoute);
         let echecs = Self::relever_les_echecs(&canal);
 
-        let outcome = match result {
+        let mut outcome = match result {
             Ok(_output) => {
                 self.drain_counters.total_processed += op_count;
                 self.drain_counters.flush_count += 1;
@@ -6141,7 +6190,13 @@ impl Catalog {
         // index files before dying, and pushing them is what the write-through
         // store did anyway. What's not flushed here is retried at the next
         // boundary, never dropped.
-        self.flush_blob_store("drain");
+        if let Err(e) = self.flush_blob_store("drain") {
+            // The records may already be written; persistence is a separate failed
+            // operation. Never advertise ready indexes after an unsuccessful flush.
+            outcome.failed += 1;
+            outcome.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+            outcome.warnings.push(e.to_string());
+        }
         self.signaler_les_troncatures("drain");
 
         // **Le rattrapage opportuniste** (réconciliation, A4). Qui paie déjà
@@ -6218,11 +6273,10 @@ impl Catalog {
 
     /// Push buffered index blobs to the database, at a commit boundary.
     ///
-    /// Failure is loud but not fatal here: the buffer keeps the unpushed
-    /// entries, so shutdown/drop gets another go. What we refuse to do is
-    /// silently report a drain as durable when its index isn't.
-    fn flush_blob_store(&self, context: &str) {
-        let Some(ref buffer) = self.blob_buffer else { return };
+    /// Return failures to the caller as well as emitting an event. Retaining
+    /// pending blobs permits retry but does not mean the index is durable.
+    fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
+        let Some(ref buffer) = self.blob_buffer else { return Ok(()) };
         let t0 = std::time::Instant::now();
         match buffer.flush() {
             Ok(stats) => {
@@ -6244,8 +6298,10 @@ impl Catalog {
                     context: format!("blob_flush:{context}"),
                     message: format!("index blobs not persisted: {e}"),
                 });
+                return Err(CatalogError::IndexPersistence(format!("{context}: {e}")));
             }
         }
+        Ok(())
     }
 
     /// Ne vide que les insertions d'entités, par un graphe minimal. Relations
@@ -7334,6 +7390,16 @@ impl Catalog {
         columns: &[String],
         row: &[CypherValue],
     ) -> BTreeMap<String, CypherValue> {
+        // rag3db returns a whole node in one column (`RETURN n`), while SQL
+        // returns its columns. Unwrap only this known node shape, not arbitrary
+        // object-valued projections such as `RETURN n.payload`.
+        if columns.len() == 1 && columns[0] == "n" && row.len() == 1 {
+            if let CypherValue::Map(node) = &row[0] {
+                if node.contains_key("_label") && node.contains_key("_uuid") {
+                    return node.clone();
+                }
+            }
+        }
         let mut data = BTreeMap::new();
         for (i, col) in columns.iter().enumerate() {
             if i < row.len() {
@@ -8019,6 +8085,47 @@ mod tests {
             make_test_config(),
         )
         .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
+    }
+
+    fn inject_blob_failure(cat: &mut Catalog) -> Arc<BufferedBlobStore<CypherBlobStore>> {
+        let store = CypherBlobStore::new(Arc::new(|_, _| Err("injected buffer pool full".into())));
+        let buffer = Arc::new(BufferedBlobStore::new(store));
+        buffer.save("test-index", "segment", b"must survive retry").unwrap();
+        cat.blob_buffer = Some(buffer.clone());
+        buffer
+    }
+
+    #[test]
+    fn index_flush_failure_is_returned_and_pending_bytes_survive() {
+        let mut cat = make_catalog();
+        let buffer = inject_blob_failure(&mut cat);
+        assert!(matches!(cat.flush_blob_store("test"), Err(CatalogError::IndexPersistence(_))));
+        assert_eq!(buffer.pending_len(), 1);
+        assert_eq!(buffer.load("test-index", "segment").unwrap(), b"must survive retry");
+        assert!(matches!(cat.shutdown(), Err(CatalogError::IndexPersistence(_))));
+        assert_eq!(buffer.pending_len(), 1);
+    }
+
+    #[test]
+    fn ingestion_does_not_acknowledge_unpersisted_index_blobs() {
+        let mut cat = make_catalog();
+        cat.initialize().unwrap();
+        let buffer = inject_blob_failure(&mut cat);
+        let result = cat.ingest_entities("Document", vec![make_doc_data("hello", "text")]);
+        assert!(matches!(result, Err(CatalogError::IndexPersistence(_))), "{result:?}");
+        assert_eq!(buffer.pending_len(), 1);
+    }
+
+    #[test]
+    fn drain_does_not_advertise_ready_after_blob_failure() {
+        let mut cat = make_catalog();
+        cat.initialize().unwrap();
+        inject_blob_failure(&mut cat);
+        cat.create("Document", make_doc_data("hello", "text")).unwrap();
+        let result = cat.drain();
+        assert!(result.failed > 0);
+        assert_eq!(result.rendu_pret, Some(crate::disponibilite::Disponibilites::AUCUNE));
+        assert!(result.warnings.iter().any(|w| w.contains("index persistence failed")));
     }
 
     fn make_doc_data(title: &str, body: &str) -> BTreeMap<String, CypherValue> {
@@ -9804,6 +9911,6 @@ impl Drop for Catalog {
             }
         }
         // `conn` is the last field to drop, so the backend is still reachable.
-        self.flush_blob_store("drop");
+        let _ = self.flush_blob_store("drop"); // Drop can only log; explicit APIs propagate.
     }
 }

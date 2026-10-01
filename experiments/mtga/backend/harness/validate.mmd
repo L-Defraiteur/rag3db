@@ -1,0 +1,63 @@
+%% tool: validate_deck
+%% description: Independently validate an Arena constructed deck proposal and collect all diagnostics.
+%% param: context json! -- Proposal and trusted facts.
+%% result: merge9.report
+graph LR
+    facts["RhaiNode(script_id=deck_facts, value=$context)"]
+    deck_size["ValidationRuleNode(script_id=deck_size, code=deck_size, path=/result/mainboard, severity=error, message='Mainboard needs at least {number} cards; received {actual}.')"]
+    facts -->|result:value| deck_size
+    sideboard_size["ValidationRuleNode(script_id=sideboard_size, code=sideboard_size, path=/result/sideboard, severity=error, message='Sideboard allows at most {number} cards; received {actual}.')"]
+    facts -->|result:value| sideboard_size
+    land_count["ValidationRuleNode(script_id=land_count, code=land_count, path=/result/mainboard, severity=warning, message='{actual} lands in the mainboard; usual range is {minimum} to {maximum}. Check the curve.')"]
+    facts -->|result:value| land_count
+    known_card["ValidationRuleNode(script_id=known_card, code=known_card, path=/result/mainboard, severity=error, message='arena_id {id} is not a playable card of the catalog; take arena_id from search or select results.')"]
+    facts -->|result:value| known_card
+    copy_limit["ValidationRuleNode(script_id=copy_limit, code=copy_limit, path=/result/mainboard, severity=error, message='At most {number} copies of {name} across mainboard, sideboard and printings; received {actual}.')"]
+    facts -->|result:value| copy_limit
+    craftable["ValidationRuleNode(script_id=craftable, code=craftable, path=/result/mainboard, severity=error, message='{name}: {missing} missing copies cannot be crafted with wildcards; replace it or use owned copies only.')"]
+    facts -->|result:value| craftable
+    wildcard_budget["ValidationRuleNode(script_id=wildcard_budget, code=wildcard_budget, path=/result/mainboard, severity=error, message='Missing cards need {actual} {rarity} wildcards; only {number} available. Replace unowned {rarity} cards with owned ones.')"]
+    facts -->|result:value| wildcard_budget
+    mana_sources["ValidationRuleNode(script_id=mana_sources, code=mana_sources, path=/result/mainboard, severity=error, message='Spells need {color} but lands provide {actual} {color} sources (minimum {number}).')"]
+    facts -->|result:value| mana_sources
+    mana_distribution["ValidationRuleNode(script_id=mana_distribution, code=mana_distribution, path=/result/mainboard, severity=warning, message='Only {actual} {color} land sources; target {number}. Review against the casting curve.')"]
+    facts -->|result:value| mana_distribution
+    merge1["ValidationMergeNode"]
+    deck_size -->|report:left| merge1
+    sideboard_size -->|report:right| merge1
+    merge2["ValidationMergeNode"]
+    merge1 -->|report:left| merge2
+    land_count -->|report:right| merge2
+    merge3["ValidationMergeNode"]
+    merge2 -->|report:left| merge3
+    known_card -->|report:right| merge3
+    merge4["ValidationMergeNode"]
+    merge3 -->|report:left| merge4
+    copy_limit -->|report:right| merge4
+    merge5["ValidationMergeNode"]
+    merge4 -->|report:left| merge5
+    craftable -->|report:right| merge5
+    merge6["ValidationMergeNode"]
+    merge5 -->|report:left| merge6
+    wildcard_budget -->|report:right| merge6
+    merge7["ValidationMergeNode"]
+    merge6 -->|report:left| merge7
+    mana_sources -->|report:right| merge7
+    merge8["ValidationMergeNode"]
+    merge7 -->|report:left| merge8
+    mana_distribution -->|report:right| merge8
+    land_bounds["ValidationRuleNode(script_id=land_bounds, code=land_bounds, path=/result/mainboard, severity=error, message='{actual} lands: a constructed deck needs {minimum} to {maximum}. Do not pad with basic lands; add spells that serve the plan.')"]
+    facts -->|result:value| land_bounds
+    commander_card["ValidationRuleNode(script_id=commander_card, code=commander_card, path=/result/mainboard, severity=error, message='{name} refers to a commander: it does nothing (or almost) in a 60-card deck without one. Replace it.')"]
+    facts -->|result:value| commander_card
+    legendary_copies["ValidationRuleNode(script_id=legendary_copies, code=legendary_copies, path=/result/mainboard, severity=warning, message='{actual} copies of legendary {name}: extra copies are often dead; {number} is usually enough.')"]
+    facts -->|result:value| legendary_copies
+    merge10["ValidationMergeNode"]
+    land_bounds -->|report:left| merge10
+    commander_card -->|report:right| merge10
+    merge11["ValidationMergeNode"]
+    merge10 -->|report:left| merge11
+    legendary_copies -->|report:right| merge11
+    merge9["ValidationMergeNode"]
+    merge8 -->|report:left| merge9
+    merge11 -->|report:right| merge9

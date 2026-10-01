@@ -1,0 +1,9 @@
+%% tool: put_record
+%% description: Écrit un record selon le schéma, les dates serveur et la politique de l'entité. Une révision attendue évite d'écraser une modification plus récente.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: record json! -- Payload complet des champs éditables ; ne pas fournir les champs générés par le serveur.
+%% param: expected_revision int = 0 -- Zéro pour créer ; révision lue précédemment pour modifier.
+%% result: write.record
+
+graph LR
+    write["EntityRecordNode(entity=$entity, action='put', record=$record, expected_revision=$expected_revision)"]

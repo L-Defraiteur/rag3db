@@ -952,6 +952,10 @@ impl NodeFactory for FuseResultsNodeFactory {
         config: &serde_json::Value,
     ) -> Result<Box<dyn super::node::Node>, String> {
         let mut node = FuseResultsNode::new(name);
+        if let Some(value) = config.get("duplicates") {
+            node = node.with_duplicates(serde_json::from_value(value.clone())
+                .map_err(|e| format!("FuseResultsNode: invalid duplicates: {e}"))?);
+        }
         if let Some(strategy) = config.get("strategy") {
             let strategy: crate::search::FusionStrategy = serde_json::from_value(strategy.clone())
                 .map_err(|e| format!("FuseResultsNode: invalid 'strategy': {e}"))?;
@@ -1021,6 +1025,12 @@ impl NodeFactory for FuseResultsNodeFactory {
             ],
             outputs: vec![results_out()],
             config_params: vec![
+                ConfigParam {
+                    name: "duplicates", param_type: ConfigParamType::String, required: false,
+                    default: Some(serde_json::json!("merge")),
+                    description: "merge: one result per (entity, uuid); keep: original occurrences with their object's fused score",
+                    choices: Some(Choices::fixed(["merge", "keep"])), json_schema: None,
+                },
                 ConfigParam {
                     name: "strategy",
                     param_type: ConfigParamType::String,
@@ -1235,7 +1245,10 @@ impl NodeFactory for ResolveParentNodeFactory {
 /// Populate a NodeRegistry with all built-in node types (see [`BUILTIN_NODE_COUNT`]).
 pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
+    super::composable_results::register(registry);
     registry.register(Box::new(ComposeNodeFactory));
+    registry.register(Box::new(super::rhai_node::RhaiNodeFactory));
+    super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
     registry.register(Box::new(GroupFrameNodeFactory));
@@ -1291,7 +1304,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 32 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 39 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1488,6 +1501,8 @@ mod tests {
                     "query": "MATCH (n) RETURN count(n) AS n",
                     "assert": "n > 0",
                 }),
+                "SelectRecordsNode" => serde_json::json!({"entity":"Product","filter":{"field":{"key":"name","value":"x"}}}),
+                "RelatedResultsNode" => serde_json::json!({"signal":"related"}),
                 "FetchRelatedNode" => serde_json::json!({ "relation": "HAS_VARIANT" }),
                 "FlushNode" | "SparseCommitNode" => serde_json::json!({ "table": "Product" }),
                 "KBQuerySourceNode" => serde_json::json!({ "kb_name": "kb", "query": "rust" }),
@@ -1502,6 +1517,8 @@ mod tests {
                 "ReadFileNode" => serde_json::json!({ "path": "README.md" }),
                 "EditFileNode" => serde_json::json!({ "path": "README.md", "content": "texte" }),
                 "GrepNode" => serde_json::json!({ "pattern": "motif" }),
+                "RhaiNode" => serde_json::json!({"script":"input", "value":{}}),
+                "ValidationRuleNode" => serde_json::json!({"script":"#{valid:true}","code":"test", "message":"failed", "value":{}}),
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),

@@ -216,6 +216,8 @@ fn group_key(r: &UnifiedResult, lens: &PathLens) -> Option<(String, String)> {
 /// elle n'a rien à faire dans un `format!`.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ResultsView {
+    /// Full structured results for lossless product-specific templates.
+    pub payload: serde_json::Value,
     /// Le texte cherché, quand le nœud le reçoit sur son port `query`.
     pub query: Option<String>,
     /// L'entité ou la base où l'on a cherché.
@@ -343,6 +345,18 @@ pub fn build_view(
     max_chars: usize,
     group: bool,
     lens: &PathLens,
+) -> ResultsView {
+    build_view_with(results, max_chars, group, lens, None)
+}
+
+/// La même, en connaissant la configuration des entités : c'est elle qui dit
+/// si un extrait a des lignes de fichier ou si c'est une fiche.
+pub fn build_view_with(
+    results: &[UnifiedResult],
+    max_chars: usize,
+    group: bool,
+    lens: &PathLens,
+    configs: Option<&std::collections::HashMap<String, crate::config::EntityConfig>>,
 ) -> ResultsView {
     let mut order: Vec<usize> = (0..results.len()).collect();
     let mut header_at: std::collections::HashMap<usize, GroupView> = std::collections::HashMap::new();
@@ -478,6 +492,7 @@ pub fn build_view(
     types.sort_by(|a, b| b.count.cmp(&a.count).then(a.name.cmp(&b.name)));
 
     ResultsView {
+        payload: payload_view(serde_json::to_value(results).expect("serializable results"), configs),
         query: None,
         target: None,
         count: results.len(),
@@ -502,6 +517,7 @@ pub fn builtin_template(name: &str) -> Option<&'static str> {
     match name {
         "" | "default" | "results" => Some(DEFAULT_TEMPLATE),
         "compact" => Some(COMPACT_TEMPLATE),
+        "tree" => Some(include_str!("../../templates/render/tree.md.jinja")),
         "schema" => Some(SCHEMA_TEMPLATE),
         _ => None,
     }
@@ -557,6 +573,184 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
         ))
 }
 
+/// Format a JSON value as a tree without shortening domain values or arrays.
+/// Scalar siblings share one line; complex children remain explicit branches.
+/// This is a view only: graph payloads are never modified.
+/// La clé sous laquelle la vue range l'extrait d'un résultat, à la place de
+/// son `chunk`.
+const EXCERPT: &str = "excerpt";
+
+/// **La vue d'un payload** : le même, sauf le `chunk` de chaque résultat,
+/// remplacé par son extrait (voir [`excerpt`]). Le JSON des programmes, lui,
+/// garde les chunks tels quels : seule la vue change.
+fn payload_view(
+    mut payload: serde_json::Value,
+    configs: Option<&std::collections::HashMap<String, crate::config::EntityConfig>>,
+) -> serde_json::Value {
+    let Some(items) = payload.as_array_mut() else { return payload };
+    for item in items {
+        let Some(objet) = item.as_object_mut() else { continue };
+        let Some(chunk) = objet.remove("chunk") else { continue };
+        let config = objet.get("entity").and_then(|e| e.as_str()).and_then(|e| configs.and_then(|c| c.get(e)));
+        if let Some(texte) = excerpt(&chunk, objet.get("data").and_then(|d| d.as_object()), config) {
+            objet.insert(EXCERPT.into(), serde_json::Value::String(texte));
+        }
+    }
+    payload
+}
+
+/// Les replis d'un champ (voir [`crate::config::SourceLines::folds`]) :
+/// `(ligne du champ, première, dernière ligne du fichier)`. `None` pour `?`,
+/// un champ dont les lignes ne sont pas celles du fichier.
+fn parse_folds(texte: &str) -> Option<Vec<(usize, usize, usize)>> {
+    if texte.trim() == "?" {
+        return None;
+    }
+    let mut replis = Vec::new();
+    for morceau in texte.split(',').map(str::trim).filter(|m| !m.is_empty()) {
+        let (ligne, empan) = morceau.split_once(':')?;
+        let (a, b) = empan.split_once('-')?;
+        replis.push((ligne.parse().ok()?, a.parse().ok()?, b.parse().ok()?));
+    }
+    Some(replis)
+}
+
+/// **L'extrait d'un chunk, tel qu'on peut le croire.**
+///
+/// Une fiche (`contentKind: record`) n'a ni lignes ni bornes : pas d'extrait
+/// quand il répète un champ déjà rendu, le texte seul sinon.
+///
+/// Un document a des lignes, mais celles du chunk comptent depuis le début
+/// **de son champ**, depuis 0. Montrées à côté d'un chemin, elles enverraient
+/// un `replace` ailleurs. Alors : quand l'entité déclare `sourceLines`, que
+/// la découpe est par lignes et que le texte du chunk est **exactement** les
+/// lignes annoncées du champ rendu, on écrit les lignes du fichier, à partir
+/// de 1, en tenant compte des enfants repliés (`⟨142-168⟩`). `… 125` en haut
+/// dit qu'il y a du texte avant, `125` seul que l'extrait commence au début ;
+/// de même en bas. Sinon, aucun numéro : le texte, et `…` là où il est coupé.
+/// Lucie, 27 septembre 2026.
+fn excerpt(
+    chunk: &serde_json::Value,
+    data: Option<&serde_json::Map<String, serde_json::Value>>,
+    config: Option<&crate::config::EntityConfig>,
+) -> Option<String> {
+    use crate::config::{ChunkStrategy, ContentKind};
+    let texte = chunk.get("text").and_then(|t| t.as_str()).unwrap_or("").trim_end();
+    if texte.trim().is_empty() {
+        return None;
+    }
+    let chaine = |k: &str| data.and_then(|d| d.get(k)).and_then(|v| v.as_str());
+    let entier = |k: &str| data.and_then(|d| d.get(k)).and_then(|v| v.as_u64()).map(|n| n as usize);
+    let kind = config.map(|c| c.content_kind).unwrap_or_default();
+    if kind == ContentKind::Record {
+        let repete = data.is_some_and(|d| d.values().any(|v| v.as_str().is_some_and(|s| s.trim() == texte.trim())));
+        return (!repete).then(|| texte.to_string());
+    }
+
+    // Les lignes du fichier, si elles sont prouvées.
+    if let Some((config, sl)) = config.and_then(|c| c.source_lines.as_ref().map(|sl| (c, sl))) {
+        let replis = match sl.folds.as_deref() {
+            Some(champ) => parse_folds(chaine(champ).unwrap_or("")),
+            None => Some(Vec::new()),
+        };
+        let debut_fichier = match sl.start_line.as_deref() {
+            Some(champ) => entier(champ),
+            None => Some(1),
+        };
+        let champ = chaine(&sl.field);
+        let k0 = chunk.get("startLine").and_then(|v| v.as_u64()).map(|n| n as usize);
+        if let (Some(replis), Some(debut), Some(champ), Some(k0), ChunkStrategy::Lines) =
+            (replis, debut_fichier, champ, k0, &config.chunking.strategy)
+        {
+            let lignes: Vec<&str> = champ.lines().collect();
+            let extrait: Vec<&str> = texte.lines().collect();
+            let n = extrait.len();
+            let exact = k0 + n <= lignes.len()
+                && extrait.iter().zip(&lignes[k0..k0 + n]).all(|(a, b)| a.trim_end() == b.trim_end());
+            if exact {
+                let repli_a = |k: usize| replis.iter().find(|(l, _, _)| *l == k);
+                let fichier = |k: usize| {
+                    debut + k + replis.iter().filter(|(l, _, _)| *l < k).map(|(_, a, b)| b - a).sum::<usize>()
+                };
+                let k1 = k0 + n - 1;
+                let premiere = fichier(k0);
+                let derniere = repli_a(k1).map(|(_, _, b)| *b).unwrap_or_else(|| fichier(k1));
+                let mut out = vec![if k0 > 0 { format!("… {premiere}") } else { premiere.to_string() }];
+                for (i, ligne) in extrait.iter().enumerate() {
+                    match repli_a(k0 + i) {
+                        Some((_, a, b)) => out.push(format!("{ligne}   ⟨{a}-{b}⟩")),
+                        None => out.push(ligne.to_string()),
+                    }
+                }
+                let reste = lignes[k1 + 1..].iter().any(|l| !l.trim().is_empty());
+                out.push(if reste { format!("… {derniere}") } else { derniere.to_string() });
+                return Some(out.join("\n"));
+            }
+        }
+    }
+
+    // Sans lignes sûres : le texte, et `…` là où il est coupé. Retrouvé dans
+    // un champ rendu, on sait où ; sinon, on le suppose coupé.
+    let place = data.and_then(|d| {
+        d.values().filter_map(|v| v.as_str()).find_map(|s| s.find(texte).map(|p| (s, p)))
+    });
+    let (avant, apres) = match place {
+        Some((s, p)) => (!s[..p].trim().is_empty(), !s[p + texte.len()..].trim().is_empty()),
+        None => (chunk.get("startChar").and_then(|v| v.as_u64()).unwrap_or(0) > 0, true),
+    };
+    if !avant && !apres && place.is_some() {
+        // Tout le champ : il est déjà rendu.
+        return None;
+    }
+    let mut out = Vec::new();
+    if avant {
+        out.push("…");
+    }
+    out.push(texte);
+    if apres {
+        out.push("…");
+    }
+    Some(out.join("\n"))
+}
+
+pub fn structured_tree(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    fn scalar(v: &Value) -> Option<String> {
+        match v {
+            Value::Object(_) => None,
+            Value::Array(xs) if xs.iter().any(|x| x.is_object() || x.is_array()) => None,
+            Value::Array(xs) => Some(format!("[{}]", xs.iter().map(|x| scalar(x).unwrap()).collect::<Vec<_>>().join("; "))),
+            Value::String(s) => Some(s.replace('\r', "\\r").replace('\n', " ↵ ").replace('\t', "\\t")),
+            _ => Some(v.to_string()),
+        }
+    }
+    fn walk(v: &Value, prefix: &str, lines: &mut Vec<String>) {
+        let children: Vec<(String, &Value)> = match v {
+            Value::Object(o) => o.iter().map(|(k,v)| (k.clone(),v)).collect(),
+            Value::Array(a) => a.iter().enumerate().map(|(i,v)| (format!("#{}",i+1),v)).collect(),
+            _ => { lines.push(format!("{prefix}{}",scalar(v).unwrap())); return; }
+        };
+        // Un extrait se lit en bloc, ses lignes à leur place : aplati en
+        // `↵`, ses bornes ne voudraient plus rien dire.
+        let bloc=|k:&str,v:&Value| k==EXCERPT && v.as_str().is_some_and(|s| s.contains('\n'));
+        let scalars=children.iter().filter(|(k,v)| !bloc(k,v)).filter_map(|(k,v)| scalar(v).map(|s| format!("{k}: {s}"))).collect::<Vec<_>>();
+        if !scalars.is_empty() { lines.push(format!("{prefix}{}",scalars.join(" · "))); }
+        let complex=children.iter().filter(|(k,v)| bloc(k,v) || scalar(v).is_none()).collect::<Vec<_>>();
+        if children.is_empty() { lines.push(format!("{prefix}{}",if v.is_array(){"[]"}else{"{}"})); }
+        for (i,(key,child)) in complex.iter().enumerate() {
+            let last=i+1==complex.len();
+            lines.push(format!("{prefix}{}{key}",if last {"`-- "} else {"|-- "}));
+            let dedans=format!("{prefix}{}",if last {"    "}else{"|   "});
+            if bloc(key,child) {
+                lines.extend(child.as_str().unwrap_or("").lines().map(|l| format!("{dedans}{l}")));
+                continue;
+            }
+            walk(child,&dedans,lines);
+        }
+    }
+    let mut lines=Vec::new();walk(value,"",&mut lines);lines.join("\n")
+}
+
 /// Rend une vue à travers un gabarit.
 /// **Rendre n'importe quoi par un gabarit.**
 ///
@@ -568,8 +762,28 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
 /// Lucie, en le voyant venir sur `schema` : *« attention au formatage, faut se
 /// standardiser les affichages pour pas avoir 30 types de sorties
 /// différentes »*.
+/// Optional presentation projection for heterogeneous graph rows: remove engine
+/// internals, vector columns and null padding. The structured payload stays intact.
+fn public_payload(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::Object(object) => Value::Object(object.into_iter()
+            .filter(|(k,v)| !k.starts_with('_') && !k.starts_with("embedding__") && !v.is_null())
+            .map(|(k,v)| (k, public_payload(v))).collect()),
+        Value::Array(values) => Value::Array(values.into_iter().map(public_payload).collect()),
+        other => other,
+    }
+}
+
 pub fn rendre<T: serde::Serialize>(donnees: &T, gabarit: &str) -> Result<String, String> {
     let mut env = minijinja::Environment::new();
+    env.add_filter("public_payload", |v: minijinja::Value| minijinja::Value::from_serialize(public_payload(serde_json::to_value(v).unwrap_or(serde_json::Value::Null))));
+    env.add_filter("without_fields", |v: minijinja::Value, fields: Vec<String>| {
+        let mut value = serde_json::to_value(v).unwrap_or(serde_json::Value::Null);
+        if let Some(object) = value.as_object_mut() { for field in fields { object.remove(&field); } }
+        minijinja::Value::from_serialize(value)
+    });
+    env.add_filter("tree", |v: minijinja::Value| structured_tree(&serde_json::to_value(v).unwrap_or(serde_json::Value::Null)));
     env.add_template("vue", gabarit).map_err(|e| format!("gabarit invalide : {e}"))?;
     let tpl = env.get_template("vue").map_err(|e| format!("gabarit : {e}"))?;
     tpl.render(donnees).map_err(|e| format!("gabarit : {e}"))
@@ -742,7 +956,8 @@ impl Node for RenderResultsNode {
                 PathLens::Origin => self.lens_du_travail(ctx),
                 explicite => explicite.clone(),
             };
-            let mut view = build_view(&results, self.max_chars, self.group, &lens);
+            let configs = ctx.service::<std::collections::HashMap<String, crate::config::EntityConfig>>("entity_configs");
+            let mut view = build_view_with(&results, self.max_chars, self.group, &lens, configs.as_deref());
             if let Some(qp) = &query {
                 view.query = Some(qp.query.clone());
                 view.target = Some(qp.target_name.clone());
@@ -864,8 +1079,8 @@ impl NodeFactory for RenderResultsNodeFactory {
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("default")),
-                    description: "Gabarit de rendu : un nom fourni (default | compact), un chemin de fichier, ou la source Jinja elle-même",
-                    choices: Some(Choices::fixed(["default", "compact"])),
+                    description: "Gabarit de rendu : default, compact, tree, un nom dans le répertoire de templates, ou une source Jinja",
+                    choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
@@ -885,6 +1100,66 @@ impl NodeFactory for RenderResultsNodeFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scope_config() -> crate::config::EntityConfig {
+        crate::config::EntityConfig {
+            chunking: crate::config::ChunkingConfig { strategy: crate::config::ChunkStrategy::Lines, ..Default::default() },
+            source_lines: Some(crate::config::SourceLines {
+                field: "content".into(),
+                start_line: Some("start_line".into()),
+                folds: Some("folds".into()),
+            }),
+            ..Default::default()
+        }
+    }
+    const IMPL: &str = "impl Compteur {\n    pub fn inc(&mut self) { …\n\n    pub fn total(&self) -> u32 { …\n}";
+
+    /// Un extrait de code se lit avec les lignes **du fichier** : la
+    /// méthode repliée dit son empan, le bas finit l'impl, sans `…`.
+    #[test]
+    fn un_extrait_de_code_porte_les_lignes_du_fichier() {
+        let data = serde_json::json!({"content": IMPL, "start_line": 4, "folds": "1:5-7,3:9-12"});
+        let chunk = serde_json::json!({"text": "    pub fn total(&self) -> u32 { …\n}", "startLine": 3, "startChar": 60});
+        let out = excerpt(&chunk, data.as_object(), Some(&scope_config())).unwrap();
+        assert_eq!(out, "… 9\n    pub fn total(&self) -> u32 { …   ⟨9-12⟩\n}\n13");
+        let debut = serde_json::json!({"text": "impl Compteur {\n    pub fn inc(&mut self) { …", "startLine": 0});
+        let out = excerpt(&debut, data.as_object(), Some(&scope_config())).unwrap();
+        assert_eq!(out, "4\nimpl Compteur {\n    pub fn inc(&mut self) { …   ⟨5-7⟩\n… 7");
+    }
+
+    /// Des lignes annoncées qui ne sont pas celles du champ (un chunk de la
+    /// docstring, un index périmé) ne donnent **aucun** numéro.
+    #[test]
+    fn des_lignes_non_prouvees_ne_donnent_aucun_numero() {
+        let data = serde_json::json!({"content": IMPL, "start_line": 4, "folds": "1:5-7,3:9-12", "docstring": "Compte.\nDeux lignes."});
+        let chunk = serde_json::json!({"text": "Deux lignes.", "startLine": 1, "startChar": 8});
+        assert_eq!(excerpt(&chunk, data.as_object(), Some(&scope_config())).unwrap(), "…\nDeux lignes.");
+        let inconnu = serde_json::json!({"content": IMPL, "start_line": 4, "folds": "?"});
+        let chunk = serde_json::json!({"text": "    pub fn total(&self) -> u32 { …", "startLine": 3, "startChar": 60});
+        assert_eq!(excerpt(&chunk, inconnu.as_object(), Some(&scope_config())).unwrap(), "…\n    pub fn total(&self) -> u32 { …\n…");
+    }
+
+    /// Une fiche : pas d'extrait quand il répète un champ rendu, le texte seul
+    /// sinon — jamais de positions.
+    #[test]
+    fn une_fiche_n_a_ni_positions_ni_extrait_redondant() {
+        let config = crate::config::EntityConfig { content_kind: crate::config::ContentKind::Record, ..Default::default() };
+        let data = serde_json::json!({"text": "Essence Scatter\nInstant\nCounter target creature spell."});
+        let chunk = serde_json::json!({"text": "Essence Scatter\nInstant\nCounter target creature spell.", "startLine": 0, "endLine": 3, "startChar": 0, "endChar": 50});
+        assert_eq!(excerpt(&chunk, data.as_object(), Some(&config)), None);
+        let partiel = serde_json::json!({"text": "Counter target creature spell.", "startLine": 2});
+        assert_eq!(excerpt(&partiel, data.as_object(), Some(&config)).unwrap(), "Counter target creature spell.");
+        let vue = payload_view(serde_json::json!([{"entity": "Carte", "data": data, "chunk": chunk}]),
+            Some(&std::collections::HashMap::from([("Carte".to_string(), config)])));
+        assert_eq!(vue, serde_json::json!([{"entity": "Carte", "data": {"text": "Essence Scatter\nInstant\nCounter target creature spell."}}]));
+    }
+
+    /// L'arbre rend l'extrait en bloc, pas aplati en `↵`.
+    #[test]
+    fn l_arbre_rend_l_extrait_en_bloc() {
+        let rendu = structured_tree(&serde_json::json!({"score": 1, "excerpt": "… 9\nfn a() {}\n10"}));
+        assert_eq!(rendu, "score: 1\n`-- excerpt\n    … 9\n    fn a() {}\n    10");
+    }
 
     /// Les trois lentilles sur le même résultat. Le stockage est absolu ; ce
     /// que le modèle lit ne l'est pas (doc 04 §5).
@@ -1257,5 +1532,52 @@ mod tests {
         // Le type est dans la fiche, plus dans la liste des colonnes brutes.
         assert!(md.contains("(function) ★"), "{md}");
         assert!(!md.contains("scope_type="), "{md}");
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn tree_keeps_nested_values_long_text_and_empty_values() {
+        let long = "resurrection ".repeat(100);
+        let value = json!({"name":"Example","colors":["Black","Green"],"owned":0,
+            "abilities":[{"id":7,"text":long}],"missing":null,"empty":[],
+            "matchedChildren":[{"uuid":"same","relation":"CardAbility","score":0.7}]});
+        let output=structured_tree(&value);
+        assert!(output.contains(&long));
+        for expected in ["colors: [Black; Green]","owned: 0","missing: null","empty: []","abilities","matchedChildren","CardAbility","uuid: same"] {
+            assert!(output.contains(expected),"missing {expected}: {output}");
+        }
+        assert_eq!(value["abilities"][0]["text"],long);
+    }
+    #[test]
+    fn template_can_project_without_mutating_the_payload() {
+        let value=json!({"name":"Card","internal":"hash","nested":{"x":[1,2,3]}});
+        let output=rendre(&json!({"payload":value}),"{{ payload | without_fields(['internal']) | tree }}").unwrap();
+        assert!(!output.contains("hash"));
+        assert!(output.contains("x: [1; 2; 3]"));
+        assert_eq!(value["internal"],"hash");
+    }
+    #[test]
+    fn public_projection_preserves_domain_values_and_excludes_vector_padding() {
+        let original=serde_json::json!({"uuid":"id","data":{"_hash":"secret","embedding__model":[0.1],"unused":null,"owned":0,"flag":false,"abilities":[{"text":"all rules"}]}});
+        let projected=public_payload(original.clone());
+        assert_eq!(projected["uuid"],"id");
+        assert_eq!(projected["data"]["owned"],0);
+        assert_eq!(projected["data"]["flag"],false);
+        assert_eq!(projected["data"]["abilities"][0]["text"],"all rules");
+        assert!(!projected["data"].as_object().unwrap().contains_key("embedding__model"));
+        assert!(!projected["data"].as_object().unwrap().contains_key("unused"));
+        assert!(original["data"].as_object().unwrap().contains_key("embedding__model"));
+    }
+    #[test]
+    fn tree_template_uses_full_payload_instead_of_bounded_snippets() {
+        let results: Vec<UnifiedResult>=serde_json::from_value(json!([{"uuid":"u","score":0.5,"entity":"Card","data":{"name":"Title","text":"z".repeat(1000),"abilities":[{"text":"unique nested effect"}]}}])).unwrap();
+        let view=build_view(&results,10,false,&PathLens::default());
+        let rendered=render_view(&view,builtin_template("tree").unwrap()).unwrap();
+        assert!(rendered.contains(&"z".repeat(1000)));
+        assert!(rendered.contains("unique nested effect"));
     }
 }

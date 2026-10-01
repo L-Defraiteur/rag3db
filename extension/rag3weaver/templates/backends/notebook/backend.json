@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "name": "notebook",
+  "database": "data/notebook.rag3db",
+  "embeddings": {
+    "address": "127.0.0.1:7878",
+    "model": "bge-m3",
+    "dimensions": 1024
+  },
+  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "entities": {
+    "Note": {
+      "schema": "schemas/note.json",
+      "config": {
+        "fields": {
+          "key": {
+            "type": "string",
+            "isTitle": true
+          },
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "key",
+          "labels",
+          "revision",
+          "stage"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "stage",
+          "initial": "working",
+          "transitions": [
+            {
+              "name": "review",
+              "from": "working",
+              "to": "reviewed"
+            },
+            {
+              "name": "rework",
+              "from": "reviewed",
+              "to": "working"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision",
+        "transition_dates": [
+          {
+            "field": "stage",
+            "to": "reviewed",
+            "timestamp_field": "reviewed_at"
+          }
+        ]
+      }
+    },
+    "Snapshot": {
+      "schema": "schemas/snapshot.json",
+      "config": {
+        "fields": {
+          "key": {
+            "type": "string",
+            "isTitle": true
+          },
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "signals": [
+          "bm25"
+        ]
+      },
+      "writes": {
+        "immutable": true,
+        "created_at": "created_at"
+      }
+    }
+  },
+  "tools": {
+    "put_note": {
+      "graph": "graphs/put.mmd",
+      "bindings": {
+        "entity": "Note"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Note",
+          "view": "editable"
+        }
+      }
+    },
+    "get_note": {
+      "graph": "graphs/get.mmd",
+      "bindings": {
+        "entity": "Note"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Note",
+          "view": "identity"
+        }
+      }
+    },
+    "save_snapshot": {
+      "graph": "graphs/put.mmd",
+      "bindings": {
+        "entity": "Snapshot"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Snapshot",
+          "view": "editable"
+        }
+      }
+    },
+    "get_snapshot": {
+      "graph": "graphs/get.mmd",
+      "bindings": {
+        "entity": "Snapshot"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Snapshot",
+          "view": "identity"
+        }
+      }
+    },
+    "search_notes": {
+      "graph": "../../tools/search_structured.mmd",
+      "bindings": {
+        "target": "Note"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    }
+  }
+}

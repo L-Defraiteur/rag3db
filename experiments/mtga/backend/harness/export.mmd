@@ -1,0 +1,6 @@
+%% tool: export_deck
+%% description: Render the accepted deck as Arena import text.
+%% param: context json! -- Accepted proposal and trusted facts.
+%% result: export.result
+graph LR
+    export["RhaiNode(script_id=deck_export, value=$context)"]

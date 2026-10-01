@@ -1,0 +1,6 @@
+%% tool: craft_plan
+%% description: Summarize wildcards the accepted deck needs.
+%% param: context json! -- Accepted proposal and trusted facts.
+%% result: plan.result
+graph LR
+    plan["RhaiNode(script_id=deck_craft_plan, value=$context)"]

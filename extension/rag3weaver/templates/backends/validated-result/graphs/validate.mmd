@@ -1,0 +1,10 @@
+%% tool: validate_result
+%% description: Validate a proposal using a host-authored hook.
+%% param: context json! -- Tool arguments, result and trusted facts.
+%% result: all.report
+graph LR
+    positive["ValidationRuleNode(script_id=validate_result, value=$context, code=positive_required, path=/result/value, message='Value must be greater than {minimum}; received {actual}.')"]
+    name["ValidationRuleNode(script_id=validate_name, value=$context, code=name_required, path=/result/name, message='Name must contain non-whitespace characters.')"]
+    all["ValidationMergeNode"]
+    positive -->|report:left| all
+    name -->|report:right| all

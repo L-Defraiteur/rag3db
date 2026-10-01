@@ -54,7 +54,7 @@ pub enum Flow {
 /// requête (400) si un appel reste sans réponse. C'est pourquoi ce type
 /// remplace la chaîne JSON d'avant : on accumulait la structure pour la jeter
 /// à la frontière, et un `id` perdu rend la conversation **irrejouable**.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ToolCall {
     /// Identifiant opaque. Vient du fournisseur (`call_…`), ou de
     /// [`ToolCall::local_id`] pour un modèle local qui n'en a pas.
@@ -221,6 +221,12 @@ pub trait TokenSink: Send {
     /// Appelé une fois par fragment décodé. Rendre [`Flow::Stop`] annule.
     fn on_token(&mut self, delta: &str) -> Flow;
 
+    /// Optional reasoning text exposed by the provider, separate from the
+    /// public answer. Ignored by default; never implicitly replayed as content.
+    fn on_reasoning(&mut self, _delta: &str) -> Flow {
+        Flow::Continue
+    }
+
     /// Appelé une seule fois, à la toute fin, quelle que soit la raison.
     fn on_finish(&mut self, _reason: &Finish) {}
 
@@ -343,7 +349,7 @@ impl TokenSink for CountingSink {
 /// exactement ce que les chat templates itèrent (`system`, `user`,
 /// `assistant`, et `tool` à l'étape 6), et un modèle inconnu peut en
 /// inventer un sans qu'on ait à recompiler.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Turn {
     pub role: String,
     pub content: String,

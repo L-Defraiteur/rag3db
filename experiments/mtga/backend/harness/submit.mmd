@@ -1,0 +1,6 @@
+%% tool: submit_deck
+%% description: Submit a finished Arena constructed deck (min 60 cards, sideboard up to 15) using arena_id values from search/select results. The harness checks card identity, copy limits, owned copies, wildcard budget and mana sources; on refusal fix every listed error and submit again. On acceptance returns the Arena import text to copy and the wildcards to spend. Legality in a specific format (Standard, Historic...) is NOT checked.
+%% param: result json! -- {name, plan, mainboard:[{arena_id, quantity}], sideboard?:[{arena_id, quantity}]}
+%% result: accept.result
+graph LR
+    accept["RhaiNode(script_id=deck_accept, value=$result)"]

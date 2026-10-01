@@ -344,7 +344,9 @@ impl Node for InsertRecordNode {
                                             .filter(|d| d.column == *col)
                                             .map(|d| CypherValue::List(d.values.iter().map(|&f| CypherValue::Float(f as f64)).collect()))
                                     });
-                                    map.insert(col.to_string(), valeur.unwrap_or(CypherValue::Null));
+                                    let value = valeur.unwrap_or(CypherValue::Null);
+                                    let ty = ctx.service::<CatalogConfig>("config").and_then(|c| c.entities.get(entity_name)).and_then(|e| e.fields.get(*col)).map(|f| &f.field_type);
+                                    map.insert(col.to_string(), typed_payload_param(value, ty));
                                 }
                                 CypherValue::Map(map)
                             })
@@ -3119,7 +3121,8 @@ impl Node for UpdateRecordNode {
                         m.insert("_uuid".to_string(), CypherValue::String(rec.uuid.clone()));
                         m.insert("_content_hash".to_string(), CypherValue::String(rec.new_content_hash.clone()));
                         for (k, v) in &rec.data {
-                            m.insert(k.clone(), v.clone());
+                            let ty = config.entities.get(entity_name).and_then(|e| e.fields.get(k)).map(|f| &f.field_type);
+                            m.insert(k.clone(), typed_payload_param(v.clone(), ty));
                         }
                         CypherValue::Map(m)
                     }).collect(),
@@ -3825,4 +3828,15 @@ mod tests {
         assert_eq!(node.outputs()[1].name, "embedded");
     }
 
+}
+
+// An annotation belongs at the parameter boundary, never in stored records or checkpoints.
+fn typed_payload_param(value: CypherValue, ty: Option<&crate::config::FieldType>) -> CypherValue {
+    match ty {
+        Some(ty) if matches!(value, CypherValue::Null) =>
+            CypherValue::Typed { value: Box::new(value), field_type: ty.clone() },
+        Some(ty @ (crate::config::FieldType::List(_) | crate::config::FieldType::Struct(_))) =>
+            CypherValue::Typed { value: Box::new(value), field_type: ty.clone() },
+        _ => value,
+    }
 }

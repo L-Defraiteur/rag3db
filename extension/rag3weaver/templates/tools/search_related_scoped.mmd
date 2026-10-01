@@ -1,0 +1,53 @@
+%% tool: search_related_scoped
+%% description: Recherche exhaustive par filtres, parcours mécanique-capacité-carte, restriction deck/collection avant fusion et pagination. Aucun top-k intermédiaire.
+%% param: mechanic_entity string! -- Entité des concepts et définitions.
+%% param: ability_entity string! -- Entité des capacités natives.
+%% param: card_entity string! -- Entité des objets recherchés.
+%% param: scope_entity string! -- Entité des entrées de deck ou de collection.
+%% param: mechanic_filter json! -- Filtre sur les définitions.
+%% param: ability_filter json! -- Filtre sur les textes des capacités.
+%% param: card_filter json! -- Filtre direct sur les cartes.
+%% param: scope_filter json! -- Filtre du périmètre, deck_id ou quantité possédée.
+%% param: ability_mechanic_relation string! -- Relation capacité vers mécanique.
+%% param: card_ability_relation string! -- Relation carte vers capacité.
+%% param: scope_card_relation string! -- Relation entrée vers carte.
+%% param: options json! -- limit et offset de la page finale.
+%% param: duplicates string = "merge" -- merge ou keep.
+%% result: page.results
+
+graph LR
+    mechanics["SelectRecordsNode(entity=$mechanic_entity, filter=$mechanic_filter)"]
+    ability_text["SelectRecordsNode(entity=$ability_entity, filter=$ability_filter)"]
+    mechanic_links["FetchRelatedNode(relation=$ability_mechanic_relation, direction=Incoming, limit=0)"]
+    mechanic_abilities["RelatedResultsNode(signal=mechanic)"]
+    abilities["FuseResultsNode(weights='mechanic:1,ability_text:1', signal=abilities)"]
+    card_links["FetchRelatedNode(relation=$card_ability_relation, direction=Incoming, limit=0)"]
+    ability_cards["RelatedResultsNode(signal=ability)"]
+    card_text["SelectRecordsNode(entity=$card_entity, filter=$card_filter)"]
+    scope["SelectRecordsNode(entity=$scope_entity, filter=$scope_filter)"]
+    scope_links["FetchRelatedNode(relation=$scope_card_relation, direction=Outgoing, limit=0)"]
+    scope_cards["RelatedResultsNode(signal=scope)"]
+    scoped_abilities["IntersectResultsNode"]
+    scoped_text["IntersectResultsNode"]
+    fuse["FuseResultsNode(weights='ability:2,card_text:1', duplicates=$duplicates)"]
+    paging["KBQuerySourceNode(kb_name=$card_entity, query='', options=$options)"]
+    page["PaginateNode"]
+    mechanics -->|results| mechanic_links
+    mechanics -->|results:parents| mechanic_abilities
+    mechanic_links -->|children| mechanic_abilities
+    mechanic_abilities -->|results:signals| abilities
+    ability_text -->|results:signals| abilities
+    abilities -->|results| card_links
+    abilities -->|results:parents| ability_cards
+    card_links -->|children| ability_cards
+    scope -->|results| scope_links
+    scope -->|results:parents| scope_cards
+    scope_links -->|children| scope_cards
+    ability_cards -->|results| scoped_abilities
+    scope_cards -->|results:allowed| scoped_abilities
+    card_text -->|results| scoped_text
+    scope_cards -->|results:allowed| scoped_text
+    scoped_abilities -->|results:signals| fuse
+    scoped_text -->|results:signals| fuse
+    fuse -->|results| page
+    paging -->|query| page

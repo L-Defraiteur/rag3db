@@ -602,6 +602,7 @@ impl NodeFactory for ValidateNodeFactory {
 
 fn cypher_value_to_json(val: &CypherValue) -> serde_json::Value {
     match val {
+        CypherValue::Typed { value, .. } => cypher_value_to_json(value),
         CypherValue::String(s) => serde_json::Value::String(s.clone()),
         CypherValue::Int(n) => serde_json::json!(n),
         CypherValue::Float(f) => serde_json::json!(f),

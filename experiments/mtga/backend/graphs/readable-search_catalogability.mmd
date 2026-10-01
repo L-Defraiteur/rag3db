@@ -1,0 +1,29 @@
+%% tool: search_structured
+%% description: Recherche structurée dans une entité : lucivy et dense local, filtres appliqués par chaque signal avant fusion et pagination.
+%% param: target string! -- Entité où chercher.
+%% param: query string! -- Description naturelle ou nom de carte.
+%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency. Les restrictions collection/deck sont injectées ici avant l'exécution.
+%% result: render.results
+
+graph LR
+    source["SearchSourceNode(target_name=$target, query=$query, options=$options)"]
+    bm25["BM25SearchNode"]
+    vector["VectorSearchNode"]
+    fuse["FuseResultsNode(weights='bm25:0.5,vector:0.5')"]
+    paginate["PaginateNode"]
+    resolve["ResolveParentNode"]
+    render["RenderResultsNode(template=magic)"]
+    source -->|query| bm25
+    source -->|query| vector
+    source -->|query| fuse
+    source -->|query| paginate
+    source -->|query| resolve
+    source -->|query| render
+    source -->|meta| render
+    bm25 -->|meta| render
+    vector -->|meta| render
+    bm25 -->|results:bm25| fuse
+    vector -->|results:vector| fuse
+    fuse -->|results| paginate
+    paginate -->|results| resolve
+    resolve -->|results| render

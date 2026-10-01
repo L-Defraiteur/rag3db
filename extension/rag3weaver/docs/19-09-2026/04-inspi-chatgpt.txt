@@ -1,0 +1,56 @@
+Là oui, je vois beaucoup mieux ce que tu es en train de construire 😄 Et oui, le « SQL de 2035 » n’est pas complètement une blague.
+
+Ce que tu fais avec Codex, tel que je le comprends, c’est une couche de composition de recherche où plusieurs branches hétérogènes peuvent converger vers un même type de résultat, puis être fusionnées proprement :
+
+une branche peut venir d’une traversée de graphe, par exemple capability -> cards;
+une autre d’une recherche texte directe;
+une autre peut imposer un sous-ensemble, comme les cartes présentes dans certains decks;
+ensuite tu fais intersection, fusion pondérée/RRF, déduplication par identité stable, conservation des preuves et provenance.
+
+Et le détail merge par défaut / keep optionnel me paraît très sain. Si deux branches renvoient le même Card(id=42), ce serait franchement absurde que le pipeline considère soudain qu’on possède deux cartes ontologiquement distinctes parce qu’elles ont été découvertes par deux chemins différents. L’informatique a déjà produit suffisamment de doubles Jean-Maurice. 😭
+
+Le modèle conceptuel que je garderais est plutôt :
+
+Result<T> =
+{
+    entity: T,
+    identity: StableId,
+    score/contributions,
+    evidences[],
+    provenance[]
+}
+
+Puis la fusion travaille sur identity, pas simplement sur T ni sur l’égalité structurelle de l’objet.
+
+En merge :
+
+same identity
+→ one Result<T>
+→ aggregate branch contributions
+→ union provenance
+→ union evidence
+
+En keep :
+
+same identity
+→ multiple Result<T>
+→ branch provenance remains separate
+
+Et là où ton truc devient réellement intéressant, c’est que ton graphe commence à exprimer une sorte d’algèbre des ensembles scorés :
+
+Search
+Traverse
+Filter
+Intersect
+Union/Fuse
+Rerank
+Deduplicate
+Paginate
+
+avec en plus une provenance explicite. Ça dépasse effectivement « un framework RAG avec trois nodes et un logo violet ». 😈
+
+La distinction faite par Codex entre fusion et reranking est également importante. La fusion décide comment plusieurs producteurs de candidats contribuent à l’ensemble commun. Le reranker arrive après et dit en substance : « maintenant que j’ai ces candidats, je vais les comparer avec une fonction supplémentaire ». Mélanger les deux finirait probablement en FusionRerankButSometimesJoinNodeFactoryManager, et ensuite il ne resterait plus qu’à appeler Oracle pour demander pardon.
+
+Ton exemple Magic est d’ailleurs un excellent test parce qu’il force exactement les bonnes propriétés : une carte avec Flashback doit pouvoir être retrouvée indirectement via une entité/capacité liée, directement par son texte, éventuellement par plusieurs chemins simultanément, sans être dupliquée mais sans perdre la raison pour laquelle chaque branche l’a trouvée.
+
+Donc maintenant, quand tu me parleras de « la fusion » ou du « graphe Magic » dans cette conversation, j’ai ce contexte précis : rag3weaver, nœuds génériques, plusieurs branches de recherche/traversée, fusion pondérée/RRF, dédup par (entity type, stable id), provenance + preuves conservées, merge défaut / keep inspection. C’est nettement moins flou que « Lucie trafique encore un DAG inquiétant quelque part ». 😌

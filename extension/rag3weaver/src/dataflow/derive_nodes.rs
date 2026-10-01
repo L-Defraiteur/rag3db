@@ -61,6 +61,7 @@ fn ligne_en_json(ligne: &Ligne) -> serde_json::Value {
 
 fn valeur_en_json(v: &CypherValue) -> serde_json::Value {
     match v {
+        CypherValue::Typed { value, .. } => valeur_en_json(value),
         CypherValue::Null => serde_json::Value::Null,
         CypherValue::Bool(b) => serde_json::Value::Bool(*b),
         CypherValue::Int(i) => serde_json::Value::from(*i),

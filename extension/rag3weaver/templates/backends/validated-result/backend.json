@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "name": "validated_result",
+  "database": "data/results.rag3db",
+  "embeddings": {
+    "address": "127.0.0.1:7878",
+    "model": "bge-m3",
+    "dimensions": 1024
+  },
+  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "entities": {
+    "Submission": {
+      "schema": "schemas/submission.json",
+      "config": {
+        "fields": {
+          "text": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "signals": [],
+        "returnFields": [
+          "key",
+          "text",
+          "payload_json",
+          "created_at"
+        ]
+      },
+      "writes": {
+        "immutable": true,
+        "created_at": "created_at"
+      }
+    }
+  },
+  "scripts": {
+    "prepare_record": "hooks/record.rhai",
+    "validate_result": "hooks/positive.rhai",
+    "validate_name": "hooks/name.rhai"
+  },
+  "tools": {
+    "submit_result": {
+      "graph": "graphs/submit.mmd",
+      "bindings": {
+        "empty": {}
+      },
+      "harness": {
+        "input_schema": "schemas/input.json",
+        "before": [
+          {
+            "graph": "graphs/validate.mmd"
+          }
+        ]
+      }
+    },
+    "get_result": {
+      "graph": "graphs/get.mmd",
+      "input_payloads": {
+        "record": {
+          "entity": "Submission",
+          "view": "identity"
+        }
+      }
+    }
+  }
+}
