@@ -1,5 +1,6 @@
 #include "integrity/integrity_checker.h"
 
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 
@@ -16,6 +17,8 @@ namespace {
 
 // Au-delà, une violation est résumée : la sortie brute doit rester lisible.
 constexpr size_t MAX_LISTED = 10;
+
+constexpr const char* MISSING = "<missing>";
 
 std::unique_ptr<main::QueryResult> mustQuery(main::Connection& connection,
     const std::string& query) {
@@ -44,56 +47,94 @@ std::vector<std::vector<std::string>> rows(main::Connection& connection, const s
 struct NodeTable {
     std::string name;
     std::string primaryKey;
+    std::vector<std::string> properties;
 };
 
 struct RelTable {
     std::string name;
     std::string source;
     std::string destination;
-    std::string sourcePrimaryKey;
-    std::string destinationPrimaryKey;
-    bool carriesEndpointKeys = false;
+    std::vector<std::string> properties;
+    // Position de src_id et dst_id dans properties, ou -1.
+    int sourceKeyIndex = -1;
+    int destinationKeyIndex = -1;
 };
 
-// Une relation telle qu'un balayage la rend, avec les clés lues sur ses extrémités.
-struct Edge {
-    std::string sourceOffset;
-    std::string destinationOffset;
-    std::string sourceKey;
-    std::string destinationKey;
-    std::string declaredSourceKey;
-    std::string declaredDestinationKey;
+struct Schema {
+    std::vector<NodeTable> nodeTables;
+    std::vector<RelTable> relTables;
 };
 
-std::string primaryKeyOf(main::Connection& connection, const std::string& table) {
-    for (const auto& row : rows(connection,
-             stringFormat("CALL table_info('{}') RETURN name, `primary key`;", table))) {
-        if (row[1] == "True") {
-            return row[0];
+Schema loadSchema(main::Connection& connection) {
+    Schema schema;
+    for (const auto& row : rows(connection, "CALL show_tables() RETURN name, type;")) {
+        if (row[1] == "NODE") {
+            NodeTable table{row[0]};
+            for (const auto& property : rows(connection,
+                     stringFormat("CALL table_info('{}') RETURN name, `primary key`;", row[0]))) {
+                table.properties.push_back(property[0]);
+                if (property[1] == "True") {
+                    table.primaryKey = property[0];
+                }
+            }
+            schema.nodeTables.push_back(std::move(table));
+        } else if (row[1] == "REL") {
+            RelTable rel{row[0]};
+            const auto connections = rows(connection,
+                stringFormat("CALL show_connection('{}') RETURN `source table name`, "
+                             "`destination table name`;",
+                    rel.name));
+            // Une table de relations à plusieurs paires de tables n'est pas dans le banc.
+            if (connections.size() != 1) {
+                throw std::runtime_error("integrity checker: rel table " + rel.name +
+                                         " has several connections, not supported");
+            }
+            rel.source = connections[0][0];
+            rel.destination = connections[0][1];
+            for (const auto& property :
+                rows(connection, stringFormat("CALL table_info('{}') RETURN name;", rel.name))) {
+                if (property[0] == SOURCE_KEY_PROPERTY) {
+                    rel.sourceKeyIndex = static_cast<int>(rel.properties.size());
+                } else if (property[0] == DESTINATION_KEY_PROPERTY) {
+                    rel.destinationKeyIndex = static_cast<int>(rel.properties.size());
+                }
+                rel.properties.push_back(property[0]);
+            }
+            schema.relTables.push_back(std::move(rel));
         }
     }
-    return "";
+    return schema;
 }
 
-bool hasProperty(main::Connection& connection, const std::string& table,
-    const std::string& property) {
-    for (const auto& row :
-        rows(connection, stringFormat("CALL table_info('{}') RETURN name;", table))) {
-        if (row[0] == property) {
-            return true;
-        }
+std::string castAll(const std::string& variable, const std::vector<std::string>& properties) {
+    std::string out;
+    for (const auto& property : properties) {
+        out += stringFormat(", CAST({}.{} AS STRING)", variable, property);
     }
-    return false;
+    return out;
 }
 
-// Les lignes visibles d'une table de nœuds : offset -> clé primaire.
-std::map<std::string, std::string> visibleRows(main::Connection& connection,
-    const NodeTable& table) {
-    std::map<std::string, std::string> out;
-    for (const auto& row :
-        rows(connection, stringFormat("MATCH (n:{}) RETURN offset(id(n)), CAST(n.{} AS STRING);",
-                             table.name, table.primaryKey))) {
-        out[row[0]] = row[1];
+// Les lignes visibles d'une table de nœuds : offset -> toutes les propriétés.
+struct VisibleRows {
+    std::map<std::string, std::vector<std::string>> byOffset;
+    size_t primaryKeyIndex = 0;
+
+    std::string keyOf(const std::string& offset) const {
+        const auto it = byOffset.find(offset);
+        return it == byOffset.end() ? std::string(MISSING) : it->second[primaryKeyIndex];
+    }
+};
+
+VisibleRows visibleRows(main::Connection& connection, const NodeTable& table) {
+    VisibleRows out;
+    out.primaryKeyIndex = static_cast<size_t>(
+        std::find(table.properties.begin(), table.properties.end(), table.primaryKey) -
+        table.properties.begin());
+    for (auto& row : rows(connection, stringFormat("MATCH (n:{}) RETURN offset(id(n)){};",
+                                          table.name, castAll("n", table.properties)))) {
+        auto offset = row[0];
+        row.erase(row.begin());
+        out.byOffset[offset] = std::move(row);
     }
     return out;
 }
@@ -118,37 +159,61 @@ void checkPrimaryKey(main::Connection& connection, const NodeTable& table,
     violations.push_back({"primary-key-unique", detail});
 }
 
+// Une relation telle qu'un balayage la rend. Les clés des extrémités viennent des
+// lignes visibles, jamais d'une lecture sur l'extrémité (règle de l'en-tête).
+struct Edge {
+    std::string sourceOffset;
+    std::string destinationOffset;
+    std::string sourceKey;
+    std::string destinationKey;
+    std::vector<std::string> properties;
+};
+
 // Balaye les relations en partant d'un côté. Le WITH oblige le plan à lier d'abord ce
 // côté, puis à étendre vers l'autre (vérifié par EXPLAIN : SCAN_REL_TABLE depuis le
 // côté lié). Une relation dont ce côté est invisible n'est pas vue, ce qui est le but :
 // comparer les deux sens fait sortir les relations pendantes.
-// On ne lit aucune propriété de l'autre extrémité : y accéder joint sa table de nœuds
-// et efface en silence une relation dont l'extrémité est supprimée. Les clés des
-// extrémités viennent des lignes visibles, lues à part.
 std::map<std::string, Edge> scanEdges(main::Connection& connection, const RelTable& rel,
-    bool fromSource, const std::map<std::string, std::string>& sourceKeys,
-    const std::map<std::string, std::string>& destinationKeys) {
-    const auto declared = rel.carriesEndpointKeys ?
-                              stringFormat(", CAST(r.{} AS STRING), CAST(r.{} AS STRING)",
-                                  SOURCE_KEY_PROPERTY, DESTINATION_KEY_PROPERTY) :
-                              std::string(", '', ''");
+    bool fromSource, const VisibleRows& sources, const VisibleRows& destinations) {
     const auto pattern = fromSource ? stringFormat("MATCH (a:{}) WITH a MATCH (a)-[r:{}]->(b:{})",
                                           rel.source, rel.name, rel.destination) :
                                       stringFormat("MATCH (b:{}) WITH b MATCH (a:{})-[r:{}]->(b)",
                                           rel.destination, rel.source, rel.name);
-    const auto query =
-        stringFormat("{} RETURN offset(id(r)), offset(id(a)), offset(id(b)){};", pattern, declared);
-    const auto keyOf = [](const std::map<std::string, std::string>& keys,
-                           const std::string& offset) {
-        const auto it = keys.find(offset);
-        return it == keys.end() ? std::string("<missing>") : it->second;
-    };
+    const auto query = stringFormat("{} RETURN offset(id(r)), offset(id(a)), offset(id(b)){};",
+        pattern, castAll("r", rel.properties));
     std::map<std::string, Edge> edges;
     for (auto& row : rows(connection, query)) {
-        edges[row[0]] = Edge{row[1], row[2], keyOf(sourceKeys, row[1]),
-            keyOf(destinationKeys, row[2]), row[3], row[4]};
+        Edge edge{row[1], row[2], sources.keyOf(row[1]), destinations.keyOf(row[2]),
+            std::vector<std::string>(row.begin() + 3, row.end())};
+        edges[row[0]] = std::move(edge);
     }
     return edges;
+}
+
+// Toutes les relations d'une table, vues des deux côtés, et celles qu'un seul côté voit.
+struct EdgeScan {
+    std::map<std::string, Edge> all;
+    std::vector<std::pair<std::string, std::string>> oneSideOnly;
+};
+
+EdgeScan scanBothSides(main::Connection& connection, const RelTable& rel,
+    const VisibleRows& sources, const VisibleRows& destinations) {
+    const auto forward = scanEdges(connection, rel, true /* fromSource */, sources, destinations);
+    const auto backward = scanEdges(connection, rel, false /* fromSource */, sources, destinations);
+    EdgeScan scan;
+    for (const auto& [offset, edge] : forward) {
+        if (!backward.contains(offset)) {
+            scan.oneSideOnly.emplace_back("forward only", offset);
+        }
+    }
+    for (const auto& [offset, edge] : backward) {
+        if (!forward.contains(offset)) {
+            scan.oneSideOnly.emplace_back("backward only", offset);
+        }
+    }
+    scan.all = forward;
+    scan.all.insert(backward.begin(), backward.end());
+    return scan;
 }
 
 std::string edgeText(const std::string& relOffset, const Edge& edge) {
@@ -157,56 +222,44 @@ std::string edgeText(const std::string& relOffset, const Edge& edge) {
 }
 
 void checkRelTable(main::Connection& connection, const RelTable& rel,
-    const std::map<std::string, std::map<std::string, std::string>>& visible,
-    std::vector<Violation>& violations) {
-    const auto& sourceKeys = visible.at(rel.source);
-    const auto& destinationKeys = visible.at(rel.destination);
-    const auto forward =
-        scanEdges(connection, rel, true /* fromSource */, sourceKeys, destinationKeys);
-    const auto backward =
-        scanEdges(connection, rel, false /* fromSource */, sourceKeys, destinationKeys);
+    const std::map<std::string, VisibleRows>& visible, std::vector<Violation>& violations) {
+    const auto& sources = visible.at(rel.source);
+    const auto& destinations = visible.at(rel.destination);
+    const auto scan = scanBothSides(connection, rel, sources, destinations);
 
-    std::string onlyOneSide;
-    size_t numOnlyOneSide = 0;
-    for (const auto& [side, mine, other] : {std::tuple{"forward only", &forward, &backward},
-             std::tuple{"backward only", &backward, &forward}}) {
-        for (const auto& [offset, edge] : *mine) {
-            if (other->contains(offset)) {
-                continue;
-            }
-            if (++numOnlyOneSide <= MAX_LISTED) {
-                onlyOneSide += stringFormat(" [{}] {}", side, edgeText(offset, edge));
-            }
+    if (!scan.oneSideOnly.empty()) {
+        std::string detail = stringFormat(
+            "table {}: {} relations seen from one side only:", rel.name, scan.oneSideOnly.size());
+        for (auto i = 0u; i < scan.oneSideOnly.size() && i < MAX_LISTED; ++i) {
+            const auto& [side, offset] = scan.oneSideOnly[i];
+            detail += stringFormat(" [{}] {}", side, edgeText(offset, scan.all.at(offset)));
         }
-    }
-    if (numOnlyOneSide != 0) {
-        violations.push_back({"rel-directions-agree",
-            stringFormat("table {}: {} relations seen from one side only:{}", rel.name,
-                numOnlyOneSide, onlyOneSide)});
+        violations.push_back({"rel-directions-agree", detail});
     }
 
-    std::map<std::string, Edge> all = forward;
-    all.insert(backward.begin(), backward.end());
     std::string dangling;
     size_t numDangling = 0;
     std::string wrong;
     size_t numWrong = 0;
-    for (const auto& [offset, edge] : all) {
-        const bool sourceVisible = sourceKeys.contains(edge.sourceOffset);
-        const bool destinationVisible = destinationKeys.contains(edge.destinationOffset);
+    for (const auto& [offset, edge] : scan.all) {
+        const bool sourceVisible = sources.byOffset.contains(edge.sourceOffset);
+        const bool destinationVisible = destinations.byOffset.contains(edge.destinationOffset);
         if ((!sourceVisible || !destinationVisible) && ++numDangling <= MAX_LISTED) {
             dangling += stringFormat(" {}{}{}", edgeText(offset, edge),
                 sourceVisible ? "" : " source missing",
                 destinationVisible ? "" : " destination missing");
         }
         // Une extrémité absente est déjà une violation ; on ne la recompte pas ici.
-        if (rel.carriesEndpointKeys && sourceVisible && destinationVisible &&
-            (edge.declaredSourceKey != edge.sourceKey ||
-                edge.declaredDestinationKey != edge.destinationKey)) {
-            if (++numWrong <= MAX_LISTED) {
-                wrong += stringFormat(" {} declared ({} -> {})", edgeText(offset, edge),
-                    edge.declaredSourceKey, edge.declaredDestinationKey);
-            }
+        if (rel.sourceKeyIndex < 0 || rel.destinationKeyIndex < 0 || !sourceVisible ||
+            !destinationVisible) {
+            continue;
+        }
+        const auto& declaredSource = edge.properties[rel.sourceKeyIndex];
+        const auto& declaredDestination = edge.properties[rel.destinationKeyIndex];
+        if ((declaredSource != edge.sourceKey || declaredDestination != edge.destinationKey) &&
+            ++numWrong <= MAX_LISTED) {
+            wrong += stringFormat(" {} declared ({} -> {})", edgeText(offset, edge), declaredSource,
+                declaredDestination);
         }
     }
     if (numDangling != 0) {
@@ -221,47 +274,72 @@ void checkRelTable(main::Connection& connection, const RelTable& rel,
     }
 }
 
+std::string join(const std::vector<std::string>& values) {
+    std::string out;
+    for (const auto& value : values) {
+        out += "|" + value;
+    }
+    return out;
+}
+
 } // namespace
 
 std::vector<Violation> checkLevel1(main::Connection& connection) {
-    std::vector<NodeTable> nodeTables;
-    std::vector<RelTable> relTables;
-    for (const auto& row : rows(connection, "CALL show_tables() RETURN name, type;")) {
-        if (row[1] == "NODE") {
-            nodeTables.push_back({row[0], primaryKeyOf(connection, row[0])});
-        } else if (row[1] == "REL") {
-            relTables.push_back({row[0]});
-        }
-    }
-    for (auto& rel : relTables) {
-        const auto connections =
-            rows(connection, stringFormat("CALL show_connection('{}') RETURN `source table name`, "
-                                          "`destination table name`, `source table primary key`, "
-                                          "`destination table primary key`;",
-                                 rel.name));
-        // Une table de relations à plusieurs paires de tables n'est pas dans le banc.
-        if (connections.size() != 1) {
-            throw std::runtime_error("integrity checker: rel table " + rel.name +
-                                     " has several connections, not supported");
-        }
-        rel.source = connections[0][0];
-        rel.destination = connections[0][1];
-        rel.sourcePrimaryKey = connections[0][2];
-        rel.destinationPrimaryKey = connections[0][3];
-        rel.carriesEndpointKeys = hasProperty(connection, rel.name, SOURCE_KEY_PROPERTY) &&
-                                  hasProperty(connection, rel.name, DESTINATION_KEY_PROPERTY);
-    }
-
+    const auto schema = loadSchema(connection);
     std::vector<Violation> violations;
-    std::map<std::string, std::map<std::string, std::string>> visible;
-    for (const auto& table : nodeTables) {
+    std::map<std::string, VisibleRows> visible;
+    for (const auto& table : schema.nodeTables) {
         visible[table.name] = visibleRows(connection, table);
-        if (!table.primaryKey.empty()) {
-            checkPrimaryKey(connection, table, violations);
+        checkPrimaryKey(connection, table, violations);
+    }
+    for (const auto& rel : schema.relTables) {
+        checkRelTable(connection, rel, visible, violations);
+    }
+    return violations;
+}
+
+std::vector<std::string> canonicalDump(main::Connection& connection) {
+    const auto schema = loadSchema(connection);
+    std::vector<std::string> lines;
+    std::map<std::string, VisibleRows> visible;
+    for (const auto& table : schema.nodeTables) {
+        visible[table.name] = visibleRows(connection, table);
+        for (const auto& [offset, values] : visible[table.name].byOffset) {
+            lines.push_back("node " + table.name + join(values));
         }
     }
-    for (const auto& rel : relTables) {
-        checkRelTable(connection, rel, visible, violations);
+    for (const auto& rel : schema.relTables) {
+        const auto scan =
+            scanBothSides(connection, rel, visible.at(rel.source), visible.at(rel.destination));
+        for (const auto& [offset, edge] : scan.all) {
+            lines.push_back("rel " + rel.name + "|" + edge.sourceKey + "->" + edge.destinationKey +
+                            join(edge.properties));
+        }
+    }
+    std::sort(lines.begin(), lines.end());
+    return lines;
+}
+
+std::vector<Violation> compareDumps(const std::vector<std::string>& before,
+    const std::vector<std::string>& after, const std::string& beforeName,
+    const std::string& afterName) {
+    std::vector<std::string> onlyBefore;
+    std::vector<std::string> onlyAfter;
+    std::set_difference(before.begin(), before.end(), after.begin(), after.end(),
+        std::back_inserter(onlyBefore));
+    std::set_difference(after.begin(), after.end(), before.begin(), before.end(),
+        std::back_inserter(onlyAfter));
+    std::vector<Violation> violations;
+    for (const auto& [name, lines] :
+        {std::pair{beforeName, &onlyBefore}, std::pair{afterName, &onlyAfter}}) {
+        if (lines->empty()) {
+            continue;
+        }
+        std::string detail = stringFormat("{} lines only {}:", lines->size(), name);
+        for (auto i = 0u; i < lines->size() && i < MAX_LISTED; ++i) {
+            detail += " [" + (*lines)[i] + "]";
+        }
+        violations.push_back({"same-answers", detail});
     }
     return violations;
 }
