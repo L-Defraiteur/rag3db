@@ -27,6 +27,11 @@ git stash list ; git worktree list ; git status --short
 
 Dernière mise à jour : **1er octobre 2026**.
 
+**À lire avec ce journal** : la réconciliation des objectifs et le knowledge
+dump du 1er octobre 2026, dans
+`extension/rag3weaver/docs/1-octobre-2026-22h47/` — ce qu'on voulait, ce qui
+existe, ce qui est en suspens, et l'ordre proposé.
+
 ## 1. Branches ouvertes
 
 | Branche | Qui | État | Ce qui reste |
