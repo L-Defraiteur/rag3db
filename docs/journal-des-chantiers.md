@@ -35,7 +35,8 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
-Au 2 octobre 2026, trois branches en cours, chacune dans son arbre, avec la
+Au 2 octobre 2026, deux branches en cours (`sparse-et-suppressions` fusionnée
+le 2 octobre, `7c653f66c` et `01791e347`), chacune dans son arbre, avec la
 session qui la porte (les noms `rag3db-xx` changent à chaque relance : se fier
 au sujet) :
 
@@ -43,7 +44,6 @@ au sujet) :
 |---|---|---|---|---|
 | `lecteur-reverifie-a-l-ouverture` | `../rag3db-moteur` | cœur C++ | Marche 1 du plan des écritures parallèles : le lecteur d'un autre processus revérifie l'identité du journal et de l'en-tête après avoir lu le fichier de données ; quatre tests déterministes par un crochet de test. | Branche poussée, `api_test` vert en entier ; la fusion et les suites Rust attendent le contrôle de l'orchestration. |
 | `banc-de-concurrence` | `../rag3db-banc` | banc de concurrence | Marche 2 : banc de concurrence et vérificateur d'intégrité (spécification dans la branche, `docs/…/01-specification-du-banc-de-concurrence.md`). Étape 1 : cas C0 à C3, qui tranchent les corruptions seulement déduites. | Après l'étape 1, compte rendu avant de continuer. Ses cas rouges restent rouges, sous le label `concurrence-rouge-connu`. |
-| `sparse-et-suppressions` | arbre principal | produit | `sparse-vector` 4.3.0, puis les trois suppressions décidées au §4 (tests de `fuse_results` portés sur `fuse_signals`, garde `max_rounds` déplacée dans `build_dataflow_graph`). | Livrée sans le banc de recherche (poids granite absents, voir §6). |
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
@@ -91,7 +91,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 
 | Chantier | Où | Ce qui reste |
 |---|---|---|
-| Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Attend une décision (§4). |
+| Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Décidé (§4) ; **la mesure des poids de fusion ne commence pas** avant la référence du banc `e2e_banc_etage` en granite-278m, avant / après les suppressions — avant = `a66bb0b9d`, après = `01791e347` (45 → 43 questions : les deux sur le parcours en largeur n'ont plus de cible) —, à jouer dès que les poids granite-278m sont sur ce poste. |
 | Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
 | Deck builder MTG (produit) | `experiments/mtga`, `master` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
 | Synchronisation par identifiant : supprimer les lignes disparues d'un snapshot | moteur (`ingest_snapshot` / `EntityBatchNode`) | Décidé avec Lucie le 1er octobre, après les étapes D et E du WAL. Générique ; aujourd'hui seuls les fichiers de code le font (`reingest_file`). |
@@ -121,10 +121,14 @@ Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
    4.0.1 alors que lucivy est en 4.3.0 et que `sparse-vector` 4.3.0 est
    publiée depuis le 13 septembre ; aligner d'abord.
 3. Le texte embarqué (le nom avec le corps) : **plus tard**.
-4. `fuse_results` à trois listes et ses onze tests : **supprimer**.
+4. `fuse_results` à trois listes et ses onze tests : **supprimer** — fait
+   le 2 octobre (`01791e347`) ; les onze tests, seuls tests unitaires de la
+   fusion vivante, portés sur `fuse_signals`.
 5. La grappe d'exploration après recherche (`search_with_explore`,
-   `explore_bfs`) : **supprimer**.
-6. `search_with_strategy` : **supprimer**.
+   `explore_bfs`) : **supprimer** — fait (`01791e347`).
+6. `search_with_strategy` : **supprimer** — fait (`01791e347`) ; sa garde
+   `max_rounds` vit dans `build_dataflow_graph`, qui rend un `Result`.
+   `sparse-vector` alignée en 4.3.0 avant (`7c653f66c`, sources identiques).
 
 Encore en attente :
 
