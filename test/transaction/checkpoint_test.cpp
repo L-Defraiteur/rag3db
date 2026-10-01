@@ -94,6 +94,70 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointSerializeFailure) {
     runTest(flakyCheckpointer);
 }
 
+// La même panne, sur une table qui a déjà vécu. Les autres tests de ce fichier
+// interrompent le PREMIER point de reprise d'une table neuve. Ici la table en a
+// onze derrière elle : des pages ont été libérées puis réutilisées, et les
+// pages de l'index de clé primaire ne sont plus dans l'ordre du fichier. Le
+// point de reprise s'arrête après sa phase de stockage, avant d'avoir rien
+// journalisé : le fichier de données doit encore être celui du point de
+// reprise précédent, et le journal se rejouer par-dessus.
+TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointSerializeFailureAfterEarlierCheckpoints) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    conn->query("CALL force_checkpoint_on_close=false;");
+    conn->query("CALL auto_checkpoint=false");
+    conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);");
+    auto numRows = 0;
+    for (auto cycle = 0; cycle < 12; cycle++) {
+        for (auto i = 0; i < 25; i++, numRows++) {
+            auto res = conn->query(
+                stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", numRows, numRows));
+            ASSERT_TRUE(res->isSuccess()) << res->getErrorMessage();
+        }
+        if (cycle < 11) {
+            ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+        }
+    }
+    FlakyCheckpointer flakyCheckpointer([](main::ClientContext& context) {
+        return std::make_unique<FlakyCheckpointerFailsOnSerialization>(context);
+    });
+    flakyCheckpointer.setCheckpointer(*getClientContext(*conn));
+    ASSERT_FALSE(conn->query("CHECKPOINT;")->isSuccess());
+
+    // La « panne » : on rouvre. Le journal porte les 25 dernières lignes, et le
+    // contenu doit être exactement celui du dernier commit acquitté — ni une
+    // ligne de moins, ni une clé en double, ni une valeur d'une autre ligne.
+    createDBAndConn();
+    const auto single = [&](const std::string& query) {
+        auto res = conn->query(query);
+        EXPECT_TRUE(res->isSuccess()) << query << " : " << res->getErrorMessage();
+        return res->isSuccess() && res->hasNext() ?
+                   res->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    };
+    EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), numRows);
+    EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(DISTINCT a.id);"), numRows);
+    EXPECT_EQ(single("MATCH (a:test) RETURN SUM(a.id);"), numRows * (numRows - 1) / 2);
+    EXPECT_EQ(
+        single("MATCH (a:test) WHERE a.name <> 'name_' + cast(a.id AS STRING) RETURN COUNT(a);"),
+        0);
+    // Chaque clé se retrouve par l'index, une à une : c'est lui qui était abîmé.
+    for (auto id = 0; id < numRows; id++) {
+        ASSERT_EQ(single(stringFormat("MATCH (a:test) WHERE a.id = {} RETURN COUNT(a);", id)), 1)
+            << "clé " << id;
+    }
+    // Et la base rouverte sert encore : une ligne de plus, un point de reprise
+    // complet, une réouverture.
+    ASSERT_TRUE(
+        conn->query(stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", numRows, numRows))
+            ->isSuccess());
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), numRows + 1);
+    EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(DISTINCT a.id);"), numRows + 1);
+}
+
 class FlakyCheckpointerFailsOnWritingHeader final : public Checkpointer {
 public:
     explicit FlakyCheckpointerFailsOnWritingHeader(main::ClientContext& context)

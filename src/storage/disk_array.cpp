@@ -41,27 +41,12 @@ DiskArrayInternal::DiskArrayInternal(FileHandle& fileHandle,
     ShadowFile* shadowFile, uint64_t elementSize, bool bypassShadowing)
     : storageInfo{elementSize}, fileHandle(fileHandle), header{headerForReadTrx},
       headerForWriteTrx{headerForWriteTrx}, hasTransactionalUpdates{false}, shadowFile{shadowFile},
-      lastAPPageIdx{INVALID_PAGE_IDX}, lastPageOnDisk{INVALID_PAGE_IDX} {
+      lastAPPageIdx{INVALID_PAGE_IDX}, bypassShadowing{bypassShadowing} {
     if (this->header.firstPIPPageIdx != ShadowUtils::NULL_PAGE_IDX) {
         pips.emplace_back(fileHandle, header.firstPIPPageIdx);
         while (pips[pips.size() - 1].pipContents.nextPipPageIdx != ShadowUtils::NULL_PAGE_IDX) {
             pips.emplace_back(fileHandle, pips[pips.size() - 1].pipContents.nextPipPageIdx);
         }
-    }
-    // If bypassing the WAL is disabled, just leave the lastPageOnDisk as invalid, as then all pages
-    // will be treated as updates to existing ones
-    if (bypassShadowing) {
-        updateLastPageOnDisk();
-    }
-}
-
-void DiskArrayInternal::updateLastPageOnDisk() {
-    auto numElements = getNumElementsNoLock(TransactionType::READ_ONLY);
-    if (numElements > 0) {
-        auto apCursor = getAPIdxAndOffsetInAP(storageInfo, numElements - 1);
-        lastPageOnDisk = getAPPageIdxNoLock(apCursor.pageIdx, TransactionType::READ_ONLY);
-    } else {
-        lastPageOnDisk = 0;
     }
 }
 
@@ -89,7 +74,7 @@ void DiskArrayInternal::get(uint64_t idx, const Transaction* transaction,
     auto apCursor = getAPIdxAndOffsetInAP(storageInfo, idx);
     page_idx_t apPageIdx = getAPPageIdxNoLock(apCursor.pageIdx, transaction->getType());
     if (transaction->getType() != TransactionType::CHECKPOINT || !hasTransactionalUpdates ||
-        apPageIdx > lastPageOnDisk ||
+        !existedAtLastCheckpoint(apCursor.pageIdx) ||
         !shadowFile->hasShadowPage(fileHandle.getFileIndex(), apPageIdx)) {
         fileHandle.optimisticReadPage(apPageIdx, [&](const uint8_t* frame) -> void {
             memcpy(val.data(), frame + apCursor.elemPosInPage, val.size());
@@ -102,14 +87,13 @@ void DiskArrayInternal::get(uint64_t idx, const Transaction* transaction,
     }
 }
 
-void DiskArrayInternal::updatePage(uint64_t pageIdx, bool isNewPage,
+void DiskArrayInternal::updatePage(page_idx_t apIdx, uint64_t pageIdx, bool isNewPage,
     std::function<void(uint8_t*)> updateOp) {
     // Pages which are new to this transaction are written directly to the file
     // Pages which previously existed are written to the WAL file
-    if (pageIdx <= lastPageOnDisk) {
+    if (existedAtLastCheckpoint(apIdx)) {
         // This may still be used to create new pages since bypassing the WAL is currently optional
-        // and if disabled lastPageOnDisk will be INVALID_PAGE_IDX (and the above comparison will
-        // always be true)
+        // and if disabled every page is treated as an existing one
         ShadowUtils::updatePage(fileHandle, pageIdx, isNewPage, *shadowFile, updateOp);
     } else {
         const auto frame = fileHandle.pinPage(pageIdx,
@@ -136,9 +120,10 @@ void DiskArrayInternal::update(const Transaction* transaction, uint64_t idx,
     // getAPPageIdxNoLock logic needs to change to give the same guarantee (e.g., an apIdx = 0, may
     // no longer to be guaranteed to be in pips[0].)
     page_idx_t apPageIdx = getAPPageIdxNoLock(apCursor.pageIdx, transaction->getType());
-    updatePage(apPageIdx, false /*isNewPage=*/, [&apCursor, &val](uint8_t* frame) -> void {
-        memcpy(frame + apCursor.elemPosInPage, val.data(), val.size());
-    });
+    updatePage(apCursor.pageIdx, apPageIdx, false /*isNewPage=*/,
+        [&apCursor, &val](uint8_t* frame) -> void {
+            memcpy(frame + apCursor.elemPosInPage, val.data(), val.size());
+        });
 }
 
 uint64_t DiskArrayInternal::resize(PageAllocator& pageAllocator, const Transaction* transaction,
@@ -220,9 +205,6 @@ void DiskArrayInternal::checkpointOrRollbackInMemoryIfNecessaryNoLock(bool isChe
     // Note that we already updated the header to its correct state above.
     pipUpdates.clear();
     hasTransactionalUpdates = false;
-    if (isCheckpoint && lastPageOnDisk != INVALID_PAGE_IDX) {
-        updateLastPageOnDisk();
-    }
 }
 
 void DiskArrayInternal::checkpoint() {
@@ -315,7 +297,7 @@ DiskArrayInternal::WriteIterator& DiskArrayInternal::WriteIterator::seek(size_t 
     apCursor = getAPIdxAndOffsetInAP(diskArray.storageInfo, idx);
     if (oldPageIdx != apCursor.pageIdx) {
         page_idx_t apPageIdx = diskArray.getAPPageIdxNoLock(apCursor.pageIdx, TRX_TYPE);
-        getPage(apPageIdx, false /*isNewlyAdded*/);
+        getPage(apCursor.pageIdx, apPageIdx, false /*isNewlyAdded*/);
     }
     return *this;
 }
@@ -334,7 +316,7 @@ void DiskArrayInternal::WriteIterator::pushBack(PageAllocator& pageAllocator,
     diskArray.headerForWriteTrx.numElements++;
     if (isNewlyAdded || shadowPageAndFrame.originalPage == INVALID_PAGE_IDX ||
         apCursor.pageIdx != oldPageIdx) {
-        getPage(apPageIdx, isNewlyAdded);
+        getPage(apCursor.pageIdx, apPageIdx, isNewlyAdded);
     }
     memcpy(operator*().data(), val.data(), val.size());
 }
@@ -351,9 +333,10 @@ void DiskArrayInternal::WriteIterator::unpin() {
     }
 }
 
-void DiskArrayInternal::WriteIterator::getPage(page_idx_t newPageIdx, bool isNewlyAdded) {
+void DiskArrayInternal::WriteIterator::getPage(page_idx_t apIdx, page_idx_t newPageIdx,
+    bool isNewlyAdded) {
     unpin();
-    if (newPageIdx <= diskArray.lastPageOnDisk) {
+    if (diskArray.existedAtLastCheckpoint(apIdx)) {
         // Pin new page
         shadowPageAndFrame = ShadowUtils::createShadowVersionIfNecessaryAndPinPage(newPageIdx,
             isNewlyAdded, diskArray.fileHandle, *diskArray.shadowFile);
