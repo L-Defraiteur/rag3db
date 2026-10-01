@@ -35,15 +35,22 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
-Au 2 octobre 2026, deux branches en cours (`sparse-et-suppressions` fusionnée
-le 2 octobre, `7c653f66c` et `01791e347`), chacune dans son arbre, avec la
-session qui la porte (les noms `rag3db-xx` changent à chaque relance : se fier
-au sujet) :
+**Arrêt du 2 octobre 2026, 01 h 25** : toutes les sessions ont cessé de
+travailler ; chacune a rendu un rapport et un knowledge dump dans
+`extension/rag3weaver/docs/2-octobre-2026-01h07/<sujet>/`. **Pour reprendre :
+`…/orchestration/01-rapport-de-session.md`, §6.** `master` est à jour, vert,
+l'arbre principal est sur `master`.
 
-| Branche | Arbre | Session (sujet) | Ce que c'est | Où elle s'arrête |
+Cinq branches en cours, toutes poussées, aucune fusionnée (les noms
+`rag3db-xx` changent à chaque relance : se fier au sujet) :
+
+| Branche | Arbre | Session (sujet) | État au 2 octobre, 01 h 25 | Premier geste |
 |---|---|---|---|---|
-| `lecteur-reverifie-a-l-ouverture` | `../rag3db-moteur` | cœur C++ | Marche 1 du plan des écritures parallèles : le lecteur d'un autre processus revérifie l'identité du journal et de l'en-tête après avoir lu le fichier de données ; quatre tests déterministes par un crochet de test. | Branche poussée, `api_test` vert en entier ; la fusion et les suites Rust attendent le contrôle de l'orchestration. |
-| `banc-de-concurrence` | `../rag3db-banc` | banc de concurrence | Marche 2 : banc de concurrence et vérificateur d'intégrité (spécification dans la branche, `docs/…/01-specification-du-banc-de-concurrence.md`). Étape 1 : cas C0 à C3, qui tranchent les corruptions seulement déduites. | Après l'étape 1, compte rendu avant de continuer. Ses cas rouges restent rouges, sous le label `concurrence-rouge-connu`. |
+| `lecteur-reverifie-a-l-ouverture` (`6bc8ce632`) | `../rag3db-moteur` | cœur C++ | Marche 1 « en cours » : crochet de test, quatre tests déterministes, revérification ; tests ciblés 17/17, suites complètes non rejouées. | Rebaser, rejouer les suites, rendre le tableau ; la livraison se fait depuis l'arbre principal. |
+| `reprise-apres-panne-index-cle-primaire` (`a486fde9c`) | `../rag3db-moteur` | cœur C++ | Le correctif est sur `master` (`6bf46150b`) ; reste un commit de test seul (panne pendant la phase de stockage, 38 s). | Relire, fusionner avec la marche 1. |
+| `banc-de-concurrence` (`00b2a0263`) | `../rag3db-banc` | banc | Étape 1 faite, étape 2 en cours (compile). Cinq cas rouges, dont deux hors plan (§6). | Relecture par la session cœur C++, fusion de l'étape 1, fin de l'étape 2. |
+| `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
+| `synchronisation-par-perimetre` (`325134ff0`) | arbre principal | produit | `SnapshotConfig` dans `EntityConfig` ; le reste à écrire. | Tests rouges sur une entité synthétique, puis la marque, l'appel de fin, les garde-fous. |
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
@@ -195,6 +202,19 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- **Deux corruptions de plus sous le mode multi-écrivains, hors plan**
+  (étape 2 du banc, 2 octobre) : des virements entre comptes ne conservent
+  pas la somme (mécanisme non identifié — le plan croyait ce cas protégé par
+  le conflit de mise à jour) ; une suppression et une mise à jour de la même
+  ligne valident toutes deux. À faire examiner par la session cœur C++.
+- **Après un point de reprise échoué, le processus qui continue perd des clés
+  en silence puis plante** (mesuré sur `master`, 2 octobre ; patch
+  d'expérience dans `…/2-octobre-2026-01h07/moteur-concurrence/`). rag3weaver
+  ne demande pas de `CHECKPOINT` mais subit ceux du commit, et continue après
+  un échec : il est exposé. Prévu : le moteur refuse tout jusqu'à réouverture
+  (à vérifier contre PostgreSQL), puis rag3weaver apprend à rouvrir.
+- **Les poids de l'OCR (ppocrv6-tiny) manquent sur ce poste** et ne sont
+  publiés nulle part ; à régénérer ou à rapporter de l'ancien poste.
 - **Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026**
   par l'étape 1 du banc de concurrence (branche `banc-de-concurrence`,
   `37a44e351`, 20 passes sur 20). Sous `debug_enable_multi_writes` : deux ou

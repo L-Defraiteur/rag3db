@@ -22,3 +22,7 @@ dossier à son sujet, deux documents, puis cesse de travailler :
 
 Le registre des chantiers reste `docs/journal-des-chantiers.md` à la racine :
 c'est lui qu'on lit en premier en reprenant.
+
+
+**État à 01 h 25** : les six dossiers sont remplis, plus rien ne tourne.
+Pour reprendre, commencer par `orchestration/01-rapport-de-session.md`, §6.
