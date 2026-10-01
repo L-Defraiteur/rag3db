@@ -2,6 +2,7 @@
 
 #include "api_test/private_api_test.h"
 #include "common/exception/runtime.h"
+#include "flaky_checkpointer.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/wal.h"
@@ -14,19 +15,6 @@ using namespace rag3db::storage;
 
 namespace rag3db {
 namespace testing {
-
-class FlakyCheckpointer {
-public:
-    explicit FlakyCheckpointer(TransactionManager::init_checkpointer_func_t initFunc)
-        : initFunc(std::move(initFunc)) {}
-
-    void setCheckpointer(main::ClientContext& context) const {
-        TransactionManager::Get(context)->initCheckpointerFunc = initFunc;
-    }
-
-private:
-    TransactionManager::init_checkpointer_func_t initFunc;
-};
 
 class FlakyCheckpointerTest : public PrivateApiTest {
 public:

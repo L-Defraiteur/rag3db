@@ -9,11 +9,11 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_entry/type_catalog_entry.h"
 #include "common/exception/end_of_file.h"
-#include "common/string_format.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
+#include "common/string_format.h"
 #include "extension/extension_manager.h"
 #include "main/client_context.h"
 #include "processor/expression_mapper.h"
@@ -86,12 +86,26 @@ static uint64_t getReadOffset(Deserializer& deSer, bool enableChecksums) {
     }
 }
 
+// Test-only, see wal_replayer.h. Not synchronised: tests set it before opening.
+static WALReplayer::read_only_open_hook_t readOnlyOpenHookForTesting;
+
+void WALReplayer::setReadOnlyOpenHookForTesting(read_only_open_hook_t hook) {
+    readOnlyOpenHookForTesting = std::move(hook);
+}
+
+void WALReplayer::runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const {
+    if (readOnlyOpenHookForTesting && StorageManager::Get(clientContext)->isReadOnly()) {
+        readOnlyOpenHookForTesting(phase);
+    }
+}
+
 void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) const {
     auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
     Checkpointer checkpointer(clientContext);
     // First, check if the WAL file exists. If it does not, we can safely remove the shadow file.
     if (!vfs->fileOrPathExists(walPath, &clientContext)) {
         removeFileIfExists(shadowFilePath);
+        runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
         // Read the checkpointed data from the disk.
         checkpointer.readCheckpoint();
         return;
@@ -101,6 +115,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
     // Check if the wal file is empty. If so, we do not need to replay anything.
     if (fileInfo->getFileSize() == 0) {
         removeWALAndShadowFiles();
+        runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
         // Read the checkpointed data from the disk.
         checkpointer.readCheckpoint();
         return;
@@ -129,8 +144,10 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
         } else {
             // There is no checkpoint record, so we should remove the shadow file if it exists.
             removeFileIfExists(shadowFilePath);
+            runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
             // Read the checkpointed data from the disk.
             checkpointer.readCheckpoint();
+            runReadOnlyOpenHook(ReadOnlyOpenPhase::DATA_FILE_READ);
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer = initDeserializer(*fileInfo, clientContext, enableChecksums);
 
@@ -625,8 +642,8 @@ void WALReplayer::setAsideCutBytes(FileInfo& fileInfo, uint64_t offsetDeserializ
                             .count();
     const auto asidePath = stringFormat("{}.ecarte-{}", walPath, millis);
     auto aside = VirtualFileSystem::GetUnsafe(clientContext)
-                     ->openFile(asidePath,
-                         FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
+                     ->openFile(asidePath, FileOpenFlags(FileFlags::WRITE |
+                                                         FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
     // By blocks: after a bulk ingestion the cut can be large.
     constexpr uint64_t BLOCK_SIZE = 1 << 20;
     std::vector<uint8_t> block(std::min(cut, BLOCK_SIZE));
