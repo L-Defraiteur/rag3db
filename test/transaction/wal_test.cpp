@@ -876,3 +876,26 @@ TEST_F(WalTornEndTest, ReplayFailureWithoutThrowSetsTheCutAside) {
     EXPECT_EQ(discardedBytes(), ends[3] - ends[1]);
     expectNothingLost(corrupted);
 }
+
+// En lecture seule, une fin incomplète (un écrivain vivant en train d'ajouter
+// au journal) rouvre au dernier COMMIT sans rien écrire ni retirer : journal
+// inchangé à l'octet, aucun fichier écarté.
+TEST_F(WalTornEndTest, ReadOnlyOpenOnAnIncompleteEndChangesNothing) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    std::vector<uint64_t> ends;
+    writeThreeTransactions(ends);
+    systemConfig->throwOnWalReplayFailure = true;
+    const auto cut = ends[2] + (ends[3] - ends[2]) / 2;
+    restoreWithWALCutAt(cut);
+    const auto before = readAll(walPath);
+    systemConfig->readOnly = true;
+    std::vector<int64_t> ids;
+    ASSERT_NO_THROW(ids = idsAfterReopen());
+    EXPECT_EQ(ids, (std::vector<int64_t>{1, 2}));
+    conn.reset();
+    database.reset();
+    EXPECT_TRUE(readAll(walPath) == before);
+    EXPECT_EQ(discardedBytes(), 0u);
+}
