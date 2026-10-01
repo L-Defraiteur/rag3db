@@ -1,4 +1,4 @@
-From 49bb1396f409332c76fe70ebb74e6a6e730cca41 Mon Sep 17 00:00:00 2001
+From 10b2084c93f49c290281e4ddd34fb7309b077d23 Mon Sep 17 00:00:00 2001
 From: Lucie Defraiteur <luciedefraiteur@gmail.com>
 Date: Fri, 2 Oct 2026 00:15:29 +0200
 Subject: [PATCH] fix(cubecl-fusion): number F32 and Flex32 locals together,
@@ -17,11 +17,11 @@ in F32 — and the overwritten local is an input still to be read.
 The pool is now keyed by storage precision (Flex32 maps to F32) and keeps
 the declared precision next to each position.
 ---
- .../src/engine/trace/block.rs                 | 45 +++++++++++--------
- 1 file changed, 27 insertions(+), 18 deletions(-)
+ .../src/engine/trace/block.rs                 | 106 +++++++++++++++---
+ 1 file changed, 88 insertions(+), 18 deletions(-)
 
 diff --git a/crates/burn-cubecl-fusion/src/engine/trace/block.rs b/crates/burn-cubecl-fusion/src/engine/trace/block.rs
-index a4d3db2b..f5688fef 100644
+index a4d3db2b1..f8d993ee4 100644
 --- a/crates/burn-cubecl-fusion/src/engine/trace/block.rs
 +++ b/crates/burn-cubecl-fusion/src/engine/trace/block.rs
 @@ -484,13 +484,31 @@ impl FuseBlockBuilder {
@@ -96,6 +96,71 @@ index a4d3db2b..f5688fef 100644
  
          FuseArg::BlockLocal {
              pos: new_index,
+@@ -534,3 +543,64 @@ impl LocalVariablePool {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn position(arg: FuseArg) -> (usize, FuseType) {
++        match arg {
++            FuseArg::BlockLocal { pos, ty } => (pos, ty),
++            other => panic!("expected a block local, got {other:?}"),
++        }
++    }
++
++    /// `F32` and `Flex32` locals are read from and written to the same `l_f32`
++    /// registry by the generated kernel, so two live locals must never be handed
++    /// the same position, whatever their declared precision.
++    #[test]
++    fn f32_and_flex32_locals_never_share_a_position() {
++        let mut pool = LocalVariablePool::default();
++
++        let input = pool.create(FuseType::Flex32, TensorId::new(0));
++        let gate = pool.create(FuseType::Flex32, TensorId::new(1));
++        // A `Flex32` value promoted to `F32` mid-chain, e.g. by `hard_sigmoid`.
++        let promoted = pool.create(FuseType::F32, TensorId::new(2));
++        let sum = pool.create(FuseType::F32, TensorId::new(3));
++
++        let positions = [input, gate, promoted, sum].map(position);
++        for (i, (pos_a, _)) in positions.iter().enumerate() {
++            for (pos_b, _) in positions.iter().skip(i + 1) {
++                assert_ne!(pos_a, pos_b, "two l_f32 locals share position {pos_a}");
++            }
++        }
++
++        // The declared precision is kept, and each tensor is found again under it.
++        assert_eq!(positions[0].1, FuseType::Flex32);
++        assert_eq!(positions[2].1, FuseType::F32);
++        assert_eq!(
++            pool.get(FuseType::Flex32, TensorId::new(1)).map(position),
++            Some(positions[1])
++        );
++        assert_eq!(
++            pool.get(FuseType::F32, TensorId::new(3)).map(position),
++            Some(positions[3])
++        );
++        assert_eq!(
++            pool.get_any_precision(TensorId::new(2)).map(position),
++            Some(positions[2])
++        );
++    }
++
++    /// Other storage classes keep their own numbering.
++    #[test]
++    fn locals_of_different_registries_are_numbered_independently() {
++        let mut pool = LocalVariablePool::default();
++
++        let float = position(pool.create(FuseType::F32, TensorId::new(0)));
++        let int = position(pool.create(FuseType::I32, TensorId::new(1)));
++        let half = position(pool.create(FuseType::F16, TensorId::new(2)));
++
++        assert_eq!((float.0, int.0, half.0), (0, 0, 0));
++    }
++}
 -- 
 2.55.0
 

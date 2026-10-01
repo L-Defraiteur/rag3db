@@ -12,7 +12,7 @@ float tensors were cast to Flex32 panicked on the first parameter.
  1 file changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/crates/burn-cubecl/src/ops/tensor.rs b/crates/burn-cubecl/src/ops/tensor.rs
-index 6945fb5b..7c2eb904 100644
+index 6945fb5b9..7c2eb9047 100644
 --- a/crates/burn-cubecl/src/ops/tensor.rs
 +++ b/crates/burn-cubecl/src/ops/tensor.rs
 @@ -26,7 +26,9 @@ impl FloatTensorOps<Self> for CubeBackend {

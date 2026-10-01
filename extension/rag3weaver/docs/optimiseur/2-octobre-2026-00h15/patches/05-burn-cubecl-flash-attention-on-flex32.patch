@@ -23,7 +23,7 @@ as Flex32. The degradation logs its reason at debug level.
  1 file changed, 41 insertions(+), 3 deletions(-)
 
 diff --git a/crates/burn-cubecl/src/kernel/attention/base.rs b/crates/burn-cubecl/src/kernel/attention/base.rs
-index 1ae85edf..3338705a 100644
+index 1ae85edf8..3338705a8 100644
 --- a/crates/burn-cubecl/src/kernel/attention/base.rs
 +++ b/crates/burn-cubecl/src/kernel/attention/base.rs
 @@ -95,9 +95,15 @@ pub fn attention(

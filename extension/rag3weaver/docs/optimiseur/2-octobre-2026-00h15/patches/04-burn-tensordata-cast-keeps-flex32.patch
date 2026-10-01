@@ -1,4 +1,4 @@
-From 54e54c4418e1297bbbe33f8880eb7724901259a4 Mon Sep 17 00:00:00 2001
+From c8344a8b5018503ede775fb731f51145891e69ca Mon Sep 17 00:00:00 2001
 From: Lucie Defraiteur <luciedefraiteur@gmail.com>
 Date: Fri, 2 Oct 2026 00:15:29 +0200
 Subject: [PATCH] fix(tensor): TensorData::try_cast to Flex32 keeps the Flex32
@@ -19,7 +19,7 @@ the weights stayed F32 and the whole model computed in f32.
  2 files changed, 34 insertions(+), 4 deletions(-)
 
 diff --git a/crates/burn-std/src/data/tensor/base.rs b/crates/burn-std/src/data/tensor/base.rs
-index a92ac6fb..3aeb0fdd 100644
+index a92ac6fbc..82797a736 100644
 --- a/crates/burn-std/src/data/tensor/base.rs
 +++ b/crates/burn-std/src/data/tensor/base.rs
 @@ -1179,6 +1179,27 @@ mod tests {
@@ -33,14 +33,14 @@ index a92ac6fb..3aeb0fdd 100644
 +            .try_cast(DType::Flex32)
 +            .unwrap();
 +        assert_eq!(data.dtype(), DType::Flex32);
-+        assert_eq!(data.as_slice::<f32>().unwrap(), &[1.0, 2.0, 3.0]);
++        assert_eq!(data.iter::<f32>().collect::<Vec<_>>(), [1.0, 2.0, 3.0]);
 +
 +        // Different size: the cloning path.
 +        let data = TensorData::from([1.0f64, 2.0, 3.0])
 +            .try_cast(DType::Flex32)
 +            .unwrap();
 +        assert_eq!(data.dtype(), DType::Flex32);
-+        assert_eq!(data.as_slice::<f32>().unwrap(), &[1.0, 2.0, 3.0]);
++        assert_eq!(data.iter::<f32>().collect::<Vec<_>>(), [1.0, 2.0, 3.0]);
 +
 +        // And back: Flex32 to F32 is tagged F32.
 +        let data = data.try_cast(DType::F32).unwrap();
@@ -51,7 +51,7 @@ index a92ac6fb..3aeb0fdd 100644
      fn try_cast_propagates_invalid_storage() {
          let invalid_inplace =
 diff --git a/crates/burn-std/src/data/tensor/conversion.rs b/crates/burn-std/src/data/tensor/conversion.rs
-index e7c19a5e..1c726232 100644
+index e7c19a5ea..1c7262321 100644
 --- a/crates/burn-std/src/data/tensor/conversion.rs
 +++ b/crates/burn-std/src/data/tensor/conversion.rs
 @@ -270,8 +270,8 @@ impl TensorData {
