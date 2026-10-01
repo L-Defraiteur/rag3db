@@ -145,8 +145,11 @@ sessions, pas d'une vérification.
   refusé avec « Found duplicated primary key value » au lieu du seul refus
   attendu. Présent avec et sans les deux correctifs du journal, à chaque
   passe : il leur est antérieur, et aucun contrôle de livraison ne jouait
-  `api_test` (il y entre désormais). Diagnostic en cours avant de livrer la
-  fin de journal déchirée, qui touche le même chemin ; rien n'est corrigé.
+  `api_test` (il y entre désormais). **Rouge aussi à `20a8f6ee8`** (18
+  septembre), 5 fois sur 5 sur cette machine : la course a toujours existé,
+  c'est le Strix Halo qui la montre. Accepté comme antérieur et nommé à la
+  livraison de la fin déchirée ; rien n'est corrigé, le test n'est ni
+  désactivé ni relâché.
   **Cause, par lecture du code (session cœur C++, 2 octobre)** : un lecteur
   en lecture seule rejoue le journal d'un écrivain vivant (`database.cpp:136`
   → `StorageManager::recover`, sans condition sur `readOnly`) par trois
@@ -169,9 +172,10 @@ sessions, pas d'une vérification.
   corrigé chez Vela. **Le bug d'écriture est corrigé sur `master`** (`955b1b136`, étape D :
   recopie des deux côtés, message « journal corrompu », doc
   `docs/1-octobre-2026-23h37/01-…`). **La fin déchirée** (étape E,
-  décidée par Lucie le 1er octobre) est faite sur `fin-de-journal-dechiree` :
+  décidée par Lucie le 1er octobre) est sur `master` depuis le 2 octobre :
   rouvrir au dernier COMMIT, toute troncature copiée dans
-  `<journal>.ecarte-<ms>`. **Limite** : sans longueur par enregistrement, une
+  `<journal>.ecarte-<ms>` (par blocs) ; en lecture seule, rien n'est écrit ni
+  dit. **Limite** : sans longueur par enregistrement, une
   longueur abîmée au milieu se lit comme une fin déchirée et fait écarter des
   transactions validées (copiées à l'octet près, rien n'est supprimé) ; seul
   un changement de format la lèverait. En attendant : arrêt par SIGTERM ou
