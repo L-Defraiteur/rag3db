@@ -484,7 +484,7 @@ impl PreparedBackend {
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
         }
-        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.manifest.embeddings,"payloads":self.mappings,"tools":tools})
+        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.manifest.embeddings,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read"]})
     }
     pub fn open(
         self,

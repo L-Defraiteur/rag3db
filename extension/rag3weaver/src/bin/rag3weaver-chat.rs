@@ -71,6 +71,9 @@ impl Drop for BackendProcess {
 }
 struct AppTools {
     backend: Option<Arc<Mutex<BackendProcess>>>,
+    /// Le backend annonce l'op `journal` dans `describe` (`capabilities`).
+    /// Un backend qui ne la connaît pas ne la reçoit jamais.
+    journal: bool,
     defs: Vec<ToolDef>,
     artifacts: ArtifactTools,
     completion_tool: Option<String>,
@@ -81,11 +84,15 @@ impl AppTools {
             root: config.state_dir.join("artifacts"),
         };
         let mut defs = artifacts.tool_defs();
+        let mut journal = false;
         let backend = if config.backend_command.is_empty() {
             None
         } else {
             let mut process = BackendProcess::start(&config.backend_command)?;
             let description = process.request(json!({"op":"describe"}))?;
+            journal = description["capabilities"]
+                .as_array()
+                .is_some_and(|c| c.iter().any(|v| v == "journal"));
             let tools = description["tools"]
                 .as_array()
                 .ok_or("backend has no tools array")?;
@@ -118,6 +125,7 @@ impl AppTools {
         };
         Ok(Self {
             backend,
+            journal,
             defs,
             artifacts,
             completion_tool: config.completion_tool.clone(),
@@ -319,7 +327,7 @@ fn run() -> Result<(), String> {
     // L'écrivain du journal en base : un fil à part, pour que l'agent n'attende
     // jamais une écriture. Il passe par le même backend (un seul processus par
     // base) et se termine avant sa fermeture, plus bas.
-    let (to_db, journal_writer) = match tools.backend.clone() {
+    let (to_db, journal_writer) = match tools.backend.clone().filter(|_| tools.journal) {
         Some(backend) => {
             let (tx, rx) = mpsc::channel::<Vec<Value>>();
             let handle = std::thread::spawn(move || {

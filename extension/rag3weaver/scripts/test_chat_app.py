@@ -78,6 +78,10 @@ class Provider(http.server.BaseHTTPRequestHandler):
 
 
 class ChatAppTest(unittest.TestCase):
+    # The fixture backend announces the `journal` op in describe; the chat must
+    # then journal into it. The subclass below covers a backend without it.
+    JOURNAL = True
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = Path(self.tmp.name)
@@ -87,12 +91,19 @@ class ChatAppTest(unittest.TestCase):
         self.provider.release = threading.Event()
         threading.Thread(target=self.provider.serve_forever, daemon=True).start()
         backend = self.path / "backend.py"
+        self.journal_log = self.path / "journal-ops.jsonl"
         backend.write_text('''import sys,json
+JOURNAL=%r
 for line in sys.stdin:
     r=json.loads(line)
     if r['op']=='describe':
         result={'tools':[{'name':n,'description':'Fixture','inputSchema':{'type':'object','properties':{'query':{'type':'string'}}}} for n in ['search','hidden']]}
-    elif r['op']=='shutdown':
+        if JOURNAL: result['capabilities']=['journal']
+    elif r['op']=='journal':
+        assert JOURNAL, 'journal sent to a backend that did not announce it'
+        with open(%r,'a') as f: f.write(json.dumps(r['events'])+'\\n')
+        result={'messages':len(r['events'])}
+    elif r['op']=='shutdown':''' % (self.JOURNAL, str(self.journal_log)) + '''
         print(json.dumps({'ok':True,'result':{'closed':True}}),flush=True)
         break
     else:
@@ -145,6 +156,12 @@ for line in sys.stdin:
         self.assertFalse(any(t["role"] == "system" for t in turns))
         self.assertTrue(any(t["tool_call_id"] == "call_search" for t in turns))
         self.bridge.close()
+        # Closing the bridge joins the journal writer: every event has been sent.
+        if self.JOURNAL:
+            sent = [e for line in self.journal_log.read_text().splitlines() for e in json.loads(line)]
+            self.assertIn("Export enregistré : essai.txt", [e.get("content") for e in sent])
+        else:
+            self.assertFalse(self.journal_log.exists())
         self.bridge = Bridge([str(BINARY), str(self.config)])
         self.server.bridge = self.bridge
         with self.api("/api/history?session=one") as response:
@@ -267,6 +284,11 @@ for line in sys.stdin:
                 wd(f"/session/{sid}", method="DELETE")
             driver.terminate()
             driver.wait(timeout=10)
+
+
+class ChatAppWithoutJournalTest(ChatAppTest):
+    """A backend that does not announce `journal` never receives it."""
+    JOURNAL = False
 
 
 if __name__ == "__main__":
