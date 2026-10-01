@@ -31,6 +31,34 @@ jusqu'au dernier COMMIT / CHECKPOINT complet, on écarte le reste en le
 copiant à côté et en le disant. Une corruption au milieu d'un journal qui
 continue reste un refus d'ouvrir.
 
+**Étape E, faite (branche `fin-de-journal-dechiree`).**
+- `EndOfFileException` (sous-type de `RuntimeException`) : une lecture au-delà
+  de la fin du fichier. `BufferedFileReader::read` la lève avant de copier
+  quoi que ce soit (la branche par pages copiait des octets périmés au-delà
+  d'une dernière page courte ; la branche directe acceptait un `pread` court).
+  `pread` lui-même n'est pas changé : ses autres appelants (pages de données)
+  comptent sur la lecture courte en fin de fichier.
+- `dryReplay` : une fin de fichier au milieu d'un enregistrement, ou des
+  enregistrements sans COMMIT terminés sur une frontière, rouvrent au dernier
+  COMMIT / CHECKPOINT quel que soit `throwOnWalReplayFailure`. Toute autre
+  erreur (somme fausse, type inconnu) garde son sens : refus par défaut.
+- **Toute troncature** met de côté ce qu'elle retire dans
+  `<journal>.ecarte-<ms>`, copié par blocs de 1 Mio, et le dit sur stderr ; en
+  lecture seule, rien n'est écrit, la fin est laissée en place et signalée.
+
+**La limite, écrite en clair.** Le format n'a pas de longueur par
+enregistrement. Une longueur abîmée au milieu du journal (celle d'une chaîne,
+par exemple) fait demander plus que le fichier : elle se lit comme une fin
+déchirée, et la base rouvre en écartant ce qui suit — **transactions validées
+comprises**. On ne peut pas le distinguer sans changer le format. Ce qui est
+écarté est copié à l'octet près (le test
+`CorruptedLengthReadsAsATornEndAndIsSetAsideWhole` le fixe : journal tronqué +
+fichier écarté = journal d'origine), et le message de stderr ne prétend pas
+que ces octets étaient non validés. La base MTG est exactement dans ce cas
+possible : ses enregistrements abîmés par l'ancien bug d'écriture peuvent se
+lire comme une fin de fichier. **Elle reste à ne pas ouvrir** (Lucie, 1er
+octobre : « on la laisse tranquille pour le moment »).
+
 ---
 
 ## Le rapport de l'agent, tel quel

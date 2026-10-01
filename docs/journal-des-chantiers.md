@@ -148,14 +148,20 @@ sessions, pas d'une vérification.
   déjà faux (`wal_record.cpp:79` ou `:76`). Hérité de l'amont (#5940), non
   corrigé chez Vela. **Le bug d'écriture est corrigé sur `master`** (`955b1b136`, étape D :
   recopie des deux côtés, message « journal corrompu », doc
-  `docs/1-octobre-2026-23h37/01-…`). **Reste ouvert : la fin déchirée**
-  (étape E, décidée par Lucie le 1er octobre : rouvrir au dernier COMMIT,
-  écarter le reste en le copiant à côté) ; d'ici là un arrêt brutal pendant
-  l'écriture d'un commit peut encore refuser l'ouverture. En attendant : arrêt par SIGTERM ou
+  `docs/1-octobre-2026-23h37/01-…`). **La fin déchirée** (étape E,
+  décidée par Lucie le 1er octobre) est faite sur `fin-de-journal-dechiree` :
+  rouvrir au dernier COMMIT, toute troncature copiée dans
+  `<journal>.ecarte-<ms>`. **Limite** : sans longueur par enregistrement, une
+  longueur abîmée au milieu se lit comme une fin déchirée et fait écarter des
+  transactions validées (copiées à l'octet près, rien n'est supprimé) ; seul
+  un changement de format la lèverait. En attendant : arrêt par SIGTERM ou
   EOF, copie reflink avant une longue écriture, un seul processus par base.
   **La base MTG actuelle a un `.wal` déjà corrompu (30 enregistrements
   illisibles) : ne pas l'ouvrir, et jamais avec
   `throw_on_wal_replay_failure=false`** — le rejeu tronquerait le journal.
+  Avec l'étape E, la raison s'ajoute : ses enregistrements abîmés peuvent se
+  lire comme une fin de fichier, et l'ouverture écarterait des transactions
+  validées. Lucie, 1er octobre : « on la laisse tranquille pour le moment ».
 - **Persistance des `abilities` imbriquées** : après réouverture, des textes
   rattachés au mauvais élément. Bloquant pour les filtres sur ce champ.
 - **SIGSEGV avec un buffer pool de 1 Gio** ; contournement : 8 à 15 Gio.
