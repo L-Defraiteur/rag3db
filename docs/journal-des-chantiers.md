@@ -161,6 +161,19 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- **Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026**
+  par l'étape 1 du banc de concurrence (branche `banc-de-concurrence`,
+  `37a44e351`, 20 passes sur 20). Sous `debug_enable_multi_writes` : deux ou
+  trois écrivains insèrent la même clé primaire et tous valident (la clé
+  existe deux et trois fois) ; une suppression de nœud et la création d'une
+  relation vers lui valident toutes deux (relation pendante, comptée par
+  `count(r)` mais invisible à toute requête qui lit une propriété de
+  l'extrémité) ; deux écrivains qui créent des nœuds puis des relations entre
+  les leurs voient les relations du second pointer vers les nœuds du premier.
+  Aucune erreur dans aucun cas. **Ce mode n'est pas allumé en production** :
+  ne pas l'allumer avant les marches A2, A3, A4 du plan
+  (`docs/2-octobre-2026-00h17/01-…`, §7), qui corrigent ces trois cas contre
+  ce banc.
 - **Les poids granite ne sont ni sur ce poste ni publiés** (vu le 2 octobre) :
   `~/.cache/rag3weaver/` n'a que bge-m3, minilm et multilingual-minilm ;
   granite-278m (le modèle par défaut), granite-107m et l'OCR ppocrv6-tiny
