@@ -5,6 +5,7 @@
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
+#include "test_helper/flaky_buffer_manager.h"
 #include "test_runner/fsm_leak_checker.h"
 #include "test_runner/test_parser.h"
 #include "transaction/transaction_manager.h"
@@ -18,49 +19,6 @@ public:
         storage::BufferManager* bm) {
         return bm->fileHandles;
     }
-};
-
-class FlakyBufferManager : public storage::BufferManager {
-public:
-    FlakyBufferManager(const std::string& databasePath, const std::string& spillToDiskPath,
-        uint64_t bufferPoolSize, uint64_t maxDBSize, common::VirtualFileSystem* vfs, bool readOnly,
-        std::atomic<uint64_t>& failureFrequency, bool canFailDuringExecute,
-        bool canFailDuringCheckpoint, bool canFailDuringCommit)
-        : storage::BufferManager(databasePath, spillToDiskPath, bufferPoolSize, maxDBSize, vfs,
-              readOnly),
-          failureFrequency(failureFrequency), canFailDuringCheckpoint(canFailDuringCheckpoint),
-          canFailDuringExecute(canFailDuringExecute), canFailDuringCommit(canFailDuringCommit) {}
-
-    bool reserve(uint64_t sizeToReserve) override {
-        // we currently can't handle exceptions thrown during rollback
-        const bool inRollback = std::current_exception().operator bool();
-
-        const bool inDBInit = ctx == nullptr;
-
-        const bool inCheckpoint =
-            ctx && !transaction::TransactionManager::Get(*ctx)->hasActiveWriteTransactionNoLock();
-        const bool inCommit =
-            !inCheckpoint && ctx && transaction::Transaction::Get(*ctx) &&
-            transaction::Transaction::Get(*ctx)->getCommitTS() != common::INVALID_TRANSACTION;
-        const bool inExecute = (!inCommit && !inCheckpoint);
-        reserveCount = (reserveCount + 1) % failureFrequency;
-        if (!inRollback && !inDBInit && (canFailDuringCommit || !inCommit) &&
-            (canFailDuringCheckpoint || !inCheckpoint) && (canFailDuringExecute || !inExecute) &&
-            reserveCount == 0) {
-            failureFrequency = failureFrequency * 2;
-            return false;
-        }
-        return storage::BufferManager::reserve(sizeToReserve);
-    }
-
-    void setClientContext(main::ClientContext* newCtx) { ctx = newCtx; }
-
-    std::atomic<uint64_t>& failureFrequency;
-    main::ClientContext* ctx{nullptr};
-    bool canFailDuringCheckpoint;
-    bool canFailDuringExecute;
-    bool canFailDuringCommit;
-    std::atomic<uint64_t> reserveCount = 0;
 };
 
 struct BMExceptionRecoveryTestConfig {
