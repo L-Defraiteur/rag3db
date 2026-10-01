@@ -264,11 +264,23 @@ TEST_F(LecteursConcurrents, CeQueLeLecteurVoitEstCoherent) {
            "sans verrou voit un état à demi écrit, rag3daemon ne peut pas cesser de relayer.";
     EXPECT_EQ(recule, 0) << "le lecteur a vu MOINS de lignes qu'à un tour précédent";
 
-    // Des refus sont attendus, mais un seul est acceptable : celui par lequel le
-    // moteur préfère refuser plutôt que lire un point de reprise à demi
-    // installé (shadow_file.cpp:93). Tout autre refus est un vrai problème.
+    // Des refus sont attendus, mais deux seulement sont acceptables, et ce sont
+    // les deux façons qu'a le moteur de refuser plutôt que de lire un point de
+    // reprise à demi installé :
+    //  - il a vu le CHECKPOINT en fin de journal dès son parcours
+    //    (shadow_file.cpp, « Couldn't replay shadow pages ») ;
+    //  - le point de reprise a traversé son ouverture, après son parcours du
+    //    journal (WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN).
+    // Tout autre refus est un vrai problème : avant la revérification à
+    // l'ouverture on voyait ici « Found duplicated primary key », « Reading
+    // past the end of the file » et « Cannot open file ».
     for (const auto& [msg, n] : refus) {
-        EXPECT_NE(msg.find("Couldn't replay shadow pages under read-only mode"), std::string::npos)
+        const auto sawCheckpointInJournal =
+            msg.find("Couldn't replay shadow pages under read-only mode") != std::string::npos;
+        const auto checkpointCrossedOpen =
+            msg.find("was checkpointed by another process while this read-only open") !=
+            std::string::npos;
+        EXPECT_TRUE(sawCheckpointInJournal || checkpointCrossedOpen)
             << "refus INATTENDU, " << n << " fois : " << msg;
     }
 }
