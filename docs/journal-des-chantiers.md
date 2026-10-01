@@ -90,6 +90,10 @@ Depuis :
 
 7. Le budget de reprise du lecteur (§3).
 8. Fusionner `mtg-experiments` dans `master`, et quand.
+9. Les trailers d'attribution : 17 commits de `mtg-experiments` (du 25 et du
+   27 septembre, tous publiés) portent `Co-Authored-By: Claude…`, contre la
+   règle du dépôt. Les réécrire et pousser en force **avant** la fusion dans
+   `master`, ou les laisser. Après la fusion, ce ne sera plus raisonnable.
 
 ## 5. Hors de ce dépôt
 
