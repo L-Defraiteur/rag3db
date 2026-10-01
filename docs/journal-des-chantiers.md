@@ -30,7 +30,8 @@ Dernière mise à jour : **1er octobre 2026**, après la fusion de `mtg-experime
 **À lire avec ce journal** : la réconciliation des objectifs et le knowledge
 dump du 1er octobre 2026, dans
 `extension/rag3weaver/docs/1-octobre-2026-22h47/` — ce qu'on voulait, ce qui
-existe, ce qui est en suspens, et l'ordre proposé.
+existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du même soir
+(`05`) dit ce qui est en vol et comment le contrôler.
 
 ## 1. Branches ouvertes
 

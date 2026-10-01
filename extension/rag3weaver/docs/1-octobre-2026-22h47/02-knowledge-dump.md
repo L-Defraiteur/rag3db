@@ -630,3 +630,45 @@ C++ en granite-107m).
 | Ingestion du catalogue MTG, ancien chemin | ~63 cartes/s, 286 s pour 17 920 | 27 sept., Strix Halo |
 | Blobs d'index après purge | 29 Mo au lieu de 355 Mo | 27 sept. |
 | Démon BGE-M3 | ~8 500 jetons/s (15 000 sur les R9700) | 27 sept. |
+
+## 11. Ajouts du 1er octobre au soir — ce que la fusion et l'enquête ont appris
+
+- **`Catalog::get` et `get_many` rendent une ligne à plat** : les champs
+  déclarés et `_uuid`, sans clé `n`. Même forme sur les deux dialectes. Gardé
+  par `e2e_search::get_rend_une_ligne_a_plat`.
+- **`describe` d'un backend porte `capabilities`** (`journal`,
+  `journal_read`). Un client n'envoie une op que si elle y est annoncée.
+- **Les outils d'ingestion d'un backend passent par `Catalog::ingest_entities`**
+  (`backend_nodes.rs`) : court-circuit de l'inchangé, dérivées et rattrapages
+  s'appliquent aux entités d'un manifeste. Deux manques connus : un snapshot
+  ne supprime pas les lignes disparues ; un lot est refusé sur une entité à
+  `Lifecycle` (« bulk snapshot writes cannot bypass a lifecycle »), ce qui
+  peut devenir une vérification depuis que l'ingestion garde les transitions.
+- **Le harnais rend toutes les erreurs d'une étape d'un coup** : les règles
+  partent en parallèle des mêmes faits et leurs rapports sont fusionnés
+  (`Backend::validate_hooks` ne s'arrête pas au premier refus). Trois
+  frontières seulement : un schéma d'entrée invalide ne lance pas les règles ;
+  un `before` refusé n'exécute ni l'outil ni `after` ; le nœud commun de
+  préparation des faits, s'il échoue, bloque tout le hook.
+- **Le journal d'écriture (WAL)** : un enregistrement de plus de 4 096 octets
+  était corrompu à l'écriture (`ChecksumWriter::resizeBufferIfNeeded`, tampon
+  remplacé sans recopie). Un journal relu après un arrêt brutal était donc
+  illisible. Correctif en cours sur `correctif-wal-enregistrements-longs`.
+  Format d'un enregistrement : type (1 octet), corps, somme (8 octets) ; pas
+  de longueur. Le rejeu fait une passe à blanc qui retient le dernier COMMIT.
+  Rapport complet : voir le doc du correctif, `docs/` à la racine.
+- **Les poids MiniLM et MiniLM multilingue** (`~/.cache/rag3weaver/minilm/`)
+  sont installés depuis le 1er octobre ; sans eux, 16 tests de `e2e_search`,
+  `e2e_simple_entity`, `e2e_generic_search` et `e2e_idempotent_registration`
+  ne tournent pas, et les suivants tombent en « LazyLock poisoned ».
+- **Fusionner tôt.** Une branche de onze jours portait une régression de
+  contrat que la suite qui la gardait n'avait jamais vue. Avant de dire une
+  branche prête : jouer les suites voisines **sur la branche**, et tenir sa
+  ligne au journal.
+- **Travailler à deux sessions sans se marcher dessus** : celle qui n'a pas
+  l'arbre commite depuis un worktree détaché de `origin/master` (dans son
+  scratchpad), pousse, et le retire. `git worktree add --detach`.
+- **`mtg-experiments` a été réécrite le 1er octobre** pour retirer les
+  trailers d'attribution : les hash d'avant ne valent plus à partir de
+  `64a12b05b`. Une branche locale `sauvegarde/mtg-experiments-avant-reecriture`
+  garde l'ancienne pointe.
