@@ -4454,55 +4454,108 @@ impl Catalog {
         let Some(lc) = config.lifecycle.as_ref() else {
             return (records, Vec::new());
         };
-        let declared: std::collections::HashSet<&str> = lc.states().into_iter().collect();
         let mut kept = Vec::with_capacity(records.len());
         let mut refused = Vec::new();
 
         for mut rec in records {
             let uuid = rec.data.get("_uuid").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let written = rec.data.get(&lc.field).and_then(|v| v.as_str()).map(str::to_string);
-
             let Some(to) = written else {
                 // Rien de dit : l'état initial s'applique.
                 rec.data.insert(lc.field.clone(), CypherValue::String(lc.initial.clone()));
                 kept.push(rec);
                 continue;
             };
-
-            match previous_states.get(&uuid) {
-                None => {
-                    if declared.contains(to.as_str()) {
-                        kept.push(rec);
-                    } else {
-                        refused.push(format!(
-                            "{entity_name} '{uuid}' : état '{to}' non déclaré (déclarés : {})",
-                            lc.states().join(", ")
-                        ));
-                    }
-                }
-                Some(from) if *from == to => kept.push(rec),
-                Some(from) => {
-                    if lc.allows(from, &to).is_some() {
-                        kept.push(rec);
-                    } else {
-                        let allowed: Vec<String> = lc
-                            .next_from(from)
-                            .iter()
-                            .map(|t| format!("{} → {}", t.name, t.to))
-                            .collect();
-                        let allowed = if allowed.is_empty() {
-                            format!("'{from}' est un état terminal")
-                        } else {
-                            format!("depuis '{from}' : {}", allowed.join(", "))
-                        };
-                        refused.push(format!(
-                            "{entity_name} '{uuid}' : transition '{from}' → '{to}' non déclarée ({allowed})"
-                        ));
-                    }
-                }
+            match Self::lifecycle_verdict(entity_name, lc, &uuid, &to, previous_states.get(&uuid).map(String::as_str)) {
+                Ok(()) => kept.push(rec),
+                Err(cause) => refused.push(cause),
             }
         }
         (kept, refused)
+    }
+
+    /// **La règle d'une ligne**, partagée par l'ingestion et la vérification
+    /// d'un lot avant écriture : une naissance doit prendre un état déclaré ;
+    /// un état qui change doit suivre une transition déclarée. Le refus dit ce
+    /// qui aurait été permis.
+    fn lifecycle_verdict(
+        entity_name: &str,
+        lc: &crate::config::Lifecycle,
+        uuid: &str,
+        to: &str,
+        from: Option<&str>,
+    ) -> Result<(), String> {
+        match from {
+            None => {
+                if lc.states().contains(&to) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "{entity_name} '{uuid}' : état '{to}' non déclaré (déclarés : {})",
+                        lc.states().join(", ")
+                    ))
+                }
+            }
+            Some(from) if from == to => Ok(()),
+            Some(from) => {
+                if lc.allows(from, to).is_some() {
+                    return Ok(());
+                }
+                let allowed: Vec<String> = lc
+                    .next_from(from)
+                    .iter()
+                    .map(|t| format!("{} → {}", t.name, t.to))
+                    .collect();
+                let allowed = if allowed.is_empty() {
+                    format!("'{from}' est un état terminal")
+                } else {
+                    format!("depuis '{from}' : {}", allowed.join(", "))
+                };
+                Err(format!(
+                    "{entity_name} '{uuid}' : transition '{from}' → '{to}' non déclarée ({allowed})"
+                ))
+            }
+        }
+    }
+
+    /// **Les refus de la machine à états pour un lot, sans rien écrire.** Pour
+    /// un écrivain qui veut tout ou rien (`EntityBatchNode`) : relit l'état
+    /// d'avant des lignes du lot et applique la même règle que l'ingestion, qui
+    /// la réapplique de toute façon en écrivant. Une entité sans `lifecycle` ne
+    /// refuse rien.
+    pub fn lifecycle_refusals(
+        &self,
+        entity_name: &str,
+        records: &[BTreeMap<String, CypherValue>],
+    ) -> Result<Vec<String>, CatalogError> {
+        let config = self
+            .entity_configs()
+            .get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
+        let Some(lc) = config.lifecycle.as_ref() else {
+            return Ok(Vec::new());
+        };
+        let uuids = records
+            .iter()
+            .map(|r| self.entity_uuid(entity_name, r))
+            .collect::<Result<Vec<_>, _>>()?;
+        let previous: HashMap<String, String> = self
+            .get_many(entity_name, &uuids)?
+            .into_iter()
+            .filter_map(|row| {
+                let uuid = row.get("_uuid")?.as_str()?.to_string();
+                let state = row.get(&lc.field)?.as_str()?.to_string();
+                Some((uuid, state))
+            })
+            .collect();
+        Ok(records
+            .iter()
+            .zip(&uuids)
+            .filter_map(|(record, uuid)| {
+                let to = record.get(&lc.field)?.as_str()?;
+                Self::lifecycle_verdict(entity_name, lc, uuid, to, previous.get(uuid).map(String::as_str)).err()
+            })
+            .collect())
     }
 
     /// Le verbe de lot, **complet** : quand il rend, tout est prêt, étage GPU

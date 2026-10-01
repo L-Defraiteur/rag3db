@@ -308,9 +308,6 @@ impl Node for EntityBatchNode {
             .clone();
         let mut cat = cat.lock().map_err(|e| e.to_string())?;
         let config = cat.entity_configs().get(entity).ok_or("unknown entity")?;
-        if config.lifecycle.is_some() {
-            return Err("bulk snapshot writes cannot bypass a lifecycle".into());
-        }
         let keys = config
             .hashsafe
             .as_ref()
@@ -342,6 +339,15 @@ impl Node for EntityBatchNode {
             }
             rows.push(row);
             ids.push(id);
+        }
+        // A lifecycle is checked like the schema: all-or-nothing, before any
+        // write. The ingestion applies the same rule again while writing
+        // (the catalog lock is held from here on), so nothing slips through.
+        let refused = cat
+            .lifecycle_refusals(entity, &rows)
+            .map_err(|e| e.to_string())?;
+        if !refused.is_empty() {
+            return Err(format!("lifecycle refused {} record(s), nothing written: {}", refused.len(), refused.join("; ")));
         }
         // Validation is all-or-nothing; storage/index failures are not a transaction rollback.
         let report = cat
