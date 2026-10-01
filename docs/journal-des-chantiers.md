@@ -86,18 +86,28 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 
 ## 4. Décisions en attente de Lucie
 
-Posées le 18 septembre 2026, non tranchées depuis :
+Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
 
-1. La forme du pas C (fusion pesée par entité, pondération par valeur de champ).
-2. Les poids de fusion par défaut : 0,6 / 0,4 du gabarit `search_base`, en
-   vigueur depuis `63d4b86b5`, ou 0,3 / 0,7 d'avant.
-3. Le texte embarqué : le nom avec le corps (environ +0,06 de MRR au banc).
-4. Supprimer `fuse_results` à trois listes et ses onze tests, ou la garder.
-5. Supprimer la grappe d'exploration après recherche (`search_with_explore`,
-   `explore_bfs`).
-6. Supprimer `search_with_strategy` (aucun appelant de production).
+1. La forme du pas C : **oui** — fusion pesée par entité, pondération par
+   valeur de champ (un poids, pas un filtre), gabarits de dérivées. **Avec une
+   exigence de Lucie : ces pondérations se règlent dans les graphes de
+   recherche**, comme les poids de fusion (`FuseResultsNode(weights=…)`), pas
+   seulement dans la config d'entité. Reste à dessiner : quand l'entité
+   déclare une fusion, le gabarit ne la retouche pas aujourd'hui
+   (`base_de_fusion`) — dire si un graphe peut forcer les siens.
+2. Les poids de fusion par défaut : **mesurer avant de choisir**, au banc, aux
+   deux réglages (0,6 / 0,4 du gabarit, 0,3 / 0,7 d'avant) — **et avec le
+   signal sparse**, que le banc n'a jamais mesuré et que le gabarit laisse au
+   défaut du moteur (0,2). Avant de mesurer : `sparse-vector` est figée en
+   4.0.1 alors que lucivy est en 4.3.0 et que `sparse-vector` 4.3.0 est
+   publiée depuis le 13 septembre ; aligner d'abord.
+3. Le texte embarqué (le nom avec le corps) : **plus tard**.
+4. `fuse_results` à trois listes et ses onze tests : **supprimer**.
+5. La grappe d'exploration après recherche (`search_with_explore`,
+   `explore_bfs`) : **supprimer**.
+6. `search_with_strategy` : **supprimer**.
 
-Depuis :
+Encore en attente :
 
 7. Le budget de reprise du lecteur (§3).
 8. ~~Fusionner `mtg-experiments` dans `master`~~ — **tranchée et faite le
