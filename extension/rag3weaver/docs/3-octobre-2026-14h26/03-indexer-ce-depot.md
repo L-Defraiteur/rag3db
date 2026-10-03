@@ -174,6 +174,46 @@ le mesurer), puis les symboles. Trois COPY de morceaux sont aussi refusés à
 la première ingestion (« vector with ANY type ») et retombent sur le chemin
 ligne à ligne.
 
+### Après la fermeture des deux vidages aberrants : 499 s, il en manque 320
+
+Troisième passe, le 3 octobre à 22 h 40, même protocole que celle de 523 s
+(binaire de test, 8 fils lucivy, service distant, mots seulement) : la
+session de l'arbre principal a trouvé la cause des deux vidages — le COPY
+des liens était refusé dès qu'une liste entre guillemets apparaissait après
+les premières lignes, et les liens repartaient par lots en balayant les
+tables.
+
+| Passe | Cherchable par mots (relations comprises) |
+|---|---|
+| Relations paquet par paquet | 1 798 s |
+| Chargement en masse à la fin | 523 s |
+| Binaire optimisé, avec les deux vidages à 57 s et 145 s | 643 s |
+| **Vidages fermés** (sept vidages, 30 s en tout) | **499 s** |
+
+La cible est deux à trois minutes : **il manque environ 320 s**. Cette fois
+le temps est ventilé en entier.
+
+| Poste | Temps |
+|---|---|
+| Ingestion des symboles | 109 s |
+| Dans l'ingestion des paquets, hors de tout nœud (montage du graphe, points de reprise, construction des enregistrements) | 140 s |
+| Insertion des morceaux | 56 s |
+| Insertion des nœuds | 49 s |
+| Analyse des fichiers (codeparsers) | 43 s |
+| Index plein texte (lucivy, 8 fils) | 26 s |
+| Vidages de la file des liens en route | 23 s |
+| Marques de découpe | 20 s |
+| Chargement final des relations | 14 s |
+| Liaison des morceaux, mise en file des symboles, marques de session | 18 s |
+| Lister et lire les fichiers | moins d'une seconde |
+
+Où chercher, par ordre de prise : **les symboles** (une seconde par paquet ;
+la réécriture des requêtes par lot, en cours, devrait y toucher), **les
+140 s hors nœuds** (à instrumenter avant d'y toucher), **les insertions**
+(105 s, dont trois COPY de morceaux refusés qui retombent en ligne à ligne),
+puis **l'analyse**, qui se parallélise par fichier. Le plein texte et les
+relations ne sont plus le sujet.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
