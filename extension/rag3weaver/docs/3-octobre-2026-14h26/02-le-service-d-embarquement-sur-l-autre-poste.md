@@ -303,6 +303,27 @@ déclaration commune ne porte pas et que le chat déclare aujourd'hui
 (`context_tokens`) ; et que la section `llm` du chat devienne un alias de
 `models.llm`, comme `embeddings` l'est devenu de `models.embed`.
 
+## 7 quater. Le relecteur et l'OCR, par le démon bge-m3
+
+Depuis le 3 octobre à 23 h 45, le démon du port 7879 porte aussi un relecteur
+et un OCR : un seul démon à relancer. Il se lance comme au § 3, avec deux
+variables de plus (et la carte des deux rôles) :
+
+```bash
+RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 RAG3WEAVER_BURN_DEVICE_RERANKER=gpu:0 RAG3WEAVER_BURN_DEVICE_OCR=gpu:0 \
+RAG3WEAVER_REGIME=plein RAG3WEAVER_EMBED_MODEL=bge-m3 \
+RAG3WEAVER_RERANK_MODEL=bge-reranker-v2-m3 RAG3WEAVER_OCR_MODEL=ppocrv6-tiny \
+  setsid nohup $BIN --adresse 127.0.0.1:7879 > ~/.cache/rag3weaver/service-embeddings-bge-m3.log 2>&1 < /dev/null &
+```
+
+Son identité (`curl -s http://127.0.0.1:7980/sante`) déclare `"reranker":
+"bge-reranker-v2-m3"` et `"ocr": "ppocrv6-tiny"`. Un backend les demande par
+`"models": {"rerank": {"provider": "service", "model": "bge-reranker-v2-m3"},
+"ocr": {"provider": "service", "model": "ppocrv6-tiny"}}` ; sans adresse
+écrite, le client les cherche parmi les adresses de l'embarquement. La carte
+libre passe de 17,5 à 22,3 Gio. Le binaire doit être bâti avec la feature
+`burn-ocr` en plus (`--features daemon,burn-embedder,burn-ocr`).
+
 ## 8. Ce qui reste ouvert
 
 - Les démons ne sont pas des services systemd : un redémarrage de luciepc
