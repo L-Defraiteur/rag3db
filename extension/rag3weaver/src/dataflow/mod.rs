@@ -46,6 +46,7 @@ pub mod ocr_nodes;
 pub mod code_nodes;
 #[cfg(feature = "code")]
 pub mod index_nodes;
+pub mod usage_nodes;
 /// **Le balayage des fichiers** : la recherche quand l'index ne sait pas (encore).
 #[cfg(feature = "code")]
 pub mod scan_nodes;

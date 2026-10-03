@@ -124,6 +124,7 @@ const BASE_NODES: &[&str] = &[
     // L'estimation d'indexation : liste par la source (noms et tailles,
     // aucun fichier lu hors sonde), rien n'écrit — sûre pour tout outil.
     "EstimateNode",
+    "UsagesNode",
     // L'indexation en fond : n'écrit qu'en base, par le catalogue, et rend
     // un journal. Refuse d'elle-même sans confirmation quand l'estimation
     // dépasse le seuil — le produit cloud doit pouvoir indexer sans

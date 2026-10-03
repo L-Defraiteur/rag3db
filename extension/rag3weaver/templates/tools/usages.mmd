@@ -1,0 +1,18 @@
+%% tool: usages
+%% description: Tous les usages d'un nom, et sa ou ses définitions : qui l'appelle, qui s'en sert comme type, qui l'importe, qui en hérite — groupés par genre, chacun avec fichier et ligne. Un nom défini plusieurs fois montre toutes ses définitions, sans choisir ; `path` restreint celles qu'on regarde.
+%% param: name string! -- Le nom cherché (fonction, type, méthode…), tel qu'écrit dans le code.
+%% param: path string = "" -- Ne montrer que les définitions sous ce chemin (préfixe de fichier), pour lever une ambiguïté.
+%% param: usage string = "all" -- Ne garder qu'un genre d'usage.
+%% choices: usage = all | call | type | import | inheritance | other
+%% param: limit int = 20 -- Usages rendus par genre (plafond 200) ; tous sont comptés.
+%% result: usages.result
+
+graph LR
+    usages["UsagesNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, usage=$usage, limit=$limit)"]
+
+%% Le schéma de code (src/code.rs) : `Symbol` est le rendez-vous des noms,
+%% `DEFINES` le relie à ses définitions, `MENTIONS` à ce qui le nomme d'un
+%% autre fichier ; `CONSUMES`, `INHERITS_FROM` et `IMPLEMENTS` relient
+%% directement un usage à une définition — dont ceux du même fichier, que le
+%% rendez-vous ne garde pas. Le nœud est générique : un autre schéma déclare
+%% son propre pivot ici.
