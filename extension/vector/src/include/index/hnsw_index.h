@@ -419,6 +419,12 @@ private:
         const std::unordered_set<common::offset_t>* deletedNodes = nullptr);
     // True if `offset` can serve as an entry point: a row this transaction still sees, with a
     // vector, that the statement in progress has not deleted.
+    // The first row of the table, other than `except`, that this transaction sees and that has a
+    // vector, or INVALID_OFFSET. The entry points live outside transactions: a delete that is
+    // rolled back gives the rows back but not the entry point it had removed. An invalid entry
+    // point therefore does not prove the index is empty; this is how to make sure.
+    common::offset_t findLiveNode(const transaction::Transaction* transaction,
+        HNSWSearchState& searchState, common::offset_t except = common::INVALID_OFFSET) const;
     bool canBeEntryPoint(transaction::Transaction* transaction, common::offset_t offset,
         HNSWInsertState& insertState,
         const std::unordered_set<common::offset_t>* deletedNodes) const;

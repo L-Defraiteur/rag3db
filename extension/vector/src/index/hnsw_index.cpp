@@ -518,11 +518,15 @@ std::vector<NodeWithDistance> OnDiskHNSWIndex::searchFromCheckpointed(Transactio
     auto entryPoint = searchNNInUpperLayer(queryVector, searchState);
     const auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     if (entryPoint == common::INVALID_OFFSET) {
-        if (hnswStorageInfo.lowerEntryPoint == common::INVALID_OFFSET) {
-            // Both upper and lower layers are empty. Thus, the index is empty.
-            return {};
-        }
         entryPoint = hnswStorageInfo.lowerEntryPoint;
+        if (entryPoint == common::INVALID_OFFSET) {
+            // No entry point is not proof that the index is empty: a rolled back delete brings
+            // the rows and their edges back, not the entry point. Start from any live node.
+            entryPoint = findLiveNode(transaction, searchState);
+            if (entryPoint == common::INVALID_OFFSET) {
+                return {};
+            }
+        }
     }
     return searchKNNInLayer(transaction, queryVector, entryPoint, searchState, false);
 }
@@ -740,6 +744,21 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     state.lowerNeighborsOfDeleted.clear();
     state.upperNeighborsOfDeleted.clear();
     state.deletedNodes.clear();
+}
+
+common::offset_t OnDiskHNSWIndex::findLiveNode(const Transaction* transaction,
+    HNSWSearchState& searchState, common::offset_t except) const {
+    const auto numNodes = storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes;
+    for (common::offset_t offset = 0; offset < numNodes; offset++) {
+        if (offset == except || !nodeTable.isVisible(transaction, offset)) {
+            continue;
+        }
+        if (!searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState)
+                 .isNull()) {
+            return offset;
+        }
+    }
+    return common::INVALID_OFFSET;
 }
 
 bool OnDiskHNSWIndex::canBeEntryPoint(Transaction* transaction, common::offset_t offset,
@@ -1232,6 +1251,11 @@ void OnDiskHNSWIndex::insertToLayer(Transaction* transaction, common::offset_t o
     if (entryPoint == common::INVALID_OFFSET) {
         auto& entryPointToSet =
             isUpperLayer ? hnswStorageInfo.upperEntryPoint : hnswStorageInfo.lowerEntryPoint;
+        if (entryPointToSet == common::INVALID_OFFSET && !isUpperLayer) {
+            // Same doubt as in the search: make sure the lower layer is really empty before
+            // starting a new graph that would not reach the nodes already there.
+            entryPointToSet = findLiveNode(transaction, insertState.searchState, offset);
+        }
         if (entryPointToSet == common::INVALID_OFFSET) {
             // The layer is empty. Set the entry point to the current offset.
             entryPointToSet = offset;
