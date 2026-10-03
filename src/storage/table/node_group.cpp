@@ -1,5 +1,8 @@
 #include "storage/table/node_group.h"
 
+#include <mutex>
+#include <shared_mutex>
+
 #include "common/assert.h"
 #include "common/types/types.h"
 #include "common/uniq_lock.h"
@@ -47,6 +50,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
     const std::vector<column_id_t>& columnIDs, std::span<const ColumnChunkData*> chunkedGroup,
     row_idx_t startRowIdx, row_idx_t numRowsToAppend) {
     const auto lock = chunkedGroups.lock();
+    const std::unique_lock appendGuard{inMemAppendMtx};
     const auto numRowsBeforeAppend = getNumRows();
     if (chunkedGroups.isEmpty(lock)) {
         chunkedGroups.appendGroup(lock,
@@ -80,6 +84,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
     const std::vector<column_id_t>& columnIDs, std::span<const ColumnChunk*> chunkedGroup,
     row_idx_t startRowIdx, row_idx_t numRowsToAppend) {
     const auto lock = chunkedGroups.lock();
+    const std::unique_lock appendGuard{inMemAppendMtx};
     const auto numRowsBeforeAppend = getNumRows();
     if (chunkedGroups.isEmpty(lock)) {
         chunkedGroups.appendGroup(lock,
@@ -112,6 +117,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
 void NodeGroup::append(const Transaction* transaction, const std::vector<ValueVector*>& vectors,
     const row_idx_t startRowIdx, const row_idx_t numRowsToAppend) {
     const auto lock = chunkedGroups.lock();
+    const std::unique_lock appendGuard{inMemAppendMtx};
     const auto numRowsBeforeAppend = getNumRows();
     if (chunkedGroups.isEmpty(lock)) {
         chunkedGroups.appendGroup(lock,
@@ -347,6 +353,12 @@ bool NodeGroup::lookup(const Transaction* transaction, const TableScanState& sta
     return lookupNoLock(transaction, state, posInSel);
 }
 
+bool NodeGroup::lookupSharedLock(const Transaction* transaction, const TableScanState& state,
+    sel_t posInSel) const {
+    const std::shared_lock appendGuard{inMemAppendMtx};
+    return lookupNoLock(transaction, state, posInSel);
+}
+
 bool NodeGroup::lookupMultiple(const Transaction* transaction, const TableScanState& state) const {
     const auto lock = chunkedGroups.lock();
     return lookupMultiple(lock, transaction, state);
@@ -401,6 +413,7 @@ void NodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pa
 
 void NodeGroup::rollbackInsert(row_idx_t startRow) {
     const auto lock = chunkedGroups.lock();
+    const std::unique_lock appendGuard{inMemAppendMtx};
     const auto numEmptyTrailingGroups = chunkedGroups.getNumEmptyTrailingGroups(lock);
     chunkedGroups.removeTrailingGroups(lock, numEmptyTrailingGroups);
     numRows = startRow;
@@ -725,6 +738,9 @@ bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGrou
 }
 
 bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdxInGroup) const {
+    // Sans le verrou de chunkedGroups, mais sous la garde partagée : la liste des blocs
+    // peut s'allonger sous un lecteur.
+    const std::shared_lock appendGuard{inMemAppendMtx};
     const auto* chunkedGroup = findChunkedGroupFromRowIdxNoLock(rowIdxInGroup);
     if (!chunkedGroup) {
         return false;

@@ -293,7 +293,11 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemSequential(const Transaction
         const auto lock = chunkedGroups.lock();
         chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
     }
-    chunkedGroup->scan(transaction, tableState, nodeGroupScanState, startRowInChunk, numRows);
+    {
+        // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
+        const std::shared_lock appendGuard{inMemAppendMtx};
+        chunkedGroup->scan(transaction, tableState, nodeGroupScanState, startRowInChunk, numRows);
+    }
     nodeGroupScanState.nextRowToScan += numRows;
     return NodeGroupScanResult{startRow, numRows};
 }
@@ -321,6 +325,8 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
             chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
         }
         KU_ASSERT(chunkedGroup);
+        // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
+        const std::shared_lock appendGuard{inMemAppendMtx};
         numSelected += chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
             numSelected);
         nextRow++;

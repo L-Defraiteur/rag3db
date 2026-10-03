@@ -369,7 +369,7 @@ bool NodeTable::lookup(const Transaction* transaction, const TableScanState& sca
     if constexpr (lock) {
         return scanState.nodeGroup->lookup(transaction, scanState);
     } else {
-        return scanState.nodeGroup->lookupNoLock(transaction, scanState);
+        return scanState.nodeGroup->lookupSharedLock(transaction, scanState);
     }
 }
 
@@ -411,7 +411,7 @@ bool NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanSta
         if constexpr (lock) {
             numRowsRead += scanState.nodeGroup->lookup(transaction, scanState, i);
         } else {
-            numRowsRead += scanState.nodeGroup->lookupNoLock(transaction, scanState, i);
+            numRowsRead += scanState.nodeGroup->lookupSharedLock(transaction, scanState, i);
         }
     }
     return numRowsRead == numRowsToRead;

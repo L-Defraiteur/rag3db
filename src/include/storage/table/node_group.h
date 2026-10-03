@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <shared_mutex>
 
 #include "common/uniq_lock.h"
 #include "storage/enums/residency_state.h"
@@ -153,6 +154,11 @@ public:
         common::sel_t posInSel = 0) const;
     bool lookupNoLock(const transaction::Transaction* transaction, const TableScanState& state,
         common::sel_t posInSel = 0) const;
+    // La lecture d'une ligne sans le verrou du groupe, pour qui lit beaucoup et en parallèle
+    // (la recherche HNSW lit un vecteur par nœud visité) : elle ne tient que la garde
+    // partagée contre l'ajout en mémoire.
+    bool lookupSharedLock(const transaction::Transaction* transaction,
+        const TableScanState& state, common::sel_t posInSel = 0) const;
     // TODO(Guodong): These should be merged together with `lookup`.
     bool lookupMultiple(const common::UniqLock& lock, const transaction::Transaction* transaction,
         const TableScanState& state) const;
@@ -263,6 +269,12 @@ protected:
     common::row_idx_t capacity;
     std::vector<common::LogicalType> dataTypes;
     GroupCollection<ChunkedNodeGroup> chunkedGroups;
+    // La garde des lectures qui ne prennent pas le verrou de chunkedGroups (lookupSharedLock,
+    // isVisibleNoLock). L'ajout en mémoire la prend en exclusif : il allonge la liste des
+    // blocs et réalloue le tampon d'une colonne à longueur variable, qu'un lecteur ne doit
+    // pas avoir sous la main à ce moment-là. Toujours prise après le verrou de
+    // chunkedGroups, jamais l'inverse.
+    mutable std::shared_mutex inMemAppendMtx;
 };
 
 } // namespace storage
