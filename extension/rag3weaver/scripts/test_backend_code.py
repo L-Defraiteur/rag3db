@@ -193,20 +193,19 @@ def main():
         t = json.dumps(r, ensure_ascii=False)
         assert "main.rs" in t, f"la recherche répond après l'indexation : {r}"
         assert "balayage" not in t, f"l'index prêt répond sans ligne de balayage : {r}"
-        # Après l'index (vecteurs prêts), une édition rend la section du
-        # crochet : l'appel dans main.rs ressemble à l'ancien texte de la
-        # définition (0,76 mesuré, granite-278m) — et le fichier édité
-        # lui-même n'y figure JAMAIS : il n'est pas un « ailleurs ».
+        # Après l'index (vecteurs prêts), une édition sur CE micro-corpus
+        # reste silencieuse : le seuil est calibré au banc M à 0,97
+        # (presque-identique — les vrais clones inter-fichiers), et ici le
+        # plus proche voisin est l'appel à 0,76. La preuve positive vit au
+        # banc M (motifs à 1,000 nommés sur src/) et au test lib du
+        # mécanisme ; ici on prouve que le crochet ne fait PAS de bruit.
         r = host.ask(op="call", name="edit_file",
                      arguments={"path": "lib.rs",
                                 "old": "pub fn depart() {}",
                                 "new": "pub fn depart() { let _unique_xq7 = 1; }"})
         assert r.get("ok"), r
         t = json.dumps(r, ensure_ascii=False)
-        assert "Le même motif" in t, f"la section parle quand un voisin existe : {r}"
-        section = t.split("Le même motif", 1)[1]
-        assert "lib.rs" not in section, f"le fichier édité n'est pas un ailleurs : {r}"
-        assert "main.rs" in section, f"le vrai voisin est montré : {r}"
+        assert "Le même motif" not in t, f"sous le seuil calibré, silence : {r}"
 
         # wait ne sort pas du dossier des journaux : la traversée se refuse.
         traverse = str(Path(journal).parent / ".." / ".." / "etc" / "passwd")

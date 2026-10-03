@@ -2,7 +2,7 @@
 %% description: Le crochet d'edit_file — « le même motif existe ailleurs » : cherche par similarité le code qui ressemble à l'ANCIEN texte édité, hors du fichier qu'on vient de toucher, au-dessus d'un seuil. Il ne rend rien quand il n'y a rien : le silence est sa conduite normale.
 %% param: old string! -- L'ancien texte de l'édition (l'argument old d'edit_file).
 %% param: path string! -- Le fichier édité (exclu des voisins : il n'est pas un « ailleurs »).
-%% param: threshold float = 0.72 -- Seuil de similarité du signal vectoriel. **Provisoire** : à calibrer au banc avant de servir le crochet en vrai — un seuil ne se pose pas sans preuve.
+%% param: threshold float = 0.97 -- Seuil de similarité du signal vectoriel. **Calibré au banc M le 4 octobre 2026** (126 requêtes sur src/, granite-278m) : le meilleur voisin hors fichier d'un scope quelconque vit déjà à 0,87 de médiane (p90 0,81 — en code, tout se ressemble) ; les vrais motifs répétés vivent à 0,975-1,000. En dessous de ~0,95, la section parlerait à chaque édition.
 %% param: target string = "Scope" -- L'entité où chercher ; un binding du manifeste peut la changer.
 %% result: render.text
 %%

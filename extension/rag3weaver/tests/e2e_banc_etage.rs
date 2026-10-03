@@ -425,6 +425,86 @@ fn banc_etage_qui_perd() {
         par_poids.push((format!("T(case,suite,support → {x}) — les tests dévalués"), t));
     }
 
+    // ── M : le seuil du « même motif » — une distribution, pas une note ──
+    // Le crochet d'edit_file (apres-motif-ailleurs) montre les voisins de
+    // l'ANCIEN texte au-dessus d'un seuil de similarité vectorielle. Pour le
+    // poser : un échantillon de scopes, requête = leur propre texte, vecteur
+    // seul, et l'on regarde le MEILLEUR voisin hors de leur fichier. Les
+    // percentiles disent où vivent les voisins quelconques (le seuil doit
+    // être au-dessus), les exemples nommés disent à quoi ressemble le haut
+    // (les vrais motifs répétés — impl Node boilerplate — que la section
+    // doit montrer). Mesure, pas d'assert : un banc mesure.
+    {
+        let rows = reel
+            .lock()
+            .unwrap()
+            .execute_raw_with_params(
+                "MATCH (s:Scope) WHERE s.scope_type = 'function' OR s.scope_type = 'method' \
+                 RETURN s.name, s.file_path, s.content ORDER BY s.file_path, s.name",
+                &[],
+            )
+            .expect("échantillon de scopes")
+            .rows;
+        let scopes: Vec<(String, String, String)> = rows
+            .iter()
+            .filter_map(|l| {
+                Some((
+                    l.first()?.as_str()?.to_string(),
+                    l.get(1)?.as_str()?.to_string(),
+                    l.get(2)?.as_str()?.to_string(),
+                ))
+            })
+            .collect();
+        // Un sur 37 : déterministe, ~60 requêtes sur src/, pas tout le tas.
+        let mut meilleurs: Vec<(f64, String, String)> = Vec::new();
+        for (i, (nom, fichier, contenu)) in scopes.iter().enumerate() {
+            if i % 37 != 0 || contenu.trim().is_empty() {
+                continue;
+            }
+            // Le budget de l'embarquement de requête : comme le crochet.
+            let q: String = contenu.chars().take(4096).collect();
+            let r = Catalog::rechercher(&reel, SCOPE, &q, options_vecteur())
+                .expect("recherche motif");
+            let voisin = r.results.iter().find(|x| {
+                x.data
+                    .as_ref()
+                    .and_then(|d| d.get("file_path"))
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|f| f != fichier)
+            });
+            if let Some(v) = voisin {
+                let vnom = v
+                    .data
+                    .as_ref()
+                    .and_then(|d| d.get("name"))
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("?")
+                    .to_string();
+                meilleurs.push((v.score, nom.clone(), vnom));
+            }
+        }
+        meilleurs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let pct = |p: f64| -> f64 {
+            if meilleurs.is_empty() {
+                return 0.0;
+            }
+            let i = ((meilleurs.len() - 1) as f64 * p) as usize;
+            meilleurs[i].0
+        };
+        eprintln!(
+            "| M (seuil motif) — meilleur voisin hors fichier, {} requêtes | max {:.3} | p10 {:.3} | p25 {:.3} | p50 {:.3} | p90 {:.3} |",
+            meilleurs.len(),
+            pct(0.0),
+            pct(0.10),
+            pct(0.25),
+            pct(0.50),
+            pct(0.90),
+        );
+        for (score, de, vers) in meilleurs.iter().take(8) {
+            eprintln!("|   motif : `{de}` ↔ `{vers}` ({score:.3}) |");
+        }
+    }
+
     // ── H et I : les poids de fusion en hybride, sur les deux versants ──
     // La mesure que Lucie attend depuis le 18 septembre, affinée le
     // 3 octobre : « favorise légèrement les identifiants » se cherche entre
