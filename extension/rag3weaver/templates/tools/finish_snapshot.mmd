@@ -2,7 +2,7 @@
 %% description: Fin d'une session de synchronisation : les lignes du périmètre qu'aucun lot de la session n'a portées sont retirées, ou passent par la transition que l'entité déclare. Refuse une session vide ou trop d'absentes, sauf demande explicite.
 %% param: entity string! -- Entité fixée par le manifeste.
 %% param: scope json! -- Les valeurs du périmètre, une par champ déclaré par l'entité ({} pour l'entité entière).
-%% param: snapshot string! -- L'identifiant de session porté par les lots.
+%% param: snapshot string! -- L'identifiant de session porté par les lots. Un identifiant neuf à chaque synchronisation : réutilisé, les lignes qu'il a déjà marquées ne seront jamais vues absentes. Une seule session à la fois par périmètre : deux sessions simultanées se verraient mutuellement absentes.
 %% param: allow_empty bool = false -- Accepter une session qui n'a porté aucune ligne du périmètre.
 %% param: force bool = false -- Passer outre maxMissingRatio.
 %% result: finish.report
