@@ -5,6 +5,9 @@
 //!
 //! Poids : `~/.cache/rag3weaver/granite-{107m,278m}/{model.bpk,tokenizer.json}`
 //! (voir `generated/README.md`).
+//!
+//! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
+//! c'est le modèle sur burn qu'elle éprouve, pas ses vecteurs vus de loin (`tests/common`, `SUITES_LOCALES`).
 #![cfg(feature = "burn-embedder")]
 
 mod common;

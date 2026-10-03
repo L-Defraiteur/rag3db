@@ -13,6 +13,9 @@
 //! cargo test --features daemon,burn-embedder --test e2e_demon_embeddings \
 //!   -- --ignored --nocapture
 //! ```
+//!
+//! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
+//! elle lance et arrête son propre démon, c'est lui qu'elle éprouve (`tests/common`, `SUITES_LOCALES`).
 
 #![cfg(all(feature = "daemon", feature = "burn-embedder"))]
 

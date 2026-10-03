@@ -6,6 +6,9 @@
 //! RAG3WEAVER_SANS_DEMON=1 ./run_e2e.sh --test e2e_banc_bge_m3   # en local
 //! ./run_e2e.sh --test e2e_banc_bge_m3                            # par le démon
 //! ```
+//!
+//! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
+//! elle mesure le débit de la carte de ce poste (`tests/common`, `SUITES_LOCALES`).
 #![cfg(all(feature = "burn-embedder", feature = "daemon"))]
 mod common;
 
