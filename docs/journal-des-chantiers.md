@@ -654,6 +654,57 @@ devant l'écran ; le seuil de confirmation d'`index` et la politique cloud ; la
 demande au support GitHub ; le ménage des branches distantes ; dans la vision
 des relations, la cohésion active par défaut ou non.
 
+### Un seul résolveur entre fichiers : le graphe ne dépend plus de la taille du paquet (4 octobre, minuit)
+
+Décidé par l'orchestration, sur les mesures de l'arbre principal et de la
+session codeparsers. **C'est un changement de ce que l'index contient**, pas
+un réglage.
+
+**Le fait.** Le même dépôt compte 819 808 relations indexé d'un seul tenant,
+contre 438 104 par paquets de 64. Sur `src/` de rag3weaver (129 fichiers) :
+59 152 contre 72 721. Seuls les liens entre fichiers diffèrent. codeparsers
+résout lui-même les noms entre les fichiers qu'il voit ensemble, et choisit
+parmi les homonymes : même fichier d'abord, puis le type lu, puis le premier
+homonyme dans un ordre fixe. Son choix change donc avec le paquet. La voie des
+`Symbol` (rendez-vous `DEFINES`/`MENTIONS`), elle, s'abstient sur un nom
+ambigu.
+
+**La justesse.** Deux échantillons indépendants de 50 arêtes, tirées dans
+l'écart et relues (arbre principal sur `src/` de rag3weaver, codeparsers sur
+le dépôt entier), donnent tous deux 15 justes et 35 fausses.
+- **Fausses** : appels de méthode sur un receveur sans type (`.len()`,
+  `.count()`, `.get()`), accès de champ (`self.dialect` relié au module
+  `dialect`), autre langage (`std::fs` Rust vers une variable de `.cjs`),
+  autre crate du même nom.
+- **Justes** : types importés (`use crate::estimate::Rate`), chemins de
+  module.
+
+**La décision.**
+1. codeparsers ne résout plus que **dans le fichier** (option `cross_file`).
+   La résolution devient parallèle par fichier.
+2. Tout lien entre fichiers passe par la voie des `Symbol`, qui s'abstient
+   sur un nom ambigu. La mention porte, pour départager, le type lu (déjà
+   fait) et **le chemin d'import** (à faire).
+3. L'analyseur reçoit la **liste des chemins du projet** : sans elle, par
+   paquets, un import interne devient une « bibliothèque ».
+   `USES_LIBRARY` : 15 994 par paquets contre 5 975 d'un seul tenant.
+4. Un test : la même source par paquets de 1, de 64 et d'un seul tenant
+   donne le même graphe, arête par arête. La justesse se mesure avant et
+   après, au banc des relations et sur `e2e_code` ; tout seuil qui bouge se
+   justifie par la liste des arêtes retirées.
+
+**À faire à la mise à jour.** Une base existante garde ses arêtes devinées :
+une resynchronisation ne les retire pas (`ingest_code_jusqu_a` ne nettoie
+pas les arêtes ; seule une édition, par `reingest_file`, nettoie celles du
+fichier édité). Il faut réindexer la source de zéro, ou faire un nettoyage
+unique : retirer les arêtes d'usage entre scopes de la source, puis
+rejouer analyse et résolution.
+
+**Ce que ça ouvre.** La taille du paquet ne change plus que le temps. Le
+premier index peut prendre de gros paquets, bornés en octets plutôt qu'en
+fichiers. Mesure de la session embarquements : le dépôt entier en un
+paquet fait 132 s (352 par paquets de 64), pour 16 Go au pic.
+
 ### `SET` refuse un champ nul partout qu'un `CREATE` accepte (cœur C++, 3 octobre)
 
 `UNWIND $rows AS r MATCH (t:T {id: r.id}) SET t.v = r.v`, avec `v` nul dans toutes les
