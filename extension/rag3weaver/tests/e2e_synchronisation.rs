@@ -247,7 +247,7 @@ fn les_relations_partent_avec_la_ligne_et_sont_comptees() {
     let mut attendues = vec![a3, a4];
     attendues.sort();
     assert_eq!(fin.removed, attendues);
-    assert_eq!(fin.relations_removed, Some(3), "a1 → a3, a3 → a4 (une fois), a4 → a1");
+    assert_eq!(fin.relations_to_remove, Some(3), "a1 → a3, a3 → a4 (une fois), a4 → a1");
     let reste = catalog.execute_raw("MATCH ()-[r:RENVOIE_A]->() RETURN count(r)").unwrap();
     assert_eq!(reste.rows[0][0].as_i64(), Some(0));
 }
@@ -378,4 +378,58 @@ fn un_etat_vide_vaut_l_etat_initial() {
     assert_eq!(fin.kept.len(), 1, "{fin:?}");
     assert!(fin.kept[0].1.contains("depuis 'brouillon'"), "{:?}", fin.kept);
     assert!(fin.transitioned.is_empty());
+}
+
+// ─── Le plan, puis l'application : la base a pu changer entre les deux ─────
+
+fn archivage() -> Catalog {
+    let mut catalog = catalogue();
+    let mut snapshot = perimetre_classeur();
+    snapshot.on_missing = OnMissing::Transition("archiver".into());
+    snapshot.max_missing_ratio = 1.0;
+    catalog.register_entity("Fiche", fiche(snapshot, Some(cycle()))).unwrap();
+    lot(&mut catalog, "s1", vec![
+        ligne("a1", "A", Some("active")),
+        ligne("a2", "A", Some("active")),
+        ligne("a3", "A", Some("active")),
+    ]);
+    lot(&mut catalog, "s2", vec![ligne("a1", "A", Some("active"))]);
+    catalog
+}
+
+/// Une absente planifiée pour la transition, disparue avant l'application :
+/// gardée et nommée, pas annoncée comme transitionnée.
+#[test]
+#[ignore]
+fn une_absente_disparue_entre_le_plan_et_l_application_est_nommee() {
+    let mut catalog = archivage();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), "s2", SnapshotFinishOptions::default()).unwrap();
+    assert!(!plan.applied);
+    assert_eq!(plan.transitioned.len(), 2, "{plan:?}");
+    catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a2' DETACH DELETE f").unwrap();
+    let a2 = catalog.entity_uuid("Fiche", &ligne("a2", "A", None)).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(fin.applied);
+    assert!(!fin.transitioned.contains(&a2), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a2 && r.contains("introuvable")), "{fin:?}");
+    assert_eq!(fin.transitioned.len(), 1);
+}
+
+/// Une transition planifiée, que la garde refuse à l'écriture parce que l'état
+/// a changé entre-temps : `UpdateStatus::Failed` la fait passer dans `kept`
+/// avec sa cause — le rapport ne dit que ce qui a eu lieu.
+#[test]
+#[ignore]
+fn une_transition_refusee_a_l_ecriture_quitte_le_rapport_des_transitionnees() {
+    let mut catalog = archivage();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), "s2", SnapshotFinishOptions::default()).unwrap();
+    // a3 repasse en brouillon : archiver (active → archivee) ne part plus de là.
+    catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a3' SET f.etat = 'brouillon'").unwrap();
+    let a3 = catalog.entity_uuid("Fiche", &ligne("a3", "A", None)).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(!fin.transitioned.contains(&a3), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("refusée à l'écriture")), "{fin:?}");
+    assert_eq!(etat(&catalog, &a3), "brouillon");
+    // Un plan ne s'applique qu'une fois.
+    assert!(catalog.apply_snapshot_finish(fin).is_err());
 }
