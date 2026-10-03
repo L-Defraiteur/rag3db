@@ -64,7 +64,13 @@ symboles (regex de fichier ou découpe seule).
   doc (`services.rs:15`, ramassé par la regex des zones hors scope) ; comme
   la signature du scope est `impl Default for ServiceRegistry`, l'heuristique
   `impl\s+\w+\s+for` fait de **toute** référence de ce scope une
-  implémentation.
+  implémentation. *Correction du même soir* : cette arête-là passe par les
+  références de niveau fichier, que rag3weaver n'active pas
+  (`include_file_level_refs: false`) ; ce qui l'atteint, c'est
+  `file_scope_01 → is`, un `CONSUMES` tiré du même commentaire. Les autres
+  cas de ce paragraphe atteignent rag3weaver (sonde rejouée avec ses
+  options : 235 relations sur ces deux fichiers, contre 260 avec les options
+  par défaut).
 - `PortValue IMPLEMENTS PortValue` : un `impl PortValue` sans trait relié à
   l'enum du même nom comme une implémentation.
 - `new → count` (`port.rs:292`, `let count = data.len();`) : une variable
@@ -103,7 +109,18 @@ parce qu'ils utilisent leur verrou. Reproduit par la sonde, corrigé en la
 rebâtissant avec 0.23.1. Correctif proposé : épingler `=0.23.1` dans le
 `Cargo.toml` de codeparsers.
 
-## 6. Ce que le second temps fera
+## 6. Ce que le second temps a fait (codeparsers `11ecd4f`)
+
+Le genre et la ligne sortent désormais sur chaque relation d'usage
+(`RelationshipMetadata.sites`). Ils ne corrigent aucune fausse arête, puisque
+les types de relation ne changent pas, mais ils la rendent visible : avec les
+options de rag3weaver, les deux `IMPLEMENTS` du corpus (`PortValue`,
+`ServiceRegistry` vers eux-mêmes) portent un site `type` et non `inheritance`,
+et les deux `INHERITS_FROM` devinés sur l'appel du constructeur parent en C++
+portent un site `other`. C'est la contradiction que le lot suivant pourra
+lever en préférant le genre lu sur l'AST à la devinette par sous-chaîne.
+
+## 7. Ce que le second temps devait faire
 
 Dans codeparsers seulement, sans changer les relations sorties ni leur
 nombre :
