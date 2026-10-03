@@ -312,22 +312,29 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
 /// **Ce que la reprise doit absorber, éprouvé plutôt que supposé.**
 ///
 /// Le report de Vela lève l'exclusion lecteur/écrivain : un lecteur peut ouvrir
-/// pendant qu'un écrivain travaille. Le refus qui reste — « Couldn't replay
-/// shadow pages under read-only mode » — est **transitoire** : il dure le temps
-/// que l'écrivain finisse de poser ses pages fantômes. Sans reprise, cet
-/// instant se présente à l'appelant comme « la base est inaccessible ».
+/// pendant qu'un écrivain travaille. Le refus qui reste est **transitoire** :
+/// les pages fantômes pas encore posées, ou, depuis la marche 1 (`d6c1a541a`),
+/// un point de reprise qui a traversé l'ouverture — le cœur la refuse alors par
+/// son nom (`WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN`) au lieu de servir
+/// un mélange d'avant et d'après. `read_only` retente dans son budget
+/// (`PATIENCE_OUVERTURE_MS`, 250 ms).
 ///
-/// Ce test ouvre quatre-vingts fois pendant qu'on écrit, et regarde ce qui
-/// arrive. **Il affirme quelque chose dans les deux régimes**, et dit lequel il
-/// observe :
+/// Ce test ouvre quatre-vingts fois pendant qu'on écrit, avec un point de
+/// reprise tous les cinq enregistrements. Après la marche 1, dix passes de
+/// suite (3 octobre 2026) : zéro refus survivant à la reprise, 80 lectures sur 80,
+/// zéro incohérence, sous 275 à 605 écritures. **Ce qu'il garde** :
 ///
-/// - bibliothèque à jour → **aucun** refus ne doit survivre à la reprise, et
-///   chaque ouverture réussie doit lire un compte cohérent, jamais du bruit ;
+/// - bibliothèque à jour → **aucun** refus ne survit à la reprise, et chaque
+///   ouverture réussie lit un compte cohérent, jamais du bruit ;
 /// - bibliothèque antérieure au report → le refus est **uniforme**, c'est
 ///   l'ancien contrat, et il est nommé comme tel.
 ///
-/// Ce qui est interdit dans les deux cas, c'est le refus **sporadique** : il
-/// voudrait dire qu'un transitoire a traversé la reprise.
+/// Un refus **sporadique** qui survit au budget n'est pas une incohérence —
+/// celle-là, c'est `INCOHERENTS` qui la compte, et elle est interdite dans
+/// tous les cas : c'est la **famine** d'un lecteur que chaque point de reprise
+/// renvoie au début, celle que la marche 5 (une époque écrite dans le fichier)
+/// doit réduire. Le test la refuse quand même : elle se mesure, elle ne se
+/// tolère pas en silence.
 #[test]
 #[ignore]
 fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
@@ -429,7 +436,9 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         panic!(
             "refus SPORADIQUE : {refus}/{CYCLES}. Ce n'est ni l'ancien contrat (refus \
              uniforme) ni la reprise qui fonctionne (aucun refus) — un transitoire a \
-             traversé le budget de `read_only`"
+             traversé le budget de `read_only`. Pas une incohérence (aucune lecture \
+             fausse) : la famine d'un lecteur que les points de reprise renvoient au \
+             début, celle que la marche 5 doit réduire"
         );
     }
     drop(ecrivain);

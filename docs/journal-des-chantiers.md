@@ -61,6 +61,14 @@ entre dans la liste de livraison de toute marche du moteur.** Les branches
 sont des états d'avant rebase, laissées sans force : à supprimer par Lucie. Les six
 remarques de la relecture se traitent sur une branche neuve.
 
+**Budget de reprise du lecteur en lecture seule : décidé le 3 octobre, il reste
+à 250 ms** (`PATIENCE_OUVERTURE_MS`). Le pic à 567 ms mesuré à `20a8f6ee8` venait
+de la course que la marche 1 corrige — ses refus étaient comptés sans lire leur
+message — et `un_lecteur_qui_insiste_pendant_qu_on_ecrit`, joué dix fois après
+la marche, n'a laissé aucun refus survivre au budget. Un refus sporadique qui y
+survivrait un jour serait la famine que la marche 5 doit réduire, pas une
+incohérence ; le test le dit.
+
 La **marche 1** (le lecteur revérifie à l'ouverture) est fusionnée dans `master`
 le 3 octobre 2026, en avance rapide depuis la branche locale `livraison-marche-1` :
 le commit de test de `reprise-apres-panne-index-cle-primaire`, les quatre tests
@@ -127,7 +135,6 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
-| Budget de reprise du lecteur en lecture seule | `master`, mesuré (`20a8f6ee8`) | 250 ms de budget contre un pic à 567 ms sous charge : relever le budget, ou tester l'invariant par `read_only_patient`. Attend une décision. |
 | Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée | promis le 18 septembre à la session optimiseur, **jamais confié** | Attendait que `Lifecycle` soit appliqué à l'écriture : c'est fait (`780acfd2d`). À cadrer avec les sessions optimiseur et lifecycle. |
 | Écritures parallèles | **objectif décidé par Lucie le 2 octobre** : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » | **Cible tranchée par Lucie : « oui jusque B, et A d'abord si dans même chemin »** — B, plusieurs processus écrivains sur le même fichier ; A, plusieurs transactions d'écriture dans le processus qui tient la base, en première étape seulement si elle est sur la route de B. **Lucie, 2 octobre : « l'écrivain doit attendre au lieu d'échouer, sur un lock par clé »** ; et son principe pour tout choix du moteur : **faire comme PostgreSQL et Neo4j, sauf quand on sait faire mieux** (ne lui rendre que les écarts) — les marches A3 et A4 se font donc par verrous (le second attend), pas par simple validation au commit ; note de conception demandée à la session cœur C++ avant tout code (ce qu'on verrouille, ce que fait celui qui a attendu une mise à jour, interblocages, où vit la table de verrous pour B). Plan demandé à la session cœur C++ (lecture seule) : ce que B réutilise de A, un ordre de marches testables une à une, et le lecteur d'un autre processus comme premier cas. Rien à coder avant que Lucie ait vu le plan. État d'aujourd'hui : Le second écrivain est **refusé**, pas mis en attente ; le checkpoint bloque les lecteurs. Ordre écrit le 6 septembre (`docs/6-septembre-2026-13h08/01-…`) : prendre Vela → mettre les écrivains en file → lots courts à l'ingestion → bien plus tard, deux processus écrivains. **Étude en lecture seule confiée à la session cœur C++ le 2 octobre** (Vela aujourd'hui, coût de fusion après nos deux correctifs du journal). Rien de décidé. |
 
@@ -194,7 +201,8 @@ Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
 
 Encore en attente :
 
-7. Le budget de reprise du lecteur (§3).
+7. ~~Le budget de reprise du lecteur~~ — **tranchée le 3 octobre 2026** : il
+   reste à 250 ms (§1, après la marche 1).
 8. ~~Fusionner `mtg-experiments` dans `master`~~ — **tranchée et faite le
    1er octobre 2026** : correctifs C++ extraits seuls (`9edf6f3b4`, avec le
    test de `ParsedParameterExpression::copy` prouvé rouge sans le correctif),
