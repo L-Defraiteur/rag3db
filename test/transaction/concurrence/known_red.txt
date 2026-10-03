@@ -131,7 +131,8 @@ IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks
 # (SIGSEGV dans NodeTable::initInsertState au rejeu, avant tout LOAD EXTENSION). Vu par une
 # ouverture dans un processus neuf, comme un service qui redémarre (3 octobre au soir).
 # Garde 1 : la base s'ouvre avec toutes ses lignes, l'index « à rebâtir » le dit par une
-# erreur nommée (fragment provisoire « rebuild ») ; garde 2 : l'index est juste sans
+# erreur nommée (fragment « is behind its table », HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE) ;
+# garde 2 : l'index est juste sans
 # rebâtir. Quand la garde 2 arrivera, les témoins IndexToRebuildIsNamed deviendront rouges
 # pour une autre raison : elle les retirera dans son commit.
 SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery database-opens-without-crash
@@ -144,7 +145,7 @@ Writes/ExtensionIndexRecovery.OpensWithEveryCommittedRow/Delete database-opens-w
 Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/Delete database-opens-without-crash
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete database-opens-without-crash
 Writes/ExtensionIndexRecovery.SecondDeathAfterRecovery/Delete database-opens-without-crash
-# La mise à jour d'un vecteur ne plante pas et l'index reste exact ; seul le témoin de la
-# garde 1 est rouge (la recherche ne refuse rien) — question posée à la session cœur C++ :
-# la garde 1 doit-elle s'appliquer quand l'index est juste ?
+# La mise à jour d'un vecteur ne plante pas et l'index reste exact aujourd'hui ; la garde 1
+# s'y applique aussi (session cœur C++) : son témoin est rouge tant qu'elle n'est pas
+# livrée.
 Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/UpdateVector create-names-index-to-rebuild,search-names-index-to-rebuild

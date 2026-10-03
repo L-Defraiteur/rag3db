@@ -645,8 +645,10 @@ TEST_F(SingleWriterCrash, DeathDuringDeletesOfAnIndexFromAnEarlierSessionKeepsTh
 // session suivante charge l'extension, fait un CHECKPOINT, écrit, et meurt.
 // Les attendus des deux gardes que la session cœur C++ code :
 // - garde 1 : la base s'ouvre avec toutes ses lignes validées, l'index est « à rebâtir » :
-//   la recherche et la création refusent par une erreur nommée (fragment provisoire
-//   « rebuild », en attendant son nom), DROP puis CREATE le rebâtissent ;
+//   la recherche et la création refusent par une erreur nommée, reconnue par le fragment
+//   « is behind its table » (HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, nom fixé par la
+//   session cœur C++), DROP puis CREATE le rebâtissent ; vrai aussi pour la mise à jour
+//   d'un vecteur ;
 // - garde 2, plus tard : l'index est juste dès la réouverture, sans rebâtir. Quand elle
 //   arrivera, les témoins de la garde 1 (IndexToRebuildIsNamed) deviendront rouges : la
 //   garde 2 les retirera dans son commit.
@@ -688,10 +690,12 @@ public:
     // L'écriture du cas, dans une session qui a chargé l'extension puis fait un
     // point de reprise ; « round » décale les lignes touchées pour une seconde mort.
     static void writeAfterCheckpoint(rag3db::main::Connection& connection, IndexedWrite write,
-        int64_t round) {
+        int64_t round, bool checkpointAfterLoad = true) {
         loadVectorExtension(connection);
         mustQuery(connection, "CALL auto_checkpoint=false;");
-        mustQuery(connection, "CHECKPOINT;");
+        if (checkpointAfterLoad) {
+            mustQuery(connection, "CHECKPOINT;");
+        }
         const auto first = round * 20;
         switch (write) {
         case IndexedWrite::Insert:
@@ -729,13 +733,34 @@ public:
         }
     }
 
+    // Pour une mise à jour de vecteur, l'invariant de l'index ne suffit pas : il vérifie que
+    // chaque ligne vivante est rendue, pas que l'index connaît son NOUVEAU vecteur (une ligne
+    // mise à jour reste trouvable sous l'ancien). Une recherche du nouveau vecteur doit
+    // rendre les lignes mises à jour parmi ses plus proches.
+    void expectIndexKnowsTheUpdatedVectors(IndexedWrite write, int64_t rounds) {
+        if (write != IndexedWrite::UpdateVector) {
+            return;
+        }
+        const auto expected = 20 * rounds;
+        auto result = conn->query(stringFormat("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [7.0, "
+                                               "7.0, 7.0, 7.0], {}, efs := 500) WITH node WHERE "
+                                               "node.id >= 100 RETURN count(node.id);",
+            expected + 1));
+        EXPECT_TRUE(result->isSuccess()) << "[check: search-works] " << result->getErrorMessage();
+        const auto found =
+            result->isSuccess() ? result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+        EXPECT_EQ(found, expected)
+            << "[check: index-knows-new-vectors] a search for the new vector finds " << found
+            << " of the " << expected << " updated rows";
+    }
+
     // Ouvre après une mort, comme un service qui redémarre : processus neuf, puis
     // réouverture ici, l'extension chargée.
     bool reopenAfterDeath() { return reopen(true /* vectorExtension */); }
 
-    void dieAfterWriting(IndexedWrite write, int64_t round) {
+    void dieAfterWriting(IndexedWrite write, int64_t round, bool checkpointAfterLoad = true) {
         runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
-            writeAfterCheckpoint(connection, write, round);
+            writeAfterCheckpoint(connection, write, round, checkpointAfterLoad);
         });
         expectJournalToReplay();
     }
@@ -763,13 +788,13 @@ TEST_P(ExtensionIndexRecovery, IndexToRebuildIsNamed) {
         "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN node.id;");
     const auto searchError = search->isSuccess() ? "" : search->getErrorMessage();
     std::cerr << "  search: " << (searchError.empty() ? "ok" : searchError) << "\n";
-    EXPECT_TRUE(containsIgnoringCase(searchError, "rebuild"))
+    EXPECT_TRUE(containsIgnoringCase(searchError, "is behind its table"))
         << "[check: search-names-index-to-rebuild] ";
     auto create = conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := "
                               "'l2', skip_if_exists := true);");
     const auto createError = create->isSuccess() ? "" : create->getErrorMessage();
     std::cerr << "  create: " << (createError.empty() ? "ok" : createError) << "\n";
-    EXPECT_TRUE(containsIgnoringCase(createError, "rebuild"))
+    EXPECT_TRUE(containsIgnoringCase(createError, "is behind its table"))
         << "[check: create-names-index-to-rebuild] ";
     auto drop = conn->query("CALL DROP_VECTOR_INDEX('Doc', 'doc_index');");
     auto rebuild =
@@ -795,6 +820,7 @@ TEST_P(ExtensionIndexRecovery, IndexExactWithoutRebuild) {
         "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN node.id;");
     EXPECT_TRUE(search->isSuccess()) << "[check: search-works] " << search->getErrorMessage();
     search.reset();
+    expectIndexKnowsTheUpdatedVectors(GetParam(), 1);
     expectIntegrity();
 }
 
@@ -810,6 +836,25 @@ TEST_P(ExtensionIndexRecovery, SecondDeathAfterRecovery) {
         return;
     }
     expectEveryCommittedRow(GetParam(), 2);
+}
+
+// Quand le journal porte encore le LOAD EXTENSION (aucun point de reprise après lui dans
+// la session qui meurt), le rejeu tient l'index à jour : il répond juste sans rebâtir —
+// insertion et suppression aujourd'hui ; la mise à jour d'un vecteur depuis le correctif
+// de la session cœur C++ (avant, le rejeu d'une mise à jour n'informait aucun index).
+TEST_P(ExtensionIndexRecovery, IndexMaintainedWhenTheJournalHoldsTheLoad) {
+    createIndexInAnEarlierSession();
+    dieAfterWriting(GetParam(), 0, false /* checkpointAfterLoad */);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    expectEveryCommittedRow(GetParam(), 1);
+    auto search = conn->query(
+        "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN node.id;");
+    EXPECT_TRUE(search->isSuccess()) << "[check: search-works] " << search->getErrorMessage();
+    search.reset();
+    expectIndexKnowsTheUpdatedVectors(GetParam(), 1);
+    expectIntegrity();
 }
 
 INSTANTIATE_TEST_SUITE_P(Writes, ExtensionIndexRecovery,
