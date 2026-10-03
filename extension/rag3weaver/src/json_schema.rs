@@ -299,7 +299,7 @@ pub fn search_options_schema(filter_description: &str) -> Value {
     filtre["description"] = Value::String(filter_description.to_string());
     serde_json::json!({
         "type":"object","additionalProperties":false,
-        "description":"Options : filter_condition (critères structurés : type, coût, couleur, possession… jamais dans le texte de la requête), limit, offset.",
+        "description":"Options : filter_condition (critères structurés sur les champs de l'entité — jamais dans le texte de la requête), limit, offset.",
         "properties":{
             "filter_condition":filtre,
             "limit":{"type":"integer","minimum":1,"maximum":200},

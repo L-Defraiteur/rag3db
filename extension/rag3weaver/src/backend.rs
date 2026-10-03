@@ -15,7 +15,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -96,6 +96,13 @@ pub struct BackendEntity {
     pub config: EntityConfig,
     #[serde(default)]
     pub writes: WritePolicy,
+    /// Ce que cette entité **est**, pour un agent qui choisit ses outils —
+    /// reprise dans la description générée de chaque outil qui la vise et en
+    /// tête du schéma de ses filtres. La leçon du deck builder : tous les
+    /// `search_*` disaient le même texte, l'agent choisissait au hasard du
+    /// nom. Dire **quand** prendre l'outil, pas ce qu'il fait techniquement.
+    #[serde(default)]
+    pub description: Option<String>,
 }
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -121,6 +128,11 @@ pub struct TransitionDate {
 #[serde(deny_unknown_fields)]
 pub struct ToolAttachment {
     pub graph: PathBuf,
+    /// Surcharge la ligne `%% description:` du gabarit — un produit change
+    /// une phrase sans dupliquer un `.mmd`. Absente : le gabarit garde son
+    /// texte.
+    #[serde(default)]
+    pub description: Option<String>,
     #[serde(default)]
     pub harness: ToolHarness,
     #[serde(default)]
@@ -191,6 +203,9 @@ pub struct PreparedBackend {
     tool_validators: HashMap<String, jsonschema::Validator>,
     harnesses: HashMap<String, PreparedHarness>,
     scripts: BTreeMap<String, String>,
+    /// Les entités **décrites** que chaque outil vise (payloads, bindings,
+    /// nœuds de sélection/recherche) : ce que `describe()` reprend.
+    tool_entities: BTreeMap<String, BTreeSet<String>>,
 }
 impl PreparedBackend {
     /// Compile transport-independent search verbs without opening or querying a DB.
@@ -431,10 +446,16 @@ impl PreparedBackend {
                     },
                     None => None,
                 };
-                let Some(mapping) = entite.and_then(|e| mappings.get(&e)) else {
+                let Some(entite) = entite else {
                     continue;
                 };
-                let description = crate::json_schema::filter_description(&mapping.filter_fields);
+                let Some(mapping) = mappings.get(&entite) else {
+                    continue;
+                };
+                let mut description = crate::json_schema::filter_description(&mapping.filter_fields);
+                if let Some(d) = manifest.entities.get(&entite).and_then(|b| b.description.as_deref()) {
+                    description = format!("{d} — {description}");
+                }
                 input["properties"][param] = if options {
                     crate::json_schema::search_options_schema(&description)
                 } else {
@@ -475,6 +496,49 @@ impl PreparedBackend {
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
+        // Les entités décrites que chaque outil vise : par ses payloads, par
+        // un binding qui nomme une entité, ou par ses nœuds de sélection et
+        // de recherche (entité littérale ou liée). `describe()` les reprend.
+        let mut tool_entities: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (name, attachment) in &manifest.tools {
+            let mut vues: BTreeSet<String> = attachment
+                .input_payloads
+                .values()
+                .map(|p| p.entity.clone())
+                .collect();
+            for v in attachment.bindings.values() {
+                if let Some(e) = v.as_str() {
+                    if manifest.entities.contains_key(e) {
+                        vues.insert(e.to_string());
+                    }
+                }
+            }
+            if let Some(tool) = tools.get(name) {
+                for node in &tool.template().nodes {
+                    let cle = match node.node_type.as_str() {
+                        "SelectRecordsNode" => "entity",
+                        "SearchSourceNode" => "target_name",
+                        _ => continue,
+                    };
+                    let entite = match node.config.get(cle).and_then(Value::as_str) {
+                        Some(v) => match v.strip_prefix('$') {
+                            Some(lie) => attachment.bindings.get(lie).and_then(Value::as_str).map(str::to_string),
+                            None => Some(v.to_string()),
+                        },
+                        None => None,
+                    };
+                    if let Some(e) = entite {
+                        if manifest.entities.contains_key(&e) {
+                            vues.insert(e);
+                        }
+                    }
+                }
+            }
+            vues.retain(|e| manifest.entities[e].description.is_some());
+            if !vues.is_empty() {
+                tool_entities.insert(name.clone(), vues);
+            }
+        }
         Ok(Self {
             manifest,
             directory,
@@ -487,6 +551,7 @@ impl PreparedBackend {
             tool_validators,
             harnesses,
             scripts,
+            tool_entities,
         })
     }
     pub fn path(&self, path: &Path) -> PathBuf {
@@ -494,7 +559,22 @@ impl PreparedBackend {
     }
     pub fn describe(&self) -> Value {
         let mut tools:Vec<Value>=self.tools.iter().map(|(name,t)|{
-            json!({"name":name,"description":t.tool_def().description,"inputSchema":self.tool_schemas[name]})
+            // La surcharge du manifeste, sinon la ligne du gabarit ; puis la
+            // description de chaque entité visée — c'est elle qui distingue
+            // deux outils de même forme, et l'agent choisit sur elle.
+            let attachment = &self.manifest.tools[name];
+            let mut description = attachment
+                .description
+                .clone()
+                .unwrap_or_else(|| t.tool_def().description);
+            if let Some(vues) = self.tool_entities.get(name) {
+                for e in vues {
+                    if let Some(d) = self.manifest.entities[e].description.as_deref() {
+                        description.push_str(&format!(" Cible « {e} » : {d}"));
+                    }
+                }
+            }
+            json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name]})
         }).collect();
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
@@ -1287,6 +1367,87 @@ mod tests {
         .unwrap();
         let request = SearchGraphRequest { mermaid: "%% tool: select\n%% description: Select records\n%% param: entity string! -- Entity\n%% param: filter json! -- Filter\n%% result: select.results\ngraph LR\n select[\"SelectRecordsNode(entity=$entity, filter=$filter)\"]".into(), arguments: json!({"entity":"Note","filter":{"must":[]}}), metadata:vec![] };
         (p, request)
+    }
+
+    /// Le backend notebook copié dans un dossier jetable, avec les
+    /// descriptions du pas produit : l'entité `Note` en gagne une, l'outil
+    /// `get_note` une surcharge — `put_note` garde le texte de son gabarit.
+    fn fixture_avec_descriptions() -> (tempfile::TempDir, PreparedBackend) {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+        let dir = tempfile::tempdir().unwrap();
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        copier(&src, dir.path());
+        // Le gabarit partagé `../../tools/search_structured.mmd` sort du
+        // dossier copié : on le rapatrie et on pointe dessus.
+        let partage = src.join("../../tools/search_structured.mmd");
+        std::fs::copy(&partage, dir.path().join("search_structured.mmd")).unwrap();
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+        manifest["entities"]["Note"]["description"] = json!(
+            "Une note de travail : un texte court sous une clé stable. À prendre quand la question porte sur ce que l'utilisateur a écrit."
+        );
+        manifest["tools"]["get_note"]["description"] = json!("Relit une note précise par sa clé exacte.");
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let p = PreparedBackend::load(&chemin).unwrap();
+        (dir, p)
+    }
+
+    /// **La description d'entité se reprend dans les outils** (la leçon du
+    /// deck builder : deux outils de même forme ne se distinguent que par
+    /// elle) ; la surcharge d'attachement prime sur le gabarit ; sans
+    /// surcharge, le gabarit garde son texte ; et le schéma des options de
+    /// recherche commence par l'entité.
+    #[test]
+    fn la_description_d_entite_se_reprend_dans_les_outils() {
+        let (_garde, p) = fixture_avec_descriptions();
+        let d = p.describe();
+        let outil = |nom: &str| -> Value {
+            d["tools"].as_array().unwrap().iter().find(|t| t["name"] == nom).unwrap().clone()
+        };
+        let put = outil("put_note");
+        let texte = put["description"].as_str().unwrap();
+        assert!(texte.contains("note de travail"), "l'entité visée se dit : {texte}");
+        assert!(texte.contains("révision attendue"), "le texte du gabarit reste : {texte}");
+        let get = outil("get_note");
+        let texte = get["description"].as_str().unwrap();
+        assert!(texte.starts_with("Relit une note précise"), "la surcharge prime : {texte}");
+        assert!(texte.contains("note de travail"), "et l'entité se dit aussi : {texte}");
+        let search = outil("search_notes");
+        let texte = search["description"].as_str().unwrap();
+        assert!(texte.contains("note de travail"), "le binding `target` suffit à viser : {texte}");
+        let filtre = &search["inputSchema"]["properties"]["options"]["properties"]["filter_condition"]["description"];
+        assert!(
+            filtre.as_str().unwrap().starts_with("Une note de travail"),
+            "le schéma du filtre commence par l'entité : {filtre}"
+        );
+    }
+
+    /// Sans aucune description déclarée, rien ne change : les textes des
+    /// gabarits se rendent tels quels — une base d'avant se relit et se
+    /// décrit comme avant.
+    #[test]
+    fn sans_description_les_gabarits_gardent_leur_texte() {
+        let p = PreparedBackend::load(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook/backend.json"),
+        )
+        .unwrap();
+        let d = p.describe();
+        let put = d["tools"].as_array().unwrap().iter().find(|t| t["name"] == "put_note").unwrap();
+        let texte = put["description"].as_str().unwrap();
+        assert!(texte.contains("révision attendue"), "{texte}");
+        assert!(!texte.contains("Cible «"), "pas d'entité à dire : {texte}");
     }
     #[test]
     fn ad_hoc_search_validates_without_storage() {
