@@ -1,0 +1,11 @@
+%% tool: finish_snapshot
+%% description: Fin d'une session de synchronisation : les lignes du périmètre qu'aucun lot de la session n'a portées sont retirées, ou passent par la transition que l'entité déclare. Refuse une session vide ou trop d'absentes, sauf demande explicite.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: scope json! -- Les valeurs du périmètre, une par champ déclaré par l'entité ({} pour l'entité entière).
+%% param: snapshot string! -- L'identifiant de session porté par les lots.
+%% param: allow_empty bool = false -- Accepter une session qui n'a porté aucune ligne du périmètre.
+%% param: force bool = false -- Passer outre maxMissingRatio.
+%% result: finish.report
+
+graph LR
+    finish["SnapshotFinishNode(entity=$entity, scope=$scope, snapshot=$snapshot, allow_empty=$allow_empty, force=$force)"]
