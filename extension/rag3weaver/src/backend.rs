@@ -46,6 +46,9 @@ pub struct BackendManifest {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EmbeddingService {
+    /// Vide ou absente : l'adresse vient de `RAG3WEAVER_EMBED_SERVICE`
+    /// (`DaemonEmbedder::from_service`), choisie par le modèle demandé.
+    #[serde(default)]
     pub address: String,
     pub model: String,
     pub dimensions: usize,
@@ -65,6 +68,15 @@ impl EmbeddingService {
     #[cfg(feature = "daemon")]
     pub fn connect(&self) -> Result<Box<dyn Embedder>, String> {
         match self.provider {
+            EmbeddingProvider::Daemon if self.address.trim().is_empty() => {
+                match crate::daemon::DaemonEmbedder::from_service(&self.model) {
+                    Some(service) => Ok(Box::new(service?)),
+                    None => Err(format!(
+                        "embeddings : ni `address` dans le manifeste, ni {} dans l'environnement",
+                        crate::daemon::embeddings::SERVICE_VARIABLE
+                    )),
+                }
+            }
             EmbeddingProvider::Daemon => Ok(Box::new(
                 crate::daemon::DaemonEmbedder::joindre(&self.address).map_err(|e| e.to_string())?,
             )),

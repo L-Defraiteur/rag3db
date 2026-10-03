@@ -75,6 +75,10 @@ pub mod burn {
     /// granite-embedding-107m-multilingual sur burn (384 d, 6 couches, texte et
     /// code, multilingue). 428 Mo ; chargé une fois par binaire.
     pub static GRANITE_107M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
+        #[cfg(feature = "daemon")]
+        if let Some(service) = par_le_service("granite-107m") {
+            return Arc::new(service);
+        }
         let t0 = std::time::Instant::now();
         let bpk = artifact("RAG3WEAVER_GRANITE_107M_BPK", "granite-107m", "model.bpk");
         let tok = artifact("RAG3WEAVER_GRANITE_107M_TOKENIZER", "granite-107m", "tokenizer.json");
@@ -86,6 +90,10 @@ pub mod burn {
 
     /// granite-embedding-278m-multilingual sur burn (768 d, 12 couches). 1,1 Go.
     pub static GRANITE_278M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
+        #[cfg(feature = "daemon")]
+        if let Some(service) = par_le_service("granite-278m") {
+            return Arc::new(service);
+        }
         let t0 = std::time::Instant::now();
         let bpk = artifact("RAG3WEAVER_GRANITE_278M_BPK", "granite-278m", "model.bpk");
         let tok = artifact("RAG3WEAVER_GRANITE_278M_TOKENIZER", "granite-278m", "tokenizer.json");
@@ -172,7 +180,47 @@ pub mod burn {
     /// partagé par toutes les suites. Voir [`Bge`] pour le local/distant.
     pub static BGE_M3: LazyLock<Arc<Bge>> = LazyLock::new(|| Arc::new(bge_m3()));
 
+    /// **Le service d'embarquement de `RAG3WEAVER_EMBED_SERVICE`**, s'il est
+    /// posé : on s'y attache, on ne lance rien ici et on ne l'arrête jamais.
+    /// Posée sans qu'aucune adresse serve `modele`, c'est un échec dit
+    /// clairement — pas un repli sur la carte d'ici, que la variable existe
+    /// justement pour épargner.
+    #[cfg(feature = "daemon")]
+    fn par_le_service(modele: &str) -> Option<DaemonEmbedder> {
+        if suite_locale() {
+            return None;
+        }
+        let service = DaemonEmbedder::from_service(modele)?;
+        let d = service.unwrap_or_else(|raison| panic!("{raison}"));
+        eprintln!("▸ {modele} par le service d'embarquement ({})", d.identite().executable);
+        Some(d)
+    }
+
+    /// **Les suites qui restent sur la carte d'ici, variable posée ou non** :
+    /// celles dont l'objet est l'embarqueur ou le démon lui-même, ou la
+    /// vitesse de *ce* poste. Les envoyer au service, ce serait éprouver
+    /// autre chose que ce qu'elles disent éprouver.
+    ///
+    /// - `e2e_burn_*` : le modèle sur burn, ses formes, sa précision ;
+    /// - `e2e_demon_embeddings` : le démon, qu'elle lance et arrête elle-même ;
+    /// - `e2e_mesure_ingestion_code`, `e2e_banc_bge_m3` : des débits mesurés
+    ///   sur la carte locale.
+    #[cfg(feature = "daemon")]
+    const SUITES_LOCALES: &[&str] = &["e2e_burn_", "e2e_demon_embeddings", "e2e_mesure_ingestion_code", "e2e_banc_bge_m3"];
+
+    #[cfg(feature = "daemon")]
+    fn suite_locale() -> bool {
+        let binaire = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_default();
+        SUITES_LOCALES.iter().any(|s| binaire.starts_with(s))
+    }
+
     fn bge_m3() -> Bge {
+        #[cfg(feature = "daemon")]
+        if let Some(d) = par_le_service("bge-m3") {
+            let id = d.identite();
+            assert!(id.dual && id.sparse && id.dim == 1024, "le service bge-m3 ne sert pas dense et creux : {id:?}");
+            return Bge::Distant(d);
+        }
         #[cfg(feature = "daemon")]
         if std::env::var_os("RAG3WEAVER_SANS_DEMON").is_none() {
             match bge_m3_par_le_demon() {
