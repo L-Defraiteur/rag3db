@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 01 h 15.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 02 h 10.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -62,7 +62,23 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
 
 ## En cours
 
-**Lot 6 d'embarquements (models.llm au chat)** : accepté — la session
+**L'épreuve T5 Gemini du lot 6** (en fond) : la tâche 5 du scénario par
+le chemin vertex DÉCLARÉ (llm → alias → source() → connect_llm) — elle
+éprouve à la fois la pose du lot 6 et, en re-passant, la garde confinée.
+
+**Fusionnés depuis la dernière mise à jour** :
+- Le seuil du motif CALIBRÉ (bfdbe1d90) : la section M du banc étagé —
+  126 requêtes sur src/, granite-278m, le meilleur voisin hors fichier
+  d'un scope quelconque vit à 0,87 de médiane (p90 0,81 : en code, tout
+  se ressemble), les vrais clones à 0,975-1,000 (embed/name/dim des impl
+  Node). Le 0,72 provisoire aurait parlé à chaque édition ; le seuil est
+  à 0,97 (presque-identique), la tuyauterie prouve le silence sous le
+  seuil, la preuve positive vit au banc M nommée.
+- La pose du lot 6 (3645e0799) : models.llm au chat, section llm en
+  alias, les chat.json existants intacts — le diff d'embarquements posé
+  par moi (mon fichier), vérifié lib avec et sans openai-llm.
+
+Ancien en-cours : **lot 6 d'embarquements (models.llm au chat)** : accepté — la session
 embarquements apporte connect_llm (openai + vertex) dans model_source,
 la fenêtre de contexte dans ModelSource (comme dimensions), et me passe
 le diff de chat.rs (mon fichier, section llm → alias de models.llm) que

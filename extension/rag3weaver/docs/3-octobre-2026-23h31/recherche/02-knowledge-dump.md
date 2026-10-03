@@ -1,6 +1,6 @@
 # Session recherche — ce que je sais
 
-**Mis à jour : 4 octobre 2026, vers 01 h 15.** Le rapport (01) dit l'état ;
+**Mis à jour : 4 octobre 2026, vers 02 h 10.** Le rapport (01) dit l'état ;
 ici, l'architecture et les leçons, pour qu'une reprise n'ait pas à les
 redécouvrir.
 
@@ -138,17 +138,38 @@ scripté ne voyait :
   jeton par `TokenSource`/`GOOGLE_APPLICATION_CREDENTIALS`, une heure —
   limite avouée). `.vault/vertex-sa.json`, projet `lr-hub-472010`.
 
+### Le harnais, pour les autres sessions (vérifié à la source)
+
+- Un résultat d'outil n'est une ERREUR que si son JSON a un champ
+  "error" (chaîne) au premier niveau (agent.rs, error_detail) ;
+  {"ok": true, …} n'est jamais compté, quel que soit le contenu. La
+  forme « demande de complément » = ok:true, executed:false, charge
+  needs — le précédent est la validation d'entrée du backend.
+- stop_on_repeated_error : DEUX erreurs consécutives à clé identique
+  (outil + texte exact), reset au premier résultat sain.
+- La coupure « pas par une autre formulation » (Garde) ne voit que les
+  commandes shell hors domaine, jamais les outils.
+- Le chat renvoie tools à CHAQUE tour (fiches relues fraîches) et
+  l'historique garde tool_calls/tool_call_id mot pour mot.
+- Mesure des passes : accepted:false AVEC marche à suivre n'a jamais
+  fait boucler ni renoncer un agent ; le refus sec sans chemin, si. Et
+  la reprise déviée la plus grave CHANGE d'outil (T5 : read_file refusé
+  → cat) — tout compteur par même-outil est un minorant.
+
 ## 7. Défauts connus, essais sans succès
 
 - La ligne d'état sous `⚠` n'est relayée par AUCUN modèle (faible et
   Gemini) — proposition « en tête de fiche » chez Lucie ; ne pas coder
   sans son mot (changement de rendu).
-- Le seuil du motif-ailleurs n'est PAS calibré — 0,72 provisoire, dit
-  tel. Premières données réelles (granite-278m, micro-corpus de la
-  tuyauterie) : 0,84 = le scope édité contre son propre ancien texte,
-  0,76 = son appelant direct. Le seuil utile est donc quelque part sous
-  0,76 pour « un appelant ressemble » et la calibration au banc doit
-  mesurer de VRAIS motifs répétés sur src/, pas ce micro-corpus.
+- Le seuil du motif-ailleurs est CALIBRÉ : 0,97. La section M du banc
+  (126 requêtes sur src/, granite-278m) : meilleur voisin hors fichier
+  max 1,000, p10 0,975, p25 0,923, p50 0,868, p90 0,811 — en code tout
+  se ressemble, le discriminant est le presque-identique. Le micro-corpus
+  de la tuyauterie (0,76-0,84) était TROMPEUR : ses paires vivent sous le
+  bruit de fond de src/. Leçon : jamais calibrer un seuil de similarité
+  code sur un corpus jouet. La section M se rejoue avec le banc
+  (RAG3WEAVER_BANC_MODELE=granite-278m, ./run_e2e.sh --test
+  e2e_banc_etage).
 - L'exclusion d'un champ chemin se compare à frontière de séparateur
   (file_path en base est ABSOLU, l'argument d'outil est relatif) —
   l'égalité stricte a laissé le fichier édité dans sa propre section au
