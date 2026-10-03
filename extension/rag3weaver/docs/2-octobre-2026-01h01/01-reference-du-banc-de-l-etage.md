@@ -78,3 +78,32 @@ part de la colonne **après** : 43 questions, 5 247 scopes, poids
 `69aed115…`. Si l'on veut comparer des passes futures question par question,
 le banc devrait sortir le rang de chaque question : sans cela, un écart de
 0,005 restera « non attribué ».
+
+## Addendum du 3 octobre — les poids d'origine, et la stabilité des lignes
+
+Les poids granite-278m du 6 septembre sont revenus (`a54628b5…`). Le banc a
+été rejoué sur `master` (`7928974ba`, même corpus de 5 247 scopes, 43
+questions), deux fois avec chaque fichier :
+
+| ligne | régénérés, passe 1 | régénérés, passe 2 | origine, passe 1 | origine, passe 2 |
+|---|---|---|---|---|
+| tel quel | 0,333 / 9 / 24 | 0,333 / 9 / 24 | 0,333 / 9 / 24 | 0,333 / 9 / 24 |
+| M1 | 0,837 / 30 / 43 | 0,764 / 29 / 37 | 0,775 / 29 / 38 | 0,771 / 29 / 38 |
+| M2 | 0,342 / 9 / 24 | 0,342 / 9 / 24 | 0,342 / 9 / 24 | 0,342 / 9 / 24 |
+| M3 | 0,182 / 3 / 14 | 0,230 / 4 / 18 | 0,142 / 2 / 8 | 0,090 / 0 / 4 |
+| M1b | 0,390 / 9 / 28 | 0,390 / 9 / 28 | 0,390 / 9 / 28 | 0,390 / 9 / 28 |
+| G | 0,412 / 13 / 27 | 0,414 / 13 / 27 | 0,412 / 13 / 27 | 0,412 / 13 / 27 |
+
+- **Les deux fichiers de poids se valent** : toutes les lignes stables sont
+  identiques entre eux.
+- **M1 et M3 ne sont pas stables d'une passe à l'autre**, avec le même fichier
+  de poids : M1 va de 0,764 à 0,837 (le 0,837 du 2 octobre était une passe
+  haute), M3 de 0,090 à 0,230. Ce sont des index HNSW sur de petits ensembles
+  (63 scopes pour M1, 20 chunks bruts pour M3), qui réordonnent les
+  quasi-ex-æquo à chaque reconstruction. **Ni M1 ni M3 ne servent de
+  référence à une passe.**
+- **G bouge de 0,002 entre deux passes** (0,412 / 0,414), avec le même R@1 et
+  le même R@5. C'est l'ordre de grandeur de la variance de la ligne qui sert
+  de référence : un écart de cet ordre ne se lit pas.
+- Les références à retenir : **tel quel 0,333, G 0,412 ± 0,002, M2 0,342,
+  M1b 0,390.**
