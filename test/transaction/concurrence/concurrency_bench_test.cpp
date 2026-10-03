@@ -992,8 +992,9 @@ static void createIndexedDocs(ConcurrencyBench& bench) {
 // H1 — deux écrivains insèrent des vecteurs dans des transactions ouvertes ensemble,
 // puis valident l'un après l'autre. Invariant : les deux valident, tous les vecteurs sont
 // retrouvés par l'index. C'est le défaut 5 de l'étude : le moteur plantait au second
-// COMMIT (SIGSEGV, offsets définitifs lus comme locaux) ; corrigé par la marche A2. Le
-// cas est isolé, pour qu'un plantage soit un rouge et non la fin de la passe.
+// COMMIT (SIGSEGV, offsets définitifs lus comme locaux). Vert depuis b23309848 (marche
+// A2, « au commit, un offset définitif n'est plus pris pour une ligne locale »). Le cas
+// reste isolé, pour qu'un plantage soit un rouge et non la fin de la passe.
 TEST_P(ConcurrencyBench, H1_IndexedInsertsTogether) {
     runCase({.numWorkers = 2,
         .setup = createIndexedDocs,

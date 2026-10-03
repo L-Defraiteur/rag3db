@@ -61,12 +61,6 @@ Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
 # conflit n'est cherché que colonne par colonne (relecture du cœur C++ ; marche A4′).
 MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
 #
-# H1 — deux insertions dans une table indexée par HNSW, transactions ouvertes ensemble :
-# le processus écrivain meurt par SIGSEGV au second COMMIT (défaut 5 de l'étude HNSW,
-# offsets définitifs lus comme locaux). Corrigé par la marche A2, qui retire ces lignes.
-Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Hot all-commit,row-count,writer-process-crashed
-Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Crash all-commit,killed,row-count,same-answers
-#
 # H3 — deux suppressions de documents sans rapport, dont les voisinages dans le graphe de
 # l'index se recouvrent : le second reçoit un « Write-write conflict » (la suppression
 # réécrit les arêtes des voisins). Déduit par l'étude HNSW, §3 ; vu le 3 octobre. Rouge
@@ -76,5 +70,7 @@ Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
 #
 # Un index HNSW construit sur les 100 premières lignes d'embeddings-8-1k.csv laisse le
-# nœud 13 injoignable, sans aucune concurrence (session cœur C++ ; à 98 lignes aussi).
+# nœud 13 injoignable, sans aucune concurrence. Un cas limite des petits index, pas une
+# proportion du corpus : le nœud manque à 98 et à 100 lignes, pas à 90, 95, 99, 101,
+# 102, 105, 110, 128, 200, ni à mille (session cœur C++ et balayage du banc, 3 octobre).
 MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete

@@ -117,7 +117,13 @@ bougé). Depuis, `known_red.txt` épingle la raison de chaque rouge (étiquettes
 `[check: …]`) : une marche qui corrige un cas retire sa ligne dans son commit. La passe
 ThreadSanitizer du banc (`concurrence_tsan.signatures`) ne vit que dans un build TSan.
 **La course de A5 fait planter le processus** (SIGSEGV dans `VersionInfo::isSelected`
-et `isDeleted`, piles dans la spécification du banc, §10).
+et `isDeleted`, piles dans la spécification du banc, §10). Les cas sur une table indexée
+par HNSW sont fusionnés le 3 octobre (`banc-hnsw`, spécification §11) : l'invariant de
+l'index (une recherche exhaustive rend exactement les lignes vivantes), l'exécution isolée
+dans un fils (un plantage ou une base qui ne se rouvre plus deviennent des rouges nommés),
+le build du banc avec `-DBUILD_EXTENSIONS=vector`. H1 (deux insertions de vecteurs) est
+vert depuis `b23309848` (A2) ; H3 (voisinages qui se recouvrent) et l'index construit sur
+cent lignes qui perd un nœud sont rouges ; H4 est probabiliste (§6).
 
 **Budget de reprise du lecteur en lecture seule : décidé le 3 octobre, il reste
 à 250 ms** (`PATIENCE_OUVERTURE_MS`). Le pic à 567 ms mesuré à `20a8f6ee8` venait

@@ -401,12 +401,12 @@ TEST_F(MinimalReproduction, SameRowSameColumnConflictsSingleThread) {
 // aucune écriture concurrente (session cœur C++, 3 octobre). Les N premières lignes de
 // dataset/embeddings/embeddings-8-1k.csv, chargées par COPY, puis CREATE_VECTOR_INDEX
 // avec les paramètres par défaut : à N = 100, le nœud 13 n'est rendu par aucune
-// recherche, pas même par son propre vecteur ; à 50, 90, 95, 99, 101, 105, 110, 120, 150,
-// 200, 300, 500 et 1000, rien ne manque — mais à 98 (balayage du banc), le nœud 13 manque
-// aussi. alpha := 1.0 fait manquer quatre nœuds ;
-// ml := 20, mu := 10 n'en fait manquer aucun : l'élagage des voisins à la construction.
-// Cause non élucidée. L'invariant de l'index du vérificateur (vector-index-complete) le
-// voit.
+// recherche, pas même par son propre vecteur. Un cas limite des petits index, pas une
+// proportion du corpus : le nœud 13 manque à 98 et à 100 lignes (balayage du banc), pas à
+// 50, 90, 95, 99, 101, 102, 105, 110, 120, 128, 150, 200, 300, 500, ni à mille. alpha := 1.0 fait
+// manquer quatre nœuds ; ml := 20, mu := 10 n'en fait manquer aucun : l'élagage des voisins à la
+// construction. Cause non élucidée. L'invariant de l'index du vérificateur (vector-index-complete)
+// le voit.
 static void buildIndexOnFirstEmbeddings(MinimalReproduction& test, int64_t numRows) {
     rag3db::testing::concurrency::loadVectorExtension(*test.conn);
     const auto source =
