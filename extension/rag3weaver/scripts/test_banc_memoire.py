@@ -121,6 +121,7 @@ def main():
         'propositions jamais appliquées': None,
     }
     non_jouees = []
+    artefact = (0, '(non écrit)')
 
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
@@ -141,6 +142,12 @@ def main():
                         'Depuis le 6 septembre, le debug de performance est fini.'),
                 memoire('laisser deux coeurs libres',
                         'Jamais tous les coeurs : c est la compilation qui fige le poste.'),
+                memoire('le journal survit à la passe',
+                        'run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec.'),
+                memoire('annoncer cargo avant de le prendre',
+                        'Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus.'),
+                memoire('ne pas fusionner sans preuve',
+                        'Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul.'),
             ]
             for f in faits:
                 ask('put_memory', {'record': f})
@@ -172,6 +179,46 @@ def main():
                 'expected_revision': record_de(apres)['revision']}, attendu_ok=False)
             assert 'transition' in json.dumps(refus), refus
 
+            # ── Les paires de contrôle ──────────────────────────────────
+            #
+            # Un scénario **écrit** connaît ses réponses : ces paires n'ont été
+            # étiquetées par personne, elles le sont par construction. Elles
+            # servent de jeu de contrôle **indépendant** à qui règle un seuil
+            # sur des paires jugées à la main — sinon les seuils sont évalués
+            # sur ce qui les a réglés, et le chiffre est une borne haute.
+            #
+            # Écrites en artefact plutôt que laissées à lire dans ce script :
+            # un jeu qu'il faut extraire d'un programme n'est pas un jeu.
+            redites = [
+                ('le dossier temporaire vit en RAM', '/tmp est de la mémoire vive'),
+                ('rien de lourd dans le repertoire temporaire', '/tmp est de la mémoire vive'),
+                ('la batterie se joue sans rien demander', 'la passe complète se lance sans demander'),
+                ('garder deux processeurs pour la machine', 'laisser deux coeurs libres'),
+                ('le compte rendu de la passe reste sur le disque', 'le journal survit à la passe'),
+                ('dire qu on prend le compilateur', 'annoncer cargo avant de le prendre'),
+            ]
+            contradictions = [
+                ('on peut mettre un target cargo dans /tmp', '/tmp est de la mémoire vive'),
+                ('compiler sur tous les coeurs ne gêne personne', 'laisser deux coeurs libres'),
+            ]
+            paires = []
+            claims = [f['claim'] for f in faits]
+            for nouveau, cible in redites:
+                for claim in claims:
+                    paires.append({'nouveau': nouveau, 'existant': claim,
+                                   'verite': 'meme' if claim == cible else 'different',
+                                   'genre': 'redite'})
+            for nouveau, cible in contradictions:
+                for claim in claims:
+                    paires.append({'nouveau': nouveau, 'existant': claim,
+                                   'verite': 'contredit' if claim == cible else 'different',
+                                   'genre': 'contradiction'})
+            sortie = Path(os.environ.get('BANC_PAIRES')
+                          or (TARGET / 'banc-memoire-paires.json'))
+            sortie.parent.mkdir(parents=True, exist_ok=True)
+            sortie.write_text(json.dumps(paires, ensure_ascii=False, indent=2) + '\n')
+            artefact = (len(paires), str(sortie))
+
             # ── Session 3 : une redite dite autrement ────────────────────
             if AVEC_SENS:
                 proches = ask('recall', {'query': 'le dossier temporaire vit en RAM', 'options': {'limit': 5}})
@@ -195,12 +242,14 @@ def main():
             if 'coeurs libres' in json.dumps(ask('recall', {'query': 'coeurs', 'options': {'limit': 5}})):
                 mesures['rappels utiles'] += 1
 
-            non_jouees.append('session 4 (l ancre change ou disparaît) — attend le lot 3 '
-                              'et son réacteur')
+            non_jouees.append('session 4 (l ancre change ou disparaît) — l ingestion dit '
+                              'désormais ce qu elle a changé ; il manque le réacteur qui '
+                              'transitionne les mémoires ancrées')
             non_jouees.append('propositions jamais appliquées — attend `remember` et '
                               'son noeud de décision (lot 5)')
-            non_jouees.append('contradictions vues — aucune contradiction au scénario, '
-                              'et aucune détection : la mesure attend les deux')
+            non_jouees.append('contradictions vues — le scénario en porte deux dans ses '
+                              'paires de contrôle, mais rien ne les détecte encore : '
+                              'la matière est là, la mesure attend le nœud de décision')
 
     largeur = max(len(k) for k in mesures)
     print('\n── Banc de la mémoire longue ' + '─' * 28)
@@ -208,6 +257,8 @@ def main():
     for nom, valeur in mesures.items():
         rendu = '— non joué' if valeur is None else str(valeur)
         print(f'  {nom.ljust(largeur)} : {rendu}')
+    print(f'\n  paires de contrôle : {artefact[0]}, vérité par construction')
+    print(f'    {artefact[1]}')
     if non_jouees:
         print('\n  NON JOUÉ — le banc ne les compte pas et ne les annonce pas vertes :')
         for n in non_jouees:
