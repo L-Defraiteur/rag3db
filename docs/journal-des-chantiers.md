@@ -512,7 +512,23 @@ devient une marche à part, décidée sur une mesure au calme. Porte : cœur C++
 - **Une édition pendant l'indexation** ne la ralentit jamais : fichier pas
   encore passé, il est lu à son paquet dans son état édité ; fichier déjà
   passé, il entre dans une file et se reprend en incrémental à la toute fin.
-  Porte : arbre principal.
+  Porte : arbre principal. **Livré** (branche `edition-pendant-l-indexation`).
+  Le registre « à reprendre » vit hors du catalogue (`code_sync::note_change`) :
+  l'outil d'édition (`edit_file_shared`) n'attend jamais le verrou qu'une
+  indexation tient. Il écrit, s'inscrit et le dit dans son rendu. La
+  justesse tient à un ordre : la synchronisation inscrit un chemin comme
+  « lu » *avant* de le lire, et l'édition écrit *avant* de consulter.
+  La reprise passe par `reingest_file` une fois les sessions closes, ou par
+  `remove_file` pour un fichier supprimé. La file se vide sous le même verrou
+  que la désinscription, pour qu'aucune édition ne reste orpheline.
+  `reingest_file` retire d'abord les arêtes sortantes des scopes du fichier,
+  sauf `CONSUMED_BY`, et le miroir `CONSUMED_BY` de ses `CONSUMES` : un scope
+  gardé qui n'appelle plus `f` gardait sinon son arête, ce qu'une mutation
+  du test a montré. Le COPY garde déjà la sémantique de MERGE, donc rien ne
+  double. Quatre tests (`e2e_code_sync`), dans les deux modes de relations,
+  comparent l'index final à un index bâti à neuf, arête par arête avec leur
+  multiplicité. Le libellé du journal d'indexation est proposé à la session
+  embarquements (`run_index`).
 - **La recherche choisit seule son mode** selon l'état de l'index : balayage
   des fichiers quand rien n'est indexé, plein texte quand les mots sont prêts,
   fusion quand tout l'est ; une ligne d'état le dit ; un paramètre permet de

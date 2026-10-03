@@ -301,6 +301,10 @@ impl Snapshot {
     pub fn insert(&self, path: impl Into<String>, content: impl Into<String>) {
         self.files.write().unwrap().insert(path.into(), content.into());
     }
+    /// Retire un fichier — sa suppression, pour un instantané.
+    pub fn remove(&self, path: &str) {
+        self.files.write().unwrap().remove(path);
+    }
 }
 
 impl FileSource for Snapshot {
@@ -1195,6 +1199,11 @@ pub struct EditResult {
     /// synchronisation de la source le réindexera.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index_pending: Option<String>,
+    /// **Une indexation de la source était en cours** : l'édition n'a pas
+    /// attendu le catalogue qu'elle tient — le fichier est écrit, et
+    /// l'indexation le lira à son paquet, ou le reprendra à sa fin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub during_indexing: Option<crate::code_sync::ChangeDuringIndexing>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1237,6 +1246,12 @@ impl EditResult {
                 }
             }
             None => match &self.index_pending {
+                _ if self.during_indexing == Some(crate::code_sync::ChangeDuringIndexing::QueuedForResume) => {
+                    out.push_str("\nFile written; the index will pick it up at the end of the indexing in progress")
+                }
+                _ if self.during_indexing == Some(crate::code_sync::ChangeDuringIndexing::ReadAtItsBatch) => {
+                    out.push_str("\nFile written; the indexing in progress will read it when it reaches it")
+                }
                 Some(e) => out.push_str(&format!(
                     "\nFile written; the index did not follow ({e}) — a synchronisation of the source will reindex it"
                 )),
@@ -1273,6 +1288,22 @@ pub fn edit_file(
     path: &str,
     op: &EditOp,
 ) -> Result<EditResult, String> {
+    let (mut result, after_text) = write_edit(source, path, op)?;
+    // **Une édition n'échoue pas parce que l'index ne suit pas** : le
+    // fichier est écrit, c'est ce qui a été demandé ; la ré-ingestion qui
+    // échoue se dit dans le rendu, et l'index suivra.
+    if let Some(catalog) = catalog {
+        match reingest_file(catalog, source, path, &after_text) {
+            Ok(r) => result.reingest = Some(r),
+            Err(e) => result.index_pending = Some(e),
+        }
+    }
+    Ok(result)
+}
+
+/// Applique `op` et écrit, sans toucher l'index : le résultat, et le contenu
+/// écrit.
+pub(crate) fn write_edit(source: &dyn FileSource, path: &str, op: &EditOp) -> Result<(EditResult, String), String> {
     let before = source.read(path)?;
     let created = before.is_none();
     let before_text = before.unwrap_or_default();
@@ -1302,17 +1333,7 @@ pub fn edit_file(
         .or_else(|| if before_text != after_text { Some(before_text.lines().count().min(after_text.lines().count()) + 1) } else { None });
     source.write(path, &after_text)?;
     let content_hash = crate::hash::content_hash(&after_text);
-    // **Une édition n'échoue pas parce que l'index ne suit pas** : le
-    // fichier est écrit, c'est ce qui a été demandé ; la ré-ingestion qui
-    // échoue se dit dans le rendu, et l'index suivra.
-    let (reingest, index_pending) = match catalog {
-        Some(catalog) => match reingest_file(catalog, source, path, &after_text) {
-            Ok(r) => (Some(r), None),
-            Err(e) => (None, Some(e)),
-        },
-        None => (None, None),
-    };
-    Ok(EditResult {
+    let result = EditResult {
         path: path.to_string(),
         cursor: source.cursor(),
         created,
@@ -1320,9 +1341,11 @@ pub fn edit_file(
         lines_after: after_text.lines().count(),
         first_changed_line,
         content_hash,
-        reingest,
-        index_pending,
-    })
+        reingest: None,
+        index_pending: None,
+        during_indexing: None,
+    };
+    Ok((result, after_text))
 }
 
 /// Ré-ingère un seul fichier, par la synchronisation déclarée de l'entité

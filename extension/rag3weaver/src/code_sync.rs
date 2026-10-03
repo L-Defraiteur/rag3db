@@ -26,10 +26,19 @@
 //!   mise de côté. C'est la brique que les produits appellent pour « indexer
 //!   ce dépôt » et le tenir à jour.
 //!
+//! - **L'édition pendant l'indexation** : une synchronisation tient le
+//!   catalogue de bout en bout, et une édition n'attend jamais son verrou. Le
+//!   [registre](note_change) hors du catalogue dit, pour un fichier édité,
+//!   s'il sera lu à son paquet (pas encore passé : il le sera dans son état
+//!   édité) ou s'il est à reprendre (déjà passé) ; la synchronisation reprend
+//!   ces derniers à sa toute fin, par [`reingest_file`], et le compte dans
+//!   son avancement.
+//!
 //! Le module est neuf exprès : `code.rs` et `code_tools.rs` sont indexés par
 //! le banc de recherche (corpus vivant).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +54,127 @@ fn grain_du_fichier(source_id: &str, indexed_path: &str) -> BTreeMap<String, Cyp
         ("source".to_string(), CypherValue::String(source_id.to_string())),
         ("file_path".to_string(), CypherValue::String(indexed_path.to_string())),
     ])
+}
+
+/// Une synchronisation en cours, vue du registre : les fichiers déjà lus,
+/// et ceux qu'une édition a touchés après leur passage.
+#[derive(Default)]
+struct EnCours {
+    /// Les synchronisations de cette source en cours dans le processus.
+    tenants: usize,
+    lus: BTreeSet<String>,
+    a_reprendre: BTreeSet<String>,
+}
+
+/// **Le registre « à reprendre »**, hors du catalogue : une édition le
+/// consulte sans attendre le verrou que la synchronisation tient. Par
+/// identité de source ; les chemins sont ceux de la source.
+static EN_COURS: LazyLock<Mutex<HashMap<String, EnCours>>> = LazyLock::new(Default::default);
+
+/// Ce qu'une indexation en cours fait d'un fichier qui vient de changer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChangeDuringIndexing {
+    /// Aucune indexation de cette source en cours.
+    NotIndexing,
+    /// Pas encore passé : son paquet le lira dans son état présent.
+    ReadAtItsBatch,
+    /// Déjà passé : repris à la fin de l'indexation en cours.
+    QueuedForResume,
+}
+
+/// **Un fichier de la source vient de changer** (écrit, ou supprimé) : à
+/// appeler *après* l'écriture. Si une indexation de la source est en cours,
+/// le fichier est soit lu plus tard à son paquet, soit mis à reprendre.
+///
+/// L'ordre fait la justesse : la synchronisation inscrit un chemin comme lu
+/// *avant* de le lire, l'édition écrit *avant* de consulter ; un chemin
+/// trouvé non lu le sera donc après l'écriture.
+pub fn note_change(source_id: &str, path: &str) -> ChangeDuringIndexing {
+    let mut registre = EN_COURS.lock().unwrap();
+    let Some(en_cours) = registre.get_mut(source_id) else {
+        return ChangeDuringIndexing::NotIndexing;
+    };
+    if en_cours.lus.contains(path) {
+        en_cours.a_reprendre.insert(path.to_string());
+        ChangeDuringIndexing::QueuedForResume
+    } else {
+        ChangeDuringIndexing::ReadAtItsBatch
+    }
+}
+
+/// Une indexation de cette source est-elle en cours dans le processus ?
+pub fn indexing_in_progress(source_id: &str) -> bool {
+    EN_COURS.lock().unwrap().contains_key(source_id)
+}
+
+fn inscrire(source_id: &str) {
+    EN_COURS.lock().unwrap().entry(source_id.to_string()).or_default().tenants += 1;
+}
+
+fn marquer_lus(source_id: &str, paths: &[String]) {
+    if let Some(en_cours) = EN_COURS.lock().unwrap().get_mut(source_id) {
+        en_cours.lus.extend(paths.iter().cloned());
+    }
+}
+
+fn nombre_a_reprendre(source_id: &str) -> usize {
+    EN_COURS.lock().unwrap().get(source_id).map_or(0, |e| e.a_reprendre.len())
+}
+
+/// Les fichiers à reprendre — ou, s'il n'y en a plus, la fin de
+/// l'inscription, **sous le même verrou** : une édition qui arrive ensuite
+/// trouve la source hors indexation, au lieu d'une file que personne ne
+/// viderait plus.
+fn reprendre_ou_sortir(source_id: &str) -> Option<Vec<String>> {
+    let mut registre = EN_COURS.lock().unwrap();
+    let en_cours = registre.get_mut(source_id)?;
+    if en_cours.a_reprendre.is_empty() {
+        en_cours.tenants -= 1;
+        if en_cours.tenants == 0 {
+            registre.remove(source_id);
+        }
+        return None;
+    }
+    Some(std::mem::take(&mut en_cours.a_reprendre).into_iter().collect())
+}
+
+/// **Éditer sans attendre le catalogue** : le chemin des outils, où le
+/// catalogue est partagé. S'il est libre, l'édition le prend et ré-ingère
+/// tout de suite ([`edit_file`](crate::code_tools::edit_file)). S'il est
+/// tenu par une indexation de la source, l'édition écrit le fichier et
+/// s'inscrit au registre — lu à son paquet, ou repris à la fin — sans
+/// toucher l'index maintenant. Tenu par autre chose, on attend, comme avant.
+pub fn edit_file_shared(
+    source: &dyn FileSource,
+    catalog: &Mutex<Catalog>,
+    path: &str,
+    op: &crate::code_tools::EditOp,
+) -> Result<crate::code_tools::EditResult, String> {
+    let (source_id, _) = crate::code_tools::indexed_name(source, path);
+    loop {
+        match catalog.try_lock() {
+            Ok(mut guard) => return crate::code_tools::edit_file(source, Some(&mut guard), path, op),
+            Err(std::sync::TryLockError::Poisoned(e)) => return Err(format!("catalogue empoisonné : {e}")),
+            Err(std::sync::TryLockError::WouldBlock) if indexing_in_progress(&source_id) => break,
+            // Tenu, mais pas par une indexation de cette source — ou pas
+            // encore inscrite : on repasse dans un instant.
+            Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(5)),
+        }
+    }
+    let (mut result, after_text) = crate::code_tools::write_edit(source, path, op)?;
+    match note_change(&source_id, path) {
+        // L'indexation a fini entre-temps : le catalogue se libère, on ré-ingère.
+        ChangeDuringIndexing::NotIndexing => {
+            let mut guard = catalog.lock().map_err(|e| format!("catalogue empoisonné : {e}"))?;
+            match crate::code_tools::reingest_file(&mut guard, source, path, &after_text) {
+                Ok(r) => result.reingest = Some(r),
+                Err(e) => result.index_pending = Some(e),
+            }
+        }
+        suite => result.during_indexing = Some(suite),
+    }
+    Ok(result)
 }
 
 /// **Ré-ingère un seul fichier**, par la synchronisation déclarée : analyse
@@ -99,6 +229,7 @@ pub fn reingest_file(
         Err(CatalogError::SnapshotRefused(raison)) => deferred_to = Some(raison),
         Err(e) => return Err(e.to_string()),
     }
+    oublier_les_aretes_du_fichier(catalog, &source_id, &indexed_path)?;
     let report = catalog.ingest_code_jusqu_a(&analysis, exige).map_err(|e| e.to_string())?;
     // Un nom dont un définisseur vient de partir a pu redevenir unique.
     catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
@@ -109,6 +240,56 @@ pub fn reingest_file(
         failed: report.failed,
         deferred_to,
     })
+}
+
+/// **Ce que les scopes gardés d'un fichier affirmaient**, retiré avant de le
+/// ré-ingérer : un scope qui reste (même clé) mais n'appelle plus `f` garderait
+/// sinon son arête vers `f`. Ce sont les arêtes **sortantes** des scopes du
+/// fichier — l'ingestion les repose toutes : relations de l'analyse,
+/// rendez-vous, arêtes résolues de ses mentionneurs — et le miroir
+/// `CONSUMED_BY` de ses `CONSUMES`. Les arêtes **entrantes** venues d'autres
+/// fichiers restent : leurs appelants n'ont pas changé.
+fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed_path: &str) -> Result<(), String> {
+    let params = [
+        crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string())),
+        crate::connection::QueryParam::new("path", CypherValue::String(indexed_path.to_string())),
+    ];
+    let filtre = "WHERE s.source = $source AND s.file_path = $path DELETE r";
+    for (rel, from, _) in crate::code::RELATIONS {
+        if from == SCOPE && rel != "CONSUMED_BY" {
+            catalog
+                .execute_raw_with_params(&format!("MATCH (s:{SCOPE})-[r:{rel}]->() {filtre}"), &params)
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    catalog
+        .execute_raw_with_params(&format!("MATCH ()-[r:CONSUMED_BY]->(s:{SCOPE}) {filtre}"), &params)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// **Retire un fichier supprimé de la source** : ses scopes par une fin
+/// immédiate sur son grain, où rien n'est marqué, puis sa ligne `File`. Le
+/// pendant de [`reingest_file`] pour un fichier qui n'existe plus.
+pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, exige: Disponibilites) -> Result<ReingestReport, String> {
+    let (source_id, indexed_path) = crate::code_tools::indexed_name(source, path);
+    let grain = grain_du_fichier(&source_id, &indexed_path);
+    let open = catalog.begin_snapshot(SCOPE, &grain, true).map_err(|e| e.to_string())?;
+    let plan = catalog
+        .plan_snapshot_finish(SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
+        .map_err(|e| e.to_string())?;
+    let noms_retires = noms_des_scopes(catalog, &plan.removed)?;
+    let fin = catalog.apply_snapshot_finish(plan).map_err(|e| e.to_string())?;
+    let fichier = BTreeMap::from([
+        ("source".to_string(), CypherValue::String(source_id)),
+        ("path".to_string(), CypherValue::String(indexed_path)),
+    ]);
+    let uuid = catalog.entity_uuid(FILE, &fichier).map_err(|e| e.to_string())?;
+    if !catalog.get_many(FILE, std::slice::from_ref(&uuid)).map_err(|e| e.to_string())?.is_empty() {
+        catalog.delete_jusqu_a(FILE, &uuid, exige).map_err(|e| e.to_string())?;
+    }
+    catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
+    Ok(ReingestReport { scopes_deleted: fin.removed.len(), ..Default::default() })
 }
 
 /// Ce qu'on demande à une synchronisation de source.
@@ -165,6 +346,8 @@ pub enum SyncPhase {
     Nodes,
     /// Le chargement final des relations et la résolution (`Bulk`).
     Relations,
+    /// La reprise des fichiers édités après leur passage.
+    Resume,
     /// Tout est posé.
     Done,
 }
@@ -188,6 +371,9 @@ pub struct SourceSyncProgress {
     pub scopes_written: usize,
     /// Les liens en file, pas encore posés (`Bulk`).
     pub relations_pending: usize,
+    /// Les fichiers édités après leur passage, que la fin reprendra.
+    pub files_to_resume: usize,
+    pub files_resumed: usize,
     pub phase: SyncPhase,
 }
 
@@ -208,6 +394,9 @@ pub struct SourceSyncReport {
     /// La fin, par entité : plan seul si `plan_only`, appliquée sinon.
     pub scopes: SnapshotFinish,
     pub files: SnapshotFinish,
+    /// Les fichiers édités pendant l'indexation, après leur passage, et
+    /// repris à la fin.
+    pub files_resumed: Vec<String>,
 }
 
 /// **Synchroniser une source entière** : voir le module. Les sessions sont
@@ -221,6 +410,74 @@ pub fn sync_source(
 ) -> Result<SourceSyncReport, String> {
     let cursor = source.cursor();
     let source_id = crate::code::source_id(&cursor);
+    let mut inscription = Inscription::new(&source_id);
+    let (mut report, mut avancement) = synchroniser_la_source(catalog, source, options, progress, &source_id)?;
+    // **La reprise**, à la toute fin, sessions closes : chaque fichier édité
+    // après son passage est ré-ingéré sur son grain, ou retiré s'il n'existe
+    // plus. Une édition qui arrive pendant la reprise s'ajoute à la file.
+    while let Some(paths) = inscription.reprendre_ou_sortir() {
+        avancement.phase = SyncPhase::Resume;
+        avancement.files_to_resume = paths.len();
+        progress(avancement);
+        for path in paths {
+            let r = match source.read(&path)? {
+                Some(content) => reingest_file(catalog, source, &path, &content, options.exige)?,
+                None => remove_file(catalog, source, &path, options.exige)?,
+            };
+            report.failed += r.failed;
+            report.files_resumed.push(path);
+            avancement.files_resumed += 1;
+            avancement.files_to_resume -= 1;
+            progress(avancement);
+        }
+    }
+    avancement.phase = SyncPhase::Done;
+    progress(avancement);
+    Ok(report)
+}
+
+/// L'inscription d'une synchronisation au registre, rendue quoi qu'il
+/// arrive : la file d'un échec est abandonnée — une synchronisation qui
+/// n'est pas allée au bout se relance, et relit le disque.
+struct Inscription<'a> {
+    source_id: &'a str,
+    sortie: bool,
+}
+
+impl<'a> Inscription<'a> {
+    fn new(source_id: &'a str) -> Self {
+        inscrire(source_id);
+        Self { source_id, sortie: false }
+    }
+    fn reprendre_ou_sortir(&mut self) -> Option<Vec<String>> {
+        let paths = reprendre_ou_sortir(self.source_id);
+        self.sortie = paths.is_none();
+        paths
+    }
+}
+
+impl Drop for Inscription<'_> {
+    fn drop(&mut self) {
+        if !self.sortie {
+            let mut registre = EN_COURS.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(en_cours) = registre.get_mut(self.source_id) {
+                en_cours.tenants -= 1;
+                if en_cours.tenants == 0 {
+                    registre.remove(self.source_id);
+                }
+            }
+        }
+    }
+}
+
+fn synchroniser_la_source(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    options: &SourceSyncOptions,
+    progress: &mut dyn FnMut(SourceSyncProgress),
+    source_id: &str,
+) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
+    let source_id = source_id.to_string();
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
     let s_scopes = catalog.begin_snapshot(SCOPE, &grain, options.takeover).map_err(|e| e.to_string())?.session;
     let s_files = match catalog.begin_snapshot(FILE, &grain, options.takeover) {
@@ -267,7 +524,7 @@ fn synchroniser(
     s_scopes: &str,
     s_files: &str,
     source_id: String,
-) -> Result<SourceSyncReport, String> {
+) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
     let cursor = source.cursor();
     let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
         Some(root) => (root.to_string(), false),
@@ -286,6 +543,9 @@ fn synchroniser(
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     for paquet in retenus.chunks(options.batch_files.max(1)) {
+        // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
+        // d'ici, est à reprendre.
+        marquer_lus(&report.source, paquet);
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
             if let Some(content) = source.read(path)? {
@@ -334,6 +594,7 @@ fn synchroniser(
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         avancement.relations_pending = catalog.pending_work().relations.len();
+        avancement.files_to_resume = nombre_a_reprendre(&report.source);
         if mode == RelationsMode::Bulk {
             let _ = catalog.persist_meta_key(marque, &format!("{s_scopes}|{}", avancement.relations_pending));
         }
@@ -348,15 +609,13 @@ fn synchroniser(
         report.relations_bulk_ms = debut.elapsed().as_millis();
         avancement.relations_pending = 0;
     }
-    avancement.phase = SyncPhase::Done;
-    progress(avancement);
     let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
     let plan_scopes = catalog.plan_snapshot_finish(SCOPE, grain, s_scopes, garde).map_err(|e| e.to_string())?;
     let plan_files = catalog.plan_snapshot_finish(FILE, grain, s_files, garde).map_err(|e| e.to_string())?;
     if options.plan_only {
         report.scopes = plan_scopes;
         report.files = plan_files;
-        return Ok(report);
+        return Ok((report, avancement));
     }
     // Les scopes d'abord : un fichier supprimé emporte ses `DEFINED_IN`, ses
     // scopes sont déjà partis.
@@ -367,7 +626,7 @@ fn synchroniser(
     // mentionneurs, qu'aucun paquet ne repasse, gagnent leur arête.
     let resolu = catalog.resoudre_les_symboles(&noms_retires, options.exige).map_err(|e| e.to_string())?;
     report.relations += resolu.linked_across_batches;
-    Ok(report)
+    Ok((report, avancement))
 }
 
 /// Les noms des scopes `uuids`, relus avant leur retrait.

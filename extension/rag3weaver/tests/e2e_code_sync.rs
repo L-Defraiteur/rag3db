@@ -328,3 +328,180 @@ fn le_mode_des_relations_se_choisit_selon_la_source() {
     assert_eq!(seconde.relations_mode, Some(RelationsMode::PerBatch));
     assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Done], "{phases:?}");
 }
+
+// ─── L'édition pendant l'indexation ─────────────────────────────────────────
+//
+// Une indexation tient le catalogue de bout en bout ; une édition ne l'attend
+// pas. Le rappel d'avancement joue l'agent qui édite entre deux paquets, par
+// le chemin même des outils (`edit_file_shared`), pendant que
+// `sync_source` tient le verrou. Dans chaque cas, l'index final vaut un index
+// bâti à neuf sur l'état final du disque.
+
+/// Ce qu'un index dit d'une source : ses scopes et leur texte, ses fichiers et
+/// leur empreinte, et ses arêtes, relation par relation, **avec leur
+/// multiplicité** — une arête doublée ou périmée se voit.
+fn etat(catalog: &Catalog) -> (Vec<Vec<CypherValue>>, Vec<Vec<CypherValue>>, Vec<Vec<CypherValue>>) {
+    let lignes = |q: &str| {
+        let mut v = catalog.execute_raw(q).unwrap().rows;
+        v.sort_by_key(|r| format!("{r:?}"));
+        v
+    };
+    let cle = |label: &str| match label {
+        "Scope" => "key",
+        "File" => "path",
+        _ => "name",
+    };
+    let mut aretes = Vec::new();
+    for (rel, from, to) in rag3weaver::code::RELATIONS {
+        aretes.extend(lignes(&format!(
+            "MATCH (a:{from})-[r:{rel}]->(b:{to}) RETURN '{rel}', a.{}, b.{}",
+            cle(from),
+            cle(to)
+        )));
+    }
+    aretes.sort_by_key(|r| format!("{r:?}"));
+    (lignes("MATCH (s:Scope) RETURN s.key, s.content"), lignes("MATCH (f:File) RETURN f.path, f.content_hash"), aretes)
+}
+
+/// L'index bâti à neuf sur l'état présent de `source`.
+fn a_neuf(source: &Snapshot, label: &str, options: &SourceSyncOptions) -> Catalog {
+    let fichiers: Vec<(String, String)> =
+        source.list().unwrap().into_iter().map(|p| (p.clone(), source.read(&p).unwrap().unwrap())).collect();
+    let mut catalog = catalogue();
+    sync_source(&mut catalog, &Snapshot::new(label, fichiers), options, &mut |_| {}).unwrap();
+    catalog
+}
+
+/// Ce que l'agent fait pendant l'indexation : après le paquet `n`, une action
+/// sur la source.
+type Geste<'a> = (usize, Box<dyn Fn(&Snapshot, &std::sync::Mutex<Catalog>) + 'a>);
+
+/// Indexe `source_reliee()` paquet par paquet (un fichier par paquet, dans
+/// l'ordre : base, calc, geo, main) en jouant les gestes, dans les deux modes
+/// de relations ; compare l'index final à un index bâti à neuf. Rend, par
+/// mode, le rapport et les avancements.
+fn indexer_en_editant(label: &str, gestes: &[Geste]) -> Vec<(rag3weaver::code_sync::SourceSyncReport, Vec<SourceSyncProgress>)> {
+    let mut sorties = Vec::new();
+    for mode in [RelationsMode::Bulk, RelationsMode::PerBatch] {
+        let label = format!("{label}-{mode:?}");
+        let snapshot = Snapshot::new(label.clone(), source_reliee());
+        let options = SourceSyncOptions { batch_files: 1, relations: Some(mode), ..Default::default() };
+        let partage = std::sync::Mutex::new(catalogue());
+        let mut avancements = Vec::new();
+        let rapport = {
+            let mut tenu = partage.lock().unwrap();
+            sync_source(&mut tenu, &snapshot, &options, &mut |p: SourceSyncProgress| {
+                avancements.push(p);
+                if p.phase == SyncPhase::Nodes {
+                    for (apres, geste) in gestes {
+                        if *apres == p.files_done {
+                            geste(&snapshot, &partage);
+                        }
+                    }
+                }
+            })
+            .unwrap()
+        };
+        let neuf = a_neuf(&snapshot, &label, &options);
+        let (fini, attendu) = (etat(&partage.lock().unwrap()), etat(&neuf));
+        assert_eq!(fini.0, attendu.0, "{mode:?} : les scopes");
+        assert_eq!(fini.1, attendu.1, "{mode:?} : les fichiers");
+        assert_eq!(fini.2, attendu.2, "{mode:?} : les arêtes");
+        sorties.push((rapport, avancements));
+    }
+    sorties
+}
+
+fn editer(snapshot: &Snapshot, catalog: &std::sync::Mutex<Catalog>, path: &str, old: &str, new: &str) -> rag3weaver::code_tools::EditResult {
+    rag3weaver::code_sync::edit_file_shared(snapshot, catalog, path, &EditOp::Replace { old: old.into(), new: new.into() })
+        .expect("l'édition n'attend pas et réussit")
+}
+
+/// **Une édition avant le paquet du fichier** : main.rs, pas encore passé,
+/// est lu à son paquet dans son état édité — rien à reprendre.
+#[test]
+#[ignore]
+fn une_edition_avant_le_paquet_du_fichier_est_lue_a_son_paquet() {
+    use rag3weaver::code_sync::ChangeDuringIndexing;
+    let gestes: Vec<Geste> = vec![(
+        1,
+        Box::new(|s, c| {
+            let r = editer(s, c, "main.rs", "autre();", "base();");
+            assert_eq!(r.during_indexing, Some(ChangeDuringIndexing::ReadAtItsBatch), "{r:?}");
+            assert!(r.to_markdown().contains("will read it when it reaches it"), "{}", r.to_markdown());
+        }),
+    )];
+    for (rapport, avancements) in indexer_en_editant("avant", &gestes) {
+        assert!(rapport.files_resumed.is_empty(), "{rapport:?}");
+        assert!(avancements.iter().all(|p| p.phase != SyncPhase::Resume), "{avancements:?}");
+    }
+}
+
+/// **Une édition après le passage du fichier** : base.rs est écrit, l'index
+/// n'est pas touché, et la fin le reprend. Le scope `autre` reste (même clé)
+/// mais n'appelle plus `base` : son arête périmée doit partir.
+#[test]
+#[ignore]
+fn une_edition_apres_le_passage_du_fichier_est_reprise_a_la_fin() {
+    use rag3weaver::code_sync::ChangeDuringIndexing;
+    let gestes: Vec<Geste> = vec![(
+        3,
+        Box::new(|s, c| {
+            let r = editer(s, c, "base.rs", "pub fn autre() -> f64 { base() }", "pub fn autre() -> f64 { 2.0 }\npub fn neuve() -> f64 { autre() }");
+            assert_eq!(r.during_indexing, Some(ChangeDuringIndexing::QueuedForResume), "{r:?}");
+            assert!(r.reingest.is_none(), "l'index n'est pas touché maintenant : {r:?}");
+            assert!(r.to_markdown().contains("will pick it up at the end of the indexing in progress"), "{}", r.to_markdown());
+        }),
+    )];
+    for (rapport, avancements) in indexer_en_editant("apres", &gestes) {
+        assert_eq!(rapport.files_resumed, ["base.rs"], "{rapport:?}");
+        let mode = rapport.relations_mode;
+        assert!(avancements.iter().any(|p| p.phase == SyncPhase::Nodes && p.files_to_resume == 1), "{mode:?} : l'avancement compte la reprise : {avancements:?}");
+        let phases: Vec<SyncPhase> = avancements.iter().map(|p| p.phase).filter(|p| *p != SyncPhase::Nodes).collect();
+        let attendu = match mode {
+            Some(RelationsMode::Bulk) => vec![SyncPhase::Relations, SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
+            _ => vec![SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
+        };
+        assert_eq!(phases, attendu, "{mode:?}");
+        assert_eq!(avancements.last().map(|p| (p.files_to_resume, p.files_resumed)), Some((0, 1)));
+    }
+}
+
+/// **Un fichier édité deux fois** : avant son passage puis après — il est lu
+/// édité, puis repris une seule fois, dans son dernier état.
+#[test]
+#[ignore]
+fn un_fichier_edite_deux_fois_est_repris_une_fois_dans_son_dernier_etat() {
+    let gestes: Vec<Geste> = vec![
+        (1, Box::new(|s, c| {
+            editer(s, c, "calc.rs", "+ base()", "+ autre()");
+        })),
+        (2, Box::new(|s, c| {
+            editer(s, c, "calc.rs", "pub fn total", "pub fn somme");
+        })),
+        (3, Box::new(|s, c| {
+            editer(s, c, "calc.rs", "+ autre()", "+ base()");
+        })),
+    ];
+    for (rapport, _) in indexer_en_editant("deux-fois", &gestes) {
+        assert_eq!(rapport.files_resumed, ["calc.rs"], "{rapport:?}");
+    }
+}
+
+/// **Un fichier supprimé après son passage** : geo.rs part à la reprise —
+/// ses scopes, sa ligne `File` ; l'appel `p.norme()` de calc.rs perd sa cible.
+#[test]
+#[ignore]
+fn un_fichier_supprime_apres_son_passage_part_a_la_reprise() {
+    use rag3weaver::code_sync::{note_change, ChangeDuringIndexing};
+    let gestes: Vec<Geste> = vec![(
+        3,
+        Box::new(|s, _| {
+            s.remove("geo.rs");
+            assert_eq!(note_change(&source_id(&s.cursor()), "geo.rs"), ChangeDuringIndexing::QueuedForResume);
+        }),
+    )];
+    for (rapport, _) in indexer_en_editant("supprime", &gestes) {
+        assert_eq!(rapport.files_resumed, ["geo.rs"], "{rapport:?}");
+    }
+}

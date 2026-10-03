@@ -424,10 +424,13 @@ impl Node for EditFileNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("EditFileNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
-        let result = {
-            let mut guard = catalog.as_ref().map(|c| c.lock().unwrap());
-            edit_file(source.as_ref(), guard.as_deref_mut(), &self.path, &self.op).map_err(|e| format!("EditFileNode: {e}"))?
-        };
+        // Le catalogue partagé : une indexation en cours ne fait pas attendre
+        // l'édition.
+        let result = match catalog.as_ref() {
+            Some(c) => crate::code_sync::edit_file_shared(source.as_ref(), c, &self.path, &self.op),
+            None => edit_file(source.as_ref(), None, &self.path, &self.op),
+        }
+        .map_err(|e| format!("EditFileNode: {e}"))?;
         ctx.metric("lines_after", result.lines_after as f64);
         if let Some(r) = &result.reingest {
             ctx.metric("scopes_upserted", r.scopes_upserted as f64);
