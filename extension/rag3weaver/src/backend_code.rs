@@ -384,4 +384,38 @@ mod tests {
         c.commands = CommandGate::Approval;
         assert!(build_garde(&c).is_some());
     }
+
+    /// **La surface cloud ne lance aucun processus.** Le manifeste réel :
+    /// aucune politique d'outil n'ouvre `run_commands`, et la seule pièce du
+    /// crate qui lance un processus — `RunCommandNode` — n'entre dans aucune
+    /// liste de nœuds permise sans elle. (Demandé après la passe Gemini : un
+    /// modèle fort contourne par là où un processus se lance.)
+    #[test]
+    fn la_surface_cloud_ne_lance_aucun_processus() {
+        let manifest: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("templates/backends/code/snapshot.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        for (nom, outil) in manifest["tools"].as_object().unwrap() {
+            let run = outil
+                .get("policy")
+                .and_then(|p| p.get("run_commands"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            assert!(!run, "l'outil cloud `{nom}` ouvre run_commands");
+            let policy = ToolPolicy {
+                read_files: true,
+                write_files: true,
+                run_commands: run,
+            };
+            assert!(
+                !allowed_nodes(&policy).contains(&"RunCommandNode"),
+                "`{nom}` : RunCommandNode permis sans run_commands"
+            );
+        }
+    }
 }

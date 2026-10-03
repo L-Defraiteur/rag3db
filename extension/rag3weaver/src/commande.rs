@@ -151,6 +151,55 @@ pub fn observer(c: &Commande) -> Faits {
     }
 }
 
+/// **Ce qui empêche une commande de tourner librement : un argument que la
+/// garde ne sait pas prouver dans le domaine.** Rend le coupable et la
+/// raison, ou rien si tout se prouve.
+///
+/// Trouvé par la passe agent Gemini du 3 octobre 2026 :
+/// `read_file(../backend.json)` refusé, l'agent a contourné par
+/// `cat ../backend.json` — `cat` était libre et la commande s'exécute dans
+/// la racine du workspace, où `..` sort. On ne cherche pas à comprendre le
+/// shell : une ligne n'est libre que si elle est **prouvée** dedans, et dans
+/// le doute on demande. (La vraie frontière pour un usage sans humain est un
+/// bac à sable du processus — voir le journal des chantiers ; ceci borne
+/// l'honnête et l'opportuniste, pas un adversaire.)
+fn argument_hors_domaine(
+    c: &Commande,
+    domaine: &std::path::Path,
+) -> Option<(String, &'static str)> {
+    use std::path::Path;
+    let domaine_canon = domaine.canonicalize().unwrap_or_else(|_| domaine.to_path_buf());
+    for arg in &c.args {
+        // Le texte d'abord : ce qui prétend sortir, ou que rien n'a réduit.
+        if arg.contains('$') {
+            return Some((arg.clone(), "une variable non réduite ne se prouve pas"));
+        }
+        if arg.starts_with('~') {
+            return Some((arg.clone(), "`~` désigne un dossier hors du domaine"));
+        }
+        if arg == ".." || arg.contains("../") || arg.ends_with("/..") || arg.contains("=/") {
+            return Some((arg.clone(), "ce chemin sort du domaine de travail"));
+        }
+        let p = Path::new(arg);
+        if p.is_absolute() {
+            // Un absolu peut être DANS le domaine : sa forme canonique tranche.
+            match p.canonicalize() {
+                Ok(canon) if canon.starts_with(&domaine_canon) => continue,
+                _ => return Some((arg.clone(), "un chemin absolu hors du domaine de travail")),
+            }
+        }
+        // Relatif, sans `..` : s'il existe, sa forme canonique tranche — un
+        // lien symbolique peut sortir ; s'il n'existe pas, il ne désigne rien
+        // (un motif de grep, une option, un fichier à venir).
+        if let Ok(canon) = domaine.join(p).canonicalize() {
+            if !canon.starts_with(&domaine_canon) {
+                return Some((arg.clone(), "un lien symbolique sort du domaine de travail"));
+            }
+        }
+    }
+    None
+}
+
 // ─── Ce qu'on décide ─────────────────────────────────────────────────────────
 
 /// Ce qu'on fait, maintenant.
@@ -434,6 +483,37 @@ impl Garde {
     /// **Le verdict, et lui seul.** Rien ne s'exécute ici : décider et faire
     /// sont deux gestes, et les séparer permet de montrer le premier.
     pub fn juger(&self, c: &Commande, ctx: &Contexte) -> Verdict {
+        // **Le confinement passe avant les acquis** : un oui sur `cat x.rs`
+        // retient la famille, et `cat ../secret` arrivait couvert — la
+        // famille est la même, le domaine non. Seul un oui explicite de
+        // l'humain sur CETTE ligne prime : il l'a vue, domaine compris.
+        if !ctx.accorde_par_l_utilisateur {
+            if let Some(domaine) = &ctx.domaine {
+                if let Some((arg, raison)) = argument_hors_domaine(c, domaine) {
+                    let demande = Verdict {
+                        decision: Decision::Demande,
+                        portee: Portee::CetteFois,
+                        fondement: Fondement::Configuration,
+                        faits: observer(c),
+                        motif: format!("`{arg}` : {raison} — seul un humain peut l'accorder."),
+                    };
+                    // En standard il n'y a personne pour répondre.
+                    return if self.mode == Mode::Standard {
+                        Verdict {
+                            decision: Decision::Refuse,
+                            motif: format!(
+                                "{} Mode standard : rien ne sort du domaine de travail.",
+                                demande.motif
+                            ),
+                            ..demande
+                        }
+                    } else {
+                        demande
+                    };
+                }
+            }
+        }
+
         // Une portée acquise passe avant tout : c'est ce qui évite de
         // redemander, et d'appeler un modèle pour rien.
         if self.acquis.couvre(c) {
@@ -1234,5 +1314,141 @@ mod tests {
         let relu: Verdict = serde_json::from_str(&json).expect("relecture");
         assert_eq!(relu, v);
         assert!(json.contains("reseau"), "les faits voyagent avec : {json}");
+    }
+
+    // ── Le domaine confine la lecture libre (3 octobre 2026) ────────────
+    // Trouvé par la passe agent Gemini : read_file(../backend.json) refusé,
+    // l'agent contourne par `cat ../backend.json`, que la liste libre
+    // laissait passer — les arguments-chemins n'étaient pas confinés.
+
+    fn ctx_dans(d: &std::path::Path) -> Contexte {
+        Contexte { accorde_par_l_utilisateur: false, domaine: Some(d.to_path_buf()) }
+    }
+
+    /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
+    /// prouver dedans ; ce que la garde ne sait pas prouver demande.
+    #[test]
+    fn la_lecture_libre_ne_sort_pas_du_domaine() {
+        let dossier = tempfile::tempdir().unwrap();
+        std::fs::write(dossier.path().join("x.rs"), "ok").unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(dossier.path());
+
+        // Le chemin heureux d'abord : rien ne casse pour un agent honnête.
+        assert_eq!(g.juger(&cmd("cat", &["x.rs"]), &ctx).decision, Decision::Autorise);
+        assert_eq!(g.juger(&cmd("rg", &["fn main", "."]), &ctx).decision, Decision::Autorise);
+        let dedans = dossier.path().join("x.rs");
+        assert_eq!(
+            g.juger(&cmd("cat", &[dedans.to_str().unwrap()]), &ctx).decision,
+            Decision::Autorise,
+            "un absolu DANS le domaine se prouve"
+        );
+
+        // La faille de la passe, et ses variantes : chacune demande, et le
+        // motif nomme le coupable.
+        let cas: &[(&str, &[&str])] = &[
+            ("cat", &["../backend.json"]),
+            ("cat", &["/etc/hostname"]),
+            ("ls", &["/"]),
+            ("cat", &["~/.ssh/id_ed25519"]),
+            ("cat", &["$HOME/.ssh/id_ed25519"]),
+            ("grep", &["-r", "motif", ".."]),
+            ("find", &["..", "-name", "z"]),
+            ("git", &["-C", "..", "log"]),
+            ("tail", &["--file=../x"]),
+        ];
+        for (prog, args) in cas {
+            let v = g.juger(&cmd(prog, args), &ctx);
+            assert_eq!(
+                v.decision,
+                Decision::Demande,
+                "`{prog} {}` doit demander : {}",
+                args.join(" "),
+                v.motif
+            );
+        }
+    }
+
+    /// **Un acquis de famille ne couvre pas la sortie du domaine** : un
+    /// `cat x.rs` autorisé retient la famille, et `cat ../secret` arrivait
+    /// couvert — la famille est la même, le domaine non.
+    #[test]
+    fn un_acquis_de_famille_ne_couvre_pas_la_sortie_du_domaine() {
+        let dossier = tempfile::tempdir().unwrap();
+        std::fs::write(dossier.path().join("x.rs"), "ok").unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(dossier.path());
+        assert_eq!(g.juger(&cmd("cat", &["x.rs"]), &ctx).decision, Decision::Autorise);
+        let v = g.juger(&cmd("cat", &["../secret"]), &ctx);
+        assert_eq!(v.decision, Decision::Demande, "{}", v.motif);
+    }
+
+    /// Un lien symbolique sous le domaine qui pointe dehors ne se lit pas
+    /// librement : le texte du chemin ment, le disque tranche.
+    #[cfg(unix)]
+    #[test]
+    fn la_lecture_libre_ne_suit_pas_un_lien_qui_sort() {
+        let dossier = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        std::fs::write(dehors.path().join("secret"), "x").unwrap();
+        std::os::unix::fs::symlink(dehors.path().join("secret"), dossier.path().join("lien")).unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let v = g.juger(&cmd("cat", &["lien"]), &ctx_dans(dossier.path()));
+        assert_eq!(v.decision, Decision::Demande, "{}", v.motif);
+    }
+
+    /// En standard il n'y a personne pour répondre : la sortie du domaine se
+    /// refuse, elle n'attend pas.
+    #[test]
+    fn en_standard_la_sortie_du_domaine_se_refuse() {
+        let dossier = tempfile::tempdir().unwrap();
+        let g = Garde::new(Mode::Standard);
+        let v = g.juger(&cmd("cat", &["../backend.json"]), &ctx_dans(dossier.path()));
+        assert_eq!(v.decision, Decision::Refuse, "{}", v.motif);
+    }
+
+    /// Un oui explicite de l'humain prime : il a vu la commande, domaine
+    /// compris — on ne lui redemande pas ce qu'il vient d'accorder.
+    #[test]
+    fn un_oui_explicite_couvre_aussi_la_sortie_du_domaine() {
+        let dossier = tempfile::tempdir().unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = Contexte { accorde_par_l_utilisateur: true, domaine: Some(dossier.path().to_path_buf()) };
+        assert_eq!(g.juger(&cmd("cat", &["../connu.txt"]), &ctx).decision, Decision::Autorise);
+    }
+
+    /// Les lignes entières : ce que l'analyse ne réduit pas ne tourne pas
+    /// librement — substitution, glob qui remonte, redirection.
+    #[cfg(feature = "code")]
+    #[test]
+    fn une_ligne_qui_echappe_a_l_analyse_ne_tourne_pas_librement() {
+        let dossier = tempfile::tempdir().unwrap();
+        std::fs::write(dossier.path().join("x.rs"), "ok").unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(dossier.path());
+
+        // Le chemin heureux : un tube entre commandes libres, dans le domaine.
+        let v = g.juger_ligne("cat x.rs | head", &ctx).expect("réductible");
+        assert_eq!(v.decision, Decision::Autorise, "{}", v.motif);
+
+        for ligne in [
+            "cat ../backend.json",
+            "cd .. && cat backend.json",
+            "cat $(echo ../x)",
+            "cat ../*",
+            "cat < ../x",
+            "cat ../x | head",
+        ] {
+            match g.juger_ligne(ligne, &ctx) {
+                Ok(v) => assert_ne!(
+                    v.decision,
+                    Decision::Autorise,
+                    "`{ligne}` ne doit pas tourner librement : {}",
+                    v.motif
+                ),
+                // Refusée avant jugement (non réduite) : c'est aussi un non.
+                Err(_) => {}
+            }
+        }
     }
 }
