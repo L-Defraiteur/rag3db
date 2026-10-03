@@ -186,28 +186,52 @@ donner ce soir-là (six sessions y travaillaient).
 - Non examiné : la liste des groupes d'une table (`NodeGroupCollection`), lue sans verrou
   par `NodeTable::isVisibleNoLock` ; elle ne s'allonge que toutes les 131 072 lignes.
 
-**Suite de la session cœur C++**, dans l'ordre :
-1. **Le `MERGE` de relation dont le coût suit la taille de la table** (mesuré par la
-   session de l'arbre principal : 2 764 liens en 108 ms au paquet 2, 4 085 en 2 159 ms au
-   paquet 25). Il ne bloque plus « indexer ce dépôt » depuis que les liens passent par
-   `COPY`, mais les éditions y passent encore. D'abord dire si le défaut est dans le
-   moteur : un premier essai isolé en C++ (lots de 4 000 relations jusqu'à 100 000,
-   `MERGE` et `CREATE`, épars et moyeu) est plat, mais la liste y passait en littéral et
-   le temps était dominé par l'analyse — non probant, à refaire avec un paramètre et la
-   forme réelle. S'il reste plat, le défaut est dans la forme des requêtes et repart à la
-   session de l'arbre principal.
-2. **H4** : une fois les courses fermées, il reste rouge (35 sur 40). Sous ThreadSanitizer,
-   plus aucune course entre fils ; restent une lecture de mémoire libérée au point de
-   reprise (`ListChunkData::append` sous `NodeGroup::checkpointInMemAndOnDisk`, un seul fil
-   à ce moment-là, donc un état déjà corrompu) et la base qui ne se rouvre pas (« Found
-   duplicated primary key value » au rejeu, 21 à 23 fois sur 40), **seulement sur une
-   table indexée** : C1 et C7, sans index, valident des clés en double mais se rouvrent.
-3. Les verrous, tranchés le 3 octobre (§4) : le gestionnaire de verrous, A3′, A4′,
-   l'annonce en tête de transaction ; la maintenance de l'index vectoriel au commit avant
-   A6.
+**Reprise après arrêt brutal, livrée le 3 octobre 2026 au soir** (session cœur C++, deux
+commits en avance rapide, passe C++ complète et passe Rust à chacun) :
+- `f5acca417` — un `DROP` d'index rejoué depuis le journal retire aussi l'index de la
+  table (§6).
+- `fcd9a7882` — **une base ne plante plus à l'ouverture** quand le journal écrit dans une
+  table dont l'index n'est pas chargé (§6, garde 1). L'index est alors « en retard » et le
+  dit par une erreur nommée, `is behind its table` ; rag3weaver doit le reconnaître à
+  l'ouverture, le retirer et le rebâtir (à faire, session de l'arbre principal).
+
+**Deux faux verts à connaître pour tout test de reprise** (trouvés ce soir, par le banc et
+ici) : un test qui ferme la base avec son point de reprise final ne rejoue rien — exiger un
+journal non vide juste avant de rouvrir ; et un processus qui a déjà chargé l'extension
+vector ne voit pas les défauts du rejeu sans extension — rouvrir dans un processus neuf
+(`test/transaction/vector_index_crash_reopen_test.cpp` le fait par `exec`).
+
+**Suite de la session cœur C++**, dans l'ordre fixé par l'orchestration :
+1. **La garde 2 de la reprise** : que le rejeu ait l'extension avant de rejouer, pour que
+   l'index reste juste après une mort au lieu d'être à rebâtir. Deux formes à lire avant de
+   chiffrer : la liste des extensions chargées persistée avec la base (préférée si le
+   changement de format est petit), ou l'enregistrement de chargement réécrit en tête du
+   journal après chaque point de reprise. Ses cinq témoins sont rouges au banc.
+2. **Les deux défauts de l'index vectoriel en service** (§6) : la mise à jour d'un vecteur
+   qui perd des lignes, la ligne lointaine injoignable à la construction. Regarder d'abord
+   ce que Ladybug a fait de son HNSW.
+3. **Les verrous**, tranchés le 3 octobre (§4) : V1 (gestionnaire générique, deux genres dès
+   le départ : ligne par clé, index d'une table), A3′, A4′, V2 ; puis **la maintenance de
+   l'index vectoriel au commit**, qui n'est plus un affinage mais une marche du plan —
+   c'est elle qui rend parallèles les écritures sur une même table indexée.
+4. **H4** : une fois les courses fermées, il reste rouge (35 sur 40) — une lecture de
+   mémoire libérée au point de reprise (`ListChunkData::append` sous
+   `NodeGroup::checkpointInMemAndOnDisk`, un seul fil à ce moment-là, donc un état déjà
+   corrompu) et la base qui ne se rouvre pas (« Found duplicated primary key value » au
+   rejeu, 21 à 23 fois sur 40). **Correction du 3 octobre au soir** : j'avais écrit que cet
+   échec de réouverture n'arrivait que sur une table indexée, parce que C1 et C7 se
+   rouvraient. C'était faux : la variante Crash du banc fermait la base avant de tuer le
+   processus. Avec un vrai arrêt, une clé en double validée rend la base impossible à
+   rouvrir, index ou pas (C1 déterministe, C7 vingt fois sur vingt). C'est le doublon seul ;
+   A3′ l'empêchera de naître, et la reprise devra mettre de côté la transaction fautive au
+   lieu de refuser d'ouvrir (témoin rouge au banc,
+   `LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen`).
+5. Le port de la recherche par clé par ligne de Ladybug (§6, `UNWIND … MATCH`), et la
+   marche A5 ter.
 
 Les branches `a5-suppression-sure-entre-fils`, `-2` et `-3` sur `origin` sont des états
-d'avant rebase : à supprimer par Lucie. Celles d'A5 bis sont restées locales.
+d'avant rebase : à supprimer par Lucie. Celles d'A5 bis et des correctifs de reprise sont
+restées locales.
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
@@ -657,6 +681,65 @@ sessions, pas d'une vérification.
   rend désormais l'origine du calcul avec le client (lot 1, fait pour
   l'embarquement dense).
 
+- **Une base plantait à l'ouverture après la mort d'un processus qui écrivait dans une
+  table à index vectoriel : garde 1 livrée le 3 octobre 2026 (`fcd9a7882`), garde 2 à
+  faire.** Mode en service, un seul écrivain. Trouvé par le banc de concurrence, confirmé
+  sur le chemin réel de rag3weaver par l'arrêt brutal d'un catalogue (`e2e_arret_brutal`,
+  session mémoire). **La condition exacte** : le rejeu du journal a lieu dans le
+  constructeur de `Database`, avant tout `LOAD EXTENSION` de l'appelant ; il n'a
+  l'extension que si le journal porte encore l'enregistrement `LOAD EXTENSION` de la session
+  morte. Un point de reprise vide le journal, cet enregistrement compris — et
+  `CREATE_VECTOR_INDEX` comme `COPY` en écrivent un d'eux-mêmes. Après lui, le rejeu d'une
+  écriture rencontrait un index connu de la table et pas chargé : pointeur nul dans
+  `NodeTable::initInsertState`. Vérifié sur quatre bases conservées : le chemin de
+  l'extension présent dans le journal ⟺ la base s'ouvre. Défaut d'origine (c'est l'amont
+  qui journalise le chargement) ; Ladybug a gardé les chemins d'écriture (`d2db8acb4`,
+  `1ba0cc540`), gardes reprises ici. **Ce que fait la garde 1** : au rejeu, l'index non
+  chargé est détaché de la table — la ligne entre, l'index n'est plus écrit au point de
+  reprise, seule son entrée au catalogue reste. Cet état est « à rebâtir » :
+  `QUERY_VECTOR_INDEX` et `CREATE_VECTOR_INDEX` (même `skip_if_exists`) refusent par
+  l'erreur nommée **`is behind its table`** (`HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE`),
+  `DROP_VECTOR_INDEX` le retire, après quoi on le recrée. Chez Ladybug l'index sauté se
+  recharge tel quel, faux sans le dire. Dix cas par SIGKILL et processus neuf
+  (`test/transaction/vector_index_crash_reopen_test.cpp`), sept témoins verts au banc.
+  **Ce qui reste** : rag3weaver doit reconnaître le nom à l'ouverture et rebâtir de
+  lui-même (session de l'arbre principal) ; et la garde 2, sans laquelle chaque mort de ce
+  genre coûte un index entier à rebâtir.
+- **Le rejeu d'une mise à jour de nœud n'informait aucun index** : corrigé avec la garde 1
+  (`fcd9a7882`). `WALReplayer::replayNodeUpdateRecord` appelait `update` sans
+  `initUpdateState` ; un index chargé gardait l'ancienne position du vecteur.
+- **La mise à jour d'un vecteur perd des lignes dans l'index** (extension vector, en
+  service, sans arrêt ni rejeu ; trouvé le 3 octobre par la session cœur C++, non corrigé).
+  Mille lignes indexées, `MATCH (n:Doc) WHERE n.id >= 100 AND n.id < 120 SET n.vec =
+  [7.0, 7.0, 7.0, 7.0]`, et une recherche exhaustive (`k = 1000`, `efs := 1000`) ne rend
+  plus que 998 lignes ; un point de reprise n'y change rien. Les lignes sont dans la table,
+  l'index ne les atteint plus : du rappel perdu sans erreur. C'est notre chemin de mise à
+  jour de l'index (`98e35566a`), le pendant de ce que `13284a0fe` a corrigé pour la
+  suppression (`keepNodeReachable`). Témoin au banc, rouge sous ce nom :
+  `Writes/ExtensionIndexRecovery.IndexMaintainedWhenTheJournalHoldsTheLoad/UpdateVector`.
+  À savoir avant de le placer : si rag3weaver met à jour des vecteurs en place ou supprime
+  et réinsère (question posée à la session de l'arbre principal).
+- **`e2e_idempotent_registration` rougit environ une fois sur dix à la réouverture**
+  (`register_entity_persists_and_reloads`) : « Runtime exception: Reading past the end of
+  the file …/test.db.wal with size 0 at offset 0 ». Mesuré le 3 octobre : 2 rouges sur 20
+  sur la bibliothèque de master d'avant `f5acca417`, 2 sur 20 avec ; 1 sur 9 chez la
+  session de l'arbre principal. Le test ferme un catalogue puis rouvre la même base dans le
+  même processus. Hypothèses non vérifiées : un journal de taille nulle laissé par la
+  fermeture, que l'ouverture lit au lieu de l'ignorer ; ou deux `Database` sur le même
+  fichier un instant, le point de reprise de fermeture de l'une vidant le journal pendant
+  que l'autre l'ouvre. À regarder des deux côtés : le test ferme-t-il vraiment avant de
+  rouvrir (arbre principal), et que fait l'ouverture d'un journal vide (cœur C++).
+- **Quand `CREATE_VECTOR_INDEX` échoue en plein milieu, la connexion en auto-commit reste
+  dans un bloc en échec** (« The transaction was rolled back… Send ROLLBACK to close it »)
+  alors que le client n'a jamais envoyé `BEGIN` : la fonction ouvre sa propre transaction,
+  et la marche T0 la laisse en échec. Un client qui n'a pas ouvert le bloc ne doit pas
+  avoir à le fermer. Vu le 3 octobre, non examiné ; une suite de T0, à reprendre avec les
+  verrous.
+- **Ladybug est un amont vivant, à surveiller en plus de Vela.** Trois correctifs qui nous
+  manquaient y ont été trouvés le 3 octobre (la recherche par clé par ligne, les gardes des
+  index non chargés). Son histoire est séparée de la nôtre (espace de noms `lbug`, même
+  arborescence) : on porte, on ne cherry-pick pas. À regarder, pas fait : ce qu'il a changé
+  depuis notre fork à la reprise après panne et à l'index HNSW (mise à jour, construction).
 - **`UNWIND $items AS item MATCH (n {_uuid: item.champ})` balaie la table entière**
   (planificateur, trouvé le 3 octobre par la session cœur C++, non corrigé ; un
   contournement existe). Toute écriture par lot qui retrouve ses nœuds par la clé primaire
@@ -690,18 +773,25 @@ sessions, pas d'une vérification.
   colonne nommée, pas `STRUCT_EXTRACT(item, …)`. **Le contournement** : sortir les champs
   en variables simples par un `WITH` avant le `MATCH` (lignes en gras) ; pour un lien,
   enchaîner les deux `MATCH` par `WITH a, t` — côte à côte, le plan retombe sur le produit
-  cartésien des deux tables — et écrire `CREATE`, pas `MERGE` : la même forme avec `MERGE`
-  est refusée, « Cannot evaluate expression with type VARIABLE », second défaut, non
-  examiné. Vérifier par `EXPLAIN` qu'on lit `HASH_JOIN` et non `CROSS_PRODUCT`. **Le vrai
+  cartésien des deux tables. **Mieux, trouvé par la session de l'arbre principal
+  (`b3db4244c`, `dialect::unwind_par_cle`)** : la structure `item` voyage, et chaque clé est
+  extraite dans le `WITH` qui précède immédiatement son `MATCH` ou son `MERGE` ; le `MERGE`
+  d'arête, la suppression d'arête et les formes sans étiquette passent alors tous par
+  jointure de hachage. Le refus que j'avais noté ici comme un second défaut (« Cannot
+  evaluate expression with type VARIABLE » avec `MERGE`) venait d'une clé extraite trop tôt,
+  à travers deux `WITH` : pas un `MERGE` impossible, au plus un défaut de portée des
+  variables, non examiné. Vérifier par `EXPLAIN` qu'on lit `HASH_JOIN` et non
+  `CROSS_PRODUCT`. **Le vrai
   correctif** : une recherche par clé par ligne. Ladybug l'a faite (`e92346c97`, « Row-Driven
   Primary-Key Lookup for MATCH », sous le tag `ladybug-main-2026-08-31`, puis sept
   correctifs) ; son histoire est séparée de la nôtre, c'est un port et non un
   cherry-pick, et il ne couvre qu'un motif à un seul nœud. Quatre à six jours, estimation
   non étayée ; derrière les verrous. Brouillons de mesure :
   `~/.cache/rag3db-moteur-notes/croissance-relations/`.
-- **Au rejeu du journal, un `DROP_VECTOR_INDEX` retire l'index du catalogue mais pas de
-  la table** (moteur, cas minimal de la session de l'arbre principal, 3 octobre ; en
-  cours de correction par la session cœur C++). Un index écrit par un point de reprise,
+- **Au rejeu du journal, un `DROP_VECTOR_INDEX` retirait l'index du catalogue mais pas de
+  la table : corrigé le 3 octobre 2026 (`f5acca417`)** (moteur, cas minimal de la session
+  de l'arbre principal ; code hérité de l'amont). Le rejeu retire maintenant les deux ; le
+  symétrique n'existe pas, la création d'un index écrit elle-même un point de reprise. Un index écrit par un point de reprise,
   puis retiré, puis un arrêt sans fermeture : à la réouverture `SHOW_INDEXES` ne le montre
   plus, mais `CREATE_VECTOR_INDEX` lève « Index … is not loaded yet ». C'est le rouge
   intermittent d'`an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`, et
@@ -770,6 +860,10 @@ sessions, pas d'une vérification.
   `banc-hnsw`). C'est aussi pourquoi le test Rust des suppressions partielles ne doit
   pas exiger que chaque survivante se retrouve elle-même sur un jeu de cent lignes : il
   compare désormais à un index bâti à neuf (session de l'arbre principal).
+  **Reproduction plus simple, 3 octobre au soir** : 500 lignes de dimension 4
+  (`[i, 2, 3, 4]`), une ligne mise à `[9000, 2, 3, 4]`, `CREATE_VECTOR_INDEX` ; chercher ce
+  vecteur rend la ligne 499, à distance 8 501. Une ligne très loin des autres est
+  injoignable dans un index bâti d'un coup ; avec `[250.5, 2, 3, 4]` elle est trouvée.
 - **`QUERY_VECTOR_INDEX … RETURN count(*)` rend toujours `k`** (extension vector,
   3 octobre), même quand l'index a moins de `k` lignes : le résultat est complété
   jusqu'à `k` avant la jointure avec la table. `count(node.id)` est juste.
