@@ -1,6 +1,6 @@
 # Mémoire longue — rapport de session
 
-3 octobre 2026, 23 h 50. Session « mémoire longue » (lignée d'août : la
+3 octobre 2026, puis la nuit du 4. Session « mémoire longue » (lignée d'août : la
 session comme graphe, le langage de déclaration, la machine à états).
 Mis à jour sur place.
 
@@ -81,19 +81,72 @@ produite. Ce qu'elle autorise, c'est d'**éliminer**, pas de choisir.
 
 ## 4. En cours
 
-- **`e2e_arret_brutal`** : deux cas verts, un rouge **connu et nommé** qui
-  attend un moteur postérieur à `fcd9a7882`. La bibliothèque liée datait de
-  21 h 33, la garde 1 de 23 h 11.
-- **La sonde du catalogue** face à un index détaché est écrite
-  (`CATALOGUE=ok | erreur: … | panique`) et n'attend que ce moteur.
+### `e2e_arret_brutal` : trois cas verts, et un vert qui ne prouve pas ce qu'on croirait
+
+Rejoué contre `librag3db.so` et `libvector` du 3 octobre 23 h 50 (garde 1
+`fcd9a7882` comprise), âge imprimé pour les deux : **3 passed**. Chaque cas
+porte sa condition de validité à côté de son verdict — journal non vide avant
+la mort (63 987 / 65 030 / 65 509 octets), `REPLI=non` pour le témoin sans
+point de reprise.
+
+**Et le cas vectoriel a imprimé sa propre réserve** :
+« le montage ne voit plus d'index en retard : rebâti de lui-même ? »
+
+Deux défauts du témoin, trouvés après coup, qui empêchent de lire ce vert
+comme une preuve :
+
+1. **Il redéclare le schéma** (`register_entity("Fiche", …)` après
+   l'ouverture), et c'est ce `CREATE_VECTOR_INDEX` qui recrée l'index. Le vert
+   ne distingue pas « la garde a réparé » de « je l'ai recréé moi-même ».
+2. **Son journal portait encore le `LOAD EXTENSION`.** Le rejeu a donc chargé
+   l'extension et l'index est resté juste — c'est le cas où le détachement
+   *n'a pas lieu*, et c'est exactement l'équivalence que les quatre cas de la
+   veille avaient établie. Le témoin mesurait le cas complémentaire du sien.
+
+### Le lot « index vectoriel détaché » (orchestration, nuit du 4)
+
+Reconnaître à l'ouverture un index vectoriel absent ou détaché, le rebâtir, et
+le dire. Code posé, `cargo check` en cours, pas encore commité :
+
+| Où | Quoi |
+|---|---|
+| `src/catalog.rs` | `INDEX_BEHIND_ITS_TABLE`, `CatalogError::IndexDetache`, `all_vector_indexes`, `rebuild_detached_vector_indexes`, et le `DROP` devant le `CREATE` dans `rebuild_vector_index` |
+| `src/catalog.rs` (`initialize`) | étape « 10 quater », après la restauration par drapeau |
+| `src/search.rs` | le refus **nommé** au lieu d'une `DbError` opaque |
+| `tests/e2e_arret_brutal.rs` | les trois sondes brutes du relecteur, avant toute redéclaration |
+
+**La décision de conception qui porte le lot** : détecter par **sonde** et non
+par drapeau. Le drapeau `vector_index_dropped:` ne connaît que les index que
+*nous* avons retirés ; le rejeu du moteur n'en pose aucun. La sonde, c'est le
+`CREATE … skip_if_exists` lui-même — muet sur un index sain, réparateur sur un
+absent, refusé par le fragment sur un détaché. Une seule question qui est
+aussi sa réponse. Et elle balaie **tous les modèles enregistrés**, pas
+seulement le courant : l'index d'un modèle d'avant n'est recréé par personne.
+
+**Ce que je ne sais toujours pas, et que la prochaine passe doit dire.** Je
+n'ai **jamais vu** d'index détaché. Je ne sais donc pas si la garde 1 laisse un
+index *détaché* ou *retiré* — les deux demandent une réparation différente.
+D'où les trois sondes brutes ajoutées au relecteur (`INDEX_VUS`,
+`INDEX_CIBLE`, `VECTEUR=`, `SONDE_CREATE=`), dans cet ordre précis : la sonde
+`CREATE` **répare** un index absent, donc elle vient après les observations,
+sinon elle efface ce qu'elles allaient voir.
+
+**La recette qui fabrique l'état à coup sûr** (orchestration, d'après les dix
+cas du cœur C++) : l'index vient d'une session **précédente, fermée
+proprement** ; la session suivante ouvre — donc enregistre un `LOAD EXTENSION`
+—, fait un **`CHECKPOINT` explicite** qui vide le journal de cet
+enregistrement, écrit dans la table indexée, et meurt. Et surtout : **ne pas**
+essayer « ouvrir sans l'extension puis écrire », le moteur refuse cette
+écriture hors rejeu.
 
 ## 5. Ce qui attend quelqu'un
 
 | Quoi | Qui | État |
 |---|---|---|
-| rebâtir `build/lecteurs-csv` dans un creux, annoncé aux sessions qui le lient | arbre principal | demandé par l'orchestration |
-| l'âge de la bibliothèque imprimé par `run_e2e.sh`, et refus d'une bibliothèque plus vieille que les sources C++ | `rag3db-50` | proposé, avec le piège qui la motive |
-| reconnaître un index détaché à l'ouverture et le rebâtir en le disant | arbre principal | après la garde 1 |
+| rebâtir `build/lecteurs-csv` | `rag3db-50` | **fait** — master `a5cef54cc`, 3 oct. 23 h 50 |
+| l'âge de la bibliothèque imprimé par `run_e2e.sh`, et refus d'une bibliothèque plus vieille que les sources | `rag3db-50` | **fait** — `2914d470e`, avec `RAG3WEAVER_MOTEUR_ANCIEN=1` pour passer outre en le disant |
+| reconnaître un index détaché à l'ouverture et le rebâtir en le disant | **moi** | lot en cours (§4) |
+| les deux cas du chargement en masse interrompu | **moi** | scénario reçu de `rag3db-50`, à écrire |
 | le crochet après outil (`context` : identités résolues, source, cellule, lignes) | recherche | contrat acté, code après la passe Gemini |
 | un modèle de décision, quand une bonne manière de s'en servir existera | optimiseur | diagnostic en cours |
 
@@ -129,12 +182,14 @@ dépile celui d'une autre session sans que rien ne s'en voie chez elle.
 
 ## 7. L'ordre de la suite
 
-1. le **réacteur** (lot 4) : lire `EntitiesChanged`, remonter les
+1. le lot **« index vectoriel détaché »** — une base qui se rouvre passe avant
+   le reste (arbitrage de l'orchestration, nuit du 4) ;
+2. le **réacteur** (lot 4) : lire `EntitiesChanged`, remonter les
    `ANCHORED_TO` entrantes, transitionner par `review`. **Demande un nœud
    neuf** — rien ne consomme le port `events` sauf `TraceSinkNode`, et un
    graphe-outil n'a pas de conditionnelle. En attente du mot de Lucie.
-2. le crochet après outil (session recherche) et le jardinier ;
-3. `Subject` en **entité dérivée** — la mesure dit que le bon classement vient
+3. le crochet après outil (session recherche) et le jardinier ;
+4. `Subject` en **entité dérivée** — la mesure dit que le bon classement vient
    du *texte complet* du sujet, et une description écrite une fois ne contient
    pas ce qu'on range dessous ;
-4. le nœud de décision **à modèle**, en dernier.
+5. le nœud de décision **à modèle**, en dernier.

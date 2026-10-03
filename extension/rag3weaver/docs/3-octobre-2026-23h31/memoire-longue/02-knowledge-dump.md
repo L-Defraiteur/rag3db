@@ -48,6 +48,34 @@ entité ne déclare de vecteur** — `EmbeddingService::connect` est appelé san
 regarder les signaux. Signalé à la session recherche ; en attendant, le banc
 exige le service.
 
+**Le refus d'un index derrière sa table est une constante nommée du
+moteur**, pas un message de circonstance :
+`HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE = "is behind its table"`, dans
+`extension/vector/src/include/index/hnsw_index_utils.h`. Le commentaire
+au-dessus dit la suite à faire — « l'appelant le reconnaît à ce fragment,
+retire l'index (`DROP_VECTOR_INDEX`) et le rebâtit ». On s'accroche au
+fragment, pas à la phrase, qui porte des noms de table.
+
+**`CREATE_VECTOR_INDEX` n'est pas idempotent, malgré `skip_if_exists`.** Sur
+un index *détaché* il refuse par ce fragment, `skip_if_exists` ou non. C'est
+ce qui rendait `restore_dropped_vector_indexes` incapable de réparer le cas
+qu'elle existe pour réparer — et pire, son échec remontait jusqu'à faire
+refuser l'ouverture. Remède : `DROP` (qui porte `skip_if_not_exists`) puis
+`CREATE`, toujours.
+
+**`Catalog::initialize` rejoue ses DDL d'index à chaque ouverture** (étapes 2
+à 4 : `generate_full_schema_with_dialect`, puis `schema.indexes`). Donc un
+index **retiré** par un rejeu est déjà recréé à l'ouverture, par un code écrit
+pour autre chose ; et un index **détaché** ferait échouer cette étape 4. Mais
+ces DDL ne portent que le **schéma déclaré** : l'index d'un modèle
+d'embarquement d'avant n'y est pas, et personne ne le recrée.
+
+**Le moteur refuse une écriture dans une table indexée si l'extension
+vectorielle n'est pas chargée**, hors rejeu. Donc on ne fabrique pas un index
+détaché en « ouvrant sans l'extension puis en écrivant » : il faut la mort
+brutale, avec un `CHECKPOINT` explicite entre le chargement de l'extension et
+l'écriture.
+
 **`_absent_since`** existe (schéma v8), est posée sur les lignes
 transitionnées par une fin, effacée dès qu'une ligne reparaît par trois
 chemins — et **relue par personne en production**. Préfixée `_`, elle n'est
@@ -92,6 +120,8 @@ source n'a plus **empêche définitivement son retrait**, en silence.
 | ranger par le cosinus | 14/16, 19/32, 22/30 | sur le **texte complet** du sujet ; sur les noms seuls, 8/7/15 |
 | décider qu'il faut **créer** | rien ne marche, sur aucun jeu | d'où « demander toujours » |
 | arrêt brutal | `libvector` au journal ⟺ la base s'ouvre | 4 cas, une variable, aucune exception |
+| garde 1 par le chemin du produit | 3 cas verts contre le moteur du 3 oct. 23 h 50 | **le cas vectoriel redéclarait le schéma** : son vert ne distingue pas « la garde a réparé » de « j'ai recréé l'index moi-même » |
+| index détaché dans rag3weaver | **jamais observé** | ni détaché ni retiré : je ne sais pas lequel des deux la garde laisse |
 
 **Le texte du juge n'est pas le texte du vecteur.** Le classement veut le
 titre court, le verdict veut le titre **et** le pourquoi. Ce n'est pas un
@@ -105,8 +135,13 @@ aux deux puisque c'est la même mémoire.
   sortie : le jour où elle existe, le crochet filtre au lieu d'exclure.
 - **Un backend sans vecteur exige quand même le service d'embarquement.**
 - **`_absent_since` n'a aucun lecteur** en production, et n'est pas filtrable.
-- **`e2e_arret_brutal` est rouge** sur un cas, en attente d'un moteur
-  postérieur à `fcd9a7882`.
+- **`e2e_arret_brutal` est vert sur ses trois cas**, mais son cas vectoriel
+  **redéclare le schéma** : son `register_entity` recrée l'index, donc le vert
+  ne prouve pas que la garde a réparé. À refaire selon la recette à trois
+  processus.
+- **`restore_dropped_vector_indexes` ne pouvait pas réparer un index
+  détaché** : son `CREATE … skip_if_exists` est l'appel que le moteur refuse.
+  Corrigé par un `DROP` devant (lot en cours).
 - **Le sujet n'est pas une entité dérivée**, alors que la mesure le demande.
 
 ## 6. Ce qui a été essayé sans succès
@@ -133,7 +168,16 @@ aux deux puisque c'est la même mémoire.
   antérieure) et la fermeture de session (lue en queue de fichier au lieu de
   queue de fonction).
 - **Un test porte sa condition de validité à côté de son verdict** : journal
-  non vide, `REPLI=non`, âge de la bibliothèque liée.
+  non vide, `REPLI=non`, âge de la bibliothèque liée. Éprouvé dès la passe
+  suivante : trois rouges, et c'est l'imprimé qui les a nommés —
+  `extension vector absente : …/rag3db-memoire/extension/vector/build/…`,
+  faute de `RAG3DB_ROOT`. Depuis un worktree, **toute** référence au moteur
+  passe par cette variable, pas seulement `RAG3DB_BUILD` : un rouge de harnais
+  qui se nomme lui-même ne coûte qu'une relance.
+- **Un rouge qui se nomme vaut mieux qu'un vert muet, et un vert qui imprime sa
+  réserve vaut mieux que les deux.** « le montage ne voit plus d'index en
+  retard : rebâti de lui-même ? » est ce qui a empêché d'annoncer une preuve
+  qui n'en était pas une.
 - **Nommer ce qu'un rouge signifierait**, dans le message d'échec, plutôt que
   « attendu 6, reçu 0 ».
 - **Mesurer plutôt que raisonner, quand les deux sont possibles.** Aucun de
