@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
         'entities':{'Card':{'schema':str(tmp/'card.json'),'config':{
             'fields':{'key':{'type':'string','isTitle':True},'binder':{'type':'string'},'text':{'type':'string','isContent':True}},
             'hashsafe':['key'],'signals':['bm25'],
-            'snapshot':{'scope':['binder']}}}},
+            'snapshot':{'scope':['binder'],'fineScope':['key']}}}},
         'tools':{
             'ingest_cards':{'graph':str(CRATE/'templates/tools/ingest_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'finish_cards':{'graph':str(CRATE/'templates/tools/finish_snapshot.mmd'),'bindings':{'entity':'Card'}},
@@ -104,6 +104,15 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
         # A session left open is taken over explicitly.
         s4=begin('A')['result']['result']['session']
         took=begin('A',takeover=True); assert took['ok'] and took['result']['result']['replaced']==s4,took
+        # The fine grain: refused while the coarse session holds the binder; open on another binder.
+        fine=ask(name='begin_cards',arguments={'scope':{'binder':'A','key':'a1'}})
+        assert not fine['ok'] and 'grain' in fine['error'],fine
+        sf=ask(name='begin_cards',arguments={'scope':{'binder':'B','key':'b1'}}); assert sf['ok'],sf
+        sf=sf['result']['result']['session']
+        carried=ingest(sf,[card('b1','B')]); assert carried['scope']=={'binder':'B','key':'b1'},carried
+        assert finish(sf,'B',)['ok'] is False  # the fine session is finished on its own scope, not the binder's
+        done=ask(name='finish_cards',arguments={'scope':{'binder':'B','key':'b1'},'snapshot':sf}); assert done['ok'],done
+        assert done['result']['result']['seen']==1,done
         # Set aside before purge (keepFor, 7 days by default): a finish that removes keeps a copy,
         # and undoes as a block.
         s5=took['result']['result']['session']

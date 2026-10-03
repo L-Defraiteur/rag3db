@@ -29,6 +29,7 @@ fn fiche(snapshot: SnapshotConfig, lifecycle: Option<Lifecycle>) -> EntityConfig
     fields.insert("classeur".to_string(), champ(FieldType::String, false, false));
     fields.insert("texte".to_string(), champ(FieldType::Text, false, true));
     fields.insert("etat".to_string(), champ(FieldType::String, false, false));
+    fields.insert("tiroir".to_string(), champ(FieldType::String, false, false));
     EntityConfig {
         fields,
         signals: SearchSignals::BM25,
@@ -42,6 +43,7 @@ fn fiche(snapshot: SnapshotConfig, lifecycle: Option<Lifecycle>) -> EntityConfig
 fn perimetre_classeur() -> SnapshotConfig {
     SnapshotConfig {
         scope: vec!["classeur".into()],
+        fine_scope: vec![],
         max_missing_ratio: 0.5,
         on_missing: OnMissing::Delete,
         keep_for: None,
@@ -778,6 +780,112 @@ fn mesure_le_cout_de_la_marque_a_l_ecriture() {
     eprintln!("MESURE marque à l'écriture, 4 lots de 500 : sans session {ms_sans} ms, avec session {ms_avec} ms");
     let fin = finir(&mut avec, "A", &session, SnapshotFinishOptions { allow_empty: true, force: false }).unwrap();
     assert_eq!(fin.written, 2000, "toutes les lignes écrites pendant la session sont marquées : {}", fin.written);
+}
+
+// ─── Deux grains emboîtés (3 octobre 2026) ──────────────────────────────────
+//
+// Le classeur est le grain large, le tiroir le grain fin. Une session s'ouvre
+// sur l'un ou sur l'autre, jamais sur deux qui se recouvrent : une ligne n'a
+// qu'une marque. Quand la fine est refusée, l'appelant écrit simplement, et la
+// marque à l'écriture le compte pour la large.
+
+fn par_tiroir() -> SnapshotConfig {
+    let mut s = perimetre_classeur();
+    s.fine_scope = vec!["tiroir".into()];
+    s.max_missing_ratio = 1.0;
+    s
+}
+
+fn rangee(cle: &str, classeur: &str, tiroir: &str) -> BTreeMap<String, CypherValue> {
+    let mut l = ligne(cle, classeur, None);
+    l.insert("tiroir".into(), CypherValue::String(tiroir.into()));
+    l
+}
+
+fn perimetre_fin(classeur: &str, tiroir: &str) -> BTreeMap<String, CypherValue> {
+    BTreeMap::from([
+        ("classeur".to_string(), CypherValue::String(classeur.into())),
+        ("tiroir".to_string(), CypherValue::String(tiroir.into())),
+    ])
+}
+
+#[test]
+#[ignore]
+fn le_grain_fin_est_verifie_a_la_declaration() {
+    let mut catalog = catalogue();
+    let mut inconnu = perimetre_classeur();
+    inconnu.fine_scope = vec!["dossier".into()];
+    assert!(catalog.register_entity("Fiche", fiche(inconnu, None)).is_err(), "champ inconnu");
+    let mut repete = perimetre_classeur();
+    repete.fine_scope = vec!["classeur".into()];
+    let err = catalog.register_entity("Fiche", fiche(repete, None)).unwrap_err().to_string();
+    assert!(err.contains("raffine"), "{err}");
+    catalog.register_entity("Fiche", fiche(par_tiroir(), None)).unwrap();
+    // Un périmètre qui n'est ni le large ni le fin est refusé.
+    let err = catalog
+        .begin_snapshot("Fiche", &BTreeMap::from([("tiroir".to_string(), CypherValue::String("t1".into()))]), false)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("périmètre"), "{err}");
+}
+
+/// Une session sur le grain fin ne retire que dans son tiroir.
+#[test]
+#[ignore]
+fn une_session_fine_ne_retire_que_dans_son_grain() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(par_tiroir(), None)).unwrap();
+    catalog
+        .ingest_entities("Fiche", vec![rangee("a1", "A", "t1"), rangee("a2", "A", "t1"), rangee("a3", "A", "t2")])
+        .unwrap();
+    let s = catalog.begin_snapshot("Fiche", &perimetre_fin("A", "t1"), false).unwrap().session;
+    let lot1 = vec![rangee("a1", "A", "t1")];
+    let uuids: Vec<String> = lot1.iter().map(|r| catalog.entity_uuid("Fiche", r).unwrap()).collect();
+    catalog.ingest_entities("Fiche", lot1).unwrap();
+    catalog.mark_snapshot("Fiche", &perimetre_fin("A", "t1"), &s, &uuids).unwrap();
+    let fin = catalog.finish_snapshot("Fiche", &perimetre_fin("A", "t1"), &s, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.in_scope, 2, "{fin:?}");
+    assert_eq!(fin.removed, [uuid(&catalog, "a2")]);
+    assert_eq!(cles(&catalog, "A"), ["a1", "a3"], "le tiroir t2 n'est pas touché");
+}
+
+/// Les deux grains ne s'ouvrent jamais sur des lignes qui se recouvrent ;
+/// sur un autre classeur, ils sont libres.
+#[test]
+#[ignore]
+fn les_deux_grains_ne_se_recouvrent_jamais() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(par_tiroir(), None)).unwrap();
+    let large = catalog.begin_snapshot("Fiche", &perimetre("A"), false).unwrap().session;
+    let err = catalog.begin_snapshot("Fiche", &perimetre_fin("A", "t1"), false).unwrap_err().to_string();
+    assert!(err.contains(&large), "le refus nomme la session large qui tient le périmètre : {err}");
+    let err = catalog.begin_snapshot("Fiche", &perimetre_fin("A", "t1"), true).unwrap_err().to_string();
+    assert!(err.contains(&large), "takeover ne passe pas outre un recouvrement : {err}");
+    catalog.begin_snapshot("Fiche", &perimetre_fin("B", "t1"), false).expect("un autre classeur est libre");
+    catalog.abort_snapshot("Fiche", &perimetre("A"), &large).unwrap();
+    let fine = catalog.begin_snapshot("Fiche", &perimetre_fin("A", "t1"), false).unwrap().session;
+    let err = catalog.begin_snapshot("Fiche", &perimetre("A"), false).unwrap_err().to_string();
+    assert!(err.contains(&fine), "la large est refusée tant qu'une fine tient un de ses tiroirs : {err}");
+}
+
+/// Pendant une session large, une écriture dans un tiroir est comptée pour
+/// elle ; pendant une session fine, pour la fine.
+#[test]
+#[ignore]
+fn la_marque_a_l_ecriture_suit_le_grain_ouvert() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(par_tiroir(), None)).unwrap();
+    let large = catalog.begin_snapshot("Fiche", &perimetre("A"), false).unwrap().session;
+    catalog.ingest_entities("Fiche", vec![rangee("a1", "A", "t1")]).unwrap();
+    let fin = catalog.finish_snapshot("Fiche", &perimetre("A"), &large, SnapshotFinishOptions { allow_empty: true, force: false }).unwrap();
+    assert_eq!(fin.written, 1, "{fin:?}");
+    // Pendant la fine, a1 est réécrite et a2 naît : toutes deux sont
+    // comptées pour elle. (Une ligne écrite pendant la large seulement serait,
+    // pour la fine, absente.)
+    let fine = catalog.begin_snapshot("Fiche", &perimetre_fin("A", "t1"), false).unwrap().session;
+    catalog.ingest_entities("Fiche", vec![rangee("a1", "A", "t1"), rangee("a2", "A", "t1")]).unwrap();
+    let fin = catalog.finish_snapshot("Fiche", &perimetre_fin("A", "t1"), &fine, SnapshotFinishOptions { allow_empty: true, force: false }).unwrap();
+    assert_eq!((fin.written, fin.removed.len()), (2, 0), "a1 et a2 écrites pendant la fine : {fin:?}");
 }
 
 // ─── Les cellules (_org / _project) ─────────────────────────────────────────

@@ -346,7 +346,20 @@ impl Node for EntityBatchNode {
         let scope = if session.is_empty() {
             None
         } else {
-            Some(cat.snapshot_scope_of(entity, &rows).map_err(|e| e.to_string())?)
+            // Le grain large, ou le fin si c'est sur lui que la session est
+            // ouverte : la session dit lequel, pas l'appelant.
+            let large = cat.snapshot_scope_of(entity, &rows).map_err(|e| e.to_string())?;
+            let tenue = |s: &BTreeMap<String, CypherValue>| -> Result<bool, String> {
+                Ok(cat.open_snapshot_session(entity, s).map_err(|e| e.to_string())?.is_some_and(|o| o.session == session))
+            };
+            if tenue(&large)? {
+                Some(large)
+            } else {
+                match cat.snapshot_fine_scope_of(entity, &rows) {
+                    Ok(fin) if tenue(&fin)? => Some(fin),
+                    _ => Some(large),
+                }
+            }
         };
         // A lifecycle is checked like the schema: all-or-nothing, before any
         // write. The ingestion applies the same rule again while writing

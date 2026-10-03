@@ -195,15 +195,56 @@ impl Catalog {
         scope: &BTreeMap<String, CypherValue>,
     ) -> Result<(), CatalogError> {
         let config = self.snapshot_config(entity_name)?;
-        let mut declared: Vec<&str> = config.scope.iter().map(String::as_str).collect();
-        declared.sort_unstable();
+        let mut large: Vec<&str> = config.scope.iter().map(String::as_str).collect();
+        large.sort_unstable();
+        let mut fin: Vec<&str> = config.scope.iter().chain(&config.fine_scope).map(String::as_str).collect();
+        fin.sort_unstable();
         let given: Vec<&str> = scope.keys().map(String::as_str).collect();
-        if declared != given {
-            return Err(CatalogError::ValidationFailed(format!(
-                "snapshot : le périmètre déclaré est [{}], reçu [{}]",
-                declared.join(", "),
+        if given == large || (!config.fine_scope.is_empty() && given == fin) {
+            return Ok(());
+        }
+        Err(CatalogError::ValidationFailed(if config.fine_scope.is_empty() {
+            format!("snapshot : le périmètre déclaré est [{}], reçu [{}]", large.join(", "), given.join(", "))
+        } else {
+            format!(
+                "snapshot : le périmètre déclaré est [{}], ou [{}] au grain fin ; reçu [{}]",
+                large.join(", "),
+                fin.join(", "),
                 given.join(", ")
-            )));
+            )
+        }))
+    }
+
+    /// **Les deux grains ne se recouvrent jamais** : une session large refuse
+    /// une fine sur l'un de ses sous-périmètres, et une fine refuse la large
+    /// qui la contient — une ligne n'a qu'une marque. `takeover` ne passe pas
+    /// outre : il reprend une session du même périmètre, pas celle d'un
+    /// autre grain.
+    fn check_no_overlapping_grain(
+        &mut self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+    ) -> Result<(), CatalogError> {
+        let config = self.snapshot_config(entity_name)?.clone();
+        if config.fine_scope.is_empty() {
+            return Ok(());
+        }
+        let large_de = |m: &BTreeMap<String, CypherValue>| -> BTreeMap<String, CypherValue> {
+            m.iter().filter(|(k, _)| config.scope.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+        let est_fin = scope.len() > config.scope.len();
+        let notre_large = large_de(scope);
+        for (json, session) in self.sessions_ouvertes_de(entity_name)? {
+            let Ok(autre) = serde_json::from_str::<BTreeMap<String, CypherValue>>(&json) else { continue };
+            let autre_est_fin = autre.len() > config.scope.len();
+            if autre_est_fin != est_fin && large_de(&autre) == notre_large {
+                return Err(CatalogError::SnapshotRefused(format!(
+                    "{entity_name} : la session '{session}' tient déjà {} ({json}) ; les deux grains ne s'ouvrent pas \
+                     sur des lignes qui se recouvrent. Pendant une session large, écrire simplement : la marque à \
+                     l'écriture compte pour elle",
+                    if autre_est_fin { "un grain fin de ce périmètre" } else { "le périmètre large qui contient celui-ci" }
+                )));
+            }
         }
         Ok(())
     }
@@ -241,6 +282,7 @@ impl Catalog {
         self.check_ecriture("begin_snapshot")?;
         self.check_entity(entity_name)?;
         self.check_scope_declared(entity_name, scope)?;
+        self.check_no_overlapping_grain(entity_name, scope)?;
         let replaced = match self.open_snapshot_session(entity_name, scope)? {
             Some(open) if !takeover => {
                 return Err(CatalogError::SnapshotRefused(format!(
@@ -312,6 +354,18 @@ impl Catalog {
         Ok(())
     }
 
+    /// [`snapshot_scope_of`](Self::snapshot_scope_of) au **grain fin** : les
+    /// valeurs du périmètre et du grain fin, communes à tout le lot.
+    pub fn snapshot_fine_scope_of(
+        &self,
+        entity_name: &str,
+        rows: &[BTreeMap<String, CypherValue>],
+    ) -> Result<BTreeMap<String, CypherValue>, CatalogError> {
+        let config = self.snapshot_config(entity_name)?;
+        let champs: Vec<String> = config.scope.iter().chain(&config.fine_scope).cloned().collect();
+        Self::valeurs_communes(&champs, rows)
+    }
+
     /// **Vérifier qu'un lot appartient bien au périmètre annoncé** : chaque
     /// ligne porte, pour chaque champ du périmètre, la même valeur. Rend ces
     /// valeurs (vide pour un périmètre vide).
@@ -321,8 +375,17 @@ impl Catalog {
         rows: &[BTreeMap<String, CypherValue>],
     ) -> Result<BTreeMap<String, CypherValue>, CatalogError> {
         let config = self.snapshot_config(entity_name)?;
+        Self::valeurs_communes(&config.scope, rows)
+    }
+
+    /// Les valeurs de `champs`, communes à toutes les lignes ; une ligne sans
+    /// valeur ou un lot à cheval sur deux périmètres est refusé.
+    fn valeurs_communes(
+        champs: &[String],
+        rows: &[BTreeMap<String, CypherValue>],
+    ) -> Result<BTreeMap<String, CypherValue>, CatalogError> {
         let mut scope = BTreeMap::new();
-        for field in &config.scope {
+        for field in champs {
             let mut value: Option<&CypherValue> = None;
             for (i, row) in rows.iter().enumerate() {
                 let v = row.get(field).filter(|v| !matches!(v, CypherValue::Null)).ok_or_else(|| {
@@ -386,8 +449,9 @@ impl Catalog {
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
         // Le périmètre, **dans la cellule courante** : une synchronisation ne
         // voit ni ne retire les lignes d'une autre cellule.
-        let mut scope_fields: Vec<&str> = config.scope.iter().map(String::as_str).collect();
-        let mut values: Vec<CypherValue> = config.scope.iter().map(|f| scope[f].clone()).collect();
+        // Les champs de la session : ceux du grain large, ou du fin.
+        let mut scope_fields: Vec<&str> = scope.keys().map(String::as_str).collect();
+        let mut values: Vec<CypherValue> = scope.values().cloned().collect();
         scope_fields.extend(["_org", "_project"]);
         values.push(CypherValue::String(self.scope.org.clone()));
         values.push(CypherValue::String(self.scope.project.clone()));
@@ -772,13 +836,18 @@ impl Catalog {
             if !(cellule("_org", &self.scope.org) && cellule("_project", &self.scope.project)) {
                 continue;
             }
-            let perimetre: BTreeMap<String, CypherValue> = config
-                .scope
-                .iter()
-                .filter_map(|f| Some((f.clone(), row.get(f)?.clone())))
-                .collect();
-            let json = serde_json::to_string(&perimetre).unwrap_or_default();
-            if let Some(session) = ouvertes.get(&json) {
+            // Le grain fin d'abord, puis le large : les deux ne sont jamais
+            // ouverts sur la même ligne.
+            let json_de = |champs: &mut dyn Iterator<Item = &String>| -> String {
+                let perimetre: BTreeMap<String, CypherValue> =
+                    champs.filter_map(|f| Some((f.clone(), row.get(f)?.clone()))).collect();
+                serde_json::to_string(&perimetre).unwrap_or_default()
+            };
+            let fin = (!config.fine_scope.is_empty())
+                .then(|| json_de(&mut config.scope.iter().chain(&config.fine_scope)));
+            let large = json_de(&mut config.scope.iter());
+            let session = fin.and_then(|j| ouvertes.get(&j)).or_else(|| ouvertes.get(&large));
+            if let Some(session) = session {
                 par_session.entry(session.clone()).or_default().push(uuid.to_string());
             }
         }

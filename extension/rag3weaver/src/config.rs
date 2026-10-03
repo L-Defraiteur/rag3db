@@ -544,6 +544,15 @@ pub struct SnapshotConfig {
     /// Les champs qui délimitent un périmètre. `[]` : l'entité entière.
     #[serde(default)]
     pub scope: Vec<String>,
+    /// **Un grain fin**, facultatif : des champs qui raffinent `scope`. Une
+    /// session s'ouvre soit sur `scope` (le grain large), soit sur `scope` et
+    /// `fineScope` ensemble (le grain fin) — jamais les deux sur des lignes
+    /// qui se recouvrent : une ligne n'a qu'une marque. Quand une session fine
+    /// est refusée parce que la large tient le périmètre, l'appelant écrit
+    /// simplement : la marque à l'écriture le compte pour la session large,
+    /// et ce qui manque part à sa fin.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fine_scope: Vec<String>,
     /// Au-delà de cette part du périmètre, la fin refuse de retirer sans
     /// `force` — c'est ce qui attrape un instantané tronqué qui paraît complet.
     #[serde(default = "SnapshotConfig::default_max_missing_ratio")]
@@ -627,6 +636,14 @@ impl SnapshotConfig {
         for f in &self.scope {
             if !fields.contains_key(f) {
                 return Err(format!("snapshot : le champ de périmètre '{f}' n'est pas un champ de cette entité"));
+            }
+        }
+        for f in &self.fine_scope {
+            if !fields.contains_key(f) {
+                return Err(format!("snapshot : le champ du grain fin '{f}' n'est pas un champ de cette entité"));
+            }
+            if self.scope.contains(f) {
+                return Err(format!("snapshot : '{f}' est déjà dans le périmètre ; le grain fin le raffine, il ne le répète pas"));
             }
         }
         if !(self.max_missing_ratio > 0.0 && self.max_missing_ratio <= 1.0) {
@@ -1881,6 +1898,7 @@ mod tests_keep_for {
     fn avec(v: Option<&str>) -> SnapshotConfig {
         SnapshotConfig {
             scope: vec![],
+            fine_scope: vec![],
             max_missing_ratio: 0.5,
             on_missing: OnMissing::Delete,
             keep_for: v.map(str::to_string),
