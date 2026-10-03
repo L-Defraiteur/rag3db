@@ -269,6 +269,9 @@ std::unique_ptr<PreparedStatement> ClientContext::prepareWithParams(std::string_
     try {
         parsedStatements = parseQuery(query);
     } catch (std::exception& exception) {
+        // Any statement that fails inside BEGIN ... COMMIT fails the block, whatever the cause:
+        // a statement that does not even parse is no exception.
+        transactionContext->rollbackAfterStatementFailure();
         return PreparedStatement::getPreparedStatementWithError(exception.what());
     }
     if (parsedStatements.size() > 1) {
@@ -317,6 +320,7 @@ std::unique_ptr<QueryResult> ClientContext::executeWithParams(PreparedStatement*
     try {
         bindParametersNoLock(*preparedStatement, inputParams);
     } catch (std::exception& e) {
+        transactionContext->rollbackAfterStatementFailure();
         return QueryResult::getQueryResultWithError(e.what());
     }
     auto name = preparedStatement->getName();
@@ -348,6 +352,8 @@ std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
     try {
         parsedStatements = parseQuery(query);
     } catch (std::exception& exception) {
+        // See prepareWithParams: one rule, whatever the cause of the failure.
+        transactionContext->rollbackAfterStatementFailure();
         return QueryResult::getQueryResultWithError(exception.what());
     }
     std::unique_ptr<QueryResult> queryResult;
