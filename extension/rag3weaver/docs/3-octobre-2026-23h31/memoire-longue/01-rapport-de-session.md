@@ -14,6 +14,8 @@ Mis à jour sur place.
 | `5d1a3189b`, `266c972fa`, `4e5bd8c07` | le banc passe à 72 paires de contrôle versionnées |
 | `7438b2909` | la portée `person`, dette nommée avec sa condition de sortie |
 | `5b3d0656f` | `e2e_arret_brutal` — le témoin produit de la reprise |
+| `87f176535` | **un index vectoriel détaché se reconnaît à l'ouverture et se rebâtit** |
+| `86fd91473` | l'audit des `CatalogEvent::Warning` au journal des chantiers |
 
 **Zéro ligne de Rust pour `Memory` et `Subject`.** Le gabarit `notebook`
 avait déjà prouvé qu'une entité à machine à états, identité stable et
@@ -176,17 +178,44 @@ comme une preuve :
    *n'a pas lieu*, et c'est exactement l'équivalence que les quatre cas de la
    veille avaient établie. Le témoin mesurait le cas complémentaire du sien.
 
-### Le lot « index vectoriel détaché » (orchestration, nuit du 4)
+### Le lot « index vectoriel détaché » — **fusionné** (`87f176535`)
 
 Reconnaître à l'ouverture un index vectoriel absent ou détaché, le rebâtir, et
-le dire. Code posé, `cargo check` en cours, pas encore commité :
+le dire.
+
+**Et il est mesuré, les deux pôles dans la même exécution.** Cas
+`une_mort_apres_insertion_vectorielle` : la recherche vectorielle refuse par
+« is behind its table » **avant** le montage, et rend ses lignes **après**. Cas
+de contrôle `un_temoin_sans_point_de_reprise_survit` : saine des deux côtés.
+Une seule variable — le `CHECKPOINT` explicite entre le chargement de
+l'extension et l'écriture.
+
+**La ligne qui fait mal** : `CATALOGUE=ok` dans la même seconde où la recherche
+refusait. Ce n'était ni la garde 1 qui réparait, ni ma redéclaration de schéma
+comme je l'avais d'abord écrit : la pose de l'index passait par `poser_index`,
+dont le commentaire portait une prémisse fausse — « ce DDL est idempotent, donc
+une erreur ici est un index absent, pas un doublon ». Le refus devenait un
+`CatalogEvent::Warning` que personne ne lit.
+
+**La cause, en une phrase, écrite dans le code pour qu'elle me survive** : nous
+demandions « l'index existe-t-il ? », à quoi le catalogue répond oui — l'entrée
+y reste. La question juste est « la table le porte-t-elle ? », et seul le
+moteur sait y répondre. D'où une sonde qui est un **ordre** et pas une
+question : on ne demande pas l'état au moteur, on lui demande de poser l'index,
+et c'est son refus qui renseigne.
+
+Les passes avant fusion : `e2e_code` filtre `bulk` 3 passed ; `e2e_simple_entity`
++ `e2e_chemin_de_masse` + `e2e_synchronisation` 68 passed ; après rebase,
+`e2e_arret_brutal` + `e2e_code` entier 28 passed.
+
+Ce qui a été touché :
 
 | Où | Quoi |
 |---|---|
 | `src/catalog.rs` | `INDEX_BEHIND_ITS_TABLE`, `CatalogError::IndexDetache`, `all_vector_indexes`, `rebuild_detached_vector_indexes`, et le `DROP` devant le `CREATE` dans `rebuild_vector_index` |
 | `src/catalog.rs` (`initialize`) | étape « 10 quater », après la restauration par drapeau |
 | `src/search.rs` | le refus **nommé** au lieu d'une `DbError` opaque |
-| `tests/e2e_arret_brutal.rs` | les trois sondes brutes du relecteur, avant toute redéclaration |
+| `tests/e2e_arret_brutal.rs` | les sondes brutes du relecteur, et **deux verts dont un échoue** : `REBATI` (l'index était détaché, le produit l'a réparé) contre `JUSTE` (rien n'était cassé, donc rien n'a été éprouvé) |
 
 **La décision de conception qui porte le lot** : détecter par **sonde** et non
 par drapeau. Le drapeau `vector_index_dropped:` ne connaît que les index que
@@ -196,8 +225,16 @@ absent, refusé par le fragment sur un détaché. Une seule question qui est
 aussi sa réponse. Et elle balaie **tous les modèles enregistrés**, pas
 seulement le courant : l'index d'un modèle d'avant n'est recréé par personne.
 
-**Ce que je ne sais toujours pas, et que la prochaine passe doit dire.** Je
-n'ai **jamais vu** d'index détaché. Je ne sais donc pas si la garde 1 laisse un
+**Ce que je ne savais pas et que la passe a dit.** J'ai écrit ici que je n'avais
+jamais vu d'index détaché, et que la recette à trois processus serait
+nécessaire pour en fabriquer un. Faux : mon scénario `insertion` le fabriquait
+depuis le début — un `CHECKPOINT` explicite entre le chargement de l'extension
+et l'écriture, la recette de l'orchestration en une session au lieu de deux. Je
+n'avais pas besoin de trois processus, j'avais besoin de **regarder**. Ce qui
+suit est gardé tel quel, parce que c'était vrai quand je l'ai écrit et que
+l'ordre des sondes, lui, reste la bonne décision.
+
+Je n'ai **jamais vu** d'index détaché. Je ne sais donc pas si la garde 1 laisse un
 index *détaché* ou *retiré* — les deux demandent une réparation différente.
 D'où les trois sondes brutes ajoutées au relecteur (`INDEX_VUS`,
 `INDEX_CIBLE`, `VECTEUR=`, `SONDE_CREATE=`), dans cet ordre précis : la sonde
