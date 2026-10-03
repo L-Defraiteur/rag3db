@@ -206,26 +206,27 @@ impl Origine {
     /// seulement en dernier — parce qu'elle traîne dans un profil au lieu
     /// d'être posée pour ce qu'on fait maintenant.
     pub fn voulue(regime: Regime) -> Self {
-        match std::env::var(VARIABLE_LLM) {
-            Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
+        Self::voulue_si(regime, std::env::var(VARIABLE_LLM).ok().as_deref(), std::env::var("RAG3WEAVER_LOCAL_LLM").is_ok())
+    }
+
+    /// [`Self::voulue`], l'environnement en paramètres : `llm` est la valeur
+    /// de `RAG3WEAVER_LLM`, `local_llm` dit si `RAG3WEAVER_LOCAL_LLM` est
+    /// posée. Pur — un test n'a pas à toucher aux variables du processus.
+    pub fn voulue_si(regime: Regime, llm: Option<&str>, local_llm: bool) -> Self {
+        if let Some(v) = llm {
+            match v.trim().to_ascii_lowercase().as_str() {
                 "local" | "locale" => return Self::Locale,
                 "distant" | "distante" | "cloud" | "vertex" => return Self::Distante,
                 "" => {}
                 autre => eprintln!(
                     "[rag3weaver] {VARIABLE_LLM}='{autre}' inconnu (local | distant) — on ignore"
                 ),
-            },
-            Err(_) => {}
+            }
         }
         match regime {
             Regime::Confort => Self::Distante,
-            Regime::Plein => {
-                if std::env::var("RAG3WEAVER_LOCAL_LLM").is_ok() {
-                    Self::Locale
-                } else {
-                    Self::Distante
-                }
-            }
+            Regime::Plein if local_llm => Self::Locale,
+            Regime::Plein => Self::Distante,
         }
     }
 }
@@ -742,46 +743,20 @@ mod tests {
 
 /// **La précédence de l'origine, isolée de l'environnement réel.**
 ///
-/// Ces tests posent des variables de processus : ils vivent dans leur propre
-/// module et s'exécutent en série, sinon deux d'entre eux se marchent dessus
-/// sur `RAG3WEAVER_LLM` — un test qui échoue une fois sur trois est pire qu'un
-/// test absent, parce qu'on apprend à l'ignorer.
+/// L'origine de l'inférence, sur des valeurs passées en paramètres : aucun
+/// de ces tests ne touche aux variables du processus (3 octobre 2026 — deux
+/// tests qui posent la même variable en parallèle finissent par se marcher
+/// dessus, verrou de module ou non, dès qu'un troisième la lit).
 #[cfg(test)]
 mod tests_origine {
     use super::*;
-
-    /// Pose les variables, appelle, remet tout comme c'était. Sérialisé par un
-    /// verrou de module : `std::env::set_var` est global au processus.
-    fn avec(vars: &[(&str, Option<&str>)], f: impl FnOnce() -> Origine) -> Origine {
-        static VERROU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = VERROU.lock().unwrap_or_else(|e| e.into_inner());
-        let anciens: Vec<(String, Option<String>)> =
-            vars.iter().map(|(k, _)| (k.to_string(), std::env::var(k).ok())).collect();
-        for (k, v) in vars {
-            match v {
-                Some(v) => std::env::set_var(k, v),
-                None => std::env::remove_var(k),
-            }
-        }
-        let r = f();
-        for (k, v) in anciens {
-            match v {
-                Some(v) => std::env::set_var(&k, v),
-                None => std::env::remove_var(&k),
-            }
-        }
-        r
-    }
 
     /// **Le cœur de la décision du 3 septembre.** `RAG3WEAVER_LOCAL_LLM` traîne
     /// dans un profil ; elle ne dit pas ce qu'on veut *maintenant*. Si elle
     /// gagnait, `confort` reprendrait la carte qu'il vient de libérer.
     #[test]
     fn sous_confort_une_variable_qui_traine_ne_reprend_pas_la_carte() {
-        let o = avec(
-            &[("RAG3WEAVER_LLM", None), ("RAG3WEAVER_LOCAL_LLM", Some("http://127.0.0.1:8080/v1"))],
-            || Origine::voulue(Regime::Confort),
-        );
+        let o = Origine::voulue_si(Regime::Confort, None, true);
         assert_eq!(o, Origine::Distante);
     }
 
@@ -789,10 +764,7 @@ mod tests_origine {
     /// règle du module, appliquée à la bonne variable.
     #[test]
     fn une_intention_explicite_reprend_la_main() {
-        let o = avec(
-            &[("RAG3WEAVER_LLM", Some("local")), ("RAG3WEAVER_LOCAL_LLM", Some("http://x/v1"))],
-            || Origine::voulue(Regime::Confort),
-        );
+        let o = Origine::voulue_si(Regime::Confort, Some("local"), true);
         assert_eq!(o, Origine::Locale, "RAG3WEAVER_LLM=local doit pouvoir reprendre la carte");
     }
 
@@ -800,15 +772,9 @@ mod tests_origine {
     /// pour que ce travail n'ait aucun effet de bord.
     #[test]
     fn sous_plein_la_variable_decide_comme_avant() {
-        let avec_locale = avec(
-            &[("RAG3WEAVER_LLM", None), ("RAG3WEAVER_LOCAL_LLM", Some("http://x/v1"))],
-            || Origine::voulue(Regime::Plein),
-        );
+        let avec_locale = Origine::voulue_si(Regime::Plein, None, true);
         assert_eq!(avec_locale, Origine::Locale);
-        let sans = avec(
-            &[("RAG3WEAVER_LLM", None), ("RAG3WEAVER_LOCAL_LLM", None)],
-            || Origine::voulue(Regime::Plein),
-        );
+        let sans = Origine::voulue_si(Regime::Plein, None, false);
         assert_eq!(sans, Origine::Distante, "sans local, on va au nuage comme avant");
     }
 
@@ -816,10 +782,7 @@ mod tests_origine {
     /// régime lui-même.
     #[test]
     fn une_valeur_illisible_ne_decide_rien() {
-        let o = avec(
-            &[("RAG3WEAVER_LLM", Some("nuageux")), ("RAG3WEAVER_LOCAL_LLM", Some("http://x/v1"))],
-            || Origine::voulue(Regime::Plein),
-        );
+        let o = Origine::voulue_si(Regime::Plein, Some("nuageux"), true);
         assert_eq!(o, Origine::Locale, "on retombe sur la règle normale, pas sur un choix arbitraire");
     }
 }

@@ -595,6 +595,8 @@ mod tests {
         // Sans réglage : le découpage d'avance, comme avant.
         // Et c'est **exactement** celui d'avant : une carte à soi, ou `plein`
         // écrit, ne voient aucune différence.
+        // (Les deux côtés lisent le même environnement : l'égalité tient
+        // quels que soient le régime et les réglages posés.)
         let Batches::Fixed(lots) = plan_with(&lens, Some((128, 512)), 32, None) else { panic!("un plan d'avance attendu") };
         assert_eq!(lots, stable_batches(&lens, lot_budget(Some((128, 512)), 32)));
         // Avec : une rafale après l'autre, sous le plafond du modèle — pas
