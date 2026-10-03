@@ -42,7 +42,14 @@ fn field_matches(r: &UnifiedResult, field: &str, value: &str) -> bool {
     r.data
         .as_ref()
         .and_then(|d| d.get(field))
-        .is_some_and(|v| matches!(v, CypherValue::String(s) if s == value))
+        .is_some_and(|v| match v {
+            // L'égalité, ou le suffixe à frontière de séparateur : un chemin
+            // d'index est souvent absolu quand l'argument de l'outil est
+            // relatif (« lib.rs » doit exclure « /tmp/…/workspace/lib.rs »,
+            // jamais « autre-lib.rs »).
+            CypherValue::String(s) => s == value || s.ends_with(&format!("/{value}")),
+            _ => false,
+        })
 }
 
 impl Node for FilterResultsNode {
@@ -202,6 +209,31 @@ mod tests {
             .unwrap();
         let uuids: Vec<&str> = out.iter().map(|u| u.uuid.as_str()).collect();
         assert_eq!(uuids, ["a"], "b est exclu par le champ, c par le seuil");
+    }
+
+    /// Un chemin absolu en base s'exclut par son nom relatif — à frontière
+    /// de séparateur : jamais « autre-lib.rs » pour « lib.rs ».
+    #[test]
+    fn l_exclusion_tient_sur_un_chemin_absolu() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input(
+            "results",
+            PortValue::new(vec![
+                r("abs", 0.9, "/tmp/x/workspace/lib.rs"),
+                r("piege", 0.9, "/tmp/x/workspace/autre-lib.rs"),
+            ]),
+        );
+        FilterResultsNode::new("f")
+            .with_exclude("file_path", "lib.rs")
+            .execute(&mut ctx)
+            .unwrap();
+        let out = ctx
+            .drain_outputs()
+            .remove("results")
+            .and_then(take_or_clone::<Vec<UnifiedResult>>)
+            .unwrap();
+        let uuids: Vec<&str> = out.iter().map(|u| u.uuid.as_str()).collect();
+        assert_eq!(uuids, ["piege"], "l'absolu est exclu, le presque-pareil reste");
     }
 
     /// Une exclusion à moitié déclarée refuse au montage.
