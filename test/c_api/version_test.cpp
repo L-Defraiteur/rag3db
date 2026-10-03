@@ -1,9 +1,11 @@
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "c_api/rag3db.h"
 #include "c_api_test/c_api_test.h"
 #include "gtest/gtest.h"
+#include "storage/storage_version_info.h"
 
 using namespace rag3db::main;
 using namespace rag3db::testing;
@@ -44,10 +46,12 @@ TEST_F(CApiVersionTest, GetStorageVersion) {
     std::ifstream dbFile;
     dbFile.open(data, std::ios::binary);
     ASSERT_TRUE(dbFile.is_open());
-    char magic[5];
-    dbFile.read(magic, 4);
-    magic[4] = '\0';
-    ASSERT_STREQ(magic, "RAG3DB");
+    // Les octets magiques sont ceux du moteur, et leur nombre aussi : l'en-tête les écrit
+    // tous avant le numéro de version (database_header.cpp).
+    const std::string expectedMagic = rag3db::storage::StorageVersionInfo::MAGIC_BYTES;
+    std::string magic(expectedMagic.size(), '\0');
+    dbFile.read(magic.data(), static_cast<std::streamsize>(magic.size()));
+    ASSERT_EQ(magic, expectedMagic);
     uint64_t actualVersion;
     dbFile.read(reinterpret_cast<char*>(&actualVersion), sizeof(actualVersion));
     dbFile.close();
@@ -66,10 +70,12 @@ TEST_F(EmptyCApiVersionTest, GetStorageVersion) {
     std::ifstream dbFile;
     dbFile.open(data, std::ios::binary);
     ASSERT_TRUE(dbFile.is_open());
-    char magic[5];
-    dbFile.read(magic, 4);
-    magic[4] = '\0';
-    ASSERT_STREQ(magic, "RAG3DB");
+    // Les octets magiques sont ceux du moteur, et leur nombre aussi : l'en-tête les écrit
+    // tous avant le numéro de version (database_header.cpp).
+    const std::string expectedMagic = rag3db::storage::StorageVersionInfo::MAGIC_BYTES;
+    std::string magic(expectedMagic.size(), '\0');
+    dbFile.read(magic.data(), static_cast<std::streamsize>(magic.size()));
+    ASSERT_EQ(magic, expectedMagic);
     uint64_t actualVersion;
     dbFile.read(reinterpret_cast<char*>(&actualVersion), sizeof(actualVersion));
     dbFile.close();
