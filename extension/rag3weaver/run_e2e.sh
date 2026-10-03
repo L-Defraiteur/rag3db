@@ -304,6 +304,28 @@ verifier_le_moteur() {
 }
 verifier_le_moteur
 
+# **Et contre quoi elle a tourné.** La ligne d'en-tête dit contre quoi la passe
+# a *commencé*. Un rebâti en cours de route est invisible : les binaires lancés
+# avant tiennent l'ancien moteur, ceux d'après le neuf (4 octobre 2026, une
+# batterie jetée). On relève date et taille au début et à la fin ; si elles ont
+# changé, la passe ne conclut pas. Une somme du contenu, ni la date (un
+# `touch` sans rebâti ferait refuser à tort) ni la taille (deux rebâtis de ce
+# soir avaient la même, à l'octet).
+empreinte_du_moteur() {
+  local f
+  for f in "$BUILD/src/librag3db.so" "$ROOT/extension/vector/build/libvector.rag3db_extension"; do
+    [ -f "$f" ] && cksum "$f"
+  done
+}
+MOTEUR_AU_DEBUT="$(empreinte_du_moteur)"
+moteur_inchange() {
+  if [ "$(empreinte_du_moteur)" != "$MOTEUR_AU_DEBUT" ]; then
+    echo "✗ le moteur a été remplacé pendant la passe : ce résultat ne vaut rien, rejoue"
+    return 1
+  fi
+  return 0
+}
+
 # **Zéro test n'est pas une réussite** — dans les deux modes. Sans filtre,
 # chaque suite demandée doit jouer au moins un test ; avec un filtre, c'est la
 # passe entière (un filtre qui ne désigne rien est une faute de frappe, pas
@@ -508,6 +530,10 @@ if [ "$SUMMARY" = true ]; then
     say "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
+  if ! moteur_inchange > /dev/null; then
+    say "  %s\n" "$(moteur_inchange)"
+    EXIT_CODE=1
+  fi
   if ! suites_vides "$TMPLOG" > /dev/null; then
     say "  %s\n" "$(suites_vides "$TMPLOG")"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
@@ -534,6 +560,9 @@ else
   echo ""
   if ! suites_vides "$E2E_LOG"; then
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
+  if ! moteur_inchange; then
+    EXIT_CODE=1
   fi
   if [ -n "$CHARGE_PID" ]; then
     kill "$CHARGE_PID" 2>/dev/null || true
