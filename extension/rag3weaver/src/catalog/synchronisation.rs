@@ -108,9 +108,12 @@ impl Catalog {
     // supprime ne devine pas qu'un appelant est parti. Deux périmètres
     // différents se synchronisent en même temps sans se gêner.
 
-    fn session_key(entity_name: &str, scope: &BTreeMap<String, CypherValue>) -> String {
+    /// La clé de la session ouverte : la **cellule courante** (`_org`,
+    /// `_project`), l'entité, les valeurs du périmètre. Deux cellules ne se
+    /// touchent pas : elles synchronisent le même périmètre en même temps.
+    fn session_key(&self, entity_name: &str, scope: &BTreeMap<String, CypherValue>) -> String {
         let scope = serde_json::to_string(scope).unwrap_or_default();
-        format!("snapshot_session:{entity_name}:{scope}")
+        format!("snapshot_session:{}/{}:{entity_name}:{scope}", self.scope.org, self.scope.project)
     }
 
     /// La session ouverte sur ce périmètre, s'il y en a une.
@@ -119,7 +122,7 @@ impl Catalog {
         entity_name: &str,
         scope: &BTreeMap<String, CypherValue>,
     ) -> Result<Option<SnapshotSession>, CatalogError> {
-        match self.read_meta_key(&Self::session_key(entity_name, scope))? {
+        match self.read_meta_key(&self.session_key(entity_name, scope))? {
             Some(v) if !v.is_empty() => serde_json::from_str(&v)
                 .map(Some)
                 .map_err(|e| CatalogError::DbError(format!("session de synchronisation illisible : {e}"))),
@@ -196,7 +199,7 @@ impl Catalog {
         let open = SnapshotSession { session, opened_at, replaced };
         let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        self.persist_meta_key(&Self::session_key(entity_name, scope), &value)?;
+        self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
         Ok(open)
     }
 
@@ -211,7 +214,7 @@ impl Catalog {
         self.check_ecriture("abort_snapshot")?;
         self.check_entity(entity_name)?;
         self.check_open_session(entity_name, scope, session)?;
-        self.persist_meta_key(&Self::session_key(entity_name, scope), "")
+        self.persist_meta_key(&self.session_key(entity_name, scope), "")
     }
 
     /// **Marquer des lignes comme portées par la session ouverte** sur leur
@@ -314,13 +317,18 @@ impl Catalog {
             .get(entity_name)
             .cloned()
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
-        let scope_fields: Vec<&str> = config.scope.iter().map(String::as_str).collect();
+        // Le périmètre, **dans la cellule courante** : une synchronisation ne
+        // voit ni ne retire les lignes d'une autre cellule.
+        let mut scope_fields: Vec<&str> = config.scope.iter().map(String::as_str).collect();
+        let mut values: Vec<CypherValue> = config.scope.iter().map(|f| scope[f].clone()).collect();
+        scope_fields.extend(["_org", "_project"]);
+        values.push(CypherValue::String(self.scope.org.clone()));
+        values.push(CypherValue::String(self.scope.project.clone()));
         let cypher = self.dialect.select_snapshot_scope(entity_name, &scope_fields, &[]);
-        let params: Vec<QueryParam> = config
-            .scope
-            .iter()
+        let params: Vec<QueryParam> = values
+            .into_iter()
             .enumerate()
-            .map(|(i, f)| QueryParam::new(&format!("p{i}"), scope[f].clone()))
+            .map(|(i, v)| QueryParam::new(&format!("p{i}"), v))
             .collect();
         let rows = self
             .conn
@@ -582,7 +590,7 @@ impl Catalog {
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         // La fin ferme la session.
-        self.persist_meta_key(&Self::session_key(&entity_name, &report.scope), "")?;
+        self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
         Ok(report)
     }
 
