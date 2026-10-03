@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -325,19 +326,88 @@ public:
     // l'autre peut être bloqué par le moteur et ne jamais l'atteindre. Rend faux au
     // délai, sans bloquer la passe.
     bool waitFor(uint32_t worker, std::string_view label, std::chrono::milliseconds timeout) {
+        return waitForAny(worker, {label}, timeout);
+    }
+
+    // Attend qu'un autre écrivain ait marqué l'un des événements donnés.
+    bool waitForAny(uint32_t worker, std::initializer_list<std::string_view> labels,
+        std::chrono::milliseconds timeout) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline) {
-            const auto count = std::min(area.numEvents.load(), MAX_EVENTS);
-            for (auto i = 0u; i < count; ++i) {
-                const auto& event = area.events[i];
-                if (event.ready.load(std::memory_order_acquire) != 0 && event.worker == worker &&
-                    label == event.label) {
+            for (const auto label : labels) {
+                if (eventIndexOf(worker, label) >= 0) {
                     return true;
                 }
             }
             std::this_thread::yield();
         }
         return false;
+    }
+
+    // L'index d'un événement déjà entièrement marqué, ou -1.
+    int eventIndexOf(uint32_t worker, std::string_view label) const {
+        const auto count = std::min(area.numEvents.load(), MAX_EVENTS);
+        for (auto i = 0u; i < count; ++i) {
+            const auto& event = area.events[i];
+            if (event.ready.load(std::memory_order_acquire) != 0 && event.worker == worker &&
+                label == event.label) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    // Valide, encadré par « <label>:start » et « <label>:done » ou « <label>:failed ».
+    bool commitMarked(const std::string& label) {
+        mark(label + ":start");
+        const bool succeeded = commit();
+        mark(label + (succeeded ? ":done" : ":failed"));
+        return succeeded;
+    }
+
+    // Écrit à son tour : l'écrivain k attend la fin de l'écriture de l'écrivain k - 1,
+    // puis écrit (runMarked(…, "write")). Les transactions ont toutes écrit avant le
+    // premier commit — l'anomalie logique est la même — mais deux écritures ne touchent
+    // jamais les informations de version en même temps : la course physique du chemin
+    // de suppression sans verrou fait planter le processus (SIGSEGV dans
+    // VersionInfo::isDeleted et isSelected, 3 octobre), et elle a ses propres cas (C5,
+    // C7, la passe ThreadSanitizer). Le jour où le moteur fera attendre un écrivain sur
+    // un verrou, l'écriture de k bloquera après celle de k - 1, ce qui ne change rien
+    // ici.
+    bool writeInTurn(const std::string& query) {
+        constexpr std::chrono::milliseconds PREVIOUS_WRITE{30'000};
+        if (workerIndex > 0) {
+            waitForAny(workerIndex - 1, {"write:done", "write:failed"}, PREVIOUS_WRITE);
+        }
+        return runMarked(query, "write");
+    }
+
+    // Les commits dans l'ordre donné, réglés par les événements et non par une barrière,
+    // pour les cas où chaque écrivain a écrit par runMarked(…, "write") dans sa
+    // transaction. Chacun, à son tour : attend la fin de l'écriture des autres, au plus
+    // WRITE_SETTLE — aujourd'hui elle arrive aussitôt, et les transactions ont donc
+    // toutes écrit avant le premier commit ; le jour où le moteur fera attendre le
+    // second écrivain sur un verrou (décision de Lucie, 2 octobre), son écriture ne
+    // finira qu'après le commit du premier, le délai expirera et le premier validera,
+    // là où une barrière aurait bloqué les deux. Puis il attend que le précédent dans
+    // l'ordre ait fini de valider, et valide.
+    void commitInOrderByEvents(const std::vector<uint32_t>& order) {
+        constexpr std::chrono::milliseconds WRITE_SETTLE{2'000};
+        constexpr std::chrono::milliseconds PREVIOUS_COMMIT{30'000};
+        for (auto position = 0u; position < order.size(); ++position) {
+            if (order[position] != workerIndex) {
+                continue;
+            }
+            for (auto other = 0u; other < area.numWorkers; ++other) {
+                if (other != workerIndex) {
+                    waitForAny(other, {"write:done", "write:failed"}, WRITE_SETTLE);
+                }
+            }
+            if (position > 0) {
+                waitForAny(order[position - 1], {"commit:done", "commit:failed"}, PREVIOUS_COMMIT);
+            }
+            commitMarked("commit");
+        }
     }
 
     // Une instruction encadrée par deux marques : « <label>:start » puis

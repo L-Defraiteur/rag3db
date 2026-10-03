@@ -13,11 +13,30 @@ endif()
 target_include_directories(concurrence_test PRIVATE ${PROJECT_SOURCE_DIR}/test/include)
 include(GoogleTest)
 
+if (ENABLE_THREAD_SANITIZER)
+    # Le build ThreadSanitizer n'enregistre que la passe à signatures (label
+    # concurrence-tsan) : sous TSan, les tests ordinaires sortiraient en erreur au premier
+    # avertissement, et rien n'y est déterministe. Voir compare_tsan_signatures.py.
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME concurrence_tsan.signatures
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/compare_tsan_signatures.py
+            $<TARGET_FILE:concurrence_test> ${CMAKE_CURRENT_SOURCE_DIR}/tsan_signatures.txt
+            ${CMAKE_CURRENT_BINARY_DIR}/tsan-reports
+    )
+    set_tests_properties(concurrence_tsan.signatures PROPERTIES LABELS concurrence-tsan)
+    return()
+endif()
+
 set(KNOWN_RED_FILE ${CMAKE_CURRENT_SOURCE_DIR}/known_red.txt)
 set(PROBABILISTIC_FILE ${CMAKE_CURRENT_SOURCE_DIR}/probabilistic.txt)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${KNOWN_RED_FILE} ${PROBABILISTIC_FILE})
-file(STRINGS ${KNOWN_RED_FILE} KNOWN_RED ENCODING UTF-8 REGEX "^[^#]")
+file(STRINGS ${KNOWN_RED_FILE} KNOWN_RED_LINES ENCODING UTF-8 REGEX "^[^#]")
+set(KNOWN_RED)
+foreach (line IN LISTS KNOWN_RED_LINES)
+    string(REGEX REPLACE "^([^ \t]+).*$" "\\1" name "${line}")
+    list(APPEND KNOWN_RED ${name})
+endforeach()
 file(STRINGS ${PROBABILISTIC_FILE} PROBABILISTIC ENCODING UTF-8 REGEX "^[^#]")
 list(JOIN KNOWN_RED ":" KNOWN_RED_FILTER)
 list(JOIN PROBABILISTIC ":" PROBABILISTIC_FILTER)

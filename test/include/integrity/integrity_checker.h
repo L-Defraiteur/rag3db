@@ -9,7 +9,8 @@
 // lister des relations. Lire a.id dans MATCH (a)-[r]->(b) joint la table des nœuds
 // de a et efface en silence une relation dont a est supprimé, alors que count(r) la
 // compte encore. La première version du vérificateur s'y est fait prendre (C2, étape
-// 1) ; son témoin rouge est IntegrityCheckerWitness.
+// 1) ; son témoin rouge est IntegrityCheckerWitness. Même chose pour une étiquette
+// posée sur l'extrémité lointaine (« (b:Item) ») : elle joint aussi la table des nœuds.
 //
 // Niveau 1 : par Cypher seulement (API publique), utilisable depuis n'importe quel
 // processus. Niveau 2 : par les internes, voir checkLevel2.

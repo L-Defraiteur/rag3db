@@ -1,39 +1,70 @@
-# Les rouges attendus du banc de concurrence, un nom complet gtest par ligne.
+# Les rouges attendus du banc de concurrence : un nom complet gtest, puis l'ensemble
+# exact des étiquettes « [check: …] » de ses échecs — la raison du rouge.
 # La passe compare le résultat à cette liste (test ctest concurrence_test.known_red) :
-# un rouge absent d'ici, comme un nom d'ici qui passe au vert, la fait échouer.
-# Une ligne ne se retire que dans le commit de la marche qui corrige le cas.
-#
-# C7 n'est pas ici : il est probabiliste (probabilistic.txt).
+# un rouge absent d'ici, un nom d'ici qui passe au vert, ou un rouge connu dont les
+# étiquettes changent (un rouge qui change de cause) la font échouer. Un échec sans
+# étiquette (plantage, préparation qui échoue) compte comme « untagged ».
+# Une ligne ne se retire, ou ne change d'étiquettes, que dans le commit de la marche qui
+# corrige le cas. Les cas probabilistes sont dans probabilistic.txt.
 #
 # C1 — deux insertions de la même clé primaire validées toutes les deux (marche A3).
 # Survit au point de reprise et au rejeu, à l'identique.
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Hot
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Reopen
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash
-# C2 — relation vers un nœud supprimé par une transaction concurrente (marche A4).
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Hot
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Hot
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Reopen
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Reopen
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Crash
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Crash
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+#
+# C1 — la même clé sans chevauchement, depuis un instantané antérieur au commit de
+# l'autre (relecture du cœur C++) : le contrôle d'unicité doit regarder le dernier
+# état validé (marche A3).
+Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+#
+# C2 — relation vers un nœud supprimé par une transaction concurrente (marche A4) :
+# la source, la destination, et la source par DETACH DELETE, dans les deux ordres.
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+#
 # C3 — relations rattachées aux nœuds de l'autre transaction (marche A2).
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Hot
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Reopen
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Crash
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Hot rel-endpoints-correct
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Reopen rel-endpoints-correct
+Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Crash rel-endpoints-correct
+#
 # C6 — suppression et mise à jour de la même ligne validées toutes les deux ; la
-# mise à jour est perdue. Reproduit sans harnais, dans un seul fil.
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Hot
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Reopen
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Crash
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash
-MinimalReproduction.C6_DeleteCommitsFirstSingleThread
-MinimalReproduction.C6_UpdateCommitsFirstSingleThread
+# mise à jour est perdue. Reproduit sans harnais, dans un seul fil. L'attendu est en
+# suspens jusqu'à la note sur les verrous (voir le commentaire du cas).
+MinimalReproduction.C6_DeleteCommitsFirstSingleThread not-both-commit
+MinimalReproduction.C6_UpdateCommitsFirstSingleThread not-both-commit
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Hot one-commit
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Reopen one-commit
+Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Crash one-commit
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot one-commit
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen one-commit
+Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
+#
 # La transaction en échec : après une instruction en erreur dans BEGIN … COMMIT, les
 # suivantes sont validées une à une en auto-commit (PostgreSQL et Neo4j les refusent).
-MinimalReproduction.FailedTransactionRefusesFurtherStatements
+MinimalReproduction.FailedTransactionRefusesFurtherStatements nothing-after-error,refused-after-error,rollback-closes
+#
+# Deux mises à jour de la même ligne sur deux colonnes, validées toutes les deux : le
+# conflit n'est cherché que colonne par colonne (relecture du cœur C++ ; marche A4′).
+MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
