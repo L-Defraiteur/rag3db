@@ -791,6 +791,67 @@ retard », est donc sans objet pour le premier index par gros paquets. Pour
 l'incrémental, ce n'est pas un gros poste. Ne pas le rouvrir sans une mesure
 qui le redemande.
 
+**Livré côté codeparsers (4 octobre, nuit).** Branche `fichier-seul` du dépôt
+codeparsers, `2c17314`, en attente du pointeur unique chez l'arbre principal.
+- `resolve_cross_file: Some(false)` : aucune relation ne traverse un fichier ;
+  ni les cibles, ni les qualificatifs connus, ni les types lus d'un champ ou
+  d'un retour ne dépendent plus du paquet. Sur le dépôt entier, un appel et
+  85 paquets rendent les mêmes 371 289 relations.
+- `project_files` : seulement pour Python. Ailleurs, la forme de l'import dit
+  ce qui est local. Un dossier `std` ou `node` du dépôt effaçait sinon la
+  bibliothèque du même nom.
+- `IdentifierReference.import_origin { source, imported, via_qualifier }` :
+  l'import qui amène le nom, ou son qualificatif, tel qu'écrit.
+
+**Ce que la règle retire de l'index d'aujourd'hui.** 50 retraits relus par
+rapport aux paquets de 64, pas par rapport à l'appel unique : **32 justes, 18
+fausses**. Un paquet regroupe des fichiers voisins, donc le premier homonyme y
+tombe plus souvent juste.
+- 10 des justes étaient un bogue de la branche, corrigé avant livraison.
+- Environ 16 se rattrapent par les rendez-vous : nom unique, ou import qui le
+  désigne.
+- Environ 5 sont des **paires déclaration `.h` / définition `.cpp`**
+  (`get_time_`, `getLine`, `BrotliCreateBackwardReferences`). Deux définitions
+  du même nom, que les rendez-vous ne trancheront pas.
+- La fusion attend donc le banc des relations avant et après, rendez-vous
+  enrichis compris. Le rappel ne doit pas baisser.
+
+**Prochain lot côté justesse : les paires `.h` / `.cpp`.** Ce dépôt est pour
+moitié du C++. La règle à mesurer : même nom qualifié, même signature,
+fichiers de même base (`x.h` et `x.cpp`, ou `-inl.h`). La déclaration et la
+définition sont alors une seule chose pour un rendez-vous. Elle se mesure
+comme les autres : relations gagnées, et 50 relues.
+
+**L'analyse était quadratique, et sa sortie pas déterministe** (même
+branche, `8d6d212`, `2c17314`).
+- La ligne de contexte de chaque référence se lisait en découpant le fichier
+  depuis le début.
+- La doc de chaque scope se cherchait en découpant le fichier entier.
+- Gains : roaring.c 12,1 → 0,86 s ; dépôt entier en un appel 19,9 → 8,7 s ;
+  par paquets de 64, 34,7 → 12,8 s.
+- Références et imports sortaient dans un ordre propre à chaque fil :
+  jusqu'à 28 ordres pour 64 analyses du même fichier. C'était la paire qui
+  clignotait dans le test d'égalité des graphes.
+- Tout est trié à la sortie. Preuve par empreinte canonique de chaque
+  fichier : 0 différence avant et après, 0 entre deux passes.
+
+**Les géants générés** (analyseurs ANTLR, `generated/*_onnx.rs`, tables
+Unicode) ne coûtent plus de temps, mais n'apprennent rien à un agent. C'est à
+la politique (`code::verdict`) de les écarter, avec leur raison : marqueur
+« generated », dossier `generated/`, ou grande taille pour très peu de
+scopes. Confié à la session embarquements, pour l'estimation.
+
+**Mis de côté : la résolution parallèle par fichier.** En fichier seul, chaque
+fichier se résout sans les autres, donc la résolution se parallélise. Elle ne
+fait plus que 2,2 s en un appel sur le dépôt entier : le gain est petit.
+L'orchestration l'a écartée pour l'instant.
+
+**Pour la session cœur C++.** `SHORTEST` sur `CONSUMES` fait 11 à 18 ms par
+paire sur 5 000 scopes, sans produit cartésien. Mais son plan lit les
+propriétés des nœuds du chemin par un **`SCAN_NODE_TABLE`**, qui croîtra avec
+la table. À regarder avant d'en faire une section de chaque recherche :
+`extension/rag3weaver/docs/3-octobre-2026-20h30/08`.
+
 ### `SET` refuse un champ nul partout qu'un `CREATE` accepte (cœur C++, 3 octobre)
 
 `UNWIND $rows AS r MATCH (t:T {id: r.id}) SET t.v = r.v`, avec `v` nul dans toutes les
