@@ -75,6 +75,13 @@ pub struct Identite {
     /// Vide chez un démon d'avant le 6 septembre 2026 — donc périmé.
     #[serde(default)]
     pub executable: String,
+    /// Le relecteur que ce démon sert aussi (`POST /rerank`), par son nom ;
+    /// absent : il n'en sert pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reranker: Option<String>,
+    /// L'OCR que ce démon sert aussi (`POST /ocr`), par son nom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ocr: Option<String>,
 }
 
 // ─── Le serveur ──────────────────────────────────────────────────────────────
@@ -84,6 +91,10 @@ pub struct EmbedDaemon {
     embedder: Arc<dyn Embedder>,
     dual: Option<Arc<dyn DualEmbedder>>,
     sparse: Option<Arc<dyn SparseEmbedder>>,
+    /// Un relecteur et un OCR, servis par le même démon : un seul processus à
+    /// relancer sur le poste qui sert, une seule carte, une seule file.
+    reranker: Option<(String, Arc<dyn crate::reranker::Reranker>)>,
+    ocr: Option<(String, Arc<dyn crate::ocr::Ocr>)>,
     fils: usize,
     /// Servir hors de la boucle locale, en connaissance de cause. Voir
     /// [`super::est_local`].
@@ -111,6 +122,8 @@ impl EmbedDaemon {
             embedder,
             dual: None,
             sparse: None,
+            reranker: None,
+            ocr: None,
             fils: 4,
             lot_max: 32,
             expose: false,
@@ -140,6 +153,19 @@ impl EmbedDaemon {
     /// avant du modèle en moins de trafic sur le fil, pas en moins de calcul.
     pub fn avec_sparse(mut self, sparse: Arc<dyn SparseEmbedder>) -> Self {
         self.sparse = Some(sparse);
+        self
+    }
+
+    /// Ce démon relit aussi : `POST /rerank`. `model` est le nom sous lequel
+    /// un client le demandera (`models.rerank.model`).
+    pub fn avec_reranker(mut self, model: impl Into<String>, reranker: Arc<dyn crate::reranker::Reranker>) -> Self {
+        self.reranker = Some((model.into(), reranker));
+        self
+    }
+
+    /// Ce démon lit aussi les images : `POST /ocr`.
+    pub fn avec_ocr(mut self, model: impl Into<String>, ocr: Arc<dyn crate::ocr::Ocr>) -> Self {
+        self.ocr = Some((model.into(), ocr));
         self
     }
 
@@ -256,6 +282,8 @@ impl EmbedDaemon {
             precision: "unknown".to_string(),
             lot_conseille: self.embedder.budget_conseille(),
             executable: String::new(),
+            reranker: self.reranker.as_ref().map(|(model, _)| model.clone()),
+            ocr: self.ocr.as_ref().map(|(model, _)| model.clone()),
         }
     }
 
@@ -269,6 +297,34 @@ impl EmbedDaemon {
 #[derive(Deserialize)]
 struct Textes {
     texts: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct Relecture {
+    query: String,
+    passages: Vec<String>,
+}
+
+/// Une image sur le fil : ses dimensions et ses octets RGB en base64.
+#[derive(Serialize, Deserialize)]
+struct ImageSurLeFil {
+    width: u32,
+    height: u32,
+    rgb: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LigneSurLeFil {
+    text: String,
+    confidence: f32,
+    quad: [[f32; 2]; 4],
+}
+
+#[derive(Serialize, Deserialize)]
+struct LectureSurLeFil {
+    width: u32,
+    height: u32,
+    lines: Vec<LigneSurLeFil>,
 }
 
 impl Service for EmbedDaemon {
@@ -325,6 +381,58 @@ impl Service for EmbedDaemon {
                     ),
                     Err(e) => (500, erreur(&e.to_string())),
                 },
+            },
+            // Le relecteur et l'OCR prennent la carte comme un lot
+            // d'embarquement : une passe à la fois, sous le même verrou.
+            ("POST", "/rerank") => match (&self.reranker, lire_json::<Relecture>(req)) {
+                (None, _) => (404, erreur("ce démon ne sert pas de relecteur")),
+                (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some((_, r)), Ok(d)) => {
+                    let debut = std::time::Instant::now();
+                    let scores = {
+                        let _passe = self.passe.lock();
+                        r.rerank(&d.query, &d.passages)
+                    };
+                    souffler(debut.elapsed());
+                    match scores {
+                        Ok(scores) => (200, serde_json::json!({ "scores": scores }).to_string()),
+                        Err(e) => (500, erreur(&e.to_string())),
+                    }
+                }
+            },
+            ("POST", "/ocr") => match (&self.ocr, lire_json::<ImageSurLeFil>(req)) {
+                (None, _) => (404, erreur("ce démon ne sert pas d'OCR")),
+                (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some((_, o)), Ok(i)) => {
+                    use base64::Engine as _;
+                    let image = base64::engine::general_purpose::STANDARD
+                        .decode(i.rgb.as_bytes())
+                        .map_err(|e| e.to_string())
+                        .and_then(|rgb| crate::ocr::OcrImage::from_rgb(i.width, i.height, rgb).map_err(|e| e.to_string()));
+                    match image {
+                        Err(e) => (400, erreur(&e)),
+                        Ok(image) => {
+                            let debut = std::time::Instant::now();
+                            let lu = {
+                                let _passe = self.passe.lock();
+                                o.recognize(&image)
+                            };
+                            souffler(debut.elapsed());
+                            match lu {
+                                Ok(lu) => (
+                                    200,
+                                    serde_json::to_string(&LectureSurLeFil {
+                                        width: lu.width,
+                                        height: lu.height,
+                                        lines: lu.lines.into_iter().map(|l| LigneSurLeFil { text: l.text, confidence: l.confidence, quad: l.quad }).collect(),
+                                    })
+                                    .unwrap_or_default(),
+                                ),
+                                Err(e) => (500, erreur(&e.to_string())),
+                            }
+                        }
+                    }
+                }
             },
             _ => (404, erreur("route inconnue")),
         }
@@ -523,6 +631,90 @@ impl Embedder for DaemonEmbedder {
     /// [`Embedder::distant`].
     fn distant(&self) -> bool {
         true
+    }
+}
+
+// ─── Le relecteur et l'OCR, par le démon ─────────────────────────────────────
+
+/// **Le relecteur d'un démon** (`POST /rerank`). On s'y attache : le démon
+/// doit déjà répondre et déclarer un relecteur dans son identité.
+pub struct DaemonReranker {
+    base: String,
+    agent: ureq::Agent,
+    model: String,
+}
+
+impl DaemonReranker {
+    pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
+        let agent = agent();
+        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        match identite.reranker {
+            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            None => Err(DaemonError::Reponse(format!("sert {} sans relecteur", identite.modele))),
+        }
+    }
+    /// Le relecteur que le démon déclare servir.
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+}
+
+impl crate::reranker::Reranker for DaemonReranker {
+    fn rerank(&self, query: &str, passages: &[String]) -> Result<Vec<f32>, EmbedError> {
+        let corps = serde_json::json!({ "query": query, "passages": passages }).to_string();
+        let texte = poster(&self.agent, &self.base, "/rerank", corps).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
+        let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
+        let scores: Vec<f32> = serde_json::from_value(v["scores"].clone()).map_err(|e| EmbedError::ProviderError(format!("champ 'scores' : {e}")))?;
+        if scores.len() != passages.len() {
+            return Err(EmbedError::ProviderError(format!("{} scores pour {} passages", scores.len(), passages.len())));
+        }
+        Ok(scores)
+    }
+    fn name(&self) -> &str {
+        &self.model
+    }
+}
+
+/// **L'OCR d'un démon** (`POST /ocr`).
+pub struct DaemonOcr {
+    base: String,
+    agent: ureq::Agent,
+    model: String,
+}
+
+impl DaemonOcr {
+    pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
+        let agent = agent();
+        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        match identite.ocr {
+            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            None => Err(DaemonError::Reponse(format!("sert {} sans OCR", identite.modele))),
+        }
+    }
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+}
+
+impl crate::ocr::Ocr for DaemonOcr {
+    fn recognize(&self, image: &crate::ocr::OcrImage) -> Result<crate::ocr::OcrOutput, crate::ocr::OcrError> {
+        use base64::Engine as _;
+        let corps = serde_json::to_string(&ImageSurLeFil {
+            width: image.width,
+            height: image.height,
+            rgb: base64::engine::general_purpose::STANDARD.encode(&image.rgb),
+        })
+        .map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, "/ocr", corps).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
+        let lu: LectureSurLeFil = serde_json::from_str(&texte).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
+        Ok(crate::ocr::OcrOutput {
+            width: lu.width,
+            height: lu.height,
+            lines: lu.lines.into_iter().map(|l| crate::ocr::OcrLine { text: l.text, confidence: l.confidence, quad: l.quad }).collect(),
+        })
+    }
+    fn name(&self) -> &str {
+        &self.model
     }
 }
 
@@ -928,6 +1120,49 @@ mod tests {
         let autre = ModelSource { address: Addresses::parse(&complet), ..ModelSource::service("bge-m3") };
         let refus = connect_sparse(&autre).err().expect("pas ce modèle");
         assert!(refus.contains("aucun service ne sert bge-m3") && refus.contains("sert regle"), "{refus}");
+    }
+
+    /// **Le même démon relit et lit les images** : ses routes, son identité,
+    /// et la déclaration `models.rerank` / `models.ocr` qui le trouve parmi
+    /// plusieurs adresses.
+    #[test]
+    fn le_demon_porte_aussi_le_relecteur_et_l_ocr() {
+        use crate::model_source::{connect_ocr, connect_reranker, Addresses, ModelSource, Origin};
+        use crate::ocr::{MockOcr, Ocr, OcrImage, OcrLine};
+        use crate::reranker::{CallbackReranker, Reranker};
+
+        // Un relecteur qui note la longueur du passage, un OCR qui rend une ligne.
+        let relecteur: Arc<dyn Reranker> = Arc::new(CallbackReranker::new("longueur", |_q: &str, passages: &[String]| {
+            Ok(passages.iter().map(|p| p.len() as f32).collect())
+        }));
+        let ligne = OcrLine::rect("bonjour", 0.9, 0.0, 0.0, 2.0, 1.0);
+        let ocr: Arc<dyn Ocr> = Arc::new(MockOcr::with_lines(vec![ligne.clone()]));
+        let nu = demon(EmbedDaemon::new(Arc::new(Regle(8))));
+        let complet = demon(EmbedDaemon::new(Arc::new(Regle(8))).avec_reranker("relecteur-test", relecteur).avec_ocr("ocr-test", ocr));
+
+        let id = DaemonEmbedder::joindre(&complet).expect("joindre").identite().clone();
+        assert_eq!((id.reranker.as_deref(), id.ocr.as_deref()), (Some("relecteur-test"), Some("ocr-test")));
+        assert_eq!(DaemonEmbedder::joindre(&nu).expect("joindre").identite().reranker, None);
+
+        // Par la déclaration : la bonne adresse est choisie, l'origine est un service.
+        let source = |model: &str| ModelSource { address: Addresses::parse(&format!("{nu}, {complet}")), ..ModelSource::service(model) };
+        let (r, origine) = connect_reranker(&source("relecteur-test")).expect("le second relit");
+        assert_eq!(origine, Origin::Service(complet.clone()));
+        assert_eq!(r.rerank("q", &["abc".to_string(), "abcdef".to_string()]).expect("scores"), vec![3.0, 6.0]);
+        let (o, _) = connect_ocr(&source("ocr-test")).expect("le second lit");
+        let lu = o.recognize(&OcrImage::from_rgb(2, 1, vec![0; 6]).unwrap()).expect("lecture");
+        assert_eq!((lu.width, lu.height), (2, 1));
+        assert_eq!(lu.lines, vec![ligne], "la lecture traverse le fil sans rien perdre");
+
+        // Un démon sans relecteur, ou un autre relecteur demandé : un refus qui dit quoi.
+        let seul = ModelSource { address: Addresses::parse(&nu), ..ModelSource::service("relecteur-test") };
+        let refus = connect_reranker(&seul).err().expect("pas de relecteur");
+        assert!(refus.contains("models.rerank") && refus.contains("sans relecteur"), "{refus}");
+        let refus = connect_reranker(&source("un-autre")).err().expect("pas ce relecteur");
+        assert!(refus.contains("sert relecteur-test"), "{refus}");
+        // Une image mal formée est refusée par le démon, pas plantée.
+        let c = DaemonEmbedder::joindre(&complet).expect("joindre");
+        assert!(poster(&c.agent, &c.base, "/ocr", r#"{"width":2,"height":2,"rgb":"AAAA"}"#.to_string()).is_err());
     }
 
     /// **Un embarqueur distant se déclare distant**, sur les trois traits.

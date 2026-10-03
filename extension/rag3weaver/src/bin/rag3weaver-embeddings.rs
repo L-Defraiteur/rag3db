@@ -123,6 +123,28 @@ fn servir() -> Result<(), String> {
         );
     }
     let demon = demon.burst(rafales);
+    // **Un seul démon à relancer** : il peut porter aussi un relecteur et un
+    // OCR, sur la même carte et sous la même file. `RAG3WEAVER_RERANK_MODEL`
+    // (`msmarco-minilm`, `mmarco-mminilm`, `bge-reranker-v2-m3`) et
+    // `RAG3WEAVER_OCR_MODEL` (`ppocrv6-tiny`) ; un client les demande par
+    // `models.rerank` / `models.ocr` en `provider: service`.
+    let demande = |variable: &str| std::env::var(variable).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    let demon = match demande("RAG3WEAVER_RERANK_MODEL") {
+        Some(model) => {
+            let (relecteur, _) = rag3weaver::model_source::connect_reranker(&rag3weaver::model_source::ModelSource::local(model.clone()))?;
+            eprintln!("  relecteur {model} chargé");
+            demon.avec_reranker(model, relecteur)
+        }
+        None => demon,
+    };
+    let demon = match demande("RAG3WEAVER_OCR_MODEL") {
+        Some(model) => {
+            let (ocr, _) = rag3weaver::model_source::connect_ocr(&rag3weaver::model_source::ModelSource::local(model.clone()))?;
+            eprintln!("  OCR {model} chargé");
+            demon.avec_ocr(model, ocr)
+        }
+        None => demon,
+    };
     // **Refuser avant d'annoncer.** Sinon le journal dit « à l'écoute sur
     // 0.0.0.0 » juste avant d'échouer, et c'est la ligne qu'on croira.
     if !expose && !rag3weaver::daemon::est_local(&adresse) {

@@ -62,10 +62,12 @@ impl Capability {
     /// `RAG3WEAVER_SERVICE_EMBED` n'a rien à poser de plus.
     pub fn variables(self) -> Vec<String> {
         let mut v = vec![self.variable()];
-        if self == Self::Sparse {
+        // Le creux, le relecteur et l'OCR sont servis par le démon
+        // d'embarquement : sans variable à eux, ils lisent les siennes.
+        if matches!(self, Self::Sparse | Self::Rerank | Self::Ocr) {
             v.push(Self::Embed.variable());
         }
-        if matches!(self, Self::Embed | Self::Sparse) {
+        if matches!(self, Self::Embed | Self::Sparse | Self::Rerank | Self::Ocr) {
             v.push("RAG3WEAVER_EMBED_SERVICE".to_string());
         }
         v
@@ -407,10 +409,10 @@ pub fn connect_sparse(source: &ModelSource) -> Result<(SparseClients, Origin), S
 
 // ─── Le relecteur et l'OCR ───────────────────────────────────────────────────
 
-/// **Le relecteur d'une déclaration.** Une seule forme aujourd'hui : `local`,
-/// un cross-encoder burn dans ce processus — `msmarco-minilm` (anglais),
-/// `mmarco-mminilm` (multilingue), `bge-reranker-v2-m3` (multilingue, 2,2 Go).
-/// Ni démon ni tiers : la déclaration qui les demande est refusée en le disant.
+/// **Le relecteur d'une déclaration.** `local` : un cross-encoder burn dans
+/// ce processus — `msmarco-minilm` (anglais), `mmarco-mminilm` (multilingue),
+/// `bge-reranker-v2-m3` (multilingue, 2,2 Go). `service` : le démon
+/// d'embarquement qui déclare ce relecteur (`POST /rerank`). Pas de tiers.
 pub fn connect_reranker(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::reranker::Reranker>, Origin), String> {
     type Client = std::sync::Arc<dyn crate::reranker::Reranker>;
     #[cfg(feature = "burn-embedder")]
@@ -432,19 +434,29 @@ pub fn connect_reranker(source: &ModelSource) -> Result<(std::sync::Arc<dyn crat
         };
         Ok(built)
     };
+    #[cfg(feature = "daemon")]
+    let service = |address: &str| -> Result<(Client, String), String> {
+        let d = crate::daemon::embeddings::DaemonReranker::joindre(address).map_err(|e| e.to_string())?;
+        let served = d.model().to_string();
+        Ok((std::sync::Arc::new(d) as Client, served))
+    };
     let builders: Builders<Client> = Builders {
         #[cfg(feature = "burn-embedder")]
         local: Some(&local),
         #[cfg(not(feature = "burn-embedder"))]
         local: None,
+        #[cfg(feature = "daemon")]
+        service: Some(&service),
+        #[cfg(not(feature = "daemon"))]
         service: None,
         compatible: None,
     };
     resolve(Capability::Rerank, source, &builders, &process_env)
 }
 
-/// **L'OCR d'une déclaration.** Une seule forme aujourd'hui : `local`,
-/// PP-OCR sur burn (`ppocrv6-tiny`), les poids là où les tests les cherchent.
+/// **L'OCR d'une déclaration.** `local` : PP-OCR sur burn (`ppocrv6-tiny`),
+/// les poids là où les tests les cherchent. `service` : le démon
+/// d'embarquement qui déclare cet OCR (`POST /ocr`).
 pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::ocr::Ocr>, Origin), String> {
     type Client = std::sync::Arc<dyn crate::ocr::Ocr>;
     #[cfg(feature = "burn-ocr")]
@@ -458,11 +470,20 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
             .map_err(|e| format!("{} : {e} — donnez RAG3WEAVER_PPOCR_DIR, ou placez-y det.bpk, rec.bpk et dict.txt", dir.display()))?;
         Ok(std::sync::Arc::new(ocr) as Client)
     };
+    #[cfg(feature = "daemon")]
+    let service = |address: &str| -> Result<(Client, String), String> {
+        let d = crate::daemon::embeddings::DaemonOcr::joindre(address).map_err(|e| e.to_string())?;
+        let served = d.model().to_string();
+        Ok((std::sync::Arc::new(d) as Client, served))
+    };
     let builders: Builders<Client> = Builders {
         #[cfg(feature = "burn-ocr")]
         local: Some(&local),
         #[cfg(not(feature = "burn-ocr"))]
         local: None,
+        #[cfg(feature = "daemon")]
+        service: Some(&service),
+        #[cfg(not(feature = "daemon"))]
         service: None,
         compatible: None,
     };
@@ -537,8 +558,9 @@ mod tests {
         assert_eq!(s.addresses(Capability::Embed, &both), ["c:1"]);
         let written = ModelSource { address: Addresses::parse("d:1"), ..s.clone() };
         assert_eq!(written.addresses(Capability::Embed, &both), ["d:1"]);
-        // Une autre capacité ne lit pas l'alias de l'embarquement.
-        assert!(s.addresses(Capability::Rerank, &old).is_empty());
+        // Une capacité que le démon d'embarquement ne sert pas ne lit pas ses variables.
+        assert!(s.addresses(Capability::Decide, &old).is_empty());
+        assert_eq!(s.addresses(Capability::Rerank, &old), ["a:1", "b:1"]);
         // Le creux, servi par le même démon, lit les variables de l'embarquement
         // quand il n'a pas la sienne.
         assert_eq!(Capability::Sparse.variables(), ["RAG3WEAVER_SERVICE_SPARSE", "RAG3WEAVER_SERVICE_EMBED", "RAG3WEAVER_EMBED_SERVICE"]);
@@ -599,14 +621,21 @@ mod tests {
         assert!(e.contains("pas de forme locale"), "{e}");
     }
 
-    /// Le relecteur et l'OCR n'ont qu'une forme, locale : un démon ou un tiers
-    /// demandé est refusé avec sa raison, et un modèle inconnu se dit.
+    /// Le relecteur et l'OCR se déclarent en local ou par le démon ; sans
+    /// adresse nulle part, le refus dit quelles variables poser ; un tiers
+    /// est refusé avec sa raison, et un modèle inconnu se dit.
     #[test]
-    fn le_relecteur_et_l_ocr_ne_se_declarent_qu_en_local_et_le_disent() {
-        let e = connect_reranker(&ModelSource::service("bge-reranker-v2-m3")).err().expect("pas de démon de relecture");
-        assert!(e.contains("models.rerank") && e.contains("pas encore de démon"), "{e}");
-        let e = connect_ocr(&ModelSource::service("ppocrv6-tiny")).err().expect("pas de démon d'OCR");
-        assert!(e.contains("models.ocr") && e.contains("pas encore de démon"), "{e}");
+    fn le_relecteur_et_l_ocr_se_declarent_et_les_refus_disent_quoi() {
+        #[cfg(feature = "daemon")]
+        {
+            let none = |_: &str| -> Option<String> { None };
+            let _ = none;
+            let mort = ModelSource { address: Addresses::parse("127.0.0.1:1"), ..ModelSource::service("bge-reranker-v2-m3") };
+            let e = connect_reranker(&mort).err().expect("personne à cette adresse");
+            assert!(e.contains("models.rerank") && e.contains("aucun service ne sert bge-reranker-v2-m3"), "{e}");
+            let e = connect_ocr(&ModelSource { address: Addresses::parse("127.0.0.1:1"), ..ModelSource::service("ppocrv6-tiny") }).err().expect("personne");
+            assert!(e.contains("models.ocr"), "{e}");
+        }
         let tiers = ModelSource { provider: Provider::Compatible, address: Addresses::parse("http://x:1"), ..ModelSource::local("x") };
         assert!(connect_reranker(&tiers).err().expect("pas de tiers").contains("pas de forme `compatible`"));
         // Un nom que le moteur local ne connaît pas : l'erreur liste ceux qu'il connaît.
