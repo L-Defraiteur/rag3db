@@ -40,8 +40,6 @@ public:
 
     bool getNextTuplesInternal(ExecutionContext* context) override;
 
-    void finalizeInternal(ExecutionContext* context) override;
-
     std::unique_ptr<PhysicalOperator> copy() override {
         return std::make_unique<DeleteNode>(copyVector(executors), children[0]->copy(), id,
             printInfo->copy());
@@ -49,6 +47,11 @@ public:
 
 private:
     std::vector<std::unique_ptr<NodeDeleteExecutor>> executors;
+    // The executors are finalized by this operator itself, once its input is exhausted, and not
+    // through finalizeInternal: a query runs on a COPY of the operator (ProcessorTask::run), which
+    // is the one whose executors hold the delete states, while finalize() is called on the
+    // original, whose executors were never initialized. Finalizing there did nothing.
+    bool executorsFinalized = false;
 };
 
 struct DeleteRelPrintInfo final : OPPrintInfo {

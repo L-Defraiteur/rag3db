@@ -1,5 +1,7 @@
 #include "index/hnsw_index.h"
 
+#include <algorithm>
+
 #include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
 #include "function/hnsw_index_functions.h"
@@ -694,8 +696,11 @@ void OnDiskHNSWIndex::delete_(Transaction* transaction, const common::ValueVecto
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
         const auto pos = nodeIDVector.state->getSelVector()[i];
         const auto offset = nodeIDVector.readNodeOffset(pos);
-        auto [lowerNbrs, upperNbrs] = deleteFromGraph(transaction, offset, state.insertState);
         state.deletedNodes.insert(offset);
+        auto [lowerNbrs, upperNbrs] =
+            deleteFromGraph(transaction, offset, state.insertState, &state.deletedNodes);
+        state.lowerNeighborsOfDeleted[offset] = lowerNbrs;
+        state.upperNeighborsOfDeleted[offset] = upperNbrs;
         for (const auto nbr : lowerNbrs) {
             if (nbr != offset) {
                 state.lowerNeighborsToShrink.insert(nbr);
@@ -717,51 +722,130 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     for (const auto nbrOffset : state.lowerNeighborsToShrink) {
         if (!state.deletedNodes.contains(nbrOffset)) {
             cleanEdgesForNode(transaction, nbrOffset, false /*isUpperLayer*/, state.insertState,
-                state.deletedNodes);
+                state.deletedNodes, state.lowerNeighborsOfDeleted);
         }
     }
     for (const auto nbrOffset : state.upperNeighborsToShrink) {
         if (!state.deletedNodes.contains(nbrOffset)) {
             cleanEdgesForNode(transaction, nbrOffset, true /*isUpperLayer*/, state.insertState,
-                state.deletedNodes);
+                state.deletedNodes, state.upperNeighborsOfDeleted);
         }
     }
+    repairEntryPoint(transaction, false /*isUpperLayer*/, state.insertState,
+        state.lowerNeighborsToShrink, &state.deletedNodes);
+    repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
+        state.upperNeighborsToShrink, &state.deletedNodes);
     state.lowerNeighborsToShrink.clear();
     state.upperNeighborsToShrink.clear();
+    state.lowerNeighborsOfDeleted.clear();
+    state.upperNeighborsOfDeleted.clear();
     state.deletedNodes.clear();
+}
+
+bool OnDiskHNSWIndex::canBeEntryPoint(Transaction* transaction, common::offset_t offset,
+    HNSWInsertState& insertState, const std::unordered_set<common::offset_t>* deletedNodes) const {
+    if (offset == common::INVALID_OFFSET || (deletedNodes && deletedNodes->contains(offset))) {
+        return false;
+    }
+    if (!nodeTable.isVisible(transaction, offset)) {
+        return false;
+    }
+    auto& searchState = insertState.searchState;
+    return !searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState).isNull();
+}
+
+void OnDiskHNSWIndex::repairEntryPoint(Transaction* transaction, bool isUpperLayer,
+    HNSWInsertState& insertState, const std::unordered_set<common::offset_t>& candidates,
+    const std::unordered_set<common::offset_t>* deletedNodes) {
+    auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
+    auto& entryPoint =
+        isUpperLayer ? hnswStorageInfo.upperEntryPoint : hnswStorageInfo.lowerEntryPoint;
+    if (entryPoint != common::INVALID_OFFSET) {
+        // deleteFromGraph only ever leaves a live node there.
+        return;
+    }
+    // The neighbours of the deleted nodes are nodes of this layer.
+    for (const auto candidate : candidates) {
+        if (canBeEntryPoint(transaction, candidate, insertState, deletedNodes)) {
+            entryPoint = candidate;
+            return;
+        }
+    }
+    if (isUpperLayer) {
+        // Nothing near the deleted nodes survives in the upper layer. It restarts from the next
+        // node inserted into it; until then the search starts from the lower entry point.
+        return;
+    }
+    // Every row that has a vector is in the lower layer: any live one will do.
+    for (common::offset_t offset = 0; offset < hnswStorageInfo.numCheckpointedNodes; offset++) {
+        if (canBeEntryPoint(transaction, offset, insertState, deletedNodes)) {
+            entryPoint = offset;
+            return;
+        }
+    }
 }
 
 void OnDiskHNSWIndex::cleanEdgesForNode(Transaction* transaction, common::offset_t offset,
     bool isUpperLayer, HNSWInsertState& insertState,
-    const std::unordered_set<common::offset_t>& deletedNodes) {
+    const std::unordered_set<common::offset_t>& deletedNodes,
+    const std::unordered_map<common::offset_t, std::vector<common::offset_t>>& neighborsOfDeleted) {
     // 1. Scan current forward edges.
-    auto neighbors = scanNeighbors(transaction, offset, isUpperLayer, insertState);
+    const auto neighbors = scanNeighbors(transaction, offset, isUpperLayer, insertState);
     // 2. Check if any neighbor was deleted.
-    bool needsCleanup = false;
-    for (const auto nbr : neighbors) {
-        if (deletedNodes.contains(nbr)) {
-            needsCleanup = true;
-            break;
-        }
-    }
-    if (!needsCleanup) {
+    if (std::ranges::none_of(neighbors,
+            [&](common::offset_t nbr) { return deletedNodes.contains(nbr); })) {
         return;
     }
-    // 3. Delete all forward edges.
+    // 3. The new edges: the live neighbors, and, in place of each deleted neighbor, the live
+    // nodes it led to. A deleted node may itself have led to deleted nodes: follow them.
+    const auto maxDegree = static_cast<uint64_t>(isUpperLayer ? config.mu : config.ml);
+    std::vector<common::offset_t> newNeighbors;
+    std::unordered_set<common::offset_t> seen{offset};
+    std::vector<common::offset_t> deletedToFollow;
+    for (const auto nbr : neighbors) {
+        if (!seen.insert(nbr).second) {
+            continue;
+        }
+        if (deletedNodes.contains(nbr)) {
+            deletedToFollow.push_back(nbr);
+        } else {
+            newNeighbors.push_back(nbr);
+        }
+    }
+    // The live neighbors are all kept; the replacements fill what is left of the degree, nearest
+    // in the graph first. Bounded, so that a delete of nearly everything does not make each
+    // survivor walk the whole deleted graph.
+    static constexpr uint64_t MAX_DELETED_NODES_FOLLOWED = 4096;
+    for (uint64_t i = 0; i < deletedToFollow.size() && i < MAX_DELETED_NODES_FOLLOWED &&
+                         newNeighbors.size() < maxDegree;
+         i++) {
+        const auto it = neighborsOfDeleted.find(deletedToFollow[i]);
+        if (it == neighborsOfDeleted.end()) {
+            continue;
+        }
+        for (const auto nbr : it->second) {
+            if (!seen.insert(nbr).second) {
+                continue;
+            }
+            if (deletedNodes.contains(nbr)) {
+                deletedToFollow.push_back(nbr);
+            } else if (newNeighbors.size() < maxDegree) {
+                newNeighbors.push_back(nbr);
+            }
+        }
+    }
+    // 4. Replace the forward edges.
     insertState.relDeleteState->srcNodeIDVector.setValue(0,
         common::nodeID_t{offset, indexInfo.tableID});
     auto& relTable = isUpperLayer ? *upperRelTable : *lowerRelTable;
     insertState.relDeleteState->detachDeleteDirection = common::RelDataDirection::FWD;
     relTable.detachDelete(transaction, insertState.relDeleteState.get());
-    // 4. Re-insert only edges to non-deleted nodes.
-    for (const auto nbr : neighbors) {
-        if (!deletedNodes.contains(nbr)) {
-            insertState.relInsertState->srcNodeIDVector.setValue(0,
-                common::nodeID_t{offset, indexInfo.tableID});
-            insertState.relInsertState->dstNodeIDVector.setValue(0,
-                common::nodeID_t{nbr, indexInfo.tableID});
-            relTable.insert(transaction, *insertState.relInsertState);
-        }
+    for (const auto nbr : newNeighbors) {
+        insertState.relInsertState->srcNodeIDVector.setValue(0,
+            common::nodeID_t{offset, indexInfo.tableID});
+        insertState.relInsertState->dstNodeIDVector.setValue(0,
+            common::nodeID_t{nbr, indexInfo.tableID});
+        relTable.insert(transaction, *insertState.relInsertState);
     }
 }
 
@@ -781,7 +865,16 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     const auto pos = nodeIDVector.state->getSelVector()[0];
     const auto offset = nodeIDVector.readNodeOffset(pos);
     // 1. Remove old node from graph (forward edges + lazy cleanup of neighbors' back-edges).
-    (void)deleteFromGraph(transaction, offset, state.insertState);
+    const std::unordered_set<common::offset_t> removed{offset};
+    auto [lowerNbrs, upperNbrs] =
+        deleteFromGraph(transaction, offset, state.insertState, &removed);
+    // If this node was an entry point and none of its neighbours could replace it, find another
+    // live node before re-inserting: otherwise the re-inserted node would become the entry point
+    // of a graph that reaches nothing else.
+    repairEntryPoint(transaction, false /*isUpperLayer*/, state.insertState,
+        {lowerNbrs.begin(), lowerNbrs.end()}, &removed);
+    repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
+        {upperNbrs.begin(), upperNbrs.end()}, &removed);
     // 2. Re-insert with new embedding if not NULL.
     const auto valuePos = propertyVector.state->getSelVector()[0];
     if (!propertyVector.isNull(valuePos)) {
@@ -819,22 +912,32 @@ std::vector<common::offset_t> OnDiskHNSWIndex::scanNeighbors(Transaction* /*tran
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const function.
 OnDiskHNSWIndex::DeletedNeighbors OnDiskHNSWIndex::deleteFromGraph(Transaction* transaction,
-    common::offset_t offset,
-    HNSWInsertState& insertState) {
+    common::offset_t offset, HNSWInsertState& insertState,
+    const std::unordered_set<common::offset_t>* deletedNodes) {
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     // 1. Scan neighbors in both layers BEFORE deleting edges.
     auto lowerNeighbors = scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState);
     auto upperNeighbors = scanNeighbors(transaction, offset, true /*isUpperLayer*/, insertState);
-    // 2. Entry point replacement if the deleted node is an entry point.
+    // 2. Entry point replacement if the deleted node is an entry point: by one of its neighbours
+    // that is still alive. A neighbour can be dead: the edges that point to a deleted node are
+    // only cleaned in finalizeDelete, and only from the nodes the deleted node pointed to. Taking
+    // the first neighbour blindly left the index, after a bulk delete, with a dead entry point
+    // that has no edges: every search started there and returned nothing. If no neighbour is
+    // alive the entry point is left invalid, and repairEntryPoint looks further.
+    const auto firstLiveNeighbour = [&](const std::vector<common::offset_t>& neighbours) {
+        for (const auto neighbour : neighbours) {
+            if (neighbour != offset &&
+                canBeEntryPoint(transaction, neighbour, insertState, deletedNodes)) {
+                return neighbour;
+            }
+        }
+        return common::INVALID_OFFSET;
+    };
     if (hnswStorageInfo.lowerEntryPoint == offset) {
-        hnswStorageInfo.lowerEntryPoint = lowerNeighbors.empty() ?
-                                              common::INVALID_OFFSET :
-                                              lowerNeighbors[0];
+        hnswStorageInfo.lowerEntryPoint = firstLiveNeighbour(lowerNeighbors);
     }
     if (hnswStorageInfo.upperEntryPoint == offset) {
-        hnswStorageInfo.upperEntryPoint = upperNeighbors.empty() ?
-                                              common::INVALID_OFFSET :
-                                              upperNeighbors[0];
+        hnswStorageInfo.upperEntryPoint = firstLiveNeighbour(upperNeighbors);
     }
     // 3. Delete all forward edges from the node in both layers.
     insertState.relDeleteState->srcNodeIDVector.setValue(0,
