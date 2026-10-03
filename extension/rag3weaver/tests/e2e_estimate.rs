@@ -120,7 +120,12 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
 
-    let options = SourceSyncOptions { batch_files: 64, exige: D::RECHERCHE_TEXTE, ..Default::default() };
+    // `RAG3WEAVER_ESTIMATE_BATCH_FILES` : la taille des paquets (64 par défaut).
+    // À 100 000, toute la source passe en un paquet — le plancher du « tout
+    // d'un coup » avec le code d'aujourd'hui.
+    let batch_files = std::env::var("RAG3WEAVER_ESTIMATE_BATCH_FILES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(64);
+    eprintln!("[mots] paquets de {batch_files} fichiers");
+    let options = SourceSyncOptions { batch_files, exige: D::RECHERCHE_TEXTE, ..Default::default() };
     let t = Instant::now();
     let mut last = 0usize;
     // Les trois temps, séparés : les mots (les paquets), les relations (le
@@ -148,6 +153,13 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         report.relations
     );
 
+    // Le pic de mémoire résidente du processus : la borne à tenir sur un
+    // poste modeste, et l'inconnue d'un chargement de bout en bout.
+    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+        if let Some(peak) = status.lines().find(|l| l.starts_with("VmHWM:")) {
+            eprintln!("[mots] pic de mémoire résidente : {}", peak.trim_start_matches("VmHWM:").trim());
+        }
+    }
     let progress = catalog.index_progress().expect("avancement");
     let chars_per_chunk = chars / progress.chunks().max(1);
     eprintln!("[mots] {}", progress.line(rate, chars_per_chunk));
