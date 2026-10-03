@@ -45,6 +45,17 @@ pub struct SnapshotSession {
     pub replaced: Option<String>,
 }
 
+/// Une durée lisible : c'est sur elle qu'un appelant décide d'un `takeover`.
+fn elapsed_since(opened_at: i64) -> String {
+    let secs = ((now_ms() - opened_at).max(0) / 1000) as u64;
+    match secs {
+        0..=59 => format!("{secs} s"),
+        60..=3599 => format!("{} min {} s", secs / 60, secs % 60),
+        3600..=86399 => format!("{} h {} min", secs / 3600, (secs % 3600) / 60),
+        _ => format!("{} j {} h", secs / 86400, (secs % 86400) / 3600),
+    }
+}
+
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -145,9 +156,9 @@ impl Catalog {
         match self.open_snapshot_session(entity_name, scope)? {
             Some(open) if open.session == session => Ok(open),
             Some(open) => Err(CatalogError::SnapshotRefused(format!(
-                "{entity_name} : la session '{session}' n'est pas celle ouverte sur ce périmètre ('{}', depuis {} ms) — \
+                "{entity_name} : la session '{session}' n'est pas celle ouverte sur ce périmètre ('{}', ouverte depuis {}) — \
                  périmée, reprise par une autre, ou d'un autre périmètre",
-                open.session, open.opened_at
+                open.session, elapsed_since(open.opened_at)
             ))),
             None => Err(CatalogError::SnapshotRefused(format!(
                 "{entity_name} : aucune session ouverte sur ce périmètre — begin_snapshot d'abord (la session '{session}' est fermée ou n'a jamais existé)"
@@ -171,17 +182,17 @@ impl Catalog {
         let replaced = match self.open_snapshot_session(entity_name, scope)? {
             Some(open) if !takeover => {
                 return Err(CatalogError::SnapshotRefused(format!(
-                    "{entity_name} : une session est déjà ouverte sur ce périmètre ('{}', depuis {} ms) ; \
+                    "{entity_name} : une session est déjà ouverte sur ce périmètre ('{}', ouverte depuis {}) ; \
                      une seule à la fois — la finir, l'abandonner, ou takeover pour la reprendre",
-                    open.session, open.opened_at
+                    open.session, elapsed_since(open.opened_at)
                 )))
             }
             Some(open) => Some(open.session),
             None => None,
         };
         let opened_at = now_ms();
-        let graine = format!("{entity_name}|{:?}|{opened_at}|{}|{:?}", scope, std::process::id(), replaced);
-        let session = format!("{opened_at}-{}", &blake3::hash(graine.as_bytes()).to_hex()[..12]);
+        let seed = format!("{entity_name}|{:?}|{opened_at}|{}|{:?}", scope, std::process::id(), replaced);
+        let session = format!("{opened_at}-{}", &blake3::hash(seed.as_bytes()).to_hex()[..12]);
         let open = SnapshotSession { session, opened_at, replaced };
         let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
