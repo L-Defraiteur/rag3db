@@ -40,3 +40,33 @@ en deux temps (doc du 3 octobre, « indexer ce dépôt ») ; en attendant, un
 fichier édité est réindexé à l'édition.
 
 La tuyauterie s'éprouve sans modèle : `scripts/test_backend_code.py`.
+
+## Le signal creux (4 octobre 2026)
+
+Le manifeste du poste déclare le creux : `models.sparse` (bge-m3 par le
+service) **et** `workspace.index_signals` qui monte `Scope` en
+`bm25+vector+sparse` — un signal de plus sur une entité se déclare, il ne
+découle pas du modèle tout seul. La fusion le pèse par les
+`default_weights` mesurés (`bm25:0.45, vector:0.55, sparse:0.4` — banc du
+4 octobre : phrases 0,340 → 0,369, identifiants 0,850 → 0,900 sur granite
+dense + creux bge).
+
+**Ce que le creux coûte** : un second embarquement (bge-m3) de chaque
+morceau à l'indexation — au banc, la passe complète de `src/`
+(~7 600 scopes, dense + creux par le service) tient dans les mêmes
+minutes que la passe dense seule, le service absorbant les deux ; sur un
+dépôt entier, compter le même ordre de grandeur que les vecteurs. Le
+plein texte reste cherchable d'abord ; le creux entre dans la dette comme
+les vecteurs (`sparse_missing` est compté) — son reflet dans
+`index_state_for` est en discussion avec la session embarquements.
+
+**Une base déjà indexée sans creux** : déclarer le signal ne casse rien —
+les morceaux existants ont leur `sparse_missing`, la dette les rattrape
+au fil des passes d'indexation, et la fusion ne compte pas un signal
+absent comme un zéro : une liste creuse vide ne pèse pas, les autres
+signaux répondent seuls en attendant.
+
+**Le cloud** : pas de creux déclaré dans `snapshot.json` pour l'instant —
+le service d'embarquement du cloud n'est pas défini, et le creux est un
+gain de qualité, pas une condition de marche. Le déclarer quand l'infra
+cloud existera tient en deux clés.

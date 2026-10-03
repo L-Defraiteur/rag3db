@@ -343,6 +343,40 @@ impl PreparedBackend {
                     ));
                 }
             }
+            // **Les signaux montés sur le schéma nommé se valident ici, dans
+            // les deux sens** : un signal qui demande un modèle refuse sans
+            // lui, et un modèle que rien ne lit refuse aussi.
+            if !w.index_signals.is_empty() && w.index.is_none() {
+                return Err(
+                    "workspace.index_signals sans workspace.index : les signaux se montent \
+                     sur les entités d'un schéma nommé — déclarez l'index, ou retirez la clé"
+                        .into(),
+                );
+            }
+            let mut index_veut_creux = false;
+            for (entite, signaux) in &w.index_signals {
+                for signal in signaux {
+                    match signal.as_str() {
+                        "bm25" | "vector" => {}
+                        "sparse" => index_veut_creux = true,
+                        autre => {
+                            return Err(format!(
+                                "workspace.index_signals.{entite} : signal « {autre} » \
+                                 inconnu (bm25, vector, sparse)"
+                            ));
+                        }
+                    }
+                }
+            }
+            if index_veut_creux
+                && !manifest.models.contains_key(&crate::model_source::Capability::Sparse)
+            {
+                return Err(
+                    "workspace.index_signals déclare le signal sparse : `models.sparse` est \
+                     requis (par exemple {\"provider\": \"service\", \"model\": \"bge-m3\"})"
+                        .into(),
+                );
+            }
             if cfg!(not(feature = "code")) {
                 return Err(
                     "la clé `workspace` demande un binaire bâti avec la feature `code` — \
@@ -848,7 +882,23 @@ impl PreparedBackend {
         if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Ocr) {
             cat.set_ocr(crate::model_source::connect_ocr(source)?.0);
         }
-        let veut_le_creux = self.entities.values().any(|config| config.signals.sparse());
+        let veut_le_creux = self.entities.values().any(|config| config.signals.sparse())
+            || self
+                .manifest
+                .workspace
+                .as_ref()
+                .is_some_and(|w| w.index_signals.values().flatten().any(|s| s == "sparse"));
+        // Le sens inverse : un modèle creux que rien ne lit est une
+        // déclaration morte — la famille « écrire ce que rien ne lira ».
+        if self.manifest.models.contains_key(&crate::model_source::Capability::Sparse)
+            && !veut_le_creux
+        {
+            return Err(
+                "models.sparse est déclaré mais aucun signal sparse ne le lit — montez-le \
+                 sur une entité (signals) ou sur le schéma nommé (workspace.index_signals)"
+                    .into(),
+            );
+        }
         match (self.manifest.models.get(&crate::model_source::Capability::Sparse), veut_le_creux) {
             (None, true) if !sans_service => {
                 return Err("ce backend déclare un signal sparse : `models.sparse` est requis \
@@ -887,6 +937,35 @@ impl PreparedBackend {
         {
             crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
                 .map_err(|e| e.to_string())?;
+            // Les signaux déclarés par le manifeste montent sur les entités
+            // du schéma — la déclaration du moteur reste neutre, chaque
+            // produit choisit. Une entité inconnue refuse en listant.
+            if let Some(w) = &self.manifest.workspace {
+                for (entite, signaux) in &w.index_signals {
+                    let Some(config) = cat.entity_configs().get(entite.as_str()).cloned() else {
+                        let connues: Vec<String> =
+                            cat.entity_configs().keys().map(|k| k.to_string()).collect();
+                        return Err(format!(
+                            "workspace.index_signals : « {entite} » n'est pas une entité du \
+                             schéma « {} » — les entités : {}",
+                            w.index.as_deref().unwrap_or("?"),
+                            connues.join(", ")
+                        ));
+                    };
+                    let mut config = config;
+                    let mut s = crate::search::SearchSignals::NONE;
+                    for signal in signaux {
+                        s = s | match signal.as_str() {
+                            "bm25" => crate::search::SearchSignals::BM25,
+                            "vector" => crate::search::SearchSignals::VECTOR,
+                            "sparse" => crate::search::SearchSignals::SPARSE,
+                            _ => unreachable!("validé au chargement"),
+                        };
+                    }
+                    config.signals = s;
+                    cat.register_entity(entite, config).map_err(|e| e.to_string())?;
+                }
+            }
         }
         for (name, r) in &self.manifest.relations {
             cat.register_relation_with(
@@ -1921,6 +2000,23 @@ mod tests {
         (dir, p)
     }
 
+    /// [`fixture_code`], plus un patch libre du manifeste.
+    fn fixture_code_avec(
+        source: &str,
+        read_only: bool,
+        outils: Value,
+        patch: &dyn Fn(&mut Value),
+    ) -> (tempfile::TempDir, Result<PreparedBackend, String>) {
+        let (dir, _) = fixture_code(source, read_only, outils);
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value =
+            serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        patch(&mut manifest);
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let p = PreparedBackend::load(&chemin);
+        (dir, p)
+    }
+
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
@@ -2189,6 +2285,41 @@ mod tests {
             !rendu.contains("À voir aussi"),
             "vecteurs pas prêts : le crochet se tait : {rendu}"
         );
+    }
+
+    /// **Les signaux du schéma nommé se valident dans les deux sens** : le
+    /// signal sans modèle, la clé sans index, le signal inconnu — chacun
+    /// refuse au chargement en disant quoi faire.
+    #[test]
+    fn index_signals_se_valide_dans_les_deux_sens() {
+        let (_d, p) = fixture_code("working_tree", false, json!({}));
+        assert!(p.is_ok(), "le montage de base passe");
+
+        // index_signals sans index.
+        let patch = |m: &mut Value| {
+            m["workspace"]["index_signals"] = json!({"Scope": ["sparse"]});
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("workspace.index"), "{e}");
+
+        // sparse déclaré sans models.sparse.
+        let patch = |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["index_signals"] = json!({"Scope": ["bm25", "vector", "sparse"]});
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("models.sparse"), "{e}");
+
+        // signal inconnu.
+        let patch = |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["index_signals"] = json!({"Scope": ["fuzzy"]});
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("fuzzy"), "{e}");
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou

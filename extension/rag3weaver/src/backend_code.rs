@@ -32,6 +32,19 @@ pub struct WorkspaceConfig {
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
     pub commands: CommandGate,
+    /// **Des signaux montés sur les entités du schéma nommé** — la clé
+    /// EXPLICITE : un signal de plus sur une entité se déclare, il ne
+    /// découle pas de `models.sparse` tout seul. Générique : n'importe
+    /// quelle entité du schéma, n'importe quel signal (`bm25`, `vector`,
+    /// `sparse`). Exemple : `"index_signals": {"Scope": ["bm25", "vector",
+    /// "sparse"]}` — avec `models.sparse` déclaré, l'indexation du code
+    /// écrit AUSSI le signal creux, et la fusion le pèse
+    /// (`default_weights` mesurés du 4 octobre). Validé au chargement dans
+    /// les deux sens : `sparse` ici sans `models.sparse` refuse, et
+    /// `models.sparse` sans aucun signal creux nulle part refuse — une
+    /// déclaration que rien ne lit est la famille de défauts qu'on chasse.
+    #[serde(default)]
+    pub index_signals: std::collections::BTreeMap<String, Vec<String>>,
     /// Le schéma **nommé** que ce workspace indexe — `"code"` enregistre le
     /// schéma de code du moteur (`register_code_schema`) à l'ouverture ;
     /// absent, rien ne s'enregistre. Un nom plutôt qu'une copie JSON : la
@@ -349,6 +362,7 @@ mod tests {
             root: "sources".into(),
             read_only,
             commands: CommandGate::Off,
+            index_signals: std::collections::BTreeMap::new(),
             index: Some("code".into()),
             generated: Default::default(),
         }

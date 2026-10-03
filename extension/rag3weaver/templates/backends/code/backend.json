@@ -11,7 +11,14 @@
     "source": "working_tree",
     "root": "workspace",
     "commands": "approval",
-    "index": "code"
+    "index": "code",
+    "index_signals": {
+      "Scope": [
+        "bm25",
+        "vector",
+        "sparse"
+      ]
+    }
   },
   "entities": {},
   "tools": {
@@ -90,6 +97,12 @@
     "impact": {
       "graph": "../../tools/impact.mmd",
       "description": "Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer."
+    }
+  },
+  "models": {
+    "sparse": {
+      "provider": "service",
+      "model": "bge-m3"
     }
   }
 }
