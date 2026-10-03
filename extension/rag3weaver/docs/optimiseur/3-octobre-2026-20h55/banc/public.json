@@ -1,0 +1,318 @@
+{
+ "source": "mteb/amazon_massive_scenario (reprise de AmazonScience/massive)",
+ "licence": "apache-2.0 sur la carte de la reprise ; cc-by-4.0 pour le jeu d'origine",
+ "graine": 2026,
+ "existants": [
+  "email",
+  "calendar",
+  "alarm",
+  "audio",
+  "recommendation",
+  "datetime",
+  "play",
+  "iot",
+  "transport",
+  "general"
+ ],
+ "retires": [
+  "lists",
+  "qa",
+  "music"
+ ],
+ "sujets": [
+  {
+   "nom": "email",
+   "exemples": [
+    "écrire ray de destinataire d'e-mail",
+    "do i have the reply from charlotte relating to yesterdays inquiry"
+   ]
+  },
+  {
+   "nom": "calendar",
+   "exemples": [
+    "me parler des réunions sur une période de temps",
+    "what is my schedule for twelve p. m. to four p. m."
+   ]
+  },
+  {
+   "nom": "alarm",
+   "exemples": [
+    "montre-moi les heures d'alarme que j'ai réglées pour la semaine",
+    "let me know about any alarms set today"
+   ]
+  },
+  {
+   "nom": "audio",
+   "exemples": [
+    "désactive le volume des médias",
+    "the volume of the music playing now should be raised"
+   ]
+  },
+  {
+   "nom": "recommendation",
+   "exemples": [
+    "olly recommande un événement qui se passe dans ma région",
+    "when does the closest bar close"
+   ]
+  },
+  {
+   "nom": "datetime",
+   "exemples": [
+    "quelle heure est-il en australie maintenant",
+    "what day of the week is halloween"
+   ]
+  },
+  {
+   "nom": "play",
+   "exemples": [
+    "joue moi le dernier podcast sur les sondages en ligne",
+    "play my shazaam playlist on the spotify app"
+   ]
+  },
+  {
+   "nom": "iot",
+   "exemples": [
+    "fais briller les lumières en bleu",
+    "olly make coffee at six am"
+   ]
+  },
+  {
+   "nom": "transport",
+   "exemples": [
+    "réserver un ticket de train pour le belgium ce soir",
+    "can you check train schedule to berkeley"
+   ]
+  },
+  {
+   "nom": "general",
+   "exemples": [
+    "quelle est ta couleur préférée",
+    "hey today i was fired from my job"
+   ]
+  }
+ ],
+ "textes": [
+  {
+   "texte": "ai- je de nouveaux e-mails de mon contact q.",
+   "langue": "fr",
+   "sujet": "email"
+  },
+  {
+   "texte": "have i gotten any new email",
+   "langue": "en",
+   "sujet": "email"
+  },
+  {
+   "texte": "quelle est l'heure de l'entretien d'après l'e-mail d' hier",
+   "langue": "fr",
+   "sujet": "email"
+  },
+  {
+   "texte": "delete the next event today",
+   "langue": "en",
+   "sujet": "calendar"
+  },
+  {
+   "texte": "supprimer le dîner de ce soir avec shelly",
+   "langue": "fr",
+   "sujet": "calendar"
+  },
+  {
+   "texte": "delete the shopping trip i have scheduled march twenty third",
+   "langue": "en",
+   "sujet": "calendar"
+  },
+  {
+   "texte": "y a-t-il des alarmes qui se déclenchent aujourd'hui",
+   "langue": "fr",
+   "sujet": "alarm"
+  },
+  {
+   "texte": "i need to get up at ten tomorrow",
+   "langue": "en",
+   "sujet": "alarm"
+  },
+  {
+   "texte": "quelles alarmes ai-je définies aujourd'hui",
+   "langue": "fr",
+   "sujet": "alarm"
+  },
+  {
+   "texte": "can you please stop speaking",
+   "langue": "en",
+   "sujet": "audio"
+  },
+  {
+   "texte": "coupe le son de la musique",
+   "langue": "fr",
+   "sujet": "audio"
+  },
+  {
+   "texte": "slow down the speaker volume",
+   "langue": "en",
+   "sujet": "audio"
+  },
+  {
+   "texte": "quels sont les restaurants près de chez moi",
+   "langue": "fr",
+   "sujet": "recommendation"
+  },
+  {
+   "texte": "what's going on around here this weekend",
+   "langue": "en",
+   "sujet": "recommendation"
+  },
+  {
+   "texte": "indique-moi les évènements locaux",
+   "langue": "fr",
+   "sujet": "recommendation"
+  },
+  {
+   "texte": "what time is it in pacific standard time",
+   "langue": "en",
+   "sujet": "datetime"
+  },
+  {
+   "texte": "le deux du mois prochain sera quel jour",
+   "langue": "fr",
+   "sujet": "datetime"
+  },
+  {
+   "texte": "what day is december thirteenth",
+   "langue": "en",
+   "sujet": "datetime"
+  },
+  {
+   "texte": "lance la playlist que j' ai consacrée à la musique rock",
+   "langue": "fr",
+   "sujet": "play"
+  },
+  {
+   "texte": "olly play i can't feel my face",
+   "langue": "en",
+   "sujet": "play"
+  },
+  {
+   "texte": "passe à l'épisode suivant de ça peut vous arriver",
+   "langue": "fr",
+   "sujet": "play"
+  },
+  {
+   "texte": "brightness ninety percent",
+   "langue": "en",
+   "sujet": "iot"
+  },
+  {
+   "texte": "et l'obscurité est tombée",
+   "langue": "fr",
+   "sujet": "iot"
+  },
+  {
+   "texte": "put dark colors instead of light ones in the house",
+   "langue": "en",
+   "sujet": "iot"
+  },
+  {
+   "texte": "réserve un billet de train d'ici à paris à huit heures du matin aujourd'hui",
+   "langue": "fr",
+   "sujet": "transport"
+  },
+  {
+   "texte": "please purchase a train ticket for this weekend",
+   "langue": "en",
+   "sujet": "transport"
+  },
+  {
+   "texte": "réserve-moi un billet de train",
+   "langue": "fr",
+   "sujet": "transport"
+  },
+  {
+   "texte": "what sound does a dog make",
+   "langue": "en",
+   "sujet": "general"
+  },
+  {
+   "texte": "olly raconte moi une blague",
+   "langue": "fr",
+   "sujet": "general"
+  },
+  {
+   "texte": "olly i have to tell you about my day",
+   "langue": "en",
+   "sujet": "general"
+  },
+  {
+   "texte": "y'a-t-il des objets spéciaux sur ma liste",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "lists"
+  },
+  {
+   "texte": "faire une nouvelle liste de course",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "lists"
+  },
+  {
+   "texte": "please create a new list for me",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "lists"
+  },
+  {
+   "texte": "delete the first item on the list",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "lists"
+  },
+  {
+   "texte": "trouver une description sur un téléviseur samsung",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "qa"
+  },
+  {
+   "texte": "quelles sont les conditions climatiques dans cette région",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "qa"
+  },
+  {
+   "texte": "where does sophia vergara live",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "qa"
+  },
+  {
+   "texte": "how much is the average house",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "qa"
+  },
+  {
+   "texte": "c'est une bonne chanson note le fichier en conséquence s'il te plaît",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "music"
+  },
+  {
+   "texte": "quelle chanson est en cours de lecture maintenant",
+   "langue": "fr",
+   "sujet": null,
+   "sujet_retire": "music"
+  },
+  {
+   "texte": "which type of music it is",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "music"
+  },
+  {
+   "texte": "bring me the title of current music",
+   "langue": "en",
+   "sujet": null,
+   "sujet_retire": "music"
+  }
+ ]
+}

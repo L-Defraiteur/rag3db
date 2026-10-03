@@ -1,0 +1,6148 @@
+{
+ "url": "http://127.0.0.1:7982",
+ "jeux": {
+  "le nôtre": {
+   "cas": 24,
+   "a_ranger": 16,
+   "a_creer": 8
+  },
+  "le journal": {
+   "cas": 47,
+   "a_ranger": 32,
+   "a_creer": 15
+  },
+  "le public": {
+   "cas": 42,
+   "a_ranger": 30,
+   "a_creer": 12
+  }
+ },
+ "resultats": {
+  "le nôtre|nom": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 5,
+    "cosinus": {
+     "premier_juste": 8,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.5703125,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 4,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 12,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 5,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 11,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 5,
+       "ranges_ailleurs": 6,
+       "crees_a_tort": 5,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 5,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.53125,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 4,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 12,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 4,
+       "ranges_ailleurs": 2,
+       "crees_a_tort": 10,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 4,
+       "ranges_ailleurs": 5,
+       "crees_a_tort": 7,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 10,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.796875,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 5,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 11,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 10,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 5,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 10,
+       "ranges_ailleurs": 6,
+       "crees_a_tort": 0,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 10,
+     "cree_a_tort": 2,
+     "range_ailleurs": 4,
+     "a_ranger": 16,
+     "neufs_crees": 3,
+     "fusions_a_tort": 5,
+     "a_creer": 8
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.5046586394309998
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5392560958862305
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.596879243850708
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.4926908612251282
+     },
+     {
+      "attendu": "tests",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.515593409538269
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.5079745054244995
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.529746413230896
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.5845629572868347
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.6346386671066284
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5343847274780273
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.649649977684021
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "régime GPU",
+      "meilleur": 0.5177810192108154
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.46818915009498596
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.4749329686164856
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "meilleur": 0.5938343405723572
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.549824059009552
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "meilleur": 0.4647507965564728
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5091708302497864
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.4917753338813782
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.5536993741989136
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5888237953186035
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.5754518508911133
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.5115547180175781
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.5386624336242676
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "identité git",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.0006948125082999468
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.0006741991965100169
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.037276655435562134
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.00014389237912837416
+     },
+     {
+      "attendu": "tests",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.006173387169837952
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.19244177639484406
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "conception et périmètre",
+      "meilleur": 0.001283497316762805
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.0008029576856642962
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.11409833282232285
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.002019454026594758
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.8829444646835327
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.0021155423019081354
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.000412514666095376
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 9.629496344132349e-05
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.019508592784404755
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.00012092445103917271
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "meilleur": 0.02609911933541298
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 9.699564543552697e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.004911195486783981
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.0047956244088709354
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.0009632889414206147
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.018239054828882217
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.00039054988883435726
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.0007546278648078442
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.9588110699649044
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.9281193499623379
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.8957646413025832
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.6794544462945016
+     },
+     {
+      "attendu": "tests",
+      "rendu": "identité git",
+      "meilleur": 0.5146297752599426
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.9488385265877479
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.6742520985240343
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.7080027686436952
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.9706058092692044
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5394317829886295
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.7484295610732817
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "régime GPU",
+      "meilleur": 0.45960681928758057
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.6242000270616694
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.5708660491855523
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "meilleur": 0.9742200636432901
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.4347770830909658
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "meilleur": 0.9138319264567876
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.40487682979293926
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.5075168366455809
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.33195790648224494
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5934337810437215
+     },
+     {
+      "attendu": null,
+      "rendu": "identité git",
+      "meilleur": 0.3924010077935363
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.40069165278811225
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.6965261765875589
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "p": 0.9183851214695555,
+      "p_aucun": 0.02280103354668642
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "p": 0.9012885661817699,
+      "p_aucun": 0.025246265204930285
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "p": 0.8533301202067959,
+      "p_aucun": 0.04189708515653885
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "p": 0.6479253233670451,
+      "p_aucun": 0.11691101601654626
+     },
+     {
+      "attendu": "tests",
+      "rendu": "identité git",
+      "p": 0.5131393816311101,
+      "p_aucun": 0.08149207834164564
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "p": 0.8641087905708694,
+      "p_aucun": 0.06855325176976365
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "p": 0.530295712296324,
+      "p_aucun": 0.11903245873548407
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "p": 0.5877986783946659,
+      "p_aucun": 0.10435317130778368
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "p": 0.9400232522460709,
+      "p_aucun": 0.022431844234229233
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "p": 0.44466509827608014,
+      "p_aucun": 0.10957115437474098
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "p": 0.6735844381155667,
+      "p_aucun": 0.0799037332920683
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "régime GPU",
+      "p": 0.32328221539686763,
+      "p_aucun": 0.23829192175200556
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "identifiants et secrets",
+      "p": 0.5784853335683474,
+      "p_aucun": 0.09641463892555828
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": null,
+      "p": 0.3883391347823119,
+      "p_aucun": 0.3883391347823119
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "p": 0.9334646431208912,
+      "p_aucun": 0.0377791914424671
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": null,
+      "p": 0.3658775438884727,
+      "p_aucun": 0.3658775438884727
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "p": 0.8571160991968935,
+      "p_aucun": 0.03362451741281961
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.4326598505643497,
+      "p_aucun": 0.4326598505643497
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.32252091989759457,
+      "p_aucun": 0.32252091989759457
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.42726651289612094,
+      "p_aucun": 0.42726651289612094
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "p": 0.402914182600665,
+      "p_aucun": 0.30025242854239315
+     },
+     {
+      "attendu": null,
+      "rendu": "identité git",
+      "p": 0.3470566444913681,
+      "p_aucun": 0.16923309448585538
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "p": 0.36303057666127214,
+      "p_aucun": 0.13009646963658006
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "p": 0.5284096800023851,
+      "p_aucun": 0.19340782448721391
+     }
+    ]
+   }
+  },
+  "le nôtre|complet": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 2,
+    "cosinus": {
+     "premier_juste": 14,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.65625,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 7,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 9,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 7,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 11,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 5,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 12,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.6484375,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 7,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 8,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 6,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 6,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 12,
+     "a_ranger": 16,
+     "auc_meilleur_score": 0.7890625,
+     "courbe": [
+      {
+       "neufs_attrapes": 8,
+       "sur": 8,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 7,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 8,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 4,
+       "a_ranger": 16
+      },
+      {
+       "neufs_attrapes": 4,
+       "sur": 8,
+       "ranges_au_bon_endroit": 10,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 3,
+       "a_ranger": 16
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 12,
+     "cree_a_tort": 0,
+     "range_ailleurs": 4,
+     "a_ranger": 16,
+     "neufs_crees": 3,
+     "fusions_a_tort": 5,
+     "a_creer": 8
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.6150984168052673
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.6547890901565552
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.7006670832633972
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5359780788421631
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.553433895111084
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.7008981704711914
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.6309084892272949
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.6745460033416748
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.7128263711929321
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "conception et périmètre",
+      "meilleur": 0.5980250239372253
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.6127709746360779
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.5312377214431763
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.589296817779541
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.6283138394355774
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "meilleur": 0.7154528498649597
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.6630778312683105
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.5564322471618652
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5694045424461365
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "meilleur": 0.6249677538871765
+     },
+     {
+      "attendu": null,
+      "rendu": "moteur de base de données",
+      "meilleur": 0.6102509498596191
+     },
+     {
+      "attendu": null,
+      "rendu": "moteur de base de données",
+      "meilleur": 0.6239299774169922
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.636417031288147
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.5575346946716309
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.6203102469444275
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.020747462287545204
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.008626975119113922
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.1697787642478943
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.00014739143080078065
+     },
+     {
+      "attendu": "tests",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.00021619127073790878
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.0007558675715699792
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.0013372449902817607
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.0003828123153652996
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.008883916772902012
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.0003740246465895325
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.0011174578685313463
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "moteur de base de données",
+      "meilleur": 3.866681799991056e-05
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.004663560073822737
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.0006132374983280897
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "meilleur": 0.019583016633987427
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.00017297056911047548
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.0009339298121631145
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "meilleur": 9.501351451035589e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.0008034666534513235
+     },
+     {
+      "attendu": null,
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.0005995332612656057
+     },
+     {
+      "attendu": null,
+      "rendu": "moteur de base de données",
+      "meilleur": 0.0005825717817060649
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.0004331601085141301
+     },
+     {
+      "attendu": null,
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.0005108402110636234
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.0002770011778920889
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.9911759192638647
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "meilleur": 0.9881567231874595
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.9527169041391649
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.9213595800870833
+     },
+     {
+      "attendu": "tests",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.8393889771297609
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "meilleur": 0.5114063384681025
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "meilleur": 0.5885192842331952
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.5309169853444172
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.9963215478921194
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "meilleur": 0.8610549675015063
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.3887143637974945
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "régime GPU",
+      "meilleur": 0.8523872009657812
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.9815098251132678
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "meilleur": 0.9783032125607265
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "meilleur": 0.9748402992682724
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "identifiants et secrets",
+      "meilleur": 0.995515726517639
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "meilleur": 0.8731142015088152
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.3122678363589671
+     },
+     {
+      "attendu": null,
+      "rendu": "recherche plein texte",
+      "meilleur": 0.5203833738523578
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "meilleur": 0.6422424132712445
+     },
+     {
+      "attendu": null,
+      "rendu": "moteur de base de données",
+      "meilleur": 0.9025476930005344
+     },
+     {
+      "attendu": null,
+      "rendu": "identité git",
+      "meilleur": 0.5598986784147642
+     },
+     {
+      "attendu": null,
+      "rendu": "arbre partagé entre sessions",
+      "meilleur": 0.3176957887088967
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "meilleur": 0.8316747565166694
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "p": 0.96360631623831,
+      "p_aucun": 0.026702499888752788
+     },
+     {
+      "attendu": "identité git",
+      "rendu": "identité git",
+      "p": 0.9604366614043749,
+      "p_aucun": 0.03156558788217089
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "p": 0.9315671968739542,
+      "p_aucun": 0.03554515521563338
+     },
+     {
+      "attendu": "compilation et charge du poste",
+      "rendu": "compilation et charge du poste",
+      "p": 0.7803337401696833,
+      "p_aucun": 0.1553573596340091
+     },
+     {
+      "attendu": "tests",
+      "rendu": "arbre partagé entre sessions",
+      "p": 0.6425852324776694,
+      "p_aucun": 0.16849974894209127
+     },
+     {
+      "attendu": "tests",
+      "rendu": "tests",
+      "p": 0.47422147243085766,
+      "p_aucun": 0.16565599253522553
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "régime GPU",
+      "p": 0.5771078148742271,
+      "p_aucun": 0.04498780599547144
+     },
+     {
+      "attendu": "régime GPU",
+      "rendu": "compilation et charge du poste",
+      "p": 0.421625969673947,
+      "p_aucun": 0.23210171940001909
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "arbre partagé entre sessions",
+      "p": 0.9747627965520101,
+      "p_aucun": 0.021235835292964012
+     },
+     {
+      "attendu": "arbre partagé entre sessions",
+      "rendu": "compilation et charge du poste",
+      "p": 0.8074564733452106,
+      "p_aucun": 0.09236594480324854
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "modèles d'embarquement",
+      "p": 0.2903659866961958,
+      "p_aucun": 0.2762073767081063
+     },
+     {
+      "attendu": "modèles d'embarquement",
+      "rendu": "régime GPU",
+      "p": 0.6670815253845703,
+      "p_aucun": 0.2239726158220624
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "p": 0.9530518990896018,
+      "p_aucun": 0.028757713701975163
+     },
+     {
+      "attendu": "moteur de base de données",
+      "rendu": "moteur de base de données",
+      "p": 0.9005722800759851,
+      "p_aucun": 0.07461989234335528
+     },
+     {
+      "attendu": "recherche plein texte",
+      "rendu": "recherche plein texte",
+      "p": 0.9203187541293566,
+      "p_aucun": 0.05493979198830646
+     },
+     {
+      "attendu": "identifiants et secrets",
+      "rendu": "identifiants et secrets",
+      "p": 0.9778616792163953,
+      "p_aucun": 0.014649103931210569
+     },
+     {
+      "attendu": null,
+      "rendu": "tests",
+      "p": 0.8127137907044865,
+      "p_aucun": 0.061653370263345386
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.4107422085067098,
+      "p_aucun": 0.4107422085067098
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.591560713373141,
+      "p_aucun": 0.591560713373141
+     },
+     {
+      "attendu": null,
+      "rendu": "conception et périmètre",
+      "p": 0.5363999649306805,
+      "p_aucun": 0.27149889918507647
+     },
+     {
+      "attendu": null,
+      "rendu": "moteur de base de données",
+      "p": 0.758146857322054,
+      "p_aucun": 0.13438699167926352
+     },
+     {
+      "attendu": null,
+      "rendu": "identité git",
+      "p": 0.34713490612368025,
+      "p_aucun": 0.21941679937347397
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.2730162328179196,
+      "p_aucun": 0.2730162328179196
+     },
+     {
+      "attendu": null,
+      "rendu": "modèles d'embarquement",
+      "p": 0.532765795156836,
+      "p_aucun": 0.3646811028497086
+     }
+    ]
+   }
+  },
+  "le journal|nom": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 6,
+    "cosinus": {
+     "premier_juste": 7,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.5489583333333333,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 1,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 30,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 4,
+       "ranges_ailleurs": 6,
+       "crees_a_tort": 22,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 5,
+       "ranges_ailleurs": 12,
+       "crees_a_tort": 15,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 12,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.603125,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 2,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 29,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 2,
+       "ranges_ailleurs": 5,
+       "crees_a_tort": 25,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 6,
+       "ranges_ailleurs": 13,
+       "crees_a_tort": 13,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 13,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.7166666666666667,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 8,
+       "ranges_ailleurs": 4,
+       "crees_a_tort": 20,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 11,
+       "ranges_ailleurs": 8,
+       "crees_a_tort": 13,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 12,
+       "ranges_ailleurs": 11,
+       "crees_a_tort": 9,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 13,
+     "cree_a_tort": 3,
+     "range_ailleurs": 16,
+     "a_ranger": 32,
+     "neufs_crees": 4,
+     "fusions_a_tort": 11,
+     "a_creer": 15
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5727558135986328
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5322432518005371
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5722748041152954
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.538213312625885
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5403430461883545
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5605940222740173
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.5414491295814514
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5816797018051147
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6805684566497803
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5513321161270142
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5966419577598572
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6088138818740845
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6037310361862183
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5553538799285889
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6811558604240417
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5864250063896179
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6273534297943115
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5871255993843079
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6017830967903137
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.5842658281326294
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.5751118659973145
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.5911129713058472
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6234902143478394
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5969918370246887
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.572304904460907
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.495689332485199
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5729897022247314
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5857211351394653
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5208770632743835
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5310412049293518
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5283485054969788
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6332882642745972
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5816797018051147
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.556117832660675
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5864783525466919
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5513166189193726
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.526289701461792
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5661115646362305
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5871255993843079
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5233334302902222
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5474240779876709
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.5911129713058472
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6234902143478394
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5969918370246887
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5735085606575012
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6375875473022461
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5150034427642822
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0537741594016552
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0006934510893188417
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.06674182415008545
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0020847180858254433
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6260682344436646
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.0031250801403075457
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.008480863645672798
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.00232498231343925
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.011186688207089901
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0020207844208925962
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.027097364887595177
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.00014088590978644788
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.02649584226310253
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.002038752194494009
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.039112988859415054
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0018894847016781569
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.12855233252048492
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.013917428441345692
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.019093845039606094
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.011749211698770523
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.09982580691576004
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.12176407873630524
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.05516825616359711
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.06848254799842834
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.3238447904586792
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.0024378374218940735
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.003881803946569562
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.039298634976148605
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.0006242673844099045
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.0009041615412570536
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.0018274009926244617
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.011230689473450184
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.00232498231343925
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.0002771184663288295
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.05561082437634468
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0020207844208925962
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.027097364887595177
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.00013827887596562505
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.013917428441345692
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.0006597909377887845
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.0005309516564011574
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.12176407873630524
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.05516825616359711
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.06848254799842834
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.006116282194852829
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.009473307058215141
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0004196810768917203
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.32108436725273537
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.861434431696809
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6502968864602028
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5376681342643869
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6133877967981152
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.3694231540621724
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.3571432225282696
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.40762761118068347
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.9305524289168757
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7916998431200721
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.660362228294226
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.8062445256046344
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6501110987215553
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.4661413652231373
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7625175521005171
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.48135432941990924
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7148183224111763
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.4483887426153439
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.791421851013106
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6020941563091179
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.3271999452851693
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.7446963797048166
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5192984681545098
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6767010640425342
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.8586835636686907
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.7455219324165173
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.4979377395573917
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.338964543805188
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5901287034932092
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9461682912680477
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.419199198761813
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.8634218491888908
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.32249602482976725
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.4502252354718422
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7129790856282686
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.3408980706541323
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.46929125412669864
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.3261977345702332
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5225295173827458
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.3004143267575475
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.4237603605464909
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.515759417690496
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5428282270474191
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.4355424999603272
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5079673695741266
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.5644983120553985
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6982408982150516
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.24077836009677023,
+      "p_aucun": 0.2292407430814762
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.7456815256887385,
+      "p_aucun": 0.11382255690990578
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.5890011533890267,
+      "p_aucun": 0.11627403192855382
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": null,
+      "p": 0.40455803474181967,
+      "p_aucun": 0.40455803474181967
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.5648200499079596,
+      "p_aucun": 0.1272686211165474
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.3430288324072779,
+      "p_aucun": 0.09786617327949994
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.3632360301325047,
+      "p_aucun": 0.1891729203345956
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": null,
+      "p": 0.25017982626921514,
+      "p_aucun": 0.25017982626921514
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.8850604069643657,
+      "p_aucun": 0.0520666508680628
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.7251062187423493,
+      "p_aucun": 0.10646091815479329
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.5147565218084529,
+      "p_aucun": 0.10968364673299605
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.7153581616935866,
+      "p_aucun": 0.09671334354173548
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.5917775166263184,
+      "p_aucun": 0.12226321494671333
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.3095216442452248,
+      "p_aucun": 0.2741490691944006
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.6875001651203639,
+      "p_aucun": 0.09182240581693916
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.3658410138376252,
+      "p_aucun": 0.22302823755626852
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.6607593766167164,
+      "p_aucun": 0.10347986068533958
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.3924805936935604,
+      "p_aucun": 0.07570637810961273
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.6776559792487854,
+      "p_aucun": 0.0807355171058139
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "p": 0.5114508736534824,
+      "p_aucun": 0.13040740695131472
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "p": 0.2958236059318091,
+      "p_aucun": 0.1033149055195932
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.5974003708569186,
+      "p_aucun": 0.07066815841908104
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.45908333128488804,
+      "p_aucun": 0.04829050142734456
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.5917082314636496,
+      "p_aucun": 0.07621331154005441
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.8343217022777597,
+      "p_aucun": 0.03382443611014638
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.6252338591464227,
+      "p_aucun": 0.1774122726464469
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.4570528637958632,
+      "p_aucun": 0.08065521517594385
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.2564824200535895,
+      "p_aucun": 0.16599955556715734
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.3788908560125447,
+      "p_aucun": 0.14768837965823312
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.8914089641303191,
+      "p_aucun": 0.05726553542027033
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": null,
+      "p": 0.5694048597427204,
+      "p_aucun": 0.5694048597427204
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.8471119828792771,
+      "p_aucun": 0.046233987997407563
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.2672534048320228,
+      "p_aucun": 0.2672534048320228
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.43969450548434513,
+      "p_aucun": 0.43969450548434513
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.6003836463332445,
+      "p_aucun": 0.16187267554482276
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.2980625294927323,
+      "p_aucun": 0.16082257485471432
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "p": 0.384577055245854,
+      "p_aucun": 0.17055032726499586
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "p": 0.2767646185975234,
+      "p_aucun": 0.22752915013125272
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.43190689887223643,
+      "p_aucun": 0.11283025269241784
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.24942507038100115,
+      "p_aucun": 0.2033667029104262
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.39045270609186994,
+      "p_aucun": 0.16069517175997716
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.4537538951943324,
+      "p_aucun": 0.06827149207043752
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.4687002185067655,
+      "p_aucun": 0.0458171456141042
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.44578047481470273,
+      "p_aucun": 0.07559137524500896
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.771508303888334,
+      "p_aucun": 0.771508303888334
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.4909541318718634,
+      "p_aucun": 0.1568369145230299
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.5339435019303549,
+      "p_aucun": 0.5339435019303549
+     }
+    ]
+   }
+  },
+  "le journal|complet": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 0,
+    "cosinus": {
+     "premier_juste": 19,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.6583333333333333,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 6,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 26,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 8,
+       "ranges_ailleurs": 4,
+       "crees_a_tort": 20,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 15,
+       "ranges_ailleurs": 9,
+       "crees_a_tort": 8,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 16,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.7364583333333333,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 7,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 22,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 9,
+       "ranges_ailleurs": 9,
+       "crees_a_tort": 14,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 12,
+       "ranges_ailleurs": 10,
+       "crees_a_tort": 10,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 15,
+     "a_ranger": 32,
+     "auc_meilleur_score": 0.6729166666666667,
+     "courbe": [
+      {
+       "neufs_attrapes": 15,
+       "sur": 15,
+       "ranges_au_bon_endroit": 6,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 23,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 12,
+       "sur": 15,
+       "ranges_au_bon_endroit": 13,
+       "ranges_ailleurs": 6,
+       "crees_a_tort": 13,
+       "a_ranger": 32
+      },
+      {
+       "neufs_attrapes": 8,
+       "sur": 15,
+       "ranges_au_bon_endroit": 14,
+       "ranges_ailleurs": 10,
+       "crees_a_tort": 8,
+       "a_ranger": 32
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 16,
+     "cree_a_tort": 1,
+     "range_ailleurs": 15,
+     "a_ranger": 32,
+     "neufs_crees": 2,
+     "fusions_a_tort": 13,
+     "a_creer": 15
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6718528866767883
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6674073338508606
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7284565567970276
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6517709493637085
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7434906959533691
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6475209593772888
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6704962253570557
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6308177709579468
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7642097473144531
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6557028889656067
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6583263278007507
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6856470108032227
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6919546127319336
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6959887146949768
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7280640602111816
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6614026427268982
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.619721531867981
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6862280368804932
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6306447982788086
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.712539792060852
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.7938545942306519
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.7856088876724243
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.7237139940261841
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.7240873575210571
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.7877103090286255
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6551119089126587
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6570347547531128
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.8006385564804077
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6657335758209229
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6600986123085022
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.630285382270813
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7124667167663574
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6177511811256409
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5800710916519165
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.7334883213043213
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6557028889656067
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6274940967559814
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6550303101539612
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6862280368804932
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.6226053833961487
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.712539792060852
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.63387131690979
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7016460299491882
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.7240873575210571
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.6796796321868896
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.7052251100540161
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.5717707872390747
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.04918757081031799
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.0010012701386585832
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.04554478079080582
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.025059795007109642
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5369225740432739
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.001161995343863964
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.013056712225079536
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0003174939483869821
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.1001913845539093
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.008759143762290478
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.0043889787048101425
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.0020772337447851896
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.009735947474837303
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.002431836910545826
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.2881031930446625
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.0028275439981371164
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.021763205528259277
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.012408005073666573
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0008727037929929793
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.016836095601320267
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.5995056629180908
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.3482300937175751
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.3315596580505371
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.04877536743879318
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.27318745851516724
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.05183384194970131
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.019001789391040802
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5026743412017822
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.003678851295262575
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.012418871745467186
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.0007900794153101742
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.003524446627125144
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.00013308609777595848
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.00029727889341302216
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.02277355082333088
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0011393777094781399
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0039018497336655855
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.00027881882851943374
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.012408005073666573
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0008727037929929793
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.016836054623126984
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.006882981862872839
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.006998537573963404
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.04877536743879318
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.010789340361952782
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.0015286003472283483
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 7.113340689102188e-05
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.4643756267801301
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.3409305633550934
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.5940570115694238
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7677064583157258
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.38454464391327736
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.35863031172432497
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9579819489971871
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.41982533823798085
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.942338617691932
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6759478256452343
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.367056266753145
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.7797145922727734
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.7561953845537068
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6371805257514437
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.9392228748289969
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.6642547374596911
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.656165612363543
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.32173448775473507
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.8127534710884899
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.7777368604248956
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6770631734904456
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.6867337668582508
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.7757918860620304
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.8726619028450082
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9815119479455255
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9594265664004986
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.95208031938827
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5661303203544905
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6795296788751443
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9617887788248947
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.33162542126701106
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.9476308147342439
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.3950689085034496
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5014374269792478
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.6756513240635873
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.49268579500727194
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.42612248537954794
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.4236304927355561
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.43628349726929794
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.8034042337913336
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.8324923099943679
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.39494277812484196
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "meilleur": 0.5191629849843453
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "meilleur": 0.8527191634266453
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "meilleur": 0.5902743556372966
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "meilleur": 0.3805403807897345
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "meilleur": 0.3737564451542464
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.4029381481823847,
+      "p_aucun": 0.16147106327065405
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "p": 0.2833076404772362,
+      "p_aucun": 0.1917318106606953
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.5618093929141267,
+      "p_aucun": 0.070337206938702
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Branches ouvertes",
+      "p": 0.6679088216498175,
+      "p_aucun": 0.08942224599518936
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.34783264343965853,
+      "p_aucun": 0.1560521012933236
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Hors de ce dépôt",
+      "p": 0.2894090740093657,
+      "p_aucun": 0.14246811526051253
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.8987700871827401,
+      "p_aucun": 0.06471866894232023
+     },
+     {
+      "attendu": "Branches ouvertes",
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.28913695805380796,
+      "p_aucun": 0.28873461790111077
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.8858823850330311,
+      "p_aucun": 0.04703412364566671
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.5836129129319202,
+      "p_aucun": 0.16267333063993442
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.29131964780906644,
+      "p_aucun": 0.2145486515893274
+     },
+     {
+      "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.6298039004840894,
+      "p_aucun": 0.1824298629120726
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "p": 0.7153225902857614,
+      "p_aucun": 0.06515125963047805
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.5947587549887042,
+      "p_aucun": 0.12832218978068693
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.9165788697460469,
+      "p_aucun": 0.038650114531000104
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.5534411859094965,
+      "p_aucun": 0.14314596149527054
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.5459376163697087,
+      "p_aucun": 0.19636462758765924
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "p": 0.31388857886362986,
+      "p_aucun": 0.0983956085584832
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Branches ouvertes",
+      "p": 0.7635712837066463,
+      "p_aucun": 0.08849579070224102
+     },
+     {
+      "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "rendu": "Hors de ce dépôt",
+      "p": 0.6736873894828805,
+      "p_aucun": 0.1487637479039841
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "p": 0.6173328208948694,
+      "p_aucun": 0.10415977697879052
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "p": 0.6869787910529962,
+      "p_aucun": 0.04997177935964956
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Hors de ce dépôt",
+      "p": 0.7301807610298383,
+      "p_aucun": 0.0647432321816732
+     },
+     {
+      "attendu": "Hors de ce dépôt",
+      "rendu": "Branches ouvertes",
+      "p": 0.8127098764809783,
+      "p_aucun": 0.05492538290096291
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.9548500298326138,
+      "p_aucun": 0.02709010573616831
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.9162364082064359,
+      "p_aucun": 0.048267555428706914
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.9352142471182188,
+      "p_aucun": 0.034099722810913516
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.5041060772660537,
+      "p_aucun": 0.10226618859681934
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.49069319889925933,
+      "p_aucun": 0.149270554750717
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.9212387368281345,
+      "p_aucun": 0.05734515544526657
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": null,
+      "p": 0.31946326290665494,
+      "p_aucun": 0.31946326290665494
+     },
+     {
+      "attendu": "Bugs connus, non corrigés",
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.8901108273747227,
+      "p_aucun": 0.057329051807525205
+     },
+     {
+      "attendu": null,
+      "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+      "p": 0.30885845970100917,
+      "p_aucun": 0.208650365399812
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.37285963116365495,
+      "p_aucun": 0.27613662822650015
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.5891790053893913,
+      "p_aucun": 0.15578082046453315
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.360242370136774,
+      "p_aucun": 0.2845698578964217
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.3485916563009356,
+      "p_aucun": 0.15971166409727608
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.3500444669567885,
+      "p_aucun": 0.19193941921846722
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.3943063858031064,
+      "p_aucun": 0.08323314621408083
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.7168913396366334,
+      "p_aucun": 0.10894197352420362
+     },
+     {
+      "attendu": null,
+      "rendu": "Hors de ce dépôt",
+      "p": 0.7482231049906867,
+      "p_aucun": 0.13362762277814674
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.4590360217968213,
+      "p_aucun": 0.028799723634637894
+     },
+     {
+      "attendu": null,
+      "rendu": "Bugs connus, non corrigés",
+      "p": 0.46916503778551505,
+      "p_aucun": 0.1139599495261802
+     },
+     {
+      "attendu": null,
+      "rendu": "Branches ouvertes",
+      "p": 0.7825826218660421,
+      "p_aucun": 0.0557731580873184
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.4486771999752218,
+      "p_aucun": 0.4486771999752218
+     },
+     {
+      "attendu": null,
+      "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+      "p": 0.3100812275784926,
+      "p_aucun": 0.22458177843883653
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.5095968397541351,
+      "p_aucun": 0.5095968397541351
+     }
+    ]
+   }
+  },
+  "le public|nom": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 4,
+    "cosinus": {
+     "premier_juste": 15,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.7333333333333333,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 7,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 20,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 13,
+       "ranges_ailleurs": 8,
+       "crees_a_tort": 9,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 14,
+       "ranges_ailleurs": 11,
+       "crees_a_tort": 5,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 19,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.6777777777777778,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 1,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 29,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 11,
+       "ranges_ailleurs": 3,
+       "crees_a_tort": 16,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 19,
+       "ranges_ailleurs": 8,
+       "crees_a_tort": 3,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 21,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.6833333333333333,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 7,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 22,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 12,
+       "ranges_ailleurs": 2,
+       "crees_a_tort": 16,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 19,
+       "ranges_ailleurs": 7,
+       "crees_a_tort": 4,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 21,
+     "cree_a_tort": 1,
+     "range_ailleurs": 8,
+     "a_ranger": 30,
+     "neufs_crees": 0,
+     "fusions_a_tort": 12,
+     "a_creer": 12
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.6704414486885071
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.755243182182312
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.6763875484466553
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.6114794015884399
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "recommendation",
+      "meilleur": 0.5441067218780518
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.6073011159896851
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.7160241603851318
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "iot",
+      "meilleur": 0.6128894090652466
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.7254800200462341
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.6543323397636414
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.7580498456954956
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.6526007652282715
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.5907253623008728
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "general",
+      "meilleur": 0.5222352147102356
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "calendar",
+      "meilleur": 0.6750346422195435
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.6358072757720947
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "calendar",
+      "meilleur": 0.6739310026168823
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "calendar",
+      "meilleur": 0.6162964701652527
+     },
+     {
+      "attendu": "play",
+      "rendu": "recommendation",
+      "meilleur": 0.5592471361160278
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.6317526698112488
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.5219408869743347
+     },
+     {
+      "attendu": "iot",
+      "rendu": "alarm",
+      "meilleur": 0.6240163445472717
+     },
+     {
+      "attendu": "iot",
+      "rendu": "alarm",
+      "meilleur": 0.6630371809005737
+     },
+     {
+      "attendu": "iot",
+      "rendu": "recommendation",
+      "meilleur": 0.4983379542827606
+     },
+     {
+      "attendu": "transport",
+      "rendu": "alarm",
+      "meilleur": 0.5227715969085693
+     },
+     {
+      "attendu": "transport",
+      "rendu": "recommendation",
+      "meilleur": 0.561395525932312
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.6563708782196045
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "meilleur": 0.6416649222373962
+     },
+     {
+      "attendu": "general",
+      "rendu": "iot",
+      "meilleur": 0.5726311802864075
+     },
+     {
+      "attendu": "general",
+      "rendu": "datetime",
+      "meilleur": 0.5961264371871948
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.5330920815467834
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5932691693305969
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.6503288149833679
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5318316221237183
+     },
+     {
+      "attendu": null,
+      "rendu": "iot",
+      "meilleur": 0.5307967662811279
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.5012478828430176
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.5106598138809204
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.5790984630584717
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.5631927251815796
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.551863431930542
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.6553458571434021
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.6285265684127808
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.002916038269177079
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.23066972196102142
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.0036015543155372143
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.009576923213899136
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "datetime",
+      "meilleur": 0.00042619404848665
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.0023654813412576914
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.11632779985666275
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.012294496409595013
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.0209015104919672
+     },
+     {
+      "attendu": "audio",
+      "rendu": "general",
+      "meilleur": 0.0011477131629362702
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.04951329901814461
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.10890350490808487
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.003244573948904872
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "calendar",
+      "meilleur": 0.004498324356973171
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "calendar",
+      "meilleur": 0.06611502170562744
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.020390896126627922
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.00946818944066763
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.08621381968259811
+     },
+     {
+      "attendu": "play",
+      "rendu": "recommendation",
+      "meilleur": 0.002466652076691389
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.08288851380348206
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.006253628060221672
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "meilleur": 0.0012223112862557173
+     },
+     {
+      "attendu": "iot",
+      "rendu": "alarm",
+      "meilleur": 0.08633917570114136
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "meilleur": 0.015569719485938549
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.04644685983657837
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.0735488012433052
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.15637506544589996
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "meilleur": 0.0031275381334125996
+     },
+     {
+      "attendu": "general",
+      "rendu": "play",
+      "meilleur": 0.0020027479622513056
+     },
+     {
+      "attendu": "general",
+      "rendu": "datetime",
+      "meilleur": 0.008656138554215431
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.0011207337956875563
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 0.03244495019316673
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 0.06332704424858093
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.0035408863332122564
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.00043531155097298324
+     },
+     {
+      "attendu": null,
+      "rendu": "iot",
+      "meilleur": 0.0006346904556266963
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 7.563452527392656e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.011523406952619553
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.0013122938107699156
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.0008206762140616775
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.21056051552295685
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.013897339813411236
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.9571214325195765
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.96819829139111
+     },
+     {
+      "attendu": "email",
+      "rendu": "datetime",
+      "meilleur": 0.6600546067146429
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.7730686695544363
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.5934557436367432
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.763129725830679
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.7363478866637837
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.5494406094055065
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.8409225695027678
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.7136513658306141
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.7622393375965665
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.9386077643846013
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.9384454309166382
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "general",
+      "meilleur": 0.6199075050224144
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "calendar",
+      "meilleur": 0.4915218947738166
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.9210975955270203
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.7401318008974835
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.5822699032242
+     },
+     {
+      "attendu": "play",
+      "rendu": "audio",
+      "meilleur": 0.7310637499776026
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.6549985767431209
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.4413940351698003
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 0.3776525070196733
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "meilleur": 0.6181419507890029
+     },
+     {
+      "attendu": "iot",
+      "rendu": "recommendation",
+      "meilleur": 0.9715441625541094
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.8514588285323319
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.9625829003424429
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.981570942863746
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "meilleur": 0.7915718663319914
+     },
+     {
+      "attendu": "general",
+      "rendu": "play",
+      "meilleur": 0.44803976989098043
+     },
+     {
+      "attendu": "general",
+      "rendu": "datetime",
+      "meilleur": 0.5375861950025979
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.4249444037933113
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.3729930059755494
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.8369396393703542
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 0.3614730539533564
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.5210693916462067
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.7378509259726281
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.8302800589147973
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.9060480174517209
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.7411436297809338
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.4551394835570718
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.6537683090448313
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.4688354650646294
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "p": 0.9355404096087375,
+      "p_aucun": 0.020794501561719875
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "p": 0.9598122662960953,
+      "p_aucun": 0.00988823728528689
+     },
+     {
+      "attendu": "email",
+      "rendu": "datetime",
+      "p": 0.587456037894584,
+      "p_aucun": 0.058212192593586905
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "p": 0.737046600368786,
+      "p_aucun": 0.044670992077831956
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "p": 0.4870076978880534,
+      "p_aucun": 0.09531857717823096
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "p": 0.6804654520151026,
+      "p_aucun": 0.049436361774323256
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "p": 0.6906856279831712,
+      "p_aucun": 0.049009265790552634
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "p": 0.4587161065603399,
+      "p_aucun": 0.054585544312625696
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "p": 0.7763190317217307,
+      "p_aucun": 0.060861648765867846
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.5298360356857448,
+      "p_aucun": 0.24791907631058516
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.7211668115959876,
+      "p_aucun": 0.07840091701728988
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.9144444701426712,
+      "p_aucun": 0.02602035129492271
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "p": 0.9160543087883071,
+      "p_aucun": 0.024045488859147444
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "general",
+      "p": 0.4750004933007374,
+      "p_aucun": 0.05763243362804499
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "calendar",
+      "p": 0.3862554383686706,
+      "p_aucun": 0.20006804428635816
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.913979609284796,
+      "p_aucun": 0.02033874714264775
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.7010911206878189,
+      "p_aucun": 0.06992053176361032
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.5634650006293145,
+      "p_aucun": 0.03089733205378256
+     },
+     {
+      "attendu": "play",
+      "rendu": "audio",
+      "p": 0.6540296797519017,
+      "p_aucun": 0.05113855704452321
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "p": 0.5751876973871346,
+      "p_aucun": 0.1776012554193362
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "p": 0.36871417935587625,
+      "p_aucun": 0.19096919767953988
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "p": 0.29549243623225235,
+      "p_aucun": 0.1518981296576182
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "p": 0.5098769656672939,
+      "p_aucun": 0.18917619386671664
+     },
+     {
+      "attendu": "iot",
+      "rendu": "recommendation",
+      "p": 0.9371597902670556,
+      "p_aucun": 0.03583851208519525
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.839023121997748,
+      "p_aucun": 0.02928863287435918
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.9512751178816975,
+      "p_aucun": 0.011134819500199181
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.9728673239076575,
+      "p_aucun": 0.008471632562537254
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "p": 0.6269964994098494,
+      "p_aucun": 0.1910629215188782
+     },
+     {
+      "attendu": "general",
+      "rendu": null,
+      "p": 0.3286098613136209,
+      "p_aucun": 0.3286098613136209
+     },
+     {
+      "attendu": "general",
+      "rendu": "datetime",
+      "p": 0.513760959360258,
+      "p_aucun": 0.0999750826191827
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.3434868758599353,
+      "p_aucun": 0.16852313746565606
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.4099983138874698,
+      "p_aucun": 0.13571319945994298
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.6987547610759192,
+      "p_aucun": 0.16596896613827614
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "p": 0.2860064595455903,
+      "p_aucun": 0.22186284316896096
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.5217765076407299,
+      "p_aucun": 0.09084705640211525
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.5796126996368258,
+      "p_aucun": 0.19592961819203245
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.686555228906921,
+      "p_aucun": 0.15493851306479897
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.768228286639222,
+      "p_aucun": 0.14557304962240963
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.7021696953193419,
+      "p_aucun": 0.05267491660994675
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "p": 0.4274243399333327,
+      "p_aucun": 0.0844474216232051
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.614524802470349,
+      "p_aucun": 0.07032883031593773
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.46157712686490415,
+      "p_aucun": 0.04863934058360928
+     }
+    ]
+   }
+  },
+  "le public|complet": {
+   "bilan": {
+    "bon_absent_des_quatre_premiers": 2,
+    "cosinus": {
+     "premier_juste": 22,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.8,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 10,
+       "ranges_ailleurs": 1,
+       "crees_a_tort": 19,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 17,
+       "ranges_ailleurs": 2,
+       "crees_a_tort": 11,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 22,
+       "ranges_ailleurs": 6,
+       "crees_a_tort": 2,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "reranker": {
+     "premier_juste": 22,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.7194444444444444,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 3,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 27,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 15,
+       "ranges_ailleurs": 4,
+       "crees_a_tort": 11,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 20,
+       "ranges_ailleurs": 5,
+       "crees_a_tort": 5,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "jevk5_b": {
+     "premier_juste": 20,
+     "a_ranger": 30,
+     "auc_meilleur_score": 0.7888888888888889,
+     "courbe": [
+      {
+       "neufs_attrapes": 12,
+       "sur": 12,
+       "ranges_au_bon_endroit": 15,
+       "ranges_ailleurs": 0,
+       "crees_a_tort": 15,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 9,
+       "sur": 12,
+       "ranges_au_bon_endroit": 19,
+       "ranges_ailleurs": 2,
+       "crees_a_tort": 9,
+       "a_ranger": 30
+      },
+      {
+       "neufs_attrapes": 6,
+       "sur": 12,
+       "ranges_au_bon_endroit": 20,
+       "ranges_ailleurs": 4,
+       "crees_a_tort": 6,
+       "a_ranger": 30
+      }
+     ]
+    },
+    "jevk5_a": {
+     "rejoint_le_bon": 20,
+     "cree_a_tort": 1,
+     "range_ailleurs": 9,
+     "a_ranger": 30,
+     "neufs_crees": 3,
+     "fusions_a_tort": 9,
+     "a_creer": 12
+    }
+   },
+   "lignes": {
+    "cosinus": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.6719284653663635
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.6418763399124146
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.6784947514533997
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "datetime",
+      "meilleur": 0.5494740009307861
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "datetime",
+      "meilleur": 0.5583075284957886
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "transport",
+      "meilleur": 0.5525879859924316
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.6918864250183105
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.5769399404525757
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.7540295124053955
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.6110566854476929
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.6060532927513123
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.5922771692276001
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.6214001178741455
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "datetime",
+      "meilleur": 0.630550742149353
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.6456171274185181
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.6444554328918457
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.5955166816711426
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.6274307370185852
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.623022198677063
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.5776330232620239
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.5800415277481079
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 0.5714330673217773
+     },
+     {
+      "attendu": "iot",
+      "rendu": "alarm",
+      "meilleur": 0.49797216057777405
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 0.5887970924377441
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.6488346457481384
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.6594533324241638
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.6486082077026367
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "meilleur": 0.5085376501083374
+     },
+     {
+      "attendu": "general",
+      "rendu": "iot",
+      "meilleur": 0.5824673175811768
+     },
+     {
+      "attendu": "general",
+      "rendu": "alarm",
+      "meilleur": 0.641164243221283
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 0.556311845779419
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5272983312606812
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5663505792617798
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.4371984899044037
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5457912683486938
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 0.5245612859725952
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.5137314796447754
+     },
+     {
+      "attendu": null,
+      "rendu": "datetime",
+      "meilleur": 0.46951019763946533
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.5911921262741089
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.6398394107818604
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.5890161991119385
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.6062282919883728
+     }
+    ],
+    "reranker": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.00013009259419050068
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.0010075676254928112
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.0010191566543653607
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "alarm",
+      "meilleur": 0.0002607496571727097
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "transport",
+      "meilleur": 1.9573521058191545e-05
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 4.164369238424115e-05
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.17159022390842438
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 9.309460438089445e-05
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.2694595456123352
+     },
+     {
+      "attendu": "audio",
+      "rendu": "general",
+      "meilleur": 1.8910066501121037e-05
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.006036682985723019
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.004011009354144335
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 5.597495328402147e-05
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 5.040736868977547e-05
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.019871950149536133
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "iot",
+      "meilleur": 0.004994823597371578
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 5.464271453092806e-05
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.00027156673604622483
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.0002637631550896913
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.00042584052425809205
+     },
+     {
+      "attendu": "play",
+      "rendu": "recommendation",
+      "meilleur": 3.7156150938244537e-05
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 4.2621450120350346e-05
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 1.6703668734407984e-05
+     },
+     {
+      "attendu": "iot",
+      "rendu": "iot",
+      "meilleur": 3.399147681193426e-05
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.003209201619029045
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.005925454199314117
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.5739089846611023
+     },
+     {
+      "attendu": "general",
+      "rendu": "email",
+      "meilleur": 1.6662492271279916e-05
+     },
+     {
+      "attendu": "general",
+      "rendu": "recommendation",
+      "meilleur": 0.0016594304470345378
+     },
+     {
+      "attendu": "general",
+      "rendu": "alarm",
+      "meilleur": 0.001392752630636096
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 3.870518776238896e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 3.443319656071253e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "calendar",
+      "meilleur": 8.144814637489617e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "datetime",
+      "meilleur": 6.016446423018351e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "datetime",
+      "meilleur": 1.91525377886137e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "recommendation",
+      "meilleur": 1.8331387764192186e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "alarm",
+      "meilleur": 1.662669819779694e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "email",
+      "meilleur": 1.6442369087599218e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 2.150677755707875e-05
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.00010807058424688876
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.03749200329184532
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.001445025554858148
+     }
+    ],
+    "jevk5_b": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.9786566167059972
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "meilleur": 0.9883003690108544
+     },
+     {
+      "attendu": "email",
+      "rendu": "datetime",
+      "meilleur": 0.6113905115049707
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.9012492006403763
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "datetime",
+      "meilleur": 0.507900857058561
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "meilleur": 0.8758861290383276
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.8948796293660181
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "datetime",
+      "meilleur": 0.4586471868254228
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "meilleur": 0.9684781278475684
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.776167570567884
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.9533719433585385
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "meilleur": 0.9900511872272889
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.9833310536130146
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "datetime",
+      "meilleur": 0.4322597378840969
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "meilleur": 0.6114106860023019
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.9809767512301791
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.755356359554292
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "meilleur": 0.8077755289864805
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "meilleur": 0.919501050492355
+     },
+     {
+      "attendu": "play",
+      "rendu": "general",
+      "meilleur": 0.46980695783350385
+     },
+     {
+      "attendu": "play",
+      "rendu": "recommendation",
+      "meilleur": 0.5194616147649602
+     },
+     {
+      "attendu": "iot",
+      "rendu": "audio",
+      "meilleur": 0.7368962498688896
+     },
+     {
+      "attendu": "iot",
+      "rendu": "datetime",
+      "meilleur": 0.5467636945174743
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "meilleur": 0.8366818038156889
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.9228494341044295
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.9850650301731535
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "meilleur": 0.9950046871051432
+     },
+     {
+      "attendu": "general",
+      "rendu": "audio",
+      "meilleur": 0.629023638372113
+     },
+     {
+      "attendu": "general",
+      "rendu": "general",
+      "meilleur": 0.8967260213613029
+     },
+     {
+      "attendu": "general",
+      "rendu": "general",
+      "meilleur": 0.8035816357450932
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.4615117760316735
+     },
+     {
+      "attendu": null,
+      "rendu": "iot",
+      "meilleur": 0.48120127701728055
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.6603554775586842
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.32920231447135645
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.5881234809626567
+     },
+     {
+      "attendu": null,
+      "rendu": "datetime",
+      "meilleur": 0.6560695763923656
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.84739284390602
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "meilleur": 0.7981180475048917
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.4085515220395087
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "meilleur": 0.6004576275136089
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.5253140245832356
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "meilleur": 0.6891355800092007
+     }
+    ],
+    "jevk5_a": [
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "p": 0.9508969383052053,
+      "p_aucun": 0.022273686632613747
+     },
+     {
+      "attendu": "email",
+      "rendu": "email",
+      "p": 0.9737779129684027,
+      "p_aucun": 0.009434456917874671
+     },
+     {
+      "attendu": "email",
+      "rendu": "datetime",
+      "p": 0.5214407443071306,
+      "p_aucun": 0.03349243504986299
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "p": 0.8537767217908695,
+      "p_aucun": 0.03949133192182864
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "datetime",
+      "p": 0.42524771300061565,
+      "p_aucun": 0.1385409914306106
+     },
+     {
+      "attendu": "calendar",
+      "rendu": "calendar",
+      "p": 0.8227384051864343,
+      "p_aucun": 0.08198204566429033
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "p": 0.887396849797902,
+      "p_aucun": 0.019039283322806074
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "datetime",
+      "p": 0.4229364683663257,
+      "p_aucun": 0.07484123103143651
+     },
+     {
+      "attendu": "alarm",
+      "rendu": "alarm",
+      "p": 0.9553955578079915,
+      "p_aucun": 0.011287355673778116
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.6631064286984993,
+      "p_aucun": 0.2119491769871086
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.9508687290978527,
+      "p_aucun": 0.015641134552901198
+     },
+     {
+      "attendu": "audio",
+      "rendu": "audio",
+      "p": 0.9814127440540374,
+      "p_aucun": 0.00960050226679788
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "p": 0.9712733289099938,
+      "p_aucun": 0.013004199910971828
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "datetime",
+      "p": 0.4299017270762356,
+      "p_aucun": 0.03916389642984337
+     },
+     {
+      "attendu": "recommendation",
+      "rendu": "recommendation",
+      "p": 0.5166495278504194,
+      "p_aucun": 0.11945380514546715
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.9659818996183619,
+      "p_aucun": 0.018607215659697935
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.6917616878369259,
+      "p_aucun": 0.05559726449588585
+     },
+     {
+      "attendu": "datetime",
+      "rendu": "datetime",
+      "p": 0.790267473886411,
+      "p_aucun": 0.052920270967485444
+     },
+     {
+      "attendu": "play",
+      "rendu": "play",
+      "p": 0.8737859928681383,
+      "p_aucun": 0.02752456566050913
+     },
+     {
+      "attendu": "play",
+      "rendu": "general",
+      "p": 0.44080324857985415,
+      "p_aucun": 0.16244205847760532
+     },
+     {
+      "attendu": "play",
+      "rendu": "recommendation",
+      "p": 0.3801223814112052,
+      "p_aucun": 0.2958337389493989
+     },
+     {
+      "attendu": "iot",
+      "rendu": "audio",
+      "p": 0.4271438945725742,
+      "p_aucun": 0.14559568011928498
+     },
+     {
+      "attendu": "iot",
+      "rendu": "datetime",
+      "p": 0.3643164977340061,
+      "p_aucun": 0.19089231312765353
+     },
+     {
+      "attendu": "iot",
+      "rendu": "general",
+      "p": 0.553447337201647,
+      "p_aucun": 0.38105260903050503
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.9142101140455441,
+      "p_aucun": 0.022942581342774656
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.9821549079250786,
+      "p_aucun": 0.005337324617561714
+     },
+     {
+      "attendu": "transport",
+      "rendu": "transport",
+      "p": 0.9895149150080733,
+      "p_aucun": 0.005728868132032058
+     },
+     {
+      "attendu": "general",
+      "rendu": null,
+      "p": 0.5450612263726955,
+      "p_aucun": 0.5450612263726955
+     },
+     {
+      "attendu": "general",
+      "rendu": "general",
+      "p": 0.7861776171454853,
+      "p_aucun": 0.1620154284363429
+     },
+     {
+      "attendu": "general",
+      "rendu": "general",
+      "p": 0.784540368525461,
+      "p_aucun": 0.08686428798068978
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.3033621549659193,
+      "p_aucun": 0.2725414462515839
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.5432439233479096,
+      "p_aucun": 0.5432439233479096
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.4408816996381882,
+      "p_aucun": 0.2914860528547516
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.3106321837199163,
+      "p_aucun": 0.3106321837199163
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.4577833606675648,
+      "p_aucun": 0.32050582859904003
+     },
+     {
+      "attendu": null,
+      "rendu": null,
+      "p": 0.435840688891126,
+      "p_aucun": 0.435840688891126
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.6841786095339459,
+      "p_aucun": 0.2175988283067403
+     },
+     {
+      "attendu": null,
+      "rendu": "general",
+      "p": 0.6602941545223653,
+      "p_aucun": 0.20958071421131608
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.41871763511672655,
+      "p_aucun": 0.054948814082289535
+     },
+     {
+      "attendu": null,
+      "rendu": "play",
+      "p": 0.5762781252372229,
+      "p_aucun": 0.034110171384038934
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.4975487469796206,
+      "p_aucun": 0.06350217776135166
+     },
+     {
+      "attendu": null,
+      "rendu": "audio",
+      "p": 0.6599322169922343,
+      "p_aucun": 0.04408846786029206
+     }
+    ]
+   }
+  }
+ },
+ "memoires_48": {
+  "titre": [
+   {
+    "verite": "meme",
+    "jevk5": 0.2781552949025637,
+    "choix": "completes",
+    "cosinus": 0.8020598888397217,
+    "reranker": 0.3660900592803955
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.039638608427467685,
+    "choix": "new",
+    "cosinus": 0.5390410423278809,
+    "reranker": 1.645997144805733e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.045576560036824275,
+    "choix": "new",
+    "cosinus": 0.5662412643432617,
+    "reranker": 1.6507367035956122e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.13710380794776708,
+    "choix": "new",
+    "cosinus": 0.6386322975158691,
+    "reranker": 0.04243488609790802
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.043757561814126565,
+    "choix": "new",
+    "cosinus": 0.5387019515037537,
+    "reranker": 2.8197937353979796e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.026991678275537608,
+    "choix": "completes",
+    "cosinus": 0.4977732002735138,
+    "reranker": 1.61461084644543e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.035668047084136144,
+    "choix": "completes",
+    "cosinus": 0.6843003034591675,
+    "reranker": 0.000618020654655993
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.021288056112756037,
+    "choix": "completes",
+    "cosinus": 0.6541083455085754,
+    "reranker": 0.00011479120439616963
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04903768117135477,
+    "choix": "new",
+    "cosinus": 0.636601448059082,
+    "reranker": 0.0012539733434095979
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.037794277866803484,
+    "choix": "new",
+    "cosinus": 0.5683916807174683,
+    "reranker": 0.0010334260296076536
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.048431261908316904,
+    "choix": "new",
+    "cosinus": 0.6101890206336975,
+    "reranker": 5.499667895492166e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02445584152552258,
+    "choix": "completes",
+    "cosinus": 0.632943868637085,
+    "reranker": 3.089377787546255e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05203670982872464,
+    "choix": "new",
+    "cosinus": 0.5424118041992188,
+    "reranker": 8.282578346552327e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.13534826417831874,
+    "choix": "new",
+    "cosinus": 0.78853440284729,
+    "reranker": 0.8109650611877441
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.0630600002923612,
+    "choix": "new",
+    "cosinus": 0.6187168955802917,
+    "reranker": 0.002263321541249752
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.08221480444207951,
+    "choix": "new",
+    "cosinus": 0.5716336965560913,
+    "reranker": 0.0007870072149671614
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07513838800762089,
+    "choix": "new",
+    "cosinus": 0.6110938787460327,
+    "reranker": 7.022566569503397e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04980570176574831,
+    "choix": "contradicts",
+    "cosinus": 0.6592547297477722,
+    "reranker": 0.0044859629124403
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.026119075652312407,
+    "choix": "completes",
+    "cosinus": 0.5104131698608398,
+    "reranker": 0.00011230689415242523
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02407754433400863,
+    "choix": "new",
+    "cosinus": 0.452259361743927,
+    "reranker": 1.6681429769960232e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.08224367048375088,
+    "choix": "new",
+    "cosinus": 0.6989730000495911,
+    "reranker": 0.0059281992726027966
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02960957434174742,
+    "choix": "new",
+    "cosinus": 0.5573787093162537,
+    "reranker": 1.604711178515572e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.0531669250221394,
+    "choix": "new",
+    "cosinus": 0.5221740007400513,
+    "reranker": 2.1971020032651722e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03333697112037647,
+    "choix": "completes",
+    "cosinus": 0.5089340209960938,
+    "reranker": 0.00014487025327980518
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.022937728521645863,
+    "choix": "new",
+    "cosinus": 0.6213335990905762,
+    "reranker": 0.0076163397170603275
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.010445038281305972,
+    "choix": "completes",
+    "cosinus": 0.6449773907661438,
+    "reranker": 0.001340598682872951
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04412480714585789,
+    "choix": "new",
+    "cosinus": 0.5845884680747986,
+    "reranker": 1.6324671378242783e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.04832938086138031,
+    "choix": "completes",
+    "cosinus": 0.7409201264381409,
+    "reranker": 0.5259159207344055
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.047512717868238324,
+    "choix": "new",
+    "cosinus": 0.5960984230041504,
+    "reranker": 1.6603549738647416e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.040544191768571144,
+    "choix": "completes",
+    "cosinus": 0.5651201009750366,
+    "reranker": 1.631200393603649e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04668077473003464,
+    "choix": "new",
+    "cosinus": 0.5871765613555908,
+    "reranker": 6.129833491286263e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05437648678551424,
+    "choix": "new",
+    "cosinus": 0.5610582232475281,
+    "reranker": 1.9817996872006916e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07038048594481601,
+    "choix": "new",
+    "cosinus": 0.5689453482627869,
+    "reranker": 2.377798591624014e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06092438135249387,
+    "choix": "new",
+    "cosinus": 0.6084469556808472,
+    "reranker": 1.6263697034446523e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.10495472059623319,
+    "choix": "contradicts",
+    "cosinus": 0.6719614267349243,
+    "reranker": 0.009182446636259556
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05632091411886498,
+    "choix": "contradicts",
+    "cosinus": 0.6015907526016235,
+    "reranker": 2.3228909412864596e-05
+   },
+   {
+    "verite": "contredit",
+    "jevk5": 0.026333573938083152,
+    "choix": "completes",
+    "cosinus": 0.7329744100570679,
+    "reranker": 0.015030906535685062
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02206637790634409,
+    "choix": "completes",
+    "cosinus": 0.5085893273353577,
+    "reranker": 1.7124517398769967e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.032979858190970227,
+    "choix": "new",
+    "cosinus": 0.5347884893417358,
+    "reranker": 1.7243770344066434e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03276568169987136,
+    "choix": "new",
+    "cosinus": 0.5428065061569214,
+    "reranker": 1.612218147784006e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06208961516251214,
+    "choix": "completes",
+    "cosinus": 0.6675358414649963,
+    "reranker": 0.04591256007552147
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.019348066411786595,
+    "choix": "completes",
+    "cosinus": 0.4622911810874939,
+    "reranker": 0.00012413749936968088
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04913851471987725,
+    "choix": "new",
+    "cosinus": 0.5322175025939941,
+    "reranker": 0.00014540666597895324
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07963785113418714,
+    "choix": "new",
+    "cosinus": 0.6593607664108276,
+    "reranker": 0.03897227719426155
+   },
+   {
+    "verite": "contredit",
+    "jevk5": 0.04365270836326128,
+    "choix": "contradicts",
+    "cosinus": 0.5877350568771362,
+    "reranker": 0.004453801549971104
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07485027978742877,
+    "choix": "new",
+    "cosinus": 0.574400782585144,
+    "reranker": 0.0006559235043823719
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.08280950367790743,
+    "choix": "new",
+    "cosinus": 0.5490642786026001,
+    "reranker": 3.390167694306001e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07479505105850617,
+    "choix": "contradicts",
+    "cosinus": 0.6206079125404358,
+    "reranker": 0.0053913467563688755
+   }
+  ],
+  "complet": [
+   {
+    "verite": "meme",
+    "jevk5": 0.5139334338957638,
+    "choix": "same",
+    "cosinus": 0.7412346601486206,
+    "reranker": 0.004251299425959587
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.031119808603285396,
+    "choix": "new",
+    "cosinus": 0.5224389433860779,
+    "reranker": 1.6426633010269143e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04513476326428944,
+    "choix": "new",
+    "cosinus": 0.539237380027771,
+    "reranker": 2.4717553969821893e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03727750281303501,
+    "choix": "new",
+    "cosinus": 0.5401679873466492,
+    "reranker": 0.00016635922656860203
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02340420073914103,
+    "choix": "new",
+    "cosinus": 0.49373799562454224,
+    "reranker": 2.289929580001626e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04773242581745884,
+    "choix": "new",
+    "cosinus": 0.42725056409835815,
+    "reranker": 2.1287503841449507e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.08228631575271131,
+    "choix": "completes",
+    "cosinus": 0.6781474947929382,
+    "reranker": 0.00033847856684587896
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.01663470795430137,
+    "choix": "completes",
+    "cosinus": 0.628470778465271,
+    "reranker": 6.494487752206624e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05001522892033865,
+    "choix": "completes",
+    "cosinus": 0.6538560390472412,
+    "reranker": 0.00012320411042310297
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.024757291656602072,
+    "choix": "completes",
+    "cosinus": 0.47593721747398376,
+    "reranker": 1.8993692719959654e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02092448028190451,
+    "choix": "completes",
+    "cosinus": 0.5525387525558472,
+    "reranker": 2.4289907742058858e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05266036062205175,
+    "choix": "completes",
+    "cosinus": 0.5825585126876831,
+    "reranker": 7.51068364479579e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06759622400756646,
+    "choix": "new",
+    "cosinus": 0.5463583469390869,
+    "reranker": 3.2727912184782326e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.1618638497083887,
+    "choix": "new",
+    "cosinus": 0.6911166310310364,
+    "reranker": 0.13548080623149872
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.09091607276928017,
+    "choix": "new",
+    "cosinus": 0.6176286935806274,
+    "reranker": 1.6572052118135616e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06639580900304597,
+    "choix": "new",
+    "cosinus": 0.48343896865844727,
+    "reranker": 2.0351459170342423e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06520645027462081,
+    "choix": "new",
+    "cosinus": 0.5529903173446655,
+    "reranker": 3.448893403401598e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07381719512027858,
+    "choix": "new",
+    "cosinus": 0.5861824154853821,
+    "reranker": 0.0005128148477524519
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.02825305282725344,
+    "choix": "completes",
+    "cosinus": 0.4995797872543335,
+    "reranker": 2.5038763851625845e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.016268752651898092,
+    "choix": "completes",
+    "cosinus": 0.4405757188796997,
+    "reranker": 1.6304305972880684e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.10615935968664347,
+    "choix": "completes",
+    "cosinus": 0.5715087652206421,
+    "reranker": 0.000953635317273438
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.025485628556416128,
+    "choix": "completes",
+    "cosinus": 0.5422001481056213,
+    "reranker": 3.396762622287497e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.019898557723170326,
+    "choix": "completes",
+    "cosinus": 0.5024596452713013,
+    "reranker": 3.0572937248507515e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.04200261178178682,
+    "choix": "new",
+    "cosinus": 0.418878436088562,
+    "reranker": 1.654173684073612e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.022080369943030927,
+    "choix": "contradicts",
+    "cosinus": 0.5976334810256958,
+    "reranker": 4.3085274228360504e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.017383224828522476,
+    "choix": "completes",
+    "cosinus": 0.610343873500824,
+    "reranker": 0.000502532348036766
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07091360057487396,
+    "choix": "completes",
+    "cosinus": 0.5883747339248657,
+    "reranker": 1.9573650206439197e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.08327369859839573,
+    "choix": "completes",
+    "cosinus": 0.5839846134185791,
+    "reranker": 0.0019518389599397779
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.020558784101008788,
+    "choix": "completes",
+    "cosinus": 0.5944947600364685,
+    "reranker": 7.033946894807741e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05651320063787752,
+    "choix": "new",
+    "cosinus": 0.5086135864257812,
+    "reranker": 1.5940329831209965e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03930055746717629,
+    "choix": "new",
+    "cosinus": 0.5270935893058777,
+    "reranker": 1.8220312995254062e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03005836458642473,
+    "choix": "new",
+    "cosinus": 0.5344650745391846,
+    "reranker": 1.6126627087942325e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.060603310083090625,
+    "choix": "completes",
+    "cosinus": 0.551969051361084,
+    "reranker": 0.0005279816687107086
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03506463416264356,
+    "choix": "new",
+    "cosinus": 0.504865825176239,
+    "reranker": 1.7066851796698757e-05
+   },
+   {
+    "verite": "meme",
+    "jevk5": 0.04669154572791056,
+    "choix": "completes",
+    "cosinus": 0.5885205268859863,
+    "reranker": 0.00025413581170141697
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.07408246016112718,
+    "choix": "new",
+    "cosinus": 0.5301059484481812,
+    "reranker": 0.0002987762854900211
+   },
+   {
+    "verite": "contredit",
+    "jevk5": 0.028207440886899374,
+    "choix": "completes",
+    "cosinus": 0.7686732411384583,
+    "reranker": 0.8636839389801025
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.012694104296305643,
+    "choix": "completes",
+    "cosinus": 0.4727615416049957,
+    "reranker": 1.8377280866843648e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.03992272966951301,
+    "choix": "new",
+    "cosinus": 0.5331352949142456,
+    "reranker": 4.5543954911408946e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.020749386017890534,
+    "choix": "completes",
+    "cosinus": 0.5613651275634766,
+    "reranker": 0.00020628258062060922
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.019089797263144623,
+    "choix": "completes",
+    "cosinus": 0.6619507074356079,
+    "reranker": 0.08945541828870773
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.033066511179229915,
+    "choix": "new",
+    "cosinus": 0.4473167657852173,
+    "reranker": 1.7168880731333047e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.056092715194763124,
+    "choix": "new",
+    "cosinus": 0.5473860502243042,
+    "reranker": 5.867558138561435e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.05637848759863586,
+    "choix": "new",
+    "cosinus": 0.6191556453704834,
+    "reranker": 0.0003201962972525507
+   },
+   {
+    "verite": "contredit",
+    "jevk5": 0.02660287597425995,
+    "choix": "contradicts",
+    "cosinus": 0.6851356625556946,
+    "reranker": 0.0060457224026322365
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.06487580145114699,
+    "choix": "new",
+    "cosinus": 0.5251707434654236,
+    "reranker": 2.5771969376364723e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.08453485459285402,
+    "choix": "contradicts",
+    "cosinus": 0.5773112177848816,
+    "reranker": 4.80794369650539e-05
+   },
+   {
+    "verite": "different",
+    "jevk5": 0.08144079784398885,
+    "choix": "new",
+    "cosinus": 0.6382863521575928,
+    "reranker": 0.0005463134148158133
+   }
+  ]
+ }
+}
