@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "code-poste",
-  "database": "data/code.rag3db",
+  "database": "data/code-poste.rag3db",
   "embeddings": {
     "model": "granite-278m",
     "dimensions": 768
@@ -10,7 +10,8 @@
   "workspace": {
     "source": "working_tree",
     "root": "workspace",
-    "commands": "approbation"
+    "commands": "approval",
+    "index": "code"
   },
   "entities": {},
   "tools": {
@@ -66,6 +67,10 @@
       "policy": {
         "run_commands": true
       }
+    },
+    "estimate": {
+      "graph": "../../tools/estimate.mmd",
+      "description": "Estimer ce que l'indexation du workspace coûterait : fichiers retenus et écartés (avec leurs raisons, secrets probables compris), modèle choisi et pourquoi, durée prévue. À prendre avant d'indexer — rien n'est écrit."
     }
   }
 }

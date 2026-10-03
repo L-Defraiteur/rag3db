@@ -32,17 +32,19 @@ pub struct WorkspaceConfig {
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
     pub commands: CommandGate,
-    /// Enregistrer le schéma de code (`File`/`Scope`…) à l'ouverture — la
-    /// vérité vit dans le moteur (`register_code_schema`), pas dupliquée en
-    /// JSON : un schéma de payload ne sait pas dire `Text`, et une copie
-    /// dériverait. Les entités **métier** restent déclaratives.
-    #[serde(default = "vrai")]
-    pub index: bool,
+    /// Le schéma **nommé** que ce workspace indexe — `"code"` enregistre le
+    /// schéma de code du moteur (`register_code_schema`) à l'ouverture ;
+    /// absent, rien ne s'enregistre. Un nom plutôt qu'une copie JSON : la
+    /// vérité d'un schéma vit dans le moteur (un schéma de payload ne sait
+    /// pas dire `Text`, une copie dériverait) — et un nom plutôt qu'un
+    /// booléen : un workspace est une source de fichiers, pas du code par
+    /// nature ; un dossier de documents nommera le sien.
+    #[serde(default)]
+    pub index: Option<String>,
 }
 
-fn vrai() -> bool {
-    true
-}
+/// Les schémas de workspace que le moteur sait enregistrer.
+pub const KNOWN_INDEX_SCHEMAS: &[&str] = &["code"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -61,7 +63,7 @@ pub enum CommandGate {
     /// La liste de lecture seule, rien d'autre — pour un agent sans humain.
     Standard,
     /// La liste librement ; le reste demande à l'humain.
-    Approbation,
+    Approval,
     /// La liste librement ; le reste, la sentinelle tranche.
     Auto,
 }
@@ -119,6 +121,9 @@ const BASE_NODES: &[&str] = &[
     "GroupFrameNode",
     // La carte du catalogue : une lecture, sûre pour tout outil.
     "SchemaNode",
+    // L'estimation d'indexation : liste par la source (noms et tailles,
+    // aucun fichier lu hors sonde), rien n'écrit — sûre pour tout outil.
+    "EstimateNode",
 ];
 
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode"];
@@ -199,7 +204,7 @@ pub fn validate_tool_policy(
         if porte == CommandGate::Off {
             return Err(format!(
                 "l'outil « {tool_name} » déclare run_commands mais la porte est fermée : \
-                 mettez workspace.commands à standard, approbation ou auto"
+                 mettez workspace.commands à standard, approval ou auto"
             ));
         }
     }
@@ -273,7 +278,7 @@ mod monte {
         let mode = match config.commands {
             CommandGate::Off => return None,
             CommandGate::Standard => Mode::Standard,
-            CommandGate::Approbation => Mode::Approbation,
+            CommandGate::Approval => Mode::Approbation,
             CommandGate::Auto => Mode::Auto,
         };
         Some(Arc::new(Garde::new(mode)))
@@ -295,7 +300,7 @@ mod tests {
             root: "sources".into(),
             read_only,
             commands: CommandGate::Off,
-            index: true,
+            index: Some("code".into()),
         }
     }
 
@@ -363,7 +368,7 @@ mod tests {
     fn la_porte_suit_la_cle_commands() {
         let mut c = config(WorkspaceSource::Snapshot, false);
         assert!(build_garde(&c).is_none(), "off = pas de service, run refuse tout");
-        c.commands = CommandGate::Approbation;
+        c.commands = CommandGate::Approval;
         assert!(build_garde(&c).is_some());
     }
 }

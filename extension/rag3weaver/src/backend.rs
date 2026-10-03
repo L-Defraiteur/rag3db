@@ -252,6 +252,14 @@ impl PreparedBackend {
             .unwrap()
             .to_path_buf();
         if let Some(w) = &manifest.workspace {
+            if let Some(nom) = &w.index {
+                if !crate::backend_code::KNOWN_INDEX_SCHEMAS.contains(&nom.as_str()) {
+                    return Err(format!(
+                        "workspace.index : schéma « {nom} » inconnu — les schémas connus : {}",
+                        crate::backend_code::KNOWN_INDEX_SCHEMAS.join(", ")
+                    ));
+                }
+            }
             if cfg!(not(feature = "code")) {
                 return Err(
                     "la clé `workspace` demande un binaire bâti avec la feature `code` — \
@@ -661,11 +669,16 @@ impl PreparedBackend {
             cat.register_entity(name, config.clone())
                 .map_err(|e| e.to_string())?;
         }
-        // Le schéma de code, par le moteur : la vérité de `scope_config` ne
-        // se duplique pas en JSON (elle dériverait) — un workspace déclaré
-        // l'enregistre, sauf refus explicite (`index: false`).
+        // Le schéma **nommé** du workspace, par le moteur : la vérité d'un
+        // schéma ne se duplique pas en JSON (elle dériverait) — elle se
+        // nomme, et le moteur l'enregistre.
         #[cfg(feature = "code")]
-        if self.manifest.workspace.as_ref().is_some_and(|w| w.index) {
+        if let Some("code") = self
+            .manifest
+            .workspace
+            .as_ref()
+            .and_then(|w| w.index.as_deref())
+        {
             crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
                 .map_err(|e| e.to_string())?;
         }

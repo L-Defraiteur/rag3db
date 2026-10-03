@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "code-cloud",
-  "database": "data/code.rag3db",
+  "database": "data/code-cloud.rag3db",
   "embeddings": {
     "model": "granite-278m",
     "dimensions": 768
@@ -9,7 +9,8 @@
   "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
   "workspace": {
     "source": "snapshot",
-    "root": "workspace"
+    "root": "workspace",
+    "index": "code"
   },
   "entities": {},
   "tools": {
@@ -51,6 +52,10 @@
       "policy": {
         "write_files": true
       }
+    },
+    "estimate": {
+      "graph": "../../tools/estimate.mmd",
+      "description": "Estimer ce que l'indexation du workspace coûterait : fichiers retenus et écartés (avec leurs raisons, secrets probables compris), modèle choisi et pourquoi, durée prévue. À prendre avant d'indexer — rien n'est écrit."
     }
   }
 }
