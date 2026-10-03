@@ -47,3 +47,14 @@ fn ecrire_la_liste_des_fichiers_de_code() {
         t.elapsed().as_millis()
     );
 }
+
+/// Les bibliothèques qu'`analyze` (un seul appel) tire d'un dossier :
+/// `SONDE_DOSSIER`, par défaut `src/dataflow` de ce crate.
+#[test]
+#[ignore]
+fn bibliotheques_d_un_dossier() {
+    let dossier = std::env::var("SONDE_DOSSIER").unwrap_or_else(|_| format!("{}/src/dataflow", env!("CARGO_MANIFEST_DIR")));
+    let analyse = rag3weaver::code::analyze(&dossier, rag3weaver::code::read_sources(&dossier).unwrap());
+    let noms: Vec<&str> = analyse.libraries.iter().map(|l| l.name.as_str()).collect();
+    eprintln!("[bibliothèques] {} : {noms:?}", noms.len());
+}
