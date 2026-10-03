@@ -1346,7 +1346,7 @@ impl Catalog {
         report.relations_ms = phase.elapsed().as_millis();
 
         let phase = std::time::Instant::now();
-        self.resolve_across_batches(analysis, &mut report)?;
+        self.resolve_across_batches(analysis, &mut report, exige)?;
         report.symbols_ms = phase.elapsed().as_millis();
         Ok(report)
     }
@@ -1358,10 +1358,15 @@ impl Catalog {
     /// ajouté seul retrouve ce qui existait, et l'existant retrouve ce que
     /// le fichier apporte — sans ré-analyser le dossier
     /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md)).
+    /// `exige` : ce que l'ingestion qui l'appelle demande d'être prêt. Ses
+    /// drains le respectent — un drain complet solderait au passage la dette
+    /// d'embarquement de toute la base (le rattrapage opportuniste), ce
+    /// qu'une ingestion en plein texte seul ne veut pas payer.
     fn resolve_across_batches(
         &mut self,
         analysis: &CodeAnalysis,
         report: &mut CodeIngestReport,
+        exige: crate::disponibilite::Disponibilites,
     ) -> Result<(), CatalogError> {
         use std::collections::{BTreeMap as Map, BTreeSet};
 
@@ -1391,7 +1396,7 @@ impl Catalog {
             }
             *t = std::time::Instant::now();
         };
-        let ingested = self.ingest_entities(SYMBOL, records)?;
+        let ingested = self.ingest_entities_jusqu_a(SYMBOL, records, exige)?;
         etape("ingestion", &mut t);
         report.failed += ingested.failed;
 
@@ -1420,7 +1425,7 @@ impl Catalog {
         }
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
         etape("mise en file DEFINES/MENTIONS", &mut t);
-        let drained = self.drain();
+        let drained = self.drain_jusqu_a(exige);
         report.failed += drained.failed;
         etape("drain des rendez-vous", &mut t);
 
@@ -1462,7 +1467,7 @@ impl Catalog {
             }
         }
         etape("mise en file des arêtes résolues", &mut t);
-        let linked = self.drain();
+        let linked = self.drain_jusqu_a(exige);
         etape("drain des arêtes résolues", &mut t);
         report.failed += linked.failed;
         Ok(())
