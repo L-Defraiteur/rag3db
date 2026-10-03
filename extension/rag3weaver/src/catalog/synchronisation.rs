@@ -220,17 +220,32 @@ impl Catalog {
         // ── Ce que deviennent les absentes ──────────────────────────────
         match &config.on_missing {
             OnMissing::Delete => {
-                report.relations_removed = match self.dialect.compter_relations_de(entity_name) {
-                    Some(cypher) => {
-                        let list = CypherValue::List(report.missing.iter().cloned().map(CypherValue::String).collect());
-                        let res = self
-                            .conn
-                            .execute_with_params(&cypher, &[QueryParam::new("uuids", list)])
-                            .map_err(|e| CatalogError::DbError(e.to_string()))?;
-                        res.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).map(|n| n as usize)
-                    }
-                    None => None,
-                };
+                // Les relations déclarées au catalogue qui touchent l'entité :
+                // les liens internes (chunks, dérivées) ne sont pas des
+                // relations au sens de l'utilisateur.
+                let mut rels: Vec<String> = self
+                    .config
+                    .relations
+                    .iter()
+                    .filter(|(_, d)| d.from == entity_name || d.to == entity_name)
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                rels.sort();
+                let list = CypherValue::List(report.missing.iter().cloned().map(CypherValue::String).collect());
+                let mut total = Some(0usize);
+                for rel in &rels {
+                    let Some(cypher) = self.dialect.compter_relations_de(entity_name, rel) else {
+                        total = None;
+                        break;
+                    };
+                    let res = self
+                        .conn
+                        .execute_with_params(&cypher, &[QueryParam::new("uuids", list.clone())])
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                    let n = res.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+                    total = total.map(|t| t + n);
+                }
+                report.relations_removed = total;
                 for uuid in report.missing.clone() {
                     self.mettre_en_file_la_suppression(entity_name, &uuid)?;
                     report.removed.push(uuid);
@@ -278,9 +293,10 @@ impl Catalog {
                 }
             }
         }
+        // Une fin est une unité : elle rend une fois tout posé, quel que soit
+        // le régime d'écriture du catalogue.
         if !(report.removed.is_empty() && report.transitioned.is_empty()) {
-            let exige = self.exigence_d_ecriture_par_defaut();
-            let res = self.tenir_l_exigence_d_ecriture(entity_name, exige);
+            let res = self.drain();
             report.warnings = res.warnings;
         }
         Ok(report)
