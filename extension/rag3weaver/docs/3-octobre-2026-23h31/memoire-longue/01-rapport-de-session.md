@@ -93,8 +93,26 @@ une pièce de la conception et pas une formulation :
 - **La mémoire n'est jamais perdue** : le rappel reprend le texte tel quel, et
   le message le dit — le contenu est gardé, il n'attend que le choix du sujet.
 - **Côté statut, un résultat ordinaire qui demande un complément, pas une
-  erreur.** À voir avec la session recherche : le harnais du chat doit les
-  distinguer, pour que sa règle « après refus répétés » ne s'applique pas ici.
+  erreur** — et la session recherche a vérifié dans le code que le harnais
+  **sait déjà** les distinguer. Un résultat d'outil ne compte comme erreur que
+  si son JSON porte un champ `error` au premier niveau (`agent.rs`,
+  `error_detail`) : tout `{"ok": true, "result": …}` n'est jamais une erreur,
+  quel que soit son contenu — ni compté dans `tool_errors`, ni vu par la
+  coupure. Le précédent existe : la validation d'entrée du backend rend
+  exactement cette silhouette, `ok: true` avec
+  `{"validation": {"accepted": false, …}, "executed": false}`. `remember`
+  prendra la même, avec sa charge `needs` : le champ manquant, les deux appels
+  possibles tels quels, l'extrait du sujet proche.
+  - Les deux coupures ne mordent pas, même en passant par l'erreur :
+    `stop_on_repeated_error` exige **deux erreurs consécutives à clé
+    strictement identique** (même outil, même texte), remise à zéro au premier
+    résultat sain — deux demandes de précision sur des sujets différents ont
+    des textes différents. Et la règle « refus répétés » de la session
+    recherche vit dans la garde des commandes shell : elle ne voit pas les
+    outils ordinaires.
+  - Le fait qui tranche pour la crainte de Lucie : dans leurs passes,
+    `accepted: false` **avec la marche à suivre** n'a jamais fait boucler ni
+    renoncer un agent. C'est le refus **sec, sans chemin**, qui le fait.
 
 Cela remplace « dans le doute, créer et demander après » : dans le doute,
 **demander à l'appelant avant**, par cette demande. Le jardinier reste pour ce qui
