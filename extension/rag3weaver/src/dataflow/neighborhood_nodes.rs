@@ -37,19 +37,12 @@ use super::node::{Node, NodeContext};
 use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{PortDef, PortType, PortValue};
 use super::usage_nodes::{rel_info, usages_of, RelInfo, UsagesConfig};
+pub use super::graph_walk::{degree_query, Direction};
 use crate::catalog::{Catalog, CatalogError};
 use crate::connection::{CypherValue, QueryParam};
 
 pub const MAX_DEPTH: usize = 3;
 pub const MAX_BUDGET: usize = 2_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    /// `(d)<-[r]-(m)` : ce qui pointe vers le nœud (qui dépend de lui).
-    Incoming,
-    /// `(d)-[r]->(m)` : ce vers quoi il pointe (ce dont il dépend).
-    Outgoing,
-}
 
 /// Un pas d'un chemin déclaré : une relation et son sens.
 #[derive(Debug, Clone)]
@@ -134,19 +127,7 @@ fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
 /// Un saut : depuis une liste d'uuid, par une relation, dans un sens.
 pub fn hop_query(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
     let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
-    let motif = match direction {
-        Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", rel.to, rel.name, rel.from),
-        Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", rel.from, rel.name, rel.to),
-    };
-    format!("UNWIND $uuids AS u MATCH {motif} RETURN u, {c}, {ligne}", c = champs("m", cfg))
-}
-
-/// Le degré, dans le sens suivi, d'une liste de nœuds.
-pub fn degree_query(rel: &RelInfo, direction: Direction) -> String {
-    match direction {
-        Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{} {{_uuid: u}})<-[r:{}]-() RETURN u, count(r)", rel.to, rel.name),
-        Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{} {{_uuid: u}})-[r:{}]->() RETURN u, count(r)", rel.from, rel.name),
-    }
+    format!("UNWIND $uuids AS u MATCH {} RETURN u, {c}, {ligne}", direction.pattern(rel), c = champs("m", cfg))
 }
 
 fn texte(v: Option<&CypherValue>) -> String {
@@ -217,21 +198,7 @@ impl Moteur<'_> {
 
     /// Le degré de chaque nœud dans le sens suivi.
     fn degres(&self, uuids: &[String]) -> Result<HashMap<String, usize>, String> {
-        let mut out: HashMap<String, usize> = HashMap::new();
-        if uuids.is_empty() {
-            return Ok(out);
-        }
-        let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
-        for rel in &self.rels {
-            let rows = self
-                .catalog
-                .execute_raw_with_params(&degree_query(rel, self.cfg.direction), &[QueryParam::new("uuids", liste.clone())])
-                .map_err(Self::err)?;
-            for r in &rows.rows {
-                *out.entry(texte(r.first())).or_default() += r.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-            }
-        }
-        Ok(out)
+        super::graph_walk::degrees(self.catalog, &self.rels, &[self.cfg.direction], uuids).map_err(|e| format!("NeighborhoodNode: {e}"))
     }
 
     /// Le départ supplémentaire : le chemin déclaré depuis chaque départ,
@@ -245,10 +212,7 @@ impl Moteur<'_> {
         for (i, pas) in cfg.also_path.iter().enumerate() {
             let rel = rel_info(self.catalog, &pas.relation)?;
             let dernier = i + 1 == cfg.also_path.len();
-            let (motif, champ) = match pas.direction {
-                Direction::Incoming => (format!("(d:{} {{_uuid: u}})<-[:{}]-(m:{})", rel.to, rel.name, rel.from), "m"),
-                Direction::Outgoing => (format!("(d:{} {{_uuid: u}})-[:{}]->(m:{})", rel.from, rel.name, rel.to), "m"),
-            };
+            let (motif, champ) = (pas.direction.pattern(&rel), "m");
             let q = if dernier {
                 format!("UNWIND $uuids AS u MATCH {motif} RETURN u, {champ}._uuid, {champ}.{}", cfg.also_same)
             } else {

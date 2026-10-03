@@ -1419,6 +1419,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::react_nodes::ReactTransitionNodeFactory));
     registry.register(Box::new(super::usage_nodes::UsagesNodeFactory));
     registry.register(Box::new(super::neighborhood_nodes::NeighborhoodNodeFactory));
+    registry.register(Box::new(super::links_nodes::LinksNodeFactory));
     registry.register(Box::new(FieldWeightNodeFactory));
     registry.register(Box::new(GroupFrameNodeFactory));
     // Trace : le consommateur du bus d'événements, en graphe.
@@ -1680,6 +1681,7 @@ mod tests {
                 "ReactTransitionNode" => serde_json::json!({ "target": "Memory", "transition": "review", "relation": "ANCHORED_TO" }),
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),
+                "LinksNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),
                 "FlushNode" | "SparseCommitNode" => serde_json::json!({ "table": "Product" }),
                 "KBQuerySourceNode" => serde_json::json!({ "kb_name": "kb", "query": "rust" }),
                 "SearchSourceNode" => serde_json::json!({ "target_name": "Product", "query": "rust" }),
