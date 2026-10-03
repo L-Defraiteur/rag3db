@@ -755,6 +755,21 @@ Décidé par l'orchestration, sur les mesures de l'arbre principal et de la
 session codeparsers. **C'est un changement de ce que l'index contient**, pas
 un réglage.
 
+**Livré le 4 octobre vers 1 h** (`63d154730`, codeparsers `fichier-seul` @
+`d567e7c`). Les mêmes arêtes par paquets de 1, de 64 et d'un seul tenant,
+trois passes sur trois. Banc des relations, master → livré :
+- qui appelle : 1,00/0,88 → 1,00/0,88 ;
+- dépend de : 1,00/0,64 → 1,00/0,85 ;
+- relie : 4/4 → 4/4 ;
+- tests qui traversent : 0,96/0,92 → 0,96/0,93.
+
+Les pièges trouvés en route :
+- un nom de bibliothèque était pris sur tout le paquet ;
+- l'ordre des fichiers venait d'un `HashMap` ;
+- le mot NULL des COPY était une constante du code, devenue un symbole ;
+- le correctif des `use` Rust internes était resté hors d'un commit de
+  codeparsers.
+
 **Le fait.** Le même dépôt compte 819 808 relations indexé d'un seul tenant,
 contre 438 104 par paquets de 64. Sur `src/` de rag3weaver (129 fichiers) :
 59 152 contre 72 721. Seuls les liens entre fichiers diffèrent. codeparsers
