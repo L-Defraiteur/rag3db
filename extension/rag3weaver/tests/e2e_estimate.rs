@@ -66,3 +66,109 @@ fn ce_depot_s_estime_avant_de_s_indexer() {
         assert!(!estimate.model_reason.is_empty());
     }
 }
+
+/// **Cherchable par mots avant ses vecteurs** — la mesure que la proposition
+/// n'avait pu que calculer. Le dépôt entier (fichiers suivis, retenus par la
+/// politique) est synchronisé en exigeant seulement le plein texte ; les
+/// vecteurs restent en dette, et l'avancement le dit.
+///
+/// Par défaut le corpus est `src/` de la crate — une à deux minutes, ce
+/// qu'une batterie supporte. `RAG3WEAVER_ESTIMATE_REPO=1` prend le dépôt
+/// entier : mesuré le 3 octobre 2026 (6 735 fichiers, 59,6 Mo, 121 820
+/// morceaux, binaire de test non optimisé, granite-278m par le service
+/// distant), **1 798 s** pour être cherchable par mots — les 1 024 premiers
+/// fichiers en 19 s, puis l'insertion des relations coûte de plus en plus
+/// cher à mesure que la base grossit (418 761 relations ; confié à la session
+/// cœur C++).
+///
+/// `RAG3WEAVER_ESTIMATE_VECTORS=1` solde ensuite la dette et chronomètre :
+/// c'est ce que l'estimation avait prévu, confronté à ce qui arrive. Même
+/// mesure : 710 s pour 121 820 morceaux, 569 s prévus par la sonde.
+#[test]
+#[ignore]
+fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
+    use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
+    use rag3weaver::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
+    use rag3weaver::code_tools::Snapshot;
+    use rag3weaver::disponibilite::Disponibilites as D;
+    use rag3weaver::estimate::Kept;
+    use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
+    use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    let root = repository_root();
+    let whole = std::env::var_os("RAG3WEAVER_ESTIMATE_REPO").is_some();
+    let corpus = if whole { root.clone() } else { std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src") };
+    let (listed, _) = working_tree_files(&WorkingTree::new(&corpus)).expect("liste du corpus");
+    let kept: Vec<(String, String)> = listed
+        .iter()
+        .filter(|(p, b)| matches!(code_policy(p, *b), Kept::Yes(_)))
+        .filter_map(|(p, _)| std::fs::read_to_string(corpus.join(p)).ok().map(|c| (p.clone(), c)))
+        .collect();
+    let chars: usize = kept.iter().map(|(_, c)| c.len()).sum();
+    eprintln!("[mots] {} fichiers, {:.1} Mo à synchroniser", kept.len(), chars as f64 / 1e6);
+
+    let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
+    let rate = probe_rate(embedder.as_ref(), &samples()).expect("sonde");
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    boxed
+        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
+        .expect("extension vector");
+    let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: embedder.dim(), ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+
+    let options = SourceSyncOptions { batch_files: 64, exige: D::RECHERCHE_TEXTE, ..Default::default() };
+    let t = Instant::now();
+    let mut last = 0usize;
+    let report = sync_source(&mut catalog, &Snapshot::new("rag3db", kept), &options, &mut |p: SourceSyncProgress| {
+        if p.files_done >= last + 1_000 || p.files_done == p.files_total {
+            last = p.files_done;
+            eprintln!("[mots] {} / {} fichiers, {} scopes, {:.0} s", p.files_done, p.files_total, p.scopes_written, t.elapsed().as_secs_f64());
+        }
+    })
+    .expect("synchronisation jusqu'au plein texte");
+    let text_seconds = t.elapsed().as_secs_f64();
+    eprintln!("[mots] cherchable par mots en {text_seconds:.0} s — {} fichiers, {} scopes, {} relations", report.files_ingested, report.scopes_written, report.relations);
+
+    let progress = catalog.index_progress().expect("avancement");
+    let chars_per_chunk = chars / progress.chunks().max(1);
+    eprintln!("[mots] {}", progress.line(rate, chars_per_chunk));
+    assert!(progress.chunks() > 1_000, "{progress:?}");
+    assert_eq!(progress.dense_missing(), progress.chunks(), "aucun vecteur n'a été calculé : {progress:?}");
+
+    let catalog = Arc::new(Mutex::new(catalog));
+    let found = Catalog::rechercher(&catalog, SCOPE, "embarquer_le_retard", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        ..Default::default()
+    })
+    .expect("recherche par mots");
+    eprintln!("[mots] « embarquer_le_retard » : {} résultats par mots, vecteurs à {} %", found.results.len(), progress.dense_percent());
+    assert!(!found.results.is_empty(), "le dépôt doit être cherchable par mots avant ses vecteurs");
+
+    if std::env::var_os("RAG3WEAVER_ESTIMATE_VECTORS").is_some() {
+        let predicted = rate.map(|r| r.duration_for((progress.dense_missing() * chars_per_chunk) as u64).as_secs());
+        let t = Instant::now();
+        let mut done = 0usize;
+        let mut next = 10_000usize;
+        loop {
+            let n = catalog.lock().unwrap().embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage");
+            if n == 0 {
+                break;
+            }
+            done += n;
+            if done >= next {
+                next += 10_000;
+                let p = catalog.lock().unwrap().index_progress().unwrap();
+                eprintln!("[vecteurs] {:.0} s — {}", t.elapsed().as_secs_f64(), p.line(rate, chars_per_chunk));
+            }
+        }
+        let p = catalog.lock().unwrap().index_progress().unwrap();
+        eprintln!("[vecteurs] {done} morceaux embarqués en {:.0} s (prévu : {predicted:?} s) — {}", t.elapsed().as_secs_f64(), p.line(rate, chars_per_chunk));
+        assert_eq!(p.dense_missing(), 0, "{p:?}");
+    }
+}

@@ -28,8 +28,14 @@ comme une autre, son reçu se suit par le `wait` que les agents ont déjà.
 **Ce qu'on compte**, sans rien lire d'autre que les noms et les tailles : la
 politique d'ingestion existe (`code::verdict` : liste d'extensions interdites,
 seuil de 128 Kio pour le texte brut) et dit pour chaque fichier « retenu » ou
-« écarté, parce que ». Sur ce dépôt-ci (6 110 fichiers suivis, 427 Mo), c'est ce qui
-sépare 35 Mo de code de 392 Mo d'autre chose, surtout des CSV et du Parquet.
+« écarté, parce que ». Sur ce dépôt-ci, c'est ce qui sépare 59,8 Mo de code et de texte retenus
+(6 831 fichiers) de 524 Mo écartés, surtout des CSV et du Parquet.
+
+**Le dossier n'est pas le dépôt.** Lu tel quel, ce dossier de travail compte
+307 541 fichiers (builds, données d'expérience, dossiers de compilation) ;
+l'estimation l'a montré avant qu'on indexe. Depuis, `WorkingTree` respecte
+les règles d'exclusion du dossier (7 442 fichiers) et écarte les secrets
+probables, avec la raison.
 
 **Le modèle** : l'heuristique du premier index, telle qu'elle est sur master
 — granite-278m, sauf plus de 50 000 fichiers, carte faible ou absente, ou
@@ -95,21 +101,39 @@ sa forme est fixée et cette proposition se branche dessus en trois points.
 
 ### En combien de temps est-on cherchable par mots ?
 
-**Calculé, pas mesuré** : l'ingestion de code ne sait pas encore s'arrêter au
-plein texte, il n'y a donc rien à chronométrer sans écrire ce qu'on propose.
+**Mesuré le 3 octobre au soir**, une fois l'ingestion de code capable de
+s'arrêter au plein texte (`sync_source` avec `exige = RECHERCHE_TEXTE`, livré
+par la session de l'arbre principal). Le premier jet de cette page donnait un
+calcul — « environ une minute » — et il était **faux d'un facteur trente**
+pour le dépôt entier ; il reste ici, daté, pour qu'on voie d'où vient
+l'écart.
 
-| Pour ce dépôt (35 Mo de code, ~70 000 morceaux ; les textes retenus s'y ajoutent) | Durée | D'où vient le chiffre |
+| Corpus (binaire de test non optimisé, granite-278m par le service distant) | Cherchable par mots | Vecteurs ensuite |
 |---|---|---|
-| Analyse | ~25 s | 3,9 Mo en 2,7 s, mesuré aujourd'hui sur `src/` |
-| Écriture et plein texte, sans modèle | ~40 s | 21 778 morceaux en 11 à 12 s (cœur C++, 7 septembre) |
-| **Cherchable par mots** | **environ une minute** | somme des deux |
-| Vecteurs, par le service de l'autre poste, 278m | ~4 min | 148 000 caractères/s, mesuré aujourd'hui |
-| Vecteurs, carte d'ici, 278m, régulateur provisoire | ~30 min | 26 000 jetons/s, un quart du temps sur la carte |
-| Vecteurs, carte d'ici, 107m, régulateur provisoire | ~5 min | 148 000 jetons/s, idem |
+| `src/` de la crate : 122 fichiers, 4 Mo, 9 528 morceaux, 49 648 relations | **17 s** | ~1 min prévue |
+| Ce dépôt : 6 735 fichiers, 59,6 Mo, 121 820 morceaux, 418 761 relations | **1 798 s** (30 min) | **710 s** mesurés, 569 s prévus par la sonde |
 
-L'ordre de grandeur est le résultat utile : **une minute pour chercher par
-mots, des minutes à une demi-heure pour les vecteurs**. C'est l'écart qui
-justifie le plein texte d'abord, et le troisième déclencheur de 107m.
+Trois choses à en retenir.
+
+- **L'exigence est tenue** : à la fin de la passe « plein texte », aucun
+  vecteur n'est calculé (0 sur 121 820) et une recherche par mots répond. La
+  première mesure, avant correctif, en trouvait 83 % de faits — un rattrapage
+  tournait dans la liaison des symboles.
+- **Le temps du plein texte ne croît pas comme la taille.** Les 1 024
+  premiers fichiers passent en 19 s ; les mille suivants en 53 s, puis 151,
+  283, 422, 367 et 503 s. Ce qui croît est l'insertion des relations par le
+  moteur, de plus en plus chère à mesure que la base grossit ; isolé par la
+  session de l'arbre principal, confié à la session cœur C++. Au rythme des
+  premiers paquets, le dépôt entier prendrait environ deux minutes : c'est ce
+  qu'il faut retrouver.
+- **L'estimation des vecteurs tient à 20 % près** : 569 s prévus, 710 s
+  mesurés. L'écart est le prix de l'écriture en base et de la reconstruction
+  de l'index, que la sonde ne voit pas ; chaque indexation note son débit
+  réel, la suivante prévoit mieux.
+
+Tant que l'insertion des relations n'est pas corrigée, **« le plein texte
+d'abord » ne rend l'attente supportable que pour un petit dépôt** : sur
+celui-ci, les vecteurs (12 min) arrivent plus vite que les mots (30 min).
 
 ## 4. Les deux politiques
 
@@ -129,6 +153,11 @@ La source git n'existe pas (`FileSource` porte le commentaire « demain
 cloné. Les champs `repo` et `revision` sont déjà dans le schéma des fichiers.
 
 ## 5. Ce qu'on recommande de coder en premier
+
+> **État au 3 octobre au soir** : les points 1 et 2 sont sur master
+> (`src/estimate.rs`, `EstimateNode`, `templates/tools/estimate.mmd`,
+> `Catalog::index_progress`). Le point 3 attend la correction de l'insertion
+> des relations.
 
 1. **`estimate`**, entièrement : compte par `verdict`, modèle et raison,
    sonde de débit, seuil. C'est une lecture, elle ne dépend de personne, et
