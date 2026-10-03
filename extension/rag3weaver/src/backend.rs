@@ -1648,6 +1648,7 @@ mod tests {
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
         use crate::embedder::HashEmbedder;
         // Une VRAIE base en mémoire : depuis que `edit` réindexe par la
@@ -1713,6 +1714,7 @@ mod tests {
     /// **Le même moteur, deux politiques** : l'une lit un instantané sans
     /// rien pouvoir écrire, l'autre édite un arbre de travail — et le disque
     /// le prouve.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn le_meme_moteur_sous_deux_politiques() {
         // La politique cloud : un instantané, lecture seule.
@@ -1750,6 +1752,7 @@ mod tests {
     /// sans regarder les signaux, et une adresse injoignable empêchait un
     /// backend bm25-only de démarrer. Et l'inverse : un backend qui déclare
     /// du vecteur refuse l'absence de service en la nommant.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn un_backend_en_mots_seuls_demarre_sans_service() {
         // Le notebook, ramené aux mots seuls, avec une adresse injoignable.

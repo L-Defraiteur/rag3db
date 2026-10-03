@@ -22,6 +22,7 @@ use rag3weaver::dataflow::{
 use rag3weaver::dataflow::QueryPayload;
 #[cfg(feature = "burn-embedder")]
 use rag3weaver::dataflow::{ExecutionStatus, FuseResultsNode, RerankNode, VectorSearchNode};
+#[cfg(feature = "burn-embedder")]
 use rag3weaver::reranker::Reranker;
 use rag3weaver::search::BM25Mode;
 use rag3weaver::embedder::{DualEmbedder, Embedder, MockEmbedder, SparseEmbedder};
@@ -909,6 +910,7 @@ fn generic_hybrid_pipeline_with_report() {
 /// La requête « Rust pandas » (mode split) fait matcher le Rust Book sur la
 /// description et le Python Cookbook sur les détails : les poids décident de
 /// l'ordre. C'est le « boost de champ » sans pondération dans le moteur.
+#[cfg(feature = "burn-embedder")]
 fn run_two_field_fusion(weights: &[(&str, f64)]) -> Vec<UnifiedResult> {
     let mut catalog = setup_simple_catalog(4);
     catalog.ingest_entities("Product", test_products()).unwrap();
@@ -949,10 +951,12 @@ fn run_two_field_fusion(weights: &[(&str, f64)]) -> Vec<UnifiedResult> {
     results
 }
 
+#[cfg(feature = "burn-embedder")]
 fn name_of(r: &UnifiedResult) -> String {
     r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).unwrap_or("?").to_string()
 }
 
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_two_field_branches_weights_decide_order() {
@@ -971,6 +975,7 @@ fn generic_two_field_branches_weights_decide_order() {
 
 /// `fields` doit nommer un champ indexé : l'erreur est explicite, pas un
 /// résultat vide silencieux.
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_bm25_unknown_field_is_an_error() {
@@ -999,6 +1004,7 @@ fn generic_bm25_unknown_field_is_an_error() {
 /// Graphe BM25 (split) → [rerank] → resolve, sur « Rust Python French » qui
 /// retrouve les trois produits. `reranker` = None donne l'ordre BM25 de
 /// référence ; sinon un reranker à préférence contrôlée.
+#[cfg(feature = "burn-embedder")]
 fn run_bm25_then_rerank(reranker: Option<Arc<dyn Reranker>>, candidates: usize) -> Vec<UnifiedResult> {
     let mut catalog = setup_simple_catalog(4);
     catalog.ingest_entities("Product", test_products()).unwrap();
@@ -1031,6 +1037,7 @@ fn run_bm25_then_rerank(reranker: Option<Arc<dyn Reranker>>, candidates: usize) 
 }
 
 /// Reranker qui ne veut qu'une chose : `favourite` en tête.
+#[cfg(feature = "burn-embedder")]
 fn prefers(favourite: &str) -> Arc<dyn Reranker> {
     let fav = favourite.to_lowercase();
     Arc::new(rag3weaver::reranker::CallbackReranker::new("prefers", move |_q, passages| {
@@ -1040,6 +1047,7 @@ fn prefers(favourite: &str) -> Arc<dyn Reranker> {
 
 /// Mot du passage qui identifie chaque produit (le chunk retrouvé porte la
 /// description ou les détails, pas le nom).
+#[cfg(feature = "burn-embedder")]
 fn passage_key(name: &str) -> &'static str {
     match name {
         "Rust Book" => "rust",
@@ -1049,6 +1057,7 @@ fn passage_key(name: &str) -> &'static str {
     }
 }
 
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_rerank_replaces_head_and_keeps_tail() {
@@ -1078,6 +1087,7 @@ fn generic_rerank_replaces_head_and_keeps_tail() {
 /// Le même reranker branché en `boost` dans une fusion : il **module** l'ordre
 /// BM25 au lieu de le remplacer. Le dernier de la référence, boosté, passe
 /// devant ; les scores restent ceux de la fusion, modulés.
+#[cfg(feature = "burn-embedder")]
 #[test]
 #[ignore]
 fn generic_rerank_as_boost_signal_inside_fusion() {
