@@ -422,7 +422,7 @@ fn la_seconde_session_sur_un_meme_perimetre_est_refusee() {
 
     let sa = ouvrir(&mut catalog, "A");
     let err = catalog.begin_snapshot("Fiche", &perimetre("A"), false).unwrap_err().to_string();
-    assert!(err.contains(&sa) && err.contains("depuis") && err.contains("takeover"), "{err}");
+    assert!(err.contains(&sa) && err.contains("ouverte depuis 0 s") && err.contains("takeover"), "une durée lisible : {err}");
 
     // Le classeur B, en même temps : permis, et chacun retire chez lui.
     let sb = ouvrir(&mut catalog, "B");
