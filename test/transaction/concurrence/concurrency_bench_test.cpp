@@ -1055,8 +1055,10 @@ TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
 // partagent le plus de voisins. Supprimer un nœud réécrit les arêtes de ses voisins
 // (cleanEdgesForNode) : les deux suppressions se rencontrent sur les mêmes arêtes, alors
 // que l'utilisateur a touché deux lignes sans rapport. Invariant : les deux valident,
-// l'index rend exactement les lignes vivantes. Attendu aujourd'hui (déduit par l'étude) :
-// un « Write-write conflict » de suppression de relation chez le second.
+// l'index rend exactement les lignes vivantes. Rouge, et attendu tant que la suppression
+// recoud les voisins pendant l'instruction : le second reçoit un « Write-write
+// conflict » (vu le 3 octobre, 10 sur 10). L'étude propose de le régler en faisant toute
+// la maintenance de l'index au commit (§4) ; ce cas en sera le test.
 TEST_P(ConcurrencyBench, H3_IndexedDeletesWithOverlappingNeighbourhoods) {
     auto chosen = std::make_shared<std::pair<int64_t, int64_t>>(-1, -1);
     runCase({.numWorkers = 2,

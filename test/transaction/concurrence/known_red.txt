@@ -69,6 +69,8 @@ Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Crash all-commit,kil
 #
 # H3 — deux suppressions de documents sans rapport, dont les voisinages dans le graphe de
 # l'index se recouvrent : le second reçoit un « Write-write conflict » (la suppression
-# réécrit les arêtes des voisins). Déduit par l'étude HNSW, §3 ; vu le 3 octobre.
+# réécrit les arêtes des voisins). Déduit par l'étude HNSW, §3 ; vu le 3 octobre. Rouge
+# tant que la suppression recoud les voisins pendant l'instruction ; la maintenance de
+# l'index au commit (étude, §4) le fera passer au vert.
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count

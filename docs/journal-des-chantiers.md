@@ -419,6 +419,21 @@ sessions, pas d'une vérification.
   `docs/2-octobre-2026-00h36/02-threadsanitizer-premiere-passe.txt`. Les virements
   qui ne conservaient pas la somme (étape 2) étaient un défaut **du banc**, pas du
   moteur : corrigé.
+- **Sous le mode multi-écrivains, une table indexée par HNSW peut rendre la base
+  inutilisable** (banc de concurrence, cas H4, 3 octobre). Quatre écrivains mélangent
+  insertions, suppressions et nouveaux vecteurs sur une table qui porte un index HNSW.
+  Sur 40 exécutions (20 à chaud, 20 avec arrêt brutal), le processus écrivain meurt 34
+  fois : 30 SIGSEGV et 4 SIGABRT, dont une sur « corrupted double-linked list »
+  (corruption du tas). Surtout, **19 bases ne se rouvrent plus** : le rejeu du journal
+  bute sur « Found duplicated primary key value », une clé en double validée sous
+  concurrence (la corruption de C1). Un doublon n'est donc pas seulement une ligne de
+  trop : il peut rendre une base impossible à rouvrir. Graine 20261002, rejouable
+  depuis le worktree du banc après `cmake -S . -B build/release -DBUILD_EXTENSIONS=vector`
+  et le build de `concurrence_test` :
+  `CONCURRENCE_GRAINE=20261002 ./build/release/test/transaction/concurrence/concurrence_test --gtest_filter='*H4_IndexedRandomMix/Thread_*' --gtest_repeat=20`.
+  Le cas est probabiliste (`probabilistic.txt`). Les marches A3 (unicité au commit) et
+  A5 (chemin de suppression), et la maintenance de l'index au commit, sont celles qui le
+  concernent.
 - **Après un point de reprise échoué, le processus qui continue perd des clés
   en silence puis plante** (mesuré sur `master`, 2 octobre ; patch
   d'expérience dans `…/2-octobre-2026-01h07/moteur-concurrence/`). **Corrigé
