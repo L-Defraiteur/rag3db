@@ -439,6 +439,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // aussi l'usage, que l'arête matérialisée recopiera.
             let mut props = usage_property_defs();
             props.insert("kind".to_string(), field_def(FieldType::String));
+            props.insert("qualifier_types".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -557,6 +558,12 @@ pub struct CodeAnalysis {
     /// les références du scope à ce nom, pas seulement la première.
     #[serde(default)]
     pub pending_sites: Vec<(String, String, Vec<UsageSite>)>,
+    /// Le type des variables par lesquelles le scope atteint le nom
+    /// (`n.run()` avec `n: Node` donne `Node`), quand **toutes** ses
+    /// références à ce nom en ont un ; absent sinon. Il départage les
+    /// définisseurs homonymes à la matérialisation.
+    #[serde(default)]
+    pub pending_qualifier_types: Vec<(String, String, Vec<String>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -929,6 +936,8 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             };
             let mut seen = std::collections::HashSet::new();
             let mut sites: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
+            // Par nom : les types lus, ou `None` dès qu'une référence n'en a pas.
+            let mut types_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             for r in &sc.identifier_references {
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
@@ -942,6 +951,15 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 let liste = sites.entry(id.to_string()).or_default();
                 if !liste.contains(&site) {
                     liste.push(site);
+                }
+                let types = types_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
+                match (types.as_mut(), r.qualifier_type.as_ref()) {
+                    (Some(v), Some(t)) => {
+                        if !v.contains(t) {
+                            v.push(t.clone());
+                        }
+                    }
+                    _ => *types = None,
                 }
                 if !seen.insert(id.to_string()) {
                     continue;
@@ -977,6 +995,12 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             }
             for (name, liste) in sites {
                 analysis.pending_sites.push((key.clone(), name, liste));
+            }
+            for (name, types) in types_lus {
+                if let Some(mut v) = types.filter(|v| !v.is_empty()) {
+                    v.sort();
+                    analysis.pending_qualifier_types.push((key.clone(), name, v));
+                }
             }
         }
     }
@@ -1572,6 +1596,8 @@ impl Catalog {
         self.mettre_en_file_les_liens("DEFINES", definitions)?;
         let sites_of: HashMap<(&str, &str), &Vec<UsageSite>> =
             analysis.pending_sites.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let types_of: HashMap<(&str, &str), &Vec<String>> =
+            analysis.pending_qualifier_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -1583,6 +1609,9 @@ impl Catalog {
                 props = usage_properties(&[UsageSite { usage: UsageKind::Other, line: None }]);
             }
             props.insert("kind".to_string(), s(kind));
+            // Vide, pas nul, quand le type ne se lit pas partout.
+            let types = types_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
+            props.insert("qualifier_types".to_string(), s(&types));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -1630,36 +1659,61 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         let definers_by_symbol = self.linked_from_many("DEFINES", uuids)?;
         let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        // Le parent des définisseurs, pour les noms qu'une mention typée
+        // atteint (`n.run()` avec `n: Node` vise le `run` de `Node`).
+        let a_departager: Vec<String> = uuids
+            .iter()
+            .filter(|sym| mentioners_by_symbol.get(*sym).is_some_and(|ms| ms.iter().any(|m| !m.qualifier_types.is_empty())))
+            .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
+            .collect();
+        let parents = self.parent_names(&a_departager)?;
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
-            let empty: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::new();
+            let empty: Vec<Mention> = Vec::new();
             let definers = definers_by_symbol.get(sym).unwrap_or(&no_definer);
+            if definers.is_empty() {
+                report.still_pending += 1;
+                continue;
+            }
             if definers.len() > 1 {
-                // Plusieurs définisseurs : on s'abstient. Une relation
+                // Plusieurs définisseurs : on s'abstient, sauf pour une
+                // mention dont le type désigne l'un d'eux. Une relation
                 // manquante vaut mieux qu'une relation fausse — c'est
                 // exactement la sur-connexion que RAGForge a payée.
                 report.ambiguous += 1;
-                continue;
             }
-            let Some(target) = definers.first() else {
-                report.still_pending += 1;
-                continue;
-            };
-            let tous = lot.is_none_or(|(scopes, _)| scopes.contains(target));
-            for (mentioner, kind, usage) in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                if &mentioner == target {
+            for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
+                let target = if !m.qualifier_types.is_empty() {
+                    // Le type lu choisit, et il est seul juge : un
+                    // définisseur d'un autre type n'est pas la cible, même
+                    // s'il est le seul.
+                    let du_type: Vec<&String> = definers
+                        .iter()
+                        .filter(|d| parents.get(*d).is_some_and(|p| m.qualifier_types.contains(p)))
+                        .collect();
+                    match du_type.as_slice() {
+                        [un] => (*un).clone(),
+                        _ => continue,
+                    }
+                } else if definers.len() == 1 {
+                    definers[0].clone()
+                } else {
+                    continue;
+                };
+                let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
+                if m.from == target {
                     continue;
                 }
-                if !tous && !lot.is_some_and(|(_, mentionneurs)| mentionneurs.contains(&mentioner)) {
+                if !tous && !lot.is_some_and(|(_, mentionneurs)| mentionneurs.contains(&m.from)) {
                     continue;
                 }
                 // L'arête est du genre inscrit au rendez-vous. Seul `CONSUMES`
                 // a une réciproque déclarée ; `IMPLEMENTS` et `INHERITS_FROM`
                 // n'en ont pas, et on n'en invente pas.
-                let rel = if RELATIONS.iter().any(|(r, _, _)| *r == kind) { kind.as_str() } else { "CONSUMES" };
-                self.link_jusqu_a(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                let rel = if RELATIONS.iter().any(|(r, _, _)| *r == m.kind) { m.kind.as_str() } else { "CONSUMES" };
+                self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), m.usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
-                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
+                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), m.usage, crate::disponibilite::Disponibilites::AUCUNE)?;
                 }
                 report.linked_across_batches += 1;
             }
@@ -1702,8 +1756,30 @@ impl Catalog {
         Ok(self
             .linked_from_many_with_kind(rel, to_uuids, false)?
             .into_iter()
-            .map(|(k, v)| (k, v.into_iter().map(|(uuid, _, _)| uuid).collect()))
+            .map(|(k, v)| (k, v.into_iter().map(|m| m.from).collect()))
             .collect())
+    }
+
+    /// Le `parent_name` de scopes, par uuid.
+    fn parent_names(&self, uuids: &[String]) -> Result<std::collections::HashMap<String, String>, CatalogError> {
+        let mut out = std::collections::HashMap::new();
+        if uuids.is_empty() {
+            return Ok(out);
+        }
+        let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let result = self
+            .conn()
+            .execute_with_params(
+                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name"),
+                &[crate::connection::QueryParam::new("uuids", param)],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        for row in &result.rows {
+            if let (Some(CypherValue::String(u)), Some(CypherValue::String(p))) = (row.first(), row.get(1)) {
+                out.insert(u.clone(), p.clone());
+            }
+        }
+        Ok(out)
     }
 
     /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
@@ -1714,12 +1790,12 @@ impl Catalog {
         rel: &str,
         to_uuids: &[String],
         with_kind: bool,
-    ) -> Result<std::collections::HashMap<String, Vec<(String, String, BTreeMap<String, CypherValue>)>>, CatalogError> {
-        let mut out: std::collections::HashMap<String, Vec<(String, String, BTreeMap<String, CypherValue>)>> = std::collections::HashMap::new();
+    ) -> Result<std::collections::HashMap<String, Vec<Mention>>, CatalogError> {
+        let mut out: std::collections::HashMap<String, Vec<Mention>> = std::collections::HashMap::new();
         if to_uuids.is_empty() {
             return Ok(out);
         }
-        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line" } else { "" };
+        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types" } else { "" };
         let cypher = format!(
             // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
             // toutes les tables, à chaque symbole de chaque lot.
@@ -1741,11 +1817,26 @@ impl Catalog {
                     usage.insert("usages".to_string(), row.get(4).cloned().unwrap_or(CypherValue::Null));
                     usage.insert("line".to_string(), row.get(5).cloned().unwrap_or(CypherValue::Null));
                 }
-                out.entry(to.clone()).or_default().push((from.clone(), kind, usage));
+                let types: Vec<String> = row
+                    .get(6)
+                    .and_then(|v| v.as_str())
+                    .map(|t| t.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+                    .unwrap_or_default();
+                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types });
             }
         }
         Ok(out)
     }
+}
+
+/// Un rendez-vous relu : qui mentionne, le genre d'arête inscrit, l'usage à
+/// recopier, et les types par lesquels le nom est atteint.
+#[derive(Debug, Clone)]
+struct Mention {
+    from: String,
+    kind: String,
+    usage: BTreeMap<String, CypherValue>,
+    qualifier_types: Vec<String>,
 }
 
 /// **Le texte propre de chaque scope d'un fichier.**
@@ -1866,6 +1957,20 @@ mod tests {
     use super::*;
 
     const RUST_SRC: &str = "use serde::Serialize;\n\npub struct Point {\n    x: i32,\n}\n\nimpl Point {\n    pub fn norm(&self) -> i32 {\n        self.x.abs()\n    }\n}\n\npub fn twice(p: &Point) -> i32 {\n    p.norm() * 2\n}\n";
+
+    /// **Le rendez-vous porte le type par lequel le nom est atteint**, quand
+    /// toutes les références en ont un.
+    #[test]
+    fn le_rendez_vous_porte_le_type_du_qualificatif() {
+        let src = "pub fn go(n: &Node) {\n    n.run();\n}\n\npub fn mixte(n: &Node) {\n    n.stop();\n    stop();\n}\n";
+        let a = analyze("/virtual", vec![("go.rs".into(), src.into())]);
+        let types = |scope: &str, nom: &str| {
+            let key = &a.scopes.iter().find(|s| s.name == scope).unwrap().key;
+            a.pending_qualifier_types.iter().find(|(k, n, _)| k == key && n == nom).map(|(_, _, v)| v.clone())
+        };
+        assert_eq!(types("go", "run"), Some(vec!["Node".to_string()]));
+        assert_eq!(types("mixte", "stop"), None, "une référence sans type : pas de type sur le rendez-vous");
+    }
 
     /// **Une arête d'usage porte comment on se sert de la cible, et où.**
     /// `twice` prend un `&Point` (ligne 13) : son `CONSUMES` vers `Point` dit

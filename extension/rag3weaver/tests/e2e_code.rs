@@ -1092,6 +1092,52 @@ fn an_ambiguous_name_abstains_but_keeps_its_candidates_in_the_graph() {
     let _ = CypherValue::Null;
 }
 
+/// **Une variable typée choisit sa méthode parmi les homonymes.** `run` est
+/// défini par `Node` et par `Other` : la voie des rendez-vous s'abstenait.
+/// `go(n: &Node)` appelle `n.run()` : le type lu par codeparsers
+/// (`qualifier_type`) voyage sur `MENTIONS` et désigne le `run` de `Node`,
+/// dans les deux ordres d'ingestion — y compris quand `Other` arrive avant
+/// `Node` et que `run` n'a qu'un définisseur, du mauvais type. `vague()`
+/// appelle `run()` sans type : l'abstention, comme avant.
+#[test]
+fn a_typed_variable_picks_its_method_among_homonyms() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::connection::CypherValue;
+
+    let node = || ("node.rs".to_string(), "pub struct Node;\nimpl Node {\n    pub fn run(&self) -> i32 {\n        1\n    }\n}\n".to_string());
+    let other = || ("other.rs".to_string(), "pub struct Other;\nimpl Other {\n    pub fn run(&self) -> i32 {\n        2\n    }\n}\n".to_string());
+    let user = || ("user.rs".to_string(), "pub fn go(n: &Node) -> i32 {\n    n.run()\n}\n\npub fn vague() -> i32 {\n    run()\n}\n".to_string());
+
+    for (i, ordre) in [vec![node(), other(), user()], vec![user(), other(), node()]].into_iter().enumerate() {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for lot in ordre {
+            cat.ingest_code(&analyze("/projet", vec![lot])).unwrap();
+        }
+        let rows = cat
+            .execute_raw("MATCH (a:Scope)-[:CONSUMES]->(b:Scope {name: 'run'}) RETURN a.name, b.parent_name")
+            .unwrap();
+        let appels: Vec<(String, String)> = rows
+            .rows
+            .iter()
+            .filter_map(|r| match (r.first(), r.get(1)) {
+                (Some(CypherValue::String(a)), Some(CypherValue::String(b))) => Some((a.clone(), b.clone())),
+                _ => None,
+            })
+            .collect();
+        eprintln!("[appels de run] {appels:?}");
+        assert!(appels.contains(&("go".to_string(), "Node".to_string())), "go appelle le run de Node : {appels:?}");
+        assert!(!appels.contains(&("go".to_string(), "Other".to_string())), "et pas celui d'Other : {appels:?}");
+        if i == 0 {
+            // Dans l'autre ordre, `vague` se relie au seul `run` connu quand
+            // il arrive et le garde quand le nom devient ambigu : la
+            // fragilité connue (« un nom unique devenu ambigu garde ses
+            // anciennes arêtes »), pas l'objet de ce test.
+            assert!(!appels.iter().any(|(a, _)| a == "vague"), "sans type, on s'abstient : {appels:?}");
+        }
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 10. Grossir : un fichier, puis un autre, puis tout le projet
 // ═════════════════════════════════════════════════════════════════════════════
