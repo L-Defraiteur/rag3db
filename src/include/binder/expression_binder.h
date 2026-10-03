@@ -124,6 +124,9 @@ public:
     // Use implicitCast to cast to types you have obtained through known implicit casting rules.
     // Use forceCast to cast to types you have obtained through other means, for example,
     // through a maxLogicalType function
+    // Returns nullptr if `expression` is not a struct literal with the fields of `targetType`.
+    std::shared_ptr<Expression> castStructLiteralFieldByField(
+        const std::shared_ptr<Expression>& expression, const common::LogicalType& targetType);
     std::shared_ptr<Expression> implicitCast(const std::shared_ptr<Expression>& expression,
         const common::LogicalType& targetType);
     std::shared_ptr<Expression> forceCast(const std::shared_ptr<Expression>& expression,

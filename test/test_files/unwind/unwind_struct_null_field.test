@@ -1,0 +1,52 @@
+-DATASET CSV empty
+
+--
+
+# Un champ NULL dans une liste de structures prend le type que les autres éléments lui
+# donnent. Avant, le NULL d'un littéral de structure devenait STRING dès la liaison de la
+# structure ; la liste décidait ensuite que le champ était INT64, et la structure au NULL ne
+# pouvait plus y être convertie.
+
+-CASE NullFieldTakesTheTypeOfTheOthers
+-STATEMENT CREATE NODE TABLE T(id INT64 PRIMARY KEY, v INT64, name STRING);
+---- ok
+-STATEMENT UNWIND [{id: 1, v: 5, name: 'a'}, {id: 2, v: NULL, name: NULL}] AS r CREATE (:T {id: r.id, v: r.v, name: r.name});
+---- ok
+-STATEMENT UNWIND [{id: 3, v: NULL, name: 'c'}, {id: 4, v: 7, name: NULL}] AS r CREATE (:T {id: r.id, v: r.v, name: r.name});
+---- ok
+-STATEMENT MATCH (t:T) RETURN t.id, t.v, t.name ORDER BY t.id;
+-CHECK_ORDER
+---- 4
+1|5|a
+2||
+3||c
+4|7|
+-STATEMENT UNWIND [{id: 1, v: 5}, {id: 2, v: NULL}] AS r RETURN typeof(r.v);
+---- 2
+INT64
+INT64
+
+-CASE NullFieldInNestedStructures
+-STATEMENT UNWIND [{a: {x: 1, y: 2.5}}, {a: {x: NULL, y: NULL}}] AS r RETURN r.a.x, r.a.y;
+---- 2
+1|2.500000
+|
+-STATEMENT RETURN [{k: date('2026-10-03')}, {k: NULL}];
+---- 1
+[{k: 2026-10-03},{k: }]
+
+-CASE AllNullFieldKeepsWorking
+-STATEMENT CREATE NODE TABLE T(id INT64 PRIMARY KEY, v INT64);
+---- ok
+-STATEMENT UNWIND [{id: 3, v: NULL}, {id: 4, v: NULL}] AS r CREATE (:T {id: r.id, v: r.v});
+---- ok
+-STATEMENT MATCH (t:T) RETURN t.id, t.v ORDER BY t.id;
+-CHECK_ORDER
+---- 2
+3|
+4|
+
+-CASE ARealTypeConflictIsStillRefused
+-STATEMENT RETURN [{v: 5}, {v: [1, 2]}];
+---- error(regex)
+.*

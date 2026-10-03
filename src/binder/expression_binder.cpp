@@ -2,13 +2,17 @@
 
 #include "binder/binder.h"
 #include "binder/expression/expression_util.h"
+#include "binder/expression/literal_expression.h"
 #include "binder/expression/parameter_expression.h"
+#include "binder/expression/scalar_function_expression.h"
 #include "binder/expression_visitor.h"
 #include "common/exception/binder.h"
 #include "common/exception/not_implemented.h"
 #include "common/string_format.h"
+#include "common/types/value/nested.h"
 #include "expression_evaluator/expression_evaluator_utils.h"
 #include "function/cast/vector_cast_functions.h"
+#include "function/struct/vector_struct_functions.h"
 #include "parser/expression/parsed_expression_visitor.h"
 #include "parser/expression/parsed_parameter_expression.h"
 
@@ -113,6 +117,9 @@ std::shared_ptr<Expression> ExpressionBinder::implicitCastIfNecessary(
     if (type == targetType || targetType.containsAny()) { // No need to cast.
         return expression;
     }
+    if (auto structLiteral = castStructLiteralFieldByField(expression, targetType)) {
+        return structLiteral;
+    }
     if (!type.isInternalType() || !targetType.isInternalType()) {
         return implicitCast(expression, targetType);
     }
@@ -121,6 +128,90 @@ std::shared_ptr<Expression> ExpressionBinder::implicitCastIfNecessary(
         return expression;
     }
     return implicitCast(expression, targetType);
+}
+
+// Gives a struct value the type `targetType` by retyping its NULL fields, at any depth. Returns
+// nullptr if anything else would have to change: that is a real cast, left to the usual rules.
+static std::unique_ptr<Value> retypeNullFields(const Value& value, const LogicalType& targetType) {
+    if (value.isNull()) {
+        return std::make_unique<Value>(Value::createNullValue(targetType));
+    }
+    if (value.getDataType() == targetType) {
+        return std::make_unique<Value>(value);
+    }
+    if (value.getDataType().getLogicalTypeID() != LogicalTypeID::STRUCT ||
+        targetType.getLogicalTypeID() != LogicalTypeID::STRUCT) {
+        return nullptr;
+    }
+    const auto& fields = StructType::getFields(value.getDataType());
+    const auto& targetFields = StructType::getFields(targetType);
+    if (fields.size() != targetFields.size() ||
+        NestedVal::getChildrenSize(&value) != fields.size()) {
+        return nullptr;
+    }
+    std::vector<std::unique_ptr<Value>> children;
+    for (auto i = 0u; i < fields.size(); i++) {
+        if (fields[i].getName() != targetFields[i].getName()) {
+            return nullptr;
+        }
+        auto child =
+            retypeNullFields(*NestedVal::getChildVal(&value, i), targetFields[i].getType());
+        if (!child) {
+            return nullptr;
+        }
+        children.push_back(std::move(child));
+    }
+    return std::make_unique<Value>(targetType.copy(), std::move(children));
+}
+
+// A struct literal that must become another struct type is rebuilt with each field given its
+// target type, instead of being cast as a whole. The difference is a NULL field: the literal gave
+// it the type STRING, for want of anything better, and a list of such literals then decides the
+// real type of the field from its other elements. There is no implicit cast from STRING to that
+// type, so casting the struct as a whole was refused; a NULL field alone takes any type.
+// The literal arrives here either folded into a value (all its fields are constants) or still
+// as a call to STRUCT_PACK.
+std::shared_ptr<Expression> ExpressionBinder::castStructLiteralFieldByField(
+    const std::shared_ptr<Expression>& expression, const LogicalType& targetType) {
+    if (expression->dataType.getLogicalTypeID() != LogicalTypeID::STRUCT ||
+        targetType.getLogicalTypeID() != LogicalTypeID::STRUCT) {
+        return nullptr;
+    }
+    if (expression->expressionType == ExpressionType::LITERAL) {
+        const auto retyped =
+            retypeNullFields(expression->constCast<LiteralExpression>().getValue(), targetType);
+        if (!retyped) {
+            return nullptr;
+        }
+        auto result = createLiteralExpression(*retyped);
+        result->setAlias(expression->hasAlias() ? expression->getAlias() : expression->toString());
+        return result;
+    }
+    if (expression->expressionType != ExpressionType::FUNCTION) {
+        return nullptr;
+    }
+    const auto& functionExpression = expression->constCast<ScalarFunctionExpression>();
+    if (functionExpression.getFunction().name != StructPackFunctions::name) {
+        return nullptr;
+    }
+    const auto fieldNames = StructType::getFieldNames(expression->dataType);
+    const auto& targetFields = StructType::getFields(targetType);
+    const auto& children = expression->getChildren();
+    if (targetFields.size() != fieldNames.size() || children.size() != fieldNames.size()) {
+        return nullptr;
+    }
+    expression_vector castChildren;
+    for (auto i = 0u; i < fieldNames.size(); i++) {
+        if (targetFields[i].getName() != fieldNames[i]) {
+            return nullptr;
+        }
+        castChildren.push_back(implicitCastIfNecessary(children[i], targetFields[i].getType()));
+    }
+    auto result = bindScalarFunctionExpression(castChildren, StructPackFunctions::name, fieldNames);
+    if (expression->hasAlias()) {
+        result->setAlias(expression->getAlias());
+    }
+    return result;
 }
 
 std::shared_ptr<Expression> ExpressionBinder::implicitCast(
